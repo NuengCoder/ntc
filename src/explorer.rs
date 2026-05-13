@@ -2,6 +2,7 @@ use crate::config::Config;
 use crate::filetype::is_supported_format;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
+use indicatif::ProgressBar;
 use walkdir::WalkDir;
 
 #[derive(Debug)]
@@ -19,6 +20,7 @@ pub fn generate_tree(
     root_path: &str,
     max_depth_override: Option<usize>,
     include_files: bool,
+    pb: Option<&ProgressBar>,
 ) -> TreeNode {
     let max_depth = max_depth_override.unwrap_or_else(|| Config::global_get_max_depth());
     let root = Path::new(root_path);
@@ -56,11 +58,7 @@ pub fn generate_tree(
                     return false;
                 }
             }
-            // Skip hidden entries
-            !e.file_name()
-                .to_str()
-                .map(|s| s.starts_with('.'))
-                .unwrap_or(false)
+            true
         });
 
     for entry in walker {
@@ -111,6 +109,9 @@ pub fn generate_tree(
                 }
             }
         }
+        if let Some(pb) = pb {
+            pb.inc(1);
+        }
     }
 
     // Sort: directories first, then files
@@ -127,6 +128,88 @@ pub fn generate_tree(
     sort_children(&mut root_node.children);
 
     root_node
+}
+
+pub fn count_files(path: &Path) -> u64 {
+    let ignored_dirs = Config::global_get_ignored_dirs();
+    WalkDir::new(path)
+        .into_iter()
+        .filter_entry(|e| {
+            if e.depth() == 0 { return true; }
+            if e.file_type().is_dir() {
+                let name = e.file_name().to_string_lossy().to_lowercase();
+                if ignored_dirs.contains(&name) { return false; }
+            }
+            true
+        })
+        .filter_map(|e| e.ok())
+        .filter(|e| e.file_type().is_file())
+        .count() as u64
+}
+
+/// Calculate total size of a directory recursively in bytes (respects ignored dirs)
+pub fn calculate_dir_size(path: &Path) -> u64 {
+    let ignored_dirs = Config::global_get_ignored_dirs();
+    
+    WalkDir::new(path)
+        .into_iter()
+        .filter_entry(|e| {
+            if e.depth() == 0 {
+                return true;
+            }
+            if e.file_type().is_dir() {
+                let name = e.file_name().to_string_lossy().to_lowercase();
+                if ignored_dirs.contains(&name) {
+                    return false;
+                }
+            }
+            true
+        })
+        .filter_map(|e| e.ok())
+        .filter(|e| e.file_type().is_file())
+        .map(|e| e.metadata().map(|m| m.len()).unwrap_or(0))
+        .sum()
+}
+
+pub fn calculate_dir_size_with_progress(path: &Path, pb: &ProgressBar) -> u64 {
+    let ignored_dirs = Config::global_get_ignored_dirs();
+    
+    WalkDir::new(path)
+        .into_iter()
+        .filter_entry(|e| {
+            if e.depth() == 0 { return true; }
+            if e.file_type().is_dir() {
+                let name = e.file_name().to_string_lossy().to_lowercase();
+                if ignored_dirs.contains(&name) { return false; }
+            }
+            true
+        })
+        .filter_map(|e| e.ok())
+        .filter(|e| e.file_type().is_file())
+        .map(|e| {
+            pb.inc(1);
+            e.metadata().map(|m| m.len()).unwrap_or(0)
+        })
+        .sum()
+}
+
+/// Convert bytes to human-readable string
+pub fn human_readable_size(bytes: u64) -> String {
+    const UNITS: &[&str] = &["B", "KB", "MB", "GB", "TB", "PB"];
+    if bytes == 0 {
+        return "0 B".to_string();
+    }
+    let mut size = bytes as f64;
+    let mut unit_idx = 0;
+    while size >= 1024.0 && unit_idx < UNITS.len() - 1 {
+        size /= 1024.0;
+        unit_idx += 1;
+    }
+    if unit_idx == 0 {
+        format!("{} {}", bytes, UNITS[unit_idx])
+    } else {
+        format!("{:.2} {}", size, UNITS[unit_idx])
+    }
 }
 
 pub fn format_tree(node: &TreeNode, prefix: &str, is_last: bool) -> String {
@@ -162,6 +245,60 @@ pub fn format_tree(node: &TreeNode, prefix: &str, is_last: bool) -> String {
     output
 }
 
+/// Format tree with optional directory sizes (for view --size)
+pub fn format_tree_with_sizes(
+    node: &TreeNode, 
+    prefix: &str, 
+    is_last: bool, 
+    show_sizes: bool,
+    pb: Option<&ProgressBar>,
+) -> String {
+    let mut output = String::new();
+    let connector = if node.depth == 0 {
+        "".to_string()
+    } else if is_last {
+        "└── ".to_string()
+    } else {
+        "├── ".to_string()
+    };
+
+    let suffix = if node.is_dir && node.depth > 0 {
+        if show_sizes {
+            let dir_path = Path::new(&node.path);
+            let size = calculate_dir_size(dir_path);
+            if let Some(pb) = pb {
+                pb.inc(1);
+            }
+            format!(" [Directory] ({})", human_readable_size(size))
+        } else {
+            " [Directory]".to_string()
+        }
+    } else {
+        "".to_string()
+    };
+
+    output.push_str(&format!("{}{}{}{}\n", prefix, connector, node.name, suffix));
+
+    for (i, child) in node.children.iter().enumerate() {
+        let is_last_child = i == node.children.len() - 1;
+        let new_prefix = if node.depth == 0 {
+            String::new()
+        } else if is_last {
+            format!("{}    ", prefix)
+        } else {
+            format!("{}│   ", prefix)
+        };
+        output.push_str(&format_tree_with_sizes(
+            child, 
+            &new_prefix, 
+            is_last_child, 
+            show_sizes,
+            pb
+        ));
+    }
+    output
+}
+
 /// Count total entries for progress bar (respects same filters as generate_tree)
 pub fn count_entries(root_path: &str, max_depth_override: Option<usize>) -> u64 {
     let max_depth = max_depth_override.unwrap_or_else(|| Config::global_get_max_depth());
@@ -170,7 +307,7 @@ pub fn count_entries(root_path: &str, max_depth_override: Option<usize>) -> u64 
     WalkDir::new(root_path)
         .max_depth(max_depth)
         .into_iter()
-        .filter_entry(|e| {
+                .filter_entry(|e| {
             if e.depth() == 0 {
                 return true;
             }
@@ -180,10 +317,7 @@ pub fn count_entries(root_path: &str, max_depth_override: Option<usize>) -> u64 
                     return false;
                 }
             }
-            !e.file_name()
-                .to_str()
-                .map(|s| s.starts_with('.'))
-                .unwrap_or(false)
+            true
         })
         .count() as u64
 }

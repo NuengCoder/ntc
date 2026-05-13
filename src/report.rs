@@ -59,7 +59,7 @@ fn build_report_content(dir_path: &Path, format: ReportFormat) -> Result<String>
         .to_string();
 
     let show_lines = Config::global_get_show_line_numbers();
-    let tree = generate_tree(dir_path.to_string_lossy().as_ref(), None,true);
+    let tree = generate_tree(dir_path.to_string_lossy().as_ref(), None,true,None);
 
     match format {
         ReportFormat::Txt => build_txt_report(&dir_name, &tree, dir_path, show_lines),
@@ -302,7 +302,7 @@ mod tests {
     #[test]
     fn test_build_txt_report() -> Result<()> {
         let temp = create_test_dir();
-        let tree = generate_tree(temp.path().to_string_lossy().as_ref(), None,true);
+        let tree = generate_tree(temp.path().to_string_lossy().as_ref(), None,true,None);
         let report = build_txt_report(
             &temp.path().file_name().unwrap().to_string_lossy().to_string(),
             &tree,
@@ -320,7 +320,7 @@ mod tests {
     #[test]
     fn test_build_html_report() -> Result<()> {
         let temp = create_test_dir();
-        let tree = generate_tree(temp.path().to_string_lossy().as_ref(), None,true);
+        let tree = generate_tree(temp.path().to_string_lossy().as_ref(), None,true,None);
         let report = build_html_report(
             &temp.path().file_name().unwrap().to_string_lossy().to_string(),
             &tree,

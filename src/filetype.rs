@@ -3,11 +3,11 @@ use std::path::Path;
 
 /// Text file extensions that we can safely display
 const TEXT_EXTENSIONS: &[&str] = &[
-    "txt", "md", "rs", "py", "js", "ts", "html", "css", "json", "xml", "yaml", "yml",
+    "txt", "md", "rs", "py", "js", "ts", "html", "css", "xml", "yaml", "yml",
     "toml", "cfg", "conf", "c", "cpp", "h", "hpp", "java", "go", "rb", "php",
     "sh", "bat", "sql", "r", "swift", "kt", "scala", "lua", "perl",
     "csv", "gitignore", "dockerfile", "makefile", "readme", "license",
-    "jsx", "jsp", "tsx", "dart", "cs","kts","mq4","mq5","mqh"
+    "jsx", "jsp", "tsx", "dart", "cs", "kts", "mq4", "mq5", "mqh"
 ];
 
 /// Known file extensions that are unsupported but should appear in tree
@@ -21,6 +21,24 @@ const KNOWN_UNSUPPORTED_EXTENSIONS: &[&str] = &[
 
 /// Check if a file is a support-format (text-based) file
 pub fn is_supported_format(path: &Path) -> bool {
+    // Get filename for specific file checks
+    let filename = path
+        .file_name()
+        .and_then(|n| n.to_str())
+        .unwrap_or("");
+
+    // 0. Check specific ignored files (ignoren) - these are NEVER supported
+    let ignored_files = Config::global_get_ignored_files();
+    if ignored_files.contains(filename) {
+        return false;
+    }
+
+    // 0b. Check specific extra supported files (caren) - these are ALWAYS supported
+    let extra_files = Config::global_get_extra_supported_files();
+    if extra_files.contains(filename) {
+        return true;
+    }
+
     // 1. Check ignored extensions (from config) – these are never supported.
     if let Some(ext) = path.extension().and_then(|e| e.to_str()) {
         let ext_lower = ext.to_lowercase();

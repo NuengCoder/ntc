@@ -188,11 +188,12 @@ mod tests {
 
     #[test]
     fn test_build_output_path() {
+        // Save original and set test path
         let original = Config::global_get_output_path();
-        Config::global_set_output_path(Path::new("C:\\test"));
+        Config::global_set_output_path(Path::new("C:\\test_ntc_output"));
         
         let path = build_output_path("report.txt");
-        assert_eq!(path, PathBuf::from("C:\\test\\report.txt"));
+        assert_eq!(path, PathBuf::from("C:\\test_ntc_output\\report.txt"));
         
         // Reset
         Config::global_set_output_path(&original);

@@ -13,7 +13,7 @@ fn preprocess_args(args: Vec<String>) -> Vec<String> {
             if arg == "-say" {
                 "--say".to_string()
             } else if arg == "-print" {
-                "--say".to_string() // same as --say
+                "--say".to_string()
             } else {
                 arg
             }
@@ -22,27 +22,29 @@ fn preprocess_args(args: Vec<String>) -> Vec<String> {
 }
 
 /// Parse command-line arguments and execute the appropriate action.
-/// Returns `true` if the program should continue to interactive mode,
-/// `false` if it should exit after the command.
 pub fn run_cli() -> Result<bool> {
-    // Pre-process arguments so -say / -print become --say
     let raw_args: Vec<String> = std::env::args().collect();
     let args = preprocess_args(raw_args);
 
-    // Define all possible known flags for --list / --fun
     let known_flags = vec![
         "-i, --input <path>          Input file or directory",
         "-o, --output <file>         Output filename",
         "--setO [path]               Show or set output directory",
-        "--setD [depth]              Show or set max depth (2-10+)",
+        "--setD [depth]              Show or set max depth (1-12)",
         "--setL [ON|OFF]             Show or set line numbers",
         "--setT [threads]            Show or set thread count",
+        "--setH [path|ON|OFF]        Show or set history path/state",
         "-say, -print <text>         Print text to stdout",
+        "--size                      Show current directory size",
+        "--view                      Quick view of current directory tree",
+        "--view --size               Quick view with directory sizes",
         "--ignored                   Show ignored items",
         "--ignore <name>             Ignore a directory name",
         "--cared <name>              Stop ignoring a directory",
         "--ignoref <ext>             Ignore a file extension",
         "--caref <ext>               Care about a file extension",
+        "--ignoren <file>            Ignore a specific file",
+        "--caren <file>              Care about a specific file",
         "--clear                     Clear the terminal screen",
         "--version                   Show version information",
         "--list, --fun               List all command-line functions",
@@ -102,6 +104,14 @@ pub fn run_cli() -> Result<bool> {
                 .value_parser(clap::value_parser!(String)),
         )
         .arg(
+            Arg::new("setH")
+                .long("setH")
+                .value_name("VALUE")
+                .help("Show or set history (path/ON/OFF/default)")
+                .num_args(0..=1)
+                .value_parser(clap::value_parser!(String)),
+        )
+        .arg(
             Arg::new("say")
                 .short('s')
                 .long("say")
@@ -136,16 +146,29 @@ pub fn run_cli() -> Result<bool> {
                 .action(ArgAction::SetTrue),
         )
         .arg(Arg::new("ignored").long("ignored").help("Show ignored items").action(ArgAction::SetTrue))
-        .arg(Arg::new("ignore").long("ignore").value_name("NAME").help("Ignore a directory name or extension").num_args(1))
-        .arg(Arg::new("cared").long("cared").value_name("NAME").help("Stop ignoring a directory/extension").num_args(1))
+        .arg(Arg::new("ignore").long("ignore").value_name("NAME").help("Ignore a directory name").num_args(1))
+        .arg(Arg::new("cared").long("cared").value_name("NAME").help("Stop ignoring a directory").num_args(1))
         .arg(Arg::new("ignoref").long("ignoref").value_name("EXT").help("Ignore a file extension").num_args(1))
-        .arg(Arg::new("caref").long("caref").value_name("EXT").help("Care about (and un-ignore) a file extension").num_args(1))
+        .arg(Arg::new("caref").long("caref").value_name("EXT").help("Care about a file extension").num_args(1))
+        .arg(Arg::new("ignoren").long("ignoren").value_name("FILE").help("Ignore a specific file").num_args(1))
+        .arg(Arg::new("caren").long("caren").value_name("FILE").help("Care about a specific file").num_args(1))
+        .arg(
+            Arg::new("size")
+                .long("size")
+                .help("Show current directory size")
+                .action(ArgAction::SetTrue),
+        )
+        .arg(
+            Arg::new("view_cli")
+                .long("view")
+                .help("Quick view of current directory tree")
+                .action(ArgAction::SetTrue),
+        )
         .try_get_matches_from(args)?;
-        
 
     // --- Handle --version ---
     if matches.get_flag("version") {
-        println!("ntc 1.1.0");
+        println!("ntc 1.3.0");
         return Ok(false);
     }
 
@@ -170,38 +193,184 @@ pub fn run_cli() -> Result<bool> {
         return Ok(false);
     }
 
+    // --- Handle --ignored ---
     if matches.get_flag("ignored") {
         let dirs = Config::global_get_ignored_dirs();
         let ignored_exts = Config::global_get_ignored_extensions();
         let extra_exts = Config::global_get_extra_supported_extensions();
+        let ignored_files = Config::global_get_ignored_files();
+        let extra_files = Config::global_get_extra_supported_files();
         println!("Ignored directories: {:?}", dirs);
         println!("Ignored extensions: {:?}", ignored_exts);
         println!("Extra supported extensions: {:?}", extra_exts);
-        return Ok(false);
-    }
-    if let Some(name) = matches.get_one::<String>("ignore") {
-        Config::global_add_ignored_dir(name);
-        println!("Now ignoring: {}", name);
-        return Ok(false);
-    }
-    if let Some(name) = matches.get_one::<String>("cared") {
-        Config::global_remove_ignored_dir(name);
-        println!("No longer ignoring: {}", name);
-        return Ok(false);
-    }
-    if let Some(ext) = matches.get_one::<String>("ignoref") {
-        Config::global_add_ignored_extension(ext);
-        println!("Now ignoring extension: .{}", ext);
-        return Ok(false);
-    }
-    if let Some(ext) = matches.get_one::<String>("caref") {
-        Config::global_remove_ignored_extension(ext);
-        Config::global_add_extra_supported_extension(ext); // make it supported
-        println!("Now caring about extension: .{}", ext);
+        println!("Ignored files: {:?}", ignored_files);
+        println!("Extra supported files: {:?}", extra_files);
         return Ok(false);
     }
 
-    // --- Handle setO, setD, setL, setT (may have optional values) ---
+    // --- Handle --ignore ---
+    if let Some(name) = matches.get_one::<String>("ignore") {
+        Config::global_add_ignored_dir(name);
+        println!("Now ignoring directory: {}", name);
+        return Ok(false);
+    }
+
+    // --- Handle --cared ---
+    if let Some(name) = matches.get_one::<String>("cared") {
+        Config::global_remove_ignored_dir(name);
+        println!("No longer ignoring directory: {}", name);
+        return Ok(false);
+    }
+
+    // --- Handle --ignoref ---
+    if let Some(ext) = matches.get_one::<String>("ignoref") {
+        Config::global_add_ignored_extension(ext);
+        println!("Now ignoring .{} files", ext);
+        return Ok(false);
+    }
+
+    // --- Handle --caref ---
+    if let Some(ext) = matches.get_one::<String>("caref") {
+        Config::global_add_extra_supported_extension(ext);
+        println!("Now caring about .{} files", ext);
+        return Ok(false);
+    }
+
+    // --- Handle --ignoren ---
+    if let Some(file) = matches.get_one::<String>("ignoren") {
+        Config::global_add_ignored_file(file);
+        println!("Now ignoring file: {}", file);
+        return Ok(false);
+    }
+
+    // --- Handle --caren ---
+    if let Some(file) = matches.get_one::<String>("caren") {
+        Config::global_add_extra_supported_file(file);
+        println!("Now caring about file: {}", file);
+        return Ok(false);
+    }
+
+    // --- Handle --setH ---
+    if let Some(val) = matches.get_one::<String>("setH") {
+        if val.is_empty() {
+            // Show current
+            let enabled = Config::global_get_history_enabled();
+            let path = Config::global_get_history_path();
+            println!("History: {}", if enabled { "ON" } else { "OFF" });
+            match path {
+                Some(p) => println!("History path: {}", p.display()),
+                None => println!("History path: default"),
+            }
+        } else {
+            let upper = val.to_uppercase();
+            if upper == "ON" {
+                Config::global_set_history_enabled(true);
+                println!("History: ON");
+            } else if upper == "OFF" {
+                Config::global_set_history_enabled(false);
+                println!("History: OFF");
+            } else if val == "default" {
+                Config::global_set_history_path(None);
+                println!("History path reset to default");
+            } else {
+                let p = Path::new(val);
+                Config::global_set_history_path(Some(p.to_path_buf()));
+                println!("History path set to: {}", p.display());
+            }
+        }
+        return Ok(false);
+    } else if matches.contains_id("setH") {
+        let enabled = Config::global_get_history_enabled();
+        let path = Config::global_get_history_path();
+        println!("History: {}", if enabled { "ON" } else { "OFF" });
+        match path {
+            Some(p) => println!("History path: {}", p.display()),
+            None => println!("History path: default"),
+        }
+        return Ok(false);
+    }
+
+    // --- Handle --size ---
+    if matches.get_flag("size") {
+        let show_view = matches.get_flag("view_cli");
+        use crate::navigator::Navigator;
+        let nav = Navigator::new()?;
+        let total = crate::explorer::calculate_dir_size(nav.current_path());
+        println!("Path: {}", nav.display_path());
+        println!("┌─────────────────────────────────────────┐");
+        println!("│ Current Directory Size                  │");
+        println!("│ Bytes: {:>32} │", format!("{}", total));
+        println!("│ Human: {:>32} │", crate::explorer::human_readable_size(total));
+        println!("└─────────────────────────────────────────┘");
+        if show_view {
+            println!();
+            let total = crate::explorer::count_entries(
+                &nav.current_path().to_string_lossy(),
+                Some(1),
+            );
+            let tree_pb = indicatif::ProgressBar::new(total);
+            tree_pb.set_style(
+                indicatif::ProgressStyle::with_template("ViewD  [{bar:30}] {percent}% {msg}")
+                    .unwrap()
+                    .progress_chars("=> "),
+            );
+            tree_pb.set_message("Building tree...");
+
+            let tree = crate::explorer::generate_tree(
+                &nav.current_path().to_string_lossy(),
+                Some(1),
+                true,
+                Some(&tree_pb),
+            );
+            tree_pb.finish_with_message("Done");
+
+            let dir_count = count_dirs_in_tree(&tree);
+            let scan_pb = indicatif::ProgressBar::new(dir_count);
+            scan_pb.set_style(
+                indicatif::ProgressStyle::with_template("ScanB  [{bar:30}] {percent}% {msg}")
+                    .unwrap()
+                    .progress_chars("=> "),
+            );
+            scan_pb.set_message("Calculating sizes...");
+
+            let tree_str = crate::explorer::format_tree_with_sizes(&tree, "", true, true, Some(&scan_pb));
+            scan_pb.finish_with_message("Done");
+            println!("{}", tree_str);
+        }
+        return Ok(false);
+    }
+
+    // --- Handle --view (without --size) ---
+    if matches.get_flag("view_cli") && !matches.get_flag("size") {
+        use crate::navigator::Navigator;
+        let nav = Navigator::new()?;
+
+        let total = crate::explorer::count_entries(
+            &nav.current_path().to_string_lossy(),
+            Some(1),
+        );
+        let pb = indicatif::ProgressBar::new(total);
+        pb.set_style(
+            indicatif::ProgressStyle::with_template("ViewD  [{bar:30}] {percent}% {msg}")
+                .unwrap()
+                .progress_chars("=> "),
+        );
+        pb.set_message("Building tree...");
+
+        let tree = crate::explorer::generate_tree(
+            &nav.current_path().to_string_lossy(),
+            Some(1),
+            true,
+            Some(&pb),
+        );
+        pb.finish_with_message("Done");
+
+        let tree_str = crate::explorer::format_tree_with_sizes(&tree, "", true, false, None);
+        println!("{}", tree_str);
+        return Ok(false);
+    }
+
+    // --- Handle setO, setD, setL, setT ---
     if let Some(val) = matches.get_one::<String>("setO") {
         if val.is_empty() {
             println!("Current output path: {}", Config::global_get_output_path().display());
@@ -324,9 +493,18 @@ fn detect_format_from_filename(filename: &str) -> ReportFormat {
     }
 }
 
+/// Count directories in tree recursively
+fn count_dirs_in_tree(node: &crate::explorer::TreeNode) -> u64 {
+    let mut count = if node.is_dir && node.depth > 0 { 1 } else { 0 };
+    for child in &node.children {
+        count += count_dirs_in_tree(child);
+    }
+    count
+}
+
 /// Print detailed help
 fn print_help() {
-    println!(r#"ntc 1.1.0 - Navigate, Tree, Cat
+    println!(r#"ntc 1.3.0 - Navigate, Tree, Cat
 A combined directory tree viewer and file concatenator.
 
 USAGE:
@@ -336,38 +514,45 @@ USAGE:
     ntc --setD [depth]
     ntc --setL [ON|OFF]
     ntc --setT [threads]
+    ntc --setH [path|ON|OFF|default]
 
 OPTIONS:
     -i, --input <path>      Process a file or directory
     -o, --output <file>     Save output to specified file
     --setO [path]           Show or set the output directory (default: Desktop)
-    --setD [depth]          Show or set max recursion depth (min: 2, default: 10)
+    --setD [depth]          Show or set max recursion depth (min: 1, max: 12)
     --setL [ON|OFF]         Show or toggle line numbers for file display
     --setT [threads]        Show or set number of threads (default: 4)
+    --setH [path|ON|OFF]    Show/set history path or enable/disable
     -say, -print <text>     Print text to stdout
+    --size                  Show current directory size
+    --view                  Quick view of current directory tree
+    --view --size           Quick view with directory sizes
     --clear                 Clear the terminal screen
     --version               Show version information
     --list, --fun           List all command-line functions
     --help                  Show this help message
 
 IGNORE/CARE OPTIONS:
-    --ignored               Show currently ignored dirs, extensions, and extra supported
-    --ignore <name>         Ignore a directory name (add to ignore list)
+    --ignored               Show currently ignored items
+    --ignore <name>         Ignore a directory name
     --cared <name>          Stop ignoring a directory name
     --ignoref <ext>         Ignore a file extension
-    --caref <ext>           Care about a file extension (un-ignore and add as supported)
+    --caref <ext>           Care about a file extension
+    --ignoren <file>        Ignore a specific file (e.g., Cargo.lock)
+    --caren <file>          Care about a specific file
 
 EXAMPLES:
-    ntc                         Launch interactive mode
+    ntc                        Launch interactive mode
     ntc -i src                 Generate report of src directory (default .txt)
     ntc -i src -o report.html  Generate HTML report of src directory
     ntc -i file.txt            Display file.txt contents
-    ntc -i file.txt -o out.txt Save file.txt contents to out.txt
     ntc --setL ON              Enable line numbers
     ntc -say "Hello World"     Print Hello World
-    ntc --clear                Clear the terminal
     ntc --ignore target        Ignore 'target' directory
     ntc --caref lock           Care about .lock files
+    ntc --ignoren Cargo.lock   Ignore only Cargo.lock
+    ntc --caren Cargo.lock     Care about only Cargo.lock
 
 For interactive commands, launch ntc without arguments."#);
 }

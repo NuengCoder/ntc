@@ -1,5 +1,5 @@
 use crate::config::Config;
-use crate::explorer::{generate_tree, format_tree};
+use crate::explorer::{format_tree, format_tree_with_sizes, generate_tree};
 use crate::filetype::is_supported_format;
 use crate::navigator::Navigator;
 use crate::output::{cat_file, print_separator};
@@ -17,18 +17,22 @@ pub fn run_shell() -> Result<()> {
         DefaultEditor::new().expect("Failed to create line editor")
     });
 
-    let _ = rl.load_history("ntc_history.txt");
+    // Load history from configured path (if enabled)
+    let history_path = Config::global().read().unwrap().resolve_history_path();
+    if Config::global_get_history_enabled() && !history_path.as_os_str().is_empty() {
+        let _ = rl.load_history(&history_path);
+    }
 
     println!();
     println!("╔══════════════════════════════════════════════════════════════════╗");
-    println!("║              Welcome to ntc 1.1.0 - Navigate, Tree, Cat          ║");
+    println!("║              Welcome to ntc 1.3.0 - Navigate, Tree, Cat          ║");
     println!("╚══════════════════════════════════════════════════════════════════╝");
     println!();
     println!("Type 'help' for available commands, 'exit' to quit.");
     println!();
 
     // Show initial state - directories only (depth 1)
-    show_tree(&nav, Some(1), false, false);
+    show_tree(&nav, Some(1), false, false, false);
 
     loop {
         let prompt = format!("ntc [{}]> ", nav.display_path());
@@ -67,7 +71,14 @@ pub fn run_shell() -> Result<()> {
         }
     }
 
-    let _ = rl.save_history("ntc_history.txt");
+    // Save history to configured path
+    if Config::global_get_history_enabled() {
+        let history_path = Config::global().read().unwrap().resolve_history_path();
+        if !history_path.as_os_str().is_empty() {
+            let _ = rl.save_history(&history_path);
+        }
+    }
+
     Ok(())
 }
 
@@ -86,7 +97,7 @@ fn execute_command(input: &str, nav: &mut Navigator) -> Result<bool> {
                 println!("         go subdir");
             } else {
                 nav.go_to(Path::new(args))?;
-                show_tree(nav, Some(1), false, false);
+                show_tree(nav, Some(1), false, false, false);
             }
         }
 
@@ -108,11 +119,11 @@ fn execute_command(input: &str, nav: &mut Navigator) -> Result<bool> {
                     println!("Cancelled.");
                 } else if choice.len() == 1 && choice.chars().next().unwrap().is_alphabetic() {
                     nav.go_drive(choice.chars().next().unwrap())?;
-                    show_tree(nav, Some(1), false, false);
+                    show_tree(nav, Some(1), false, false, false);
                 } else if let Ok(num) = choice.parse::<usize>() {
                     if num > 0 && num <= drives.len() {
                         nav.go_drive(drives[num - 1])?;
-                        show_tree(nav, Some(1), false,false);
+                        show_tree(nav, Some(1), false, false, false);
                     } else {
                         println!("Invalid drive number.");
                     }
@@ -122,20 +133,49 @@ fn execute_command(input: &str, nav: &mut Navigator) -> Result<bool> {
             } else {
                 let letter = args.chars().next().unwrap_or('C');
                 nav.go_drive(letter)?;
-                show_tree(nav, Some(1), false,false);
+                show_tree(nav, Some(1), false, false, false);
             }
         }
 
         "back" => {
-            match nav.go_back() {
-                Ok(()) => show_tree(nav, Some(1), false,false),
-                Err(e) => println!("{}", e),
+            if args.is_empty() {
+                // back 1 (default)
+                match nav.go_back() {
+                    Ok(()) => show_tree(nav, Some(1), false, false, false),
+                    Err(e) => println!("{}", e),
+                }
+            } else {
+                // back n
+                match args.parse::<usize>() {
+                    Ok(n) if n > 0 => {
+                        let mut success = true;
+                        for i in 0..n {
+                            match nav.go_back() {
+                                Ok(()) => {}
+                                Err(e) => {
+                                    if i == 0 {
+                                        println!("{}", e);
+                                    } else {
+                                        println!("Error: null parent at step {} - nowhere to go back", i + 1);
+                                    }
+                                    success = false;
+                                    break;
+                                }
+                            }
+                        }
+                        if success {
+                            show_tree(nav, Some(1), false, false, false);
+                        }
+                    }
+                    _ => println!("Invalid number: {}. Usage: back [n]", args),
+                }
             }
         }
 
         // --- View command (config depth) ---
         "view" => {
-            show_tree(nav, None, true,true);
+            let show_sizes = args == "--size";
+            show_tree(nav, None, true, true, show_sizes);
         }
 
         // --- Report Generation ---
@@ -232,23 +272,50 @@ fn execute_command(input: &str, nav: &mut Navigator) -> Result<bool> {
             }
         }
 
+        // --- History ---
+        "seth" => {
+            if args.is_empty() {
+                let enabled = Config::global_get_history_enabled();
+                let path = Config::global_get_history_path();
+                println!("History: {}", if enabled { "ON" } else { "OFF" });
+                match path {
+                    Some(p) => println!("History path: {}", p.display()),
+                    None => println!("History path: default (current directory)"),
+                }
+            } else {
+                let upper = args.to_uppercase();
+                if upper == "ON" {
+                    Config::global_set_history_enabled(true);
+                    println!("History: ON");
+                } else if upper == "OFF" {
+                    Config::global_set_history_enabled(false);
+                    println!("History: OFF");
+                } else if args == "default" {
+                    Config::global_set_history_path(None);
+                    println!("History path reset to default");
+                } else {
+                    let p = Path::new(args);
+                    Config::global_set_history_path(Some(p.to_path_buf()));
+                    println!("History path set to: {}", p.display());
+                }
+            }
+        }
+
         // --- Terminal & Info ---
         "clear" => {
-            // Clear screen using Windows cmd
             let _ = std::process::Command::new("cmd").args(&["/c", "cls"]).status();
-            // Re-print welcome banner and current state
             println!();
             println!("╔══════════════════════════════════════════════════════════════════╗");
-            println!("║              Welcome to ntc 1.1.0 - Navigate, Tree, Cat          ║");
+            println!("║              Welcome to ntc 1.3.0 - Navigate, Tree, Cat          ║");
             println!("╚══════════════════════════════════════════════════════════════════╝");
             println!();
             println!("Type 'help' for available commands, 'exit' to quit.");
             println!();
-            show_tree(nav, Some(1), false,false);
+            show_tree(nav, Some(1), false, false, false);
         }
 
         "version" => {
-            println!("ntc 1.1.0");
+            println!("ntc 1.3.0");
         }
 
         "help" => {
@@ -259,33 +326,38 @@ fn execute_command(input: &str, nav: &mut Navigator) -> Result<bool> {
             return Ok(true);
         }
 
+        // --- Ignore/Care ---
         "ignored" => {
             let dirs = Config::global_get_ignored_dirs();
             let ignored_exts = Config::global_get_ignored_extensions();
             let extra_exts = Config::global_get_extra_supported_extensions();
+            let ignored_files = Config::global_get_ignored_files();
+            let extra_files = Config::global_get_extra_supported_files();
             println!("Ignored directories: {:?}", dirs);
             println!("Ignored extensions: {:?}", ignored_exts);
             println!("Extra supported extensions: {:?}", extra_exts);
+            println!("Ignored files: {:?}", ignored_files);
+            println!("Extra supported files: {:?}", extra_files);
         }
         "ignore" => {
             if args.is_empty() {
-                println!("Usage: ignore <name>");
+                println!("Usage: ignore <directory_name>");
             } else {
                 Config::global_add_ignored_dir(args);
-                println!("Now ignoring: {}", args);
+                println!("Now ignoring directory: {}", args);
             }
         }
         "cared" => {
             if args.is_empty() {
-                println!("Usage: cared <name>");
+                println!("Usage: cared <directory_name>");
             } else {
                 Config::global_remove_ignored_dir(args);
-                println!("No longer ignoring: {}", args);
+                println!("No longer ignoring directory: {}", args);
             }
         }
         "ignoref" => {
             if args.is_empty() {
-                println!("Usage: ignoref <ext>");
+                println!("Usage: ignoref <extension>");
             } else {
                 Config::global_add_ignored_extension(args);
                 println!("Now ignoring .{} files", args);
@@ -293,12 +365,39 @@ fn execute_command(input: &str, nav: &mut Navigator) -> Result<bool> {
         }
         "caref" => {
             if args.is_empty() {
-                println!("Usage: caref <ext>");
+                println!("Usage: caref <extension>");
             } else {
-                Config::global_remove_ignored_extension(args);
                 Config::global_add_extra_supported_extension(args);
                 println!("Now caring about .{} files", args);
             }
+        }
+        "ignoren" => {
+            if args.is_empty() {
+                println!("Usage: ignoren <filename>");
+                println!("Example: ignoren Cargo.lock");
+            } else {
+                Config::global_add_ignored_file(args);
+                println!("Now ignoring file: {}", args);
+            }
+        }
+        "caren" => {
+            if args.is_empty() {
+                println!("Usage: caren <filename>");
+                println!("Example: caren Cargo.lock");
+            } else {
+                Config::global_add_extra_supported_file(args);
+                println!("Now caring about file: {}", args);
+            }
+        }
+
+        "size" => {
+            let total = crate::explorer::calculate_dir_size(nav.current_path());
+            println!();
+            println!("┌─────────────────────────────────────────┐");
+            println!("│ Current Directory Size                  │");
+            println!("│ Bytes: {:>32} │", format!("{}", total));
+            println!("│ Human: {:>32} │", crate::explorer::human_readable_size(total));
+            println!("└─────────────────────────────────────────┘");
         }
 
         _ => {
@@ -312,20 +411,26 @@ fn execute_command(input: &str, nav: &mut Navigator) -> Result<bool> {
 
 
 /// Show directory tree.
-fn show_tree(nav: &Navigator, max_depth_override: Option<usize>, show_progress: bool, include_files: bool) {
+fn show_tree(
+    nav: &Navigator,
+    max_depth_override: Option<usize>,
+    show_progress: bool,
+    include_files: bool,
+    show_sizes: bool,
+) {
     println!();
     print_separator("Current Directory");
     println!("Path: {}", nav.display_path());
     println!();
 
-    let pb = if show_progress {
+    let tree_pb = if show_progress {
         let total = crate::explorer::count_entries(
             &nav.current_path().to_string_lossy(),
             max_depth_override,
         );
         let pb = ProgressBar::new(total);
         pb.set_style(
-            ProgressStyle::with_template("[{bar:40}] {percent}% {msg}")
+            ProgressStyle::with_template("ViewD  [{bar:30}] {percent}% {msg}")
                 .unwrap()
                 .progress_chars("=> "),
         );
@@ -339,21 +444,47 @@ fn show_tree(nav: &Navigator, max_depth_override: Option<usize>, show_progress: 
         &nav.current_path().to_string_lossy(),
         max_depth_override,
         include_files,
+        tree_pb.as_ref(),
     );
 
-    if let Some(pb) = pb {
+    if let Some(pb) = tree_pb {
         pb.finish_with_message("Done");
     }
 
-    let tree_str = format_tree(&tree, "", true);
+    let tree_str = if show_sizes {
+        let dir_count = count_dirs_in_tree(&tree);
+        let scan_pb = ProgressBar::new(dir_count);
+        scan_pb.set_style(
+            ProgressStyle::with_template("ScanB  [{bar:30}] {percent}% {msg}")
+                .unwrap()
+                .progress_chars("=> "),
+        );
+        scan_pb.set_message("Calculating sizes...");
+
+        let result = format_tree_with_sizes(&tree, "", true, true, Some(&scan_pb));
+        scan_pb.finish_with_message("Done");
+        result
+    } else {
+        format_tree(&tree, "", true)
+    };
+
     println!("{}", tree_str);
+}
+
+/// Count directories in tree recursively
+fn count_dirs_in_tree(node: &crate::explorer::TreeNode) -> u64 {
+    let mut count = if node.is_dir && node.depth > 0 { 1 } else { 0 };
+    for child in &node.children {
+        count += count_dirs_in_tree(child);
+    }
+    count
 }
 
 /// Print interactive mode help
 fn print_interactive_help() {
     println!(r#"
 ╔══════════════════════════════════════════════════════════════════╗
-║                     ntc 1.1.0 - Interactive Help                 ║
+║                     ntc 1.3.0 - Interactive Help                 ║
 ╚══════════════════════════════════════════════════════════════════╝
 
 NAVIGATION COMMANDS:
@@ -362,9 +493,14 @@ NAVIGATION COMMANDS:
   godrive             List all drives and select one
   godrive <letter>    Navigate to a drive (e.g., godrive C)
   back                Go back to parent directory
+  back <n>            Go back n parent directories
 
 VIEW COMMAND:
   view                Show full directory tree using configured depth
+  view --size         Show directory tree with sizes
+
+SIZE COMMAND:
+  size                Show current directory size
 
 REPORT COMMANDS:
   txt                 Generate TXT report of current directory
@@ -378,26 +514,32 @@ CONFIGURATION COMMANDS:
   setO                Show current output path
   setO <path>         Set output path
   setD                Show current max depth
-  setD <int>          Set max depth (min: 2)
+  setD <int>          Set max depth (min: 1, max: 12)
   setL                Show line number setting (ON/OFF)
   setL ON|OFF         Enable/disable line numbers
   setT                Show current thread count
   setT <int>          Set number of threads
+  setH                Show history settings
+  setH ON|OFF         Enable/disable history
+  setH <path>         Set custom history file path
+  setH default        Reset history to default location
 
 IGNORE/CARE COMMANDS:
-    ignored             Show ignored dirs, extensions, and extra supported
-    ignore <name>       Ignore a directory name
-    cared <name>        Stop ignoring a directory name
-    ignoref <ext>       Ignore a file extension
-    caref <ext>         Care about a file extension (un-ignore and add as supported)
+  ignored             Show all ignored items
+  ignore <name>       Ignore a directory name
+  cared <name>        Stop ignoring a directory name
+  ignoref <ext>       Ignore a file extension
+  caref <ext>         Care about a file extension
+  ignoren <file>      Ignore a specific file (e.g., Cargo.lock)
+  caren <file>        Care about a specific file
 
 TERMINAL COMMANDS:
-    clear               Clear the terminal screen
-    version             Show version information
+  clear               Clear the terminal screen
+  version             Show version information
 
 OTHER COMMANDS:
-    help                Show this help
-    exit, quit          Exit ntc
+  help                Show this help
+  exit, quit          Exit ntc
 "#);
 }
 
@@ -424,6 +566,14 @@ mod tests {
     }
 
     #[test]
+    fn test_execute_back_n() -> Result<()> {
+        let mut nav = Navigator::new()?;
+        let result = execute_command("back 3", &mut nav);
+        assert!(result.is_ok() || result.is_err());
+        Ok(())
+    }
+
+    #[test]
     fn test_execute_help() -> Result<()> {
         let mut nav = Navigator::new()?;
         let result = execute_command("help", &mut nav);
@@ -444,6 +594,55 @@ mod tests {
         let mut nav = Navigator::new()?;
         let result = execute_command("version", &mut nav);
         assert!(result.is_ok());
+        Ok(())
+    }
+
+    #[test]
+    fn test_execute_seth_empty() -> Result<()> {
+        let mut nav = Navigator::new()?;
+        let result = execute_command("setH", &mut nav);
+        assert!(result.is_ok());
+        Ok(())
+    }
+
+    #[test]
+    fn test_execute_seth_on() -> Result<()> {
+        let mut nav = Navigator::new()?;
+        let result = execute_command("setH ON", &mut nav);
+        assert!(result.is_ok());
+        assert!(Config::global_get_history_enabled());
+        Ok(())
+    }
+
+    #[test]
+    fn test_execute_seth_off() -> Result<()> {
+        let mut nav = Navigator::new()?;
+        let result = execute_command("setH OFF", &mut nav);
+        assert!(result.is_ok());
+        assert!(!Config::global_get_history_enabled());
+        Config::global_set_history_enabled(true);
+        Ok(())
+    }
+
+    #[test]
+    fn test_execute_ignoren() -> Result<()> {
+        let mut nav = Navigator::new()?;
+        let result = execute_command("ignoren Cargo.lock", &mut nav);
+        assert!(result.is_ok());
+        let ignored = Config::global_get_ignored_files();
+        assert!(ignored.contains("Cargo.lock"));
+        Config::global_remove_ignored_file("Cargo.lock");
+        Ok(())
+    }
+
+    #[test]
+    fn test_execute_caren() -> Result<()> {
+        let mut nav = Navigator::new()?;
+        let result = execute_command("caren Cargo.lock", &mut nav);
+        assert!(result.is_ok());
+        let extra = Config::global_get_extra_supported_files();
+        assert!(extra.contains("Cargo.lock"));
+        Config::global_remove_extra_supported_file("Cargo.lock");
         Ok(())
     }
 
@@ -511,7 +710,7 @@ mod tests {
         let result = execute_command("setD 5", &mut nav);
         assert!(result.is_ok());
         assert_eq!(Config::global_get_max_depth(), 5);
-        Config::global_set_max_depth(10);
+        Config::global_set_max_depth(2);
         Ok(())
     }
 

@@ -1,6 +1,6 @@
 [package]
 name = "ntc"
-version = "1.1.0"
+version = "1.3.0"
 edition = "2021"
 description = "Navigate, Tree, Cat - A combined directory tree viewer and file concatenator"
 authors = ["Nueng"]

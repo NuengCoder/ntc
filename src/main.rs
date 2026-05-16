@@ -2,17 +2,32 @@ use ntc::cli;
 use ntc::shell;
 use ntc::Config;
 use anyhow::Result;
+use colored::*;
+
+fn print_logo() {
+    println!();
+    println!("  {}  {}  {}", 
+        "N".blue().bold(), 
+        "T".blue().bold(), 
+        "C".blue().bold()
+    );
+    println!("  {} {} {}", 
+        "Navigate".red(), 
+        "Tree".green(), 
+        "Cat".blue()
+    );
+    println!();
+}
 
 fn main() -> Result<()> {
-    // Load persisted config (already called when accessing global, but we ensure it's initialized)
-    let _ = Config::global(); // trigger static init, which calls Config::load()
+    let _ = Config::global();
 
     let launch_interactive = cli::run_cli()?;
     if launch_interactive {
+        print_logo();
         shell::run_shell()?;
     }
 
-    // Final save
     Config::save_global();
     Ok(())
 }

@@ -36,6 +36,9 @@ pub struct Config {
     /// Whether history saving is enabled
     #[serde(default = "default_history_enabled")]
     pub history_enabled: bool,
+    /// Whether file watcher is enabled
+    #[serde(default)]
+    pub file_watcher_enabled: bool,
 }
 
 fn default_output_path() -> PathBuf {
@@ -60,16 +63,17 @@ impl Config {
     pub fn new() -> Self {
         Self {
             output_path: default_output_path(),
-            max_depth: 2,
+            max_depth: default_max_depth(),
             show_line_numbers: false,
-            num_threads: 4,
+            num_threads: default_num_threads(),
             ignored_directory_names: default_ignored_dirs(),
             ignored_extensions: HashSet::new(),
             extra_supported_extensions: HashSet::new(),
             ignored_files: HashSet::new(),
             extra_supported_files: HashSet::new(),
             history_path: None,
-            history_enabled: true,
+            history_enabled: default_history_enabled(),
+            file_watcher_enabled: false,
         }
     }
 
@@ -131,6 +135,10 @@ impl Config {
         }
     }
 
+    /// Save this config instance to disk.
+    /// Call only when you already hold a reference — do NOT re-acquire the
+    /// global lock inside this method (that would deadlock if you hold a write
+    /// lock on the same thread).
     pub fn save(&self) {
         if let Some(path) = Self::config_path() {
             let _ = fs::create_dir_all(path.parent().unwrap());
@@ -162,17 +170,33 @@ impl Config {
         &CONFIG
     }
 
+    /// Save the global config by acquiring a **read** lock (safe to call from
+    /// outside a write-lock section).
     pub fn save_global() {
         Self::global().read().unwrap().save();
     }
 
     // ---- Convenience global methods ----
+    //
+    // Pattern used throughout:
+    //   1. Acquire write lock.
+    //   2. Mutate the field.
+    //   3. Call cfg.save() — uses `&self`, no lock re-acquisition.
+    //   4. Write lock is dropped at end of block.
+    //
+    // Previously some setters called Self::save_global() while holding the
+    // write lock, which attempted to acquire a read lock on the same thread —
+    // a deadlock on std::sync::RwLock implementations that don't allow
+    // read-after-write on the same thread (e.g. pthreads). Fixed by always
+    // calling cfg.save() directly on the already-borrowed &mut Config instead.
+
     pub fn global_get_output_path() -> PathBuf {
         Self::global().read().unwrap().output_path.clone()
     }
     pub fn global_set_output_path(path: &Path) {
-        Self::global().write().unwrap().output_path = path.to_path_buf();
-        Self::save_global();
+        let mut cfg = Self::global().write().unwrap();
+        cfg.output_path = path.to_path_buf();
+        cfg.save(); // safe: cfg is &Config, no lock re-acquired
     }
     pub fn global_get_max_depth() -> usize {
         Self::global().read().unwrap().max_depth
@@ -186,8 +210,9 @@ impl Config {
         Self::global().read().unwrap().show_line_numbers
     }
     pub fn global_set_show_line_numbers(show: bool) {
-        Self::global().write().unwrap().show_line_numbers = show;
-        Self::save_global();
+        let mut cfg = Self::global().write().unwrap();
+        cfg.show_line_numbers = show;
+        cfg.save();
     }
     pub fn global_get_num_threads() -> usize {
         Self::global().read().unwrap().num_threads
@@ -206,12 +231,14 @@ impl Config {
         Self::global().read().unwrap().history_enabled
     }
     pub fn global_set_history_path(path: Option<PathBuf>) {
-        Self::global().write().unwrap().history_path = path;
-        Self::save_global();
+        let mut cfg = Self::global().write().unwrap();
+        cfg.history_path = path;
+        cfg.save();
     }
     pub fn global_set_history_enabled(enabled: bool) {
-        Self::global().write().unwrap().history_enabled = enabled;
-        Self::save_global();
+        let mut cfg = Self::global().write().unwrap();
+        cfg.history_enabled = enabled;
+        cfg.save();
     }
 
     // ---- Ignore / care helpers ----
@@ -289,6 +316,15 @@ impl Config {
         cfg.save();
     }
 
+    pub fn global_get_file_watcher_enabled() -> bool {
+        Self::global().read().unwrap().file_watcher_enabled
+    }
+    pub fn global_set_file_watcher_enabled(enabled: bool) {
+        let mut cfg = Self::global().write().unwrap();
+        cfg.file_watcher_enabled = enabled;
+        cfg.save();
+    }
+
     // Parse helpers
     pub fn parse_line_numbers_state(state: &str) -> Option<bool> {
         match state.to_uppercase().as_str() {
@@ -299,6 +335,12 @@ impl Config {
     }
     pub fn parse_num_threads(input: &str) -> Option<usize> {
         input.parse::<usize>().ok().filter(|&n| n > 0)
+    }
+}
+
+impl Default for Config {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
@@ -325,11 +367,21 @@ mod tests {
     fn test_defaults() {
         let cfg = Config::new();
         assert!(!cfg.output_path.as_os_str().is_empty());
-        assert_eq!(cfg.max_depth, 2);
+        assert_eq!(cfg.max_depth, default_max_depth());
         assert!(!cfg.show_line_numbers);
-        assert_eq!(cfg.num_threads, 4);
+        assert_eq!(cfg.num_threads, default_num_threads());
         assert!(cfg.ignored_directory_names.contains("target"));
-        assert!(cfg.history_enabled);
+        assert_eq!(cfg.history_enabled, default_history_enabled());
         assert!(cfg.history_path.is_none());
+    }
+
+    #[test]
+    fn test_default_trait_matches_new() {
+        let a = Config::new();
+        let b = Config::default();
+        assert_eq!(a.max_depth, b.max_depth);
+        assert_eq!(a.num_threads, b.num_threads);
+        assert_eq!(a.show_line_numbers, b.show_line_numbers);
+        assert_eq!(a.history_enabled, b.history_enabled);
     }
 }

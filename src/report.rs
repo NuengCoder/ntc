@@ -1,9 +1,10 @@
 use crate::config::Config;
 use crate::explorer::{generate_tree, format_tree, TreeNode};
-use crate::filetype::is_supported_format;
+use crate::filetype::{is_supported_format_with_config, FormatConfig};
 use crate::output::{build_output_path, cat_file_with_line_numbers, format_separator, write_file};
 use anyhow::Result;
 use std::path::Path;
+use walkdir::WalkDir;
 
 /// Supported report formats
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -59,11 +60,12 @@ fn build_report_content(dir_path: &Path, format: ReportFormat) -> Result<String>
         .to_string();
 
     let show_lines = Config::global_get_show_line_numbers();
-    let tree = generate_tree(dir_path.to_string_lossy().as_ref(), None,true,None);
+    let max_depth = Config::global_get_max_depth();
+    let tree = generate_tree(dir_path.to_string_lossy().as_ref(), None, true, None);
 
     match format {
-        ReportFormat::Txt => build_txt_report(&dir_name, &tree, dir_path, show_lines),
-        ReportFormat::Html => build_html_report(&dir_name, &tree, dir_path, show_lines),
+        ReportFormat::Txt => build_txt_report(&dir_name, &tree, dir_path, show_lines, max_depth),
+        ReportFormat::Html => build_html_report(&dir_name, &tree, dir_path, show_lines, max_depth),
     }
 }
 
@@ -73,6 +75,7 @@ fn build_txt_report(
     tree: &TreeNode,
     dir_path: &Path,
     show_lines: bool,
+    max_depth: usize,
 ) -> Result<String> {
     let mut content = String::new();
 
@@ -95,16 +98,15 @@ fn build_txt_report(
     // Divider
     content.push_str(&"=".repeat(77));
     content.push('\n');
-    let dir_header = format!("{}", dir_name);
-    let dir_padding = (77usize.saturating_sub(dir_header.len())) / 2;
+    let dir_padding = (77usize.saturating_sub(dir_name.len())) / 2;
     content.push_str(&" ".repeat(dir_padding));
-    content.push_str(&dir_header);
+    content.push_str(dir_name);
     content.push('\n');
     content.push_str(&"=".repeat(77));
     content.push_str("\n\n");
 
-    // Collect supported and unsupported files
-    let (supported_files, unsupported_files) = collect_files(dir_path);
+    // Collect supported and unsupported files (depth-limited, matching the tree)
+    let (supported_files, unsupported_files) = collect_files(dir_path, max_depth);
 
     // Supported files section
     for file_path in &supported_files {
@@ -150,13 +152,14 @@ fn build_html_report(
     tree: &TreeNode,
     dir_path: &Path,
     show_lines: bool,
+    max_depth: usize,
 ) -> Result<String> {
     let mut content = String::new();
 
     // HTML header
     content.push_str("<!DOCTYPE html>\n<html lang=\"en\">\n<head>\n");
     content.push_str("<meta charset=\"UTF-8\">\n");
-    content.push_str(&format!("<title>{} - Directory Report</title>\n", dir_name));
+    content.push_str(&format!("<title>{} - Directory Report</title>\n", html_escape(dir_name)));
     content.push_str(
         "<style>\n\
          body { font-family: 'Consolas', 'Courier New', monospace; background: #1e1e1e; color: #d4d4d4; padding: 20px; }\n\
@@ -171,7 +174,7 @@ fn build_html_report(
     content.push_str("</head>\n<body>\n");
 
     // Title
-    content.push_str(&format!("<h1>{} directory</h1>\n", dir_name));
+    content.push_str(&format!("<h1>{} directory</h1>\n", html_escape(dir_name)));
 
     // Tree
     content.push_str("<h2>Directory Tree</h2>\n");
@@ -182,8 +185,8 @@ fn build_html_report(
 
     content.push_str("<hr>\n\n");
 
-    // Collect supported and unsupported files
-    let (supported_files, unsupported_files) = collect_files(dir_path);
+    // Collect supported and unsupported files (depth-limited, matching the tree)
+    let (supported_files, unsupported_files) = collect_files(dir_path, max_depth);
 
     // Supported files
     content.push_str("<h2>Supported Files</h2>\n");
@@ -193,7 +196,8 @@ fn build_html_report(
             .unwrap_or_default()
             .to_string_lossy();
 
-        content.push_str(&format!("<div class=\"file-header\">{}</div>\n", file_name));
+        // Also escape file_name in the header (fix: was unescaped in original)
+        content.push_str(&format!("<div class=\"file-header\">{}</div>\n", html_escape(&file_name)));
         content.push_str("<div class=\"file-content\">\n");
 
         match cat_file_with_line_numbers(file_path, show_lines) {
@@ -214,7 +218,7 @@ fn build_html_report(
         for file_path in &unsupported_files {
             content.push_str(&format!(
                 "<li>{}</li>\n",
-                file_path.file_name().unwrap_or_default().to_string_lossy()
+                html_escape(&file_path.file_name().unwrap_or_default().to_string_lossy())
             ));
         }
         content.push_str("</ul>\n</div>\n");
@@ -224,35 +228,42 @@ fn build_html_report(
     Ok(content)
 }
 
-/// Collect all supported and unsupported text files recursively
-
-fn collect_files(dir_path: &Path) -> (Vec<std::path::PathBuf>, Vec<std::path::PathBuf>) {
+/// Collect all supported and unsupported files up to `max_depth` levels deep,
+/// respecting the same ignored-directory rules as `generate_tree`.
+///
+/// Previously this used unbounded `read_dir` recursion with no depth limit,
+/// causing the file list to include files that wouldn't appear in the tree
+/// section of the same report.
+fn collect_files(dir_path: &Path, max_depth: usize) -> (Vec<std::path::PathBuf>, Vec<std::path::PathBuf>) {
     let mut supported = Vec::new();
     let mut unsupported = Vec::new();
     let ignored_dirs = Config::global_get_ignored_dirs();
+    // Fetch format config once for the entire walk.
+    let fmt_cfg = FormatConfig::from_global();
 
-    if let Ok(entries) = std::fs::read_dir(dir_path) {
-        for entry in entries.flatten() {
-            let path = entry.path();
-            if path.is_dir() {
-                let dir_name = path
-                    .file_name()
-                    .unwrap_or_default()
-                    .to_string_lossy()
-                    .to_lowercase();
-                // Skip ignored directories
-                if ignored_dirs.contains(&dir_name) {
-                    continue;
+    let walker = WalkDir::new(dir_path)
+        .max_depth(max_depth)
+        .into_iter()
+        .filter_entry(|e| {
+            if e.depth() == 0 {
+                return true;
+            }
+            if e.file_type().is_dir() {
+                let name = e.file_name().to_string_lossy().to_lowercase();
+                if ignored_dirs.contains(&name) {
+                    return false;
                 }
-                let (sub_supported, sub_unsupported) = collect_files(&path);
-                supported.extend(sub_supported);
-                unsupported.extend(sub_unsupported);
-            } else if path.is_file() {
-                if is_supported_format(&path) {
-                    supported.push(path);
-                } else {
-                    unsupported.push(path);
-                }
+            }
+            true
+        });
+
+    for entry in walker.filter_map(|e| e.ok()) {
+        if entry.file_type().is_file() {
+            let path = entry.path().to_path_buf();
+            if is_supported_format_with_config(&path, &fmt_cfg) {
+                supported.push(path);
+            } else {
+                unsupported.push(path);
             }
         }
     }
@@ -288,9 +299,32 @@ mod tests {
     }
 
     #[test]
-    fn test_collect_files() {
+    fn test_collect_files_respects_max_depth() {
         let temp = create_test_dir();
-        let (supported, unsupported) = collect_files(temp.path());
+
+        // depth=1: only root-level files, nested.txt is excluded
+        let (supported_shallow, _) = collect_files(temp.path(), 1);
+        let names: Vec<_> = supported_shallow
+            .iter()
+            .map(|p| p.file_name().unwrap().to_string_lossy().to_string())
+            .collect();
+        assert!(!names.contains(&"nested.txt".to_string()),
+            "nested.txt should not appear at depth=1");
+
+        // depth=2: nested.txt should now be included
+        let (supported_deep, _) = collect_files(temp.path(), 2);
+        let names_deep: Vec<_> = supported_deep
+            .iter()
+            .map(|p| p.file_name().unwrap().to_string_lossy().to_string())
+            .collect();
+        assert!(names_deep.contains(&"nested.txt".to_string()),
+            "nested.txt should appear at depth=2");
+    }
+
+    #[test]
+    fn test_collect_files_full() {
+        let temp = create_test_dir();
+        let (supported, unsupported) = collect_files(temp.path(), 10);
 
         // file1.txt, file2.rs, nested.txt should be supported
         assert_eq!(supported.len(), 3, "Expected 3 supported text files");
@@ -302,12 +336,13 @@ mod tests {
     #[test]
     fn test_build_txt_report() -> Result<()> {
         let temp = create_test_dir();
-        let tree = generate_tree(temp.path().to_string_lossy().as_ref(), None,true,None);
+        let tree = generate_tree(temp.path().to_string_lossy().as_ref(), None, true, None);
         let report = build_txt_report(
             &temp.path().file_name().unwrap().to_string_lossy().to_string(),
             &tree,
             temp.path(),
             false,
+            10,
         )?;
 
         assert!(report.contains("file1.txt"));
@@ -320,12 +355,13 @@ mod tests {
     #[test]
     fn test_build_html_report() -> Result<()> {
         let temp = create_test_dir();
-        let tree = generate_tree(temp.path().to_string_lossy().as_ref(), None,true,None);
+        let tree = generate_tree(temp.path().to_string_lossy().as_ref(), None, true, None);
         let report = build_html_report(
             &temp.path().file_name().unwrap().to_string_lossy().to_string(),
             &tree,
             temp.path(),
             false,
+            10,
         )?;
 
         assert!(report.contains("<!DOCTYPE html>"));
@@ -338,7 +374,7 @@ mod tests {
 
     #[test]
     fn test_html_escape() {
-        assert_eq!(html_escape("<script>alert('xss')</script>"), 
+        assert_eq!(html_escape("<script>alert('xss')</script>"),
                    "&lt;script&gt;alert(&#39;xss&#39;)&lt;/script&gt;");
         assert_eq!(html_escape("a & b"), "a &amp; b");
         assert_eq!(html_escape("foo\"bar"), "foo&quot;bar");
@@ -354,16 +390,16 @@ mod tests {
     fn test_generate_report_creates_file() -> Result<()> {
         let temp = create_test_dir();
         let test_dir_name = temp.path().file_name().unwrap().to_string_lossy().to_string();
-        
+
         // Temporarily set output to temp parent so file is created there
         let original = Config::global_get_output_path();
         Config::global_set_output_path(temp.path().parent().unwrap());
 
         let _output_path = generate_report(temp.path(), ReportFormat::Txt)?;
-        
+
         let expected_path = temp.path().parent().unwrap().join(format!("{}.txt", test_dir_name));
         assert!(expected_path.exists(), "Report file should exist at {}", expected_path.display());
-        
+
         // Clean up
         let _ = fs::remove_file(&expected_path);
         Config::global_set_output_path(&original);

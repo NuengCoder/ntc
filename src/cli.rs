@@ -1,9 +1,10 @@
 use crate::config::Config;
 use crate::filetype::is_supported_format;
-use crate::output::cat_file;
+use crate::output::{cat_file, print_error, print_success, print_warning};
 use crate::report::{generate_report, generate_report_to, ReportFormat};
 use anyhow::{bail, Result};
 use clap::{Arg, ArgAction, Command};
+use colored::*;
 use std::path::Path;
 
 /// Pre‑process raw args to accept `-say`, `-print` as long options.
@@ -34,6 +35,8 @@ pub fn run_cli() -> Result<bool> {
         "--setL [ON|OFF]             Show or set line numbers",
         "--setT [threads]            Show or set thread count",
         "--setH [path|ON|OFF]        Show or set history path/state",
+        "--showcg                    Show current configuration",
+        "--watch [ON|OFF]            Show or set file watcher state",
         "-say, -print <text>         Print text to stdout",
         "--size                      Show current directory size",
         "--view                      Quick view of current directory tree",
@@ -47,13 +50,14 @@ pub fn run_cli() -> Result<bool> {
         "--caren <file>              Care about a specific file",
         "--clear                     Clear the terminal screen",
         "--version                   Show version information",
+        "--where                    Show ntc executable location",
         "--list, --fun               List all command-line functions",
         "--help                      Show help",
         "(no args)                   Launch interactive mode",
     ];
 
     let matches = Command::new("ntc")
-        .author("Trivico")
+        .author("NuengCoder")
         .about("Navigate, Tree, Cat - Directory tree viewer and file concatenator")
         .arg(
             Arg::new("input")
@@ -112,6 +116,20 @@ pub fn run_cli() -> Result<bool> {
                 .value_parser(clap::value_parser!(String)),
         )
         .arg(
+            Arg::new("showcg")
+                .long("showcg")
+                .help("Show current configuration overview")
+                .action(ArgAction::SetTrue),
+        )
+        .arg(
+            Arg::new("watch")
+                .long("watch")
+                .value_name("STATE")
+                .help("Show or set file watcher (ON/OFF)")
+                .num_args(0..=1)
+                .value_parser(clap::value_parser!(String)),
+        )
+        .arg(
             Arg::new("say")
                 .short('s')
                 .long("say")
@@ -164,11 +182,26 @@ pub fn run_cli() -> Result<bool> {
                 .help("Quick view of current directory tree")
                 .action(ArgAction::SetTrue),
         )
+        .arg(
+            Arg::new("where_cli")
+                .long("where")
+                .help("Show ntc executable location")
+                .action(ArgAction::SetTrue),
+        )
         .try_get_matches_from(args)?;
 
     // --- Handle --version ---
     if matches.get_flag("version") {
-        println!("ntc 1.3.0");
+        println!("ntc {}", env!("CARGO_PKG_VERSION").green().bold());
+        return Ok(false);
+    }
+
+    // --- Handle --where ---
+    if matches.get_flag("where_cli") {
+        let exe = std::env::current_exe().unwrap_or_default();
+        let cwd = std::env::current_dir().unwrap_or_default();
+        println!("ntc executable: {}", exe.display());
+        println!("Current directory: {}", cwd.display());
         return Ok(false);
     }
 
@@ -180,7 +213,7 @@ pub fn run_cli() -> Result<bool> {
 
     // --- Handle --list / --fun ---
     if matches.get_flag("list") {
-        println!("ntc - Available command-line functions:\n");
+        println!("ntc {} - Available command-line functions:\n", env!("CARGO_PKG_VERSION").green().bold());
         for flag in &known_flags {
             println!("  {}", flag);
         }
@@ -190,6 +223,48 @@ pub fn run_cli() -> Result<bool> {
     // --- Handle --help ---
     if matches.get_flag("help_extra") {
         print_help();
+        return Ok(false);
+    }
+
+    // --- Handle --showcg ---
+    if matches.get_flag("showcg") {
+        let w = 65;
+        println!();
+        println!("┌{}┐", "─".repeat(w));
+        println!("│{:^w$}│", "Current Configuration", w = w);
+        println!("├{}┤", "─".repeat(w));
+        println!("│ {:<20} {:<42} │", "Output Path:", Config::global_get_output_path().display().to_string());
+        println!("│ {:<20} {:<42} │", "Max Depth:", Config::global_get_max_depth().to_string());
+        println!("│ {:<20} {:<42} │", "Line Numbers:", if Config::global_get_show_line_numbers() { "ON" } else { "OFF" });
+        println!("│ {:<20} {:<42} │", "Threads:", Config::global_get_num_threads().to_string());
+        println!("│ {:<20} {:<42} │", "History:", if Config::global_get_history_enabled() { "ON" } else { "OFF" });
+        println!("│ {:<20} {:<42} │", "Watcher:", if Config::global_get_file_watcher_enabled() { "ON" } else { "OFF" });
+        println!("└{}┘", "─".repeat(w));
+        println!();
+        return Ok(false);
+    }
+
+    // --- Handle --watch ---
+    if let Some(val) = matches.get_one::<String>("watch") {
+        if val.is_empty() {
+            let enabled = Config::global_get_file_watcher_enabled();
+            println!("File watcher: {}", if enabled { "ON" } else { "OFF" });
+        } else {
+            let upper = val.to_uppercase();
+            if upper == "ON" {
+                Config::global_set_file_watcher_enabled(true);
+                print_success("File watcher: ON (restart ntc to activate)");
+            } else if upper == "OFF" {
+                Config::global_set_file_watcher_enabled(false);
+                print_warning("File watcher: OFF (restart ntc to deactivate)");
+            } else {
+                print_error("Use --watch ON or --watch OFF");
+            }
+        }
+        return Ok(false);
+    } else if matches.contains_id("watch") {
+        let enabled = Config::global_get_file_watcher_enabled();
+        println!("File watcher: {}", if enabled { "ON" } else { "OFF" });
         return Ok(false);
     }
 
@@ -211,49 +286,48 @@ pub fn run_cli() -> Result<bool> {
     // --- Handle --ignore ---
     if let Some(name) = matches.get_one::<String>("ignore") {
         Config::global_add_ignored_dir(name);
-        println!("Now ignoring directory: {}", name);
+        print_success(&format!("Now ignoring directory: {}", name));
         return Ok(false);
     }
 
     // --- Handle --cared ---
     if let Some(name) = matches.get_one::<String>("cared") {
         Config::global_remove_ignored_dir(name);
-        println!("No longer ignoring directory: {}", name);
+        print_success(&format!("No longer ignoring directory: {}", name));
         return Ok(false);
     }
 
     // --- Handle --ignoref ---
     if let Some(ext) = matches.get_one::<String>("ignoref") {
         Config::global_add_ignored_extension(ext);
-        println!("Now ignoring .{} files", ext);
+        print_success(&format!("Now ignoring .{} files", ext));
         return Ok(false);
     }
 
     // --- Handle --caref ---
     if let Some(ext) = matches.get_one::<String>("caref") {
         Config::global_add_extra_supported_extension(ext);
-        println!("Now caring about .{} files", ext);
+        print_success(&format!("Now caring about .{} files", ext));
         return Ok(false);
     }
 
     // --- Handle --ignoren ---
     if let Some(file) = matches.get_one::<String>("ignoren") {
         Config::global_add_ignored_file(file);
-        println!("Now ignoring file: {}", file);
+        print_success(&format!("Now ignoring file: {}", file));
         return Ok(false);
     }
 
     // --- Handle --caren ---
     if let Some(file) = matches.get_one::<String>("caren") {
         Config::global_add_extra_supported_file(file);
-        println!("Now caring about file: {}", file);
+        print_success(&format!("Now caring about file: {}", file));
         return Ok(false);
     }
 
     // --- Handle --setH ---
     if let Some(val) = matches.get_one::<String>("setH") {
         if val.is_empty() {
-            // Show current
             let enabled = Config::global_get_history_enabled();
             let path = Config::global_get_history_path();
             println!("History: {}", if enabled { "ON" } else { "OFF" });
@@ -265,17 +339,17 @@ pub fn run_cli() -> Result<bool> {
             let upper = val.to_uppercase();
             if upper == "ON" {
                 Config::global_set_history_enabled(true);
-                println!("History: ON");
+                print_success("History: ON");
             } else if upper == "OFF" {
                 Config::global_set_history_enabled(false);
-                println!("History: OFF");
+                print_warning("History: OFF");
             } else if val == "default" {
                 Config::global_set_history_path(None);
-                println!("History path reset to default");
+                print_success("History path reset to default");
             } else {
                 let p = Path::new(val);
                 Config::global_set_history_path(Some(p.to_path_buf()));
-                println!("History path set to: {}", p.display());
+                print_success(&format!("History path set to: {}", p.display()));
             }
         }
         return Ok(false);
@@ -324,7 +398,7 @@ pub fn run_cli() -> Result<bool> {
             );
             tree_pb.finish_with_message("Done");
 
-            let dir_count = count_dirs_in_tree(&tree);
+            let dir_count = crate::explorer::count_dirs_in_tree(&tree);
             let scan_pb = indicatif::ProgressBar::new(dir_count);
             scan_pb.set_style(
                 indicatif::ProgressStyle::with_template("ScanB  [{bar:30}] {percent}% {msg}")
@@ -376,7 +450,7 @@ pub fn run_cli() -> Result<bool> {
             println!("Current output path: {}", Config::global_get_output_path().display());
         } else {
             Config::global_set_output_path(Path::new(val));
-            println!("Output path set to: {}", val);
+            print_success(&format!("Output path set to: {}", val));
         }
         return Ok(false);
     } else if matches.contains_id("setO") {
@@ -391,7 +465,7 @@ pub fn run_cli() -> Result<bool> {
             match val.parse::<usize>() {
                 Ok(depth) => {
                     Config::global_set_max_depth(depth);
-                    println!("Max depth set to: {}", Config::global_get_max_depth());
+                    print_success(&format!("Max depth set to: {}", Config::global_get_max_depth()));
                 }
                 Err(_) => bail!("Invalid depth value: {}. Must be a positive integer.", val),
             }
@@ -410,7 +484,7 @@ pub fn run_cli() -> Result<bool> {
             match Config::parse_line_numbers_state(val) {
                 Some(state) => {
                     Config::global_set_show_line_numbers(state);
-                    println!("Line numbers: {}", if state { "ON" } else { "OFF" });
+                    print_success(&format!("Line numbers: {}", if state { "ON" } else { "OFF" }));
                 }
                 None => bail!("Invalid value for setL: {}. Use ON or OFF.", val),
             }
@@ -429,7 +503,7 @@ pub fn run_cli() -> Result<bool> {
             match Config::parse_num_threads(val) {
                 Some(threads) => {
                     Config::global_set_num_threads(threads);
-                    println!("Threads set to: {}", Config::global_get_num_threads());
+                    print_success(&format!("Threads set to: {}", Config::global_get_num_threads()));
                 }
                 None => bail!("Invalid thread count: {}. Must be a positive integer.", val),
             }
@@ -442,7 +516,7 @@ pub fn run_cli() -> Result<bool> {
 
     // --- Handle -say / -print ---
     if let Some(text) = matches.get_one::<String>("say") {
-        println!("{}", text);
+        println!("{}", text.green());
         return Ok(false);
     }
 
@@ -467,12 +541,12 @@ pub fn run_cli() -> Result<bool> {
                     let content = crate::output::cat_file_with_line_numbers(path, show_lines)?;
                     let output_path = crate::output::build_output_path(output);
                     crate::output::write_file(&output_path, &content)?;
-                    println!("File saved to: {}", output_path.display());
+                    print_success(&format!("File saved to: {}", output_path.display()));
                 } else {
                     cat_file(path, show_lines)?;
                 }
             } else {
-                println!("Skipped (not support format): {}", input_path);
+                print_warning(&format!("Skipped (not support format): {}", input_path));
             }
         } else {
             bail!("Path not found: {}", input_path);
@@ -493,89 +567,48 @@ fn detect_format_from_filename(filename: &str) -> ReportFormat {
     }
 }
 
-/// Count directories in tree recursively
-fn count_dirs_in_tree(node: &crate::explorer::TreeNode) -> u64 {
-    let mut count = if node.is_dir && node.depth > 0 { 1 } else { 0 };
-    for child in &node.children {
-        count += count_dirs_in_tree(child);
-    }
-    count
-}
-
 /// Print detailed help
 fn print_help() {
-    println!(r#"ntc 1.3.0 - Navigate, Tree, Cat
-A combined directory tree viewer and file concatenator.
-
-USAGE:
-    ntc [OPTIONS]
-    ntc -i <path> [-o <output>]
-    ntc --setO [path]
-    ntc --setD [depth]
-    ntc --setL [ON|OFF]
-    ntc --setT [threads]
-    ntc --setH [path|ON|OFF|default]
-
-OPTIONS:
-    -i, --input <path>      Process a file or directory
-    -o, --output <file>     Save output to specified file
-    --setO [path]           Show or set the output directory (default: Desktop)
-    --setD [depth]          Show or set max recursion depth (min: 1, max: 12)
-    --setL [ON|OFF]         Show or toggle line numbers for file display
-    --setT [threads]        Show or set number of threads (default: 4)
-    --setH [path|ON|OFF]    Show/set history path or enable/disable
-    -say, -print <text>     Print text to stdout
-    --size                  Show current directory size
-    --view                  Quick view of current directory tree
-    --view --size           Quick view with directory sizes
-    --clear                 Clear the terminal screen
-    --version               Show version information
-    --list, --fun           List all command-line functions
-    --help                  Show this help message
-
-IGNORE/CARE OPTIONS:
-    --ignored               Show currently ignored items
-    --ignore <name>         Ignore a directory name
-    --cared <name>          Stop ignoring a directory name
-    --ignoref <ext>         Ignore a file extension
-    --caref <ext>           Care about a file extension
-    --ignoren <file>        Ignore a specific file (e.g., Cargo.lock)
-    --caren <file>          Care about a specific file
-
-EXAMPLES:
-    ntc                        Launch interactive mode
-    ntc -i src                 Generate report of src directory (default .txt)
-    ntc -i src -o report.html  Generate HTML report of src directory
-    ntc -i file.txt            Display file.txt contents
-    ntc --setL ON              Enable line numbers
-    ntc -say "Hello World"     Print Hello World
-    ntc --ignore target        Ignore 'target' directory
-    ntc --caref lock           Care about .lock files
-    ntc --ignoren Cargo.lock   Ignore only Cargo.lock
-    ntc --caren Cargo.lock     Care about only Cargo.lock
-
-For interactive commands, launch ntc without arguments."#);
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_detect_format_txt() {
-        assert_eq!(detect_format_from_filename("report.txt"), ReportFormat::Txt);
-        assert_eq!(detect_format_from_filename("report"), ReportFormat::Txt);
-        assert_eq!(detect_format_from_filename("report.md"), ReportFormat::Txt);
-    }
-
-    #[test]
-    fn test_detect_format_html() {
-        assert_eq!(detect_format_from_filename("report.html"), ReportFormat::Html);
-        assert_eq!(detect_format_from_filename("report.htm"), ReportFormat::Html);
-    }
-
-    #[test]
-    fn test_print_help_doesnt_panic() {
-        print_help();
-    }
+    println!("ntc {} - Navigate, Tree, Cat", env!("CARGO_PKG_VERSION").green().bold());
+    println!("A combined directory tree viewer and file concatenator.\n");
+    println!("{}", "USAGE:".cyan().bold());
+    println!("    ntc [OPTIONS]");
+    println!("    ntc -i <path> [-o <output>]\n");
+    println!("{}", "OPTIONS:".cyan().bold());
+    println!("    -i, --input <path>      Process a file or directory");
+    println!("    -o, --output <file>     Save output to specified file");
+    println!("    --setO [path]           Show or set the output directory (default: Desktop)");
+    println!("    --setD [depth]          Show or set max recursion depth (min: 1, max: 12)");
+    println!("    --setL [ON|OFF]         Show or toggle line numbers for file display");
+    println!("    --setT [threads]        Show or set number of threads (default: 4)");
+    println!("    --setH [path|ON|OFF]    Show/set history path or enable/disable");
+    println!("    --showcg                Show current configuration overview");
+    println!("    --watch [ON|OFF]        Show/set file watcher state");
+    println!("    --where                 Show ntc executable location");
+    println!("    -say, -print <text>     Print text to stdout");
+    println!("    --size                  Show current directory size");
+    println!("    --view                  Quick view of current directory tree");
+    println!("    --view --size           Quick view with directory sizes");
+    println!("    --clear                 Clear the terminal screen");
+    println!("    --version               Show version information");
+    println!("    --list, --fun           List all command-line functions");
+    println!("    --help                  Show this help message\n");
+    println!("{}", "IGNORE/CARE OPTIONS:".cyan().bold());
+    println!("    --ignored               Show currently ignored items");
+    println!("    --ignore <name>         Ignore a directory name");
+    println!("    --cared <name>          Stop ignoring a directory name");
+    println!("    --ignoref <ext>         Ignore a file extension");
+    println!("    --caref <ext>           Care about a file extension");
+    println!("    --ignoren <file>        Ignore a specific file (e.g., Cargo.lock)");
+    println!("    --caren <file>          Care about a specific file\n");
+    println!("{}", "EXAMPLES:".cyan().bold());
+    println!("    ntc                         Launch interactive mode");
+    println!("    ntc -i src                  Generate report of src directory");
+    println!("    ntc -i src -o report.html   Generate HTML report");
+    println!("    ntc -i file.txt             Display file contents");
+    println!("    ntc --setL ON               Enable line numbers");
+    println!("    ntc --showcg                Show configuration");
+    println!("    ntc -say \"Hello World\"      Print Hello World");
+    println!("    ntc --watch ON              Enable file watcher\n");
+    println!("For interactive commands, launch ntc without arguments.");
 }

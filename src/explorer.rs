@@ -2,7 +2,7 @@ use crate::config::Config;
 use crate::filetype::{is_supported_format_with_config, FormatConfig};
 use indicatif::ProgressBar;
 use rayon::prelude::*;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use walkdir::WalkDir;
 
@@ -14,6 +14,7 @@ pub struct TreeNode {
     pub is_supported: Option<bool>,
     pub children: Vec<TreeNode>,
     pub depth: usize,
+    pub size: Option<u64>,  
 }
 
 /// Generate a hierarchical tree.
@@ -145,7 +146,7 @@ pub fn generate_tree(
     let parent_indices: Vec<usize> = flat.iter().map(|f| f.parent_idx).collect();
     let n = flat.len();
 
-    // Convert each FlatNode into a TreeNode (children empty for now).
+    // Convert each FlatNode into a TreeNode (children empty, size None for now).
     let mut nodes: Vec<Option<TreeNode>> = flat
         .into_iter()
         .map(|f| {
@@ -156,6 +157,7 @@ pub fn generate_tree(
                 is_supported: f.is_supported,
                 children: Vec::new(),
                 depth: f.depth,
+                size: None,
             })
         })
         .collect();
@@ -186,9 +188,49 @@ pub fn generate_tree(
     root_node
 }
 
+// =========================================================================
+// Pre-computed tree sizing (replaces repeated calculate_dir_size calls)
+// =========================================================================
+
+/// Compute sizes for every node in the tree.
+/// Each directory gets its TRUE recursive total size (walks all descendants).
+/// Files get their individual size from metadata.
+pub fn compute_tree_sizes(node: &mut TreeNode, pb: Option<&ProgressBar>) {
+    // Recurse into children first (bottom-up), parallel across siblings
+    node.children.par_iter_mut().for_each(|child| {
+        if child.is_dir {
+            compute_tree_sizes(child, pb);
+        } else {
+            child.size = std::fs::metadata(&child.path).map(|m| m.len()).ok();
+        }
+    });
+
+    if !node.is_dir {
+        return;
+    }
+
+    // Calculate TRUE recursive size for this directory.
+    // This uses the existing calculate_dir_size which does a full WalkDir
+    // from this path, respecting ignored directories.
+    let total = calculate_dir_size(Path::new(&node.path));
+    node.size = Some(total);
+
+    if let Some(pb) = pb {
+        pb.inc(1);
+    }
+}
+
+// =========================================================================
+// Legacy helpers (still used by the `size` command and CLI --size)
+// =========================================================================
+
 /// Count files (respects ignored dirs)
 pub fn count_files(path: &Path) -> u64 {
     let ignored_dirs = Config::global_get_ignored_dirs();
+    walk_files(path, &ignored_dirs).len() as u64
+}
+
+fn walk_files(path: &Path, ignored_dirs: &HashSet<String>) -> Vec<PathBuf> {
     WalkDir::new(path)
         .into_iter()
         .filter_entry(|e| {
@@ -197,81 +239,33 @@ pub fn count_files(path: &Path) -> u64 {
             }
             if e.file_type().is_dir() {
                 let name = e.file_name().to_string_lossy().to_lowercase();
-                if ignored_dirs.contains(&name) {
-                    return false;
-                }
-            }
-            true
-        })
-        .filter_map(|e| e.ok())
-        .filter(|e| e.file_type().is_file())
-        .count() as u64
-}
-
-/// Calculate total size of a directory (parallel with rayon)
-pub fn calculate_dir_size(path: &Path) -> u64 {
-    let ignored_dirs = Config::global_get_ignored_dirs();
-
-    let files: Vec<_> = WalkDir::new(path)
-        .into_iter()
-        .filter_entry(|e| {
-            if e.depth() == 0 {
-                return true;
-            }
-            if e.file_type().is_dir() {
-                let name = e.file_name().to_string_lossy().to_lowercase();
-                if ignored_dirs.contains(&name) {
-                    return false;
-                }
+                return !ignored_dirs.contains(&name);
             }
             true
         })
         .filter_map(|e| e.ok())
         .filter(|e| e.file_type().is_file())
         .map(|e| e.path().to_path_buf())
-        .collect();
+        .collect()
+}
 
-    // Use rayon parallel iterator for metadata reading
-    files
+/// Calculate total size of a directory (parallel with rayon)
+pub fn calculate_dir_size(path: &Path) -> u64 {
+    let ignored_dirs = Config::global_get_ignored_dirs();
+    walk_files(path, &ignored_dirs)
         .par_iter()
-        .map(|p| {
-            std::fs::metadata(p)
-                .map(|m| m.len())
-                .unwrap_or(0)
-        })
+        .map(|p| std::fs::metadata(p).map(|m| m.len()).unwrap_or(0))
         .sum()
 }
 
 /// Calculate total size with progress bar (parallel)
 pub fn calculate_dir_size_with_progress(path: &Path, pb: &ProgressBar) -> u64 {
     let ignored_dirs = Config::global_get_ignored_dirs();
-
-    let files: Vec<_> = WalkDir::new(path)
-        .into_iter()
-        .filter_entry(|e| {
-            if e.depth() == 0 {
-                return true;
-            }
-            if e.file_type().is_dir() {
-                let name = e.file_name().to_string_lossy().to_lowercase();
-                if ignored_dirs.contains(&name) {
-                    return false;
-                }
-            }
-            true
-        })
-        .filter_map(|e| e.ok())
-        .filter(|e| e.file_type().is_file())
-        .map(|e| e.path().to_path_buf())
-        .collect();
-
-    files
+    walk_files(path, &ignored_dirs)
         .par_iter()
         .map(|p| {
             pb.inc(1);
-            std::fs::metadata(p)
-                .map(|m| m.len())
-                .unwrap_or(0)
+            std::fs::metadata(p).map(|m| m.len()).unwrap_or(0)
         })
         .sum()
 }
@@ -295,42 +289,11 @@ pub fn human_readable_size(bytes: u64) -> String {
     }
 }
 
-/// Format tree as string
-pub fn format_tree(node: &TreeNode, prefix: &str, is_last: bool) -> String {
-    let mut output = String::new();
-    let connector = if node.depth == 0 {
-        "".to_string()
-    } else if is_last {
-        "└── ".to_string()
-    } else {
-        "├── ".to_string()
-    };
+// =========================================================================
+// Tree formatting (uses cached sizes when available)
+// =========================================================================
 
-    let suffix = if node.is_dir && node.depth > 0 {
-        " [Directory]"
-    } else {
-        ""
-    };
-
-    output.push_str(&format!("{}{}{}{}\n", prefix, connector, node.name, suffix));
-
-    for (i, child) in node.children.iter().enumerate() {
-        let is_last_child = i == node.children.len() - 1;
-        let new_prefix = if node.depth == 0 {
-            String::new()
-        } else if is_last {
-            format!("{}    ", prefix)
-        } else {
-            format!("{}│   ", prefix)
-        };
-        output.push_str(&format_tree(child, &new_prefix, is_last_child));
-    }
-
-    output
-}
-
-/// Format tree with optional directory sizes
-pub fn format_tree_with_sizes(
+fn format_tree_inner(
     node: &TreeNode,
     prefix: &str,
     is_last: bool,
@@ -338,41 +301,46 @@ pub fn format_tree_with_sizes(
     pb: Option<&ProgressBar>,
 ) -> String {
     let mut output = String::new();
-    let connector = if node.depth == 0 {
-        "".to_string()
-    } else if is_last {
-        "└── ".to_string()
-    } else {
-        "├── ".to_string()
+    let connector = match node.depth {
+        0 => "",
+        _ if is_last => "└── ",
+        _ => "├── ",
     };
-
     let suffix = if node.is_dir && node.depth > 0 {
         if show_sizes {
-            let dir_path = Path::new(&node.path);
-            let size = calculate_dir_size(dir_path);
-            if let Some(pb) = pb {
-                pb.inc(1);
-            }
-            format!(" [Directory] ({})", human_readable_size(size))
+            // Use cached size if available (from compute_tree_sizes),
+            // otherwise fall back to on-the-fly calculation for backwards compatibility
+            let size_str = if let Some(size) = node.size {
+                if let Some(pb) = pb {
+                    pb.inc(1);
+                }
+                human_readable_size(size)
+            } else {
+                // Fallback: compute on the fly (slower, but works without compute_tree_sizes)
+                let size = calculate_dir_size(Path::new(&node.path));
+                if let Some(pb) = pb {
+                    pb.inc(1);
+                }
+                human_readable_size(size)
+            };
+            format!(" [Directory] ({})", size_str)
         } else {
             " [Directory]".to_string()
         }
     } else {
-        "".to_string()
+        String::new()
     };
 
     output.push_str(&format!("{}{}{}{}\n", prefix, connector, node.name, suffix));
 
     for (i, child) in node.children.iter().enumerate() {
         let is_last_child = i == node.children.len() - 1;
-        let new_prefix = if node.depth == 0 {
-            String::new()
-        } else if is_last {
-            format!("{}    ", prefix)
-        } else {
-            format!("{}│   ", prefix)
+        let new_prefix = match node.depth {
+            0 => String::new(),
+            _ if is_last => format!("{}    ", prefix),
+            _ => format!("{}│   ", prefix),
         };
-        output.push_str(&format_tree_with_sizes(
+        output.push_str(&format_tree_inner(
             child,
             &new_prefix,
             is_last_child,
@@ -381,6 +349,25 @@ pub fn format_tree_with_sizes(
         ));
     }
     output
+}
+
+/// Format tree as string (no sizes)
+pub fn format_tree(node: &TreeNode, prefix: &str, is_last: bool) -> String {
+    format_tree_inner(node, prefix, is_last, false, None)
+}
+
+/// Format tree with optional directory sizes.
+/// If `show_sizes` is true and node sizes have been pre-computed via
+/// `compute_tree_sizes`, this is O(n) string building. Otherwise it
+/// falls back to per-directory `calculate_dir_size` calls for compatibility.
+pub fn format_tree_with_sizes(
+    node: &TreeNode,
+    prefix: &str,
+    is_last: bool,
+    show_sizes: bool,
+    pb: Option<&ProgressBar>,
+) -> String {
+    format_tree_inner(node, prefix, is_last, show_sizes, pb)
 }
 
 /// Count total entries for progress bar
@@ -415,4 +402,95 @@ pub fn count_dirs_in_tree(node: &TreeNode) -> u64 {
         count += count_dirs_in_tree(child);
     }
     count
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::fs;
+    use tempfile::TempDir;
+
+    fn create_test_tree() -> (TempDir, PathBuf) {
+        let temp = TempDir::new().unwrap();
+        let root = temp.path().to_path_buf();
+
+        // Directories
+        fs::create_dir_all(root.join("a/b/c")).unwrap();
+        fs::create_dir_all(root.join("a/b2")).unwrap();
+        fs::create_dir_all(root.join("d")).unwrap();
+
+        // Files
+        fs::write(root.join("root_file.txt"), b"0123456789").unwrap(); // 10 bytes
+        fs::write(root.join("a/a_file.txt"), b"01234").unwrap(); // 5 bytes
+        fs::write(root.join("a/b/b_file.txt"), b"01234567890123456789").unwrap(); // 20 bytes
+        fs::write(root.join("a/b/c/c_file.txt"), b"0").unwrap(); // 1 byte
+        fs::write(root.join("d/d_file.txt"), b"0123456789012345").unwrap(); // 16 bytes
+
+        (temp, root)
+    }
+
+    #[test]
+    fn test_compute_tree_sizes_sets_all_sizes() {
+        let (_temp, root) = create_test_tree();
+        let root_str = root.to_string_lossy().to_string();
+        let mut tree = generate_tree(&root_str, None, true, None);
+
+        // Before: all sizes are None
+        assert!(tree.size.is_none());
+
+        compute_tree_sizes(&mut tree, None);
+
+        // After: root size should be sum of all files: 10 + 5 + 20 + 1 + 16 = 52
+        assert_eq!(tree.size, Some(52));
+
+        // Spot-check a leaf directory
+        let c_node = find_node(&tree, "c").unwrap();
+        assert!(c_node.is_dir);
+        assert_eq!(c_node.size, Some(1)); // only c_file.txt (1 byte)
+
+        // Spot-check a leaf file
+        let c_file = find_node(&tree, "c_file.txt").unwrap();
+        assert!(!c_file.is_dir);
+        assert_eq!(c_file.size, Some(1));
+    }
+
+    #[test]
+    fn test_format_tree_with_sizes_uses_cache() {
+        let (_temp, root) = create_test_tree();
+        let root_str = root.to_string_lossy().to_string();
+        let mut tree = generate_tree(&root_str, None, true, None);
+
+        // Pre-compute sizes
+        compute_tree_sizes(&mut tree, None);
+
+        // Format with sizes — should use cached values (fast path)
+        let output = format_tree_with_sizes(&tree, "", true, true, None);
+        assert!(output.contains("[Directory]"));
+        assert!(output.contains("52 B")); // root total
+    }
+
+    #[test]
+    fn test_format_tree_fallback_without_cache() {
+        let (_temp, root) = create_test_tree();
+        let root_str = root.to_string_lossy().to_string();
+        let tree = generate_tree(&root_str, None, true, None);
+
+        // Format with sizes WITHOUT pre-computing — should fall back to
+        // on-the-fly calculate_dir_size (slower but still works)
+        let output = format_tree_with_sizes(&tree, "", true, true, None);
+        assert!(output.contains("[Directory]"));
+    }
+
+    /// Helper to find a node by name in the tree
+    fn find_node<'a>(node: &'a TreeNode, name: &str) -> Option<&'a TreeNode> {
+        if node.name == name {
+            return Some(node);
+        }
+        for child in &node.children {
+            if let Some(found) = find_node(child, name) {
+                return Some(found);
+            }
+        }
+        None
+    }
 }

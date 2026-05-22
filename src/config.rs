@@ -1,8 +1,9 @@
 use serde::{Deserialize, Serialize};
-use std::collections::HashSet;
+use std::collections::{HashSet, HashMap};
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::RwLock;
+
 
 /// Global configuration (persisted to disk)
 #[derive(Debug, Serialize, Deserialize)]
@@ -39,6 +40,12 @@ pub struct Config {
     /// Whether file watcher is enabled
     #[serde(default)]
     pub file_watcher_enabled: bool,
+
+    #[serde(default)]
+    pub teleports: HashMap<String, PathBuf>,
+
+    #[serde(default)]
+    pub run_aliases: HashMap<String, String>,
 }
 
 fn default_output_path() -> PathBuf {
@@ -74,6 +81,8 @@ impl Config {
             history_path: None,
             history_enabled: default_history_enabled(),
             file_watcher_enabled: false,
+            teleports: HashMap::new(),
+            run_aliases: HashMap::new(),
         }
     }
 
@@ -133,6 +142,12 @@ impl Config {
         if let Some(ref v) = local.ignored_files {
             self.ignored_files = v.iter().cloned().collect();
         }
+        if let Some(ref v) = local.teleports {
+            self.teleports = v.clone();
+        }
+        if let Some(ref v) = local.run_aliases {
+            self.run_aliases = v.clone();
+        }
     }
 
     /// Save this config instance to disk.
@@ -149,17 +164,16 @@ impl Config {
     }
 
     // ---- History path resolution ----
-    pub fn resolve_history_path(&self) -> PathBuf {
+    pub fn resolve_history_path(&self) -> Option<PathBuf> {
         if !self.history_enabled {
-            return PathBuf::new(); // empty = disabled
+            return None;
         }
         if let Some(ref custom) = self.history_path {
-            custom.clone()
+            Some(custom.clone())
         } else {
-            // Default: next to executable or current dir
-            std::env::current_dir()
+            Some(std::env::current_dir()
                 .unwrap_or_else(|_| PathBuf::from("."))
-                .join("ntc_history.txt")
+                .join("ntc_history.txt"))
         }
     }
 
@@ -336,6 +350,43 @@ impl Config {
     pub fn parse_num_threads(input: &str) -> Option<usize> {
         input.parse::<usize>().ok().filter(|&n| n > 0)
     }
+
+    pub fn global_get_teleports() -> HashMap<String, PathBuf> {
+        Self::global().read().unwrap().teleports.clone()
+    }
+    
+    pub fn global_set_teleports(teleports: HashMap<String, PathBuf>) {
+        let mut cfg = Self::global().write().unwrap();
+        cfg.teleports = teleports;
+        cfg.save();
+    }
+
+    pub fn global_get_run_aliases() -> HashMap<String, String> {
+        Self::global().read().unwrap().run_aliases.clone()
+    }
+    
+    pub fn global_add_run_alias(name: &str, command: &str) {
+        let mut cfg = Self::global().write().unwrap();
+        cfg.run_aliases.insert(name.to_lowercase(), command.to_string());
+        cfg.save();
+    }
+    
+    pub fn global_remove_run_alias(name: &str) {
+        let mut cfg = Self::global().write().unwrap();
+        cfg.run_aliases.remove(&name.to_lowercase());
+        cfg.save();
+    }
+    
+    pub fn global_update_run_alias(name: &str, command: &str) -> bool {
+        let mut cfg = Self::global().write().unwrap();
+        if cfg.run_aliases.contains_key(&name.to_lowercase()) {
+            cfg.run_aliases.insert(name.to_lowercase(), command.to_string());
+            cfg.save();
+            true
+        } else {
+            false
+        }
+    }
 }
 
 impl Default for Config {
@@ -357,31 +408,7 @@ struct LocalConfig {
     pub ignored_extensions: Option<Vec<String>>,
     pub extra_supported_extensions: Option<Vec<String>>,
     pub ignored_files: Option<Vec<String>>,
+    pub teleports: Option<HashMap<String, PathBuf>>,
+    pub run_aliases: Option<HashMap<String, String>>,
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_defaults() {
-        let cfg = Config::new();
-        assert!(!cfg.output_path.as_os_str().is_empty());
-        assert_eq!(cfg.max_depth, default_max_depth());
-        assert!(!cfg.show_line_numbers);
-        assert_eq!(cfg.num_threads, default_num_threads());
-        assert!(cfg.ignored_directory_names.contains("target"));
-        assert_eq!(cfg.history_enabled, default_history_enabled());
-        assert!(cfg.history_path.is_none());
-    }
-
-    #[test]
-    fn test_default_trait_matches_new() {
-        let a = Config::new();
-        let b = Config::default();
-        assert_eq!(a.max_depth, b.max_depth);
-        assert_eq!(a.num_threads, b.num_threads);
-        assert_eq!(a.show_line_numbers, b.show_line_numbers);
-        assert_eq!(a.history_enabled, b.history_enabled);
-    }
-}

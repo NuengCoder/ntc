@@ -15,7 +15,7 @@ pub fn start_watcher(path: &Path) -> Result<(notify::RecommendedWatcher, Arc<Ato
         if let Ok(event) = res {
             match event.kind {
                 EventKind::Create(_) | EventKind::Modify(_) | EventKind::Remove(_) => {
-                    changed_clone.store(true, Ordering::SeqCst);
+                    changed_clone.store(true, Ordering::Release);
                 }
                 _ => {}
             }

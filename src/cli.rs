@@ -1,5 +1,5 @@
 use crate::config::Config;
-use crate::filetype::is_supported_format;
+use crate::filetype::{FormatConfig, is_supported_format};
 use crate::output::{cat_file, print_error, print_success, print_warning};
 use crate::report::{generate_report, generate_report_to, ReportFormat};
 use anyhow::{bail, Result};
@@ -10,21 +10,76 @@ use std::path::Path;
 /// Pre‑process raw args to accept `-say`, `-print` as long options.
 fn preprocess_args(args: Vec<String>) -> Vec<String> {
     args.into_iter()
-        .map(|arg| {
-            if arg == "-say" {
-                "--say".to_string()
-            } else if arg == "-print" {
-                "--say".to_string()
-            } else {
-                arg
-            }
+        .map(|arg| match arg.as_str() {
+            "-say" | "-print" => "--say".to_string(),
+            _ => arg,
         })
         .collect()
+}
+
+// Add this helper function
+fn print_logo() {
+    println!();
+    println!("  {}  {}  {}", 
+        "N".blue().bold(), 
+        "T".blue().bold(), 
+        "C".blue().bold()
+    );
+    println!("  {} {} {}", 
+        "Navigate".red(), 
+        "Tree".green(), 
+        "Cat".blue()
+    );
+    println!();
 }
 
 /// Parse command-line arguments and execute the appropriate action.
 pub fn run_cli() -> Result<bool> {
     let raw_args: Vec<String> = std::env::args().collect();
+
+    // --- Handle @teleport shortcut from command line ---
+    // Check if first argument starts with @ (e.g., ntc @web)
+    if raw_args.len() == 2 {
+        let arg = &raw_args[1];
+        if (arg.starts_with('@') || arg.starts_with('#')) && arg.len() > 1 {
+            let tp_name = &arg[1..];
+            use crate::navigator::Navigator;
+            use crate::teleport::TeleportManager;
+
+            // Get the path without canonicalizing
+            if let Some(path) = TeleportManager::get_path(tp_name) {
+                // Clean the path - remove Windows extended prefix if present
+                let clean_path = path.to_string_lossy().to_string();
+                let clean_path = if clean_path.starts_with(r"\\?\") {
+                    Path::new(&clean_path[4..]).to_path_buf()
+                } else {
+                    path.clone()
+                };
+                
+                // Create navigator and manually set current_dir
+                let mut nav = Navigator::new()?;
+                
+                // Try to go to the cleaned path
+                match nav.go_to(&clean_path) {
+                    Ok(()) => {
+                        println!("✓ Teleported to '{}' -> {}", tp_name, clean_path.display());
+                        println!();
+                        print_logo();
+                        crate::shell::run_shell_with_nav(nav)?;
+                        return Ok(false);
+                    }
+                    Err(e) => {
+                        print_error(&format!("Failed to teleport to '{}': {}", tp_name, e));
+                        return Ok(false);
+                    }
+                }
+            } else {
+                print_error(&format!("Teleport point not found: '{}'", tp_name));
+                println!("Use 'ntc --tp-list' to see all savepoints.");
+                return Ok(false);
+            }
+        }
+    }
     let args = preprocess_args(raw_args);
 
     let known_flags = vec![
@@ -53,6 +108,10 @@ pub fn run_cli() -> Result<bool> {
         "--where                    Show ntc executable location",
         "--list, --fun               List all command-line functions",
         "--help                      Show help",
+        "--tp-add <name>             Save current directory as teleport point",
+        "--tp-list                   List all teleport points", 
+        "--tp-rm <name>              Remove teleport point",
+        "ntc @<name>                 Launch and teleport to savepoint",
         "(no args)                   Launch interactive mode",
     ];
 
@@ -188,6 +247,27 @@ pub fn run_cli() -> Result<bool> {
                 .help("Show ntc executable location")
                 .action(ArgAction::SetTrue),
         )
+        // In cli.rs, add these args to the Command builder:
+        .arg(
+            Arg::new("tp_add")
+                .long("tp-add")
+                .value_name("NAME")
+                .help("Save current directory as teleport point")
+                .num_args(1),
+        )
+        .arg(
+            Arg::new("tp_list")
+                .long("tp-list")
+                .help("List all teleport points")
+                .action(ArgAction::SetTrue),
+        )
+        .arg(
+            Arg::new("tp_rm")
+                .long("tp-rm")
+                .value_name("NAME")
+                .help("Remove teleport point")
+                .num_args(1),
+        )
         .try_get_matches_from(args)?;
 
     // --- Handle --version ---
@@ -271,15 +351,12 @@ pub fn run_cli() -> Result<bool> {
     // --- Handle --ignored ---
     if matches.get_flag("ignored") {
         let dirs = Config::global_get_ignored_dirs();
-        let ignored_exts = Config::global_get_ignored_extensions();
-        let extra_exts = Config::global_get_extra_supported_extensions();
-        let ignored_files = Config::global_get_ignored_files();
-        let extra_files = Config::global_get_extra_supported_files();
+        let fmt_cfg = FormatConfig::from_global();
         println!("Ignored directories: {:?}", dirs);
-        println!("Ignored extensions: {:?}", ignored_exts);
-        println!("Extra supported extensions: {:?}", extra_exts);
-        println!("Ignored files: {:?}", ignored_files);
-        println!("Extra supported files: {:?}", extra_files);
+        println!("Ignored extensions: {:?}", fmt_cfg.ignored_extensions);
+        println!("Extra supported extensions: {:?}", fmt_cfg.extra_extensions);
+        println!("Ignored files: {:?}", fmt_cfg.ignored_files);
+        println!("Extra supported files: {:?}", fmt_cfg.extra_files);
         return Ok(false);
     }
 
@@ -390,7 +467,7 @@ pub fn run_cli() -> Result<bool> {
             );
             tree_pb.set_message("Building tree...");
 
-            let tree = crate::explorer::generate_tree(
+            let mut tree = crate::explorer::generate_tree(
                 &nav.current_path().to_string_lossy(),
                 Some(1),
                 true,
@@ -406,6 +483,8 @@ pub fn run_cli() -> Result<bool> {
                     .progress_chars("=> "),
             );
             scan_pb.set_message("Calculating sizes...");
+            
+            crate::explorer::compute_tree_sizes(&mut tree, Some(&scan_pb));
 
             let tree_str = crate::explorer::format_tree_with_sizes(&tree, "", true, true, Some(&scan_pb));
             scan_pb.finish_with_message("Done");
@@ -554,6 +633,23 @@ pub fn run_cli() -> Result<bool> {
         return Ok(false);
     }
 
+    // --- Handle teleport CLI commands ---
+    if matches.get_flag("tp_list") {
+        crate::teleport::TeleportManager::list()?;
+        return Ok(false);
+    }
+
+    if let Some(name) = matches.get_one::<String>("tp_add") {
+        let current_dir = std::env::current_dir()?;
+        crate::teleport::TeleportManager::add(name, current_dir)?;
+        return Ok(false);
+    }
+
+    if let Some(name) = matches.get_one::<String>("tp_rm") {
+        crate::teleport::TeleportManager::remove_by_name(name)?;
+        return Ok(false);
+    }
+
     // --- No arguments: Launch interactive mode ---
     Ok(true)
 }
@@ -601,8 +697,14 @@ fn print_help() {
     println!("    --caref <ext>           Care about a file extension");
     println!("    --ignoren <file>        Ignore a specific file (e.g., Cargo.lock)");
     println!("    --caren <file>          Care about a specific file\n");
+    println!("{}", "TELEPORT SAVE POINTS:".cyan().bold());
+    println!("    --tp-add <name>         Save current directory as teleport point");
+    println!("    --tp-list               List all teleport points");
+    println!("    --tp-rm <name>          Remove a teleport point");
+    println!("    Note: Teleport navigation (jump/to) only works in interactive shell\n");
     println!("{}", "EXAMPLES:".cyan().bold());
     println!("    ntc                         Launch interactive mode");
+    println!("    ntc @web                    Launch and teleport to 'web' savepoint");
     println!("    ntc -i src                  Generate report of src directory");
     println!("    ntc -i src -o report.html   Generate HTML report");
     println!("    ntc -i file.txt             Display file contents");
@@ -611,4 +713,8 @@ fn print_help() {
     println!("    ntc -say \"Hello World\"      Print Hello World");
     println!("    ntc --watch ON              Enable file watcher\n");
     println!("For interactive commands, launch ntc without arguments.");
+    println!("{}", "INTERACTIVE-ONLY COMMANDS:".yellow().bold());
+    println!("    Navigation: go, godrive, back, gos, gosc");
+    println!("    Teleport: tp, tp jump, tp to, @name");
+    println!("    These commands only work inside the interactive shell (run 'ntc' alone).\n");
 }

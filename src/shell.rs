@@ -1,9 +1,10 @@
 use crate::config::Config;
 use crate::explorer::{format_tree, format_tree_with_sizes, generate_tree};
-use crate::filetype::is_supported_format;
+use crate::filetype::{FormatConfig, is_supported_format};
 use crate::navigator::{Navigator, clear_screen};
 use crate::output::{cat_file, print_error, print_info, print_separator, print_success, print_warning};
 use crate::report::{generate_report, ReportFormat};
+use crate::teleport::TeleportManager;
 use crate::watcher;
 use anyhow::Result;
 use colored::*;
@@ -14,16 +15,26 @@ use std::path::Path;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
-/// Launch the interactive shell
+/// Launch the interactive shell 
 pub fn run_shell() -> Result<()> {
-    let mut nav = Navigator::new()?;
-    let mut rl = DefaultEditor::new().expect("Failed to create line editor");
+    let nav = Navigator::new()?;
+    run_shell_with_nav(nav)
+}
 
-    let history_path = Config::global().read().unwrap().resolve_history_path();
-    if Config::global_get_history_enabled() && !history_path.as_os_str().is_empty() {
+/// Launch the interactive shell with an existing Navigator (for @ shortcuts)
+pub fn run_shell_with_nav(mut nav: Navigator) -> Result<()> {
+    if std::env::var("NTC_SHELL").is_ok() {
+        print_warning("Already inside an ntc shell — nested shells are not supported.");
+        return Ok(());
+    }
+    std::env::set_var("NTC_SHELL", "1");
+    
+    let mut rl = DefaultEditor::new().expect("Failed to create line editor");
+    
+    if let Some(history_path) = Config::global().read().unwrap().resolve_history_path() {
         let _ = rl.load_history(&history_path);
     }
-
+    
     // File watcher
     let mut watcher_handle: Option<(notify::RecommendedWatcher, Arc<std::sync::atomic::AtomicBool>)> = None;
     if Config::global_get_file_watcher_enabled() {
@@ -35,7 +46,7 @@ pub fn run_shell() -> Result<()> {
             Err(e) => print_warning(&format!("Watcher failed: {}", e)),
         }
     }
-
+    
     // Welcome banner
     println!();
     println!("╔══════════════════════════════════════════════════════════════════╗");
@@ -44,21 +55,21 @@ pub fn run_shell() -> Result<()> {
     println!();
     println!("{}", "Type 'help' for available commands, 'exit' to quit.".dimmed());
     show_tree(&nav, Some(1), false, false, false);
-
+    
     loop {
         // Check file watcher
         if let Some((_, ref changed)) = watcher_handle {
-            if changed.load(Ordering::SeqCst) {
-                changed.store(false, Ordering::SeqCst);
+            if changed.load(Ordering::Acquire) {
+                changed.store(false, Ordering::Relaxed);
                 println!();
                 print_info("Directory changed — refreshing...");
                 show_tree(&nav, Some(1), false, false, false);
             }
         }
-
+        
         let display_path = nav.display_path();
         let prompt = format!("ntc [{}]> ", display_path);
-
+        
         let line = match rl.readline(&prompt) {
             Ok(line) => {
                 rl.add_history_entry(&line).ok();
@@ -74,12 +85,12 @@ pub fn run_shell() -> Result<()> {
             }
             Err(_) => break,
         };
-
+        
         let line = line.trim();
         if line.is_empty() {
             continue;
         }
-
+        
         // Check for piped commands (&&)
         if line.contains("&&") {
             let commands: Vec<&str> = line.split("&&").map(|s| s.trim()).collect();
@@ -94,7 +105,7 @@ pub fn run_shell() -> Result<()> {
                     }
                     Err(e) => {
                         print_error(&format!("{}", e));
-                        break; // Stop on first error
+                        break;
                     }
                 }
             }
@@ -104,7 +115,7 @@ pub fn run_shell() -> Result<()> {
             }
             continue;
         }
-
+        
         match execute_command(line, &mut nav) {
             Ok(should_exit) => {
                 if should_exit {
@@ -117,14 +128,13 @@ pub fn run_shell() -> Result<()> {
             }
         }
     }
-
+    
     if Config::global_get_history_enabled() {
-        let history_path = Config::global().read().unwrap().resolve_history_path();
-        if !history_path.as_os_str().is_empty() {
+        if let Some(history_path) = Config::global().read().unwrap().resolve_history_path() {
             let _ = rl.save_history(&history_path);
         }
     }
-
+    
     Ok(())
 }
 
@@ -135,19 +145,21 @@ fn execute_command(input: &str, nav: &mut Navigator) -> Result<bool> {
     let args = parts.get(1).unwrap_or(&"").trim();
 
     match cmd.as_str() {
-        "go" => {
+        "go" | "cd" => {
             if args.is_empty() {
                 println!("Usage: go <directory_path>");
                 println!("Example: go C:\\Users");
                 println!("         go subdir");
+                println!("  cd works the same as go");
             } else {
                 nav.go_to(Path::new(args))?;
+                clear_screen();
                 print_success(&format!("Navigated to: {}", nav.display_path()));
                 show_tree(nav, Some(1), false, false, false);
             }
         }
 
-        "godrive" => {
+        "godrive" | "god" => {
             #[cfg(not(windows))]
             {
                 print_error("Drive navigation is only supported on Windows.");
@@ -170,10 +182,12 @@ fn execute_command(input: &str, nav: &mut Navigator) -> Result<bool> {
                     println!("Cancelled.");
                 } else if choice.len() == 1 && choice.chars().next().unwrap().is_alphabetic() {
                     nav.go_drive(choice.chars().next().unwrap())?;
+                    clear_screen();
                     show_tree(nav, Some(1), false, false, false);
                 } else if let Ok(num) = choice.parse::<usize>() {
                     if num > 0 && num <= drives.len() {
                         nav.go_drive(drives[num - 1])?;
+                        clear_screen();
                         show_tree(nav, Some(1), false, false, false);
                     } else {
                         print_error("Invalid drive number.");
@@ -184,14 +198,18 @@ fn execute_command(input: &str, nav: &mut Navigator) -> Result<bool> {
             } else {
                 let letter = args.chars().next().unwrap_or('C');
                 nav.go_drive(letter)?;
+                clear_screen();
                 show_tree(nav, Some(1), false, false, false);
             }
         }
 
-        "back" => {
+        "back" | "b" => {
             if args.is_empty() {
                 match nav.go_back() {
-                    Ok(()) => show_tree(nav, Some(1), false, false, false),
+                    Ok(()) => {
+                        clear_screen();
+                        show_tree(nav, Some(1), false, false, false);
+                    }
                     Err(e) => print_error(&format!("{}", e)),
                 }
             } else {
@@ -213,6 +231,7 @@ fn execute_command(input: &str, nav: &mut Navigator) -> Result<bool> {
                             }
                         }
                         if success {
+                            clear_screen();
                             show_tree(nav, Some(1), false, false, false);
                         }
                     }
@@ -410,6 +429,7 @@ fn execute_command(input: &str, nav: &mut Navigator) -> Result<bool> {
                 if let Some((_, name)) = dirs.iter().find(|(i, _)| *i == num) {
                     let new_path = nav.current_path().join(name);
                     nav.go_to(&new_path)?;
+                    clear_screen();
                     print_success(&format!("Navigated to: {}", nav.display_path()));
                     show_tree(nav, Some(1), false, false, false);
                 } else {
@@ -417,6 +437,173 @@ fn execute_command(input: &str, nav: &mut Navigator) -> Result<bool> {
                 }
             } else {
                 print_error("Invalid input.");
+            }
+        }
+
+        "gosc" => {
+            gosc_loop(nav)?;
+            // After exiting gosc, show current directory tree
+            show_tree(nav, Some(1), false, false, false);
+        }
+
+        "ral" => {
+            if args.is_empty() {
+                // Show help
+                println!("{}", "Run Alias (ral) Commands:".cyan().bold());
+                println!("  ral add <name> <command>    Create a new run alias");
+                println!("  ral edit <name> <command>   Update an existing alias");
+                println!("  ral rm <name>               Remove an alias");
+                println!("  ral list                    Show all aliases");
+                println!();
+                println!("{}", "Examples:".green());
+                println!("  ral add btr \"cargo build --release\"");
+                println!("  ral add py \"python test.py\"");
+                println!("  ral edit py \"python main.py\"");
+                println!("  ral list");
+                println!("  ral rm py");
+                println!();
+                println!("{}", "Usage with run:".green());
+                println!("  run btr     # Executes: cargo build --release");
+                println!("  run py      # Executes: python test.py");
+            } else {
+                let parts: Vec<&str> = args.splitn(3, ' ').collect();
+                let subcmd = parts[0].to_lowercase();
+                
+                match subcmd.as_str() {
+                    "add" => {
+                        if parts.len() < 3 {
+                            print_error("Usage: ral add <name> <command>");
+                            println!("Example: ral add btr \"cargo build --release\"");
+                        } else {
+                            let name = parts[1];
+                            let command = parts[2];
+                            Config::global_add_run_alias(name, command);
+                            print_success(&format!("Alias '{}' -> '{}'", name, command));
+                        }
+                    }
+                    "edit" => {
+                        if parts.len() < 3 {
+                            print_error("Usage: ral edit <name> <new_command>");
+                            println!("Example: ral edit py \"python main.py\"");
+                        } else {
+                            let name = parts[1];
+                            let command = parts[2];
+                            if Config::global_update_run_alias(name, command) {
+                                print_success(&format!("Updated alias '{}' -> '{}'", name, command));
+                            } else {
+                                print_error(&format!("Alias '{}' not found. Use 'ral add' to create it.", name));
+                            }
+                        }
+                    }
+                    "rm" | "remove" => {
+                        if parts.len() < 2 {
+                            print_error("Usage: ral rm <name>");
+                            println!("Example: ral rm py");
+                        } else {
+                            let name = parts[1];
+                            Config::global_remove_run_alias(name);
+                            print_success(&format!("Removed alias '{}'", name));
+                        }
+                    }
+                    "list" | "ls" => {
+                        let aliases = Config::global_get_run_aliases();
+                        if aliases.is_empty() {
+                            print_info("No run aliases defined. Use 'ral add <name> <command>'");
+                        } else {
+                            println!();
+                            println!("{}", "==================================================".cyan());
+                            println!("{}", "📌 Run Aliases (ral)".cyan().bold());
+                            println!("{}", "==================================================".cyan());
+                            let mut sorted: Vec<_> = aliases.iter().collect();
+                            sorted.sort_by(|a, b| a.0.cmp(b.0));
+                            for (i, (name, cmd)) in sorted.iter().enumerate() {
+                                println!("  {}. {} -> {}", 
+                                    (i + 1).to_string().yellow(), 
+                                    name.blue(), 
+                                    cmd.dimmed());
+                            }
+                            println!();
+                            println!("{}", "Usage: run <alias>".green());
+                        }
+                    }
+                    _ => {
+                        print_error(&format!("Unknown ral subcommand: {}", subcmd));
+                        println!("Type 'ral' for help.");
+                    }
+                }
+            }
+        }
+
+        "run" | "r" => {
+            if args.is_empty() {
+                println!("Usage: run <command|alias> [args...]");
+                println!();
+                println!("{}", "Examples:".green());
+                println!("  run python --version        # Run real command");
+                println!("  run btr                     # Run alias (cargo build --release)");
+                println!("  run py test.py              # Run alias with extra args");
+                println!();
+                println!("{}", "Manage aliases with: ral add/list/rm/edit".cyan());
+            } else {
+                // Parse first word to check if it's an alias
+                let parts: Vec<&str> = args.splitn(2, ' ').collect();
+                let first_word = parts[0];
+                let remaining_args = parts.get(1).unwrap_or(&"").trim();
+                
+                let aliases = Config::global_get_run_aliases();
+                
+                if let Some(aliased_cmd) = aliases.get(first_word) {
+                    // Execute alias with remaining args appended
+                    let full_cmd = if remaining_args.is_empty() {
+                        aliased_cmd.clone()
+                    } else {
+                        format!("{} {}", aliased_cmd, remaining_args)
+                    };
+                    print_info(&format!("Running: {}", full_cmd));
+                    println!();
+                    
+                    let status = run_system_command(&full_cmd, nav.current_path());
+                    
+                    println!();
+                    match status {
+                        Ok(exit_status) => {
+                            if exit_status.success() {
+                                print_success("Command completed successfully.");
+                            } else {
+                                match exit_status.code() {
+                                    Some(code) => print_error(&format!("Command exited with code: {}", code)),
+                                    None => print_warning("Command terminated (Ctrl+C)"),
+                                }
+                            }
+                        }
+                        Err(e) => {
+                            print_error(&format!("Failed to execute command: {}", e));
+                        }
+                    }
+                } else {
+                    // Not an alias, run as-is
+                    print_info(&format!("Running: {}", args));
+                    println!();
+                    
+                    let status = run_system_command(args, nav.current_path());
+                    
+                    println!();
+                    match status {
+                        Ok(exit_status) => {
+                            if exit_status.success() {
+                                print_success("Command completed successfully.");
+                            } else {
+                                match exit_status.code() {
+                                    Some(code) => print_error(&format!("Command exited with code: {}", code)),
+                                    None => print_warning("Command terminated (Ctrl+C)"),
+                                }
+                            }
+                        }
+                        Err(e) => {
+                            print_error(&format!("Failed to execute command: {}", e));
+                        }
+                    }
+                }
             }
         }
 
@@ -446,20 +633,17 @@ fn execute_command(input: &str, nav: &mut Navigator) -> Result<bool> {
 
         "ignored" => {
             let dirs = Config::global_get_ignored_dirs();
-            let ignored_exts = Config::global_get_ignored_extensions();
-            let extra_exts = Config::global_get_extra_supported_extensions();
-            let ignored_files = Config::global_get_ignored_files();
-            let extra_files = Config::global_get_extra_supported_files();
+            let fmt_cfg = FormatConfig::from_global();
             println!("{}", "Ignored directories:".yellow());
             for d in &dirs { println!("  - {}", d.red()); }
             println!("{}", "Ignored extensions:".yellow());
-            for e in &ignored_exts { println!("  - .{}", e.red()); }
+            for e in &fmt_cfg.ignored_extensions { println!("  - .{}", e.red()); }
             println!("{}", "Extra supported extensions:".yellow());
-            for e in &extra_exts { println!("  - .{}", e.green()); }
+            for e in &fmt_cfg.extra_extensions { println!("  - .{}", e.green()); }
             println!("{}", "Ignored files:".yellow());
-            for f in &ignored_files { println!("  - {}", f.red()); }
+            for f in &fmt_cfg.ignored_files { println!("  - {}", f.red()); }
             println!("{}", "Extra supported files:".yellow());
-            for f in &extra_files { println!("  - {}", f.green()); }
+            for f in &fmt_cfg.extra_files { println!("  - {}", f.green()); }
         }
         "ignore" => {
             if args.is_empty() {
@@ -527,7 +711,86 @@ fn execute_command(input: &str, nav: &mut Navigator) -> Result<bool> {
             println!("└{}┘", "─".repeat(w));
         }
 
+        "tp" => {
+            if args.is_empty() {
+                // Interactive menu
+                TeleportManager::interactive_menu(nav)?;
+            } else {
+                let tp_parts: Vec<&str> = args.splitn(2, ' ').collect();
+                let subcmd = tp_parts[0].to_lowercase();
+                let subargs = tp_parts.get(1).unwrap_or(&"").trim();
+                
+                match subcmd.as_str() {
+                    "add" => {
+                        if subargs.is_empty() {
+                            println!("Usage: tp add <name> [path]");
+                            println!("  tp add work         # Save current directory as 'work'");
+                            println!("  tp add work D:\\Work # Save specific path as 'work'");
+                        } else {
+                            let add_parts: Vec<&str> = subargs.splitn(2, ' ').collect();
+                            let name = add_parts[0];
+                            
+                            if add_parts.len() > 1 {
+                                // Specific path provided
+                                let path = std::path::Path::new(add_parts[1]);
+                                TeleportManager::add(name, path.to_path_buf())?;
+                            } else {
+                                // Use current directory
+                                TeleportManager::add_current(nav, name)?;
+                            }
+                        }
+                    }
+                    "jump" | "to" => {
+                        if subargs.is_empty() {
+                            println!("Usage: tp jump <name|number>");
+                            println!("  tp jump work  # Jump by name");
+                            println!("  tp jump 1     # Jump by number (from tp list)");
+                        } else if let Ok(num) = subargs.parse::<usize>() {
+                            TeleportManager::jump_by_index(nav, num)?;
+                        } else {
+                            TeleportManager::jump_by_name(nav, subargs)?;
+                        }
+                    }
+                    "list" | "ls" => {
+                        TeleportManager::list()?;
+                    }
+                    "rm" => {
+                        if subargs.is_empty() {
+                            println!("Usage: tp rm <name|number>");
+                            println!("  tp rm work  # Remove by name");
+                            println!("  tp rm 1     # Remove by number (from tp list)");
+                        } else if let Ok(num) = subargs.parse::<usize>() {
+                            TeleportManager::remove_by_index(num)?;
+                        } else {
+                            TeleportManager::remove_by_name(subargs)?;
+                        }
+                    }
+                    "cls" => {
+                        TeleportManager::clear_all()?;
+                    }
+                    "help" => {
+                        print_tp_help();
+                    }
+                    _ => {
+                        print_error(&format!("Unknown tp subcommand: {}", subcmd));
+                        println!("Type 'tp help' for usage.");
+                    }
+                }
+            }
+        }
+
+        // Handle @name shortcut (comes before unknown command check)
+        // Add this BEFORE the default _ case
         _ => {
+            // Check if it's an @teleport shortcut
+            if cmd.starts_with('@') && cmd.len() > 1 {
+                let tp_name = &cmd[1..];
+                if TeleportManager::get_all().contains_key(&tp_name.to_lowercase()) {
+                    TeleportManager::jump_by_name(nav, tp_name)?;
+                    return Ok(false);
+                }
+            }
+            
             print_error(&format!("Unknown command: {}", cmd));
             println!("{}", "Type 'help' for available commands.".dimmed());
         }
@@ -536,7 +799,133 @@ fn execute_command(input: &str, nav: &mut Navigator) -> Result<bool> {
     Ok(false)
 }
 
-fn show_tree(
+/// Continuous directory selection loop — never ends until user inputs 0
+fn gosc_loop(nav: &mut Navigator) -> Result<()> {
+    loop {
+        // 1. List subdirectories of current path
+        let dirs = nav.list_subdirs()?;
+        
+        // 2. Clear screen for fresh display
+        clear_screen();
+        
+        // 3. Show current directory tree
+        show_tree(nav, Some(1), false, false, false);
+        
+        // 4. Display gosc menu
+        println!();
+        println!("╔══════════════════════════════════════════════════╗");
+        println!("║{:^50}║", "gosc — Navigate Continuously".cyan().bold());
+        println!("╠══════════════════════════════════════════════════╣");
+        println!("║ {}", format!("{} go back 1 level", "-1".yellow()));
+        println!("║ {}", format!("{} go back 2 levels", "-2".yellow()));
+        println!("║ {}", format!("{} go back n levels", "-n".yellow()));
+        println!("║ {}", format!("{} exit gosc", "0".red()));
+        println!("╠──────────────────────────────────────────────────╣");
+        
+        if dirs.is_empty() {
+            println!("║ {}", "(no subdirectories)".dimmed());
+        } else {
+            for (i, name) in &dirs {
+                println!("║ {}. {}", i.to_string().yellow(), name.blue());
+            }
+        }
+        
+        println!("╚──────────────────────────────────────────────────╝");
+        println!();
+        print!("{} ", "gosc>".green().bold());
+        
+        // 5. Read input
+        let mut input = String::new();
+        std::io::stdin().read_line(&mut input)?;
+        let input = input.trim();
+        
+        // 6. Process input
+        if input.is_empty() {
+            continue;
+        }
+        
+        // Exit condition
+        if input == "0" {
+            println!("{}", "Exiting gosc...".dimmed());
+            break;
+        }
+        
+        // Back command: -1, -2, -n
+        if input.starts_with('-') {
+            let back_str = &input[1..];
+            match back_str.parse::<usize>() {
+                Ok(n) if n > 0 => {
+                    let mut success = true;
+                    for i in 0..n {
+                        match nav.go_back() {
+                            Ok(()) => {}
+                            Err(e) => {
+                                if i == 0 {
+                                    print_error(&format!("{}", e));
+                                } else {
+                                    print_error(&format!("Null parent at step {} - nowhere to go back", i + 1));
+                                }
+                                success = false;
+                                break;
+                            }
+                        }
+                    }
+                    if !success {
+                        println!();
+                        print!("Press Enter to continue...");
+                        let mut pause = String::new();
+                        std::io::stdin().read_line(&mut pause).ok();
+                    }
+                }
+                Err(_) => {
+                    print_error(&format!("Invalid back count: {}. Use -1, -2, -n", back_str));
+                    println!();
+                    print!("Press Enter to continue...");
+                    let mut pause = String::new();
+                    std::io::stdin().read_line(&mut pause).ok();
+                }
+                Ok(_) => {},
+            }
+            continue;
+        }
+        
+        // Number selection
+        match input.parse::<usize>() {
+            Ok(num) => {
+                if let Some((_, name)) = dirs.iter().find(|(i, _)| *i == num) {
+                    let new_path = nav.current_path().join(name);
+                    match nav.go_to(&new_path) {
+                        Ok(()) => {}
+                        Err(e) => {
+                            print_error(&format!("{}", e));
+                            println!();
+                            print!("Press Enter to continue...");
+                            let mut pause = String::new();
+                            std::io::stdin().read_line(&mut pause).ok();
+                        }
+                    }
+                } else {
+                    print_error(&format!("Invalid number: {}. Choose 1-{}", num, dirs.len()));
+                    println!();
+                    print!("Press Enter to continue...");
+                    let mut pause = String::new();
+                    std::io::stdin().read_line(&mut pause).ok();
+                }
+            }
+            Err(_) => {
+                print_error(&format!("Invalid input: {}. Use 0 to exit, -n to go back, or a number", input));
+                println!();
+                print!("Press Enter to continue...");
+                let mut pause = String::new();
+                std::io::stdin().read_line(&mut pause).ok();
+            }
+        }
+    }
+    
+    Ok(())
+}
+
+pub(crate) fn show_tree(
     nav: &Navigator,
     max_depth_override: Option<usize>,
     show_progress: bool,
@@ -565,7 +954,7 @@ fn show_tree(
         None
     };
 
-    let tree = generate_tree(
+    let mut tree = generate_tree(
         &nav.current_path().to_string_lossy(),
         max_depth_override,
         include_files,
@@ -577,6 +966,7 @@ fn show_tree(
     }
 
     let tree_str = if show_sizes {
+        // PRE-COMPUTE SIZES (one pass instead of N passes)
         let dir_count = crate::explorer::count_dirs_in_tree(&tree);
         let scan_pb = ProgressBar::new(dir_count);
         scan_pb.set_style(
@@ -585,6 +975,8 @@ fn show_tree(
                 .progress_chars("=> "),
         );
         scan_pb.set_message("Calculating sizes...");
+
+        crate::explorer::compute_tree_sizes(&mut tree, Some(&scan_pb));  // ← ADD THIS LINE
 
         let result = format_tree_with_sizes(&tree, "", true, true, Some(&scan_pb));
         scan_pb.finish_with_message("Done");
@@ -608,6 +1000,58 @@ fn show_tree(
     }
 }
 
+/// Run a system command, handling Ctrl+C properly
+fn run_system_command(args: &str, cwd: &Path) -> Result<std::process::ExitStatus> {
+    #[cfg(windows)]
+    {
+        let mut child = std::process::Command::new("cmd")
+            .args(["/C", args])
+            .current_dir(cwd)
+            .stdin(std::process::Stdio::inherit())
+            .stdout(std::process::Stdio::inherit())
+            .stderr(std::process::Stdio::inherit())
+            .spawn()?;
+        
+        let child_id = child.id();
+        
+        // On Ctrl+C, kill the child process tree
+        let _ = ctrlc::set_handler(move || {
+            let _ = std::process::Command::new("taskkill")
+                .args(["/F", "/T", "/PID", &child_id.to_string()])
+                .stdout(std::process::Stdio::null())
+                .stderr(std::process::Stdio::null())
+                .status();
+        });
+        
+        let status = child.wait()?;
+        
+        Ok(status)
+    }
+    
+    #[cfg(not(windows))]
+    {
+        let mut child = std::process::Command::new("sh")
+            .args(["-c", args])
+            .current_dir(cwd)
+            .stdin(std::process::Stdio::inherit())
+            .stdout(std::process::Stdio::inherit())
+            .stderr(std::process::Stdio::inherit())
+            .spawn()?;
+        
+        let child_id = child.id();
+        
+        let _ = ctrlc::set_handler(move || {
+            let _ = std::process::Command::new("kill")
+                .args(["-TERM", &child_id.to_string()])
+                .status();
+        });
+        
+        let status = child.wait()?;
+        
+        Ok(status)
+    }
+}
+
 fn print_interactive_help() {
     println!(
         "╔══════════════════════════════════════════════════════════════════╗"
@@ -622,11 +1066,42 @@ fn print_interactive_help() {
     println!("{}", "NAVIGATION COMMANDS:".cyan().bold());
     println!("  go <path>           Navigate to a directory (shows root contents)");
     println!("  go                  Show go command usage");
+    println!("  cd <path>           Change directory (same as go)");
+    println!("  cd                  Show cd command usage");
     println!("  gos                 List subdirectories and pick one to navigate");
+    println!("  gosc                Continuous directory navigation (0 to exit)");
     println!("  godrive             List all drives and select one");
     println!("  godrive <letter>    Navigate to a drive (e.g., godrive C)");
     println!("  back                Go back to parent directory");
     println!("  back <n>            Go back n parent directories");
+
+    println!();
+    println!("{}", "TELEPORT COMMANDS:".cyan().bold());
+    println!("  tp                  Show interactive teleport menu");
+    println!("  tp add <name>       Save current location as teleport point");
+    println!("  tp add <name> <path> Save specific path as teleport point");
+    println!("  tp jump <name>      Teleport to saved location");
+    println!("  tp to <name>        Teleport to saved location (alias)");
+    println!("  tp list             List all teleport points");
+    println!("  tp rm <name>        Remove teleport point");
+    println!("  tp cls              Clear all teleport points");
+    println!("  @<name>             Quick teleport shortcut");
+
+    println!();
+    println!("{}", "RUN ALIAS COMMANDS:".cyan().bold());
+    println!("  ral add <name> <command>    Create a run alias");
+    println!("  ral edit <name> <command>   Update an existing alias");
+    println!("  ral rm <name>               Remove an alias");
+    println!("  ral list                    Show all aliases");
+    println!("  run <alias>                 Execute an alias");
+    println!("  run <alias> <args>          Execute alias with arguments");
+    println!("  r <alias>                   Shortcut for run (e.g., r btr)");
+    println!();
+    println!("{}", "Run Alias Examples:".green());
+    println!("  ral add btr \"cargo build --release\"");
+    println!("  ral add py \"python test.py\"");
+    println!("  r btr                       # Runs: cargo build --release");
+    println!("  run py --verbose            # Runs: python test.py --verbose");
 
     println!();
     println!("{}", "VIEW COMMAND:".cyan().bold());
@@ -678,6 +1153,14 @@ fn print_interactive_help() {
     println!("  Use && to chain commands: go src && txt && back");
 
     println!();
+    println!("{}", "EXECUTION COMMAND:".cyan().bold());
+    println!("  run <command>       Execute a system command from ntc shell");
+    println!("                       Example: run python test.py");
+    println!("                       Example: run cargo build");
+    println!("                       Example: run git status");
+    println!("  r <command>         Shortcut for run");
+
+    println!();
     println!("{}", "TERMINAL COMMANDS:".cyan().bold());
     println!("  clear               Clear the terminal screen");
     println!("  version             Show version information");
@@ -688,4 +1171,30 @@ fn print_interactive_help() {
     println!("  help                Show this help");
     println!("  exit, quit          Exit ntc");
     println!();
+}
+
+// Add this function near print_interactive_help() or anywhere in shell.rs
+fn print_tp_help() {
+    println!();
+    println!("{}", "Teleport (tp) Commands:".cyan().bold());
+    println!("  tp                 Interactive menu (list + select)");
+    println!("  tp add <name>      Save current directory as <name>");
+    println!("  tp add <name> <path>  Save specific path as <name>");
+    println!("  tp jump <name>     Teleport to savepoint by name");
+    println!("  tp jump <number>   Teleport to savepoint by number");
+    println!("  tp to <name>       Teleport to savepoint by name");
+    println!("  tp to <number>     Teleport to savepoint by number");
+    println!("  tp list            Show all savepoints (non-interactive)");
+    println!("  tp rm <name>       Remove savepoint by name");
+    println!("  tp rm <number>     Remove savepoint by number");
+    println!("  tp cls             Clear ALL savepoints (asks confirmation)");
+    println!("  @<name>            Shortcut to teleport to <name>");
+    println!();
+    println!("{}", "Examples:".green());
+    println!("  tp add work                    # Save current dir as 'work'");
+    println!("  tp add projects D:\\Projects   # Save specific path");
+    println!("  tp jump work                  # Teleport to work");
+    println!("  @work                         # Same as above (shorter)");
+    println!("  tp                            # Show interactive menu");
+    println!("  tp rm work                    # Remove savepoint");
 }

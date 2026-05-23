@@ -4,6 +4,7 @@ use colored::*;
 use std::fs;
 use std::io::{IsTerminal, Write};
 use std::path::{Path, PathBuf};
+use arboard::Clipboard;
 
 /// Display file contents to stdout with optional line numbers.
 pub fn cat_file(file_path: &Path, show_lines: bool) -> Result<()> {
@@ -142,5 +143,16 @@ pub fn print_info(msg: &str) {
 /// Print warning message in yellow.
 pub fn print_warning(msg: &str) {
     println!("{} {}", "⚠".yellow(), msg.yellow());
+}
+
+/// Copy text to system clipboard
+pub fn copy_to_clipboard(content: &str, format: &str) -> Result<()> {
+    let mut clipboard = Clipboard::new()
+        .with_context(|| format!("Failed to access clipboard"))?;
+    
+    clipboard.set_text(content.to_string())
+        .with_context(|| format!("Failed to copy {} report to clipboard", format))?;
+    
+    Ok(())
 }
 

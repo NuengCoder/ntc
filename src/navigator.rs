@@ -128,9 +128,13 @@ pub fn clear_screen() {
     }
     #[cfg(not(windows))]
     {
-        // ANSI: move cursor to top-left and clear screen
-        print!("\x1B[2J\x1B[1;1H");
-        let _ = std::io::Write::flush(&mut std::io::stdout());
+        // Try system clear command first (works better in WSL)
+        let status = std::process::Command::new("clear").status();
+        if status.is_err() {
+            // Fallback to ANSI if clear command not available
+            print!("\x1B[2J\x1B[1;1H");
+            let _ = std::io::Write::flush(&mut std::io::stdout());
+        }
     }
 }
 

@@ -11,7 +11,7 @@ use colored::*;
 use indicatif::{ProgressBar, ProgressStyle};
 use rustyline::error::ReadlineError;
 use rustyline::DefaultEditor;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
@@ -138,11 +138,63 @@ pub fn run_shell_with_nav(mut nav: Navigator) -> Result<()> {
     Ok(())
 }
 
+// Add this function before execute_command or near the top of shell.rs
+fn validate_alias_name(name: &str) -> bool {
+    // Reserved command names that would conflict with ntc commands
+    let reserved_commands = [
+        "go", "cd", "godrive", "god", "back", "b", "view", "txt", "html", "json", "md",
+        "seto", "setd", "setl", "sett", "seth", "watch", "clear", "version", "where",
+        "gos", "gosc", "ral", "run", "r", "showcg", "help", "exit", "quit", "ignored",
+        "ignore", "cared", "ignoref", "caref", "ignoren", "caren", "size", "tp",
+    ];
+    
+    // Check for forbidden characters
+    if name.contains('@') || name.contains('#') {
+        return false;
+    }
+    
+    // Check if it's a reserved command name
+    if reserved_commands.contains(&name) {
+        return false;
+    }
+    
+    true
+}
+
 /// Execute a single interactive command
 fn execute_command(input: &str, nav: &mut Navigator) -> Result<bool> {
     let parts: Vec<&str> = input.splitn(2, ' ').collect();
     let cmd = parts[0].to_lowercase();
     let args = parts.get(1).unwrap_or(&"").trim();
+
+    // Check if cmd is a run alias FIRST
+    let aliases = Config::global_get_run_aliases();
+    if aliases.contains_key(&cmd) && validate_alias_name(&cmd) {
+        // Execute as alias (same as "run <alias>")
+        let full_cmd = if args.is_empty() {
+            aliases[&cmd].clone()
+        } else {
+            format!("{} {}", aliases[&cmd], args)
+        };
+        print_info(&format!("Running: {}", full_cmd));
+        println!();
+        let status = run_system_command(&full_cmd, nav.current_path());
+        println!();
+        match status {
+            Ok(exit_status) => {
+                if exit_status.success() {
+                    print_success("Command completed successfully.");
+                } else {
+                    match exit_status.code() {
+                        Some(code) => print_error(&format!("Command exited with code: {}", code)),
+                        None => print_warning("Command terminated (Ctrl+C)"),
+                    }
+                }
+            }
+            Err(e) => print_error(&format!("Failed to execute command: {}", e)),
+        }
+        return Ok(false);
+    }
 
     match cmd.as_str() {
         "go" | "cd" => {
@@ -246,22 +298,37 @@ fn execute_command(input: &str, nav: &mut Navigator) -> Result<bool> {
         }
 
         "txt" => {
-            if args.is_empty() {
-                generate_report(nav.current_path(), ReportFormat::Txt)?;
+            let parts: Vec<&str> = args.split_whitespace().collect();
+            let copy_to_clipboard = parts.contains(&"--cp");
+            let target_arg = if copy_to_clipboard {
+                parts.iter().find(|&&p| p != "--cp").unwrap_or(&"").trim()
             } else {
-                let target = Path::new(args);
-                if target.is_dir() {
-                    generate_report(target, ReportFormat::Txt)?;
-                } else if target.is_file() {
-                    if is_supported_format(target) {
-                        let show_lines = Config::global_get_show_line_numbers();
-                        cat_file(target, show_lines)?;
-                    } else {
-                        print_warning(&format!("Skipped (not support format): {}", args));
-                    }
+                args
+            };
+            
+            let target = if target_arg.is_empty() {
+                nav.current_path()
+            } else {
+                Path::new(target_arg)
+            };
+            
+            if target.is_dir() {
+                if copy_to_clipboard {
+                    let content = crate::report::generate_report_to_string(target, ReportFormat::Txt)?;
+                    crate::output::copy_to_clipboard(&content, "TXT")?;
+                    print_success("Directory tree copied to clipboard!");
                 } else {
-                    print_error(&format!("Path not found: {}", args));
+                    generate_report(target, ReportFormat::Txt)?;
                 }
+            } else if target.is_file() {
+                if is_supported_format(target) {
+                    let show_lines = Config::global_get_show_line_numbers();
+                    cat_file(target, show_lines)?;
+                } else {
+                    print_warning(&format!("Skipped (not support format): {}", target_arg));
+                }
+            } else {
+                print_error(&format!("Path not found: {}", target_arg));
             }
         }
 
@@ -282,6 +349,61 @@ fn execute_command(input: &str, nav: &mut Navigator) -> Result<bool> {
                 } else {
                     print_error(&format!("Path not found: {}", args));
                 }
+            }
+        }
+
+        "json" => {
+            let parts: Vec<&str> = args.split_whitespace().collect();
+            let copy_to_clipboard = parts.contains(&"--cp");
+            let target_arg = if copy_to_clipboard {
+                parts.iter().find(|&&p| p != "--cp").unwrap_or(&"").trim()
+            } else {
+                args
+            };
+            
+            let target = if target_arg.is_empty() {
+                nav.current_path()
+            } else {
+                Path::new(target_arg)
+            };
+            
+            if target.is_dir() {
+                if copy_to_clipboard {
+                    let content = crate::report::generate_report_to_string(target, ReportFormat::Json)?;
+                    crate::output::copy_to_clipboard(&content, "JSON")?;
+                    print_success("JSON report copied to clipboard!");
+                } else {
+                    generate_report(target, ReportFormat::Json)?;
+                }
+            } else {
+                print_error("JSON report only works on directories");
+            }
+        }
+        "md" => {
+            let parts: Vec<&str> = args.split_whitespace().collect();
+            let copy_to_clipboard = parts.contains(&"--cp");
+            let target_arg = if copy_to_clipboard {
+                parts.iter().find(|&&p| p != "--cp").unwrap_or(&"").trim()
+            } else {
+                args
+            };
+            
+            let target = if target_arg.is_empty() {
+                nav.current_path()
+            } else {
+                Path::new(target_arg)
+            };
+            
+            if target.is_dir() {
+                if copy_to_clipboard {
+                    let content = crate::report::generate_report_to_string(target, ReportFormat::Md)?;
+                    crate::output::copy_to_clipboard(&content, "Markdown")?;
+                    print_success("Markdown report copied to clipboard!");
+                } else {
+                    generate_report(target, ReportFormat::Md)?;
+                }
+            } else {
+                print_error("Markdown report only works on directories");
             }
         }
 
@@ -400,8 +522,43 @@ fn execute_command(input: &str, nav: &mut Navigator) -> Result<bool> {
 
         "where" => {
             let exe = std::env::current_exe().unwrap_or_default();
-            println!("ntc executable: {}", exe.display().to_string().cyan());
-            println!("Current directory: {}", nav.display_path().cyan());
+            let config_path = dirs::config_dir()
+                .map(|d| d.join("ntc").join("config.toml"))
+                .filter(|p| p.exists())
+                .unwrap_or_else(|| {
+                    dirs::config_dir()
+                        .map(|d| d.join("ntc").join("config.toml"))
+                        .unwrap_or_else(|| PathBuf::from("Not found"))
+                });
+            
+            println!();
+            println!("{}", "╔══════════════════════════════════════════════════════════════════╗".cyan());
+            println!("{}", "║                         ntc Location Info                        ║".cyan());
+            println!("{}", "╚══════════════════════════════════════════════════════════════════╝".cyan());
+            println!();
+            println!("  {} {}", "📁 Executable:".green().bold(), exe.display().to_string().cyan());
+            println!("  {} {}", "⚙️  Config file:".yellow().bold(), config_path.display().to_string().cyan());
+            println!("  {} {}", "📂 Current dir:".blue().bold(), nav.display_path().cyan());
+            println!();
+            
+            // Check if config file exists
+            if config_path.exists() {
+                println!("  {}", "✓ Config file exists".green());
+                
+                // Show config file size on Linux/WSL
+                #[cfg(not(windows))]
+                if let Ok(metadata) = std::fs::metadata(&config_path) {
+                    println!("  {} {}", "📏 Config size:".dimmed(), crate::explorer::human_readable_size(metadata.len()).dimmed());
+                }
+                
+                #[cfg(windows)]
+                if let Ok(metadata) = std::fs::metadata(&config_path) {
+                    println!("  {} {}", "📏 Config size:".dimmed(), crate::explorer::human_readable_size(metadata.len()).dimmed());
+                }
+            } else {
+                println!("  {}", "⚠ Config file not found (will be created on first save)".yellow());
+            }
+            println!();
         }
 
         "gos" => {
@@ -477,8 +634,20 @@ fn execute_command(input: &str, nav: &mut Navigator) -> Result<bool> {
                         } else {
                             let name = parts[1];
                             let command = parts[2];
+                            
+                            // Validate alias name
+                            if !validate_alias_name(name) {
+                                print_error(&format!("Invalid alias name: '{}'", name));
+                                println!("Alias names cannot:");
+                                println!("  - Start with @ or #");
+                                println!("  - Be a reserved command (go, view, txt, etc.)");
+                                println!("  - Contain special characters");
+                                return Ok(false);
+                            }
+                            
                             Config::global_add_run_alias(name, command);
                             print_success(&format!("Alias '{}' -> '{}'", name, command));
+                            println!("  Now you can run: {}", name.green());
                         }
                     }
                     "edit" => {
@@ -488,6 +657,16 @@ fn execute_command(input: &str, nav: &mut Navigator) -> Result<bool> {
                         } else {
                             let name = parts[1];
                             let command = parts[2];
+                            
+                            // Validate alias name
+                            if !validate_alias_name(name) {
+                                print_error(&format!("Invalid alias name: '{}'", name));
+                                println!("Alias names cannot:");
+                                println!("  - Start with @ or #");
+                                println!("  - Be a reserved command (go, view, txt, etc.)");
+                                return Ok(false);
+                            }
+                            
                             if Config::global_update_run_alias(name, command) {
                                 print_success(&format!("Updated alias '{}' -> '{}'", name, command));
                             } else {
@@ -517,13 +696,21 @@ fn execute_command(input: &str, nav: &mut Navigator) -> Result<bool> {
                             let mut sorted: Vec<_> = aliases.iter().collect();
                             sorted.sort_by(|a, b| a.0.cmp(b.0));
                             for (i, (name, cmd)) in sorted.iter().enumerate() {
+                                // Check if alias name is valid
+                                let is_valid = validate_alias_name(name);
+                                let name_display = if is_valid {
+                                    name.blue()
+                                } else {
+                                    format!("{} (INVALID - contains @/# or reserved)", name).red()
+                                };
                                 println!("  {}. {} -> {}", 
                                     (i + 1).to_string().yellow(), 
-                                    name.blue(), 
+                                    name_display, 
                                     cmd.dimmed());
                             }
                             println!();
-                            println!("{}", "Usage: run <alias>".green());
+                            println!("{}", "Usage: <alias> [args]".green());
+                            println!("{}", "  (just type the alias name, no 'run' needed)".dimmed());
                         }
                     }
                     _ => {
@@ -1093,15 +1280,20 @@ fn print_interactive_help() {
     println!("  ral edit <name> <command>   Update an existing alias");
     println!("  ral rm <name>               Remove an alias");
     println!("  ral list                    Show all aliases");
-    println!("  run <alias>                 Execute an alias");
-    println!("  run <alias> <args>          Execute alias with arguments");
-    println!("  r <alias>                   Shortcut for run (e.g., r btr)");
+    println!("  <alias>                     Execute alias directly (no 'run' needed)");
+    println!("  run <alias> [args]          Execute alias with arguments");
+    println!("  r <alias> [args]            Shortcut for run");
+    println!();
+    println!("{}", "Run Alias Rules:".yellow());
+    println!("  • Cannot start with @ or #");
+    println!("  • Cannot be a reserved command (go, view, txt, etc.)");
+    println!("  • Use letters, numbers, hyphens, and underscores only");
     println!();
     println!("{}", "Run Alias Examples:".green());
     println!("  ral add btr \"cargo build --release\"");
     println!("  ral add py \"python test.py\"");
-    println!("  r btr                       # Runs: cargo build --release");
-    println!("  run py --verbose            # Runs: python test.py --verbose");
+    println!("  btr                         # Runs: cargo build --release");
+    println!("  py --verbose                # Runs: python test.py --verbose");
 
     println!();
     println!("{}", "VIEW COMMAND:".cyan().bold());
@@ -1117,6 +1309,13 @@ fn print_interactive_help() {
     println!("  txt                 Generate TXT report of current directory");
     println!("  txt <dir>           Generate TXT report of specified directory");
     println!("  txt <file>          Display file contents (if supported format)");
+    println!("  txt --cp            Copy directory tree to clipboard");
+    println!("  json                Generate JSON report of current directory");
+    println!("  json <dir>          Generate JSON report of specified directory");
+    println!("  json --cp           Copy JSON report to clipboard");
+    println!("  md                  Generate Markdown report of current directory");
+    println!("  md <dir>            Generate Markdown report of specified directory");
+    println!("  md --cp             Copy Markdown report to clipboard");
     println!("  html                Generate HTML report of current directory");
     println!("  html <dir>          Generate HTML report of specified directory");
     println!("  html <file>         Display file contents (if supported format)");

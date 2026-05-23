@@ -4,3 +4,10 @@
 ntc_history.txt
 *.toml.tmp
 push.txt
+*.deb
+*.tar.gz
+*.exe
+.DS_Store
+*.swp
+*.swo
+*~

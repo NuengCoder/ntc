@@ -85,12 +85,13 @@ pub fn run_cli() -> Result<bool> {
     let known_flags = vec![
         "-i, --input <path>          Input file or directory",
         "-o, --output <file>         Output filename",
+        "--cp                        Copy report to clipboard",
         "--setO [path]               Show or set output directory",
         "--setD [depth]              Show or set max depth (1-12)",
         "--setL [ON|OFF]             Show or set line numbers",
         "--setT [threads]            Show or set thread count",
         "--setH [path|ON|OFF]        Show or set history path/state",
-        "--showcg                    Show current configuration",
+        "--showcg                    Show current configuration overview",
         "--watch [ON|OFF]            Show or set file watcher state",
         "-say, -print <text>         Print text to stdout",
         "--size                      Show current directory size",
@@ -105,7 +106,7 @@ pub fn run_cli() -> Result<bool> {
         "--caren <file>              Care about a specific file",
         "--clear                     Clear the terminal screen",
         "--version                   Show version information",
-        "--where                    Show ntc executable location",
+        "--where                     Show ntc executable and config location",
         "--list, --fun               List all command-line functions",
         "--help                      Show help",
         "--tp-add <name>             Save current directory as teleport point",
@@ -267,6 +268,21 @@ pub fn run_cli() -> Result<bool> {
                 .value_name("NAME")
                 .help("Remove teleport point")
                 .num_args(1),
+        )
+        .arg(
+            Arg::new("format")
+                .short('f')
+                .long("format")
+                .value_name("FORMAT")
+                .help("Output format: txt, html, json, md")
+                .num_args(1)
+                .value_parser(["txt", "html", "json", "md"]),
+        )
+        .arg(
+            Arg::new("copy")
+                .long("cp")
+                .help("Copy report to clipboard instead of saving to file")
+                .action(ArgAction::SetTrue),
         )
         .try_get_matches_from(args)?;
 
@@ -602,14 +618,27 @@ pub fn run_cli() -> Result<bool> {
     // --- Handle -i (input) ---
     if let Some(input_path) = matches.get_one::<String>("input") {
         let path = Path::new(input_path);
+        let copy_to_clipboard = matches.get_flag("copy");
 
         if path.is_dir() {
             let output_file = matches.get_one::<String>("output");
-            if let Some(output) = output_file {
-                let format = detect_format_from_filename(output);
+            let format_str = matches.get_one::<String>("format").map(|s| s.as_str()).unwrap_or("txt");
+            
+            let format = match format_str {
+                "html" => ReportFormat::Html,
+                "json" => ReportFormat::Json,
+                "md" => ReportFormat::Md,
+                _ => ReportFormat::Txt,
+            };
+            
+            if copy_to_clipboard {
+                // Generate report to string and copy to clipboard
+                let content = crate::report::generate_report_to_string(path, format)?;
+                crate::output::copy_to_clipboard(&content, format_str)?;
+                print_success(&format!("{} report copied to clipboard!", format_str.to_uppercase()));
+            } else if let Some(output) = output_file {
                 generate_report_to(path, format, output)?;
             } else {
-                let format = ReportFormat::Txt;
                 generate_report(path, format)?;
             }
         } else if path.is_file() {
@@ -654,25 +683,19 @@ pub fn run_cli() -> Result<bool> {
     Ok(true)
 }
 
-/// Detect report format from output filename extension
-fn detect_format_from_filename(filename: &str) -> ReportFormat {
-    let path = Path::new(filename);
-    match path.extension().and_then(|e| e.to_str()) {
-        Some("html" | "htm") => ReportFormat::Html,
-        _ => ReportFormat::Txt,
-    }
-}
-
 /// Print detailed help
 fn print_help() {
     println!("ntc {} - Navigate, Tree, Cat", env!("CARGO_PKG_VERSION").green().bold());
     println!("A combined directory tree viewer and file concatenator.\n");
     println!("{}", "USAGE:".cyan().bold());
     println!("    ntc [OPTIONS]");
-    println!("    ntc -i <path> [-o <output>]\n");
+    println!("    ntc -i <path> [-o <output>]");
+    println!("    ntc -i <path> --cp              Copy report to clipboard\n");
     println!("{}", "OPTIONS:".cyan().bold());
     println!("    -i, --input <path>      Process a file or directory");
     println!("    -o, --output <file>     Save output to specified file");
+    println!("    -f, --format <FORMAT>   Output format: txt, html, json, md (default: txt)");
+    println!("    --cp                    Copy report to clipboard instead of saving to file");
     println!("    --setO [path]           Show or set the output directory (default: Desktop)");
     println!("    --setD [depth]          Show or set max recursion depth (min: 1, max: 12)");
     println!("    --setL [ON|OFF]         Show or toggle line numbers for file display");
@@ -680,7 +703,7 @@ fn print_help() {
     println!("    --setH [path|ON|OFF]    Show/set history path or enable/disable");
     println!("    --showcg                Show current configuration overview");
     println!("    --watch [ON|OFF]        Show/set file watcher state");
-    println!("    --where                 Show ntc executable location");
+    println!("    --where                 Show ntc executable and config location");
     println!("    -say, -print <text>     Print text to stdout");
     println!("    --size                  Show current directory size");
     println!("    --view                  Quick view of current directory tree");
@@ -707,6 +730,8 @@ fn print_help() {
     println!("    ntc @web                    Launch and teleport to 'web' savepoint");
     println!("    ntc -i src                  Generate report of src directory");
     println!("    ntc -i src -o report.html   Generate HTML report");
+    println!("    ntc -i src --cp             Copy directory tree to clipboard");
+    println!("    ntc -i src -f json --cp     Copy JSON report to clipboard");
     println!("    ntc -i file.txt             Display file contents");
     println!("    ntc --setL ON               Enable line numbers");
     println!("    ntc --showcg                Show configuration");
@@ -716,5 +741,6 @@ fn print_help() {
     println!("{}", "INTERACTIVE-ONLY COMMANDS:".yellow().bold());
     println!("    Navigation: go, godrive, back, gos, gosc");
     println!("    Teleport: tp, tp jump, tp to, @name");
+    println!("    Reports: txt, txt --cp, json --cp, md --cp");
     println!("    These commands only work inside the interactive shell (run 'ntc' alone).\n");
 }

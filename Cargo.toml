@@ -1,6 +1,6 @@
 [package]
 name = "ntc"
-version = "1.5.0"
+version = "1.6.0"
 edition = "2021"
 description = "Navigate, Tree, Cat - A combined directory tree viewer and file concatenator"
 authors = ["NuengCoder"]
@@ -29,6 +29,8 @@ rayon = "1.10"
 notify = "7"
 ctrlc = "3.4"
 lazy_static = "1.4"
+serde_json = "1.0"
+arboard = "3.4"
 
 [dev-dependencies]
 tempfile = "3.15"
@@ -37,3 +39,12 @@ predicates = "3.1"
 
 [build-dependencies]
 winres = "0.1"
+
+[package.metadata.deb]
+maintainer = "Nueng <thilaphonneung@gmail.com>"
+copyright = "2026, Nueng"
+license-file = ["LICENSE", "3"]
+extended-description = """\
+ntc is a combined directory tree viewer and file concatenator.
+It helps navigate, visualize, and report on directory structures."""
+depends = "$auto"  # Automatically detects if you need libc, etc.

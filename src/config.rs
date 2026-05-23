@@ -48,6 +48,26 @@ pub struct Config {
     pub run_aliases: HashMap<String, String>,
 }
 
+// Add this function to Config impl
+pub fn validate_alias_name(name: &str) -> bool {
+    let reserved_commands = [
+        "go", "cd", "godrive", "god", "back", "b", "view", "txt", "html", "json", "md",
+        "seto", "setd", "setl", "sett", "seth", "watch", "clear", "version", "where",
+        "gos", "gosc", "ral", "run", "r", "showcg", "help", "exit", "quit", "ignored",
+        "ignore", "cared", "ignoref", "caref", "ignoren", "caren", "size", "tp"
+    ];
+    
+    if name.contains('@') || name.contains('#') {
+        return false;
+    }
+    
+    if reserved_commands.contains(&name) {
+        return false;
+    }
+    
+    true
+}
+
 fn default_output_path() -> PathBuf {
     dirs::desktop_dir().unwrap_or_else(|| PathBuf::from("."))
 }

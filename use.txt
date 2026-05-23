@@ -1,0 +1,323 @@
+# NTC - Navigate, Tree, Cat
+## Version 1.6.0 - Complete User Guide
+
+NTC is a command-line tool that combines directory navigation, tree viewing, and file concatenation. It works on Windows and Linux/WSL.
+
+## INSTALLATION
+
+### Windows
+- Download ntc.exe from GitHub Releases
+- Run the Inno Setup installer
+- Or manually place ntc.exe in a folder in your PATH
+
+### Linux (Ubuntu/Debian)
+- Download ntc_1.6.0-1_amd64.deb
+- Run: sudo dpkg -i ntc_1.6.0-1_amd64.deb
+
+### Linux (Other distributions)
+- Download ntc-1.6.0-x86_64-linux.tar.gz
+- Extract: tar -xzvf ntc-1.6.0-x86_64-linux.tar.gz
+- Copy to PATH: sudo mv ntc /usr/local/bin/
+
+## TWO MODES OF OPERATION
+
+### Mode 1: Command Line (Single Shot)
+Run a single command and exit:
+  ntc --version
+  ntc -i . -o report.txt
+  ntc --help
+
+### Mode 2: Interactive Shell
+Launch the interactive shell and run multiple commands:
+  ntc
+  Then type commands at the "ntc [path]>" prompt
+
+## BASIC NAVIGATION (Interactive Mode Only)
+
+  go <path>          - Change to a directory
+  cd <path>          - Same as go
+  back               - Go to parent directory
+  back 2             - Go up 2 levels
+  godrive            - List and select Windows drives (Windows only)
+  gos                - Show numbered list of subdirectories to choose from
+  gosc               - Continuous navigation mode (0 to exit)
+
+## VIEWING DIRECTORIES
+
+  view               - Show directory tree (uses configured depth)
+  view --size        - Show tree with folder sizes
+  size               - Show total size of current directory
+
+## GENERATING REPORTS
+
+### Command Line Mode:
+  ntc -i <directory>              - Generate TXT report
+  ntc -i <directory> -f json      - Generate JSON report
+  ntc -i <directory> -f md        - Generate Markdown report
+  ntc -i <directory> -f html      - Generate HTML report
+  ntc -i <directory> -o out.txt   - Save to specific file
+  ntc -i <directory> --cp         - Copy TXT report to clipboard
+  ntc -i <directory> -f json --cp - Copy JSON report to clipboard
+
+### Interactive Mode:
+  txt                - Generate TXT report of current directory
+  txt <directory>    - Generate TXT report of specific directory
+  txt --cp           - Copy directory tree to clipboard
+  json               - Generate JSON report
+  json --cp          - Copy JSON to clipboard
+  md                 - Generate Markdown report
+  md --cp            - Copy Markdown to clipboard
+  html               - Generate HTML report
+
+## VIEWING FILES
+
+  txt <file>         - Display file contents (text files only)
+  Works with: .txt, .md, .rs, .py, .c, .cpp, .js, .html, .json, .toml, etc.
+
+## TELEPORT SAVEPOINTS (Bookmarks)
+
+### Save locations:
+  tp add <name>                    - Save current directory
+  tp add <name> <path>             - Save specific path
+
+### Jump to saved locations:
+  tp jump <name>                   - Teleport by name
+  tp jump <number>                 - Teleport by number (from list)
+  @<name>                          - Quick teleport shortcut
+
+### Manage savepoints:
+  tp list                          - Show all savepoints
+  tp rm <name>                     - Remove a savepoint
+  tp rm <number>                   - Remove by number
+  tp cls                           - Clear ALL savepoints (asks confirmation)
+  tp                               - Interactive menu
+
+## RUN ALIASES (Custom Commands)
+
+### Create aliases:
+  ral add <name> "<command>"       - Create new alias
+  Example: ral add ll "ls -la"
+  Example: ral add py "python test.py"
+
+### Use aliases:
+  <alias>                          - Just type the alias name
+  run <alias>                      - Run with 'run' prefix
+  r <alias>                        - Shortcut for run
+
+### Manage aliases:
+  ral edit <name> "<new_command>"  - Update existing alias
+  ral rm <name>                    - Remove alias
+  ral list                         - Show all aliases
+
+### Alias Rules:
+  - Cannot start with @ or #
+  - Cannot be reserved commands (go, view, txt, etc.)
+  - Use letters, numbers, hyphens, underscores
+
+## CONFIGURATION
+
+### View settings:
+  showcg                           - Show current configuration
+  setO                             - Show output directory
+  setD                             - Show max depth
+  setL                             - Show line number setting
+  setT                             - Show thread count
+  setH                             - Show history setting
+
+### Change settings:
+  setO <path>                      - Set output directory for reports
+  setD <number>                    - Set max tree depth (1-12)
+  setL ON|OFF                      - Enable/disable line numbers
+  setT <number>                    - Set thread count (1-64)
+  setH ON|OFF                      - Enable/disable command history
+  setH <path>                      - Set custom history file path
+  setH default                     - Reset history to default
+  watch ON|OFF                     - Enable/disable file watcher
+
+### Where things are stored:
+  where                            - Show executable and config file locations
+
+### Config file locations:
+  Windows: C:\Users\<user>\AppData\Roaming\ntc\config.toml
+  Linux:   ~/.config/ntc/config.toml
+
+## IGNORE/CARE SYSTEM
+
+### View ignored items:
+  ignored                          - Show all ignored directories, extensions, files
+
+### Ignore directories:
+  ignore <name>                    - Ignore directory (e.g., "target", "node_modules")
+  cared <name>                     - Stop ignoring a directory
+
+### Ignore file extensions:
+  ignoref <ext>                    - Ignore .ext files (e.g., "log", "tmp")
+  caref <ext>                      - Stop ignoring .ext files
+
+### Ignore specific files:
+  ignoren <filename>               - Ignore specific file (e.g., "Cargo.lock")
+  caren <filename>                 - Stop ignoring a specific file
+
+## PIPING COMMANDS (Interactive Mode)
+
+Chain multiple commands with &&:
+  go src && txt && back
+  cd /home && view --size && json
+
+## SYSTEM COMMANDS
+
+  run <command>                    - Execute system command
+  r <command>                      - Shortcut for run
+  Example: run python --version
+  Example: run git status
+
+## UTILITY COMMANDS
+
+  clear                            - Clear terminal screen
+  version                          - Show version information
+  help                             - Show interactive help
+  exit or quit                     - Exit ntc
+
+## COMPLETE EXAMPLES
+
+### Example 1: Explore a project
+  ntc
+  go /home/user/project
+  view --size
+  txt --cp
+  json
+  exit
+
+### Example 2: Generate documentation
+  ntc -i ./src -f md -o API.md
+  ntc -i ./src -f json -o structure.json
+
+### Example 3: Use teleport points
+  ntc
+  tp add work /home/user/work
+  tp add docs /home/user/documents
+  @work
+  view
+  @docs
+  txt
+
+### Example 4: Create run aliases
+  ntc
+  ral add build "cargo build --release"
+  ral add test "cargo test"
+  build
+  test
+
+### Example 5: Customize ignores
+  ntc
+  ignore logs
+  ignoref tmp
+  ignoren Cargo.lock
+  ignored                    # Verify settings
+  view                       # Tree now hides ignored items
+
+## OUTPUT FORMATS EXPLAINED
+
+### TXT Report
+  Plain text directory tree
+  Best for: Quick viewing, text files
+
+### JSON Report
+  Structured data with metadata and statistics
+  Best for: Scripts, programmatic access, data processing
+
+### Markdown Report
+  Formatted with tables and sections
+  Best for: Documentation, README files, GitHub
+
+### HTML Report
+  Web page with styling
+  Best for: Sharing, web viewing, printing
+
+## REPORT STATISTICS INCLUDED
+  - Total files and directories
+  - Total size (bytes and human-readable)
+  - Supported vs unsupported files
+  - Scan time
+  - Configuration used
+
+## TIPS & BEST PRACTICES
+
+1. Use teleport points for frequently accessed directories
+2. Create run aliases for long or complex commands
+3. Set line numbers ON when reviewing code files
+4. Use --cp to quickly share directory structures
+5. Ignore build directories (target, node_modules) for cleaner trees
+6. Use gosc for rapid directory traversal
+7. Chain commands with && for automation
+8. Export reports in JSON for integration with other tools
+
+## TROUBLESHOOTING
+
+### Command not found:
+  - Ensure ntc is in your PATH
+  - On Linux: Check ~/.config/ntc/config.toml exists
+  - On Windows: Check %APPDATA%\ntc\config.toml
+
+### Clipboard copy not working (Linux):
+  - Install xclip: sudo apt install xclip
+  - Or install wl-clipboard: sudo apt install wl-clipboard
+
+### File watcher not working:
+  - Run: ntc --watch ON
+  - Restart ntc to activate
+
+### Teleport points lost:
+  - Check config file exists and is readable
+  - Use 'tp list' to verify savepoints
+
+## QUICK REFERENCE CARD
+
+| Action | Command |
+|--------|---------|
+| Enter interactive mode | ntc |
+| Change directory | go /path |
+| View tree | view |
+| View with sizes | view --size |
+| Text report | txt |
+| Copy tree to clipboard | txt --cp |
+| JSON report | json |
+| Copy JSON | json --cp |
+| Save teleport | tp add name |
+| Jump to teleport | @name |
+| Create alias | ral add name "cmd" |
+| Run alias | name |
+| Show config | showcg |
+| Show locations | where |
+| Exit | exit |
+
+## SUPPORTED FILE EXTENSIONS (Default)
+  txt, md, rs, py, c, cpp, js, html, css, json, toml, yaml, xml, sh, java, go, rb, php, sql, and many more
+
+## PLATFORM DIFFERENCES
+
+### Windows-only:
+  - godrive command (drive letter navigation)
+  - Inno Setup installer
+  - Windows-style paths (C:\Users)
+
+### Linux/WSL-only:
+  - .deb package installation
+  - Config at ~/.config/ntc/
+  - Unix-style paths (/home/user)
+
+### Cross-platform (works everywhere):
+  - All navigation commands
+  - All report formats
+  - Teleport savepoints
+  - Run aliases
+  - File viewing
+  - Ignore/care system
+
+## VERSION HISTORY
+  v1.6.0 - Added JSON/MD reports, clipboard copy, Linux support
+  v1.5.0 - Added teleport points, run aliases
+
+---
+
+For more information: https://github.com/NuengCoder/ntc

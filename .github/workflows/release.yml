@@ -3,8 +3,8 @@ name: Build and Release
 on:
   push:
     tags:
-      - 'v*'  # Triggers on tags like v1.6.0, v1.7.0, etc.
-  workflow_dispatch:  # Allows manual trigger from GitHub UI
+      - 'v*'
+  workflow_dispatch:
 
 jobs:
   build:
@@ -14,20 +14,11 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          # Windows
-          - os: windows
-            runs-on: windows-latest
-            target: x86_64-pc-windows-msvc
-            artifact_name: ntc.exe
-            archive_ext: .exe
-            archive_name: ntc-${{ github.ref_name }}-windows-x86_64
-
           # Linux (x86_64)
           - os: linux
             runs-on: ubuntu-latest
             target: x86_64-unknown-linux-gnu
             artifact_name: ntc
-            archive_ext: ''
             archive_name: ntc-${{ github.ref_name }}-linux-x86_64
 
           # macOS Intel
@@ -35,15 +26,13 @@ jobs:
             runs-on: macos-latest
             target: x86_64-apple-darwin
             artifact_name: ntc
-            archive_ext: ''
             archive_name: ntc-${{ github.ref_name }}-macos-x86_64
 
-          # macOS Apple Silicon (M1/M2/M3)
+          # macOS Apple Silicon
           - os: macos-silicon
             runs-on: macos-latest
             target: aarch64-apple-darwin
             artifact_name: ntc
-            archive_ext: ''
             archive_name: ntc-${{ github.ref_name }}-macos-aarch64
 
     steps:
@@ -72,27 +61,19 @@ jobs:
         shell: bash
         run: |
           mkdir -p artifacts
-          if [ "${{ matrix.os }}" = "windows" ]; then
-            cp target/${{ matrix.target }}/release/ntc.exe artifacts/
-          else
-            cp target/${{ matrix.target }}/release/ntc artifacts/
-          fi
+          cp target/${{ matrix.target }}/release/ntc artifacts/
 
-      - name: Create archive (tar.gz for Linux/macOS, zip for Windows)
+      - name: Create archive
         shell: bash
         run: |
           cd artifacts
-          if [ "${{ matrix.os }}" = "windows" ]; then
-            zip -r ${{ matrix.archive_name }}.zip ${{ matrix.artifact_name }}
-          else
-            tar -czvf ${{ matrix.archive_name }}.tar.gz ${{ matrix.artifact_name }}
-          fi
+          tar -czvf ${{ matrix.archive_name }}.tar.gz ${{ matrix.artifact_name }}
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.archive_name }}
-          path: artifacts/${{ matrix.archive_name }}.*
+          path: artifacts/${{ matrix.archive_name }}.tar.gz
 
   create-universal-macos:
     name: Create Universal macOS Binary
@@ -160,7 +141,6 @@ jobs:
             
             | Platform | Download |
             |----------|----------|
-            | Windows (x86_64) | [ntc-${{ github.ref_name }}-windows-x86_64.zip](https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/ntc-${{ github.ref_name }}-windows-x86_64.zip) |
             | Linux (x86_64) | [ntc-${{ github.ref_name }}-linux-x86_64.tar.gz](https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/ntc-${{ github.ref_name }}-linux-x86_64.tar.gz) |
             | Ubuntu/Debian | [ntc_${{ github.ref_name }}_amd64.deb](https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/ntc_${{ github.ref_name }}_amd64.deb) |
             | macOS (Intel) | [ntc-${{ github.ref_name }}-macos-x86_64.tar.gz](https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/ntc-${{ github.ref_name }}-macos-x86_64.tar.gz) |
@@ -169,6 +149,8 @@ jobs:
             
             ### 🚀 Quick Install
             
-            **Windows (PowerShell):**
-            ```powershell
-            curl -L -o ntc.exe https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/ntc-${{ github.ref_name }}-windows-x86_64.zip
+            **Linux:**
+            ```bash
+            wget https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/ntc-${{ github.ref_name }}-linux-x86_64.tar.gz
+            tar -xzvf ntc-${{ github.ref_name }}-linux-x86_64.tar.gz
+            sudo mv ntc /usr/local/bin/

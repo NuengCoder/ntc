@@ -1,13 +1,27 @@
+# Build artifacts
 /target
 /test
 /installer
+
+# Temporary files
 ntc_history.txt
 *.toml.tmp
 push.txt
+
+# Generated binaries
+*.exe
 *.deb
 *.tar.gz
-*.exe
-.DS_Store
+*.zip
+*.dmg
+*.pkg
+
+# IDE files (optional)
+.vscode/
+.idea/
 *.swp
 *.swo
-*~
+
+# OS files
+.DS_Store
+Thumbs.db

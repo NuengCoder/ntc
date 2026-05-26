@@ -9,7 +9,6 @@ use std::collections::HashMap;
 use std::path::{PathBuf};
 use std::io::{self, Write};
 
-
 /// Reserved command names that cannot be used as teleport names
 const RESERVED_NAMES: &[&str] = &["add", "jump", "list", "rm", "cls", "help", "tp"];
 
@@ -23,23 +22,21 @@ impl TeleportManager {
         !RESERVED_NAMES.contains(&name_lower.as_str()) && !name_lower.is_empty()
     }
 
-    /// Get all teleports from config
+    /// Get all teleports from config (always global only)
     pub fn get_all() -> HashMap<String, PathBuf> {
         Config::global().read().unwrap().teleports.clone()
     }
 
-    // Add this function to TeleportManager in teleport.rs
     pub fn get_path(name: &str) -> Option<PathBuf> {
         let teleports = Self::get_all();
         teleports.get(&name.to_lowercase()).cloned()
     }
     
-    // Add this public wrapper function
     pub fn show_current_tree(nav: &Navigator) {
         show_tree(nav, Some(1), false, false, false);
     }
 
-    /// Add or update a teleport savepoint
+    /// Add or update a teleport savepoint (always global)
     pub fn add(name: &str, path: PathBuf) -> Result<()> {
         let name_lower = name.to_lowercase();
         
@@ -47,10 +44,9 @@ impl TeleportManager {
             print_error(&format!("Invalid name: '{}' is reserved or empty", name));
             return Ok(());
         }
-
+        
         let mut cfg = Config::global().write().unwrap();
         let old_path = cfg.teleports.insert(name_lower.clone(), path.clone());
-        
         cfg.save();
         
         if let Some(old) = old_path {
@@ -89,7 +85,8 @@ impl TeleportManager {
     /// Jump to a teleport savepoint by index (1-based)
     pub fn jump_by_index(nav: &mut Navigator, index: usize) -> Result<()> {
         let teleports = Self::get_all();
-        let teleports_vec: Vec<(String, PathBuf)> = teleports.into_iter().collect();
+        let mut teleports_vec: Vec<(String, PathBuf)> = teleports.into_iter().collect();
+        teleports_vec.sort_by(|a, b| a.0.cmp(&b.0));
         
         if index == 0 || index > teleports_vec.len() {
             print_error(&format!("Invalid index: {}. Use 1-{}", index, teleports_vec.len()));
@@ -104,7 +101,7 @@ impl TeleportManager {
         Ok(())
     }
 
-    /// List all teleport savepoints (non-interactive)
+    /// List all teleport savepoints (global only)
     pub fn list() -> Result<()> {
         let teleports = Self::get_all();
         
@@ -115,7 +112,7 @@ impl TeleportManager {
         
         println!();
         println!("{}", "==================================================".cyan());
-        println!("{}", "📌 Your Teleport Savepoints".cyan().bold());
+        println!("{}", "📌 Your Teleport Savepoints (global)".cyan().bold());
         println!("{}", "==================================================".cyan());
         
         let mut sorted: Vec<(String, PathBuf)> = teleports.into_iter().collect();
@@ -132,7 +129,7 @@ impl TeleportManager {
         Ok(())
     }
 
-    /// Interactive menu (like gos)
+    /// Interactive menu (global only)
     pub fn interactive_menu(nav: &mut Navigator) -> Result<()> {
         let teleports = Self::get_all();
         
@@ -141,10 +138,9 @@ impl TeleportManager {
             return Ok(());
         }
         
-        // Show menu
         println!();
         println!("{}", "==================================================".cyan());
-        println!("{}", "📌 Teleport - Your Savepoints".cyan().bold());
+        println!("{}", "📌 Teleport - Your Savepoints (global)".cyan().bold());
         println!("{}", "==================================================".cyan());
         
         let mut sorted: Vec<(String, PathBuf)> = teleports.into_iter().collect();
@@ -218,6 +214,39 @@ impl TeleportManager {
         
         let (name, _) = &teleports_vec[index - 1];
         Self::remove_by_name(name)
+    }
+
+    /// Rename a teleport savepoint
+    pub fn rename(old_name: &str, new_name: &str) -> Result<()> {
+        let old_lower = old_name.to_lowercase();
+        let new_lower = new_name.to_lowercase();
+        
+        if !Self::validate_name(&new_lower) {
+            print_error(&format!("Invalid name: '{}' is reserved or empty", new_name));
+            return Ok(());
+        }
+        
+        let mut cfg = Config::global().write().unwrap();
+        
+        if !cfg.teleports.contains_key(&old_lower) {
+            print_error(&format!("Savepoint not found: '{}'", old_name));
+            return Ok(());
+        }
+        
+        if cfg.teleports.contains_key(&new_lower) {
+            print_error(&format!("Cannot rename: '{}' already exists as a savepoint", new_name));
+            println!("{}", "Use 'tp list' to see existing savepoints.".dimmed());
+            return Ok(());
+        }
+        
+        let path = cfg.teleports.remove(&old_lower).unwrap();
+        cfg.teleports.insert(new_lower.clone(), path.clone());
+        cfg.save();
+        
+        print_success(&format!("Renamed savepoint '{}' -> '{}' (-> {})", 
+            old_lower, new_lower, path.display()));
+        
+        Ok(())
     }
 
     /// Clear all teleport savepoints (with confirmation)

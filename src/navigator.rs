@@ -46,6 +46,10 @@ impl Navigator {
         if canonical.is_dir() {
             env::set_current_dir(&canonical)?;
             self.current_dir = canonical;
+            
+            // Reload config to pick up any ntconfig.toml in the new directory
+            crate::config::Config::reload_global();
+            
             Ok(())
         } else {
             anyhow::bail!("{} is not a directory", path.display())

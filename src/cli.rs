@@ -1,10 +1,12 @@
 use crate::config::Config;
+use crate::explorer::count_dirs_in_tree;
 use crate::filetype::{FormatConfig, is_supported_format};
 use crate::output::{cat_file, print_error, print_success, print_warning};
 use crate::report::{generate_report, generate_report_to, ReportFormat};
 use anyhow::{bail, Result};
 use clap::{Arg, ArgAction, Command};
 use colored::*;
+use indicatif::ProgressBar;
 use std::path::Path;
 
 /// Pre‑process raw args to accept `-say`, `-print` as long options.
@@ -87,7 +89,7 @@ pub fn run_cli() -> Result<bool> {
         "-o, --output <file>         Output filename",
         "--cp                        Copy report to clipboard",
         "--setO [path]               Show or set output directory",
-        "--setD [depth]              Show or set max depth (1-12)",
+        "--setD [depth]              Show or set max depth (1-20)",
         "--setL [ON|OFF]             Show or set line numbers",
         "--setT [threads]            Show or set thread count",
         "--setH [path|ON|OFF]        Show or set history path/state",
@@ -491,8 +493,9 @@ pub fn run_cli() -> Result<bool> {
             );
             tree_pb.finish_with_message("Done");
 
-            let dir_count = crate::explorer::count_dirs_in_tree(&tree);
-            let scan_pb = indicatif::ProgressBar::new(dir_count);
+            let total_dirs = count_dirs_in_tree(&tree);
+
+            let scan_pb = ProgressBar::new(total_dirs);
             scan_pb.set_style(
                 indicatif::ProgressStyle::with_template("ScanB  [{bar:30}] {percent}% {msg}")
                     .unwrap()
@@ -503,7 +506,7 @@ pub fn run_cli() -> Result<bool> {
             crate::explorer::compute_tree_sizes(&mut tree, Some(&scan_pb));
 
             let tree_str = crate::explorer::format_tree_with_sizes(&tree, "", true, true, Some(&scan_pb));
-            scan_pb.finish_with_message("Done");
+            scan_pb.finish_and_clear();
             println!("{}", tree_str);
         }
         return Ok(false);
@@ -697,7 +700,7 @@ fn print_help() {
     println!("    -f, --format <FORMAT>   Output format: txt, html, json, md (default: txt)");
     println!("    --cp                    Copy report to clipboard instead of saving to file");
     println!("    --setO [path]           Show or set the output directory (default: Desktop)");
-    println!("    --setD [depth]          Show or set max recursion depth (min: 1, max: 12)");
+    println!("    --setD [depth]          Show or set max recursion depth (min: 1, max: 20)");
     println!("    --setL [ON|OFF]         Show or toggle line numbers for file display");
     println!("    --setT [threads]        Show or set number of threads (default: 4)");
     println!("    --setH [path|ON|OFF]    Show/set history path or enable/disable");
@@ -742,5 +745,7 @@ fn print_help() {
     println!("    Navigation: go, godrive, back, gos, gosc");
     println!("    Teleport: tp, tp jump, tp to, @name");
     println!("    Reports: txt, txt --cp, json --cp, md --cp");
+    println!("    Configuration: showcg, opencg, resetcg, restorecg");
+    println!("    Run Aliases: ral add, ral edit, ral list, ral rm, ral cls");
     println!("    These commands only work inside the interactive shell (run 'ntc' alone).\n");
 }

@@ -1,5 +1,5 @@
 # NTC - Navigate, Tree, Cat
-## Version 1.6.0 - Complete User Guide
+## Version 1.7.0 - Complete User Guide
 
 NTC is a command-line tool that combines directory navigation, tree viewing, and file concatenation. It works on Windows and Linux/WSL.
 
@@ -11,12 +11,12 @@ NTC is a command-line tool that combines directory navigation, tree viewing, and
 - Or manually place ntc.exe in a folder in your PATH
 
 ### Linux (Ubuntu/Debian)
-- Download ntc_1.6.0-1_amd64.deb
-- Run: sudo dpkg -i ntc_1.6.0-1_amd64.deb
+- Download ntc_1.7.0-1_amd64.deb
+- Run: sudo dpkg -i ntc_1.7.0-1_amd64.deb
 
 ### Linux (Other distributions)
-- Download ntc-1.6.0-x86_64-linux.tar.gz
-- Extract: tar -xzvf ntc-1.6.0-x86_64-linux.tar.gz
+- Download ntc-1.7.0-x86_64-linux.tar.gz
+- Extract: tar -xzvf ntc-1.7.0-x86_64-linux.tar.gz
 - Copy to PATH: sudo mv ntc /usr/local/bin/
 
 ## TWO MODES OF OPERATION
@@ -73,6 +73,8 @@ Launch the interactive shell and run multiple commands:
 
   txt <file>         - Display file contents (text files only)
   Works with: .txt, .md, .rs, .py, .c, .cpp, .js, .html, .json, .toml, etc.
+  txtc <file>        - Copy file content to clipboard
+  txtf <file>        - Display file with selection menu
 
 ## TELEPORT SAVEPOINTS (Bookmarks)
 
@@ -108,11 +110,13 @@ Launch the interactive shell and run multiple commands:
   ral edit <name> "<new_command>"  - Update existing alias
   ral rm <name>                    - Remove alias
   ral list                         - Show all aliases
+  ral cls                          - Clear ALL aliases (asks confirmation)
 
 ### Alias Rules:
   - Cannot start with @ or #
   - Cannot be reserved commands (go, view, txt, etc.)
   - Use letters, numbers, hyphens, underscores
+  - Supports && (use quotes: ral add fb "dal && frr")
 
 ## CONFIGURATION
 
@@ -134,12 +138,51 @@ Launch the interactive shell and run multiple commands:
   setH default                     - Reset history to default
   watch ON|OFF                     - Enable/disable file watcher
 
+### Config file management (NEW in v1.7.0):
+  opencg                           - Open config.toml in default editor
+  resetcg                          - Reset config to defaults (with backup)
+  restorecg                        - Restore config from backup
+  gencg                            - Create ntconfig.toml template
+  gencg --all                      - Export current settings to ntconfig.toml
+
 ### Where things are stored:
   where                            - Show executable and config file locations
 
 ### Config file locations:
   Windows: C:\Users\<user>\AppData\Roaming\ntc\config.toml
   Linux:   ~/.config/ntc/config.toml
+
+## LOCAL PROJECT CONFIGURATION (NEW in v1.7.0)
+
+Place an `ntconfig.toml` file in any directory to override settings for that project:
+
+### What can be overridden:
+  - Ignored directories, extensions, and files
+  - Extra supported files and extensions
+  - Run aliases (project-specific commands)
+
+### What stays global:
+  - Teleport savepoints
+  - Output path, max depth, line numbers
+  - History settings, file watcher
+  - Thread count
+
+### How it works:
+  1. Create ntconfig.toml: `gencg` or `gencg --all`
+  2. Edit the file with your project settings
+  3. Navigate into the directory - settings auto-load
+  4. Leave the directory - global settings restore automatically
+
+### Example:
+  # In project directory
+  ntc [project]> ignore build
+  ✓ Now ignoring directory: build (local config)
+  
+  ntc [project]> ral add test "cargo test"
+  ✓ Alias 'test' -> 'cargo test' (local config)
+  
+  ntc [project]> cd ..
+  # Global settings restored
 
 ## IGNORE/CARE SYSTEM
 
@@ -158,11 +201,14 @@ Launch the interactive shell and run multiple commands:
   ignoren <filename>               - Ignore specific file (e.g., "Cargo.lock")
   caren <filename>                 - Stop ignoring a specific file
 
+Note: Commands automatically save to ntconfig.toml if present, otherwise to global config.
+
 ## PIPING COMMANDS (Interactive Mode)
 
 Chain multiple commands with &&:
   go src && txt && back
   cd /home && view --size && json
+  ral add fb "dal && frr"  # Quotes preserve && for aliases
 
 ## SYSTEM COMMANDS
 
@@ -208,13 +254,22 @@ Chain multiple commands with &&:
   build
   test
 
-### Example 5: Customize ignores
-  ntc
-  ignore logs
-  ignoref tmp
-  ignoren Cargo.lock
-  ignored                    # Verify settings
-  view                       # Tree now hides ignored items
+### Example 5: Create composite alias with &&
+  ral add dal "dart analyze lib/"
+  ral add frr "flutter run --release -d DEVICE_ID"
+  ral add fb "dal && frr"
+  fb  # Runs both commands
+
+### Example 6: Project-specific configuration
+  cd myproject
+  gencg --all                      # Export current settings to ntconfig.toml
+  ignore temp                      # Now saves to local config
+  ral add deploy "./deploy.sh"     # Project-specific alias
+  cd ..                            # Back to global settings
+
+### Example 7: Reset configuration
+  resetcg                          # Reset with backup option
+  restorecg                        # Restore from backup if needed
 
 ## OUTPUT FORMATS EXPLAINED
 
@@ -251,6 +306,8 @@ Chain multiple commands with &&:
 6. Use gosc for rapid directory traversal
 7. Chain commands with && for automation
 8. Export reports in JSON for integration with other tools
+9. Use ntconfig.toml for project-specific settings
+10. Back up your config with resetcg before major changes
 
 ## TROUBLESHOOTING
 
@@ -271,6 +328,11 @@ Chain multiple commands with &&:
   - Check config file exists and is readable
   - Use 'tp list' to verify savepoints
 
+### Local config not loading:
+  - Verify ntconfig.toml exists in current directory
+  - Check file has valid TOML syntax (no errors in VSCode)
+  - Run 'showcg' to see active config source
+
 ## QUICK REFERENCE CARD
 
 | Action | Command |
@@ -288,6 +350,10 @@ Chain multiple commands with &&:
 | Create alias | ral add name "cmd" |
 | Run alias | name |
 | Show config | showcg |
+| Open config file | opencg |
+| Reset config | resetcg |
+| Create local config | gencg |
+| Export local config | gencg --all |
 | Show locations | where |
 | Exit | exit |
 
@@ -310,11 +376,13 @@ Chain multiple commands with &&:
   - All navigation commands
   - All report formats
   - Teleport savepoints
-  - Run aliases
+  - Run aliases (with && support)
   - File viewing
   - Ignore/care system
+  - Local project configs
 
 ## VERSION HISTORY
+  v1.7.0 - Local project configs (ntconfig.toml), config management commands (opencg, resetcg, restorecg, gencg), improved alias expansion with &&, recursive alias support
   v1.6.0 - Added JSON/MD reports, clipboard copy, Linux support
   v1.5.0 - Added teleport points, run aliases
 

@@ -1,12 +1,12 @@
 [Setup]
 AppName=ntc
-AppVersion=1.6.0
+AppVersion=1.7.0
 AppPublisher=NuengCoder
 AppPublisherURL=https://github.com/NuengCoder/ntc
 DefaultDirName={autopf}\ntc
 DefaultGroupName=ntc
 OutputDir=.\installer
-OutputBaseFilename=ntc-installer-1.6.0
+OutputBaseFilename=ntc-installer-1.7.0
 SetupIconFile=assets\ntc_image.ico
 Compression=lzma
 SolidCompression=yes

@@ -16,6 +16,7 @@ git push
 
 ## Android Push
 cargo ndk --target aarch64-linux-android build --release
+tar -czvf ntc-1.8.0-aarch64-linux-android.tar.gz -C target/aarch64-linux-android/release ntc
 # 1. Push to /sdcard/ (world-accessible)
 adb push target\aarch64-linux-android\release\ntc /sdcard/
 

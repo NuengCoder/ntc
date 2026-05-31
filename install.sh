@@ -1,31 +1,53 @@
 #!/bin/bash
-# Quick install script for ntc on Linux (Debian/Ubuntu)
-# Version: 1.8.0
+# install.sh - Build ntc from source after git clone
+# Requires: Rust (cargo) installed
 
-set -e  # Exit on error
+set -e
 
-echo "Installing ntc v1.8.0..."
+echo "🔨 Building ntc from source..."
 
-# Check if running with sudo
-if [ "$EUID" -ne 0 ]; then 
-    echo "Please run with sudo: sudo ./install.sh"
+# Check for cargo
+if ! command -v cargo &> /dev/null; then
+    echo "❌ Rust/Cargo not found. Please install Rust first:"
+    echo "   curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh"
     exit 1
 fi
 
-# Check if .deb file exists
-if [ ! -f "ntc_1.8.0-1_amd64.deb" ]; then
-    echo "Error: ntc_1.8.0-1_amd64.deb not found!"
-    echo "Please download it from GitHub Releases first."
-    exit 1
-fi
+# Build release binary
+cargo build --release
 
-# Install the package
-dpkg -i ntc_1.8.0-1_amd64.deb
-
-# Clean up
-rm -f ntc_1.8.0-1_amd64.deb
+# Detect OS for installation path
+OS=$(uname -s)
+case "$OS" in
+    Linux)
+        if command -v termux-info &> /dev/null; then
+            # Termux (Android)
+            INSTALL_DIR="$PREFIX/bin"
+            cp target/release/ntc "$INSTALL_DIR/"
+            chmod +x "$INSTALL_DIR/ntc"
+            echo "✅ Installed to $INSTALL_DIR/ntc"
+        else
+            # Regular Linux
+            echo "📁 Installing to /usr/local/bin/ (requires sudo)..."
+            sudo cp target/release/ntc /usr/local/bin/
+            echo "✅ Installed to /usr/local/bin/ntc"
+        fi
+        ;;
+    Darwin)
+        # macOS
+        echo "📁 Installing to /usr/local/bin/ (requires sudo)..."
+        sudo cp target/release/ntc /usr/local/bin/
+        echo "✅ Installed to /usr/local/bin/ntc"
+        ;;
+    *)
+        echo "⚠️ Unknown OS: $OS"
+        echo "Binary built at: target/release/ntc"
+        echo "Copy it manually to your PATH."
+        exit 0
+        ;;
+esac
 
 echo ""
-echo "✅ ntc 1.8.0 installed successfully!"
-echo "Run 'ntc' to start the interactive shell"
-echo "Run 'ntc --help' for usage information"
+ntc --version
+echo ""
+echo "🎉 ntc installed successfully! Run 'ntc' to start."

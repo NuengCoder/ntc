@@ -1,14 +1,26 @@
-## Features (v1.7.0)
+## Quick Demo (v1.8.0)
 
-- Interactive directory navigation (go, godrive, back, gos, gosc)
-- Directory tree display with configurable depth (`view`, `view --size`)
-- **NEW!** Local project configuration (`ntconfig.toml`) — per-directory ignore/care settings and run aliases
-- **NEW!** Config management commands (`opencg`, `resetcg`, `restorecg`, `gencg`, `showcg`)
-- **NEW!** Enhanced report formats with clipboard support (`txt`, `json`, `md`, `html`, `--cp`)
-- **NEW!** Teleport savepoints for instant directory jumps (`tp add`, `tp jump`, `@name`)
-- **NEW!** Run aliases for custom command shortcuts (`ral add`, `run`, `&&` chaining)
-- File content viewing with optional line numbers (`txt`, `txtc`, `txtf`)
-- Ignore/care system for directories, extensions, and specific files
-- Persistent global configuration (`config.toml`)
-- Full Linux/WSL support (.deb package available)
-- Cross-platform: Windows, Linux, macOS (Intel + Apple Silicon)
+```bash
+# Backup your project
+ntc
+bkup                              # Create backup
+# ... make changes ...
+pldw 1                            # Restore from backup
+unpd                              # Undo the restore
+
+# Search for files
+fs main.c                         # Exact match
+fs mian.c                         # Fuzzy match (suggests main.c)
+fs test -d 5                      # Search 5 levels deep
+ds src                            # Search directories
+
+# Teleport with go/cd
+tp add work ~/projects/myapp
+go to work                        # Jump to savepoint
+
+# View tree with custom depth and sizes
+view -s -d 3
+
+# Multi-argument alias
+ral add runc(x,y) "gcc -o $y $x.c && ./$y"
+runc(main,program)

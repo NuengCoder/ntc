@@ -8,7 +8,7 @@ const TEXT_EXTENSIONS: &[&str] = &[
     "toml", "cfg", "conf", "c", "cpp", "h", "hpp", "java", "go", "rb", "php",
     "sh", "bat", "sql", "r", "swift", "kt", "scala", "lua", "perl",
     "csv", "gitignore", "dockerfile", "makefile", "readme", "license",
-    "jsx", "jsp", "tsx", "dart", "cs", "kts", "mq4", "mq5", "mqh"
+    "jsx", "jsp", "tsx", "dart", "cs", "kts", "mq4", "mq5", "mqh" , "c3"
 ];
 
 /// Known file extensions that are unsupported but should appear in tree

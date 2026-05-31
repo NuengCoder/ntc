@@ -1,7 +1,7 @@
 # NTC - Navigate, Tree, Cat
-## Version 1.7.0 - Complete User Guide
+## Version 1.8.0 - Complete User Guide
 
-NTC is a command-line tool that combines directory navigation, tree viewing, and file concatenation. It works on Windows and Linux/WSL.
+NTC is a command-line tool that combines directory navigation, tree viewing, file concatenation, backup/restore, and fuzzy search. It works on Windows, Linux/WSL, macOS, and Termux (Android).
 
 ## INSTALLATION
 
@@ -11,13 +11,24 @@ NTC is a command-line tool that combines directory navigation, tree viewing, and
 - Or manually place ntc.exe in a folder in your PATH
 
 ### Linux (Ubuntu/Debian)
-- Download ntc_1.7.0-1_amd64.deb
-- Run: sudo dpkg -i ntc_1.7.0-1_amd64.deb
+- Download ntc_1.8.0-1_amd64.deb
+- Run: sudo dpkg -i ntc_1.8.0-1_amd64.deb
 
 ### Linux (Other distributions)
-- Download ntc-1.7.0-x86_64-linux.tar.gz
-- Extract: tar -xzvf ntc-1.7.0-x86_64-linux.tar.gz
+- Download ntc-1.8.0-x86_64-linux.tar.gz
+- Extract: tar -xzvf ntc-1.8.0-x86_64-linux.tar.gz
 - Copy to PATH: sudo mv ntc /usr/local/bin/
+
+### macOS (Intel & Apple Silicon)
+- Download ntc-1.8.0-macos-universal.tar.gz
+- Extract: tar -xzvf ntc-1.8.0-macos-universal.tar.gz
+- Copy to PATH: sudo mv ntc /usr/local/bin/
+
+### Termux (Android)
+- Download ntc-1.8.0-android-aarch64.tar.gz
+- Extract: tar -xzvf ntc-1.8.0-android-aarch64.tar.gz
+- Copy: cp ntc $PREFIX/bin/
+- chmod +x $PREFIX/bin/ntc
 
 ## TWO MODES OF OPERATION
 
@@ -35,7 +46,9 @@ Launch the interactive shell and run multiple commands:
 ## BASIC NAVIGATION (Interactive Mode Only)
 
   go <path>          - Change to a directory
+  go to <tp_name>    - Teleport to a saved teleport point (NEW in v1.8.0)
   cd <path>          - Same as go
+  cd to <tp_name>    - Teleport to a saved teleport point (NEW in v1.8.0)
   back               - Go to parent directory
   back 2             - Go up 2 levels
   godrive            - List and select Windows drives (Windows only)
@@ -45,8 +58,55 @@ Launch the interactive shell and run multiple commands:
 ## VIEWING DIRECTORIES
 
   view               - Show directory tree (uses configured depth)
-  view --size        - Show tree with folder sizes
+  view -s            - Show tree with folder sizes (NEW in v1.8.0)
+  view --size        - Same as -s
+  view -d <n>        - Show tree with custom depth (NEW in v1.8.0)
+  view --depth <n>   - Same as -d
+  view -s -d <n>     - Show tree with sizes and custom depth (NEW in v1.8.0)
   size               - Show total size of current directory
+
+## BACKUP & RESTORE (NEW in v1.8.0)
+
+### Create backups:
+  bkup               - Create a backup of current project (skips files >50MB, respects ignore/care)
+  bkup --where       - Show backup storage location
+  bkup --cls         - Delete ALL backups for this project (asks confirmation)
+  bkup --force       - Delete ALL backups (no confirmation, for scripting)
+
+### Restore from backups:
+  pldw               - Interactive restore menu (shows numbered backups)
+  pldw <number>      - Restore backup by number directly
+
+### Undo restore:
+  unpd               - Undo the last restore (restores overwritten files, deletes newly created ones)
+  unpd --cls         - Clear undo history (asks confirmation)
+  unpd --force       - Clear undo history (no confirmation)
+
+### Backup storage:
+  Backups are stored in: ~/.ntc/backups/<project_hash>/bkup_<n>/
+  Each backup includes an ignore.txt file listing skipped files and reasons.
+
+## FILE & DIRECTORY SEARCH (NEW in v1.8.0)
+
+### Search files (exact → partial → fuzzy):
+  fs <pattern>               - Search files using configured depth
+  fs <pattern> -d <n>        - Search files with custom depth
+  fs main.c                  # Exact match
+  fs mian.c                  # Fuzzy match: suggests main.c (96% match)
+  fs test                    # Partial match: finds test_helper.c
+
+### Search directories:
+  ds <pattern>               - Search directories using configured depth
+  ds <pattern> -d <n>        - Search directories with custom depth
+  ds src                     # Exact match
+  ds srcd                    # Fuzzy match: suggests src (94% match)
+  ds test                    # Partial match: finds test_utils/
+
+### How search works:
+  1. Exact matches (full filename equality, case-insensitive)
+  2. Partial matches (filename contains the pattern)
+  3. Fuzzy matches (Jaro-Winkler similarity ≥75% for files, ≥72% for directories)
+  4. Shows top 3 fuzzy suggestions when no exact or partial match found
 
 ## GENERATING REPORTS
 
@@ -85,6 +145,9 @@ Launch the interactive shell and run multiple commands:
 ### Jump to saved locations:
   tp jump <name>                   - Teleport by name
   tp jump <number>                 - Teleport by number (from list)
+  tp to <name>                     - Same as jump (NEW in v1.8.0)
+  go to <name>                     - Teleport via go command (NEW in v1.8.0)
+  cd to <name>                     - Teleport via cd command (NEW in v1.8.0)
   @<name>                          - Quick teleport shortcut
 
 ### Manage savepoints:
@@ -98,23 +161,30 @@ Launch the interactive shell and run multiple commands:
 
 ### Create aliases:
   ral add <name> "<command>"       - Create new alias
+  ral add <name>(x) "<cmd $x>"     - Create parameterised alias (single arg)
+  ral add <name>(x,y) "<cmd $x $y>" - Create parameterised alias (multiple args) (NEW in v1.8.0)
+  
   Example: ral add ll "ls -la"
   Example: ral add py "python test.py"
+  Example: ral add runc(x,y) "gcc -o $y $x.c && ./$y"
 
 ### Use aliases:
   <alias>                          - Just type the alias name
+  <alias>(<arg>)                   - Run parameterised alias
   run <alias>                      - Run with 'run' prefix
   r <alias>                        - Shortcut for run
 
 ### Manage aliases:
   ral edit <name> "<new_command>"  - Update existing alias
+  ral rnm <old> to <new>           - Rename an alias
   ral rm <name>                    - Remove alias
   ral list                         - Show all aliases
   ral cls                          - Clear ALL aliases (asks confirmation)
+  ral cls --force                  - Clear ALL aliases (no confirmation)
 
 ### Alias Rules:
   - Cannot start with @ or #
-  - Cannot be reserved commands (go, view, txt, etc.)
+  - Cannot be reserved commands (go, view, txt, bkup, pldw, unpd, fs, ds, etc.)
   - Use letters, numbers, hyphens, underscores
   - Supports && (use quotes: ral add fb "dal && frr")
 
@@ -130,7 +200,7 @@ Launch the interactive shell and run multiple commands:
 
 ### Change settings:
   setO <path>                      - Set output directory for reports
-  setD <number>                    - Set max tree depth (1-12)
+  setD <number>                    - Set max tree depth (1-20)
   setL ON|OFF                      - Enable/disable line numbers
   setT <number>                    - Set thread count (1-64)
   setH ON|OFF                      - Enable/disable command history
@@ -138,7 +208,7 @@ Launch the interactive shell and run multiple commands:
   setH default                     - Reset history to default
   watch ON|OFF                     - Enable/disable file watcher
 
-### Config file management (NEW in v1.7.0):
+### Config file management:
   opencg                           - Open config.toml in default editor
   resetcg                          - Reset config to defaults (with backup)
   restorecg                        - Restore config from backup
@@ -150,9 +220,10 @@ Launch the interactive shell and run multiple commands:
 
 ### Config file locations:
   Windows: C:\Users\<user>\AppData\Roaming\ntc\config.toml
-  Linux:   ~/.config/ntc/config.toml
+  Linux/macOS: ~/.config/ntc/config.toml
+  Termux: $PREFIX/var/lib/ntc/config.toml
 
-## LOCAL PROJECT CONFIGURATION (NEW in v1.7.0)
+## LOCAL PROJECT CONFIGURATION
 
 Place an `ntconfig.toml` file in any directory to override settings for that project:
 
@@ -226,39 +297,44 @@ Chain multiple commands with &&:
 
 ## COMPLETE EXAMPLES
 
-### Example 1: Explore a project
+### Example 1: Explore a project with backup
   ntc
   go /home/user/project
-  view --size
+  bkup                             # Create backup before making changes
+  view -s -d 3                     # View tree with sizes, depth 3
   txt --cp
   json
   exit
 
-### Example 2: Generate documentation
-  ntc -i ./src -f md -o API.md
-  ntc -i ./src -f json -o structure.json
+### Example 2: Backup and restore workflow
+  ntc
+  bkup                             # Create backup #1
+  # Make some changes...
+  bkup                             # Create backup #2
+  pldw                             # Show interactive restore menu
+  pldw 1                           # Restore backup #1
+  unpd                             # Undo the restore (go back to backup #2)
 
-### Example 3: Use teleport points
+### Example 3: Search for files
+  ntc
+  fs main.c                        # Exact match
+  fs mian.c                        # Fuzzy match (typo)
+  fs test -d 5                     # Search 5 levels deep
+  ds src                           # Search directories
+
+### Example 4: Use teleport points with go/cd
   ntc
   tp add work /home/user/work
   tp add docs /home/user/documents
-  @work
+  go to work                       # Teleport via go command
   view
-  @docs
+  cd to docs                       # Teleport via cd command
   txt
 
-### Example 4: Create run aliases
+### Example 5: Create run aliases with multiple args
   ntc
-  ral add build "cargo build --release"
-  ral add test "cargo test"
-  build
-  test
-
-### Example 5: Create composite alias with &&
-  ral add dal "dart analyze lib/"
-  ral add frr "flutter run --release -d DEVICE_ID"
-  ral add fb "dal && frr"
-  fb  # Runs both commands
+  ral add runc(x,y) "gcc -o $y $x.c && ./$y"
+  runc(main,program)               # Compiles main.c → program.exe and runs it
 
 ### Example 6: Project-specific configuration
   cd myproject
@@ -298,16 +374,21 @@ Chain multiple commands with &&:
 
 ## TIPS & BEST PRACTICES
 
-1. Use teleport points for frequently accessed directories
-2. Create run aliases for long or complex commands
-3. Set line numbers ON when reviewing code files
-4. Use --cp to quickly share directory structures
-5. Ignore build directories (target, node_modules) for cleaner trees
-6. Use gosc for rapid directory traversal
-7. Chain commands with && for automation
-8. Export reports in JSON for integration with other tools
-9. Use ntconfig.toml for project-specific settings
-10. Back up your config with resetcg before major changes
+1. Use `bkup` before making major changes to your project
+2. Use `pldw` to restore and `unpd` to revert if you made a mistake
+3. Use `fs` with fuzzy matching for quick file finding (even with typos!)
+4. Use `go to <tp_name>` for instant navigation to frequently used directories
+5. Use `view -s -d <n>` to quickly see folder sizes at specific depth
+6. Use teleport points for frequently accessed directories
+7. Create run aliases for long or complex commands
+8. Set line numbers ON when reviewing code files
+9. Use --cp to quickly share directory structures
+10. Ignore build directories (target, node_modules) for cleaner trees
+11. Use gosc for rapid directory traversal
+12. Chain commands with && for automation
+13. Export reports in JSON for integration with other tools
+14. Use ntconfig.toml for project-specific settings
+15. Back up your config with resetcg before major changes
 
 ## TROUBLESHOOTING
 
@@ -333,27 +414,40 @@ Chain multiple commands with &&:
   - Check file has valid TOML syntax (no errors in VSCode)
   - Run 'showcg' to see active config source
 
+### Backup failed (file too large):
+  - ntc skips files >50 MB by default
+  - See ignore.txt in the backup directory for details
+
+### Undo not working:
+  - `unpd` only works after a `pldw` restore
+  - Undo history is cleared after successful undo
+
 ## QUICK REFERENCE CARD
 
 | Action | Command |
 |--------|---------|
 | Enter interactive mode | ntc |
 | Change directory | go /path |
+| Teleport to savepoint | go to name |
 | View tree | view |
-| View with sizes | view --size |
+| View with sizes & depth | view -s -d 5 |
+| Create backup | bkup |
+| Restore backup | pldw |
+| Undo restore | unpd |
+| Search files | fs pattern |
+| Search directories | ds pattern |
 | Text report | txt |
 | Copy tree to clipboard | txt --cp |
 | JSON report | json |
-| Copy JSON | json --cp |
 | Save teleport | tp add name |
 | Jump to teleport | @name |
 | Create alias | ral add name "cmd" |
+| Create param alias | ral add name(x,y) "cmd $x $y" |
 | Run alias | name |
 | Show config | showcg |
 | Open config file | opencg |
 | Reset config | resetcg |
 | Create local config | gencg |
-| Export local config | gencg --all |
 | Show locations | where |
 | Exit | exit |
 
@@ -372,20 +466,37 @@ Chain multiple commands with &&:
   - Config at ~/.config/ntc/
   - Unix-style paths (/home/user)
 
+### macOS:
+  - Universal binary (Intel + Apple Silicon)
+  - Config at ~/.config/ntc/
+  - Unix-style paths (/Users/username)
+
+### Termux (Android):
+  - pkg install support
+  - Config at $PREFIX/var/lib/ntc/
+  - Unix-style paths (/data/data/com.termux/files/home)
+
 ### Cross-platform (works everywhere):
   - All navigation commands
+  - Backup & restore (bkup, pldw, unpd)
+  - File & directory search (fs, ds)
   - All report formats
-  - Teleport savepoints
-  - Run aliases (with && support)
+  - Teleport savepoints (including go to / cd to)
+  - Run aliases (with && support, multiple args)
   - File viewing
   - Ignore/care system
   - Local project configs
 
 ## VERSION HISTORY
+  v1.8.0 - Backup & restore system (bkup, pldw, unpd), fuzzy file/directory search (fs, ds), view flags (-s, -d), go to / cd to teleport, RAL multiple arguments, 50MB file limit, ignore.txt generation, atomic backups, full undo support, Termux compatibility
   v1.7.0 - Local project configs (ntconfig.toml), config management commands (opencg, resetcg, restorecg, gencg), improved alias expansion with &&, recursive alias support
   v1.6.0 - Added JSON/MD reports, clipboard copy, Linux support
   v1.5.0 - Added teleport points, run aliases
-
+  v1.4.0 - Added gos / gosc
+  v1.3.0 - Added ignore/care filter
+  v1.2.0 - Added html and fixed the bug from previous version
+  v1.1.0 - Added back and other Configuration
+  v1.0.0 - normal cd with tree viewer and txt report as NTC navigation with cd see tree view each directory and txt the report to AI
 ---
 
 For more information: https://github.com/NuengCoder/ntc

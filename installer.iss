@@ -1,12 +1,12 @@
 [Setup]
 AppName=ntc
-AppVersion=1.7.0
+AppVersion=1.8.0
 AppPublisher=NuengCoder
 AppPublisherURL=https://github.com/NuengCoder/ntc
 DefaultDirName={autopf}\ntc
 DefaultGroupName=ntc
 OutputDir=.\installer
-OutputBaseFilename=ntc-installer-1.7.0
+OutputBaseFilename=ntc-installer-1.8.0
 SetupIconFile=assets\ntc_image.ico
 Compression=lzma
 SolidCompression=yes
@@ -18,8 +18,12 @@ PrivilegesRequiredOverridesAllowed=dialog
 Source: "target\release\ntc.exe"; DestDir: "{app}"; Flags: ignoreversion
 
 [Icons]
-Name: "{group}\ntc"; Filename: "{app}\ntc.exe"
+Name: "{group}\ntc"; Filename: "{app}\ntc.exe"; Comment: "Navigate, Tree, Cat - Interactive shell"
 Name: "{group}\Uninstall ntc"; Filename: "{uninstallexe}"
+Name: "{autodesktop}\ntc"; Filename: "{app}\ntc.exe"; Comment: "Navigate, Tree, Cat - Interactive shell"; Tasks: desktopicon
+
+[Tasks]
+Name: "desktopicon"; Description: "Create a desktop shortcut"; GroupDescription: "Additional icons:"
 
 [Registry]
 Root: HKCU; Subkey: "Environment"; ValueType: expandsz; ValueName: "Path"; \

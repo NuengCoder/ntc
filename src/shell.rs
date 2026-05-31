@@ -62,7 +62,115 @@ fn contains_ampersands(s: &str) -> bool {
     split_on_ampersands(s).len() > 1
 }
 
-/// Recursively expand aliases in a command (no && splitting)
+/// Parse a call token like `py(hello)` into `("py", Some("hello"))`.
+/// Returns `(token, None)` if there are no parentheses.
+fn parse_call_syntax(token: &str) -> (&str, Option<&str>) {
+    if let Some(paren_start) = token.find('(') {
+        if token.ends_with(')') {
+            let base = &token[..paren_start];
+            let arg  = &token[paren_start + 1..token.len() - 1];
+            return (base, Some(arg));
+        }
+    }
+    (token, None)
+}
+
+// ── shared arg parser for fs / ds ─────────────────────────────────────────
+// Accepts:  <pattern> [-d <depth>]   (depth flag must be at the end)
+// Returns:  (pattern, max_depth)
+fn parse_search_args(args: &str) -> (String, usize) {
+    let parts: Vec<&str> = args.split_whitespace().collect();
+    let default_depth = Config::global_get_max_depth();
+
+    // Look for -d <n> at the end: ["pattern", ..., "-d", "3"]
+    if parts.len() >= 3 {
+        let n = parts.len();
+        if parts[n - 2] == "-d" {
+            if let Ok(depth) = parts[n - 1].parse::<usize>() {
+                let pattern = parts[..n - 2].join(" ");
+                return (pattern, depth);
+            }
+        }
+    }
+
+    (args.to_string(), default_depth)
+}
+
+/// Replace `$identifier` placeholders in `template` with positional `args`.
+/// Placeholders are matched to args by their order of first appearance in the template.
+/// e.g. template = "pytest $x --cov=$y",  args = ["mymodule", "src"]
+///   -> first  $identifier seen: $x -> "mymodule"
+///   -> second $identifier seen: $y -> "src"
+///   -> result: "pytest mymodule --cov=src"
+///
+/// If fewer args than placeholders, unmatched $names are left as-is.
+/// If more args than placeholders, extras are ignored.
+fn substitute_params(template: &str, args: &[&str]) -> String {
+    // 1. Collect placeholder names in order of first appearance.
+    let mut param_order: Vec<String> = Vec::new();
+    let chars: Vec<char> = template.chars().collect();
+    let mut i = 0;
+    while i < chars.len() {
+        if chars[i] == '$' {
+            let start = i + 1;
+            let mut end = start;
+            while end < chars.len() && (chars[end].is_alphanumeric() || chars[end] == '_') {
+                end += 1;
+            }
+            if end > start {
+                let name: String = chars[start..end].iter().collect();
+                if !param_order.contains(&name) {
+                    param_order.push(name);
+                }
+            }
+            i = end;
+        } else {
+            i += 1;
+        }
+    }
+
+    // 2. Build a name->value map from param_order + args (positional).
+    let mut map: std::collections::HashMap<&str, &str> = std::collections::HashMap::new();
+    for (idx, name) in param_order.iter().enumerate() {
+        if let Some(val) = args.get(idx) {
+            map.insert(name.as_str(), val);
+        }
+    }
+
+    // 3. Walk the template again and substitute.
+    let mut result = String::with_capacity(template.len());
+    let mut i = 0;
+    while i < chars.len() {
+        if chars[i] == '$' {
+            let start = i + 1;
+            let mut end = start;
+            while end < chars.len() && (chars[end].is_alphanumeric() || chars[end] == '_') {
+                end += 1;
+            }
+            if end > start {
+                let name: String = chars[start..end].iter().collect();
+                if let Some(val) = map.get(name.as_str()) {
+                    result.push_str(val);
+                } else {
+                    // No mapping — keep original $name
+                    result.push('$');
+                    result.push_str(&name);
+                }
+                i = end;
+            } else {
+                result.push('$');
+                i += 1;
+            }
+        } else {
+            result.push(chars[i]);
+            i += 1;
+        }
+    }
+    result
+}
+
+/// Recursively expand aliases in a command (no && splitting).
+/// Supports parameterised calls: `py(hello)` with template `python $x.py` -> `python hello.py`
 fn expand_aliases(cmd: &str, depth: usize) -> String {
     const MAX_DEPTH: usize = 5;
     if depth > MAX_DEPTH {
@@ -70,23 +178,35 @@ fn expand_aliases(cmd: &str, depth: usize) -> String {
     }
 
     let aliases = Config::global_get_run_aliases();
-    let parts: Vec<&str> = cmd.split_whitespace().collect();
+    let parts: Vec<&str> = cmd.splitn(2, ' ').collect();
     if parts.is_empty() {
         return cmd.to_string();
     }
-    
-    let first_word = parts[0];
+
+    let first_token = parts[0];
     let rest = if parts.len() > 1 {
-        &cmd[first_word.len()..].trim_start()
+        &cmd[first_token.len()..].trim_start()
     } else {
         ""
     };
 
-    if let Some(expanded) = aliases.get(first_word) {
-        let new_cmd = if rest.is_empty() {
-            expanded.clone()
+    // Parse potential `name(arg)` call syntax
+    let (base_name, call_arg) = parse_call_syntax(first_token);
+    let lookup_key = base_name.to_lowercase();
+
+    if let Some(template) = aliases.get(&lookup_key) {
+        // If called with an argument, substitute every `$word` placeholder in the template.
+        let expanded_template = if let Some(args_str) = call_arg {
+            let args: Vec<&str> = args_str.split(',').map(|s| s.trim()).collect();
+            substitute_params(template, &args)
         } else {
-            format!("{} {}", expanded, rest)
+            template.clone()
+        };
+
+        let new_cmd = if rest.is_empty() {
+            expanded_template
+        } else {
+            format!("{} {}", expanded_template, rest)
         };
         expand_aliases(&new_cmd, depth + 1)
     } else {
@@ -260,7 +380,8 @@ fn validate_alias_name(name: &str) -> bool {
         "seto", "setd", "setl", "sett", "seth", "watch", "clear", "version", "where",
         "gos", "gosc", "ral", "run", "r", "showcg", "help", "exit", "quit", "ignored",
         "ignore", "cared", "ignoref", "caref", "ignoren", "caren", "size", "tp", 
-        "opencg", "resetcg", "restorecg", "gencg", "esc" , "ls"
+        "opencg", "resetcg", "restorecg", "gencg", "esc" , "bkup" , "pldw" , "unpd" , 
+        "fs" , "ds"
     ];
     
     if name.contains('@') || name.contains('#') {
@@ -284,13 +405,31 @@ fn execute_command(input: &str, nav: &mut Navigator) -> Result<bool> {
         "go" | "cd" => {
             if args.is_empty() {
                 println!("Usage: go <directory_path>");
+                println!("       go to <tp_name>      Teleport to savepoint");
                 println!("Example: go C:\\Users");
                 println!("         go subdir");
+                println!("         go to work         # Teleport to 'work' savepoint");
             } else {
-                nav.go_to(Path::new(args))?;
-                clear_screen();
-                print_success(&format!("Navigated to: {}", nav.display_path()));
-                show_tree(nav, Some(1), false, false, false);
+                // Check for "go to <tp_name>" syntax
+                let parts: Vec<&str> = args.split_whitespace().collect();
+                if parts.len() >= 2 && parts[0].to_lowercase() == "to" {
+                    // go to <tp_name> - teleport
+                    let tp_name = parts[1];
+                    if TeleportManager::get_all().contains_key(&tp_name.to_lowercase()) {
+                        TeleportManager::jump_by_name(nav, tp_name)?;
+                        clear_screen();
+                        show_tree(nav, Some(1), false, false, false);
+                    } else {
+                        print_error(&format!("Teleport point not found: '{}'", tp_name));
+                        println!("Use 'tp list' to see all savepoints.");
+                    }
+                } else {
+                    // Normal directory navigation
+                    nav.go_to(Path::new(args))?;
+                    clear_screen();
+                    print_success(&format!("Navigated to: {}", nav.display_path()));
+                    show_tree(nav, Some(1), false, false, false);
+                }
             }
         }
 
@@ -375,9 +514,36 @@ fn execute_command(input: &str, nav: &mut Navigator) -> Result<bool> {
             }
         }
 
-        "view" | "ls" => {
-            let show_sizes = args == "--size";
-            show_tree(nav, None, true, true, show_sizes);
+        "view" => {
+            let mut show_sizes = false;
+            let mut depth_override: Option<usize> = None;
+            
+            let parts: Vec<&str> = args.split_whitespace().collect();
+            let mut i = 0;
+            while i < parts.len() {
+                match parts[i] {
+                    "-s" | "--size" => show_sizes = true,
+                    "-d" | "--depth" => {
+                        if i + 1 < parts.len() {
+                            if let Ok(depth) = parts[i + 1].parse::<usize>() {
+                                depth_override = Some(depth);
+                                i += 1; // skip the value
+                            } else {
+                                print_error(&format!("Invalid depth: {}", parts[i + 1]));
+                            }
+                        }
+                    }
+                    _ => {
+                        print_error(&format!("Unknown view option: {}", parts[i]));
+                        println!("Usage: view [-s|--size] [-d|--depth <n>]");
+                        return Ok(false);
+                    }
+                }
+                i += 1;
+            }
+            
+            let max_depth = depth_override.unwrap_or_else(|| Config::global_get_max_depth());
+            show_tree(nav, Some(max_depth), true, true, show_sizes);
         }
 
         "txt" => {
@@ -422,8 +588,33 @@ fn execute_command(input: &str, nav: &mut Navigator) -> Result<bool> {
                     if is_supported_format(target) {
                         let show_lines = Config::global_get_show_line_numbers();
                         let content = crate::output::cat_file_with_line_numbers(target, show_lines)?;
-                        crate::output::copy_to_clipboard(&content, "TXT")?;
-                        print_success(&format!("File '{}' copied to clipboard!", target.display()));
+                        
+                        #[cfg(target_os = "android")]
+                        {
+                            // On Android, show file path for Neovim integration
+                            print_info(&format!("Copying '{}' to clipboard...", target.display()));
+                            match crate::output::copy_to_clipboard(&content, "TXT") {
+                                Ok(()) => {
+                                    // Success message already printed by copy_to_clipboard
+                                }
+                                Err(e) => {
+                                    print_error(&format!("Failed to copy: {}", e));
+                                    // Alternative: save to file
+                                    let output_file = crate::output::build_output_path(&format!("copied_{}.txt", 
+                                        target.file_name().unwrap_or_default().to_string_lossy()));
+                                    if let Ok(()) = crate::output::write_file(&output_file, &content) {
+                                        print_success(&format!("File content saved to: {}", output_file.display()));
+                                        print_info(&format!("You can open this in Neovim with: :edit {}", output_file.display()));
+                                    }
+                                }
+                            }
+                        }
+                        
+                        #[cfg(not(target_os = "android"))]
+                        {
+                            crate::output::copy_to_clipboard(&content, "TXT")?;
+                            print_success(&format!("File '{}' copied to clipboard!", target.display()));
+                        }
                     } else {
                         print_warning(&format!("Skipped (not support format): {}", args));
                     }
@@ -716,24 +907,27 @@ fn execute_command(input: &str, nav: &mut Navigator) -> Result<bool> {
         "ral" => {
             if args.is_empty() {
                 println!("{}", "Run Alias (ral) Commands:".cyan().bold());
-                println!("  ral add <name> <command>    Create a new run alias");
-                println!("  ral edit <name> <command>   Update an existing alias");
-                println!("  ral rnm <old> to <new>      Rename an alias");
-                println!("  ral rm <name>               Remove an alias");
-                println!("  ral list                    Show all aliases");
-                println!("  ral cls                     Clear ALL aliases (asks confirmation)");
+                println!("  ral add <name> <command>          Create a new run alias");
+                println!("  ral add <name>(x) <command>       Create a parameterised alias (use $x in command)");
+                println!("  ral edit <name> <command>         Update an existing alias");
+                println!("  ral rnm <old> to <new>            Rename an alias");
+                println!("  ral rm <name>                     Remove an alias");
+                println!("  ral list                          Show all aliases");
+                println!("  ral cls                           Clear ALL aliases (asks confirmation)");
                 println!();
                 println!("{}", "Examples:".green());
                 println!("  ral add btr \"cargo build --release\"");
                 println!("  ral rnm btr to build");
                 println!("  ral add py \"python test.py\"");
                 println!("  ral edit py \"python main.py\"");
+                println!("  ral add run_file(x) \"python $x.py\"");
                 println!("  ral list");
                 println!("  ral rm py");
                 println!();
                 println!("{}", "Usage with run:".green());
-                println!("  run btr     # Executes: cargo build --release");
-                println!("  run py      # Executes: python test.py");
+                println!("  run btr              # Executes: cargo build --release");
+                println!("  run py               # Executes: python test.py");
+                println!("  run_file(hello)      # Executes: python hello.py");
             } else {
                 let parts: Vec<&str> = args.splitn(2, ' ').collect();
                 let subcmd = parts[0].to_lowercase();
@@ -744,17 +938,23 @@ fn execute_command(input: &str, nav: &mut Navigator) -> Result<bool> {
                         if subargs.is_empty() {
                             print_error("Usage: ral add <name> <command>");
                             println!("Example: ral add btr \"cargo build --release\"");
+                            println!("Example: ral add py(x) \"python $x.py\"");
                         } else {
                             let add_parts: Vec<&str> = subargs.splitn(2, ' ').collect();
                             if add_parts.len() < 2 {
                                 print_error("Usage: ral add <name> <command>");
                                 println!("Example: ral add btr \"cargo build --release\"");
+                                println!("Example: ral add py(x) \"python $x.py\"");
                             } else {
-                                let name = add_parts[0];
+                                let raw_name = add_parts[0];
                                 let mut command = add_parts[1].to_string();
                                 if command.starts_with('"') && command.ends_with('"') && command.len() >= 2 {
                                     command = command[1..command.len()-1].to_string();
                                 }
+                                // Strip any (param) signature from the alias name — store only the base name.
+                                // e.g. `py(x)` -> stored as `py`, command keeps `$x` as the placeholder.
+                                let (base_name, param_hint) = parse_call_syntax(raw_name);
+                                let name = base_name;
                                 if !validate_alias_name(name) {
                                     print_error(&format!("Invalid alias name: '{}'", name));
                                     println!("Alias names cannot:");
@@ -764,7 +964,11 @@ fn execute_command(input: &str, nav: &mut Navigator) -> Result<bool> {
                                 }
                                 let _ = Config::local_add_run_alias(name, &command);
                                 Config::reload_global();
-                                println!("  Now you can run: {}", name.green());
+                                if param_hint.is_some() {
+                                    println!("  Now you can run: {}({})", name.green(), "<arg>".cyan());
+                                } else {
+                                    println!("  Now you can run: {}", name.green());
+                                }
                             }
                         }
                     }
@@ -772,13 +976,17 @@ fn execute_command(input: &str, nav: &mut Navigator) -> Result<bool> {
                         if subargs.is_empty() {
                             print_error("Usage: ral edit <name> <new_command>");
                             println!("Example: ral edit py \"python main.py\"");
+                            println!("Example: ral edit py(x) \"python $x.py\"");
                         } else {
                             let edit_parts: Vec<&str> = subargs.splitn(2, ' ').collect();
                             if edit_parts.len() < 2 {
                                 print_error("Usage: ral edit <name> <new_command>");
                                 println!("Example: ral edit py \"python main.py\"");
+                                println!("Example: ral edit py(x) \"python $x.py\"");
                             } else {
-                                let name = edit_parts[0];
+                                // Strip (param) from name just like `add`
+                                let (base_name, _) = parse_call_syntax(edit_parts[0]);
+                                let name = base_name;
                                 let mut command = edit_parts[1].to_string();
                                 if command.starts_with('"') && command.ends_with('"') && command.len() >= 2 {
                                     command = command[1..command.len()-1].to_string();
@@ -874,15 +1082,51 @@ fn execute_command(input: &str, nav: &mut Navigator) -> Result<bool> {
                                 } else {
                                     format!("{} (INVALID)", name).red()
                                 };
+                                // Show whether the alias has param placeholders
+                                let has_params = cmd.contains('$');
+                                let cmd_display = if has_params {
+                                    format!("{} {}", cmd.dimmed(), "(parameterised)".cyan())
+                                } else {
+                                    cmd.dimmed().to_string()
+                                };
                                 println!("  {}. {} -> {}", 
                                     (i + 1).to_string().yellow(), 
                                     name_display, 
-                                    cmd.dimmed());
+                                    cmd_display);
                             }
                             println!();
-                            println!("{}", "Usage: <alias> [args]".green());
+                            println!("{}", "Usage: <alias>  or  <alias>(<arg>) for parameterised aliases".green());
                             if is_local {
                                 println!("{}", "💡 Tip: These aliases are project-specific (saved in ntconfig.toml)".dimmed());
+                            }
+                        }
+                    }
+                    "rnm" | "rename" => {
+                        if subargs.is_empty() {
+                            print_error("Usage: ral rnm <old_name> to <new_name>");
+                            println!("Example: ral rnm btr to build");
+                        } else {
+                            let rnm_parts: Vec<&str> = subargs.splitn(3, ' ').collect();
+                            if rnm_parts.len() < 3 || rnm_parts[1].to_lowercase() != "to" {
+                                print_error("Usage: ral rnm <old_name> to <new_name>");
+                                println!("Example: ral rnm btr to build");
+                            } else {
+                                let old_name = rnm_parts[0];
+                                let new_name = rnm_parts[2];
+                                if !validate_alias_name(new_name) {
+                                    print_error(&format!("Invalid alias name: '{}'", new_name));
+                                    return Ok(false);
+                                }
+                                let aliases = Config::global_get_run_aliases();
+                                if let Some(command) = aliases.get(&old_name.to_lowercase()) {
+                                    let command = command.clone();
+                                    let _ = Config::local_remove_run_alias(old_name);
+                                    let _ = Config::local_add_run_alias(new_name, &command);
+                                    Config::reload_global();
+                                    print_success(&format!("Renamed alias '{}' to '{}'", old_name, new_name));
+                                } else {
+                                    print_error(&format!("Alias '{}' not found", old_name));
+                                }
                             }
                         }
                     }
@@ -902,6 +1146,7 @@ fn execute_command(input: &str, nav: &mut Navigator) -> Result<bool> {
                 println!("  run python --version        # Run real command");
                 println!("  run btr                     # Run alias");
                 println!("  run py test.py              # Run alias with args");
+                println!("  run_file(hello)             # Run parameterised alias");
             } else {
                 let expanded_parts = expand_command_line(args);
                 for cmd in expanded_parts {
@@ -1243,24 +1488,24 @@ fn execute_command(input: &str, nav: &mut Navigator) -> Result<bool> {
                 
                 format!(
                     r#"# ntc local configuration file
-        # This file overrides global ignore/care and run alias settings for this directory only
-        # Remove or comment out any line to use the global/default value
+# This file overrides global ignore/care and run alias settings for this directory only
+# Remove or comment out any line to use the global/default value
 
-        # Ignored directories (case-insensitive)
-        ignored_directory_names = {}
+# Ignored directories (case-insensitive)
+ignored_directory_names = {}
 
-        # Ignored file extensions
-        ignored_extensions = {}
+# Ignored file extensions
+ignored_extensions = {}
 
-        # Extra supported extensions (treat as text files)
-        extra_supported_extensions = {}
+# Extra supported extensions (treat as text files)
+extra_supported_extensions = {}
 
-        # Ignored specific files
-        ignored_files = {}
+# Ignored specific files
+ignored_files = {}
 
-        # Extra supported specific files
-        extra_supported_files = {}
-        {}"#,
+# Extra supported specific files
+extra_supported_files = {}
+{}"#,
                     ignored_dirs_str,
                     ignored_exts_str,
                     extra_exts_str,
@@ -1271,53 +1516,54 @@ fn execute_command(input: &str, nav: &mut Navigator) -> Result<bool> {
             } else {
                 // Generate a commented template (guide only, no active settings)
                 r#"# ntc local configuration file
-        # Place this file in any directory to override global ignore/care and run alias settings
-        # 
-        # INSTRUCTIONS:
-        # 1. Remove the '#' from lines you want to enable
-        # 2. Add your project-specific values
-        # 3. Run 'ntc' in this directory to activate
-        #
-        # For quick setup, run: gencg --all  (copies your current global settings)
+# Place this file in any directory to override global ignore/care and run alias settings
+# 
+# INSTRUCTIONS:
+# 1. Remove the '#' from lines you want to enable
+# 2. Add your project-specific values
+# 3. Run 'ntc' in this directory to activate
+#
+# For quick setup, run: gencg --all  (copies your current global settings)
 
-        # Ignored directories (case-insensitive)
-        # ignored_directory_names = [
-        #     "target",
-        #     "node_modules",
-        #     ".git",
-        # ]
+# Ignored directories (case-insensitive)
+# ignored_directory_names = [
+#     "target",
+#     "node_modules",
+#     ".git",
+# ]
 
-        # Ignored file extensions
-        # ignored_extensions = [
-        #     "log",
-        #     "tmp",
-        #     "bak",
-        # ]
+# Ignored file extensions
+# ignored_extensions = [
+#     "log",
+#     "tmp",
+#     "bak",
+# ]
 
-        # Extra supported extensions (treat as text files)
-        # extra_supported_extensions = [
-        #     "myext",
-        #     "custom",
-        # ]
+# Extra supported extensions (treat as text files)
+# extra_supported_extensions = [
+#     "myext",
+#     "custom",
+# ]
 
-        # Ignored specific files
-        # ignored_files = [
-        #     "Cargo.lock",
-        #     "package-lock.json",
-        # ]
+# Ignored specific files
+# ignored_files = [
+#     "Cargo.lock",
+#     "package-lock.json",
+# ]
 
-        # Extra supported specific files
-        # extra_supported_files = [
-        #     ".env",
-        #     "Dockerfile",
-        # ]
+# Extra supported specific files
+# extra_supported_files = [
+#     ".env",
+#     "Dockerfile",
+# ]
 
-        # Run aliases for this project only
-        # [run_aliases]
-        # test = "cargo test"
-        # build = "cargo build --release"
-        # fb = "flutter clean && flutter pub get"
-        "#
+# Run aliases for this project only
+# [run_aliases]
+# test = "cargo test"
+# build = "cargo build --release"
+# fb = "flutter clean && flutter pub get"
+# py = "python $x.py"   # parameterised: call as py(filename)
+"#
                 .to_string()
             };
             
@@ -1531,6 +1777,193 @@ fn execute_command(input: &str, nav: &mut Navigator) -> Result<bool> {
             }
         }
 
+        // ============================================================================
+        // Backup commands — paste these arms into execute_command() in shell.rs
+        // Also add "bkup", "pldw", "unpd" to:
+        //   1. validate_alias_name() reserved_commands array
+        //   2. The `_ =>` fallthrough ntc-command match list
+        // ============================================================================
+
+        "bkup" => {
+            match args {
+                "--where" | "-w" => {
+                    crate::backup::BackupManager::show_backup_location(nav.current_path());
+                }
+
+                "--cls" | "--clear" => {
+                    // Show how many backups exist before asking for confirmation
+                    let backups = crate::backup::BackupManager::list_backups(nav.current_path())?;
+                    if backups.is_empty() {
+                        print_info("No backups found for this project.");
+                        return Ok(false);
+                    }
+
+                    println!();
+                    println!("{}", "⚠️  WARNING: This will delete ALL backups for this project!".yellow().bold());
+                    println!("{}", format!("You have {} backup(s):", backups.len()).yellow());
+                    for (num, date, size, file_count) in backups.iter().take(10) {
+                        println!("  Backup #{} — {} — {} — {} files", num, date, size, file_count);
+                    }
+                    if backups.len() > 10 {
+                        println!("  ... and {} more", backups.len() - 10);
+                    }
+                    println!();
+                    print!("{} ", "Type 'yes' to confirm: ".red());
+                    io::stdout().flush()?;
+
+                    let mut input = String::new();
+                    io::stdin().read_line(&mut input)?;
+                    if matches!(input.trim().to_lowercase().as_str(), "y" | "yes") {
+                        crate::backup::BackupManager::clear_backups(nav.current_path())?;
+                    } else {
+                        println!("{}", "Clear cancelled.".dimmed());
+                    }
+                }
+
+                "--force" | "-f" => {
+                    // Non-interactive clear (for scripting via ral aliases)
+                    crate::backup::BackupManager::clear_backups(nav.current_path())?;
+                }
+
+                "" => {
+                    crate::backup::BackupManager::create_backup(nav.current_path())?;
+                }
+
+                _ => {
+                    print_error(&format!("Unknown bkup option: {}", args));
+                    println!("Usage:");
+                    println!("  bkup              Create a new backup");
+                    println!("  bkup --where      Show backup storage location");
+                    println!("  bkup --cls        Delete all backups (asks confirmation)");
+                    println!("  bkup --force      Delete all backups (no confirmation)");
+                }
+            }
+        }
+
+        "pldw" => {
+            if args.is_empty() {
+                // Interactive restore menu
+                let backups = crate::backup::BackupManager::list_backups(nav.current_path())?;
+                if backups.is_empty() {
+                    print_info("No backups found for this project. Use 'bkup' to create one.");
+                    return Ok(false);
+                }
+
+                println!();
+                println!("{}", "==================================================".cyan());
+                println!("{}", "📦 Available Backups (newest first)".cyan().bold());
+                println!("{}", "==================================================".cyan());
+                for (i, (num, date, size, file_count)) in backups.iter().enumerate() {
+                    println!(
+                        "  {}. Backup #{} — {} — {} — {} files",
+                        i + 1, num, date, size, file_count
+                    );
+                }
+                println!("  {}", "0. Cancel".red());
+                println!();
+                print!("{} ", format!("Select backup to restore (1-{}): ", backups.len()).green());
+                io::stdout().flush()?;
+
+                let mut input = String::new();
+                io::stdin().read_line(&mut input)?;
+                let input = input.trim();
+
+                if input == "0" || input.is_empty() {
+                    println!("{}", "Restore cancelled.".dimmed());
+                    return Ok(false);
+                }
+
+                match input.parse::<usize>() {
+                    Ok(n) if n >= 1 && n <= backups.len() => {
+                        let backup_num = backups[n - 1].0;
+                        crate::backup::BackupManager::restore_backup(
+                            nav.current_path(), backup_num, true
+                        )?;
+                        clear_screen();
+                        show_tree(nav, Some(1), false, false, false);
+                    }
+                    Ok(_)  => print_error(&format!("Invalid selection: {}", input)),
+                    Err(_) => print_error(&format!("Invalid input: {}", input)),
+                }
+            } else if let Ok(num) = args.parse::<usize>() {
+                // Direct restore by backup number (non-interactive confirmation still shown)
+                crate::backup::BackupManager::restore_backup(nav.current_path(), num, true)?;
+                clear_screen();
+                show_tree(nav, Some(1), false, false, false);
+            } else {
+                print_error(&format!("Invalid argument: {}", args));
+                println!("Usage:");
+                println!("  pldw              Interactive restore menu");
+                println!("  pldw <number>     Restore backup by number");
+            }
+        }
+
+        "unpd" => {
+            match args {
+                "--cls" | "--clear" => {
+                    println!();
+                    print!("{} ", "⚠ Clear undo history? This cannot be undone. (y/N):".red());
+                    io::stdout().flush()?;
+                    let mut input = String::new();
+                    io::stdin().read_line(&mut input)?;
+                    if matches!(input.trim().to_lowercase().as_str(), "y" | "yes") {
+                        crate::backup::BackupManager::clear_undo_history(nav.current_path())?;
+                    } else {
+                        println!("{}", "Clear cancelled.".dimmed());
+                    }
+                }
+
+                "--force" | "-f" => {
+                    // Non-interactive clear (consistent with bkup --force / ral cls --force)
+                    crate::backup::BackupManager::clear_undo_history(nav.current_path())?;
+                }
+
+                "" => {
+                    crate::backup::BackupManager::undo_last_restore(nav.current_path())?;
+                    clear_screen();
+                    show_tree(nav, Some(1), false, false, false);
+                }
+
+                _ => {
+                    print_error(&format!("Unknown unpd option: {}", args));
+                    println!("Usage:");
+                    println!("  unpd              Undo the last restore");
+                    println!("  unpd --cls        Clear undo history (asks confirmation)");
+                    println!("  unpd --force      Clear undo history (no confirmation)");
+                }
+            }
+        }
+
+        // File search command
+        "fs" => {
+            if args.is_empty() {
+                print_error("Usage: fs <pattern> [-d <depth>]");
+                println!("  fs main.c          # search using config depth");
+                println!("  fs main.c -d 5     # search up to 5 levels deep");
+                println!("  fs main            # partial match: finds main_helper.c etc.");
+                return Ok(false);
+            }
+            let (pattern, max_depth) = parse_search_args(args);
+            let results = crate::search::search_files(nav.current_path(), &pattern, max_depth);
+            let output  = crate::search::format_search_results(&results, &pattern, max_depth, true);
+            print!("{}", output);
+        }
+
+        // Directory search command
+        "ds" => {
+            if args.is_empty() {
+                print_error("Usage: ds <pattern> [-d <depth>]");
+                println!("  ds src             # search using config depth");
+                println!("  ds src -d 3        # search up to 3 levels deep");
+                println!("  ds test            # partial match: finds test_utils/ etc.");
+                return Ok(false);
+            }
+            let (pattern, max_depth) = parse_search_args(args);
+            let results = crate::search::search_directories(nav.current_path(), &pattern, max_depth);
+            let output  = crate::search::format_search_results(&results, &pattern, max_depth, false);
+            print!("{}", output);
+        }
+
         _ => {
             // Check for @teleport shortcut
             if cmd.starts_with('@') && cmd.len() > 1 {
@@ -1553,7 +1986,15 @@ fn execute_command(input: &str, nav: &mut Navigator) -> Result<bool> {
                 
                 // If it's an ntc command, recurse back into execute_command
                 match first_word.as_str() {
-                    "go" | "cd" | "godrive" | "god" | "back" | "b" | "view" | "ls" | "txt" | "txtc" | "txtf" | "html" | "json" | "md" | "seto" | "setd" | "setl" | "sett" | "seth" | "watch" | "clear" | "version" | "where" | "gos" | "gosc" | "ral" | "run" | "r" | "showcg" | "help" | "exit" | "quit" | "ignored" | "ignore" | "cared" | "ignoref" | "caref" | "ignoren" | "caren" | "size" | "tp" | "opencg" | "resetcg" | "restorecg" | "gencg" => {
+                       "go"     | "cd"      | "godrive" | "god"     | "back"      | "b"       | "view" 
+                    | "txt"     | "txtc"    | "txtf"    | "html"    | "json"      | "md" 
+                    | "seto"    | "setd"    | "setl"    | "sett"    | "seth"      | "watch" 
+                    | "clear"   | "version" | "where" 
+                    | "gos"     | "gosc"    | "ral"     | "run"     | "r" 
+                    | "showcg"  | "help"    | "exit"    | "quit" 
+                    | "ignored" | "ignore"  | "cared"   | "ignoref" | "caref"     | "ignoren" | "caren" 
+                    | "size"    | "tp"      | "opencg"  | "resetcg" | "restorecg" | "gencg" 
+                    | "bkup"    | "pldw"    | "unpd"    | "fs"      | "ds" => {
                         // This is an ntc command – execute it recursively
                         if let Err(e) = execute_command(&cmd_part, nav) {
                             print_error(&format!("{}", e));
@@ -1908,6 +2349,9 @@ fn print_interactive_help() {
     println!("╚══════════════════════════════════════════════════════════════════╝");
     println!("{}", "NAVIGATION COMMANDS:".cyan().bold());
     println!("  go <path>           Navigate to a directory");
+    println!("  go to <tp_name>     Teleport to a saved teleport point");
+    println!("  cd <path>           Same as go");
+    println!("  cd to <tp_name>     Teleport to a saved teleport point");
     println!("  gos                 List subdirectories and pick one");
     println!("  gosc                Continuous navigation (0 to exit)");
     println!("  godrive             List and select Windows drives");
@@ -1945,25 +2389,33 @@ fn print_interactive_help() {
 
     println!();
     println!("{}", "RUN ALIAS COMMANDS:".cyan().bold());
-    println!("  ral add <name> \"<command>\"  Create alias");
-    println!("  ral edit <name> \"<command>\" Update alias");
-    println!("  ral rnm <old> to <new>        Rename alias");
-    println!("  ral rm <name>                 Remove alias");
-    println!("  ral list                      Show all aliases");
-    println!("  ral cls                       Clear ALL aliases (with confirmation)");
-    println!("  <alias>                       Execute alias directly");
-    println!("  run <alias>                   Execute alias with 'run'");
+    println!("  ral add <name> \"<command>\"         Create alias");
+    println!("  ral add <name>(x) \"<cmd $x>\"       Create parameterised alias");
+    println!("  ral edit <name> \"<command>\"        Update alias");
+    println!("  ral rnm <old> to <new>             Rename alias");
+    println!("  ral rm <name>                      Remove alias");
+    println!("  ral list                           Show all aliases");
+    println!("  ral cls                            Clear ALL aliases (with confirmation)");
+    println!("  <alias>                            Execute alias directly");
+    println!("  <alias>(<arg>)                     Execute parameterised alias");
+    println!("  run <alias>                        Execute alias with 'run'");
     println!();
     println!("{}", "Examples:".green());
     println!("  ral add dal \"dart analyze lib/\"");
     println!("  ral add frr \"flutter run --release -d RFCW71EGWDW\"");
     println!("  ral add fb \"dal && frr\"");
-    println!("  fb                            # Runs both commands");
+    println!("  fb                                 # Runs both commands");
+    println!("  ral add py(x) \"python $x.py\"");
+    println!("  py(hello)                          # Runs: python hello.py");
 
     println!();
     println!("{}", "VIEW COMMAND:".cyan().bold());
-    println!("  view                Show directory tree");
-    println!("  view --size         Show tree with sizes");
+    println!("  view                Show directory tree (uses config depth)");
+    println!("  view -s             Show tree with sizes");
+    println!("  view --size         Same as -s");
+    println!("  view -d <n>         Show tree with custom depth (overrides config)");
+    println!("  view --depth <n>    Same as -d");
+    println!("  view -s -d <n>      Show tree with sizes and custom depth");
 
     println!();
     println!("{}", "REPORT COMMANDS:".cyan().bold());
@@ -1973,6 +2425,17 @@ fn print_interactive_help() {
     println!("  html                Generate HTML report");
     println!("  txtc                Copy file to clipboard");
     println!("  txtf                Display file");
+
+    println!("{}", "BACKUP COMMANDS:".cyan().bold());
+    println!("  bkup                Create a backup of current project");
+    println!("  bkup --where        Show backup storage location");
+    println!("  bkup --cls          Delete ALL backups for this project (asks confirmation)");
+    println!("  bkup --force        Delete ALL backups (no confirmation)");
+    println!("  pldw                Interactive restore menu");
+    println!("  pldw <number>       Restore backup by number");
+    println!("  unpd                Undo the last restore");
+    println!("  unpd --cls          Clear undo history (asks confirmation)");
+    println!("  unpd --force        Clear undo history (no confirmation)");
 
     println!();
     println!("{}", "OTHER COMMANDS:".cyan().bold());

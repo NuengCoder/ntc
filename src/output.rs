@@ -4,6 +4,7 @@ use colored::*;
 use std::fs;
 use std::io::{IsTerminal, Write};
 use std::path::{Path, PathBuf};
+#[cfg(not(target_os = "android"))]
 use arboard::Clipboard;
 
 /// Display file contents to stdout with optional line numbers.
@@ -145,13 +146,101 @@ pub fn print_warning(msg: &str) {
     println!("{} {}", "⚠".yellow(), msg.yellow());
 }
 
-/// Copy text to system clipboard
+// src/output.rs - Replace the entire clipboard section
+
+/// Check if running in Termux environment
+#[cfg(target_os = "android")]
+fn is_termux() -> bool {
+    std::env::var("TERMUX_VERSION").is_ok() 
+        || std::path::Path::new("/data/data/com.termux/files/usr/bin/termux-clipboard-set").exists()
+}
+
+/// Copy to clipboard using Termux API (Android only)
+#[cfg(target_os = "android")]
+pub fn copy_to_clipboard_termux(content: &str) -> Result<bool> {
+    use std::process::Command;
+    use std::io::Write;
+    
+    if !is_termux() {
+        return Ok(false);
+    }
+    
+    // Try termux-clipboard-set first
+    let status = Command::new("termux-clipboard-set")
+        .arg(content)
+        .status();
+    
+    if let Ok(status) = status {
+        if status.success() {
+            return Ok(true);
+        }
+    }
+    
+    // Fallback: write to temp file and use termux-clipboard-set with stdin
+    let temp_file = std::env::temp_dir().join(format!("ntc_clipboard_{}.txt", std::process::id()));
+    if let Ok(mut file) = std::fs::File::create(&temp_file) {
+        let _ = file.write_all(content.as_bytes());
+        let _ = file.sync_all();
+        
+        let status = Command::new("termux-clipboard-set")
+            .arg(temp_file.to_str().unwrap_or(""))
+            .status();
+        
+        let _ = std::fs::remove_file(temp_file);
+        
+        if let Ok(status) = status {
+            if status.success() {
+                return Ok(true);
+            }
+        }
+    }
+    
+    Ok(false)
+}
+
+/// Copy to clipboard for all platforms
+#[cfg(not(target_os = "android"))]
 pub fn copy_to_clipboard(content: &str, format: &str) -> Result<()> {
     let mut clipboard = Clipboard::new()
-        .with_context(|| format!("Failed to access clipboard"))?;
+        .with_context(|| "Failed to access clipboard")?;
     
     clipboard.set_text(content.to_string())
         .with_context(|| format!("Failed to copy {} report to clipboard", format))?;
+    
+    Ok(())
+}
+
+#[cfg(target_os = "android")]
+pub fn copy_to_clipboard(content: &str, format: &str) -> Result<()> {
+    // Try Termux clipboard first
+    if copy_to_clipboard_termux(content)? {
+        print_success(&format!("{} report copied to clipboard via Termux!", format));
+        return Ok(());
+    }
+    
+    // Fallback: save to temp file and show path
+    let temp_file = std::env::temp_dir().join(format!("ntc_{}_{}.{}", 
+        format.to_lowercase(),
+        chrono::Local::now().format("%Y%m%d_%H%M%S"),
+        format.to_lowercase()
+    ));
+    
+    if let Ok(mut file) = std::fs::File::create(&temp_file) {
+        use std::io::Write;
+        let _ = file.write_all(content.as_bytes());
+        print_warning(&format!(
+            "Clipboard not available. {} report saved to: {}",
+            format,
+            temp_file.display()
+        ));
+        print_info(&format!("You can view it with: cat {}", temp_file.display()));  // FIXED HERE
+    } else {
+        print_warning(&format!(
+            "Clipboard not supported on Android. {} report content shown above.",
+            format
+        ));
+        println!("\n{}\n", content);
+    }
     
     Ok(())
 }

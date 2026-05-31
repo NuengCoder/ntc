@@ -1,4 +1,4 @@
-name: Build and Release
+name: Build and Release macOS
 
 on:
   push:
@@ -7,61 +7,22 @@ on:
   workflow_dispatch:
 
 jobs:
-  build:
-    name: Build ntc for ${{ matrix.os }}
-    runs-on: ${{ matrix.runs-on }}
+  build-macos:
+    name: Build ntc for macOS
+    runs-on: macos-latest
     strategy:
       fail-fast: false
       matrix:
         include:
-          # Linux (x86_64)
-          - os: linux
-            runs-on: ubuntu-latest
-            target: x86_64-unknown-linux-gnu
-            artifact_name: ntc
-            archive_name: ntc-${{ github.ref_name }}-linux-x86_64
-
-          # Linux ARM64 (for ARM servers / Raspberry Pi)
-          - os: linux-arm64
-            runs-on: ubuntu-latest
-            target: aarch64-unknown-linux-gnu
-            artifact_name: ntc
-            archive_name: ntc-${{ github.ref_name }}-linux-aarch64
-
           # macOS Intel
-          - os: macos-intel
-            runs-on: macos-latest
-            target: x86_64-apple-darwin
+          - target: x86_64-apple-darwin
             artifact_name: ntc
             archive_name: ntc-${{ github.ref_name }}-macos-x86_64
 
           # macOS Apple Silicon
-          - os: macos-silicon
-            runs-on: macos-latest
-            target: aarch64-apple-darwin
+          - target: aarch64-apple-darwin
             artifact_name: ntc
             archive_name: ntc-${{ github.ref_name }}-macos-aarch64
-
-          # Termux / Android (ARM64)
-          - os: android
-            runs-on: ubuntu-latest
-            target: aarch64-linux-android
-            artifact_name: ntc
-            archive_name: ntc-${{ github.ref_name }}-android-aarch64
-
-          # Termux / Android (ARMv7) - for older 32-bit Android devices
-          - os: android-armv7
-            runs-on: ubuntu-latest
-            target: armv7-linux-androideabi
-            artifact_name: ntc
-            archive_name: ntc-${{ github.ref_name }}-android-armv7
-
-          # Windows (x86_64)
-          - os: windows
-            runs-on: windows-latest
-            target: x86_64-pc-windows-msvc
-            artifact_name: ntc.exe
-            archive_name: ntc-${{ github.ref_name }}-windows-x86_64
 
     steps:
       - name: Checkout code
@@ -74,66 +35,31 @@ jobs:
           target: ${{ matrix.target }}
           override: true
 
-      - name: Install Android NDK (for Android targets)
-        if: contains(matrix.os, 'android')
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y android-sdk
-          echo "ANDROID_NDK_HOME=/usr/lib/android-sdk/ndk-bundle" >> $GITHUB_ENV
-
       - name: Build
         run: cargo build --release --target ${{ matrix.target }}
-
-      - name: Create .deb package (Linux only)
-        if: matrix.os == 'linux'
-        run: |
-          cargo install cargo-deb
-          cargo deb
-          mkdir -p artifacts
-          cp target/debian/*.deb artifacts/
-
-      - name: Create Windows installer (Windows only)
-        if: matrix.os == 'windows'
-        run: |
-          cargo install cargo-inno
-          cargo inno build
-          mkdir -p artifacts
-          cp target/inno/*.exe artifacts/
 
       - name: Prepare artifacts
         shell: bash
         run: |
           mkdir -p artifacts
-          if [ "${{ matrix.os }}" = "windows" ]; then
-            cp target/${{ matrix.target }}/release/ntc.exe artifacts/
-          else
-            cp target/${{ matrix.target }}/release/ntc artifacts/
-          fi
+          cp target/${{ matrix.target }}/release/ntc artifacts/
 
-      - name: Create archive (Unix)
-        if: matrix.os != 'windows'
+      - name: Create archive
         shell: bash
         run: |
           cd artifacts
           tar -czvf ${{ matrix.archive_name }}.tar.gz ${{ matrix.artifact_name }}
 
-      - name: Create archive (Windows)
-        if: matrix.os == 'windows'
-        shell: bash
-        run: |
-          cd artifacts
-          zip ${{ matrix.archive_name }}.zip ${{ matrix.artifact_name }}
-
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.archive_name }}
-          path: artifacts/${{ matrix.archive_name }}.*
+          path: artifacts/${{ matrix.archive_name }}.tar.gz
 
   create-universal-macos:
     name: Create Universal macOS Binary
     runs-on: macos-latest
-    needs: build
+    needs: build-macos
     steps:
       - name: Download Intel binary
         uses: actions/download-artifact@v4
@@ -170,7 +96,7 @@ jobs:
   release:
     name: Create GitHub Release
     runs-on: ubuntu-latest
-    needs: [build, create-universal-macos]
+    needs: [build-macos, create-universal-macos]
     if: startsWith(github.ref, 'refs/tags/')
     permissions:
       contents: write
@@ -190,64 +116,20 @@ jobs:
         with:
           name: ntc ${{ github.ref_name }}
           body: |
-            ## 🚀 ntc ${{ github.ref_name }}
+            ## 🚀 ntc ${{ github.ref_name }} (macOS)
             
             ### 📦 Downloads
             
             | Platform | Architecture | Download |
             |----------|--------------|----------|
-            | Windows | x86_64 | [ntc-${{ github.ref_name }}-windows-x86_64.zip](https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/ntc-${{ github.ref_name }}-windows-x86_64.zip) |
-            | Windows Installer | x86_64 | [ntc-installer-${{ github.ref_name }}.exe](https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/ntc-installer-${{ github.ref_name }}.exe) |
-            | Linux | x86_64 | [ntc-${{ github.ref_name }}-linux-x86_64.tar.gz](https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/ntc-${{ github.ref_name }}-linux-x86_64.tar.gz) |
-            | Linux | ARM64 | [ntc-${{ github.ref_name }}-linux-aarch64.tar.gz](https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/ntc-${{ github.ref_name }}-linux-aarch64.tar.gz) |
-            | Ubuntu/Debian | amd64 | [ntc_${{ github.ref_name }}_amd64.deb](https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/ntc_${{ github.ref_name }}_amd64.deb) |
             | macOS | Intel | [ntc-${{ github.ref_name }}-macos-x86_64.tar.gz](https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/ntc-${{ github.ref_name }}-macos-x86_64.tar.gz) |
             | macOS | Apple Silicon | [ntc-${{ github.ref_name }}-macos-aarch64.tar.gz](https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/ntc-${{ github.ref_name }}-macos-aarch64.tar.gz) |
             | macOS | Universal | [ntc-${{ github.ref_name }}-macos-universal.tar.gz](https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/ntc-${{ github.ref_name }}-macos-universal.tar.gz) |
-            | Termux/Android | ARM64 | [ntc-${{ github.ref_name }}-android-aarch64.tar.gz](https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/ntc-${{ github.ref_name }}-android-aarch64.tar.gz) |
-            | Termux/Android | ARMv7 | [ntc-${{ github.ref_name }}-android-armv7.tar.gz](https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/ntc-${{ github.ref_name }}-android-armv7.tar.gz) |
             
-            ### 🚀 Quick Install
+            ### 🚀 Quick Install (macOS)
             
-            **Linux (x86_64):**
-            ```bash
-            wget https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/ntc-${{ github.ref_name }}-linux-x86_64.tar.gz
-            tar -xzvf ntc-${{ github.ref_name }}-linux-x86_64.tar.gz
-            sudo mv ntc /usr/local/bin/ ```
-
-            **Linux (ARM64):**
-            ```bash
-            wget https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/ntc-${{ github.ref_name }}-linux-aarch64.tar.gz
-            tar -xzvf ntc-${{ github.ref_name }}-linux-aarch64.tar.gz
-            sudo mv ntc /usr/local/bin/ ```
-
-            **Ubuntu/Debian:**
-            ```bash
-            wget https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/ntc_${{ github.ref_name }}_amd64.deb
-            sudo dpkg -i ntc_${{ github.ref_name }}_amd64.deb ```
-
-            **Termux (Android):**
-            ```bash
-            wget https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/ntc-${{ github.ref_name }}-android-aarch64.tar.gz
-            tar -xzvf ntc-${{ github.ref_name }}-android-aarch64.tar.gz
-            cp ntc $PREFIX/bin/
-            chmod +x $PREFIX/bin/ntc```
-
-            **Windows:**
-            Download the .zip file, extract, and add ntc.exe to your PATH.
-            Or run the .exe installer.
-
-            **macOS:**
+            **macOS (Universal):**
             ```bash
             wget https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/ntc-${{ github.ref_name }}-macos-universal.tar.gz
             tar -xzvf ntc-${{ github.ref_name }}-macos-universal.tar.gz
-            sudo mv ntc /usr/local/bin/```
-
-            ## ✨ New in v1.8.0
-            - Backup & Restore system (bkup, pldw, unpd)
-            - Fuzzy file & directory search (fs, ds)
-            - View flags (-s, -d, --size, --depth)
-            - Teleport via go to / cd to
-            - Multi-argument run aliases (ral add name(x,y) "cmd $x $y")
-            - Termux/Android support
-            - macOS Universal Binary
+            sudo mv ntc /usr/local/bin/

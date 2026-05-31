@@ -27,3 +27,6 @@ chmod +x $PREFIX/bin/ntc
 ntc --version
 ntc
 
+git tag -d v1.8.0
+git push origin --delete v1.8.0
+

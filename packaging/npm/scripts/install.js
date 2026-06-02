@@ -26,24 +26,20 @@ function getPlatformInfo() {
 function download(url, destPath) {
   return new Promise((resolve, reject) => {
     const file = fs.createWriteStream(destPath);
-    const request = (u) => {
-      https.get(u, (response) => {
-        if (response.statusCode >= 300 && response.statusCode < 400 && response.headers.location) {
-          file.close();
-          fs.unlinkSync(destPath);
-          return request(response.headers.location).then(resolve).catch(reject);
-        }
-        if (response.statusCode !== 200) {
-          file.close();
-          try { fs.unlinkSync(destPath); } catch {}
-          reject(new Error(`HTTP ${response.statusCode}`));
-          return;
-        }
-        response.pipe(file);
-        file.on('finish', () => { file.close(); resolve(); });
-      }).on('error', (err) => { file.close(); try { fs.unlinkSync(destPath); } catch {} reject(err); });
-    };
-    request(url);
+    https.get(url, { maxRedirects: 10 }, (response) => {
+      if (response.statusCode !== 200) {
+        file.close();
+        try { fs.unlinkSync(destPath); } catch {}
+        reject(new Error(`HTTP ${response.statusCode}`));
+        return;
+      }
+      response.pipe(file);
+      file.on('finish', () => { file.close(); resolve(); });
+    }).on('error', (err) => {
+      file.close();
+      try { fs.unlinkSync(destPath); } catch {}
+      reject(err);
+    });
   });
 }
 

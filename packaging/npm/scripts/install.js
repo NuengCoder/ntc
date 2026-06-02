@@ -106,7 +106,7 @@ async function main() {
     if (!extracted) throw new Error('binary not found in archive');
 
     fs.copyFileSync(extracted, binaryPath);
-    try { fs.chmodSync(binaryPath, 0o755); } catch {}
+    fs.chmodSync(binaryPath, 0o755);
 
     console.log(`ntc: installed to ${binaryPath}`);
   } catch (err) {

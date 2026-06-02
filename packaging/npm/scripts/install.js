@@ -56,7 +56,7 @@ async function main() {
 
     if (info.file.endsWith('.zip')) {
       if (process.platform === 'win32') {
-        execSync(`tar -xf "${archivePath}" -C "${tmpDir}"`, { stdio: 'pipe' });
+        execSync(`powershell -NoProfile -Command "Expand-Archive -LiteralPath '${archivePath}' -DestinationPath '${tmpDir}' -Force"`, { stdio: 'pipe' });
       } else {
         execSync(`unzip -o "${archivePath}" -d "${tmpDir}"`, { stdio: 'pipe' });
       }

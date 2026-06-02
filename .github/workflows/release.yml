@@ -126,7 +126,7 @@ jobs:
 
             **npm (cross-platform):**
             ```bash
-            npm install -g ntc
+            npm install -g @nuengcoder/ntc
             ```
           files: |
             artifacts/**/*
@@ -153,21 +153,14 @@ jobs:
           VERSION_NO_V="${VERSION#v}"
           mkdir -p npm-package/bin npm-package/scripts
 
-          # Copy package files
           cp packaging/npm/package.json npm-package/
           cp packaging/npm/bin/ntc.js npm-package/bin/
           cp packaging/npm/scripts/install.js npm-package/scripts/
 
-          # Update version in package.json
+          # Update version
           sed -i "s/\"version\": \".*\"/\"version\": \"$VERSION_NO_V\"/" npm-package/package.json
 
-          cd npm-package
-          npm pack
-
       - name: Publish to npm
-        shell: bash
-        run: |
-          cd npm-package
-          npm publish --access public
+        run: npm publish ./npm-package --access public
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

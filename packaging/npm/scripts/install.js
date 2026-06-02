@@ -2,7 +2,6 @@
 const { execSync } = require('child_process');
 const fs = require('fs');
 const path = require('path');
-const https = require('https');
 
 const pkg = require('../package.json');
 const VERSION = pkg.version;
@@ -23,33 +22,11 @@ function getPlatformInfo() {
   return map[`${platform}-${arch}`] || null;
 }
 
-function download(url, destPath) {
-  const doGet = (u, redirectsLeft) => new Promise((resolve, reject) => {
-    if (redirectsLeft <= 0) return reject(new Error('Too many redirects'));
-    const file = fs.createWriteStream(destPath);
-    https.get(u, (response) => {
-      if (response.statusCode >= 300 && response.statusCode < 400 && response.headers.location) {
-        file.close();
-        try { fs.unlinkSync(destPath); } catch {}
-        const nextUrl = new URL(response.headers.location, u).href;
-        resolve(doGet(nextUrl, redirectsLeft - 1));
-        return;
-      }
-      if (response.statusCode !== 200) {
-        file.close();
-        try { fs.unlinkSync(destPath); } catch {}
-        reject(new Error(`HTTP ${response.statusCode}`));
-        return;
-      }
-      response.pipe(file);
-      file.on('finish', () => { file.close(); resolve(); });
-    }).on('error', (err) => {
-      file.close();
-      try { fs.unlinkSync(destPath); } catch {}
-      reject(err);
-    });
-  });
-  return doGet(url, 10);
+async function download(url, destPath) {
+  const response = await fetch(url);
+  if (!response.ok) throw new Error(`HTTP ${response.status}`);
+  const buffer = Buffer.from(await response.arrayBuffer());
+  fs.writeFileSync(destPath, buffer);
 }
 
 async function main() {
@@ -87,7 +64,6 @@ async function main() {
       execSync(`tar -xzf "${archivePath}" -C "${tmpDir}"`, { stdio: 'pipe' });
     }
 
-    // Find the binary in the extracted files
     const walk = (dir) => {
       const entries = fs.readdirSync(dir, { withFileTypes: true });
       for (const entry of entries) {

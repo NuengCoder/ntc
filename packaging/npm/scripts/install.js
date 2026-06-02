@@ -24,9 +24,33 @@ function getPlatformInfo() {
 }
 
 async function download(url, destPath) {
-  const response = await fetch(url);
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 120_000);
+
+  let response;
+  try {
+    response = await fetch(url, { signal: controller.signal });
+  } finally {
+    clearTimeout(timer);
+  }
+
   if (!response.ok) throw new Error(`HTTP ${response.status}`);
-  const buffer = Buffer.from(await response.arrayBuffer());
+
+  const len = parseInt(response.headers.get('content-length') || '0', 10);
+  let downloaded = 0;
+
+  const reader = response.body.getReader();
+  const chunks = [];
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    chunks.push(value);
+    downloaded += value.length;
+    if (len > 0) process.stdout.write(`\rntc: ${(downloaded / len * 100).toFixed(0)}%`);
+  }
+  if (len > 0) process.stdout.write('\n');
+
+  const buffer = Buffer.concat(chunks.map(c => Buffer.from(c)));
   fs.writeFileSync(destPath, buffer);
 }
 

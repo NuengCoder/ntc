@@ -24,9 +24,17 @@ function getPlatformInfo() {
 }
 
 function download(url, destPath) {
-  return new Promise((resolve, reject) => {
+  const doGet = (u, redirectsLeft) => new Promise((resolve, reject) => {
+    if (redirectsLeft <= 0) return reject(new Error('Too many redirects'));
     const file = fs.createWriteStream(destPath);
-    https.get(url, { maxRedirects: 10 }, (response) => {
+    https.get(u, (response) => {
+      if (response.statusCode >= 300 && response.statusCode < 400 && response.headers.location) {
+        file.close();
+        try { fs.unlinkSync(destPath); } catch {}
+        const nextUrl = new URL(response.headers.location, u).href;
+        resolve(doGet(nextUrl, redirectsLeft - 1));
+        return;
+      }
       if (response.statusCode !== 200) {
         file.close();
         try { fs.unlinkSync(destPath); } catch {}
@@ -41,6 +49,7 @@ function download(url, destPath) {
       reject(err);
     });
   });
+  return doGet(url, 10);
 }
 
 async function main() {

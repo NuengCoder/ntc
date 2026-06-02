@@ -3,7 +3,7 @@
   "publishConfig": {
     "access": "public"
   },
-  "version": "1.9.5",
+  "version": "1.9.6",
   "description": "Navigate, Tree, Cat - A combined directory tree viewer and file concatenator",
   "license": "MIT",
   "homepage": "https://github.com/NuengCoder/ntc",
@@ -41,6 +41,7 @@
   "os": [
     "darwin",
     "win32",
-    "linux"
+    "linux",
+    "android"
   ]
 }

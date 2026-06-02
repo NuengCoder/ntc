@@ -91,6 +91,7 @@ pub fn run_cli() -> Result<bool> {
         "--setO [path]               Show or set output directory",
         "--setD [depth]              Show or set max depth (1-20)",
         "--setL [ON|OFF]             Show or set line numbers",
+        "--setC [ON|OFF]             Show or set color output",
         "--setT [threads]            Show or set thread count",
         "--setH [path|ON|OFF]        Show or set history path/state",
         "--showcg                    Show current configuration overview",
@@ -170,6 +171,14 @@ pub fn run_cli() -> Result<bool> {
                 .value_parser(clap::value_parser!(String)),
         )
         .arg(
+            Arg::new("setC")
+                .long("setC")
+                .value_name("STATE")
+                .help("Show or set color output (ON/OFF)")
+                .num_args(0..=1)
+                .value_parser(clap::value_parser!(String)),
+        )
+        .arg(
             Arg::new("setH")
                 .long("setH")
                 .value_name("VALUE")
@@ -226,12 +235,12 @@ pub fn run_cli() -> Result<bool> {
                 .action(ArgAction::SetTrue),
         )
         .arg(Arg::new("ignored").long("ignored").help("Show ignored items").action(ArgAction::SetTrue))
-        .arg(Arg::new("ignore").long("ignore").value_name("NAME").help("Ignore a directory name").num_args(1))
-        .arg(Arg::new("cared").long("cared").value_name("NAME").help("Stop ignoring a directory").num_args(1))
-        .arg(Arg::new("ignoref").long("ignoref").value_name("EXT").help("Ignore a file extension").num_args(1))
-        .arg(Arg::new("caref").long("caref").value_name("EXT").help("Care about a file extension").num_args(1))
-        .arg(Arg::new("ignoren").long("ignoren").value_name("FILE").help("Ignore a specific file").num_args(1))
-        .arg(Arg::new("caren").long("caren").value_name("FILE").help("Care about a specific file").num_args(1))
+        .arg(Arg::new("ignore").long("ignore").value_name("NAME").help("Ignore one or more directory names").num_args(1..))
+        .arg(Arg::new("cared").long("cared").value_name("NAME").help("Stop ignoring one or more directories").num_args(1..))
+        .arg(Arg::new("ignoref").long("ignoref").value_name("EXT").help("Ignore one or more file extensions").num_args(1..))
+        .arg(Arg::new("caref").long("caref").value_name("EXT").help("Care about one or more file extensions").num_args(1..))
+        .arg(Arg::new("ignoren").long("ignoren").value_name("FILE").help("Ignore one or more specific files").num_args(1..))
+        .arg(Arg::new("caren").long("caren").value_name("FILE").help("Care about one or more specific files").num_args(1..))
         .arg(
             Arg::new("size")
                 .long("size")
@@ -337,6 +346,7 @@ pub fn run_cli() -> Result<bool> {
         println!("│ {:<20} {:<42} │", "Threads:", Config::global_get_num_threads().to_string());
         println!("│ {:<20} {:<42} │", "History:", if Config::global_get_history_enabled() { "ON" } else { "OFF" });
         println!("│ {:<20} {:<42} │", "Watcher:", if Config::global_get_file_watcher_enabled() { "ON" } else { "OFF" });
+        println!("│ {:<20} {:<42} │", "Color:", if Config::global_get_color_enabled() { "ON" } else { "OFF" });
         println!("└{}┘", "─".repeat(w));
         println!();
         return Ok(false);
@@ -379,44 +389,56 @@ pub fn run_cli() -> Result<bool> {
     }
 
     // --- Handle --ignore ---
-    if let Some(name) = matches.get_one::<String>("ignore") {
-        Config::global_add_ignored_dir(name);
-        print_success(&format!("Now ignoring directory: {}", name));
+    if let Some(names) = matches.get_many::<String>("ignore") {
+        for name in names {
+            Config::global_add_ignored_dir(name);
+            print_success(&format!("Now ignoring directory: {}", name));
+        }
         return Ok(false);
     }
 
     // --- Handle --cared ---
-    if let Some(name) = matches.get_one::<String>("cared") {
-        Config::global_remove_ignored_dir(name);
-        print_success(&format!("No longer ignoring directory: {}", name));
+    if let Some(names) = matches.get_many::<String>("cared") {
+        for name in names {
+            Config::global_remove_ignored_dir(name);
+            print_success(&format!("No longer ignoring directory: {}", name));
+        }
         return Ok(false);
     }
 
     // --- Handle --ignoref ---
-    if let Some(ext) = matches.get_one::<String>("ignoref") {
-        Config::global_add_ignored_extension(ext);
-        print_success(&format!("Now ignoring .{} files", ext));
+    if let Some(exts) = matches.get_many::<String>("ignoref") {
+        for ext in exts {
+            Config::global_add_ignored_extension(ext);
+            print_success(&format!("Now ignoring .{} files", ext));
+        }
         return Ok(false);
     }
 
     // --- Handle --caref ---
-    if let Some(ext) = matches.get_one::<String>("caref") {
-        Config::global_add_extra_supported_extension(ext);
-        print_success(&format!("Now caring about .{} files", ext));
+    if let Some(exts) = matches.get_many::<String>("caref") {
+        for ext in exts {
+            Config::global_add_extra_supported_extension(ext);
+            print_success(&format!("Now caring about .{} files", ext));
+        }
         return Ok(false);
     }
 
     // --- Handle --ignoren ---
-    if let Some(file) = matches.get_one::<String>("ignoren") {
-        Config::global_add_ignored_file(file);
-        print_success(&format!("Now ignoring file: {}", file));
+    if let Some(files) = matches.get_many::<String>("ignoren") {
+        for file in files {
+            Config::global_add_ignored_file(file);
+            print_success(&format!("Now ignoring file: {}", file));
+        }
         return Ok(false);
     }
 
     // --- Handle --caren ---
-    if let Some(file) = matches.get_one::<String>("caren") {
-        Config::global_add_extra_supported_file(file);
-        print_success(&format!("Now caring about file: {}", file));
+    if let Some(files) = matches.get_many::<String>("caren") {
+        for file in files {
+            Config::global_add_extra_supported_file(file);
+            print_success(&format!("Now caring about file: {}", file));
+        }
         return Ok(false);
     }
 
@@ -612,6 +634,27 @@ pub fn run_cli() -> Result<bool> {
         return Ok(false);
     }
 
+    // --- Handle --setC ---
+    if let Some(val) = matches.get_one::<String>("setC") {
+        if val.is_empty() {
+            let state = if Config::global_get_color_enabled() { "ON" } else { "OFF" };
+            println!("Color output: {}", state);
+        } else {
+            match Config::parse_line_numbers_state(val) {
+                Some(state) => {
+                    Config::global_set_color_enabled(state);
+                    print_success(&format!("Color: {}", if state { "ON" } else { "OFF" }));
+                }
+                None => bail!("Invalid value for setC: {}. Use ON or OFF.", val),
+            }
+        }
+        return Ok(false);
+    } else if matches.contains_id("setC") {
+        let state = if Config::global_get_color_enabled() { "ON" } else { "OFF" };
+        println!("Color output: {}", state);
+        return Ok(false);
+    }
+
     // --- Handle -say / -print ---
     if let Some(text) = matches.get_one::<String>("say") {
         println!("{}", text.green());
@@ -702,6 +745,7 @@ fn print_help() {
     println!("    --setO [path]           Show or set the output directory (default: Desktop)");
     println!("    --setD [depth]          Show or set max recursion depth (min: 1, max: 20)");
     println!("    --setL [ON|OFF]         Show or toggle line numbers for file display");
+    println!("    --setC [ON|OFF]         Show or toggle color output");
     println!("    --setT [threads]        Show or set number of threads (default: 4)");
     println!("    --setH [path|ON|OFF]    Show/set history path or enable/disable");
     println!("    --showcg                Show current configuration overview");

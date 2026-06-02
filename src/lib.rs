@@ -1,7 +1,8 @@
 // src/lib.rs
 // ntc core library
-// Version: v1.8.0
+// Version: v1.9.0
 pub mod backup;
+pub mod backup_diff;
 pub mod backup_manifest;
 pub mod cli;
 pub mod config;

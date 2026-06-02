@@ -13,7 +13,6 @@ use rustyline::error::ReadlineError;
 use rustyline::DefaultEditor;
 use std::io::{self, Write};
 use std::path::{Path, PathBuf};
-use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
 // ============================================================================
@@ -75,6 +74,43 @@ fn parse_call_syntax(token: &str) -> (&str, Option<&str>) {
     (token, None)
 }
 
+/// Tokenize a string on whitespace, respecting `[...]` as single tokens.
+/// e.g. `"[add,minus,mul] math"` → `["[add,minus,mul]", "math"]`
+fn tokenize_args(input: &str) -> Vec<String> {
+    let mut tokens = Vec::new();
+    let mut current = String::new();
+    let mut in_bracket = false;
+    for ch in input.chars() {
+        match ch {
+            '[' if !in_bracket => {
+                if !current.trim().is_empty() {
+                    tokens.push(current.trim().to_string());
+                }
+                current.clear();
+                current.push(ch);
+                in_bracket = true;
+            }
+            ']' if in_bracket => {
+                current.push(ch);
+                in_bracket = false;
+                tokens.push(current.trim().to_string());
+                current.clear();
+            }
+            ' ' | '\t' if !in_bracket => {
+                if !current.trim().is_empty() {
+                    tokens.push(current.trim().to_string());
+                }
+                current.clear();
+            }
+            _ => current.push(ch),
+        }
+    }
+    if !current.trim().is_empty() {
+        tokens.push(current.trim().to_string());
+    }
+    tokens
+}
+
 // ── shared arg parser for fs / ds ─────────────────────────────────────────
 // Accepts:  <pattern> [-d <depth>]   (depth flag must be at the end)
 // Returns:  (pattern, max_depth)
@@ -102,6 +138,10 @@ fn parse_search_args(args: &str) -> (String, usize) {
 ///   -> first  $identifier seen: $x -> "mymodule"
 ///   -> second $identifier seen: $y -> "src"
 ///   -> result: "pytest mymodule --cov=src"
+///
+/// Array expansion: `$name[]suffix` expands each element of the array
+/// with the given suffix, joined by spaces.
+///   e.g. template = "$x[].c", arg = "[add,minus,mul]" -> "add.c minus.c mul.c"
 ///
 /// If fewer args than placeholders, unmatched $names are left as-is.
 /// If more args than placeholders, extras are ignored.
@@ -149,14 +189,42 @@ fn substitute_params(template: &str, args: &[&str]) -> String {
             }
             if end > start {
                 let name: String = chars[start..end].iter().collect();
-                if let Some(val) = map.get(name.as_str()) {
-                    result.push_str(val);
+
+                // Check for array expansion: $name[]suffix
+                let is_array = end + 1 < chars.len() && chars[end] == '[' && chars[end + 1] == ']';
+
+                if is_array {
+                    let suffix_start = end + 2;
+                    let mut suffix_end = suffix_start;
+                    while suffix_end < chars.len() && !chars[suffix_end].is_whitespace() && chars[suffix_end] != '&' && chars[suffix_end] != ';' {
+                        suffix_end += 1;
+                    }
+                    let suffix: String = chars[suffix_start..suffix_end].iter().collect();
+
+                    if let Some(val) = map.get(name.as_str()) {
+                        let elements: Vec<&str> = if val.starts_with('[') && val.ends_with(']') && val.len() >= 2 {
+                            val[1..val.len()-1].split(',').map(|s| s.trim()).filter(|s| !s.is_empty()).collect()
+                        } else {
+                            vec![val]
+                        };
+                        let expanded: Vec<String> = elements.iter().map(|e| format!("{}{}", e, suffix)).collect();
+                        result.push_str(&expanded.join(" "));
+                    } else {
+                        result.push('$');
+                        result.push_str(&name);
+                        result.push_str("[]");
+                        result.push_str(&suffix);
+                    }
+                    i = suffix_end;
                 } else {
-                    // No mapping — keep original $name
-                    result.push('$');
-                    result.push_str(&name);
+                    if let Some(val) = map.get(name.as_str()) {
+                        result.push_str(val);
+                    } else {
+                        result.push('$');
+                        result.push_str(&name);
+                    }
+                    i = end;
                 }
-                i = end;
             } else {
                 result.push('$');
                 i += 1;
@@ -195,15 +263,23 @@ fn expand_aliases(cmd: &str, depth: usize) -> String {
     let lookup_key = base_name.to_lowercase();
 
     if let Some(template) = aliases.get(&lookup_key) {
-        // If called with an argument, substitute every `$word` placeholder in the template.
-        let expanded_template = if let Some(args_str) = call_arg {
+        let has_placeholders = template.contains('$');
+        let (expanded_template, consumed_rest) = if let Some(args_str) = call_arg {
+            // Parenthesized args: py(hello) or runc([add,minus], math)
             let args: Vec<&str> = args_str.split(',').map(|s| s.trim()).collect();
-            substitute_params(template, &args)
+            (substitute_params(template, &args), false)
+        } else if !rest.is_empty() && has_placeholders {
+            // Positional args: runc [add,minus,mul] math
+            let tokens = tokenize_args(rest);
+            let token_refs: Vec<&str> = tokens.iter().map(|s| s.as_str()).collect();
+            (substitute_params(template, &token_refs), true)
         } else {
-            template.clone()
+            (template.clone(), false)
         };
 
-        let new_cmd = if rest.is_empty() {
+        let new_cmd = if consumed_rest {
+            expanded_template
+        } else if rest.is_empty() {
             expanded_template
         } else {
             format!("{} {}", expanded_template, rest)
@@ -282,12 +358,13 @@ pub fn run_shell_with_nav(mut nav: Navigator) -> Result<()> {
         let _ = rl.load_history(&history_path);
     }
     
-    let mut watcher_handle: Option<(notify::RecommendedWatcher, Arc<std::sync::atomic::AtomicBool>)> = None;
+    let mut watcher_handle: Option<Arc<watcher::WatcherHandle>> = None;
     if Config::global_get_file_watcher_enabled() {
         match watcher::start_watcher(nav.current_path()) {
             Ok(w) => {
-                watcher_handle = Some(w);
-                print_info("File watcher started");
+                let wh = Arc::new(w);
+                watcher_handle = Some(wh);
+                print_info("File watcher started (recursive)");
             }
             Err(e) => print_warning(&format!("Watcher failed: {}", e)),
         }
@@ -299,15 +376,14 @@ pub fn run_shell_with_nav(mut nav: Navigator) -> Result<()> {
     println!("╚══════════════════════════════════════════════════════════════════╝");
     println!();
     println!("{}", "Type 'help' for available commands, 'exit' to quit.".dimmed());
-    show_tree(&nav, Some(1), false, false, false);
+    show_tree(&nav, Some(1), false, false, false, false);
     
     loop {
-        if let Some((_, ref changed)) = watcher_handle {
-            if changed.load(Ordering::Acquire) {
-                changed.store(false, Ordering::Relaxed);
+        if let Some(ref wh) = watcher_handle {
+            if wh.should_refresh() {
                 println!();
                 print_info("Directory changed — refreshing...");
-                show_tree(&nav, Some(1), false, false, false);
+show_tree(&nav, Some(1), false, false, false, false);
             }
         }
         
@@ -341,8 +417,12 @@ pub fn run_shell_with_nav(mut nav: Navigator) -> Result<()> {
         // Execute each expanded command in sequence
         let mut should_exit = false;
         for cmd in expanded_commands {
-            match execute_command(&cmd, &mut nav) {
+            match execute_command(&cmd, &mut nav, &watcher_handle) {
                 Ok(exit) => {
+                    // Keep watcher in sync after every command (cheap no-op if same path)
+                    if let Some(ref wh) = watcher_handle {
+                        let _ = wh.update_path(nav.current_path());
+                    }
                     if exit {
                         should_exit = true;
                         break;
@@ -381,7 +461,7 @@ fn validate_alias_name(name: &str) -> bool {
         "gos", "gosc", "ral", "run", "r", "showcg", "help", "exit", "quit", "ignored",
         "ignore", "cared", "ignoref", "caref", "ignoren", "caren", "size", "tp", 
         "opencg", "resetcg", "restorecg", "gencg", "esc" , "bkup" , "pldw" , "unpd" , 
-        "fs" , "ds"
+        "fs" , "ds", "setc", "diff", "fgo", "fsc"
     ];
     
     if name.contains('@') || name.contains('#') {
@@ -396,7 +476,11 @@ fn validate_alias_name(name: &str) -> bool {
 }
 
 /// Execute a single command (already fully expanded)
-fn execute_command(input: &str, nav: &mut Navigator) -> Result<bool> {
+fn execute_command(
+    input: &str,
+    nav: &mut Navigator,
+    watcher_handle: &Option<Arc<watcher::WatcherHandle>>,
+) -> Result<bool> {
     let parts: Vec<&str> = input.splitn(2, ' ').collect();
     let cmd = parts[0].to_lowercase();
     let args = parts.get(1).unwrap_or(&"").trim();
@@ -418,7 +502,7 @@ fn execute_command(input: &str, nav: &mut Navigator) -> Result<bool> {
                     if TeleportManager::get_all().contains_key(&tp_name.to_lowercase()) {
                         TeleportManager::jump_by_name(nav, tp_name)?;
                         clear_screen();
-                        show_tree(nav, Some(1), false, false, false);
+                        show_tree(nav, Some(1), false, false, false, false);
                     } else {
                         print_error(&format!("Teleport point not found: '{}'", tp_name));
                         println!("Use 'tp list' to see all savepoints.");
@@ -428,7 +512,7 @@ fn execute_command(input: &str, nav: &mut Navigator) -> Result<bool> {
                     nav.go_to(Path::new(args))?;
                     clear_screen();
                     print_success(&format!("Navigated to: {}", nav.display_path()));
-                    show_tree(nav, Some(1), false, false, false);
+                    show_tree(nav, Some(1), false, false, false, false);
                 }
             }
         }
@@ -457,12 +541,12 @@ fn execute_command(input: &str, nav: &mut Navigator) -> Result<bool> {
                 } else if choice.len() == 1 && choice.chars().next().unwrap().is_alphabetic() {
                     nav.go_drive(choice.chars().next().unwrap())?;
                     clear_screen();
-                    show_tree(nav, Some(1), false, false, false);
+                    show_tree(nav, Some(1), false, false, false, false);
                 } else if let Ok(num) = choice.parse::<usize>() {
                     if num > 0 && num <= drives.len() {
                         nav.go_drive(drives[num - 1])?;
                         clear_screen();
-                        show_tree(nav, Some(1), false, false, false);
+                        show_tree(nav, Some(1), false, false, false, false);
                     } else {
                         print_error("Invalid drive number.");
                     }
@@ -473,7 +557,7 @@ fn execute_command(input: &str, nav: &mut Navigator) -> Result<bool> {
                 let letter = args.chars().next().unwrap_or('C');
                 nav.go_drive(letter)?;
                 clear_screen();
-                show_tree(nav, Some(1), false, false, false);
+                show_tree(nav, Some(1), false, false, false, false);
             }
         }
 
@@ -482,7 +566,7 @@ fn execute_command(input: &str, nav: &mut Navigator) -> Result<bool> {
                 match nav.go_back() {
                     Ok(()) => {
                         clear_screen();
-                        show_tree(nav, Some(1), false, false, false);
+                        show_tree(nav, Some(1), false, false, false, false);
                     }
                     Err(e) => print_error(&format!("{}", e)),
                 }
@@ -506,7 +590,7 @@ fn execute_command(input: &str, nav: &mut Navigator) -> Result<bool> {
                         }
                         if success {
                             clear_screen();
-                            show_tree(nav, Some(1), false, false, false);
+                            show_tree(nav, Some(1), false, false, false, false);
                         }
                     }
                     _ => print_error(&format!("Invalid number: {}. Usage: back [n]", args)),
@@ -517,12 +601,14 @@ fn execute_command(input: &str, nav: &mut Navigator) -> Result<bool> {
         "view" => {
             let mut show_sizes = false;
             let mut depth_override: Option<usize> = None;
+            let mut copy_to_clipboard = false;
             
             let parts: Vec<&str> = args.split_whitespace().collect();
             let mut i = 0;
             while i < parts.len() {
                 match parts[i] {
                     "-s" | "--size" => show_sizes = true,
+                    "-c" | "--cp" => copy_to_clipboard = true,
                     "-d" | "--depth" => {
                         if i + 1 < parts.len() {
                             if let Ok(depth) = parts[i + 1].parse::<usize>() {
@@ -535,7 +621,7 @@ fn execute_command(input: &str, nav: &mut Navigator) -> Result<bool> {
                     }
                     _ => {
                         print_error(&format!("Unknown view option: {}", parts[i]));
-                        println!("Usage: view [-s|--size] [-d|--depth <n>]");
+                        println!("Usage: view [-s|--size] [-c|--cp] [-d|--depth <n>]");
                         return Ok(false);
                     }
                 }
@@ -543,7 +629,7 @@ fn execute_command(input: &str, nav: &mut Navigator) -> Result<bool> {
             }
             
             let max_depth = depth_override.unwrap_or_else(|| Config::global_get_max_depth());
-            show_tree(nav, Some(max_depth), true, true, show_sizes);
+            show_tree(nav, Some(max_depth), true, true, show_sizes, copy_to_clipboard);
         }
 
         "txt" => {
@@ -756,6 +842,21 @@ fn execute_command(input: &str, nav: &mut Navigator) -> Result<bool> {
             }
         }
 
+        "setc" => {
+            if args.is_empty() {
+                let state = if Config::global_get_color_enabled() { "ON" } else { "OFF" };
+                println!("Color output: {}", state);
+            } else {
+                match Config::parse_line_numbers_state(args) {
+                    Some(state) => {
+                        Config::global_set_color_enabled(state);
+                        print_success(&format!("Color: {}", if state { "ON" } else { "OFF" }));
+                    }
+                    None => print_error(&format!("Invalid value: {}. Use ON or OFF.", args)),
+                }
+            }
+        }
+
         "sett" => {
             if args.is_empty() {
                 println!("Current threads: {}", Config::global_get_num_threads());
@@ -824,7 +925,7 @@ fn execute_command(input: &str, nav: &mut Navigator) -> Result<bool> {
             println!("║{}║", format!("              Welcome to ntc {} - Navigate, Tree, Cat          ", env!("CARGO_PKG_VERSION")).cyan().bold());
             println!("╚══════════════════════════════════════════════════════════════════╝");
             println!("{}", "Type 'help' for available commands, 'exit' to quit.".dimmed());
-            show_tree(nav, Some(1), false, false, false);
+            show_tree(nav, Some(1), false, false, false, false);
         }
 
         "version" => {
@@ -890,7 +991,7 @@ fn execute_command(input: &str, nav: &mut Navigator) -> Result<bool> {
                     nav.go_to(&new_path)?;
                     clear_screen();
                     print_success(&format!("Navigated to: {}", nav.display_path()));
-                    show_tree(nav, Some(1), false, false, false);
+                    show_tree(nav, Some(1), false, false, false, false);
                 } else {
                     print_error("Invalid number.");
                 }
@@ -901,14 +1002,15 @@ fn execute_command(input: &str, nav: &mut Navigator) -> Result<bool> {
 
         "gosc" => {
             gosc_loop(nav)?;
-            show_tree(nav, Some(1), false, false, false);
+            show_tree(nav, Some(1), false, false, false, false);
         }
 
         "ral" => {
             if args.is_empty() {
                 println!("{}", "Run Alias (ral) Commands:".cyan().bold());
                 println!("  ral add <name> <command>          Create a new run alias");
-                println!("  ral add <name>(x) <command>       Create a parameterised alias (use $x in command)");
+                println!("  ral add <name>(x) <command>       Create parameterised alias (use $x in command)");
+                println!("  ral add <name>(x[],y) <cmd>      Create alias with array params (use $x[].ext)");
                 println!("  ral edit <name> <command>         Update an existing alias");
                 println!("  ral rnm <old> to <new>            Rename an alias");
                 println!("  ral rm <name>                     Remove an alias");
@@ -921,6 +1023,7 @@ fn execute_command(input: &str, nav: &mut Navigator) -> Result<bool> {
                 println!("  ral add py \"python test.py\"");
                 println!("  ral edit py \"python main.py\"");
                 println!("  ral add run_file(x) \"python $x.py\"");
+                println!("  ral add runc(x[],y) \"cls && gcc -o $y.exe $x[].c && ./$y.exe && rm -rf $y.exe\"");
                 println!("  ral list");
                 println!("  ral rm py");
                 println!();
@@ -928,6 +1031,7 @@ fn execute_command(input: &str, nav: &mut Navigator) -> Result<bool> {
                 println!("  run btr              # Executes: cargo build --release");
                 println!("  run py               # Executes: python test.py");
                 println!("  run_file(hello)      # Executes: python hello.py");
+                println!("  runc [add,minus,mul] math  # Executes: cls && gcc -o math.exe add.c minus.c mul.c && ...");
             } else {
                 let parts: Vec<&str> = args.splitn(2, ' ').collect();
                 let subcmd = parts[0].to_lowercase();
@@ -939,12 +1043,14 @@ fn execute_command(input: &str, nav: &mut Navigator) -> Result<bool> {
                             print_error("Usage: ral add <name> <command>");
                             println!("Example: ral add btr \"cargo build --release\"");
                             println!("Example: ral add py(x) \"python $x.py\"");
+                            println!("Example: ral add runc(x[],y) \"cls && gcc -o $y.exe $x[].c && ./$y.exe\"");
                         } else {
                             let add_parts: Vec<&str> = subargs.splitn(2, ' ').collect();
                             if add_parts.len() < 2 {
                                 print_error("Usage: ral add <name> <command>");
                                 println!("Example: ral add btr \"cargo build --release\"");
                                 println!("Example: ral add py(x) \"python $x.py\"");
+                                println!("Example: ral add runc(x[],y) \"cls && gcc -o $y.exe $x[].c && ./$y.exe\"");
                             } else {
                                 let raw_name = add_parts[0];
                                 let mut command = add_parts[1].to_string();
@@ -1167,6 +1273,7 @@ fn execute_command(input: &str, nav: &mut Navigator) -> Result<bool> {
             println!("│ {:<20} {:<42} │", "Threads:", Config::global_get_num_threads().to_string().yellow());
             println!("│ {:<20} {:<42} │", "History:", if Config::global_get_history_enabled() { "ON".green() } else { "OFF".red() });
             println!("│ {:<20} {:<42} │", "Watcher:", if Config::global_get_file_watcher_enabled() { "ON".green() } else { "OFF".red() });
+            println!("│ {:<20} {:<42} │", "Color:", if Config::global_get_color_enabled() { "ON".green() } else { "OFF".red() });
             println!("└{}┘", "─".repeat(w));
             println!();
         }
@@ -1637,55 +1744,66 @@ extra_supported_files = {}
         
         "ignore" => {
             if args.is_empty() {
-                println!("Usage: ignore <directory_name>");
+                println!("Usage: ignore <name>[, <name>, ...]");
             } else {
-                let _ = Config::local_add_ignored_dir(args);
-                // Reload config to reflect changes
+                for name in args.split(',').map(|s| s.trim()).filter(|s| !s.is_empty()) {
+                    let _ = Config::local_add_ignored_dir(name);
+                }
                 Config::reload_global();
             }
         }
 
         "cared" => {
             if args.is_empty() {
-                println!("Usage: cared <directory_name>");
+                println!("Usage: cared <name>[, <name>, ...]");
             } else {
-                let _ = Config::local_remove_ignored_dir(args);
+                for name in args.split(',').map(|s| s.trim()).filter(|s| !s.is_empty()) {
+                    let _ = Config::local_remove_ignored_dir(name);
+                }
                 Config::reload_global();
             }
         }
 
         "ignoref" => {
             if args.is_empty() {
-                println!("Usage: ignoref <extension>");
+                println!("Usage: ignoref <ext>[, <ext>, ...]");
             } else {
-                let _ = Config::local_add_ignored_extension(args);
+                for ext in args.split(',').map(|s| s.trim()).filter(|s| !s.is_empty()) {
+                    let _ = Config::local_add_ignored_extension(ext);
+                }
                 Config::reload_global();
             }
         }
 
         "caref" => {
             if args.is_empty() {
-                println!("Usage: caref <extension>");
+                println!("Usage: caref <ext>[, <ext>, ...]");
             } else {
-                let _ = Config::local_add_extra_supported_extension(args);
+                for ext in args.split(',').map(|s| s.trim()).filter(|s| !s.is_empty()) {
+                    let _ = Config::local_add_extra_supported_extension(ext);
+                }
                 Config::reload_global();
             }
         }
 
         "ignoren" => {
             if args.is_empty() {
-                println!("Usage: ignoren <filename>");
+                println!("Usage: ignoren <file>[, <file>, ...]");
             } else {
-                let _ = Config::local_add_ignored_file(args);
+                for name in args.split(',').map(|s| s.trim()).filter(|s| !s.is_empty()) {
+                    let _ = Config::local_add_ignored_file(name);
+                }
                 Config::reload_global();
             }
         }
 
         "caren" => {
             if args.is_empty() {
-                println!("Usage: caren <filename>");
+                println!("Usage: caren <file>[, <file>, ...]");
             } else {
-                let _ = Config::local_add_extra_supported_file(args);
+                for name in args.split(',').map(|s| s.trim()).filter(|s| !s.is_empty()) {
+                    let _ = Config::local_add_extra_supported_file(name);
+                }
                 Config::reload_global();
             }
         }
@@ -1880,7 +1998,7 @@ extra_supported_files = {}
                             nav.current_path(), backup_num, true
                         )?;
                         clear_screen();
-                        show_tree(nav, Some(1), false, false, false);
+                        show_tree(nav, Some(1), false, false, false, false);
                     }
                     Ok(_)  => print_error(&format!("Invalid selection: {}", input)),
                     Err(_) => print_error(&format!("Invalid input: {}", input)),
@@ -1889,7 +2007,7 @@ extra_supported_files = {}
                 // Direct restore by backup number (non-interactive confirmation still shown)
                 crate::backup::BackupManager::restore_backup(nav.current_path(), num, true)?;
                 clear_screen();
-                show_tree(nav, Some(1), false, false, false);
+                show_tree(nav, Some(1), false, false, false, false);
             } else {
                 print_error(&format!("Invalid argument: {}", args));
                 println!("Usage:");
@@ -1921,7 +2039,7 @@ extra_supported_files = {}
                 "" => {
                     crate::backup::BackupManager::undo_last_restore(nav.current_path())?;
                     clear_screen();
-                    show_tree(nav, Some(1), false, false, false);
+                    show_tree(nav, Some(1), false, false, false, false);
                 }
 
                 _ => {
@@ -1930,6 +2048,21 @@ extra_supported_files = {}
                     println!("  unpd              Undo the last restore");
                     println!("  unpd --cls        Clear undo history (asks confirmation)");
                     println!("  unpd --force      Clear undo history (no confirmation)");
+                }
+            }
+        }
+
+        "diff" => {
+            if args.is_empty() {
+                crate::backup_diff::BackupDiff::run_diff_interactive(nav.current_path())?;
+            } else {
+                match args.parse::<usize>() {
+                    Ok(n) => {
+                        crate::backup_diff::BackupDiff::generate_diff(nav.current_path(), n)?;
+                    }
+                    Err(_) => {
+                        print_error(&format!("Invalid argument: {}. Usage: diff <backup_number>", args));
+                    }
                 }
             }
         }
@@ -1964,6 +2097,130 @@ extra_supported_files = {}
             print!("{}", output);
         }
 
+        // ── fgo: search + go ──────────────────────────────────────────────
+        "fgo" => {
+            if args.is_empty() {
+                print_error("Usage: fgo <pattern> [-d <depth>]");
+                println!("  fgo main.rs        # search then pick file to navigate to its parent");
+                println!("  fgo main.rs -d 5   # search up to 5 levels deep");
+                return Ok(false);
+            }
+            let (pattern, max_depth) = parse_search_args(args);
+            let results = crate::search::search_files(nav.current_path(), &pattern, max_depth);
+            if results.is_empty() {
+                let output = crate::search::format_search_results(&results, &pattern, max_depth, true);
+                print!("{}", output);
+                return Ok(false);
+            }
+            // Show numbered list
+            println!();
+            println!("{}", format!("🔍 Found {} file(s) for \"{}\":", results.len(), pattern).cyan().bold());
+            for (i, r) in results.iter().enumerate() {
+                let path_str = r.full_path.to_string_lossy();
+                println!("  {}. {}", (i + 1).to_string().yellow(), path_str.dimmed());
+            }
+            println!("  {}", "0. Cancel".red());
+            println!();
+            print!("{} ", "Select file to navigate to its parent directory: ".green());
+            io::stdout().flush()?;
+            let mut input = String::new();
+            io::stdin().read_line(&mut input)?;
+            let input = input.trim();
+            if input == "0" || input.is_empty() {
+                println!("{}", "Cancelled.".dimmed());
+                return Ok(false);
+            }
+            if let Ok(n) = input.parse::<usize>() {
+                if n >= 1 && n <= results.len() {
+                    let target = &results[n - 1].full_path;
+                    let parent = target.parent().unwrap_or(target);
+                    nav.go_to(parent)?;
+                    clear_screen();
+                    print_success(&format!("Navigated to: {}", nav.display_path()));
+                    show_tree(nav, Some(1), false, false, false, false);
+                } else {
+                    print_error("Invalid selection.");
+                }
+            } else {
+                print_error("Invalid input.");
+            }
+        }
+
+        // ── fsc: search + cat (display + copy) ────────────────────────────
+        "fsc" => {
+            if args.is_empty() {
+                print_error("Usage: fsc <pattern> [-d <depth>]");
+                println!("  fsc main.rs        # search then pick file to display");
+                println!("  fsc main.rs -d 5   # search up to 5 levels deep");
+                return Ok(false);
+            }
+            let (pattern, max_depth) = parse_search_args(args);
+            let results = crate::search::search_files(nav.current_path(), &pattern, max_depth);
+            if results.is_empty() {
+                let output = crate::search::format_search_results(&results, &pattern, max_depth, true);
+                print!("{}", output);
+                return Ok(false);
+            }
+            // Show numbered list
+            loop {
+                println!();
+                println!("{}", format!("🔍 Found {} file(s) for \"{}\":", results.len(), pattern).cyan().bold());
+                for (i, r) in results.iter().enumerate() {
+                    let path_str = r.full_path.to_string_lossy();
+                    println!("  {}. {}", (i + 1).to_string().yellow(), path_str.dimmed());
+                }
+                println!("  {}", "0. Done".red());
+                println!();
+                print!("{} ", "Select file to display: ".green());
+                io::stdout().flush()?;
+                let mut input = String::new();
+                io::stdin().read_line(&mut input)?;
+                let input = input.trim();
+                if input == "0" || input.is_empty() {
+                    println!("{}", "Done.".dimmed());
+                    return Ok(false);
+                }
+                if let Ok(n) = input.parse::<usize>() {
+                    if n >= 1 && n <= results.len() {
+                        let target = &results[n - 1].full_path;
+                        if target.is_file() {
+                            if is_supported_format(target) {
+                                let show_lines = Config::global_get_show_line_numbers();
+                                cat_file(target, show_lines)?;
+                                // Ask to copy to clipboard
+                                println!();
+                                print!("{} ", "Copy to clipboard? (y/N): ".yellow());
+                                io::stdout().flush()?;
+                                let mut copy_choice = String::new();
+                                io::stdin().read_line(&mut copy_choice)?;
+                                let copy_choice = copy_choice.trim().to_lowercase();
+                                if copy_choice == "y" || copy_choice == "yes" {
+                                    let content = crate::output::cat_file_with_line_numbers(target, show_lines)?;
+                                    #[cfg(not(target_os = "android"))] {
+                                        crate::output::copy_to_clipboard(&content, "TXT")?;
+                                    }
+                                    #[cfg(target_os = "android")] {
+                                        crate::output::copy_to_clipboard(&content, "TXT")?;
+                                    }
+                                    print_success(&format!("Copied '{}' to clipboard!", target.display()));
+                                }
+                            } else {
+                                print_warning(&format!("Skipped (not support format): {}", target.display()));
+                            }
+                        } else {
+                            print_warning("Selected path is not a file.");
+                        }
+                    } else {
+                        print_error("Invalid selection.");
+                    }
+                } else {
+                    print_error("Invalid input.");
+                }
+                // After showing the file, loop back for another selection
+                println!();
+            }
+        }
+
         _ => {
             // Check for @teleport shortcut
             if cmd.starts_with('@') && cmd.len() > 1 {
@@ -1988,15 +2245,15 @@ extra_supported_files = {}
                 match first_word.as_str() {
                        "go"     | "cd"      | "godrive" | "god"     | "back"      | "b"       | "view" 
                     | "txt"     | "txtc"    | "txtf"    | "html"    | "json"      | "md" 
-                    | "seto"    | "setd"    | "setl"    | "sett"    | "seth"      | "watch" 
+                    | "seto"    | "setd"    | "setl"    | "setc"    | "sett"      | "seth"    | "watch" 
                     | "clear"   | "version" | "where" 
                     | "gos"     | "gosc"    | "ral"     | "run"     | "r" 
                     | "showcg"  | "help"    | "exit"    | "quit" 
                     | "ignored" | "ignore"  | "cared"   | "ignoref" | "caref"     | "ignoren" | "caren" 
                     | "size"    | "tp"      | "opencg"  | "resetcg" | "restorecg" | "gencg" 
-                    | "bkup"    | "pldw"    | "unpd"    | "fs"      | "ds" => {
+                    | "bkup"    | "pldw"    | "unpd"    | "fs"      | "ds"        | "diff"    | "fgo"     | "fsc" => {
                         // This is an ntc command – execute it recursively
-                        if let Err(e) = execute_command(&cmd_part, nav) {
+                        if let Err(e) = execute_command(&cmd_part, nav, watcher_handle) {
                             print_error(&format!("{}", e));
                             return Ok(false);
                         }
@@ -2025,7 +2282,7 @@ fn gosc_loop(nav: &mut Navigator) -> Result<()> {
     loop {
         let dirs = nav.list_subdirs()?;
         clear_screen();
-        show_tree(nav, Some(1), false, false, false);
+        show_tree(nav, Some(1), false, false, false, false);
         
         println!();
         println!("╔══════════════════════════════════════════════════╗");
@@ -2132,6 +2389,7 @@ pub(crate) fn show_tree(
     show_progress: bool,
     include_files: bool,
     show_sizes: bool,
+    copy_to_clipboard: bool,
 ) {
     println!();
     print_separator("Current Directory");
@@ -2182,6 +2440,10 @@ pub(crate) fn show_tree(
     } else {
         format_tree(&tree, "", true)
     };
+
+    if copy_to_clipboard {
+        let _ = crate::output::copy_to_clipboard(&tree_str, "Tree");
+    }
 
     for line in tree_str.lines() {
         if line.contains("[Directory]") {
@@ -2365,6 +2627,7 @@ fn print_interactive_help() {
     println!("  setD <int>          Set max depth (min: 1, max: 20)");
     println!("  setL                Show line number setting (ON/OFF)");
     println!("  setL ON|OFF         Enable/disable line numbers");
+    println!("  setC ON|OFF         Enable/disable color output");
     println!("  setT                Show current thread count");
     println!("  setT <int>          Set number of threads");
     println!("  setH                Show history settings");
@@ -2391,6 +2654,7 @@ fn print_interactive_help() {
     println!("{}", "RUN ALIAS COMMANDS:".cyan().bold());
     println!("  ral add <name> \"<command>\"         Create alias");
     println!("  ral add <name>(x) \"<cmd $x>\"       Create parameterised alias");
+    println!("  ral add <name>(x[],y) \"...\"      Create alias with array params");
     println!("  ral edit <name> \"<command>\"        Update alias");
     println!("  ral rnm <old> to <new>             Rename alias");
     println!("  ral rm <name>                      Remove alias");
@@ -2407,6 +2671,8 @@ fn print_interactive_help() {
     println!("  fb                                 # Runs both commands");
     println!("  ral add py(x) \"python $x.py\"");
     println!("  py(hello)                          # Runs: python hello.py");
+    println!("  ral add runc(x[],y) \"cls && gcc -o $y.exe $x[].c && ./$y.exe && rm -rf $y.exe\"");
+    println!("  runc [add,minus,mul] math          # Runs: cls && gcc -o math.exe add.c minus.c mul.c && ...");
 
     println!();
     println!("{}", "VIEW COMMAND:".cyan().bold());
@@ -2416,6 +2682,8 @@ fn print_interactive_help() {
     println!("  view -d <n>         Show tree with custom depth (overrides config)");
     println!("  view --depth <n>    Same as -d");
     println!("  view -s -d <n>      Show tree with sizes and custom depth");
+    println!("  view -c             Show tree and copy to clipboard");
+    println!("  view --cp           Same as -c");
 
     println!();
     println!("{}", "REPORT COMMANDS:".cyan().bold());
@@ -2436,6 +2704,16 @@ fn print_interactive_help() {
     println!("  unpd                Undo the last restore");
     println!("  unpd --cls          Clear undo history (asks confirmation)");
     println!("  unpd --force        Clear undo history (no confirmation)");
+    println!("  diff                Interactive diff (compare current project with a backup)");
+    println!("  diff <number>       Diff against specific backup number");
+
+    println!();
+    println!();
+    println!("{}", "SEARCH COMMANDS:".cyan().bold());
+    println!("  fs <pattern> [-d <n>]   Search files by name (fuzzy fallback)");
+    println!("  ds <pattern> [-d <n>]   Search directories by name");
+    println!("  fgo <pattern> [-d <n>]  Search files, then navigate to selected file's parent dir");
+    println!("  fsc <pattern> [-d <n>]  Search files, pick one to display & optionally copy");
 
     println!();
     println!("{}", "OTHER COMMANDS:".cyan().bold());

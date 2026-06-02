@@ -1,6 +1,6 @@
 // src/backup.rs
 // Production-grade backup system for ntc
-// Version: v1.8.1
+// Version: v1.8.2
 // Cross-platform: Windows, Linux, macOS
 
 use crate::backup_manifest::{
@@ -13,6 +13,7 @@ use crate::output::{print_error, print_info, print_success, print_warning};
 use anyhow::Result;
 use sha2::{Sha256, Digest};
 
+use std::collections::HashSet;
 use std::fs;
 use std::io::{self, Write, Read};
 use std::path::{Path, PathBuf};
@@ -367,13 +368,51 @@ impl BackupManager {
     // RESTORE (with full undo support)
     // ========================================================================
 
+    /// Collect all current project files as a set of relative path strings.
+    /// Respects the same ignored-dirs and ignored-extensions config as backups.
+    fn collect_current_file_set(project_root: &Path) -> HashSet<String> {
+        let ignored_dirs = Config::global_get_ignored_dirs();
+        let fmt_cfg      = FormatConfig::from_global();
+        let mut set      = HashSet::new();
+
+        let walker = WalkDir::new(project_root)
+            .into_iter()
+            .filter_entry(|e| {
+                if e.depth() == 0 { return true; }
+                if e.file_type().is_dir() {
+                    let name = e.file_name().to_string_lossy().to_lowercase();
+                    return !ignored_dirs.contains(&name);
+                }
+                true
+            });
+
+        for entry in walker.filter_map(|e| e.ok()) {
+            if !entry.file_type().is_file() { continue; }
+            let rel = match entry.path().strip_prefix(project_root) {
+                Ok(p)  => p.to_path_buf(),
+                Err(_) => continue,
+            };
+            let file_name = entry.file_name().to_string_lossy();
+            if fmt_cfg.ignored_files.contains(&file_name.to_string()) { continue; }
+            let ext = entry.path().extension()
+                .and_then(|e| e.to_str())
+                .unwrap_or("");
+            if fmt_cfg.ignored_extensions.contains(&ext.to_lowercase()) { continue; }
+
+            set.insert(rel.to_string_lossy().to_string());
+        }
+        set
+    }
+
     /// Restore a backup by number.
     ///
     /// Before restoring:
     /// - Files that will be **overwritten** are copied to the undo directory.
-    /// - Files that will be **created new** are recorded so undo can delete them.
+    /// - Files that will be **created new** (in backup, absent in project) are recorded.
+    /// - Files that will be **deleted** (in project, absent in backup) are copied to undo
+    ///   and deleted, so the project matches the backup snapshot exactly.
     ///
-    /// This ensures `undo_last_restore` is fully reversible in both cases.
+    /// This ensures `undo_last_restore` is fully reversible in all three cases.
     pub fn restore_backup(
         project_root: &Path,
         backup_number: usize,
@@ -390,6 +429,16 @@ impl BackupManager {
 
         let manifest = BackupManifest::load(&manifest_path)?;
 
+        // Build a set of backup file paths (normalised to forward-slash strings for
+        // cross-platform comparison).
+        let backup_file_set: HashSet<String> = manifest.files
+            .iter()
+            .map(|e| e.rel_path.to_string_lossy().replace('\\', "/"))
+            .collect();
+
+        // Collect current project files (same ignore rules as backup).
+        let current_file_set = Self::collect_current_file_set(project_root);
+
         // Classify each file in the manifest as overwrite or new
         let mut to_overwrite: Vec<PathBuf> = Vec::new();
         let mut to_create:    Vec<PathBuf> = Vec::new();
@@ -403,8 +452,18 @@ impl BackupManager {
             }
         }
 
+        // FIX: Compute files that exist in the project but NOT in the backup.
+        // These need to be deleted so the restore is a true point-in-time snapshot.
+        let mut to_delete: Vec<PathBuf> = Vec::new();
+        for current_rel in &current_file_set {
+            let normalised = current_rel.replace('\\', "/");
+            if !backup_file_set.contains(&normalised) {
+                to_delete.push(PathBuf::from(current_rel));
+            }
+        }
+
         // Interactive confirmation
-        if interactive && (!to_overwrite.is_empty() || !to_create.is_empty()) {
+        if interactive && (!to_overwrite.is_empty() || !to_create.is_empty() || !to_delete.is_empty()) {
             println!();
             if !to_overwrite.is_empty() {
                 println!("⚠  The following files will be OVERWRITTEN ({}):", to_overwrite.len());
@@ -422,6 +481,16 @@ impl BackupManager {
                 }
                 if to_create.len() > 10 {
                     println!("  ... and {} more", to_create.len() - 10);
+                }
+            }
+            // FIX: show the user which extra files will be deleted
+            if !to_delete.is_empty() {
+                println!("⚠  The following files will be DELETED (not in backup) ({}):", to_delete.len());
+                for p in to_delete.iter().take(10) {
+                    println!("  - {}", p.display());
+                }
+                if to_delete.len() > 10 {
+                    println!("  ... and {} more", to_delete.len() - 10);
                 }
             }
             println!();
@@ -445,6 +514,7 @@ impl BackupManager {
         }
         fs::create_dir_all(&undo_files_dir)?;
 
+        // Save originals of files that will be overwritten
         for rel_path in &to_overwrite {
             let src = project_root.join(rel_path);
             let dst = undo_files_dir.join(rel_path);
@@ -452,6 +522,26 @@ impl BackupManager {
                 fs::create_dir_all(parent)?;
             }
             fs::copy(&src, &dst)?;
+        }
+
+        // FIX: Also save originals of files that will be deleted so undo can restore them.
+        // We reuse the undo_files_dir with a sub-prefix to avoid collisions.
+        let undo_deleted_dir = undo_dir.join("deleted");
+        if !to_delete.is_empty() {
+            fs::create_dir_all(&undo_deleted_dir)?;
+            for rel_path in &to_delete {
+                let src = project_root.join(rel_path);
+                let dst = undo_deleted_dir.join(rel_path);
+                if let Some(parent) = dst.parent() {
+                    fs::create_dir_all(parent)?;
+                }
+                if let Err(e) = fs::copy(&src, &dst) {
+                    print_warning(&format!(
+                        "Could not snapshot {} for undo ({}), continuing",
+                        rel_path.display(), e
+                    ));
+                }
+            }
         }
 
         let undo_state = UndoState {
@@ -462,6 +552,8 @@ impl BackupManager {
             restored_from: backup_number,
             overwritten_files: to_overwrite.clone(),
             new_files_created: to_create.clone(),
+            // FIX: record deleted files so undo knows to restore them
+            deleted_files: to_delete.clone(),
         };
         fs::write(
             BackupIndex::get_undo_state_path(&project_hash),
@@ -472,6 +564,7 @@ impl BackupManager {
         let mut restored_count = 0usize;
         let mut failed_count   = 0usize;
 
+        // 1. Copy backup files into project (overwrite + create)
         for entry in &manifest.files {
             let src = backup_path.join(&entry.rel_path);
             let dst = project_root.join(&entry.rel_path);
@@ -492,14 +585,39 @@ impl BackupManager {
             }
         }
 
+        // FIX: 2. Delete files that exist in the project but not in the backup
+        let mut deleted_count = 0usize;
+        for rel_path in &to_delete {
+            let target = project_root.join(rel_path);
+            if target.exists() {
+                match fs::remove_file(&target) {
+                    Ok(_)  => deleted_count += 1,
+                    Err(e) => {
+                        print_warning(&format!(
+                            "Failed to delete extra file {}: {}",
+                            rel_path.display(), e
+                        ));
+                        failed_count += 1;
+                    }
+                }
+            }
+        }
+
+        let delete_msg = if deleted_count > 0 {
+            format!(", {} extra file(s) removed", deleted_count)
+        } else {
+            String::new()
+        };
+
         print_success(&format!(
-            "Restored backup #{} ({} files{})",
+            "Restored backup #{} ({} files{}{})",
             backup_number,
             restored_count,
+            delete_msg,
             if failed_count > 0 { format!(", {} failed", failed_count) } else { String::new() }
         ));
 
-        if !to_overwrite.is_empty() || !to_create.is_empty() {
+        if !to_overwrite.is_empty() || !to_create.is_empty() || !to_delete.is_empty() {
             print_info("Previous state saved. Use 'unpd' to undo this restore.");
         }
 
@@ -513,12 +631,14 @@ impl BackupManager {
     /// Undo the last restore:
     /// - Restores overwritten files from undo storage.
     /// - Deletes files that were created new by the restore.
+    /// - FIX: Restores files that were deleted by the restore (extra files).
     /// - Only cleans up undo storage after fully successful undo.
     pub fn undo_last_restore(project_root: &Path) -> Result<()> {
         let project_hash      = compute_project_hash(project_root);
         let undo_dir          = BackupIndex::get_undo_dir(&project_hash);
         let undo_metadata_path = BackupIndex::get_undo_state_path(&project_hash);
         let undo_files_dir    = BackupIndex::get_undo_files_dir(&project_hash);
+        let undo_deleted_dir  = undo_dir.join("deleted");
 
         if !undo_metadata_path.exists() {
             print_warning("No restore operation to undo.");
@@ -577,6 +697,35 @@ impl BackupManager {
             }
         }
 
+        // FIX: Restore files that the restore deleted (extra project files)
+        let mut re_restored_count = 0usize;
+        for rel_path in &undo_state.deleted_files {
+            let src = undo_deleted_dir.join(rel_path);
+            let dst = project_root.join(rel_path);
+
+            if src.exists() {
+                if let Some(parent) = dst.parent() {
+                    fs::create_dir_all(parent)?;
+                }
+                match fs::copy(&src, &dst) {
+                    Ok(_)  => re_restored_count += 1,
+                    Err(e) => {
+                        print_warning(&format!(
+                            "Could not re-restore deleted file {}: {}",
+                            rel_path.display(), e
+                        ));
+                        failed = true;
+                    }
+                }
+            } else {
+                print_warning(&format!(
+                    "Could not re-restore {} (snapshot missing from undo storage)",
+                    rel_path.display()
+                ));
+                failed = true;
+            }
+        }
+
         // Only clean up undo storage if everything succeeded
         if !failed {
             fs::remove_dir_all(&undo_dir)?;
@@ -589,8 +738,8 @@ impl BackupManager {
             .unwrap_or_else(|| "unknown date".to_string());
 
         print_success(&format!(
-            "Undid restore of backup #{} ({} restored, {} deleted)",
-            undo_state.restored_from, restored_count, deleted_count
+            "Undid restore of backup #{} ({} restored, {} deleted, {} re-restored)",
+            undo_state.restored_from, restored_count, deleted_count, re_restored_count
         ));
         print_info(&format!("Restore was performed on: {}", date));
 

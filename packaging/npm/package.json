@@ -1,0 +1,43 @@
+{
+  "name": "ntc",
+  "version": "1.9.0",
+  "description": "Navigate, Tree, Cat - A combined directory tree viewer and file concatenator",
+  "license": "MIT",
+  "homepage": "https://github.com/NuengCoder/ntc",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/NuengCoder/ntc.git"
+  },
+  "bugs": {
+    "url": "https://github.com/NuengCoder/ntc/issues"
+  },
+  "author": "NuengCoder",
+  "bin": {
+    "ntc": "bin/ntc.js"
+  },
+  "scripts": {
+    "postinstall": "node scripts/install.js"
+  },
+  "files": [
+    "bin",
+    "scripts"
+  ],
+  "keywords": [
+    "navigate",
+    "tree",
+    "cat",
+    "file",
+    "directory",
+    "cli",
+    "terminal",
+    "shell"
+  ],
+  "engines": {
+    "node": ">=14"
+  },
+  "os": [
+    "darwin",
+    "win32",
+    "linux"
+  ]
+}

@@ -42,6 +42,10 @@ pub struct Config {
     #[serde(default)]
     pub file_watcher_enabled: bool,
 
+    /// Whether color output is enabled
+    #[serde(default = "default_color_enabled")]
+    pub color_enabled: bool,
+
     #[serde(default)]
     pub teleports: HashMap<String, PathBuf>,
 
@@ -76,6 +80,7 @@ fn default_output_path() -> PathBuf {
 fn default_max_depth() -> usize { 2 }
 fn default_num_threads() -> usize { 4 }
 fn default_history_enabled() -> bool { false }
+fn default_color_enabled() -> bool { true }
 fn default_ignored_dirs() -> HashSet<String> {
     let mut s = HashSet::new();
     s.insert("target".to_string());
@@ -103,6 +108,7 @@ impl Config {
             history_path: None,
             history_enabled: default_history_enabled(),
             file_watcher_enabled: false,
+            color_enabled: default_color_enabled(),
             teleports: HashMap::new(),
             run_aliases: HashMap::new(),
         }
@@ -128,6 +134,9 @@ impl Config {
         } else {
             Self::new()
         };
+
+        // Apply color override at startup
+        colored::control::set_override(cfg.color_enabled);
 
         // Merge .ntconfig from current directory (only ignore/care and run_aliases)
         if let Ok(cwd) = std::env::current_dir() {
@@ -374,6 +383,16 @@ impl Config {
         let mut cfg = Self::global().write().unwrap();
         cfg.file_watcher_enabled = enabled;
         cfg.save();
+    }
+
+    pub fn global_get_color_enabled() -> bool {
+        Self::global().read().unwrap().color_enabled
+    }
+    pub fn global_set_color_enabled(enabled: bool) {
+        let mut cfg = Self::global().write().unwrap();
+        cfg.color_enabled = enabled;
+        cfg.save();
+        colored::control::set_override(enabled);
     }
 
     // Parse helpers

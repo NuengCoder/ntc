@@ -1,22 +1,26 @@
 cd path/to/ntc
 cargo build --release
-tar -czvf ntc-1.8.0-linux-x86_64.tar.gz -C target/release ntc
-tar -xzvf ntc-1.8.0-linux-x86_64.tar.gz
-sudo mv ntc /usr/local/bin/
 
-curl -L -O https://github.com/NuengCoder/ntc/releases/download/1.8.0/ntc_1.8.0-1_amd64.deb
-curl -L -O https://github.com/NuengCoder/ntc/releases/download/1.8.0/ntc-1.8.0-x86.tar.gz
-curl -L -O https://github.com/NuengCoder/ntc/releases/download/v1.8.0/ntc-installer-1.8.0.exe
+curl -L -k -O https://github.com/NuengCoder/ntc/releases/download/1.9.0/ntc_1.9.0-1_amd64.deb
+curl -L -k -O https://github.com/NuengCoder/ntc/releases/download/1.9.0/ntc-1.9.0-linux-x86_64.tar.gz
+curl -L -k -O https://github.com/NuengCoder/ntc/releases/download/v1.9.0/ntc-installer-1.9.0.exe
+curl -L -k -O https://github.com/NuengCoder/ntc/releases/download/v1.9.0/ntc-1.9.0-aarch64-linux-android.tar.gz
+
+tar -czvf ntc-1.9.0-linux-x86_64.tar.gz -C target/release ntc
+tar -xzvf ntc-1.9.0-linux-x86_64.tar.gz
+sudo mv ntc /usr/local/bin/
+sudo mv ntc /usr/bin/
+
 cargo deb
-sudo dpkg -i target/debian/ntc_1.8.0-1_amd64.deb
+sudo dpkg -i ntc_1.9.0-1_amd64.deb
 
 git add .
-git commit -m "version 1.8.0"
+git commit -m "version 1.9.0"
 git push
 
 ## Android Push
 cargo ndk --target aarch64-linux-android build --release
-tar -czvf ntc-1.8.0-aarch64-linux-android.tar.gz -C target/aarch64-linux-android/release ntc
+tar -czvf ntc-1.9.0-aarch64-linux-android.tar.gz -C target/aarch64-linux-android/release ntc
 # 1. Push to /sdcard/ (world-accessible)
 adb push target\aarch64-linux-android\release\ntc /sdcard/
 
@@ -28,6 +32,6 @@ chmod +x $PREFIX/bin/ntc
 ntc --version
 ntc
 
-git tag -d v1.8.0
-git push origin --delete v1.8.0
+git tag -d v1.9.0
+git push origin --delete v1.9.0
 

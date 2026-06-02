@@ -1,6 +1,6 @@
 // src/backup_manifest.rs
 // Production-grade manifest handling for ntc backup system
-// Version: v1.8.1
+// Version: v1.8.2
 // Cross-platform: Windows, Linux, macOS
 
 use serde::{Serialize, Deserialize};
@@ -114,7 +114,7 @@ pub struct BackupSummary {
     pub file_count: usize,
 }
 
-/// State saved before a restore (for undo functionality)
+/// State saved before a restore (for undo functionality).
 /// Stores actual file contents in a separate directory alongside metadata.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct UndoState {
@@ -128,6 +128,12 @@ pub struct UndoState {
     /// Files that were created brand-new by the restore
     /// (no original to save — these should be deleted on undo)
     pub new_files_created: Vec<PathBuf>,
+    /// FIX: Files that existed in the project but NOT in the backup and were
+    /// deleted by the restore to make it a true point-in-time snapshot.
+    /// Originals are saved in the undo/deleted/ directory so they can be
+    /// re-created on undo.
+    #[serde(default)]
+    pub deleted_files: Vec<PathBuf>,
 }
 
 // ============================================================================
@@ -269,7 +275,7 @@ impl BackupIndex {
         Self::get_undo_dir(project_hash).join("state.json")
     }
 
-    /// Undo files directory (actual pre-restore file contents)
+    /// Undo files directory (actual pre-restore file contents for overwritten files)
     pub fn get_undo_files_dir(project_hash: &str) -> PathBuf {
         Self::get_undo_dir(project_hash).join("files")
     }

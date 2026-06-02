@@ -33,7 +33,7 @@ impl TeleportManager {
     }
     
     pub fn show_current_tree(nav: &Navigator) {
-        show_tree(nav, Some(1), false, false, false);
+        show_tree(nav, Some(1), false, false, false, false);
     }
 
     /// Add or update a teleport savepoint (always global)

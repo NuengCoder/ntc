@@ -1,34 +1,38 @@
 # NTC - Navigate, Tree, Cat
-## Version 1.8.0 - Complete User Guide
+## Version 2.0.0 - Complete User Guide
 
-NTC is a command-line tool that combines directory navigation, tree viewing, file concatenation, backup/restore, and fuzzy search. It works on Windows, Linux/WSL, macOS, and Termux (Android).
+NTC is a command-line tool that combines directory navigation, tree viewing, file concatenation, backup/restore, fuzzy search, built-in text editor, and syntax highlighting. It works on Windows, Linux/WSL, macOS, and Termux (Android).
 
 ## INSTALLATION
 
 ### Windows
-- Download ntc.exe from GitHub Releases
+- Download `ntc.exe` from GitHub Releases
 - Run the Inno Setup installer
-- Or manually place ntc.exe in a folder in your PATH
+- Or manually place `ntc.exe` in a folder in your PATH
+- Or install via winget: `winget install NuengCoder.ntc`
 
 ### Linux (Ubuntu/Debian)
-- Download ntc_1.8.0-1_amd64.deb
-- Run: sudo dpkg -i ntc_1.8.0-1_amd64.deb
+- Download `ntc_2.0.0-1_amd64.deb`
+- Run: `sudo dpkg -i ntc_2.0.0-1_amd64.deb`
 
 ### Linux (Other distributions)
-- Download ntc-1.8.0-x86_64-linux.tar.gz
-- Extract: tar -xzvf ntc-1.8.0-x86_64-linux.tar.gz
-- Copy to PATH: sudo mv ntc /usr/local/bin/
+- Download `ntc-v2.0.0-linux-x86_64.tar.gz`
+- Extract: `tar -xzvf ntc-v2.0.0-linux-x86_64.tar.gz`
+- Copy to PATH: `sudo mv ntc /usr/local/bin/`
 
 ### macOS (Intel & Apple Silicon)
-- Download ntc-1.8.0-macos-universal.tar.gz
-- Extract: tar -xzvf ntc-1.8.0-macos-universal.tar.gz
-- Copy to PATH: sudo mv ntc /usr/local/bin/
+- Download `ntc-v2.0.0-macos-universal.tar.gz`
+- Extract: `tar -xzvf ntc-v2.0.0-macos-universal.tar.gz`
+- Copy to PATH: `sudo mv ntc /usr/local/bin/`
 
 ### Termux (Android)
-- Download ntc-1.8.0-android-aarch64.tar.gz
-- Extract: tar -xzvf ntc-1.8.0-android-aarch64.tar.gz
-- Copy: cp ntc $PREFIX/bin/
-- chmod +x $PREFIX/bin/ntc
+- Download `ntc-v2.0.0-aarch64-linux-android.tar.gz`
+- Extract: `tar -xzvf ntc-v2.0.0-aarch64-linux-android.tar.gz`
+- Copy: `cp ntc $PREFIX/bin/`
+- `chmod +x $PREFIX/bin/ntc`
+
+### npm (cross-platform)
+- `npm install -g @nuengcoder/ntc`
 
 ## TWO MODES OF OPERATION
 
@@ -36,6 +40,9 @@ NTC is a command-line tool that combines directory navigation, tree viewing, fil
 Run a single command and exit:
   ntc --version
   ntc -i . -o report.txt
+  ntc -i . -f pdf
+  ntc -i . -f docx -o report.docx
+  ntc -i . -f xlsx
   ntc --help
 
 ### Mode 2: Interactive Shell
@@ -46,9 +53,9 @@ Launch the interactive shell and run multiple commands:
 ## BASIC NAVIGATION (Interactive Mode Only)
 
   go <path>          - Change to a directory
-  go to <tp_name>    - Teleport to a saved teleport point (NEW in v1.8.0)
+  go to <tp_name>    - Teleport to a saved teleport point
   cd <path>          - Same as go
-  cd to <tp_name>    - Teleport to a saved teleport point (NEW in v1.8.0)
+  cd to <tp_name>    - Teleport to a saved teleport point
   back               - Go to parent directory
   back 2             - Go up 2 levels
   godrive            - List and select Windows drives (Windows only)
@@ -58,14 +65,14 @@ Launch the interactive shell and run multiple commands:
 ## VIEWING DIRECTORIES
 
   view               - Show directory tree (uses configured depth)
-  view -s            - Show tree with folder sizes (NEW in v1.8.0)
+  view -s            - Show tree with folder sizes
   view --size        - Same as -s
-  view -d <n>        - Show tree with custom depth (NEW in v1.8.0)
+  view -d <n>        - Show tree with custom depth
   view --depth <n>   - Same as -d
-  view -s -d <n>     - Show tree with sizes and custom depth (NEW in v1.8.0)
+  view -s -d <n>     - Show tree with sizes and custom depth
   size               - Show total size of current directory
 
-## BACKUP & RESTORE (NEW in v1.8.0)
+## BACKUP & RESTORE
 
 ### Create backups:
   bkup               - Create a backup of current project (skips files >50MB, respects ignore/care)
@@ -82,13 +89,17 @@ Launch the interactive shell and run multiple commands:
   unpd --cls         - Clear undo history (asks confirmation)
   unpd --force       - Clear undo history (no confirmation)
 
+### Backup diff:
+  diff               - Interactive backup diff menu
+  diff <number>      - Show diff between current state and backup #N
+
 ### Backup storage:
   Backups are stored in: ~/.ntc/backups/<project_hash>/bkup_<n>/
   Each backup includes an ignore.txt file listing skipped files and reasons.
 
-## FILE & DIRECTORY SEARCH (NEW in v1.8.0)
+## FILE & DIRECTORY SEARCH
 
-### Search files (exact → partial → fuzzy):
+### Search files (exact -> partial -> fuzzy):
   fs <pattern>               - Search files using configured depth
   fs <pattern> -d <n>        - Search files with custom depth
   fs main.c                  # Exact match
@@ -102,19 +113,43 @@ Launch the interactive shell and run multiple commands:
   ds srcd                    # Fuzzy match: suggests src (94% match)
   ds test                    # Partial match: finds test_utils/
 
+### Combined search (files + directories):
+  locate <pattern>           - Search both files and directories
+  locate <pattern> -d <n>    - Combined search with custom depth
+
+### Search + navigate (fgo):
+  fgo <pattern>              - Search files, select one, navigate to its parent directory
+  fgo <pattern> -d <n>       - Search with custom depth
+
+### Search + display (fsc):
+  fsc <pattern>              - Search files, select one, display its contents
+  fsc <pattern> -d <n>       - Search with custom depth
+
 ### How search works:
   1. Exact matches (full filename equality, case-insensitive)
   2. Partial matches (filename contains the pattern)
-  3. Fuzzy matches (Jaro-Winkler similarity ≥75% for files, ≥72% for directories)
+  3. Fuzzy matches (Jaro-Winkler similarity >=75% for files, >=72% for directories)
   4. Shows top 3 fuzzy suggestions when no exact or partial match found
 
 ## GENERATING REPORTS
+
+### Supported formats:
+  - TXT     Plain text directory tree
+  - JSON    Structured data with metadata and statistics
+  - MD      Markdown with formatted tables and sections
+  - HTML    Web page with modern styling
+  - PDF     Portable Document Format
+  - DOCX    Microsoft Word format
+  - XLSX    Microsoft Excel format
 
 ### Command Line Mode:
   ntc -i <directory>              - Generate TXT report
   ntc -i <directory> -f json      - Generate JSON report
   ntc -i <directory> -f md        - Generate Markdown report
   ntc -i <directory> -f html      - Generate HTML report
+  ntc -i <directory> -f pdf       - Generate PDF report
+  ntc -i <directory> -f docx      - Generate DOCX report
+  ntc -i <directory> -f xlsx      - Generate XLSX report
   ntc -i <directory> -o out.txt   - Save to specific file
   ntc -i <directory> --cp         - Copy TXT report to clipboard
   ntc -i <directory> -f json --cp - Copy JSON report to clipboard
@@ -128,6 +163,80 @@ Launch the interactive shell and run multiple commands:
   md                 - Generate Markdown report
   md --cp            - Copy Markdown to clipboard
   html               - Generate HTML report
+  pdf                - Generate PDF report
+  docx               - Generate DOCX report
+  xlsx               - Generate XLSX report
+
+## BUILT-IN TEXT EDITOR (ntcEditor)
+
+ntc includes a full-featured built-in text editor for editing files directly from the shell.
+
+### Opening the editor:
+  ne                           - Open scratch buffer in current directory
+  ne <file>                    - Open file for editing
+  ne <path>/<file>             - Open file at specific path
+  ne .<file>                   - Open hidden file (e.g., ne .gitignore)
+  ne <dir>                     - Open scratch buffer inside directory
+  ne --init <file>             - Create file from template (supports .rs, .py, .c, etc.)
+  ntceditor <file>             - Same as ne
+
+### Editor features:
+  - Multiple open files (buffers) with sidebar navigation
+  - Undo/redo with unlimited history
+  - Mouse support (click to position cursor, scroll)
+  - Line numbers and gutter
+  - Syntax highlighting for multiple languages
+  - Clipboard operations (cut, copy, paste)
+  - Word wrap and horizontal scrolling
+  - Auto-indentation and bracket pairing
+  - Multiple cursors and selection modes
+  - Search within file
+  - Configurable tab width and color theme
+
+### Editor key bindings:
+
+#### Navigation:
+  Arrow keys / Page Up/Down    - Move cursor / scroll
+  Home / End                   - Start / end of line
+  Ctrl+Home / Ctrl+End         - Start / end of file
+  Ctrl+Left / Ctrl+Right       - Jump words
+
+#### Editing:
+  Backspace / Delete            - Delete characters
+  Enter                         - New line
+  Tab                           - Indent
+  Shift+Tab                     - Outdent
+  Ctrl+S                        - Save file
+  Ctrl+Z                        - Undo
+  Ctrl+Y / Ctrl+Shift+Z         - Redo
+
+#### Selection:
+  Shift+Arrow                   - Select text
+  Ctrl+A                        - Select all
+  Ctrl+C                        - Copy selection
+  Ctrl+X                        - Cut selection
+  Ctrl+V                        - Paste
+
+#### Search:
+  Ctrl+F                        - Find in file
+  Ctrl+G                        - Find next
+  Ctrl+Shift+G                  - Find previous
+
+#### File operations:
+  Ctrl+O                        - Open file
+  Ctrl+N                        - New buffer
+  Ctrl+W                        - Close buffer
+  Ctrl+Tab                      - Switch to next buffer
+  Ctrl+Shift+Tab                - Switch to previous buffer
+
+#### Editor commands:
+  :q                            - Quit editor
+  :w                            - Save file
+  :wq                           - Save and quit
+  :q!                           - Quit without saving
+
+### Fallback behavior:
+  opencg                        - Opens config.toml in external editor, falls back to ntcEditor
 
 ## VIEWING FILES
 
@@ -145,9 +254,9 @@ Launch the interactive shell and run multiple commands:
 ### Jump to saved locations:
   tp jump <name>                   - Teleport by name
   tp jump <number>                 - Teleport by number (from list)
-  tp to <name>                     - Same as jump (NEW in v1.8.0)
-  go to <name>                     - Teleport via go command (NEW in v1.8.0)
-  cd to <name>                     - Teleport via cd command (NEW in v1.8.0)
+  tp to <name>                     - Same as jump
+  go to <name>                     - Teleport via go command
+  cd to <name>                     - Teleport via cd command
   @<name>                          - Quick teleport shortcut
 
 ### Manage savepoints:
@@ -162,7 +271,7 @@ Launch the interactive shell and run multiple commands:
 ### Create aliases:
   ral add <name> "<command>"       - Create new alias
   ral add <name>(x) "<cmd $x>"     - Create parameterised alias (single arg)
-  ral add <name>(x,y) "<cmd $x $y>" - Create parameterised alias (multiple args) (NEW in v1.8.0)
+  ral add <name>(x,y) "<cmd $x $y>" - Create parameterised alias (multiple args)
   
   Example: ral add ll "ls -la"
   Example: ral add py "python test.py"
@@ -195,6 +304,7 @@ Launch the interactive shell and run multiple commands:
   setO                             - Show output directory
   setD                             - Show max depth
   setL                             - Show line number setting
+  setC                             - Show color setting
   setT                             - Show thread count
   setH                             - Show history setting
 
@@ -202,6 +312,7 @@ Launch the interactive shell and run multiple commands:
   setO <path>                      - Set output directory for reports
   setD <number>                    - Set max tree depth (1-20)
   setL ON|OFF                      - Enable/disable line numbers
+  setC ON|OFF                      - Enable/disable color output
   setT <number>                    - Set thread count (1-64)
   setH ON|OFF                      - Enable/disable command history
   setH <path>                      - Set custom history file path
@@ -209,7 +320,7 @@ Launch the interactive shell and run multiple commands:
   watch ON|OFF                     - Enable/disable file watcher
 
 ### Config file management:
-  opencg                           - Open config.toml in default editor
+  opencg                           - Open config.toml (external editor, fallback to built-in)
   resetcg                          - Reset config to defaults (with backup)
   restorecg                        - Restore config from backup
   gencg                            - Create ntconfig.toml template
@@ -234,13 +345,13 @@ Place an `ntconfig.toml` file in any directory to override settings for that pro
 
 ### What stays global:
   - Teleport savepoints
-  - Output path, max depth, line numbers
+  - Output path, max depth, line numbers, color setting
   - History settings, file watcher
   - Thread count
 
 ### How it works:
   1. Create ntconfig.toml: `gencg` or `gencg --all`
-  2. Edit the file with your project settings
+  2. Edit the file with your project settings (or `ne ntconfig.toml`)
   3. Navigate into the directory - settings auto-load
   4. Leave the directory - global settings restore automatically
 
@@ -295,6 +406,24 @@ Chain multiple commands with &&:
   help                             - Show interactive help
   exit or quit                     - Exit ntc
 
+## SYNTAX HIGHLIGHTING
+
+The interactive shell and built-in editor support syntax highlighting for:
+  - Rust (.rs)
+  - Python (.py)
+  - C / C++ (.c, .cpp, .h, .hpp)
+  - JavaScript / TypeScript (.js, .ts, .jsx, .tsx)
+  - HTML / CSS (.html, .css)
+  - JSON / TOML / YAML (.json, .toml, .yaml, .yml)
+  - Markdown (.md)
+  - Shell scripts (.sh, .bash)
+  - Java (.java)
+  - Go (.go)
+  - Ruby (.rb)
+  - PHP (.php)
+  - SQL (.sql)
+  - And many more
+
 ## COMPLETE EXAMPLES
 
 ### Example 1: Explore a project with backup
@@ -311,6 +440,7 @@ Chain multiple commands with &&:
   bkup                             # Create backup #1
   # Make some changes...
   bkup                             # Create backup #2
+  diff 1                           # See what changed since backup #1
   pldw                             # Show interactive restore menu
   pldw 1                           # Restore backup #1
   unpd                             # Undo the restore (go back to backup #2)
@@ -321,6 +451,7 @@ Chain multiple commands with &&:
   fs mian.c                        # Fuzzy match (typo)
   fs test -d 5                     # Search 5 levels deep
   ds src                           # Search directories
+  locate config                    # Combined file + directory search
 
 ### Example 4: Use teleport points with go/cd
   ntc
@@ -334,36 +465,36 @@ Chain multiple commands with &&:
 ### Example 5: Create run aliases with multiple args
   ntc
   ral add runc(x,y) "gcc -o $y $x.c && ./$y"
-  runc(main,program)               # Compiles main.c → program.exe and runs it
+  runc(main,program)               # Compiles main.c -> program.exe and runs it
 
-### Example 6: Project-specific configuration
+### Example 6: Search + navigate / search + display
+  ntc
+  fgo main.rs                      # Search, pick a file, navigate to its folder
+  fsc config.rs                    # Search, pick a file, view its contents
+
+### Example 7: Edit files with built-in editor
+  ntc
+  ne README.md                     # Open README in ntcEditor
+  ne --init main.rs                # Create new Rust file from template
+  ne .gitignore                    # Edit hidden file
+
+### Example 8: Project-specific configuration
   cd myproject
   gencg --all                      # Export current settings to ntconfig.toml
+  ne ntconfig.toml                 # Edit local config in ntcEditor
   ignore temp                      # Now saves to local config
   ral add deploy "./deploy.sh"     # Project-specific alias
   cd ..                            # Back to global settings
 
-### Example 7: Reset configuration
+### Example 9: Multi-format reports
+  ntc
+  pdf                              # Generate PDF report
+  docx                             # Generate DOCX report
+  xlsx                             # Generate XLSX report
+
+### Example 10: Reset configuration
   resetcg                          # Reset with backup option
   restorecg                        # Restore from backup if needed
-
-## OUTPUT FORMATS EXPLAINED
-
-### TXT Report
-  Plain text directory tree
-  Best for: Quick viewing, text files
-
-### JSON Report
-  Structured data with metadata and statistics
-  Best for: Scripts, programmatic access, data processing
-
-### Markdown Report
-  Formatted with tables and sections
-  Best for: Documentation, README files, GitHub
-
-### HTML Report
-  Web page with styling
-  Best for: Sharing, web viewing, printing
 
 ## REPORT STATISTICS INCLUDED
   - Total files and directories
@@ -376,19 +507,26 @@ Chain multiple commands with &&:
 
 1. Use `bkup` before making major changes to your project
 2. Use `pldw` to restore and `unpd` to revert if you made a mistake
-3. Use `fs` with fuzzy matching for quick file finding (even with typos!)
-4. Use `go to <tp_name>` for instant navigation to frequently used directories
-5. Use `view -s -d <n>` to quickly see folder sizes at specific depth
-6. Use teleport points for frequently accessed directories
-7. Create run aliases for long or complex commands
-8. Set line numbers ON when reviewing code files
-9. Use --cp to quickly share directory structures
-10. Ignore build directories (target, node_modules) for cleaner trees
-11. Use gosc for rapid directory traversal
-12. Chain commands with && for automation
-13. Export reports in JSON for integration with other tools
-14. Use ntconfig.toml for project-specific settings
-15. Back up your config with resetcg before major changes
+3. Use `diff 1` to see what changed since your last backup
+4. Use `fs` with fuzzy matching for quick file finding (even with typos!)
+5. Use `fgo` to search for a file and jump straight to its directory
+6. Use `fsc` to search for a file and view its contents immediately
+7. Use `locate` for combined file + directory search
+8. Use `ne` (ntcEditor) for quick file edits without leaving the shell
+9. Use `ne --init <file>` to create new files from templates
+10. Use `go to <tp_name>` for instant navigation to frequently used directories
+11. Use `view -s -d <n>` to quickly see folder sizes at specific depth
+12. Use teleport points for frequently accessed directories
+13. Create run aliases for long or complex commands
+14. Set line numbers ON when reviewing code files
+15. Use --cp to quickly share directory structures
+16. Ignore build directories (target, node_modules) for cleaner trees
+17. Use gosc for rapid directory traversal
+18. Chain commands with && for automation
+19. Export reports in JSON for integration with other tools
+20. Use PDF/DOCX/XLSX for professional report distribution
+21. Use ntconfig.toml for project-specific settings
+22. Back up your config with resetcg before major changes
 
 ## TROUBLESHOOTING
 
@@ -422,6 +560,16 @@ Chain multiple commands with &&:
   - `unpd` only works after a `pldw` restore
   - Undo history is cleared after successful undo
 
+### Editor not opening:
+  - Ensure the file path is valid and writable
+  - Use `ne` without arguments to test editor startup
+  - ntcEditor will fall back automatically if no external editor is found
+
+### Report generation failed (PDF/DOCX/XLSX):
+  - Ensure output directory exists and is writable
+  - Check available disk space
+  - These formats may require additional memory for large directories
+
 ## QUICK REFERENCE CARD
 
 | Action | Command |
@@ -434,11 +582,22 @@ Chain multiple commands with &&:
 | Create backup | bkup |
 | Restore backup | pldw |
 | Undo restore | unpd |
+| Backup diff | diff |
 | Search files | fs pattern |
 | Search directories | ds pattern |
+| Combined search | locate pattern |
+| Search + navigate | fgo pattern |
+| Search + display | fsc pattern |
+| Open built-in editor | ne file |
+| Create file from template | ne --init file.rs |
 | Text report | txt |
 | Copy tree to clipboard | txt --cp |
 | JSON report | json |
+| Markdown report | md |
+| HTML report | html |
+| PDF report | pdf |
+| DOCX report | docx |
+| XLSX report | xlsx |
 | Save teleport | tp add name |
 | Jump to teleport | @name |
 | Create alias | ral add name "cmd" |
@@ -446,13 +605,14 @@ Chain multiple commands with &&:
 | Run alias | name |
 | Show config | showcg |
 | Open config file | opencg |
+| Toggle color | setc ON/OFF |
 | Reset config | resetcg |
 | Create local config | gencg |
 | Show locations | where |
 | Exit | exit |
 
 ## SUPPORTED FILE EXTENSIONS (Default)
-  txt, md, rs, py, c, cpp, js, html, css, json, toml, yaml, xml, sh, java, go, rb, php, sql, and many more
+  txt, md, rs, py, c, cpp, js, html, css, json, toml, yaml, xml, sh, java, go, rb, php, sql, ts, tsx, jsx, swift, kt, scala, dart, r, lua, hs, ex, exs, zig, nim, and many more
 
 ## PLATFORM DIFFERENCES
 
@@ -478,16 +638,20 @@ Chain multiple commands with &&:
 
 ### Cross-platform (works everywhere):
   - All navigation commands
-  - Backup & restore (bkup, pldw, unpd)
-  - File & directory search (fs, ds)
-  - All report formats
+  - Backup & restore (bkup, pldw, unpd, diff)
+  - File & directory search (fs, ds, locate, fgo, fsc)
+  - All report formats (TXT, JSON, MD, HTML, PDF, DOCX, XLSX)
   - Teleport savepoints (including go to / cd to)
   - Run aliases (with && support, multiple args)
   - File viewing
   - Ignore/care system
   - Local project configs
+  - Built-in text editor (ntcEditor)
+  - Syntax highlighting
 
 ## VERSION HISTORY
+  v2.0.0 - Built-in text editor (ntcEditor) with full keyboard/mouse support, syntax highlighting, new report formats (PDF, DOCX, XLSX), backup diff command, search + navigate (fgo), search + display (fsc), combined locate search, color toggle (setc), codebase refactored into modules, improved cross-platform support
+  v1.9.0 - Internal refactoring and library export support
   v1.8.0 - Backup & restore system (bkup, pldw, unpd), fuzzy file/directory search (fs, ds), view flags (-s, -d), go to / cd to teleport, RAL multiple arguments, 50MB file limit, ignore.txt generation, atomic backups, full undo support, Termux compatibility
   v1.7.0 - Local project configs (ntconfig.toml), config management commands (opencg, resetcg, restorecg, gencg), improved alias expansion with &&, recursive alias support
   v1.6.0 - Added JSON/MD reports, clipboard copy, Linux support

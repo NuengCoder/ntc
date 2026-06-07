@@ -1,26 +1,30 @@
-## Quick Demo (v1.8.0)
+## Quick Demo (v2.0.0)
 
 ```bash
-# Backup your project
+# Built-in text editor (ntcEditor)
 ntc
-bkup                              # Create backup
+ne myfile.txt                     # Open file in built-in editor
+ne --init main.rs                 # Create file with template
+
+# Search and navigate
+fgo main.c                        # Search files, pick one, navigate to its parent
+fsc main.c                        # Search files, pick one, display its contents
+locate test                       # Combined file + directory search
+
+# Backup diff
+bkup
 # ... make changes ...
-pldw 1                            # Restore from backup
-unpd                              # Undo the restore
+diff 1                            # Show diff vs backup #1
 
-# Search for files
-fs main.c                         # Exact match
-fs mian.c                         # Fuzzy match (suggests main.c)
-fs test -d 5                      # Search 5 levels deep
-ds src                            # Search directories
+# New report formats
+pdf                               # Generate PDF report
+docx                              # Generate DOCX report
+xlsx                              # Generate XLSX report
 
-# Teleport with go/cd
-tp add work ~/projects/myapp
-go to work                        # Jump to savepoint
-
-# View tree with custom depth and sizes
-view -s -d 3
+# Color toggle
+setc OFF                          # Disable color output
 
 # Multi-argument alias
 ral add runc(x,y) "gcc -o $y $x.c && ./$y"
 runc(main,program)
+```

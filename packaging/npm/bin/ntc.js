@@ -7,7 +7,7 @@ const binaryName = process.platform === 'win32' ? 'ntc.exe' : 'ntc';
 const binaryPath = path.join(__dirname, '..', binaryName);
 
 if (!fs.existsSync(binaryPath)) {
-  console.error('ntc binary not found. Try reinstalling: npm install -g ntc');
+  console.error('ntc binary not found. Try reinstalling: npm install -g @nuengcoder/ntc');
   process.exit(1);
 }
 

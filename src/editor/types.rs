@@ -1,0 +1,337 @@
+use std::io::{BufRead, BufReader};
+use std::path::Path;
+
+use anyhow::{Context, Result};
+
+use crate::editor::editor_config::EditorConfig;
+use crate::syntax::SyntaxHighlighter;
+
+// ── constants ────────────────────────────────────────────────────────────────
+
+/// Maximum undo history depth.
+pub(crate) const MAX_UNDO: usize = 200;
+
+/// Width of the left sidebar (file explorer) in characters.
+pub(crate) const SIDEBAR_WIDTH: usize = 30;
+
+/// Maximum number of recently opened files to keep in the buffer stack.
+pub(crate) const MAX_BUFFERS: usize = 16;
+
+// ── editor mode ──────────────────────────────────────────────────────────────
+
+#[derive(Clone, PartialEq, Debug)]
+pub(crate) enum Mode {
+    Normal,
+    Insert,
+    Search,
+    Visual,
+    Command,
+    Help,
+    FileFinder,
+    Gosc,
+}
+
+// ── snapshot for undo/redo ────────────────────────────────────────────────────
+
+#[derive(Clone)]
+pub(crate) struct Snapshot {
+    pub(crate) lines: Vec<String>,
+    pub(crate) cursor_y: usize,
+    pub(crate) cursor_byte: usize,
+    pub(crate) extra_cursors: Vec<CursorPos>,
+}
+
+// ── cursor ───────────────────────────────────────────────────────────────────
+
+#[derive(Clone, Copy, Debug)]
+pub(crate) struct CursorPos {
+    pub(crate) y: usize,
+    pub(crate) byte: usize,
+    pub(crate) anchor: Option<(usize, usize)>,
+}
+
+// ── file tree node ──────────────────────────────────────────────────────────
+
+#[derive(Clone)]
+pub(crate) struct FileNode {
+    pub(crate) name: String,
+    pub(crate) path: std::path::PathBuf,
+    pub(crate) is_dir: bool,
+    pub(crate) expanded: bool,
+    pub(crate) depth: usize,
+}
+
+/// Left-side file explorer sidebar state.
+pub(crate) struct Sidebar {
+    pub(crate) open: bool,
+    pub(crate) scroll: usize,
+    pub(crate) selected: usize,
+    pub(crate) nodes: Vec<FileNode>,
+    pub(crate) root: std::path::PathBuf,
+}
+
+impl Sidebar {
+    pub(crate) fn new() -> Self {
+        let root = std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from("."));
+        let mut s = Self {
+            open: false,
+            scroll: 0,
+            selected: 0,
+            nodes: Vec::new(),
+            root,
+        };
+        s.rebuild_tree();
+        s
+    }
+
+    pub(crate) fn rebuild_tree(&mut self) {
+        self.root = std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from("."));
+        self.nodes.clear();
+        // ".." entry for parent directory
+        if let Some(parent) = self.root.parent() {
+            self.nodes.push(FileNode {
+                name: "..".into(),
+                path: parent.to_path_buf(),
+                is_dir: true,
+                expanded: false,
+                depth: 0,
+            });
+        }
+        Self::add_children(&mut self.nodes, &self.root, 0, false);
+        self.selected = self.selected.min(self.nodes.len().saturating_sub(1));
+    }
+
+    fn add_children(out: &mut Vec<FileNode>, dir: &std::path::Path, depth: usize, expanded: bool) {
+        let entries = match std::fs::read_dir(dir) {
+            Ok(e) => e,
+            Err(_) => return,
+        };
+        let mut dirs: Vec<FileNode> = Vec::new();
+        let mut files: Vec<FileNode> = Vec::new();
+        for entry in entries {
+            let entry = match entry {
+                Ok(e) => e,
+                Err(_) => continue,
+            };
+            if let Ok(ft) = entry.file_type() {
+                let name = entry.file_name().to_string_lossy().to_string();
+                if name.starts_with('.') {
+                    continue;
+                }
+                let path = entry.path();
+                if ft.is_dir() {
+                    dirs.push(FileNode {
+                        name,
+                        path,
+                        is_dir: true,
+                        expanded: false,
+                        depth,
+                    });
+                } else {
+                    files.push(FileNode {
+                        name,
+                        path,
+                        is_dir: false,
+                        expanded: false,
+                        depth,
+                    });
+                }
+            }
+        }
+        dirs.sort_by_key(|a| a.name.to_lowercase());
+        files.sort_by_key(|a| a.name.to_lowercase());
+        if expanded {
+            out.extend(dirs);
+            out.extend(files);
+        } else {
+            // Show dirs (collapsed) and files at this level
+            for d in dirs {
+                out.push(FileNode {
+                    expanded: false,
+                    ..d
+                });
+            }
+            out.extend(files);
+        }
+    }
+
+    pub(crate) fn expand(&mut self, idx: usize) {
+        if idx >= self.nodes.len() || !self.nodes[idx].is_dir || self.nodes[idx].expanded {
+            return;
+        }
+        self.nodes[idx].expanded = true;
+        let node = self.nodes[idx].clone();
+        let mut children = Vec::new();
+        Self::add_children(&mut children, &node.path, node.depth + 1, true);
+        let insert_at = idx + 1;
+        self.nodes.splice(insert_at..insert_at, children);
+    }
+
+    pub(crate) fn collapse(&mut self, idx: usize) {
+        if idx >= self.nodes.len() || !self.nodes[idx].is_dir || !self.nodes[idx].expanded {
+            return;
+        }
+        self.nodes[idx].expanded = false;
+        let depth = self.nodes[idx].depth;
+        let mut remove_end = idx + 1;
+        while remove_end < self.nodes.len() && self.nodes[remove_end].depth > depth {
+            remove_end += 1;
+        }
+        self.nodes.drain(idx + 1..remove_end);
+    }
+
+    pub(crate) fn toggle_expand(&mut self, idx: usize) {
+        if idx >= self.nodes.len() || !self.nodes[idx].is_dir {
+            return;
+        }
+        if self.nodes[idx].expanded {
+            self.collapse(idx);
+        } else {
+            self.expand(idx);
+        }
+    }
+}
+
+// ── Editor ───────────────────────────────────────────────────────────────────
+
+pub(crate) struct Editor {
+    pub(crate) lines: Vec<String>,
+    pub(crate) path: std::path::PathBuf,
+    pub(crate) modified: bool,
+
+    // Cursor
+    pub(crate) cursor_y: usize,
+    /// Byte offset into the current line (NOT char index).
+    pub(crate) cursor_byte: usize,
+
+    // Scroll
+    pub(crate) scroll: usize,
+    pub(crate) scroll_x: usize,
+
+    // Terminal dimensions
+    pub(crate) term_h: usize,
+    pub(crate) term_w: usize,
+
+    // Selection: anchor is the OTHER end of the selection from the cursor.
+    // When None, no selection active.
+    pub(crate) selection_anchor: Option<(usize, usize)>,
+
+    // Internal clipboard (always available cross-platform).
+    pub(crate) clipboard: String,
+
+    // Undo / redo stacks.
+    pub(crate) undo_stack: Vec<Snapshot>,
+    pub(crate) redo_stack: Vec<Snapshot>,
+
+    // Editor mode.
+    pub(crate) mode: Mode,
+
+    // Search state.
+    pub(crate) search_query: String,
+    pub(crate) search_matches: Vec<(usize, usize, usize)>,
+    pub(crate) search_match_idx: usize,
+
+    // Status message (shown briefly in the hint area).
+    pub(crate) status_msg: Option<String>,
+
+    // Command mode buffer.
+    pub(crate) cmd_buf: String,
+
+    // Help screen scroll offset.
+    pub(crate) help_scroll: usize,
+
+    // Dirty region tracking
+    pub(crate) dirty_start: usize,
+    pub(crate) dirty_end: usize,
+    pub(crate) prev_cursor_y: usize,
+    pub(crate) prev_cursor_byte: usize,
+
+    // Paste batching (Windows: chars arrive as individual events)
+    pub(crate) paste_buf: String,
+
+    // Persistent editor configuration (loaded from editor.toml)
+    pub(crate) editor_cfg: EditorConfig,
+
+    // Syntax highlighting engine
+    pub(crate) syntax: SyntaxHighlighter,
+
+    // Multi-cursor: extra cursors beyond the primary (cursor_y, cursor_byte)
+    pub(crate) extra_cursors: Vec<CursorPos>,
+
+    // Left-side file explorer sidebar
+    pub(crate) sidebar: Sidebar,
+
+    // File finder (Ctrl+P) state
+    pub(crate) ff_query: String,
+    pub(crate) ff_results: Vec<(String, std::path::PathBuf, f64)>,
+    pub(crate) ff_idx: usize,
+
+    // Gosc mode state
+    pub(crate) gosc_dirs: Vec<String>,
+    pub(crate) gosc_buf: String,
+
+    // Recently opened files buffer stack
+    pub(crate) buffer_stack: Vec<std::path::PathBuf>,
+    pub(crate) buffer_idx: usize,
+}
+
+impl Editor {
+    pub(crate) fn new(path: &Path) -> Result<Self> {
+        let content: Vec<String> = if path.exists() {
+            let file = std::fs::File::open(path)
+                .with_context(|| format!("Cannot open {}", path.display()))?;
+            BufReader::new(file)
+                .lines()
+                .collect::<std::io::Result<Vec<_>>>()
+                .with_context(|| format!("Cannot read {}", path.display()))?
+        } else {
+            vec![]
+        };
+        let lines = if content.is_empty() {
+            vec![String::new()]
+        } else {
+            content
+        };
+        let (tw, th) = crate::editor::helpers::term_size();
+        let mut syntax = crate::syntax::SyntaxHighlighter::new(path.extension().and_then(|e| e.to_str()));
+        syntax.resize_cache(lines.len());
+        Ok(Self {
+            lines,
+            path: path.to_path_buf(),
+            modified: false,
+            cursor_y: 0,
+            cursor_byte: 0,
+            scroll: 0,
+            scroll_x: 0,
+            term_h: th,
+            term_w: tw,
+            selection_anchor: None,
+            clipboard: String::new(),
+            undo_stack: Vec::new(),
+            redo_stack: Vec::new(),
+            mode: Mode::Normal,
+            search_query: String::new(),
+            search_matches: Vec::new(),
+            search_match_idx: 0,
+            status_msg: None,
+            cmd_buf: String::new(),
+            help_scroll: 0,
+            dirty_start: 0,
+            dirty_end: 0,
+            prev_cursor_y: 0,
+            prev_cursor_byte: 0,
+            paste_buf: String::new(),
+            editor_cfg: EditorConfig::load(),
+            syntax,
+            extra_cursors: Vec::new(),
+            sidebar: Sidebar::new(),
+            ff_query: String::new(),
+            ff_results: Vec::new(),
+            ff_idx: 0,
+            gosc_dirs: Vec::new(),
+            gosc_buf: String::new(),
+            buffer_stack: vec![path.to_path_buf()],
+            buffer_idx: 0,
+        })
+    }
+}

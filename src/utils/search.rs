@@ -189,12 +189,12 @@ pub fn search_files(root: &Path, pattern: &str, max_depth: usize) -> Vec<SearchR
 
     // Return the best tier that has results
     if !exact_matches.is_empty() {
-        exact_matches.sort_by(|a, b| a.name.to_lowercase().cmp(&b.name.to_lowercase()));
+        exact_matches.sort_by_cached_key(|a| a.name.to_lowercase());
         return exact_matches;
     }
 
     if !partial_matches.is_empty() {
-        partial_matches.sort_by(|a, b| a.name.to_lowercase().cmp(&b.name.to_lowercase()));
+        partial_matches.sort_by_cached_key(|a| a.name.to_lowercase());
         return partial_matches;
     }
 
@@ -253,12 +253,12 @@ pub fn search_directories(root: &Path, pattern: &str, max_depth: usize) -> Vec<S
     }
 
     if !exact_matches.is_empty() {
-        exact_matches.sort_by(|a, b| a.name.to_lowercase().cmp(&b.name.to_lowercase()));
+        exact_matches.sort_by_cached_key(|a| a.name.to_lowercase());
         return exact_matches;
     }
 
     if !partial_matches.is_empty() {
-        partial_matches.sort_by(|a, b| a.name.to_lowercase().cmp(&b.name.to_lowercase()));
+        partial_matches.sort_by_cached_key(|a| a.name.to_lowercase());
         return partial_matches;
     }
 
@@ -281,6 +281,52 @@ pub fn search_directories(root: &Path, pattern: &str, max_depth: usize) -> Vec<S
     results
 }
 
+/// Search for both files and directories matching a pattern in the current tree.
+///
+/// Combines results from both `search_files` and `search_directories`, keeping
+/// the same tiered matching: exact → partial → fuzzy. If the best tier is exact,
+/// only exact file+dir results are returned; if partial, only partial; else fuzzy.
+///
+/// # Arguments
+/// * `root`      - Starting directory (CWD)
+/// * `pattern`   - Name or partial name to search for (case-insensitive)
+/// * `max_depth` - 0 = current dir only, n = recurse n levels, usize::MAX = unlimited
+pub fn search_all(root: &Path, pattern: &str, max_depth: usize) -> Vec<SearchResult> {
+    let files = search_files(root, pattern, max_depth);
+    let dirs = search_directories(root, pattern, max_depth);
+
+    let has_exact = files.iter().any(|r| r.match_kind == MatchKind::Exact)
+                 || dirs.iter().any(|r| r.match_kind == MatchKind::Exact);
+    let has_partial = files.iter().any(|r| r.match_kind == MatchKind::Partial)
+                  || dirs.iter().any(|r| r.match_kind == MatchKind::Partial);
+
+    if has_exact {
+        let mut results: Vec<SearchResult> = files.into_iter()
+            .chain(dirs.into_iter())
+            .filter(|r| r.match_kind == MatchKind::Exact)
+            .collect();
+        results.sort_by_cached_key(|a| a.name.to_lowercase());
+        return results;
+    }
+
+    if has_partial {
+        let mut results: Vec<SearchResult> = files.into_iter()
+            .chain(dirs.into_iter())
+            .filter(|r| r.match_kind == MatchKind::Partial)
+            .collect();
+        results.sort_by_cached_key(|a| a.name.to_lowercase());
+        return results;
+    }
+
+    // Fuzzy — combine all fuzzy results, sorted by score descending
+    let mut results: Vec<SearchResult> = files.into_iter()
+        .chain(dirs.into_iter())
+        .filter(|r| r.match_kind == MatchKind::Fuzzy)
+        .collect();
+    results.sort_by(|a, b| b.score.partial_cmp(&a.score).unwrap_or(std::cmp::Ordering::Equal));
+    results
+}
+
 // ============================================================================
 // Display helpers
 // ============================================================================
@@ -289,8 +335,8 @@ pub fn search_directories(root: &Path, pattern: &str, max_depth: usize) -> Vec<S
 pub fn display_search_path(path: &Path) -> String {
     let s = path.to_string_lossy();
     #[cfg(windows)]
-    if s.starts_with(r"\\?\") {
-        return s[4..].to_string();
+    if let Some(stripped) = s.strip_prefix(r"\\?\") {
+        return stripped.to_string();
     }
     s.to_string()
 }

@@ -1,19 +1,10 @@
 // build.rs
 #[cfg(windows)]
 fn main() {
-    // Windows-specific build code
-    if cfg!(all(target_os = "windows", target_env = "msvc")) {
-        let mut res = winres::WindowsResource::new();
-        res.set_icon("assets/ntc_image.ico");
-        if let Err(e) = res.compile() {
-            eprintln!("Warning: Failed to compile Windows resource: {}", e);
-        }
-    } else if cfg!(all(target_os = "windows", target_env = "gnu")) {
-        let mut res = winres::WindowsResource::new();
-        res.set_icon("assets/ntc_image.ico");
-        if let Err(e) = res.compile() {
-            eprintln!("Warning: Failed to compile Windows resource: {}", e);
-        }
+    let mut res = winres::WindowsResource::new();
+    res.set_icon("assets/ntc_image.ico");
+    if let Err(e) = res.compile() {
+        eprintln!("Warning: Failed to compile Windows resource: {}", e);
     }
 }
 

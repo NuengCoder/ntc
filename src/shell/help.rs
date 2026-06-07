@@ -1,0 +1,166 @@
+use colored::*;
+
+pub(super) fn print_interactive_help() {
+    println!("╔══════════════════════════════════════════════════════════════════╗");
+    println!("║                     ntc {} - Interactive Help                 ║", env!("CARGO_PKG_VERSION"));
+    println!("╚══════════════════════════════════════════════════════════════════╝");
+    println!("{}", "NAVIGATION COMMANDS:".cyan().bold());
+    println!("  go <path>           Navigate to a directory");
+    println!("  go to <tp_name>     Teleport to a saved teleport point");
+    println!("  cd <path>           Same as go");
+    println!("  cd to <tp_name>     Teleport to a saved teleport point");
+    println!("  gos                 List subdirectories and pick one");
+    println!("  gosc                Continuous navigation (0 to exit)");
+    println!("  godrive             List and select Windows drives");
+    println!("  back                Go back to parent directory");
+    println!("  back <n>            Go back n parent directories");
+
+    println!("{}", "CONFIGURATION COMMANDS:".cyan().bold());
+    println!("  setO                Show current output path");
+    println!("  setO <path>         Set output path");
+    println!("  setD                Show current max depth");
+    println!("  setD <int>          Set max depth (min: 1, max: 20)");
+    println!("  setL                Show line number setting (ON/OFF)");
+    println!("  setL ON|OFF         Enable/disable line numbers");
+    println!("  setC ON|OFF         Enable/disable color output");
+    println!("  setT                Show current thread count");
+    println!("  setT <int>          Set number of threads");
+    println!("  setH                Show history settings");
+    println!("  setH ON|OFF         Enable/disable history");
+    println!("  setH <path>         Set custom history file path");
+    println!("  setH default        Reset history to default location");
+    println!("  showcg              Show current configuration overview");
+    println!("  opencg              Open config.toml (default editor, fallback to built-in)");
+    println!("  ne, ntceditor       Open file in built-in text editor");
+    println!("  resetcg             Reset config to defaults (with backup option)");  
+    println!("  restorecg           Restore config from backup");              
+    println!("  gencg               Create ntconfig.toml template (commented, for manual editing)");
+    println!("  gencg --all         Export current settings to ntconfig.toml (active config)");
+    println!("  watch ON|OFF        Enable/disable file watcher");
+    println!("  watch trigger <a>   Auto-run alias when watcher fires");
+    println!("  watch trigger off   Disable auto-run");
+
+    println!();
+    println!("{}", "TELEPORT COMMANDS:".cyan().bold());
+    println!("  tp add <name>       Save current location");
+    println!("  tp jump <name>      Teleport to saved location");
+    println!("  tp list             List all teleport points");
+    println!("  tp rm <name>        Remove teleport point");
+    println!("  @<name>             Quick teleport shortcut");
+
+    println!();
+    println!("{}", "RUN ALIAS COMMANDS:".cyan().bold());
+    println!("  ral add <name> \"<command>\"         Create alias");
+    println!("  ral add <name>(x) \"<cmd $x>\"       Create parameterised alias");
+    println!("  ral add <name>({{x=a,e=txt}}) \"...\"   Alias with default values");
+    println!("  ral add <name>(x[],y) \"...\"      Create alias with array params");
+    println!("  ral edit <name> \"<command>\"        Update alias");
+    println!("  ral rnm <old> to <new>             Rename alias");
+    println!("  ral rm <name>                      Remove alias");
+    println!("  ral list                           Show all aliases");
+    println!("  ral cls                            Clear ALL aliases (with confirmation)");
+    println!("  <alias>                            Execute alias directly");
+    println!("  <alias>(<arg>)                     Execute parameterised alias");
+    println!("  run <alias>                        Execute alias with 'run'");
+    println!();
+    println!("{}", "Examples:".green());
+    println!("  ral add dal \"dart analyze lib/\"");
+    println!("  ral add frr \"flutter run --release -d RFCW71EGWDW\"");
+    println!("  ral add fb \"dal && frr\"");
+    println!("  fb                                 # Runs both commands");
+    println!("  ral add py(x) \"python $x.py\"");
+    println!("  py(hello)                          # Runs: python hello.py");
+    println!("  ral add mkf({{x=a,e=txt}}) \"echo. > ${{x:-a}}.${{e:-txt}}\"");
+    println!("  mkf                                # Runs: echo. > a.txt (uses defaults)");
+    println!("  mkf test c                         # Runs: echo. > test.c");
+    println!("  ral add runc(x[],y) \"cls && gcc -o $y.exe $x[].c && ./$y.exe && rm -rf $y.exe\"");
+    println!("  runc [add,minus,mul] math          # Runs: cls && gcc -o math.exe add.c minus.c mul.c && ...");
+
+    println!();
+    println!("{}", "VIEW COMMAND:".cyan().bold());
+    println!("  view                Show directory tree (uses config depth)");
+    println!("  view -s             Show tree with sizes");
+    println!("  view --size         Same as -s");
+    println!("  view --care         Show tree with care everything (sizes too)");
+    println!("  view -d <n>         Show tree with custom depth (overrides config)");
+    println!("  view --depth <n>    Same as -d");
+    println!("  view -s -d <n>      Show tree with sizes and custom depth");
+    println!("  view -c             Show tree and copy to clipboard");
+    println!("  view --cp           Same as -c");
+
+    println!();
+    println!("{}", "REPORT COMMANDS:".cyan().bold());
+    println!("  txt                 Generate TXT report");
+    println!("  json                Generate JSON report");
+    println!("  md                  Generate Markdown report");
+    println!("  html                Generate HTML report");
+    println!("  pdf                 Generate PDF report");
+    println!("  docx                Generate DOCX report");
+    println!("  xlsx                Generate XLSX report (with dependency analysis)");
+    println!("  txtc                Copy file to clipboard");
+    println!("  txtf                Display file");
+
+    println!("{}", "BACKUP COMMANDS:".cyan().bold());
+    println!("  bkup                Create a backup of current project");
+    println!("  bkup --where        Show backup storage location");
+    println!("  bkup --verify       Check if backups exist");
+    println!("  bkup --cls          Delete ALL backups for this project (asks confirmation)");
+    println!("  bkup --force        Delete ALL backups (no confirmation)");
+    println!("  pldw                Interactive restore menu");
+    println!("  pldw <number>       Restore backup by number");
+    println!("  unpd                Undo the last restore");
+    println!("  unpd --cls          Clear undo history (asks confirmation)");
+    println!("  unpd --force        Clear undo history (no confirmation)");
+    println!("  diff                Interactive diff (compare current project with a backup)");
+    println!("  diff <number>       Diff against specific backup number");
+
+    println!();
+    println!();
+    println!("{}", "SEARCH COMMANDS:".cyan().bold());
+    println!("  fs <pattern> [-d <n>]   Search files by name (fuzzy fallback)");
+    println!("  ds <pattern> [-d <n>]   Search directories by name");
+    println!("  locate <pattern> [-d <n>]  Search both files and directories");
+    println!("  fgo <pattern> [-d <n>]  Search files, then navigate to selected file's parent dir");
+    println!("  fsc <pattern> [-d <n>]  Search files, pick one to display & optionally copy");
+
+    println!();
+    println!("{}", "IGNORE / CARE COMMANDS:".cyan().bold());
+    println!("  ignore <name>       Add directory to ignored list");
+    println!("  cared <name>        Remove directory from ignored list");
+    println!("  ignores             Interactive picker to add directories to ignore");
+    println!("  ignoresc            Continuous ignore mode (0 to exit)");
+    println!("  cares               Interactive picker to remove directories from ignore");
+    println!("  caresc              Continuous un-ignore mode (0 to exit)");
+    println!("  ignoref <ext>       Add file extension to ignored list");
+    println!("  caref <ext>         Remove file extension from ignored list");
+    println!("  ignoren <name>      Add specific filename to ignored list");
+    println!("  caren <name>        Remove specific filename from ignored list");
+    println!("  ignored             Show all ignore/care settings");
+
+    println!();
+    println!("{}", "OTHER COMMANDS:".cyan().bold());
+    println!("  clear               Clear screen");
+    println!("  version             Show version");
+    println!("  where               Show locations");
+    println!("  help                Show this help");
+    println!("  exit, quit          Exit ntc");
+    println!();
+}
+
+pub(super) fn print_tp_help() {
+    println!();
+    println!("{}", "Teleport (tp) Commands:".cyan().bold());
+    println!("  tp                 Interactive menu");
+    println!("  tp add <name>      Save current directory");
+    println!("  tp add <name> <path>  Save specific path");
+    println!("  tp jump <name>     Teleport by name");
+    println!("  tp jump <number>   Teleport by number");
+    println!("  tp info <name>     Show savepoint details");
+    println!("  tp list            Show all savepoints");
+    println!("  tp rm <name>       Remove by name");
+    println!("  tp rm <number>     Remove by number");
+    println!("  tp rnm <old> to <new>  Rename savepoint");
+    println!("  tp cls             Clear ALL savepoints");
+    println!("  @<name>            Quick teleport shortcut");
+    println!();
+}

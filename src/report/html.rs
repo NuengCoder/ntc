@@ -49,7 +49,7 @@ impl HtmlReportGenerator {
 
         let total_files = supported.len() + unsupported.len();
         let total_dirs = count_dirs(&tree);
-        let total_size = calculate_total_size(&tree);
+        let total_size = crate::explorer::calculate_total_size(dir_path);
         let total_size_str = crate::explorer::human_readable_size(total_size);
 
         let template = include_str!("html_template/template.html");
@@ -112,10 +112,3 @@ fn count_dirs(node: &TreeNode) -> u64 {
     count
 }
 
-fn calculate_total_size(node: &TreeNode) -> u64 {
-    let mut total = node.size.unwrap_or(0);
-    for child in &node.children {
-        total += calculate_total_size(child);
-    }
-    total
-}

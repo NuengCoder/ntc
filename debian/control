@@ -1,0 +1,17 @@
+Source: ntc
+Section: utils
+Priority: optional
+Maintainer: Nueng <thilaphonneung@gmail.com>
+Build-Depends: debhelper-compat (= 13), cargo
+Standards-Version: 4.6.0
+Homepage: https://github.com/NuengCoder/ntc
+
+Package: ntc
+Architecture: amd64
+Depends: ${misc:Depends}, ${shlibs:Depends}
+Description: Navigate, Tree, Cat - A combined directory tree viewer and file concatenator
+ ntc is a CLI tool for navigating directories, viewing file trees,
+ and concatenating file contents with a rich interactive shell.
+ It features fuzzy search, backup/restore with SHA256 integrity,
+ teleport bookmarks, custom aliases, file watching, and multiple
+ report formats (TXT, JSON, Markdown, HTML, PDF, DOCX, XLSX).

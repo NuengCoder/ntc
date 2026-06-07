@@ -13,6 +13,7 @@ use crate::output::{print_error, print_info, print_success, print_warning};
 use anyhow::Result;
 use sha2::{Sha256, Digest};
 
+use std::cmp::Reverse;
 use std::collections::HashSet;
 use std::fs;
 use std::io::{self, Write, Read};
@@ -311,8 +312,7 @@ impl BackupManager {
             }
         }
 
-        // Newest first
-        backups.sort_by(|a, b| b.0.cmp(&a.0));
+        backups.sort_by_key(|a| Reverse(a.0));
         Ok(backups)
     }
 

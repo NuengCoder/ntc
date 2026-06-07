@@ -2,13 +2,19 @@ mod txt;
 mod html;
 mod json;
 mod md;
+mod pdf;
+mod docx;
+mod xlsx;
 
 pub use txt::generate_txt_report;
 pub use html::HtmlReportGenerator;
 pub use json::JsonReportGenerator;
 pub use md::MarkdownReportGenerator;
+pub use pdf::generate_pdf_report;
+pub use docx::generate_docx_report;
+pub use xlsx::generate_xlsx_report;
 
-use anyhow::{Result};
+use anyhow::{bail, Result};
 use std::path::Path;
 
 
@@ -18,6 +24,9 @@ pub enum ReportFormat {
     Html,
     Json,
     Md,
+    Pdf,
+    Docx,
+    Xlsx,
 }
 
 impl ReportFormat {
@@ -27,6 +36,9 @@ impl ReportFormat {
             Some("html" | "htm") => ReportFormat::Html,
             Some("json") => ReportFormat::Json,
             Some("md" | "markdown") => ReportFormat::Md,
+            Some("pdf") => ReportFormat::Pdf,
+            Some("docx") => ReportFormat::Docx,
+            Some("xlsx") => ReportFormat::Xlsx,
             _ => ReportFormat::Txt,
         }
     }
@@ -37,7 +49,14 @@ impl ReportFormat {
             ReportFormat::Html => "html",
             ReportFormat::Json => "json",
             ReportFormat::Md => "md",
+            ReportFormat::Pdf => "pdf",
+            ReportFormat::Docx => "docx",
+            ReportFormat::Xlsx => "xlsx",
         }
+    }
+
+    pub fn is_binary(&self) -> bool {
+        matches!(self, ReportFormat::Pdf | ReportFormat::Docx | ReportFormat::Xlsx)
     }
 }
 
@@ -65,6 +84,15 @@ pub fn generate_report_to(dir_path: &Path, format: ReportFormat, output_file: &s
         ReportFormat::Md => {
             MarkdownReportGenerator::generate(dir_path, &output_path, None)?;
         }
+        ReportFormat::Pdf => {
+            generate_pdf_report(dir_path, &output_path)?;
+        }
+        ReportFormat::Docx => {
+            generate_docx_report(dir_path, &output_path)?;
+        }
+        ReportFormat::Xlsx => {
+            generate_xlsx_report(dir_path, &output_path)?;
+        }
     }
     
     println!("Report saved to: {}", output_path.display());
@@ -73,6 +101,9 @@ pub fn generate_report_to(dir_path: &Path, format: ReportFormat, output_file: &s
 
 // Add this function to generate report as string (for clipboard)
 pub fn generate_report_to_string(dir_path: &Path, format: ReportFormat) -> Result<String> {
+    if format.is_binary() {
+        bail!("{} report cannot be copied to clipboard (binary format)", format.extension().to_uppercase());
+    }
     // Create a temporary file
     let temp_dir = std::env::temp_dir();
     let temp_filename = format!("ntc_temp_{}.{}", 

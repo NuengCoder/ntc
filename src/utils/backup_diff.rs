@@ -471,9 +471,7 @@ impl BackupDiff {
 
             let is_binary_skipped = diff.status == FileStatus::Modified && diff.side_by_side.is_empty();
             let side_by_side_html = if is_binary_skipped {
-                format!(
-                    r#"<div class="binary-notice">📦 Binary file — diff not available</div>"#
-                )
+                r#"<div class="binary-notice">📦 Binary file — diff not available</div>"#.to_string()
             } else if diff.status == FileStatus::Modified && !diff.side_by_side.is_empty() {
                 let mut rows = String::new();
                 for sbs in &diff.side_by_side {

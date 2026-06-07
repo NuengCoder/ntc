@@ -292,13 +292,11 @@ impl BackupIndex {
 // Display helper
 // ============================================================================
 
-/// Strip Windows extended-path prefix (\\?\) for clean terminal output.
-/// Single source of truth — imported by backup.rs and search.rs.
 pub fn display_path(path: &Path) -> String {
     let s = path.to_string_lossy();
     #[cfg(windows)]
-    if s.starts_with(r"\\?\") {
-        return s[4..].to_string();
+    if let Some(stripped) = s.strip_prefix(r"\\?\") {
+        return stripped.to_string();
     }
     s.to_string()
 }

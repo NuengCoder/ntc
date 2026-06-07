@@ -47,7 +47,7 @@ impl MarkdownReportGenerator {
 fn build_markdown_content(tree: &TreeNode, dir_path: &Path, scan_time: f64) -> Result<String> {
     let fmt_cfg = FormatConfig::from_global();
     let (supported_files, unsupported_files) = collect_files(dir_path, &fmt_cfg)?;
-    let total_size = calculate_total_size(tree);
+    let total_size = crate::explorer::calculate_total_size(dir_path);
     
     let mut content = String::new();
     
@@ -103,7 +103,7 @@ fn build_markdown_content(tree: &TreeNode, dir_path: &Path, scan_time: f64) -> R
             let file_name = file_path.file_name().unwrap_or_default().to_string_lossy();
             content.push_str(&format!("- `{}`\n", file_name));
         }
-        content.push_str("\n");
+        content.push('\n');
     }
     
     // Footer
@@ -202,10 +202,3 @@ fn count_dirs(node: &TreeNode) -> u64 {
     count
 }
 
-fn calculate_total_size(node: &TreeNode) -> u64 {
-    let mut total = node.size.unwrap_or(0);
-    for child in &node.children {
-        total += calculate_total_size(child);
-    }
-    total
-}

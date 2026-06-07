@@ -1,24 +1,28 @@
 // src/lib.rs
 // ntc core library
 // Version: v1.9.0
-pub mod backup;
-pub mod backup_diff;
-pub mod backup_manifest;
-pub mod cli;
-pub mod config;
-pub mod explorer;
-pub mod filetype;
-pub mod fuzzy;
-pub mod navigator;
-pub mod output;
-pub mod report;
-pub mod search;
-pub mod shell;
-pub mod teleport;
-pub mod watcher;
 
-// Neovim/Android helpers (conditional compilation handled inside)
-pub mod nvim;
+// Top-level modules (multi-file directories)
+pub mod cli;
+pub mod editor;
+pub mod report;
+pub mod shell;
+pub mod syntax;
+pub mod utils;
+
+// Re-export utils modules so existing paths like `crate::config::Config` still work
+pub use utils::backup;
+pub use utils::backup_diff;
+pub use utils::backup_manifest;
+pub use utils::config;
+pub use utils::explorer;
+pub use utils::filetype;
+pub use utils::fuzzy;
+pub use utils::navigator;
+pub use utils::output;
+pub use utils::search;
+pub use utils::teleport;
+pub use utils::watcher;
 
 // Re-export key types for convenience
 pub use config::Config;

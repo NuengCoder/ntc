@@ -75,8 +75,8 @@ fn build_complete_json(tree: &TreeNode, dir_path: &Path, scan_time: f64) -> Resu
         "statistics": {
             "total_files": count_files(tree),
             "total_directories": count_dirs(tree),
-            "total_size_bytes": calculate_total_size(tree),
-            "total_size_human": crate::explorer::human_readable_size(calculate_total_size(tree)),
+            "total_size_bytes": crate::explorer::calculate_total_size(dir_path),
+            "total_size_human": crate::explorer::human_readable_size(crate::explorer::calculate_total_size(dir_path)),
             "supported_files": supported_files.len(),
             "unsupported_files": unsupported_files.len()
         },
@@ -189,10 +189,3 @@ fn count_dirs(node: &TreeNode) -> u64 {
     count
 }
 
-fn calculate_total_size(node: &TreeNode) -> u64 {
-    let mut total = node.size.unwrap_or(0);
-    for child in &node.children {
-        total += calculate_total_size(child);
-    }
-    total
-}

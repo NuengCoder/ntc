@@ -2,6 +2,7 @@ use crate::backup::BackupManager;
 use crate::backup_diff::BackupDiff;
 use crate::backup_manifest::display_path;
 use crate::config::Config;
+use crate::session::SessionState;
 use crate::explorer::{human_readable_size, calculate_dir_size, calculate_total_size};
 use crate::filetype::{FormatConfig, is_supported_format};
 use crate::navigator::{Navigator, clear_screen};
@@ -13,7 +14,11 @@ use crate::shell::alias::{
     expand_command_line, extract_param_names, inject_template_defaults,
     parse_call_syntax, parse_param_defaults,
 };
-use crate::shell::helpers::{show_tree, gosc_loop, ignoresc_loop, caresc_loop, run_with_spinner, open_with_fallback};
+use crate::shell::helpers::{
+    show_tree, gosc_loop, ignoresc_loop, caresc_loop, run_with_spinner, open_with_fallback,
+    ral_export_all, ral_export_select, ral_import,
+    igcare_export_all, igcare_export_select, igcare_import,
+};
 use crate::shell::help::{print_interactive_help, print_tp_help};
 use crate::watcher;
 
@@ -35,7 +40,8 @@ fn validate_alias_name(name: &str) -> bool {
         "ignore", "cared", "ignoref", "caref", "ignoren", "caren", "size", "tp", 
         "opencg", "resetcg", "restorecg", "gencg", "esc" , "bkup" , "pldw" , "unpd" , 
         "fs" , "ds", "setc", "diff", "fgo", "fsc", "locate", "ne", "ntceditor",
-        "ignores", "ignoresc", "cares", "caresc"
+        "ignores", "ignoresc", "cares", "caresc",
+        "dino", "igcare", "math"
     ];
     
     if name.contains('@') || name.contains('#') {
@@ -575,6 +581,14 @@ pub(super) fn execute_command(
             show_tree(nav, Some(1), false, false, false, false, false);
         }
 
+        "dino" => {
+            crate::game::run()?;
+        }
+
+        "math" => {
+            crate::math::run(args)?;
+        }
+
         "version" => {
             println!("ntc {}", env!("CARGO_PKG_VERSION").green().bold());
         }
@@ -740,6 +754,9 @@ pub(super) fn execute_command(
                 println!("  ral info <name>                   Show alias details");
                 println!("  ral list                          Show all aliases");
                 println!("  ral cls                           Clear ALL aliases (asks confirmation)");
+                println!("  ral export --all <name>           Export all aliases to <name>.ntc.ral");
+                println!("  ral export --select <name>        Select aliases to export to <name>.ntc.ral");
+                println!("  ral import <file>                 Import aliases from a .ntc.ral file");
                 println!();
                 println!("{}", "Examples:".green());
                 println!("  ral add btr \"cargo build --release\"");
@@ -757,6 +774,11 @@ pub(super) fn execute_command(
                 println!("  run py               # Executes: python test.py");
                 println!("  run_file(hello)      # Executes: python hello.py");
                 println!("  runc [add,minus,mul] math  # Executes: cls && gcc -o math.exe add.c minus.c mul.c && ...");
+                println!();
+                println!("{}", "Export/Import:".green());
+                println!("  ral export --all myaliases       # Creates myaliases.ntc.ral");
+                println!("  ral export --select myaliases    # Interactive pick & export");
+                println!("  ral import myaliases.ntc.ral     # Import into current config");
             } else {
                 let parts: Vec<&str> = args.splitn(2, ' ').collect();
                 let subcmd = parts[0].to_lowercase();
@@ -1021,6 +1043,38 @@ pub(super) fn execute_command(
                             }
                         }
                     }
+                    "export" => {
+                        if subargs.is_empty() {
+                            print_error("Usage: ral export --all <name> | ral export --select <name>");
+                            println!("Example: ral export --all myaliases");
+                            println!("Example: ral export --select myaliases");
+                        } else {
+                            let export_parts: Vec<&str> = subargs.splitn(2, ' ').collect();
+                            if export_parts.len() < 2 {
+                                print_error("Usage: ral export --all <name> | ral export --select <name>");
+                            } else {
+                                let flag = export_parts[0].to_lowercase();
+                                let export_name = export_parts[1];
+                                if export_name.is_empty() {
+                                    print_error("Export name cannot be empty.");
+                                } else if flag == "--all" || flag == "-a" {
+                                    ral_export_all(export_name)?;
+                                } else if flag == "--select" || flag == "-s" {
+                                    ral_export_select(nav, export_name)?;
+                                } else {
+                                    print_error(&format!("Unknown export flag: {}. Use --all or --select", flag));
+                                }
+                            }
+                        }
+                    }
+                    "import" => {
+                        if subargs.is_empty() {
+                            print_error("Usage: ral import <file>");
+                            println!("Example: ral import myaliases.ntc.ral");
+                        } else {
+                            ral_import(subargs)?;
+                        }
+                    }
                     _ => {
                         print_error(&format!("Unknown ral subcommand: {}", subcmd));
                         println!("Type 'ral' for help.");
@@ -1134,8 +1188,12 @@ pub(super) fn execute_command(
             } else {
                 raw_path
             };
-            match crate::editor::edit_file(&path) {
-                Ok(_) => {},
+            let restored = SessionState::global().read().unwrap().editor_session.clone();
+            match crate::editor::edit_file_with_session(&path, restored) {
+                Ok((_, captured)) => {
+                    SessionState::global().write().unwrap().editor_session = captured;
+                    SessionState::save_global();
+                }
                 Err(e) => print_error(&format!("Editor error: {}", e)),
             }
         }
@@ -1625,6 +1683,61 @@ extra_supported_files = {}
                     let _ = Config::local_add_extra_supported_file(name);
                 }
                 Config::reload_global();
+            }
+        }
+
+        "igcare" => {
+            if args.is_empty() {
+                println!("{}", "Ignore/Care (igcare) Commands:".cyan().bold());
+                println!("  igcare export --all <name>           Export all settings to <name>.ntc.igcare");
+                println!("  igcare export --select <name>        Select categories to export to <name>.ntc.igcare");
+                println!("  igcare import <file>                 Import settings from a .ntc.igcare file");
+                println!();
+                println!("{}", "Examples:".green());
+                println!("  igcare export --all myproject        # Creates myproject.ntc.igcare");
+                println!("  igcare export --select myproject     # Pick which categories to export");
+                println!("  igcare import myproject.ntc.igcare   # Import into current config");
+            } else {
+                let ig_parts: Vec<&str> = args.splitn(2, ' ').collect();
+                let subcmd = ig_parts[0].to_lowercase();
+                let subargs = ig_parts.get(1).unwrap_or(&"").trim();
+
+                match subcmd.as_str() {
+                    "export" => {
+                        if subargs.is_empty() {
+                            print_error("Usage: igcare export --all <name> | igcare export --select <name>");
+                        } else {
+                            let export_parts: Vec<&str> = subargs.splitn(2, ' ').collect();
+                            if export_parts.len() < 2 {
+                                print_error("Usage: igcare export --all <name> | igcare export --select <name>");
+                            } else {
+                                let flag = export_parts[0].to_lowercase();
+                                let export_name = export_parts[1];
+                                if export_name.is_empty() {
+                                    print_error("Export name cannot be empty.");
+                                } else if flag == "--all" || flag == "-a" {
+                                    igcare_export_all(export_name)?;
+                                } else if flag == "--select" || flag == "-s" {
+                                    igcare_export_select(export_name)?;
+                                } else {
+                                    print_error(&format!("Unknown export flag: {}. Use --all or --select", flag));
+                                }
+                            }
+                        }
+                    }
+                    "import" => {
+                        if subargs.is_empty() {
+                            print_error("Usage: igcare import <file>");
+                            println!("Example: igcare import myproject.ntc.igcare");
+                        } else {
+                            igcare_import(subargs)?;
+                        }
+                    }
+                    _ => {
+                        print_error(&format!("Unknown igcare subcommand: {}", subcmd));
+                        println!("Type 'igcare' for help.");
+                    }
+                }
             }
         }
 
@@ -2158,7 +2271,7 @@ extra_supported_files = {}
                     | "ignores" | "ignoresc" | "cares"   | "caresc"
                     | "size"    | "tp"      | "opencg"  | "resetcg" | "restorecg" | "gencg" 
                     | "bkup"    | "pldw"    | "unpd"    | "fs"      | "ds"        | "diff"    | "fgo"     | "fsc"
-                    | "locate"  | "ne"      | "ntceditor" => {
+                     | "locate"  | "ne"      | "ntceditor" | "dino" | "math" => {
                         // This is an ntc command – execute it recursively
                         if let Err(e) = execute_command(&cmd_part, nav, watcher_handle) {
                             print_error(&format!("{}", e));

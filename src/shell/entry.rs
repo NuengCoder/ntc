@@ -1,6 +1,7 @@
 use crate::config::Config;
 use crate::navigator::{Navigator};
 use crate::output::{print_error, print_info, print_warning};
+use crate::session::SessionState;
 use crate::watcher;
 use crate::shell::alias::expand_command_line;
 use crate::shell::commands::execute_command;
@@ -17,7 +18,13 @@ use std::sync::Arc;
 // ============================================================================
 
 pub fn run_shell() -> Result<()> {
-    let nav = Navigator::new()?;
+    let last_dir = SessionState::global().read().unwrap().last_directory.clone();
+    let mut nav = Navigator::new()?;
+    if let Some(ref last_dir) = last_dir {
+        if last_dir.exists() {
+            let _ = nav.go_to(last_dir);
+        }
+    }
     run_shell_with_nav(nav)
 }
 
@@ -153,10 +160,16 @@ pub fn run_shell_with_nav(mut nav: Navigator) -> Result<()> {
         }
         
         if should_exit {
+            SessionState::global().write().unwrap().last_directory = Some(nav.current_path().to_path_buf());
+            SessionState::save_global();
             println!("{}", "Goodbye!".green());
             break;
         }
     }
+    
+    // Also save on EOF
+    SessionState::global().write().unwrap().last_directory = Some(nav.current_path().to_path_buf());
+    SessionState::save_global();
     
     if Config::global_get_history_enabled() {
         if let Some(history_path) = Config::global().read().unwrap().resolve_history_path() {

@@ -59,6 +59,9 @@ pub(super) fn print_interactive_help() {
     println!("  ral rm <name>                      Remove alias");
     println!("  ral list                           Show all aliases");
     println!("  ral cls                            Clear ALL aliases (with confirmation)");
+    println!("  ral export --all <name>            Export all aliases to <name>.ntc.ral");
+    println!("  ral export --select <name>         Select aliases to export to <name>.ntc.ral");
+    println!("  ral import <file>                  Import aliases from a .ntc.ral file");
     println!("  <alias>                            Execute alias directly");
     println!("  <alias>(<arg>)                     Execute parameterised alias");
     println!("  run <alias>                        Execute alias with 'run'");
@@ -136,6 +139,9 @@ pub(super) fn print_interactive_help() {
     println!("  ignoren <name>      Add specific filename to ignored list");
     println!("  caren <name>        Remove specific filename from ignored list");
     println!("  ignored             Show all ignore/care settings");
+    println!("  igcare export --all <name>     Export all settings to <name>.ntc.igcare");
+    println!("  igcare export --select <name>  Select categories to export to <name>.ntc.igcare");
+    println!("  igcare import <file>           Import settings from a .ntc.igcare file");
 
     println!();
     println!("{}", "OTHER COMMANDS:".cyan().bold());
@@ -144,6 +150,20 @@ pub(super) fn print_interactive_help() {
     println!("  where               Show locations");
     println!("  help                Show this help");
     println!("  exit, quit          Exit ntc");
+    println!();
+    println!("{}", "MATH COMMANDS:".cyan().bold());
+    println!("  math <expr>         Evaluate a math expression");
+    println!("  math sin(PI/2)      Trig and other built-in functions");
+    println!("  math timer [sec]    Lap timer or countdown with alarm");
+    println!("  math rand(1,100)    Random number between 1 and 100");
+    println!("  math toHex(255)     Convert to hex, binary, octal, human-readable");
+    println!("  math fun add/rm/edit/info/ls  Manage custom math functions");
+    println!("  math file.ntc.math  Compile and run a math file");
+    println!("  Examples:");
+    println!("    math 3+4*5          → 23");
+    println!("    math sqrt(144)      → 12");
+    println!("    math fun add sq(x) = x^2");
+    println!("    math sq(5)          → 25");
     println!();
 }
 

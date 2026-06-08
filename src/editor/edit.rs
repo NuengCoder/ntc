@@ -316,6 +316,31 @@ impl Editor {
         self.status_msg = Some("Line deleted".into());
     }
 
+    /// Jump to the most recently added cursor (like VSCode Ctrl+G with multi-cursor).
+    /// Swaps the primary cursor with the last added extra cursor.
+    pub(crate) fn jump_to_last_cursor(&mut self) {
+        let idx = match self.last_added_cursor_idx {
+            Some(i) if i < self.extra_cursors.len() => i,
+            _ => {
+                self.status_msg = Some("No extra cursors to jump to".into());
+                return;
+            }
+        };
+        let target = self.extra_cursors[idx];
+        let current = CursorPos {
+            y: self.cursor_y,
+            byte: self.cursor_byte,
+            anchor: self.selection_anchor,
+        };
+        self.cursor_y = target.y;
+        self.cursor_byte = target.byte;
+        self.selection_anchor = target.anchor;
+        self.extra_cursors[idx] = current;
+        self.last_added_cursor_idx = None;
+        self.mark_all_dirty();
+        self.status_msg = Some(format!("Jumped to cursor {}", idx + 2));
+    }
+
     /// Like VSCode Ctrl+D:
     /// - If no selection, select the word under the primary cursor.
     /// - If selection exists, add a new cursor at the *next* occurrence of that
@@ -334,20 +359,17 @@ impl Editor {
             return;
         }
 
-        // Start search from the LAST cursor's cursor position (end of its selection).
-        // The cursor always sits at the FAR end of any selection, so cursor_byte
-        // is the byte right after the selected text — searching from there skips
-        // the already-selected occurrence.
-        let (search_y, search_byte) = if let Some(last) = self.extra_cursors.last() {
-            (last.y, last.byte)
-        } else if self.has_selection() {
-            (self.cursor_y, self.cursor_byte)
-        } else {
-            (self.cursor_y, self.cursor_byte)
-        };
+        // Search from the primary cursor position (which is always the most recently
+        // found occurrence). Searching from here skips the already-selected occurrence.
+        let (search_y, search_byte) = (self.cursor_y, self.cursor_byte);
 
         let q = query.to_lowercase();
         let q_len = q.len();
+
+        // Inline helper: check if (y, byte) already has a cursor
+        let pos_has_cursor = |extra: &[CursorPos], py: usize, pb: usize, y: usize, byte: usize| -> bool {
+            (py == y && pb == byte) || extra.iter().any(|c| c.y == y && c.byte == byte)
+        };
 
         // Find next occurrence at or after search point
         for li in search_y..self.lines.len() {
@@ -355,16 +377,18 @@ impl Editor {
             let start = if li == search_y { search_byte } else { 0 };
             if let Some(pos) = lower[start..].find(&q) {
                 let abs_pos = start + pos;
-                let anchor = Some((li, abs_pos));
-                let cursor_pos = CursorPos {
-                    y: li,
-                    byte: abs_pos + q_len,
-                    anchor,
-                };
-                let already_exists = (self.cursor_y == cursor_pos.y && self.cursor_byte == cursor_pos.byte)
-                    || self.extra_cursors.iter().any(|c| c.y == cursor_pos.y && c.byte == cursor_pos.byte);
+                let already_exists = pos_has_cursor(&self.extra_cursors, self.cursor_y, self.cursor_byte, li, abs_pos + q_len);
                 if !already_exists {
-                    self.extra_cursors.push(cursor_pos);
+                    let old_primary = CursorPos {
+                        y: self.cursor_y,
+                        byte: self.cursor_byte,
+                        anchor: self.selection_anchor,
+                    };
+                    self.extra_cursors.push(old_primary);
+                    self.cursor_y = li;
+                    self.cursor_byte = abs_pos + q_len;
+                    self.selection_anchor = Some((li, abs_pos));
+                    self.last_added_cursor_idx = Some(self.extra_cursors.len() - 1);
                     self.mark_all_dirty();
                     self.status_msg = Some(format!(
                         "Added cursor ({} total)",
@@ -383,15 +407,18 @@ impl Editor {
             if let Some(pos) = lower[start..].find(&q) {
                 let abs_pos = start + pos;
                 if li < search_y || (li == search_y && abs_pos < search_byte) {
-                    let cursor_pos = CursorPos {
-                        y: li,
-                        byte: abs_pos + q_len,
-                        anchor: Some((li, abs_pos)),
-                    };
-                    let already_exists = (self.cursor_y == cursor_pos.y && self.cursor_byte == cursor_pos.byte)
-                        || self.extra_cursors.iter().any(|c| c.y == cursor_pos.y && c.byte == cursor_pos.byte);
+                    let already_exists = pos_has_cursor(&self.extra_cursors, self.cursor_y, self.cursor_byte, li, abs_pos + q_len);
                     if !already_exists {
-                        self.extra_cursors.push(cursor_pos);
+                        let old_primary = CursorPos {
+                            y: self.cursor_y,
+                            byte: self.cursor_byte,
+                            anchor: self.selection_anchor,
+                        };
+                        self.extra_cursors.push(old_primary);
+                        self.cursor_y = li;
+                        self.cursor_byte = abs_pos + q_len;
+                        self.selection_anchor = Some((li, abs_pos));
+                        self.last_added_cursor_idx = Some(self.extra_cursors.len() - 1);
                         self.mark_all_dirty();
                         self.status_msg = Some(format!(
                             "Added cursor ({} total) (wrap)",

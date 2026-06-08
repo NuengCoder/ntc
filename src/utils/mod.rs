@@ -13,3 +13,4 @@ pub mod output;
 pub mod search;
 pub mod teleport;
 pub mod watcher;
+pub mod session;

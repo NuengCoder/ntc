@@ -1,5 +1,71 @@
 # Changelog
 
+## [2.1.0] - 2026-06-07
+
+### Added
+
+#### Math Expression Evaluator
+- `math <expr>` — Evaluate math expressions with built-in functions and constants
+- `math timer [sec]` — Lap timer or countdown with alarm
+- `math fun add/edit/rm/info/ls` — Manage user-defined math functions
+- `math <file>.ntc.math` — Run .ntc.math script files
+- Built-in functions: sin, cos, tan, and all trig (including arc/ inverse variants)
+- Math functions: sqrt, pow, abs, floor, ceil, round, ln/log, log2, log10
+- Aggregate: sum, min, max, avg/average/mean
+- Random: rand(min, max)
+- Conversions: toBinary, toHex, toOctal, toDecimal, toHumanBytes
+- Constants: PI, E, PHI, TAU
+- String literals with `"..."` support and escape sequences
+- `print()` function — works like Python's print (accepts strings and numbers)
+- `return` keyword for file-mode scripts
+- `--math <EXPR>` flag for command-line evaluation
+
+#### Run Alias (RAL) Export/Import
+- `ral export --all <name>` — Export all aliases to `<name>.ntc.ral`
+- `ral export --select <name>` — Interactive pick & export to `.ntc.ral`
+- `ral import <file.ntc.ral>` — Import aliases from `.ntc.ral` file
+
+#### Ignore/Care (IGCARE) Export/Import
+- `igcare export --all <name>` — Export all ignore/care settings to `<name>.ntc.igcare`
+- `igcare export --select <name>` — Interactive category pick & export to `.ntc.igcare`
+- `igcare import <file.ntc.igcare>` — Import settings from `.ntc.igcare` file
+
+#### Dinosaur Runner Game
+- `dino` — Play a Chrome-style dinosaur runner game in the terminal
+- Jump with space/up to avoid obstacles
+- Score tracking and persistent high score (saved to `dino.toml`)
+- Game over detection and restart prompt
+
+#### ntcEditor — In-editor Auto-Completion
+- Auto-completion popup for .ntc.math files
+- Tab/Enter/Esc to navigate and apply completions
+- Completions include all built-in functions, constants, user-defined functions, `print()`, and `return`
+- Smart popup positioning near cursor
+
+#### ntcEditor — LSP Server
+- Built-in LSP server for .ntc.math files (`--lsp` flag)
+- Diagnostics (syntax errors with position)
+- Completions (functions, constants, user-defined)
+- Hover documentation
+- Go-to-definition for user-defined functions
+
+#### ntcEditor — NtcMath Syntax Highlighting
+- Full syntax highlighting for .ntc.math files
+- Dedicated TokenType::Constant (gold) for PI, E, PHI, TAU
+- Keywords (return, true, false) and built-in functions highlighted
+
+### Changed
+- `view`, `txt`, `pdf`, `docx`, `xlsx` report modes now also support .ntc.ral and .ntc.igcare files
+- Internal module structure refactored for extensibility
+- Help documentation updated with all new commands (dino, math, igcare, ral export/import)
+
+### Technical Improvements
+- String token support in math tokenizer (Token::Str, Expr::Str) with escape sequences
+- Byte-offset tracking in math tokenizer for precise LSP diagnostics
+- Grammar validation function (`validate()`) used by LSP
+- Completion engine with exact-match-first + alphabetical sorting
+- Manual JSON-RPC LSP implementation without external crate dependencies
+
 ## [1.8.0] - 2026-05-31
 
 ### Added

@@ -9,7 +9,7 @@ const TEXT_EXTENSIONS: &[&str] = &[
     "sh", "bat", "sql", "r", "swift", "kt", "scala", "lua", "perl",
     "csv", "gitignore", "dockerfile", "makefile", "readme", "license",
     "jsx", "jsp", "tsx", "dart", "cs", "kts", "mq4", "mq5", "mqh" , "c3",
-    "nim" , "jai" , "zig" , "m" , "iss"
+    "nim" , "jai" , "zig" , "m" , "iss" , "ntc.ral" , "ntc.igcare","ntc.math"
 ];
 
 /// Known file extensions that are unsupported but should appear in tree
@@ -144,4 +144,3 @@ pub enum FileStatus {
     NotSupported,
     NotAFile,
 }
-

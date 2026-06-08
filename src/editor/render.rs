@@ -401,6 +401,10 @@ impl Editor {
             self.render_gosc(stdout)?;
         }
 
+        if self.completion_visible {
+            self.render_completion_popup(stdout)?;
+        }
+
         // ── horizontal scroll bar ──────────────────────────────────────────
         {
             let hrow = rows; // row index for the horizontal scroll bar (just above status)
@@ -1054,6 +1058,161 @@ impl Editor {
                     b: 36
                 }),
                 Print(hint),
+                ResetColor,
+                Clear(ClearType::UntilNewLine),
+            )?;
+        }
+
+        Ok(())
+    }
+
+    fn render_completion_popup(&self, stdout: &mut std::io::Stdout) -> std::io::Result<()> {
+        if !self.completion_visible || self.completion_items.is_empty() {
+            return Ok(());
+        }
+
+        let rows = self.term_h.saturating_sub(3);
+        let cols = self.term_w;
+        let eo = self.editor_offset();
+        let gw = gutter_width(self.lines.len());
+
+        // Cursor screen position
+        let cursor_col = byte_to_col(self.current(), self.cursor_byte);
+        let screen_cursor_x = if cursor_col >= self.scroll_x {
+            eo + gw + (cursor_col - self.scroll_x)
+        } else {
+            eo + gw
+        };
+        let screen_cursor_y = self.cursor_y.saturating_sub(self.scroll);
+
+        // Popup dimensions
+        let max_visible = 10usize.min(rows.saturating_sub(screen_cursor_y + 2).max(3));
+        let count = self.completion_items.len();
+        let visible = count.min(max_visible);
+
+        // Calculate width: max label + detail + padding
+        let mut max_label = 0;
+        let mut max_detail = 0;
+        for item in &self.completion_items {
+            let l = item.label.len();
+            let d = item.detail.len();
+            if l > max_label { max_label = l; }
+            if d > max_detail { max_detail = d; }
+        }
+        let popup_w = (max_label + 2 + max_detail + 4).min(cols.saturating_sub(screen_cursor_x + 1));
+
+        // Popup X: start at cursor, but keep within bounds
+        let popup_x = screen_cursor_x.min(cols.saturating_sub(popup_w + 1));
+
+        // Popup Y: one row below cursor, adjust if would overflow
+        let popup_y = if screen_cursor_y + 2 + visible < rows {
+            screen_cursor_y + 1
+        } else {
+            rows.saturating_sub(visible + 1)
+        };
+
+        // ── Draw popup background ──
+        let bg = Color::Rgb { r: 24, g: 24, b: 34 };
+        let border_fg = Color::Rgb { r: 80, g: 80, b: 100 };
+        for i in 0..visible + 2 {
+            let y = popup_y + i;
+            if y >= rows { break; }
+            queue!(
+                stdout,
+                MoveTo(popup_x as u16, y as u16),
+                SetBackgroundColor(bg),
+                SetForegroundColor(border_fg),
+                Print(" ".repeat(popup_w)),
+                ResetColor,
+            )?;
+        }
+
+        // ── Draw top border ──
+        let title = format!(" {} ", "completions");
+        let remaining = popup_w.saturating_sub(1 + title.len());
+        queue!(
+            stdout,
+            MoveTo(popup_x as u16, popup_y as u16),
+            SetBackgroundColor(bg),
+            SetForegroundColor(border_fg),
+            Print("┌"),
+            SetForegroundColor(Color::Rgb { r: 108, g: 108, b: 128 }),
+            Print(&title),
+            SetForegroundColor(border_fg),
+            Print("─".repeat(remaining)),
+            ResetColor,
+        )?;
+
+        // ── Draw items ──
+        for i in 0..visible {
+            let y = popup_y + 1 + i;
+            let item = &self.completion_items[i];
+            let is_sel = i == self.completion_idx;
+
+            let label_w = max_label.min(popup_w.saturating_sub(max_detail + 5));
+            let label = if item.label.len() > label_w {
+                format!("{}…", &item.label[..label_w.saturating_sub(1)])
+            } else {
+                item.label.clone()
+            };
+
+            let detail_w = max_detail.min(popup_w.saturating_sub(label_w + 4));
+            let detail = if item.detail.len() > detail_w {
+                format!("{}…", &item.detail[..detail_w.saturating_sub(1)])
+            } else {
+                item.detail.clone()
+            };
+
+            if is_sel {
+                queue!(
+                    stdout,
+                    MoveTo(popup_x as u16, y as u16),
+                    SetBackgroundColor(Color::Rgb { r: 44, g: 44, b: 68 }),
+                    SetForegroundColor(Color::White),
+                    Print(" "),
+                    SetForegroundColor(Color::Rgb { r: 162, g: 119, b: 255 }),
+                    Print(&label),
+                    SetForegroundColor(Color::Rgb { r: 108, g: 108, b: 128 }),
+                    Print("  "),
+                    SetForegroundColor(Color::Rgb { r: 150, g: 150, b: 170 }),
+                    Print(&detail),
+                    ResetColor,
+                    Clear(ClearType::UntilNewLine),
+                )?;
+            } else {
+                queue!(
+                    stdout,
+                    MoveTo(popup_x as u16, y as u16),
+                    SetBackgroundColor(bg),
+                    SetForegroundColor(Color::Rgb { r: 61, g: 61, b: 77 }),
+                    Print(" "),
+                    SetForegroundColor(Color::Rgb { r: 200, g: 200, b: 208 }),
+                    Print(&label),
+                    SetForegroundColor(Color::Rgb { r: 108, g: 108, b: 128 }),
+                    Print("  "),
+                    SetForegroundColor(Color::Rgb { r: 130, g: 130, b: 150 }),
+                    Print(&detail),
+                    ResetColor,
+                    Clear(ClearType::UntilNewLine),
+                )?;
+            }
+        }
+
+        // ── Draw bottom border ──
+        let bot_y = popup_y + 1 + visible;
+        if bot_y < rows {
+            let footer = if count > visible {
+                format!("└── {} more ({} total) ──", count - visible, count)
+            } else {
+                "└".to_string()
+            };
+            let _footer_w = footer.len().min(popup_w);
+            queue!(
+                stdout,
+                MoveTo(popup_x as u16, bot_y as u16),
+                SetBackgroundColor(bg),
+                SetForegroundColor(border_fg),
+                Print(&footer),
                 ResetColor,
                 Clear(ClearType::UntilNewLine),
             )?;

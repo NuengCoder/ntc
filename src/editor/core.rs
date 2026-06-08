@@ -21,6 +21,7 @@ impl Editor {
     pub(crate) fn clear_extra_cursors(&mut self) {
         if !self.extra_cursors.is_empty() {
             self.extra_cursors.clear();
+            self.last_added_cursor_idx = None;
             self.mark_all_dirty();
         }
     }

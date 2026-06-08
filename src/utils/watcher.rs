@@ -401,6 +401,7 @@ fn classify_file_type(path: &Path) -> String {
         // MQL
         "mq4" | "mq5"   => "MQL source".to_string(),
         "mqh"            => "MQL header".to_string(),
+        "ntc.ral" | "ntc.igcare" => "NTC source".to_string(),
         _                => format!(".{} file", ext),
     }
 }

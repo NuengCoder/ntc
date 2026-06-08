@@ -24,7 +24,17 @@ impl Editor {
         terminal::disable_raw_mode()?;
         let _ = execute!(stdout, DisableMouseCapture, Show, LeaveAlternateScreen);
         let _ = stdout.flush();
-        result.map_err(|_| anyhow::anyhow!("Editor panicked"))?
+        result.map_err(|e| {
+            let msg = if let Some(s) = e.downcast_ref::<&str>() {
+                s.to_string()
+            } else if let Some(s) = e.downcast_ref::<String>() {
+                s.clone()
+            } else {
+                "Unknown panic".to_string()
+            };
+            anyhow::anyhow!("Editor panicked: {}", msg)
+        })?
+
     }
 
     fn main_loop(&mut self, stdout: &mut std::io::Stdout) -> Result<bool> {

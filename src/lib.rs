@@ -5,6 +5,9 @@
 // Top-level modules (multi-file directories)
 pub mod cli;
 pub mod editor;
+pub mod game;
+pub mod lsp;
+pub mod math;
 pub mod report;
 pub mod shell;
 pub mod syntax;
@@ -23,6 +26,7 @@ pub use utils::output;
 pub use utils::search;
 pub use utils::teleport;
 pub use utils::watcher;
+pub use utils::session;
 
 // Re-export key types for convenience
 pub use config::Config;

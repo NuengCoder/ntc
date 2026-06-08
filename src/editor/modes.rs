@@ -291,6 +291,10 @@ impl Editor {
                     (true, KeyCode::Char('d')) => {
                         self.add_cursor_at_next_occurrence();
                     }
+                    // ── Ctrl+G: jump to last added cursor (multi-cursor) ─────
+                    (true, KeyCode::Char('g')) => {
+                        self.jump_to_last_cursor();
+                    }
                     // ── Horizontal scroll with Alt+Left/Right ─────────────────
                     (false, KeyCode::Left) if alt => {
                         self.scroll_x = self.scroll_x.saturating_sub(3);
@@ -982,6 +986,37 @@ impl Editor {
                 let ctrl = modifiers.contains(KeyModifiers::CONTROL);
                 let alt = modifiers.contains(KeyModifiers::ALT);
 
+                // ── Completion handling ──────────────────────────────────
+                if self.completion_visible {
+                    match (ctrl, code) {
+                        (false, KeyCode::Esc) => {
+                            self.dismiss_completion();
+                            return Ok(());
+                        }
+                        (false, KeyCode::Tab) => {
+                            self.select_next_completion();
+                            return Ok(());
+                        }
+                        (true, KeyCode::Char('n')) => {
+                            self.select_next_completion();
+                            return Ok(());
+                        }
+                        (true, KeyCode::Char('p')) => {
+                            self.select_prev_completion();
+                            return Ok(());
+                        }
+                        (false, KeyCode::Down) => {
+                            self.select_next_completion();
+                            return Ok(());
+                        }
+                        (false, KeyCode::Enter) => {
+                            self.apply_completion();
+                            return Ok(());
+                        }
+                        _ => {}
+                    }
+                }
+
                 match (ctrl, alt, shift, code) {
                     // ── File ops ──────────────────────────────────────────────
                     (true, _, _, KeyCode::Char('s')) => match self.save() {
@@ -1030,6 +1065,7 @@ impl Editor {
 
                     // ── Line operations / multi-cursor ─────────────────────────
                     (true, _, _, KeyCode::Char('d')) => self.add_cursor_at_next_occurrence(),
+                    (true, _, _, KeyCode::Char('g')) => self.jump_to_last_cursor(),
                     (true, _, _, KeyCode::Char('k')) => self.kill_line(),
                     (true, _, _, KeyCode::Char('l')) => self.select_line(),
                     (false, true, _, KeyCode::Up) => self.move_line_up(),
@@ -1125,24 +1161,36 @@ impl Editor {
 
                     // ── Shift+Arrow = extend selection ────────────────────────
                     (false, false, true, KeyCode::Up) => {
+                        if self.has_multiple_cursors() {
+                            self.clear_extra_cursors();
+                        }
                         self.start_or_extend_selection();
                         if self.cursor_y > 0 {
                             self.cursor_y -= 1;
                         }
                     }
                     (false, false, true, KeyCode::Down) => {
+                        if self.has_multiple_cursors() {
+                            self.clear_extra_cursors();
+                        }
                         self.start_or_extend_selection();
                         if self.cursor_y + 1 < self.lines.len() {
                             self.cursor_y += 1;
                         }
                     }
                     (false, false, true, KeyCode::Left) => {
+                        if self.has_multiple_cursors() {
+                            self.clear_extra_cursors();
+                        }
                         self.start_or_extend_selection();
                         if self.cursor_byte > 0 {
                             self.cursor_byte = prev_char_byte(self.current(), self.cursor_byte);
                         }
                     }
                     (false, false, true, KeyCode::Right) => {
+                        if self.has_multiple_cursors() {
+                            self.clear_extra_cursors();
+                        }
                         self.start_or_extend_selection();
                         let line = self.current();
                         let byte_len = line.len();
@@ -1153,33 +1201,41 @@ impl Editor {
 
                     // ── Ctrl+Arrow = word jump ────────────────────────────────
                     (true, _, false, KeyCode::Left) => {
-                        self.clear_selection();
-                        if self.cursor_byte > 0 {
-                            self.cursor_byte = prev_word_byte(self.current(), self.cursor_byte);
-                        } else if self.cursor_y > 0 {
-                            self.cursor_y -= 1;
-                            self.cursor_byte = self.current().len();
-                        }
+                        self.move_cursors(|e| {
+                            if e.cursor_byte > 0 {
+                                e.cursor_byte = prev_word_byte(e.current(), e.cursor_byte);
+                            } else if e.cursor_y > 0 {
+                                e.cursor_y -= 1;
+                                e.cursor_byte = e.current().len();
+                            }
+                        });
                     }
                     (true, _, false, KeyCode::Right) => {
-                        self.clear_selection();
-                        let line = self.current();
-                        if self.cursor_byte < line.len() {
-                            self.cursor_byte = next_word_byte(line, self.cursor_byte);
-                        } else if self.cursor_y + 1 < self.lines.len() {
-                            self.cursor_y += 1;
-                            self.cursor_byte = 0;
-                        }
+                        self.move_cursors(|e| {
+                            let line = e.current();
+                            if e.cursor_byte < line.len() {
+                                e.cursor_byte = next_word_byte(line, e.cursor_byte);
+                            } else if e.cursor_y + 1 < e.lines.len() {
+                                e.cursor_y += 1;
+                                e.cursor_byte = 0;
+                            }
+                        });
                     }
 
                     // ── Ctrl+Shift+Arrow = word-select ────────────────────────
                     (true, _, true, KeyCode::Left) => {
+                        if self.has_multiple_cursors() {
+                            self.clear_extra_cursors();
+                        }
                         self.start_or_extend_selection();
                         if self.cursor_byte > 0 {
                             self.cursor_byte = prev_word_byte(self.current(), self.cursor_byte);
                         }
                     }
                     (true, _, true, KeyCode::Right) => {
+                        if self.has_multiple_cursors() {
+                            self.clear_extra_cursors();
+                        }
                         self.start_or_extend_selection();
                         let line = self.current();
                         if self.cursor_byte < line.len() {
@@ -1189,55 +1245,65 @@ impl Editor {
 
                     // ── Home / End ────────────────────────────────────────────
                     (false, _, false, KeyCode::Home) => {
-                        self.clear_selection();
-                        // Smart home: jump to first non-whitespace, then to 0
-                        let first_non_ws = self
-                            .current()
-                            .char_indices()
-                            .find(|(_, c)| !c.is_whitespace())
-                            .map(|(b, _)| b)
-                            .unwrap_or(0);
-                        self.cursor_byte = if self.cursor_byte != first_non_ws {
-                            first_non_ws
-                        } else {
-                            0
-                        };
+                        self.move_cursors(|e| {
+                            let first_non_ws = e
+                                .current()
+                                .char_indices()
+                                .find(|(_, c)| !c.is_whitespace())
+                                .map(|(b, _)| b)
+                                .unwrap_or(0);
+                            e.cursor_byte = if e.cursor_byte != first_non_ws {
+                                first_non_ws
+                            } else {
+                                0
+                            };
+                        });
                     }
                     (false, _, false, KeyCode::End) => {
-                        self.clear_selection();
-                        self.cursor_byte = self.current().len();
+                        self.move_cursors(|e| {
+                            e.cursor_byte = e.current().len();
+                        });
                     }
                     (false, _, true, KeyCode::Home) => {
+                        if self.has_multiple_cursors() {
+                            self.clear_extra_cursors();
+                        }
                         self.start_or_extend_selection();
                         self.cursor_byte = 0;
                     }
                     (false, _, true, KeyCode::End) => {
+                        if self.has_multiple_cursors() {
+                            self.clear_extra_cursors();
+                        }
                         self.start_or_extend_selection();
                         self.cursor_byte = self.current().len();
                     }
                     // Ctrl+Home / Ctrl+End = file start/end
                     (true, _, _, KeyCode::Home) => {
-                        self.clear_selection();
-                        self.cursor_y = 0;
-                        self.cursor_byte = 0;
+                        self.move_cursors(|e| {
+                            e.cursor_y = 0;
+                            e.cursor_byte = 0;
+                        });
                     }
                     (true, _, _, KeyCode::End) => {
-                        self.clear_selection();
-                        self.cursor_y = self.lines.len().saturating_sub(1);
-                        self.cursor_byte = self.current().len();
+                        self.move_cursors(|e| {
+                            e.cursor_y = e.lines.len().saturating_sub(1);
+                            e.cursor_byte = e.current().len();
+                        });
                     }
 
                     // ── Page up / down ────────────────────────────────────────
                     (false, _, _, KeyCode::PageUp) => {
-                        self.clear_selection();
                         let rows = self.term_h.saturating_sub(3);
-                        self.cursor_y = self.cursor_y.saturating_sub(rows);
+                        self.move_cursors(|e| {
+                            e.cursor_y = e.cursor_y.saturating_sub(rows);
+                        });
                     }
                     (false, _, _, KeyCode::PageDown) => {
-                        self.clear_selection();
                         let rows = self.term_h.saturating_sub(3);
-                        self.cursor_y =
-                            (self.cursor_y + rows).min(self.lines.len().saturating_sub(1));
+                        self.move_cursors(|e| {
+                            e.cursor_y = (e.cursor_y + rows).min(e.lines.len().saturating_sub(1));
+                        });
                     }
 
                     // ── Tab / Shift+Tab ───────────────────────────────────────
@@ -1260,6 +1326,9 @@ impl Editor {
 
                     // ── Backspace / Delete ────────────────────────────────────
                     (false, false, _, KeyCode::Backspace) => {
+                        if self.completion_visible {
+                            self.dismiss_completion();
+                        }
                         if self.has_multiple_cursors() {
                             self.multi_backspace();
                         } else {
@@ -1267,6 +1336,9 @@ impl Editor {
                         }
                     }
                     (false, false, _, KeyCode::Delete) => {
+                        if self.completion_visible {
+                            self.dismiss_completion();
+                        }
                         if self.has_multiple_cursors() {
                             self.multi_delete_forward();
                         } else {
@@ -1288,6 +1360,10 @@ impl Editor {
                                 self.insert_at(c);
                             }
                         }
+                        // Auto-trigger completion for ntc.math files
+                        if self.syntax.language == Some(crate::syntax::SyntaxLanguage::NtcMath) {
+                            self.trigger_completion();
+                        }
                     }
                     (false, false, true, KeyCode::Char(c)) => {
                         if self.has_multiple_cursors() {
@@ -1301,6 +1377,10 @@ impl Editor {
                             } else {
                                 self.insert_at(c);
                             }
+                        }
+                        // Auto-trigger completion for ntc.math files
+                        if self.syntax.language == Some(crate::syntax::SyntaxLanguage::NtcMath) {
+                            self.trigger_completion();
                         }
                     }
 

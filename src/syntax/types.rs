@@ -16,6 +16,7 @@ pub enum TokenType {
     Macro,
     Regex,
     Tag,
+    Constant,
 }
 
 #[derive(Debug, Clone)]
@@ -67,6 +68,12 @@ pub enum SyntaxLanguage {
     Css,
     Bat,
     Ps1,
+    /// .ntc.ral — ntc run aliases export file (TOML format)
+    NtcRal,
+    /// .ntc.igcare — ntc ignore/care settings export file (TOML format)
+    NtcIgcare,
+    /// .ntc.math — ntc math expression file
+    NtcMath,
 }
 
 pub fn color_for(tt: TokenType) -> Color {
@@ -84,6 +91,7 @@ pub fn color_for(tt: TokenType) -> Color {
         TokenType::Macro => Color::Rgb { r: 176, g: 131, b: 240 },
         TokenType::Regex => Color::Rgb { r: 252, g: 169, b: 110 },
         TokenType::Tag => Color::Rgb { r: 80, g: 228, b: 200 },
+        TokenType::Constant => Color::Rgb { r: 229, g: 192, b: 123 },
         TokenType::Normal => Color::Rgb { r: 200, g: 200, b: 208 },
     }
 }
@@ -131,6 +139,9 @@ pub fn detect_language(ext: &str) -> Option<SyntaxLanguage> {
         "ps1" | "psm1" | "psd1" | "pssc" => Some(SyntaxLanguage::Ps1),
         "env" | "gitignore" | "dockerignore" | "hgignore" | "editorconfig"
         | "toml" | "ini" | "cfg" | "conf" => Some(SyntaxLanguage::Dotenv),
+        "ral" => Some(SyntaxLanguage::NtcRal),
+        "igcare" => Some(SyntaxLanguage::NtcIgcare),
+        "math" => Some(SyntaxLanguage::NtcMath),
         _ => None,
     }
 }

@@ -79,6 +79,14 @@ pub fn run_cli() -> Result<bool> {
         "--clear                     Clear the terminal screen",
         "--version                   Show version information",
         "--where                     Show ntc executable and config location",
+        "--ral-export-all <name>     Export all run aliases to <name>.ntc.ral",
+        "--ral-export-select <name>  Select run aliases to export to <name>.ntc.ral",
+        "--ral-import <file>         Import run aliases from .ntc.ral file",
+        "--igcare-export-all <name>  Export all ignore/care settings to <name>.ntc.igcare",
+        "--igcare-export-select <name>  Select categories to export to <name>.ntc.igcare",
+        "--igcare-import <file>      Import ignore/care settings from .ntc.igcare file",
+        "--dino                      Play the dinosaur runner game",
+        "--math <EXPR>               Evaluate a math expression (e.g. --math \"3+4*5\")",
         "--list, --fun               List all command-line functions",
         "--help                      Show help",
         "--tp-add <name>             Save current directory as teleport point",
@@ -278,6 +286,68 @@ pub fn run_cli() -> Result<bool> {
                 .value_name("FILE")
                 .help("Create starter file from template and open in editor")
                 .num_args(1),
+        )
+        .arg(
+            Arg::new("ral_export_all")
+                .long("ral-export-all")
+                .value_name("NAME")
+                .help("Export all run aliases to <name>.ntc.ral")
+                .num_args(1),
+        )
+        .arg(
+            Arg::new("ral_export_select")
+                .long("ral-export-select")
+                .value_name("NAME")
+                .help("Select run aliases to export to <name>.ntc.ral")
+                .num_args(1),
+        )
+        .arg(
+            Arg::new("ral_import")
+                .long("ral-import")
+                .value_name("FILE")
+                .help("Import run aliases from .ntc.ral file")
+                .num_args(1),
+        )
+        .arg(
+            Arg::new("igcare_export_all")
+                .long("igcare-export-all")
+                .value_name("NAME")
+                .help("Export all ignore/care settings to <name>.ntc.igcare")
+                .num_args(1),
+        )
+        .arg(
+            Arg::new("igcare_export_select")
+                .long("igcare-export-select")
+                .value_name("NAME")
+                .help("Select categories to export to <name>.ntc.igcare")
+                .num_args(1),
+        )
+        .arg(
+            Arg::new("igcare_import")
+                .long("igcare-import")
+                .value_name("FILE")
+                .help("Import ignore/care settings from .ntc.igcare file")
+                .num_args(1),
+        )
+        .arg(
+            Arg::new("dino")
+                .long("dino")
+                .help("Play the dinosaur runner game")
+                .action(ArgAction::SetTrue),
+        )
+        .arg(
+            Arg::new("math")
+                .long("math")
+                .value_name("EXPR")
+                .help("Evaluate a math expression")
+                .num_args(1..),
+        )
+        .arg(
+            Arg::new("lsp")
+                .long("lsp")
+                .help("Start the ntc-math LSP server over stdio")
+                .action(ArgAction::SetTrue)
+                .hide(true),
         )
         .try_get_matches_from(args)?;
 
@@ -689,6 +759,64 @@ pub fn run_cli() -> Result<bool> {
     // --- Handle --edit ---
     if let Some(path) = matches.get_one::<String>("edit") {
         crate::editor::edit_file(std::path::Path::new(path))?;
+        return Ok(false);
+    }
+
+    // --- Handle --dino ---
+    if matches.get_flag("dino") {
+        crate::game::run()?;
+        return Ok(false);
+    }
+
+    // --- Handle --math ---
+    if let Some(exprs) = matches.get_many::<String>("math") {
+        let input: Vec<&str> = exprs.map(|s| s.as_str()).collect();
+        let joined = input.join(" ");
+        crate::math::run(&joined)?;
+        return Ok(false);
+    }
+
+    // --- Handle --ral-export-all ---
+    if let Some(name) = matches.get_one::<String>("ral_export_all") {
+        crate::shell::helpers::ral_export_all(name)?;
+        return Ok(false);
+    }
+
+    // --- Handle --ral-export-select ---
+    if let Some(name) = matches.get_one::<String>("ral_export_select") {
+        use crate::navigator::Navigator;
+        let mut nav = Navigator::new()?;
+        crate::shell::helpers::ral_export_select(&mut nav, name)?;
+        return Ok(false);
+    }
+
+    // --- Handle --ral-import ---
+    if let Some(file) = matches.get_one::<String>("ral_import") {
+        crate::shell::helpers::ral_import(file)?;
+        return Ok(false);
+    }
+
+    // --- Handle --igcare-export-all ---
+    if let Some(name) = matches.get_one::<String>("igcare_export_all") {
+        crate::shell::helpers::igcare_export_all(name)?;
+        return Ok(false);
+    }
+
+    // --- Handle --igcare-export-select ---
+    if let Some(name) = matches.get_one::<String>("igcare_export_select") {
+        crate::shell::helpers::igcare_export_select(name)?;
+        return Ok(false);
+    }
+
+    // --- Handle --igcare-import ---
+    if let Some(file) = matches.get_one::<String>("igcare_import") {
+        crate::shell::helpers::igcare_import(file)?;
+        return Ok(false);
+    }
+
+    // --- Handle --lsp ---
+    if matches.get_flag("lsp") {
+        crate::lsp::run_server()?;
         return Ok(false);
     }
 

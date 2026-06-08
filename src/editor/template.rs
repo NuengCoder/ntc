@@ -3,6 +3,7 @@ use std::path::Path;
 use anyhow::Result;
 
 use super::Editor;
+use crate::session::EditorSession;
 
 // ── template generation ──────────────────────────────────────────────────────
 
@@ -227,6 +228,18 @@ object Main {
 print_endline \"Hello, World!\"
 "
         }
+        "math" => {
+            "\
+# ntc.math — math evaluator
+
+# Examples:
+PI * 2
+sqrt(144)
+sin(PI / 2)
+
+# Built-ins: sin, cos, tan, sqrt, pow, abs, floor, ceil, round, ln, log, rand, sum, min, max, avg
+"
+        }
         _ => "",
     }
 }
@@ -249,10 +262,26 @@ pub fn init_file(path: &Path) -> Result<bool> {
 // ── handle __exit__ sentinel ─────────────────────────────────────────────────
 
 pub fn edit_file(path: &Path) -> Result<bool> {
+    edit_file_with_session(path, None).map(|(r, _)| r)
+}
+
+pub fn edit_file_with_session(path: &Path, restored: Option<EditorSession>) -> Result<(bool, Option<EditorSession>)> {
     let mut editor = Editor::new(path)?;
-    match editor.run() {
-        Ok(v) => Ok(v),
-        Err(e) if e.to_string() == "__exit__" => Ok(false),
-        Err(e) => Err(e),
+    if let Some(ref session) = restored {
+        // Only restore cursor position if file path matches
+        if session.current_file == path {
+            editor.restore_from_session(session);
+        }
     }
+    let result = match editor.run() {
+        Ok(v) => v,
+        Err(e) if e.to_string() == "__exit__" => false,
+        Err(e) => return Err(e),
+    };
+    let captured = if result {
+        None
+    } else {
+        Some(editor.capture_session())
+    };
+    Ok((result, captured))
 }

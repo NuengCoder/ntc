@@ -20,12 +20,14 @@ pub(super) fn line_comment_prefix(lang: SyntaxLanguage) -> &'static [u8] {
         | SyntaxLanguage::Pro
         | SyntaxLanguage::Dotenv
         | SyntaxLanguage::Ps1 => b"#",
+        SyntaxLanguage::NtcRal | SyntaxLanguage::NtcIgcare | SyntaxLanguage::NtcMath => b"#",
         SyntaxLanguage::Lua | SyntaxLanguage::Haskell | SyntaxLanguage::Elixir => {
             b"--"
         }
         SyntaxLanguage::Erlang => b"%",
         SyntaxLanguage::Bat => b"::",
-        SyntaxLanguage::Html | SyntaxLanguage::Json | SyntaxLanguage::Markdown | SyntaxLanguage::Txt | SyntaxLanguage::Css => {
+        SyntaxLanguage::Html | SyntaxLanguage::Json
+        | SyntaxLanguage::Markdown | SyntaxLanguage::Txt | SyntaxLanguage::Css => {
             b""
         }
         _ => b"//",
@@ -429,6 +431,14 @@ pub(super) fn is_keyword(lang: SyntaxLanguage, word: &str) -> bool {
             word,
             "module" | "go" | "require" | "replace" | "exclude" | "retract"
         ),
+        SyntaxLanguage::NtcRal | SyntaxLanguage::NtcIgcare => matches!(
+            word,
+            "true" | "false"
+        ),
+        SyntaxLanguage::NtcMath => matches!(
+            word,
+            "return" | "true" | "false"
+        ),
         SyntaxLanguage::Bat => matches!(
             word,
             "echo" | "set" | "if" | "else" | "for" | "in" | "do" | "goto"
@@ -630,6 +640,28 @@ pub(super) fn is_builtin(lang: SyntaxLanguage, word: &str) -> bool {
                 | "parse" | "tryparse" | "convert" | "promote" | "oftype"
                 | "AbstractRange" | "StepRange" | "UnitRange" | "LinRange"
         ),
+        SyntaxLanguage::NtcRal => matches!(
+            word,
+            "run_aliases"
+        ),
+        SyntaxLanguage::NtcIgcare => matches!(
+            word,
+            "ignored_directory_names" | "ignored_extensions"
+                | "extra_supported_extensions" | "ignored_files"
+                | "extra_supported_files"
+        ),
+        SyntaxLanguage::NtcMath => matches!(
+            word,
+            "sin" | "cos" | "tan" | "cot" | "sec" | "csc"
+                | "asin" | "acos" | "atan" | "acot" | "asec" | "acsc"
+                | "arcsin" | "arccos" | "arctan" | "arccot" | "arcsec" | "arccsc"
+                | "sqrt" | "pow" | "abs" | "floor" | "ceil" | "ceiling" | "round"
+                | "ln" | "log" | "log2" | "log10"
+                | "sum" | "min" | "max" | "avg" | "average" | "mean"
+                | "rand" | "random"
+                | "tobinary" | "tohex" | "to8" | "tooctal" | "todecimal"
+                | "tohb" | "tohumanbytes" | "tohumanreadable"
+        ),
         _ => matches!(
             word,
             "true" | "false" | "null" | "nil" | "None" | "self" | "Self" | "this" | "super"
@@ -639,4 +671,19 @@ pub(super) fn is_builtin(lang: SyntaxLanguage, word: &str) -> bool {
 
 pub(super) fn is_function_call(_word: &str, next_byte: Option<u8>) -> bool {
     next_byte == Some(b'(')
+}
+
+pub(super) fn has_toml_fields(lang: SyntaxLanguage) -> bool {
+    matches!(lang, SyntaxLanguage::NtcRal | SyntaxLanguage::NtcIgcare)
+}
+
+pub(super) fn is_constant(lang: SyntaxLanguage, word: &str) -> bool {
+    match lang {
+        SyntaxLanguage::NtcMath => matches!(
+            word,
+            "PI" | "pi" | "E" | "e" | "EXP" | "exp"
+                | "PHI" | "phi" | "TAU" | "tau"
+        ),
+        _ => false,
+    }
 }

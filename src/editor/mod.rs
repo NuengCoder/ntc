@@ -11,6 +11,7 @@ mod mouse;
 mod run;
 mod template;
 mod editor_config;
+mod completion;
 
 // ── re-exports for sibling modules ──────────────────────────────────────────
 
@@ -18,6 +19,7 @@ pub(crate) use types::{
     Editor, Mode, Snapshot, CursorPos,
     MAX_UNDO, SIDEBAR_WIDTH, MAX_BUFFERS,
 };
+pub(crate) use completion::CompletionItem;
 
 pub(crate) use unicode::{
     char_col_width, byte_to_col, col_to_byte,
@@ -32,4 +34,4 @@ pub(crate) use helpers::{
 
 // ── public API ──────────────────────────────────────────────────────────────
 
-pub use template::{edit_file, init_file, generate_template};
+pub use template::{edit_file, edit_file_with_session, init_file, generate_template};

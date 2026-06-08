@@ -1,25 +1,37 @@
-## Quick Demo (v2.0.0)
+## Quick Demo (v2.1.0)
 
 ```bash
-# Built-in text editor (ntcEditor)
-ntc
-ne myfile.txt                     # Open file in built-in editor
-ne --init main.rs                 # Create file with template
+# Math expression evaluator
+math 3+4*5                        # → 23
+math sin(PI/2)                    # → 1
+math print("hello world")         # hello world
+math script.ntc.math              # Run .ntc.math file
 
-# Search and navigate
-fgo main.c                        # Search files, pick one, navigate to its parent
-fsc main.c                        # Search files, pick one, display its contents
-locate test                       # Combined file + directory search
+# Dinosaur runner game (when bored)
+dino                              # Press space to jump, avoid obstacles
+
+# Export/Import run aliases
+ral export --all myaliases        # Save all aliases to .ntc.ral
+ral import myaliases.ntc.ral      # Restore aliases
+
+# Export/Import ignore/care settings
+igcare export --all myproject     # Save all filter rules to .ntc.igcare
+igcare import myproject.ntc.igcare # Restore filters
+
+# Built-in text editor with math auto-completion
+ntc
+ne math_file.ntc.math              # Open .ntc.math file
+# Type "si" → auto-complete to "sin", "sqrt", etc.
 
 # Backup diff
 bkup
 # ... make changes ...
 diff 1                            # Show diff vs backup #1
 
-# New report formats
-pdf                               # Generate PDF report
-docx                              # Generate DOCX report
-xlsx                              # Generate XLSX report
+# PDF / DOCX / XLSX reports
+pdf
+docx
+xlsx
 
 # Color toggle
 setc OFF                          # Disable color output

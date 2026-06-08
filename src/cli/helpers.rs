@@ -54,6 +54,7 @@ pub(super) fn print_help() {
     println!("    --view --care           Quick view with tree caring everything (sizes too)");
     println!("    --clear                 Clear the terminal screen");
     println!("    --version               Show version information");
+    println!("    --math <EXPR>           Evaluate a math expression (e.g. --math \"3+4*5\")");
     println!("    --list, --fun           List all command-line functions");
     println!("    --help                  Show this help message\n");
     println!("{}", "IGNORE/CARE OPTIONS:".cyan().bold());
@@ -72,6 +73,8 @@ pub(super) fn print_help() {
     println!("{}", "EXAMPLES:".cyan().bold());
     println!("    ntc                         Launch interactive mode");
     println!("    ntc @web                    Launch and teleport to 'web' savepoint");
+    println!("    ntc --math \"3+4*5\"          Evaluate math expression");
+    println!("    ntc --math \"sin(PI/2)\"      Math with functions and constants");
     println!("    ntc -i src                  Generate report of src directory");
     println!("    ntc -i src -o report.html   Generate HTML report");
     println!("    ntc -i src --cp             Copy directory tree to clipboard");
@@ -90,6 +93,8 @@ pub(super) fn print_help() {
     println!("    Teleport: tp, tp jump, tp to, @name");
     println!("    Reports: txt, txt --cp, json --cp, md --cp");
     println!("    Configuration: showcg, opencg, resetcg, restorecg");
-    println!("    Run Aliases: ral add, ral edit, ral list, ral rm, ral cls");
+    println!("    Run Aliases: ral add, ral edit, ral list, ral rm, ral cls, ral export, ral import");
+    println!("    Ignore/Care: igcare, igcare export, igcare import, ignoresc, caresc");
+    println!("    Math: math <expr>, math fun, math timer, math <file>.ntc.math");
     println!("    These commands only work inside the interactive shell (run 'ntc' alone).\n");
 }

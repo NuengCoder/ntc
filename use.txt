@@ -1,7 +1,7 @@
 # NTC - Navigate, Tree, Cat
-## Version 2.0.0 - Complete User Guide
+## Version 2.1.0 - Complete User Guide
 
-NTC is a command-line tool that combines directory navigation, tree viewing, file concatenation, backup/restore, fuzzy search, built-in text editor, and syntax highlighting. It works on Windows, Linux/WSL, macOS, and Termux (Android).
+NTC is a command-line tool that combines directory navigation, tree viewing, file concatenation, backup/restore, fuzzy search, built-in text editor, syntax highlighting, math expression evaluator, and a dinosaur runner game. It works on Windows, Linux/WSL, macOS, and Termux (Android).
 
 ## INSTALLATION
 
@@ -291,6 +291,11 @@ ntc includes a full-featured built-in text editor for editing files directly fro
   ral cls                          - Clear ALL aliases (asks confirmation)
   ral cls --force                  - Clear ALL aliases (no confirmation)
 
+### Export/Import aliases:
+  ral export --all <name>          - Export all aliases to <name>.ntc.ral
+  ral export --select <name>       - Select which aliases to export
+  ral import <file.ntc.ral>        - Import aliases from .ntc.ral file
+
 ### Alias Rules:
   - Cannot start with @ or #
   - Cannot be reserved commands (go, view, txt, bkup, pldw, unpd, fs, ds, etc.)
@@ -383,6 +388,11 @@ Place an `ntconfig.toml` file in any directory to override settings for that pro
   ignoren <filename>               - Ignore specific file (e.g., "Cargo.lock")
   caren <filename>                 - Stop ignoring a specific file
 
+### Export/Import ignore/care settings:
+  igcare export --all <name>       - Export all settings to <name>.ntc.igcare
+  igcare export --select <name>    - Select categories to export
+  igcare import <file.ntc.igcare>  - Import settings from .ntc.igcare file
+
 Note: Commands automatically save to ntconfig.toml if present, otherwise to global config.
 
 ## PIPING COMMANDS (Interactive Mode)
@@ -405,6 +415,77 @@ Chain multiple commands with &&:
   version                          - Show version information
   help                             - Show interactive help
   exit or quit                     - Exit ntc
+
+## MATH EXPRESSION EVALUATOR
+
+ntc includes a full math expression evaluator with built-in functions and constants.
+
+### Interactive mode:
+  math <expression>                - Evaluate a math expression
+  math 3+4*5                      # → 23
+  math sin(PI/2)                  # → 1
+  math sqrt(144)                   # → 12
+  math print("hello world")       # → hello world
+  math rand(1,100)                 # → 42
+
+### Named arguments and string literals:
+  math print("the answer is", 42)  # → the answer is 42
+  math print("line1\nline2")       # multi-line with escape sequences
+
+### Timer:
+  math timer                       - Start lap timer
+  math timer 10                    - Countdown 10 seconds
+
+### File mode (.ntc.math):
+  math <file>.ntc.math             - Compile and run a math script file
+  # Example file content:
+  #   x = 42
+  #   print("x is", x)
+  #   return x * 2
+
+### Built-in functions:
+  print:   print values (like Python — accepts strings and numbers)
+  trig:    sin, cos, tan, cot, sec, csc
+  inverse: arcsin/asin, arccos/acos, arctan/atan, arccot/acot, arcsec/asec, arccsc/acsc
+  math:    sqrt, pow(x,y), abs, floor, ceil, ceiling, round, ln/log, log2, log10
+  agg:     sum, min, max, avg/average/mean
+  conv:    toBinary, toHex, to8/toOctal, toDecimal, toHB/toHumanBytes
+  rand:    rand(min, max)
+
+### Constants:
+  PI, E/EXP, PHI, TAU
+
+### User-defined functions:
+  math fun add <name>(<params>) = <body>     - Define a function
+  math fun edit <name> = <body>              - Update a function
+  math fun rm <name>                         - Remove a function
+  math fun info <name>                       - Show function details
+  math fun ls                                - List all functions
+
+  Example:
+    math fun add square(x) = x^2
+    math square(5)                           # → 25
+
+### Command-line flag:
+  ntc --math "3+4*5"                         - Evaluate from command line
+
+## DINOSAUR RUNNER GAME
+
+Play a Chrome-style dinosaur runner game right in your terminal.
+
+  dino                                 - Start the game
+
+### How to play:
+  - Press Space or Up Arrow to jump
+  - Avoid obstacles (cacti and birds)
+  - Score increases over time
+  - High score is saved to dino.toml
+
+### Features:
+  - Persistent high score
+  - Game over detection
+  - Restart prompt on game over
+  - Full terminal rendering with obstacles
 
 ## SYNTAX HIGHLIGHTING
 
@@ -602,6 +683,14 @@ The interactive shell and built-in editor support syntax highlighting for:
 | Jump to teleport | @name |
 | Create alias | ral add name "cmd" |
 | Create param alias | ral add name(x,y) "cmd $x $y" |
+| Export aliases | ral export --all name |
+| Import aliases | ral import file.ntc.ral |
+| Export ignore/care | igcare export --all name |
+| Import ignore/care | igcare import file.ntc.igcare |
+| Math expression | math 3+4*5 |
+| Math script file | math file.ntc.math |
+| Math user function | math fun add name(x) = body |
+| Dinosaur game | dino |
 | Run alias | name |
 | Show config | showcg |
 | Open config file | opencg |
@@ -612,7 +701,7 @@ The interactive shell and built-in editor support syntax highlighting for:
 | Exit | exit |
 
 ## SUPPORTED FILE EXTENSIONS (Default)
-  txt, md, rs, py, c, cpp, js, html, css, json, toml, yaml, xml, sh, java, go, rb, php, sql, ts, tsx, jsx, swift, kt, scala, dart, r, lua, hs, ex, exs, zig, nim, and many more
+  txt, md, rs, py, c, cpp, js, html, css, json, toml, yaml, xml, sh, java, go, rb, php, sql, ts, tsx, jsx, swift, kt, scala, dart, r, lua, hs, ex, exs, zig, nim, ntc.ral, ntc.igcare, ntc.math, and many more
 
 ## PLATFORM DIFFERENCES
 
@@ -650,7 +739,7 @@ The interactive shell and built-in editor support syntax highlighting for:
   - Syntax highlighting
 
 ## VERSION HISTORY
-  v2.0.0 - Built-in text editor (ntcEditor) with full keyboard/mouse support, syntax highlighting, new report formats (PDF, DOCX, XLSX), backup diff command, search + navigate (fgo), search + display (fsc), combined locate search, color toggle (setc), codebase refactored into modules, improved cross-platform support
+  v2.1.0 - Math expression evaluator (built-in functions, constants, user functions, print(), .ntc.math script files), Dinosaur runner game (dino), RAL export/import (.ntc.ral), IGCARE export/import (.ntc.igcare), ntcEditor in-editor auto-completion for .ntc.math, LSP server for .ntc.math, NtcMath syntax highlighting with dedicated Constant token type
   v1.9.0 - Internal refactoring and library export support
   v1.8.0 - Backup & restore system (bkup, pldw, unpd), fuzzy file/directory search (fs, ds), view flags (-s, -d), go to / cd to teleport, RAL multiple arguments, 50MB file limit, ignore.txt generation, atomic backups, full undo support, Termux compatibility
   v1.7.0 - Local project configs (ntconfig.toml), config management commands (opencg, resetcg, restorecg, gencg), improved alias expansion with &&, recursive alias support

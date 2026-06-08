@@ -6,6 +6,7 @@ use crate::syntax::language::{
     is_rust_attr_start, has_annotation_at, has_css_at_rules,
     is_css_at_rule, is_css_property, is_keyword, is_type_name,
     is_type_name_upper_heuristic, is_builtin, is_function_call,
+    is_constant, has_toml_fields,
 };
 use super::types::detect_language;
 
@@ -572,6 +573,34 @@ impl SyntaxHighlighter {
                 i = start;
             }
 
+            if has_toml_fields(lang) && bytes[i] == b'[' {
+                let start = i;
+                i += 1;
+                let mut depth = 1;
+                while i < len && depth > 0 {
+                    if bytes[i] == b'[' {
+                        depth += 1;
+                    } else if bytes[i] == b']' {
+                        depth -= 1;
+                    } else if bytes[i] == b'"' {
+                        i += 1;
+                        while i < len && bytes[i] != b'"' {
+                            if bytes[i] == b'\\' { i += 1; }
+                            i += 1;
+                        }
+                        if i < len { i += 1; }
+                        continue;
+                    }
+                    i += 1;
+                }
+                tokens.push(Token {
+                    start,
+                    end: i.min(len),
+                    token_type: TokenType::Tag,
+                });
+                continue;
+            }
+
             if is_ident_start(bytes[i]) {
                 let start = i;
                 while i < len && is_ident_continue(bytes[i]) {
@@ -596,6 +625,8 @@ impl SyntaxHighlighter {
                     TokenType::Type
                 } else if is_type_name_upper_heuristic(lang) && word.starts_with(|c: char| c.is_uppercase()) && word.len() > 1 {
                     TokenType::Type
+                } else if is_constant(lang, word) {
+                    TokenType::Constant
                 } else if is_builtin(lang, word) {
                     TokenType::Builtin
                 } else if matches!(lang, SyntaxLanguage::Css) && is_css_property(word) {

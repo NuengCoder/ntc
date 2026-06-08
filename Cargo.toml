@@ -1,6 +1,6 @@
 [package]
 name = "ntc"
-version = "2.0.0"
+version = "2.1.0"
 edition = "2021"
 description = "Navigate, Tree, Cat - A combined directory tree viewer and file concatenator"
 authors = ["NuengCoder"]
@@ -34,6 +34,7 @@ printpdf = "0.5"
 docx-rs = "0.4"
 rust_xlsxwriter = "0.95"
 crossterm = "0.28"
+rand = "0.8"
 [target.'cfg(not(target_os = "android"))'.dependencies]
 arboard = "3.4"
 

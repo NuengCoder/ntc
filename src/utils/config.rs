@@ -52,6 +52,9 @@ pub struct Config {
     #[serde(default)]
     pub run_aliases: HashMap<String, String>,
 
+    #[serde(default)]
+    pub math_functions: HashMap<String, String>,
+
     /// Set via `watch trigger <alias>` or `watch trigger off`.
     #[serde(default)]
     pub watch_trigger_alias: Option<String>,
@@ -64,7 +67,7 @@ pub fn validate_alias_name(name: &str) -> bool {
         "seto", "setd", "setl", "sett", "seth", "watch", "clear", "version", "where",
         "gos", "gosc", "ral", "run", "r", "showcg", "help", "exit", "quit", "ignored",
         "ignore", "cared", "ignoref", "caref", "ignoren", "caren", "size", "tp", "opencg",
-        "resetcg", "restorecg", "gencg", "ne", "ntceditor"
+        "resetcg", "restorecg", "gencg", "ne", "ntceditor", "igcare"
     ];
     
     if name.contains('@') || name.contains('#') {
@@ -115,6 +118,7 @@ impl Config {
             color_enabled: default_color_enabled(),
             teleports: HashMap::new(),
             run_aliases: HashMap::new(),
+            math_functions: HashMap::new(),
             watch_trigger_alias: None,
         }
     }
@@ -478,6 +482,35 @@ impl Config {
         }
     }
 
+    // ---- Math functions (global only) ----
+
+    pub fn global_get_math_fns() -> HashMap<String, String> {
+        Self::global().read().unwrap().math_functions.clone()
+    }
+
+    pub fn global_add_math_fn(name: &str, def: &str) {
+        let mut cfg = Self::global().write().unwrap();
+        cfg.math_functions.insert(name.to_lowercase(), def.to_string());
+        cfg.save();
+    }
+
+    pub fn global_remove_math_fn(name: &str) {
+        let mut cfg = Self::global().write().unwrap();
+        cfg.math_functions.remove(&name.to_lowercase());
+        cfg.save();
+    }
+
+    pub fn global_update_math_fn(name: &str, def: &str) -> bool {
+        let mut cfg = Self::global().write().unwrap();
+        if let std::collections::hash_map::Entry::Occupied(mut e) = cfg.math_functions.entry(name.to_lowercase()) {
+            e.insert(def.to_string());
+            cfg.save();
+            true
+        } else {
+            false
+        }
+    }
+
     // ---- Local config file operations ----
 
     /// Get the path to ntconfig.toml in current directory if it exists
@@ -746,7 +779,67 @@ impl Config {
         let mut cfg = Self::global().write().unwrap();
         cfg.watch_trigger_alias = alias;
         cfg.save();
-}
+    }
+
+    // ---- Import helpers ----
+
+    /// Import run aliases from a `.ntc.ral` file and merge into local or global config.
+    pub fn import_run_aliases_from_file(path: &Path) -> std::result::Result<(), Box<dyn std::error::Error>> {
+        let content = std::fs::read_to_string(path)?;
+        #[derive(Deserialize)]
+        struct RalFile {
+            run_aliases: Option<std::collections::HashMap<String, String>>,
+        }
+        let ral: RalFile = toml::from_str(&content)?;
+        if let Some(aliases) = ral.run_aliases {
+            for (name, cmd) in &aliases {
+                Self::local_add_run_alias(name, cmd)?;
+            }
+        }
+        Ok(())
+    }
+
+    /// Import ignore/care settings from a `.ntc.igcare` file and merge into local or global config.
+    pub fn import_igcare_from_file(path: &Path) -> std::result::Result<(), Box<dyn std::error::Error>> {
+        let content = std::fs::read_to_string(path)?;
+        #[derive(Deserialize)]
+        struct IgcareFile {
+            ignored_directory_names: Option<Vec<String>>,
+            ignored_extensions: Option<Vec<String>>,
+            extra_supported_extensions: Option<Vec<String>>,
+            ignored_files: Option<Vec<String>>,
+            extra_supported_files: Option<Vec<String>>,
+        }
+        let igc: IgcareFile = toml::from_str(&content)?;
+
+        // Merge each category — add each item to the current config
+        if let Some(ref dirs) = igc.ignored_directory_names {
+            for dir in dirs {
+                Self::local_add_ignored_dir(dir)?;
+            }
+        }
+        if let Some(ref exts) = igc.ignored_extensions {
+            for ext in exts {
+                Self::local_add_ignored_extension(ext)?;
+            }
+        }
+        if let Some(ref exts) = igc.extra_supported_extensions {
+            for ext in exts {
+                Self::local_add_extra_supported_extension(ext)?;
+            }
+        }
+        if let Some(ref files) = igc.ignored_files {
+            for file in files {
+                Self::local_add_ignored_file(file)?;
+            }
+        }
+        if let Some(ref files) = igc.extra_supported_files {
+            for file in files {
+                Self::local_add_extra_supported_file(file)?;
+            }
+        }
+        Ok(())
+    }
     
 }
 

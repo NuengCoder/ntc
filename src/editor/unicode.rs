@@ -109,7 +109,6 @@ pub(crate) fn auto_pair(c: char) -> Option<char> {
         '[' => Some(']'),
         '(' => Some(')'),
         '{' => Some('}'),
-        '\'' => Some('\''),
         '"' => Some('"'),
         _ => None,
     }

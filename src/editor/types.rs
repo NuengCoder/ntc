@@ -4,6 +4,7 @@ use std::path::Path;
 use anyhow::{Context, Result};
 
 use crate::editor::editor_config::EditorConfig;
+use crate::session::EditorSession;
 use crate::syntax::SyntaxHighlighter;
 
 // ── constants ────────────────────────────────────────────────────────────────
@@ -257,6 +258,8 @@ pub(crate) struct Editor {
 
     // Multi-cursor: extra cursors beyond the primary (cursor_y, cursor_byte)
     pub(crate) extra_cursors: Vec<CursorPos>,
+    // Index into extra_cursors of the most recently added cursor (for jump-to-last)
+    pub(crate) last_added_cursor_idx: Option<usize>,
 
     // Left-side file explorer sidebar
     pub(crate) sidebar: Sidebar,
@@ -273,6 +276,12 @@ pub(crate) struct Editor {
     // Recently opened files buffer stack
     pub(crate) buffer_stack: Vec<std::path::PathBuf>,
     pub(crate) buffer_idx: usize,
+
+    // Completion state
+    pub(crate) completion_items: Vec<super::CompletionItem>,
+    pub(crate) completion_idx: usize,
+    pub(crate) completion_visible: bool,
+    pub(crate) completion_prefix: String,
 }
 
 impl Editor {
@@ -324,6 +333,7 @@ impl Editor {
             editor_cfg: EditorConfig::load(),
             syntax,
             extra_cursors: Vec::new(),
+            last_added_cursor_idx: None,
             sidebar: Sidebar::new(),
             ff_query: String::new(),
             ff_results: Vec::new(),
@@ -332,6 +342,38 @@ impl Editor {
             gosc_buf: String::new(),
             buffer_stack: vec![path.to_path_buf()],
             buffer_idx: 0,
+            completion_items: Vec::new(),
+            completion_idx: 0,
+            completion_visible: false,
+            completion_prefix: String::new(),
         })
+    }
+
+    // ── session persistence ──────────────────────────────────────────────────
+
+    pub(crate) fn capture_session(&self) -> EditorSession {
+        EditorSession {
+            current_file: self.path.clone(),
+            cursor_y: self.cursor_y,
+            cursor_byte: self.cursor_byte,
+            scroll: self.scroll,
+            scroll_x: self.scroll_x,
+            buffer_stack: self.buffer_stack.clone(),
+            buffer_idx: self.buffer_idx,
+            sidebar_open: self.sidebar.open,
+        }
+    }
+
+    pub(crate) fn restore_from_session(&mut self, session: &EditorSession) {
+        let max = self.lines.len().saturating_sub(1);
+        self.cursor_y = session.cursor_y.min(max);
+        self.cursor_byte = session.cursor_byte.min(self.current().len());
+        self.scroll = session.scroll.min(max);
+        self.scroll_x = session.scroll_x;
+        self.sidebar.open = session.sidebar_open;
+        if !session.buffer_stack.is_empty() {
+            self.buffer_stack = session.buffer_stack.clone();
+            self.buffer_idx = session.buffer_idx.min(self.buffer_stack.len().saturating_sub(1));
+        }
     }
 }

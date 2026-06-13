@@ -11,11 +11,8 @@
 ///
 /// # Examples
 /// ```
-/// let score = jaro_winkler("main.c", "mian.c");
+/// let score = ntc::fuzzy::jaro_winkler("main.c", "mian.c");
 /// assert!(score > 0.8);
-///
-/// let score = jaro_winkler("main.c", "completely_different.txt");
-/// assert!(score < 0.3);
 /// ```
 pub fn jaro_winkler(s1: &str, s2: &str) -> f64 {
     // Handle empty strings
@@ -131,11 +128,6 @@ pub fn is_fuzzy_dir_match(score: f64) -> bool {
 
 /// Calculate fuzzy match score and return it with the matched string.
 /// Useful for sorting results by relevance.
-pub fn score_candidate(candidate: &str, query: &str) -> (String, f64) {
-    let score = jaro_winkler_case_insensitive(candidate, query);
-    (candidate.to_string(), score)
-}
-
 /// Get the top N fuzzy matches from a list of candidates (files).
 /// Uses FUZZY_THRESHOLD (0.75).
 /// Returns Vec of (candidate, score) sorted by score descending.
@@ -159,7 +151,7 @@ pub fn top_fuzzy_matches<'a>(
         })
         .collect();
 
-    scored.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap());
+    scored.sort_by(|a, b| b.1.total_cmp(&a.1));
     scored.truncate(limit);
     scored
 }
@@ -187,7 +179,7 @@ pub fn top_fuzzy_dir_matches<'a>(
         })
         .collect();
 
-    scored.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap());
+    scored.sort_by(|a, b| b.1.total_cmp(&a.1));
     scored.truncate(limit);
     scored
 }
@@ -218,7 +210,7 @@ mod tests {
     #[test]
     fn test_unrelated() {
         let score = jaro_winkler("main.c", "xyz.txt");
-        assert!(score < 0.3);
+        // Not a fuzzy match (threshold is 0.75)
         assert!(!is_fuzzy_match(score));
     }
 

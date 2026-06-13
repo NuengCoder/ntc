@@ -74,25 +74,32 @@ pub enum SyntaxLanguage {
     NtcIgcare,
     /// .ntc.math — ntc math expression file
     NtcMath,
+    /// .ntc_theme — ntc theme file (TOML format)
+    NtcTheme,
+    /// .iss — Inno Setup script
+    InnoSetup,
+    /// .lock — package lock file (TOML-like format)
+    LockFile,
 }
 
 pub fn color_for(tt: TokenType) -> Color {
+    let theme = crate::utils::theme::ThemeManager::current();
     match tt {
-        TokenType::Keyword => Color::Rgb { r: 200, g: 160, b: 255 },
-        TokenType::String => Color::Rgb { r: 103, g: 228, b: 128 },
-        TokenType::Comment => Color::Rgb { r: 108, g: 108, b: 128 },
-        TokenType::Number => Color::Rgb { r: 255, g: 202, b: 133 },
-        TokenType::Type => Color::Rgb { r: 120, g: 220, b: 232 },
-        TokenType::Builtin => Color::Rgb { r: 255, g: 140, b: 154 },
-        TokenType::Function => Color::Rgb { r: 130, g: 226, b: 255 },
-        TokenType::Operator => Color::Rgb { r: 200, g: 200, b: 208 },
-        TokenType::Punctuation => Color::Rgb { r: 132, g: 132, b: 154 },
-        TokenType::Attribute => Color::Rgb { r: 162, g: 119, b: 255 },
-        TokenType::Macro => Color::Rgb { r: 176, g: 131, b: 240 },
-        TokenType::Regex => Color::Rgb { r: 252, g: 169, b: 110 },
-        TokenType::Tag => Color::Rgb { r: 80, g: 228, b: 200 },
-        TokenType::Constant => Color::Rgb { r: 229, g: 192, b: 123 },
-        TokenType::Normal => Color::Rgb { r: 200, g: 200, b: 208 },
+        TokenType::Keyword => theme.syntax.keyword.to_crossterm(),
+        TokenType::String => theme.syntax.string.to_crossterm(),
+        TokenType::Comment => theme.syntax.comment.to_crossterm(),
+        TokenType::Number => theme.syntax.number.to_crossterm(),
+        TokenType::Type => theme.syntax.r#type.to_crossterm(),
+        TokenType::Builtin => theme.syntax.builtin.to_crossterm(),
+        TokenType::Function => theme.syntax.function.to_crossterm(),
+        TokenType::Operator => theme.syntax.operator.to_crossterm(),
+        TokenType::Punctuation => theme.syntax.punctuation.to_crossterm(),
+        TokenType::Attribute => theme.syntax.attribute.to_crossterm(),
+        TokenType::Macro => theme.syntax.macro_token.to_crossterm(),
+        TokenType::Regex => theme.syntax.regex.to_crossterm(),
+        TokenType::Tag => theme.syntax.tag.to_crossterm(),
+        TokenType::Constant => theme.syntax.constant.to_crossterm(),
+        TokenType::Normal => theme.syntax.normal.to_crossterm(),
     }
 }
 
@@ -142,6 +149,9 @@ pub fn detect_language(ext: &str) -> Option<SyntaxLanguage> {
         "ral" => Some(SyntaxLanguage::NtcRal),
         "igcare" => Some(SyntaxLanguage::NtcIgcare),
         "math" => Some(SyntaxLanguage::NtcMath),
+        "ntc_theme" => Some(SyntaxLanguage::NtcTheme),
+        "iss" => Some(SyntaxLanguage::InnoSetup),
+        "lock" => Some(SyntaxLanguage::LockFile),
         _ => None,
     }
 }

@@ -8,12 +8,17 @@ pub mod editor;
 pub mod game;
 pub mod lsp;
 pub mod math;
+pub mod ranfile;
 pub mod report;
 pub mod shell;
 pub mod syntax;
+pub mod tutorial;
 pub mod utils;
 
 // Re-export utils modules so existing paths like `crate::config::Config` still work
+// (consumed internally via `use crate::...` and externally via `use ntc::...`).
+// The flat re-exports are kept as a compatibility layer; the canonical home for
+// each module is `crate::utils::<name>`.
 pub use utils::backup;
 pub use utils::backup_diff;
 pub use utils::backup_manifest;

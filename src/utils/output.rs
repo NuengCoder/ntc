@@ -3,10 +3,103 @@ use crate::syntax::{color_for, SyntaxHighlighter};
 use anyhow::{Context, Result};
 use colored::*;
 use std::fs;
-use std::io::{IsTerminal, Write};
+use std::io::Write;
 use std::path::{Path, PathBuf};
 #[cfg(not(target_os = "android"))]
 use arboard::Clipboard;
+
+// ============================================================================
+// Output capture (used by the modern shell to keep command output inside the
+// UI's body region instead of clobbering the input line)
+// ============================================================================
+
+/// Redirect stdout to a temporary file, capture output, then restore.
+/// This captures ALL output — `println!`, `print!`, colored crate, everything.
+#[cfg(windows)]
+fn with_stdout_captured<F: FnOnce()>(f: F) -> String {
+    use std::os::windows::io::AsRawHandle;
+    use std::os::windows::io::RawHandle;
+
+    // Create a temp file path
+    let tmp_dir = std::env::temp_dir();
+    let tmp_file = tmp_dir.join(format!("ntc_capture_{}.txt", std::process::id()));
+    let tmp_file2 = tmp_file.clone();
+
+    // Open a file for writing (will be the new stdout)
+    let file = std::fs::File::create(&tmp_file)
+        .expect("failed to create capture temp file");
+
+    extern "system" {
+        fn GetStdHandle(nStdHandle: u32) -> RawHandle;
+        fn SetStdHandle(nStdHandle: u32, hHandle: RawHandle) -> i32;
+    }
+    const STD_OUTPUT_HANDLE: u32 = 0xFFFFFFF5u32;
+
+    // Save the original stdout handle
+    let original_fd = unsafe { GetStdHandle(STD_OUTPUT_HANDLE) };
+
+    // Redirect stdout to our file
+    unsafe { SetStdHandle(STD_OUTPUT_HANDLE, file.as_raw_handle()) };
+
+    f();
+
+    // Flush stdout
+    let _ = std::io::stdout().flush();
+    drop(file);
+
+    // Restore original stdout
+    unsafe { SetStdHandle(STD_OUTPUT_HANDLE, original_fd) };
+
+    // Read the captured output
+    let result = std::fs::read_to_string(&tmp_file2).unwrap_or_default();
+    let _ = std::fs::remove_file(&tmp_file2);
+    result
+}
+
+/// Redirect stdout to a temporary file, capture output, then restore.
+/// This captures ALL output — `println!`, `print!`, colored crate, everything.
+#[cfg(not(windows))]
+fn with_stdout_captured<F: FnOnce()>(f: F) -> String {
+    use std::os::unix::io::AsRawFd;
+    use libc;
+
+    // Create a temp file path
+    let tmp_dir = std::env::temp_dir();
+    let tmp_file = tmp_dir.join(format!("ntc_capture_{}.txt", std::process::id()));
+    let tmp_file2 = tmp_file.clone();
+
+    // Open a file for writing
+    let file = std::fs::File::create(&tmp_file)
+        .expect("failed to create capture temp file");
+
+    let fd = file.as_raw_fd();
+    let saved_fd = unsafe { libc::dup(1) };
+
+    // Redirect stdout (fd 1) to our file
+    unsafe { libc::dup2(fd, 1) };
+
+    f();
+
+    // Flush stdout
+    let _ = std::io::stdout().flush();
+    drop(file);
+
+    // Restore original stdout
+    unsafe { libc::dup2(saved_fd, 1) };
+    unsafe { libc::close(saved_fd) };
+
+    // Read the captured output
+    let result = std::fs::read_to_string(&tmp_file2).unwrap_or_default();
+    let _ = std::fs::remove_file(&tmp_file2);
+    result
+}
+
+/// Run `f` with command output captured to an in-memory buffer.
+/// This captures ALL stdout output including `println!()`, the colored crate,
+/// and the custom `print_info`/`print_error` helpers.
+pub fn with_captured_output<F: FnOnce()>(f: F) -> String {
+    with_stdout_captured(f)
+}
 
 /// Display file contents to stdout with optional line numbers.
 pub fn cat_file(file_path: &Path, show_lines: bool) -> Result<()> {
@@ -62,41 +155,10 @@ fn crossterm_to_ansi(c: crossterm::style::Color) -> String {
         Cc::DarkMagenta => "\x1b[95m".to_string(),
         Cc::Cyan => "\x1b[36m".to_string(),
         Cc::DarkCyan => "\x1b[96m".to_string(),
-        Cc::White => "\x1b[37m".to_string(),
-        Cc::Grey => "\x1b[97m".to_string(),
+        Cc::White => "\x1b[97m".to_string(),
+        Cc::Grey => "\x1b[37m".to_string(),
         Cc::Rgb { r, g, b } => format!("\x1b[38;2;{};{};{}m", r, g, b),
         Cc::AnsiValue(n) => format!("\x1b[38;5;{}m", n),
-    }
-}
-
-/// Same as `crossterm_to_ansi` but returning a `colored::Color` value,
-/// in case future callers want to feed the result into the `colored`
-/// `Colorize` trait. Currently unused but kept for symmetry.
-#[allow(dead_code)]
-fn crossterm_to_colored(c: crossterm::style::Color) -> colored::Color {
-    use crossterm::style::Color as Cc;
-    match c {
-        Cc::Reset => colored::Color::BrightWhite,
-        Cc::Black => colored::Color::Black,
-        Cc::DarkGrey => colored::Color::BrightBlack,
-        Cc::Red => colored::Color::Red,
-        Cc::DarkRed => colored::Color::BrightRed,
-        Cc::Green => colored::Color::Green,
-        Cc::DarkGreen => colored::Color::BrightGreen,
-        Cc::Yellow => colored::Color::Yellow,
-        Cc::DarkYellow => colored::Color::BrightYellow,
-        Cc::Blue => colored::Color::Blue,
-        Cc::DarkBlue => colored::Color::BrightBlue,
-        Cc::Magenta => colored::Color::Magenta,
-        Cc::DarkMagenta => colored::Color::BrightMagenta,
-        Cc::Cyan => colored::Color::Cyan,
-        Cc::DarkCyan => colored::Color::BrightCyan,
-        Cc::White => colored::Color::White,
-        Cc::Grey => colored::Color::BrightWhite,
-        Cc::Rgb { r, g, b } => colored::Color::TrueColor { r, g, b },
-        // 8-bit ANSI color — fall back to bright white; the palette used by
-        // `color_for` doesn't actually emit this variant.
-        Cc::AnsiValue(_) => colored::Color::BrightWhite,
     }
 }
 
@@ -131,13 +193,12 @@ pub fn cat_file_with_syntax(file_path: &Path, show_lines: bool) -> Result<()> {
     let reset = "\x1b[0m";
 
     print!(
-        "{}{}{}{}",
+        "{}{}:{}",
         header_color,
         file_path
             .file_name()
             .unwrap_or_default()
             .to_string_lossy(),
-        ":",
         reset
     );
     println!();
@@ -155,7 +216,7 @@ pub fn cat_file_with_syntax(file_path: &Path, show_lines: bool) -> Result<()> {
         let tokens = syntax.tokenize_line(i, line);
 
         if show_lines {
-            print!("{}{}>> {}{}", line_num_color, format!("LINE {}", i + 1), reset, line_num_color);
+            print!("{color}LINE {num}>> {reset}{color}", color = line_num_color, num = i + 1, reset = reset);
             // Stay in the yellow-bold prefix style for the gap.
         }
 
@@ -176,7 +237,7 @@ pub fn cat_file_with_syntax(file_path: &Path, show_lines: bool) -> Result<()> {
                 if !current_text.is_empty() {
                     match current_color {
                         Some(c) => print!("{}{}{}", crossterm_to_ansi(c), current_text, reset),
-                        None => print!("{}{}{}", reset, current_text, ""),
+                        None => print!("{}{}", reset, current_text),
                     }
                     current_text.clear();
                 }
@@ -189,7 +250,7 @@ pub fn cat_file_with_syntax(file_path: &Path, show_lines: bool) -> Result<()> {
         if !current_text.is_empty() {
             match current_color {
                 Some(c) => print!("{}{}{}", crossterm_to_ansi(c), current_text, reset),
-                None => print!("{}{}{}", reset, current_text, ""),
+                None => print!("{}{}", reset, current_text),
             }
         }
 
@@ -247,11 +308,6 @@ pub fn build_output_path(filename: &str) -> PathBuf {
     path
 }
 
-/// Check if stdout is a terminal.
-pub fn is_terminal() -> bool {
-    std::io::stdout().is_terminal()
-}
-
 /// Print a colored separator line to stdout.
 pub fn print_separator(title: &str) {
     let width: usize = 71;
@@ -287,24 +343,68 @@ pub fn format_separator(title: &str) -> String {
     )
 }
 
-/// Print success message in green.
+/// Print success message using theme color.
 pub fn print_success(msg: &str) {
-    println!("{} {}", "✓".green().bold(), msg);
+    #[cfg(not(target_os = "android"))]
+    {
+        use colored::Colorize;
+        let theme = crate::utils::theme::ThemeManager::current();
+        let icon = "✓".color(theme.shell.success.to_colored()).bold();
+        let text = msg.color(theme.shell.success.to_colored());
+        println!("{} {}", icon, text);
+    }
+    #[cfg(target_os = "android")]
+    {
+        println!("✓ {}", msg);
+    }
 }
 
-/// Print error message in red.
+/// Print error message using theme color.
 pub fn print_error(msg: &str) {
-    eprintln!("{} {}", "✗".red().bold(), msg.red());
+    #[cfg(not(target_os = "android"))]
+    {
+        use colored::Colorize;
+        let theme = crate::utils::theme::ThemeManager::current();
+        let icon = "✗".color(theme.shell.error.to_colored()).bold();
+        let text = msg.color(theme.shell.error.to_colored());
+        eprintln!("{} {}", icon, text);
+    }
+    #[cfg(target_os = "android")]
+    {
+        eprintln!("✗ {}", msg);
+    }
 }
 
-/// Print info message in cyan.
+/// Print info message using theme color.
 pub fn print_info(msg: &str) {
-    println!("{} {}", "ℹ".cyan(), msg);
+    #[cfg(not(target_os = "android"))]
+    {
+        use colored::Colorize;
+        let theme = crate::utils::theme::ThemeManager::current();
+        let icon = "ℹ".color(theme.shell.info.to_colored());
+        let text = msg.color(theme.shell.info.to_colored());
+        println!("{} {}", icon, text);
+    }
+    #[cfg(target_os = "android")]
+    {
+        println!("ℹ {}", msg);
+    }
 }
 
-/// Print warning message in yellow.
+/// Print warning message using theme color.
 pub fn print_warning(msg: &str) {
-    println!("{} {}", "⚠".yellow(), msg.yellow());
+    #[cfg(not(target_os = "android"))]
+    {
+        use colored::Colorize;
+        let theme = crate::utils::theme::ThemeManager::current();
+        let icon = "⚠".color(theme.shell.warning.to_colored());
+        let text = msg.color(theme.shell.warning.to_colored());
+        println!("{} {}", icon, text);
+    }
+    #[cfg(target_os = "android")]
+    {
+        println!("⚠ {}", msg);
+    }
 }
 
 // src/output.rs - Replace the entire clipboard section
@@ -394,7 +494,7 @@ pub fn copy_to_clipboard(content: &str, format: &str) -> Result<()> {
             format,
             temp_file.display()
         ));
-        print_info(&format!("You can view it with: cat {}", temp_file.display()));  // FIXED HERE
+        print_info(&format!("You can view it with: cat {}", temp_file.display()));
     } else {
         print_warning(&format!(
             "Clipboard not supported on Android. {} report content shown above.",

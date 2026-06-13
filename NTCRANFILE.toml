@@ -1,0 +1,50 @@
+# NTCRANFILE — ntc task runner configuration
+# Usage:
+#   ran            → runs [targets.standalone]
+#   ran <name>    → runs a specific target
+#   ran list      → lists all targets
+#   ran init      → creates this file
+#   ran help    → shows full usage with examples
+
+# ── Variables ──────────────────────────────────────────────────────────
+# Define variables here and reference them with $(VAR_NAME) in commands.
+#
+# Example:
+#   CC     = "gcc"
+#   FLAGS  = "-Wall -O2"
+#   OUTDIR = "dist"
+#
+# Then use them: cmd = "$(CC) $(FLAGS) main.c -o $(OUTDIR)/app"
+
+[vars]
+# CC = "gcc"
+# FLAGS = "-O2"
+
+# ── Targets ────────────────────────────────────────────────────────────
+# Each target can have:
+#   deps — list of other targets that must run first
+#   cmd  — shell command to execute (goes through ntc's alias system, so
+#          run aliases, @teleports, and system commands all work)
+
+[targets]
+
+[targets.standalone]
+# Default target — runs when `ran` is typed without arguments
+deps = []
+cmd = "cargo build --release && echo done...!"
+
+[targets.build]
+deps = []
+cmd = "cargo build --release && start installer.iss"
+
+# [targets.lint]
+# deps = []
+# cmd = "ruff check ."
+
+# [targets.test]
+# deps = ["build"]
+# cmd = "echo Running tests..."
+
+[targets.clean]
+deps = []
+cmd = "cargo clean"

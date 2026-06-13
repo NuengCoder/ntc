@@ -47,8 +47,11 @@ fn byte_to_lsp_position(text: &str, byte_offset: usize) -> (u32, u32) {
     let byte_offset = byte_offset.min(text.len());
     let prefix = &text[..byte_offset];
     let line = prefix.matches('\n').count() as u32;
-    let col = byte_offset - prefix.rfind('\n').map(|i| i + 1).unwrap_or(0);
-    (line, col as u32)
+    let line_start = prefix.rfind('\n').map(|i| i + 1).unwrap_or(0);
+    // Convert byte offset within line to UTF-16 code units
+    let line_text = &text[line_start..byte_offset];
+    let col: u32 = line_text.chars().map(|c| c.len_utf16() as u32).sum();
+    (line, col)
 }
 
 fn make_diagnostic(
@@ -116,7 +119,7 @@ fn constant_value(name: &str) -> Option<f64> {
     match name {
         "PI" | "pi" => Some(std::f64::consts::PI),
         "E" | "e" | "EXP" | "exp" => Some(std::f64::consts::E),
-        "PHI" | "phi" => Some(1.6180339887498948482045868343656381177),
+        "PHI" | "phi" => Some(1.618_033_988_749_895),
         "TAU" | "tau" => Some(std::f64::consts::TAU),
         _ => None,
     }
@@ -130,19 +133,8 @@ fn is_ntc_math_uri(uri: &str) -> bool {
 
 fn read_message(reader: &mut impl BufRead) -> Result<Option<Value>> {
     let mut header = String::new();
-    loop {
-        header.clear();
-        if reader.read_line(&mut header)? == 0 {
-            return Ok(None);
-        }
-        let trimmed = header.trim();
-        if trimmed.is_empty() {
-            break;
-        }
-    }
-
-    // Read Content-Length (we don't read Content-Type)
     let mut content_length: usize = 0;
+
     loop {
         header.clear();
         if reader.read_line(&mut header)? == 0 {
@@ -153,11 +145,11 @@ fn read_message(reader: &mut impl BufRead) -> Result<Option<Value>> {
             break;
         }
         if let Some(len_str) = trimmed.strip_prefix("Content-Length: ") {
-            content_length = len_str.trim().parse::<usize>()?;
+            content_length = len_str.trim().parse::<usize>().unwrap_or(0);
         }
     }
 
-    if content_length == 0 {
+    if content_length == 0 || content_length > 10_485_760 {
         return Ok(None);
     }
 
@@ -185,320 +177,7 @@ fn write_message(writer: &mut impl Write, msg: &Value) -> Result<()> {
 // ── server loop ──────────────────────────────────────────────────────────────
 
 pub fn run_server() -> Result<()> {
-    let mut store = DocumentStore::new();
-    let mut reader = io::BufReader::new(io::stdin());
-    let mut writer = io::stdout();
-
-    loop {
-        let msg = match read_message(&mut reader)? {
-            Some(m) => m,
-            None => return Ok(()),
-        };
-
-        let method = msg["method"].as_str().unwrap_or("");
-        let _is_notification = msg.get("id").map_or(true, |v| v.is_null());
-        let id = msg.get("id").cloned();
-
-        match method {
-            "initialize" => {
-                let caps = serde_json::json!({
-                    "capabilities": {
-                        "textDocumentSync": {
-                            "openClose": true,
-                            "change": 2, // Full text sync
-                            "save": true
-                        },
-                        "completionProvider": {
-                            "triggerCharacters": [],
-                            "resolveProvider": false
-                        },
-                        "hoverProvider": true,
-                        "definitionProvider": true
-                    },
-                    "serverInfo": {
-                        "name": "ntc-math-lsp",
-                        "version": "2.1.0"
-                    }
-                });
-                if let Some(req_id) = &id {
-                    write_message(
-                        &mut writer,
-                        &serde_json::json!({
-                            "jsonrpc": "2.0",
-                            "id": req_id,
-                            "result": caps
-                        }),
-                    )?;
-                }
-            }
-
-            "shutdown" => {
-                if let Some(req_id) = &id {
-                    write_message(
-                        &mut writer,
-                        &serde_json::json!({
-                            "jsonrpc": "2.0",
-                            "id": req_id,
-                            "result": null
-                        }),
-                    )?;
-                }
-            }
-
-            "exit" => {
-                return Ok(());
-            }
-
-            "textDocument/didOpen" => {
-                if let Some(params) = msg.get("params") {
-                    let uri = params["textDocument"]["uri"].as_str().unwrap_or("");
-                    let text = params["textDocument"]["text"].as_str().unwrap_or("");
-                    if is_ntc_math_uri(uri) {
-                        store.open(uri, text);
-                        publish_diagnostics(&mut writer, &store, uri)?;
-                    }
-                }
-            }
-
-            "textDocument/didChange" => {
-                if let Some(params) = msg.get("params") {
-                    let uri = params["textDocument"]["uri"].as_str().unwrap_or("");
-                    if is_ntc_math_uri(uri) {
-                        if let Some(content_changes) = params["contentChanges"].as_array() {
-                            if let Some(change) = content_changes.last() {
-                                let text = change["text"].as_str().unwrap_or("");
-                                store.change(uri, text);
-                            }
-                        }
-                        publish_diagnostics(&mut writer, &store, uri)?;
-                    }
-                }
-            }
-
-            "textDocument/didSave" => {
-                if let Some(params) = msg.get("params") {
-                    let uri = params["textDocument"]["uri"].as_str().unwrap_or("");
-                    if is_ntc_math_uri(uri) {
-                        if let Some(text) = params.get("text").and_then(|t| t.as_str()) {
-                            store.change(uri, text);
-                        }
-                        publish_diagnostics(&mut writer, &store, uri)?;
-                    }
-                }
-            }
-
-            "textDocument/didClose" => {
-                if let Some(params) = msg.get("params") {
-                    let uri = params["textDocument"]["uri"].as_str().unwrap_or("");
-                    if is_ntc_math_uri(uri) {
-                        store.close(uri);
-                        // Clear diagnostics on close
-                        let diag_notif = serde_json::json!({
-                            "jsonrpc": "2.0",
-                            "method": "textDocument/publishDiagnostics",
-                            "params": {
-                                "uri": uri,
-                                "diagnostics": []
-                            }
-                        });
-                        write_message(&mut writer, &diag_notif)?;
-                    }
-                }
-            }
-
-            "textDocument/completion" => {
-                if let Some(req_id) = &id {
-                    let mut items = Vec::new();
-
-                    // Built-in functions
-                    for name in math::builtin_function_names() {
-                        items.push(serde_json::json!({
-                            "label": name,
-                            "kind": 3, // Function
-                            "detail": builtin_hover(name).unwrap_or(""),
-                            "insertText": name
-                        }));
-                    }
-
-                    // Constants
-                    for name in math::constant_names() {
-                        if let Some(val) = constant_value(name) {
-                            items.push(serde_json::json!({
-                                "label": name,
-                                "kind": 21, // Constant
-                                "detail": format!("= {}", val),
-                                "insertText": name
-                            }));
-                        }
-                    }
-
-                    // User-defined functions from config
-                    let cfg = Config::global();
-                    let cfg_guard = cfg.read().unwrap();
-                    for (name, def) in &cfg_guard.math_functions {
-                        let detail = format!("user-defined: {}", def);
-                        items.push(serde_json::json!({
-                            "label": name,
-                            "kind": 3, // Function
-                            "detail": detail,
-                            "insertText": name
-                        }));
-                    }
-                    drop(cfg_guard);
-
-                    write_message(
-                        &mut writer,
-                        &serde_json::json!({
-                            "jsonrpc": "2.0",
-                            "id": req_id,
-                            "result": {
-                                "isIncomplete": false,
-                                "items": items
-                            }
-                        }),
-                    )?;
-                }
-            }
-
-            "textDocument/hover" => {
-                if let Some(req_id) = &id {
-                    let params = msg.get("params");
-                    let uri = params.and_then(|p| p["textDocument"]["uri"].as_str()).unwrap_or("");
-                    let pos_line = params.and_then(|p| p["position"]["line"].as_u64()).unwrap_or(0) as usize;
-                    let pos_col = params.and_then(|p| p["position"]["character"].as_u64()).unwrap_or(0) as usize;
-
-                    let mut hover_contents: Option<String> = None;
-
-                    if is_ntc_math_uri(uri) {
-                        if let Some(text) = store.get(uri) {
-                            // Find the word at the given position
-                            let byte_offset = pos_to_byte_offset(text, pos_line, pos_col);
-                            if let Some(word) = word_at_offset(text, byte_offset) {
-                                let lower = word.to_lowercase();
-
-                                // Check built-in functions
-                                if let Some(doc) = builtin_hover(&lower) {
-                                    hover_contents = Some(format!("**{}**  \n{}", word, doc));
-                                }
-
-                                // Check constants
-                                if hover_contents.is_none() {
-                                    if let Some(val) = constant_value(word) {
-                                        hover_contents = Some(format!("**{}** = {}", word, val));
-                                    }
-                                }
-
-                                // Check user-defined functions
-                                if hover_contents.is_none() {
-                                    let cfg = Config::global();
-                                    let cfg_guard = cfg.read().unwrap();
-                                    if let Some(def) = cfg_guard.math_functions.get(&lower) {
-                                        let arrow = def.find("=>").unwrap_or(0);
-                                        let params = def[..arrow].trim();
-                                        let body = def[arrow + 2..].trim();
-                                        hover_contents = Some(format!(
-                                            "**{}({})**  \n```\n{}\n```",
-                                            word, params, body
-                                        ));
-                                    }
-                                    drop(cfg_guard);
-                                }
-                            }
-                        }
-                    }
-
-                    let result = if let Some(contents) = hover_contents {
-                        serde_json::json!({
-                            "contents": {
-                                "kind": "markdown",
-                                "value": contents
-                            }
-                        })
-                    } else {
-                        serde_json::json!(null)
-                    };
-
-                    write_message(
-                        &mut writer,
-                        &serde_json::json!({
-                            "jsonrpc": "2.0",
-                            "id": req_id,
-                            "result": result
-                        }),
-                    )?;
-                }
-            }
-
-            "textDocument/definition" => {
-                if let Some(req_id) = &id {
-                    let params = msg.get("params");
-                    let uri = params.and_then(|p| p["textDocument"]["uri"].as_str()).unwrap_or("");
-                    let pos_line = params.and_then(|p| p["position"]["line"].as_u64()).unwrap_or(0) as usize;
-                    let pos_col = params.and_then(|p| p["position"]["character"].as_u64()).unwrap_or(0) as usize;
-
-                    let mut locations = Vec::new();
-
-                    if is_ntc_math_uri(uri) {
-                        if let Some(text) = store.get(uri) {
-                            let byte_offset = pos_to_byte_offset(text, pos_line, pos_col);
-                            if let Some(word) = word_at_offset(text, byte_offset) {
-                                let lower = word.to_lowercase();
-
-                                // Check user-defined functions (defined in config.toml)
-                                let cfg = Config::global();
-                                let cfg_guard = cfg.read().unwrap();
-                                if cfg_guard.math_functions.contains_key(&lower) {
-                                    // Point to the config file where the function is defined
-                                    let config_path = dirs::config_dir().map(|d| d.join("ntc").join("config.toml"));
-                                    if let Some(path) = config_path {
-                                        let file_uri = path_to_uri(&path);
-                                        // We don't know the exact line, so point to line 0
-                                        locations.push(serde_json::json!({
-                                            "uri": file_uri,
-                                            "range": {
-                                                "start": { "line": 0, "character": 0 },
-                                                "end": { "line": 0, "character": 0 }
-                                            }
-                                        }));
-                                    }
-                                }
-                                drop(cfg_guard);
-                            }
-                        }
-                    }
-
-                    let result = if locations.is_empty() {
-                        serde_json::json!(null)
-                    } else {
-                        serde_json::json!(locations)
-                    };
-
-                    write_message(
-                        &mut writer,
-                        &serde_json::json!({
-                            "jsonrpc": "2.0",
-                            "id": req_id,
-                            "result": result
-                        }),
-                    )?;
-                }
-            }
-
-            // For any unhandled method, respond with null
-            _ => {
-                if let Some(req_id) = &id {
-                    write_message(
-                        &mut writer,
-                        &serde_json::json!({
-                            "jsonrpc": "2.0",
-                            "id": req_id,
-                            "result": null
-                        }),
-                    )?;
-                }
-            }
-        }
-    }
+    run_server_inner(None)
 }
 
 // ── diagnostics publishing ───────────────────────────────────────────────────
@@ -507,32 +186,35 @@ fn publish_diagnostics(
     writer: &mut impl Write,
     store: &DocumentStore,
     uri: &str,
+    _logger: &LspLogger,
 ) -> Result<()> {
     let mut diagnostics = Vec::new();
     let content = store.get(uri).unwrap_or("");
 
-    // Validate each non-empty, non-comment line
     for (line_idx, line) in content.lines().enumerate() {
         let trimmed = line.trim();
         if trimmed.is_empty() || trimmed.starts_with('#') || trimmed.starts_with("//") {
             continue;
         }
-        // Compute the byte offset of this line's start within the full content
         let line_byte_offset = content
             .lines()
             .take(line_idx)
-            .map(|l| l.len() + 1) // +1 for newline
+            .map(|l| l.len() + {
+                let rest = &content[l.len()..];
+                if rest.starts_with("\r\n") { 2 } else { 1 }
+            })
             .sum::<usize>();
 
-        // Validate this line
         match math::validate(trimmed) {
             Ok(()) => {}
             Err((msg, offset_in_line)) => {
                 let absolute_offset = line_byte_offset + offset_in_line;
-                diagnostics.push(make_diagnostic(content, &msg, absolute_offset, 1)); // Error severity
+                diagnostics.push(make_diagnostic(content, &msg, absolute_offset, 1));
             }
         }
     }
+
+    _logger.log(format_args!("publishing {} diagnostics for {}", diagnostics.len(), uri));
 
     let notif = serde_json::json!({
         "jsonrpc": "2.0",
@@ -557,7 +239,19 @@ fn pos_to_byte_offset(text: &str, line: usize, col: usize) -> usize {
             None => return text.len(),
         }
     }
-    byte_offset + col.min(text[byte_offset..].len())
+    // Convert UTF-16 code unit column to byte offset within the line
+    let line_text = &text[byte_offset..];
+    let line_end = line_text.find('\n').unwrap_or(line_text.len());
+    let line_slice = &line_text[..line_end];
+    let mut utf16_units = 0usize;
+    for (i, ch) in line_slice.char_indices() {
+        let w = ch.len_utf16();
+        if utf16_units + w > col {
+            return byte_offset + i;
+        }
+        utf16_units += w;
+    }
+    byte_offset + line_end
 }
 
 fn word_at_offset(text: &str, byte_offset: usize) -> Option<&str> {
@@ -600,5 +294,352 @@ fn path_to_uri(path: &Path) -> String {
         format!("file://{}", path_str)
     } else {
         format!("file:///{}", path_str)
+    }
+}
+
+// ── optional debug logging ────────────────────────────────────────────────────
+
+pub struct LspLogger {
+    file: Option<std::fs::File>,
+}
+
+impl LspLogger {
+    pub fn new(path: Option<&Path>) -> Self {
+        let file = path.and_then(|p| {
+            if let Some(parent) = p.parent() {
+                let _ = std::fs::create_dir_all(parent);
+            }
+            std::fs::File::create(p).ok()
+        });
+        Self { file }
+    }
+
+    pub fn log(&self, msg: std::fmt::Arguments<'_>) {
+        use std::io::Write;
+        if let Some(ref f) = self.file {
+            let mut f = f;
+            let _ = writeln!(f, "[{}] {}", chrono::offset::Local::now().format("%H:%M:%S%.3f"), msg);
+            let _ = f.flush();
+        }
+    }
+}
+
+pub fn run_server_with_logger(log_path: Option<&Path>) -> Result<()> {
+    run_server_inner(log_path)
+}
+
+fn run_server_inner(log_path: Option<&Path>) -> Result<()> {
+    let logger = LspLogger::new(log_path);
+    let mut store = DocumentStore::new();
+    let mut reader = io::BufReader::new(io::stdin());
+    let mut writer = io::stdout();
+
+    logger.log(format_args!("LSP server starting"));
+
+    loop {
+        logger.log(format_args!("waiting for message..."));
+        let msg = match read_message(&mut reader)? {
+            Some(m) => m,
+            None => {
+                logger.log(format_args!("stdin closed, shutting down"));
+                return Ok(());
+            }
+        };
+
+        logger.log(format_args!("received: {}", serde_json::to_string(&msg).unwrap_or_default()));
+
+        let method = msg["method"].as_str().unwrap_or("");
+        let id = msg.get("id").cloned();
+
+        match method {
+            "initialize" => {
+                let caps = serde_json::json!({
+                    "capabilities": {
+                        "textDocumentSync": {
+                            "openClose": true,
+                            "change": 2,
+                            "save": true
+                        },
+                        "completionProvider": {
+                            "triggerCharacters": [],
+                            "resolveProvider": false
+                        },
+                        "hoverProvider": true,
+                        "definitionProvider": true
+                    },
+                    "serverInfo": {
+                        "name": "ntc-math-lsp",
+                        "version": "2.1.0"
+                    }
+                });
+                if let Some(req_id) = &id {
+                    let resp = serde_json::json!({
+                        "jsonrpc": "2.0",
+                        "id": req_id,
+                        "result": caps
+                    });
+                    write_message(&mut writer, &resp)?;
+                    logger.log(format_args!("sent: {}", serde_json::to_string(&resp).unwrap_or_default()));
+                }
+            }
+
+            "shutdown" => {
+                logger.log(format_args!("shutdown requested"));
+                if let Some(req_id) = &id {
+                    let resp = serde_json::json!({
+                        "jsonrpc": "2.0",
+                        "id": req_id,
+                        "result": null
+                    });
+                    write_message(&mut writer, &resp)?;
+                    logger.log(format_args!("sent: shutdown response"));
+                }
+            }
+
+            "exit" => {
+                logger.log(format_args!("exit requested, shutting down"));
+                return Ok(());
+            }
+
+            "textDocument/didOpen" => {
+                if let Some(params) = msg.get("params") {
+                    let uri = params["textDocument"]["uri"].as_str().unwrap_or("");
+                    let text = params["textDocument"]["text"].as_str().unwrap_or("");
+                    if is_ntc_math_uri(uri) {
+                        store.open(uri, text);
+                        publish_diagnostics(&mut writer, &store, uri, &logger)?;
+                    }
+                }
+            }
+
+            "textDocument/didChange" => {
+                if let Some(params) = msg.get("params") {
+                    let uri = params["textDocument"]["uri"].as_str().unwrap_or("");
+                    if is_ntc_math_uri(uri) {
+                        if let Some(content_changes) = params["contentChanges"].as_array() {
+                            if let Some(change) = content_changes.last() {
+                                let text = change["text"].as_str().unwrap_or("");
+                                store.change(uri, text);
+                            }
+                        }
+                        publish_diagnostics(&mut writer, &store, uri, &logger)?;
+                    }
+                }
+            }
+
+            "textDocument/didSave" => {
+                if let Some(params) = msg.get("params") {
+                    let uri = params["textDocument"]["uri"].as_str().unwrap_or("");
+                    if is_ntc_math_uri(uri) {
+                        if let Some(text) = params.get("text").and_then(|t| t.as_str()) {
+                            store.change(uri, text);
+                        }
+                        publish_diagnostics(&mut writer, &store, uri, &logger)?;
+                    }
+                }
+            }
+
+            "textDocument/didClose" => {
+                if let Some(params) = msg.get("params") {
+                    let uri = params["textDocument"]["uri"].as_str().unwrap_or("");
+                    if is_ntc_math_uri(uri) {
+                        store.close(uri);
+                        let diag_notif = serde_json::json!({
+                            "jsonrpc": "2.0",
+                            "method": "textDocument/publishDiagnostics",
+                            "params": {
+                                "uri": uri,
+                                "diagnostics": []
+                            }
+                        });
+                        write_message(&mut writer, &diag_notif)?;
+                        logger.log(format_args!("cleared diagnostics for {}", uri));
+                    }
+                }
+            }
+
+            "textDocument/completion" => {
+                if let Some(req_id) = &id {
+                    let mut items = Vec::new();
+
+                    let params = msg.get("params");
+                    let uri = params.and_then(|p| p["textDocument"]["uri"].as_str()).unwrap_or("");
+                    let is_math = is_ntc_math_uri(uri);
+
+                    if is_math {
+                        for name in math::builtin_function_names() {
+                            items.push(serde_json::json!({
+                                "label": name,
+                                "kind": 3,
+                                "detail": builtin_hover(name).unwrap_or(""),
+                                "insertText": name
+                            }));
+                        }
+
+                        for name in math::constant_names() {
+                            if let Some(val) = constant_value(name) {
+                                items.push(serde_json::json!({
+                                    "label": name,
+                                    "kind": 21,
+                                    "detail": format!("= {}", val),
+                                    "insertText": name
+                                }));
+                            }
+                        }
+
+                        let cfg_guard = Config::read_global();
+                        for (name, def) in &cfg_guard.math_functions {
+                            items.push(serde_json::json!({
+                                "label": name,
+                                "kind": 3,
+                                "detail": format!("user-defined: {}", def),
+                                "insertText": name
+                            }));
+                        }
+                        drop(cfg_guard);
+                    }
+
+                    let resp = serde_json::json!({
+                        "jsonrpc": "2.0",
+                        "id": req_id,
+                        "result": {
+                            "isIncomplete": false,
+                            "items": items
+                        }
+                    });
+                    write_message(&mut writer, &resp)?;
+                    logger.log(format_args!("completions: {} items for {}", items.len(), uri));
+                }
+            }
+
+            "$cancellation" | "$/cancelRequest" => {
+                logger.log(format_args!("cancellation request"));
+            }
+
+            "textDocument/hover" => {
+                if let Some(req_id) = &id {
+                    let params = msg.get("params");
+                    let uri = params.and_then(|p| p["textDocument"]["uri"].as_str()).unwrap_or("");
+                    let pos_line: usize = params.and_then(|p| p["position"]["line"].as_u64()).and_then(|v| v.try_into().ok()).unwrap_or(0);
+                    let pos_col: usize = params.and_then(|p| p["position"]["character"].as_u64()).and_then(|v| v.try_into().ok()).unwrap_or(0);
+
+                    let mut hover_contents: Option<String> = None;
+
+                    if is_ntc_math_uri(uri) {
+                        if let Some(text) = store.get(uri) {
+                            let byte_offset = pos_to_byte_offset(text, pos_line, pos_col);
+                            if let Some(word) = word_at_offset(text, byte_offset) {
+                                let lower = word.to_lowercase();
+
+                                if let Some(doc) = builtin_hover(&lower) {
+                                    hover_contents = Some(format!("**{}**  \n{}", word, doc));
+                                }
+
+                                if hover_contents.is_none() {
+                                    if let Some(val) = constant_value(word) {
+                                        hover_contents = Some(format!("**{}** = {}", word, val));
+                                    }
+                                }
+
+                                if hover_contents.is_none() {
+                                    let cfg_guard = Config::read_global();
+                                    if let Some(def) = cfg_guard.math_functions.get(&lower) {
+                                        let arrow = def.find("=>").unwrap_or(0);
+                                        let params = def[..arrow].trim();
+                                        let body = def[arrow + 2..].trim();
+                                        hover_contents = Some(format!(
+                                            "**{}({})**  \n```\n{}\n```",
+                                            word, params, body
+                                        ));
+                                    }
+                                    drop(cfg_guard);
+                                }
+                            }
+                        }
+                    }
+
+                    let result = if let Some(ref contents) = hover_contents {
+                        serde_json::json!({
+                            "contents": {
+                                "kind": "markdown",
+                                "value": contents
+                            }
+                        })
+                    } else {
+                        serde_json::json!(null)
+                    };
+
+                    let resp = serde_json::json!({
+                        "jsonrpc": "2.0",
+                        "id": req_id,
+                        "result": result
+                    });
+                    write_message(&mut writer, &resp)?;
+                    logger.log(format_args!("hover for {}:{}:{} -> {:?}", uri, pos_line, pos_col, hover_contents));
+                }
+            }
+
+            "textDocument/definition" => {
+                if let Some(req_id) = &id {
+                    let params = msg.get("params");
+                    let uri = params.and_then(|p| p["textDocument"]["uri"].as_str()).unwrap_or("");
+                    let pos_line: usize = params.and_then(|p| p["position"]["line"].as_u64()).and_then(|v| v.try_into().ok()).unwrap_or(0);
+                    let pos_col: usize = params.and_then(|p| p["position"]["character"].as_u64()).and_then(|v| v.try_into().ok()).unwrap_or(0);
+
+                    let mut locations = Vec::new();
+
+                    if is_ntc_math_uri(uri) {
+                        if let Some(text) = store.get(uri) {
+                            let byte_offset = pos_to_byte_offset(text, pos_line, pos_col);
+                            if let Some(word) = word_at_offset(text, byte_offset) {
+                                let lower = word.to_lowercase();
+
+                                let cfg_guard = Config::read_global();
+                                if cfg_guard.math_functions.contains_key(&lower) {
+                                    let config_path = dirs::config_dir().map(|d| d.join("ntc").join("config.toml"));
+                                    if let Some(path) = config_path {
+                                        let file_uri = path_to_uri(&path);
+                                        locations.push(serde_json::json!({
+                                            "uri": file_uri,
+                                            "range": {
+                                                "start": { "line": 0, "character": 0 },
+                                                "end": { "line": 0, "character": 0 }
+                                            }
+                                        }));
+                                    }
+                                }
+                                drop(cfg_guard);
+                            }
+                        }
+                    }
+
+                    let result = if locations.is_empty() {
+                        serde_json::json!(null)
+                    } else {
+                        serde_json::json!(locations)
+                    };
+
+                    let resp = serde_json::json!({
+                        "jsonrpc": "2.0",
+                        "id": req_id,
+                        "result": result
+                    });
+                    write_message(&mut writer, &resp)?;
+                    logger.log(format_args!("definition for {}:{}:{} -> {} locations", uri, pos_line, pos_col, locations.len()));
+                }
+            }
+
+            _ => {
+                logger.log(format_args!("unhandled method: {}", method));
+                if let Some(req_id) = &id {
+                    let resp = serde_json::json!({
+                        "jsonrpc": "2.0",
+                        "id": req_id,
+                        "result": null
+                    });
+                    write_message(&mut writer, &resp)?;
+                }
+            }
+        }
     }
 }

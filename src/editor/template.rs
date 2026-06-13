@@ -266,6 +266,45 @@ pub fn edit_file(path: &Path) -> Result<bool> {
 }
 
 pub fn edit_file_with_session(path: &Path, restored: Option<EditorSession>) -> Result<(bool, Option<EditorSession>)> {
+    // Check for crash recovery data
+    if let Some(data) = super::recovery::RecoveryData::check_recovery(path) {
+        eprintln!("\nCrash recovery file found for: {}", path.display());
+        eprintln!("Last saved: {}", data.timestamp);
+        eprint!("Recover unsaved changes? [Y/N]: ");
+        use std::io::Write;
+        let _ = std::io::stdout().flush();
+        let mut input = String::new();
+        let should_recover = std::io::stdin().read_line(&mut input).is_ok()
+            && input.trim().eq_ignore_ascii_case("y");
+        if should_recover {
+            // Write recovered content back to the file and remove the recovery file
+            let content = data.lines.join("\n");
+            let _ = std::fs::write(path, &content);
+            super::recovery::RecoveryData::remove_recovery(path);
+            let mut editor = Editor::new(path)?;
+            editor.init_tabs();
+            editor.cursor_y = data.cursor_y.min(editor.lines.len().saturating_sub(1));
+            editor.cursor_byte = data.cursor_byte.min(editor.current().len());
+            editor.scroll = data.scroll.min(editor.lines.len().saturating_sub(1));
+            editor.scroll_x = data.scroll_x;
+            editor.modified = true; // Mark as modified so user re-saves
+            let result = match editor.run() {
+                Ok(v) => v,
+                Err(e) if e.to_string() == "__exit__" => false,
+                Err(e) => return Err(e),
+            };
+            let captured = if result {
+                None
+            } else {
+                Some(editor.capture_session())
+            };
+            return Ok((result, captured));
+        } else {
+            // User declined recovery, remove the recovery file
+            super::recovery::RecoveryData::remove_recovery(path);
+        }
+    }
+
     let mut editor = Editor::new(path)?;
     if let Some(ref session) = restored {
         // Only restore cursor position if file path matches

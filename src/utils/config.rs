@@ -58,18 +58,34 @@ pub struct Config {
     /// Set via `watch trigger <alias>` or `watch trigger off`.
     #[serde(default)]
     pub watch_trigger_alias: Option<String>,
+
+    /// Whether autosuggest (ghost text) is enabled in the shell
+    #[serde(default = "default_autosuggest_enabled")]
+    pub autosuggest_enabled: bool,
 }
 
-// Add this function to Config impl
+// Single source of truth for alias name validation.
+// Used by both config.rs and commands.rs — keep this list in sync with
+// all shell commands that users should not be able to override.
 pub fn validate_alias_name(name: &str) -> bool {
     let reserved_commands = [
-        "go", "cd", "godrive", "god", "back", "b", "view", "ls", "txt", "html", "json", "md",
-        "seto", "setd", "setl", "sett", "seth", "watch", "clear", "version", "where",
-        "gos", "gosc", "ral", "run", "r", "showcg", "help", "exit", "quit", "ignored",
-        "ignore", "cared", "ignoref", "caref", "ignoren", "caren", "size", "tp", "opencg",
-        "resetcg", "restorecg", "gencg", "ne", "ntceditor", "igcare"
+        "go", "cd", "godrive", "god", "back", "b", "view", "ls", "txt", "txtc", "txtf",
+        "html", "json", "md", "pdf", "docx", "xlsx",
+        "seto", "setd", "setl", "sett", "seth", "setc", "seta",
+        "watch", "clear", "version", "where",
+        "gos", "gosc", "ral", "run", "r", "showcg", "help", "exit", "quit",
+        "ignored", "ignore", "cared", "ignoref", "caref", "ignoren", "caren",
+        "ignores", "ignoresc", "cares", "caresc",
+        "size", "tp", "opencg", "resetcg", "restorecg", "local",
+        "ne", "ntceditor", "igcare",
+        "esc", "bkup", "pldw", "unpd", "gs", "fs", "ds", "diff", "fgo", "fsc", "locate",
+        "dino", "math", "init", "deinit",
     ];
     
+    if name.trim().is_empty() || name.contains(' ') {
+        return false;
+    }
+
     if name.contains('@') || name.contains('#') {
         return false;
     }
@@ -88,6 +104,7 @@ fn default_max_depth() -> usize { 2 }
 fn default_num_threads() -> usize { 4 }
 fn default_history_enabled() -> bool { false }
 fn default_color_enabled() -> bool { false }
+fn default_autosuggest_enabled() -> bool { true }
 fn default_ignored_dirs() -> HashSet<String> {
     let mut s = HashSet::new();
     s.insert("target".to_string());
@@ -116,6 +133,7 @@ impl Config {
             history_enabled: default_history_enabled(),
             file_watcher_enabled: false,
             color_enabled: default_color_enabled(),
+            autosuggest_enabled: default_autosuggest_enabled(),
             teleports: HashMap::new(),
             run_aliases: HashMap::new(),
             math_functions: HashMap::new(),
@@ -170,7 +188,7 @@ impl Config {
     /// Reload the global config singleton
     pub fn reload_global() {
         let new_config = Self::reload();
-        let mut cfg = Self::global().write().unwrap();
+        let mut cfg = Self::write_global();
         *cfg = new_config;
     }
 
@@ -211,7 +229,9 @@ impl Config {
     /// lock on the same thread).
     pub fn save(&self) {
         if let Some(path) = Self::config_path() {
-            let _ = fs::create_dir_all(path.parent().unwrap());
+            if let Some(parent) = path.parent() {
+                let _ = fs::create_dir_all(parent);
+            }
             if let Ok(toml) = toml::to_string_pretty(self) {
                 let _ = fs::write(&path, toml);
             }
@@ -239,10 +259,20 @@ impl Config {
         &CONFIG
     }
 
+    /// Acquire a read lock, recovering from poison if a previous write panicked.
+    pub(crate) fn read_global() -> std::sync::RwLockReadGuard<'static, Config> {
+        Self::global().read().unwrap_or_else(|e| e.into_inner())
+    }
+
+    /// Acquire a write lock, recovering from poison if a previous write panicked.
+    pub(crate) fn write_global() -> std::sync::RwLockWriteGuard<'static, Config> {
+        Self::global().write().unwrap_or_else(|e| e.into_inner())
+    }
+
     /// Save the global config by acquiring a **read** lock (safe to call from
     /// outside a write-lock section).
     pub fn save_global() {
-        Self::global().read().unwrap().save();
+        Self::read_global().save();
     }
 
     // ---- Convenience global methods ----
@@ -260,152 +290,161 @@ impl Config {
     // calling cfg.save() directly on the already-borrowed &mut Config instead.
 
     pub fn global_get_output_path() -> PathBuf {
-        Self::global().read().unwrap().output_path.clone()
+        Self::read_global().output_path.clone()
     }
     pub fn global_set_output_path(path: &Path) {
-        let mut cfg = Self::global().write().unwrap();
+        let mut cfg = Self::write_global();
         cfg.output_path = path.to_path_buf();
         cfg.save(); // safe: cfg is &Config, no lock re-acquired
     }
     pub fn global_get_max_depth() -> usize {
-        Self::global().read().unwrap().max_depth
+        Self::read_global().max_depth
     }
     pub fn global_set_max_depth(depth: usize) {
-        let mut cfg = Self::global().write().unwrap();
+        let mut cfg = Self::write_global();
         cfg.max_depth = depth.clamp(1, 20);
         cfg.save();
     }
     pub fn global_get_show_line_numbers() -> bool {
-        Self::global().read().unwrap().show_line_numbers
+        Self::read_global().show_line_numbers
     }
     pub fn global_set_show_line_numbers(show: bool) {
-        let mut cfg = Self::global().write().unwrap();
+        let mut cfg = Self::write_global();
         cfg.show_line_numbers = show;
         cfg.save();
     }
     pub fn global_get_num_threads() -> usize {
-        Self::global().read().unwrap().num_threads
+        Self::read_global().num_threads
     }
     pub fn global_set_num_threads(threads: usize) {
-        let mut cfg = Self::global().write().unwrap();
+        let mut cfg = Self::write_global();
         cfg.num_threads = threads.clamp(1, 16);
         cfg.save();
     }
 
     // ---- History ----
     pub fn global_get_history_path() -> Option<PathBuf> {
-        Self::global().read().unwrap().history_path.clone()
+        Self::read_global().history_path.clone()
     }
     pub fn global_get_history_enabled() -> bool {
-        Self::global().read().unwrap().history_enabled
+        Self::read_global().history_enabled
     }
     pub fn global_set_history_path(path: Option<PathBuf>) {
-        let mut cfg = Self::global().write().unwrap();
+        let mut cfg = Self::write_global();
         cfg.history_path = path;
         cfg.save();
     }
     pub fn global_set_history_enabled(enabled: bool) {
-        let mut cfg = Self::global().write().unwrap();
+        let mut cfg = Self::write_global();
         cfg.history_enabled = enabled;
         cfg.save();
     }
 
     // ---- Ignore / care helpers ----
     pub fn global_get_ignored_dirs() -> HashSet<String> {
-        Self::global().read().unwrap().ignored_directory_names.clone()
+        Self::read_global().ignored_directory_names.clone()
     }
     pub fn global_add_ignored_dir(name: &str) {
-        let mut cfg = Self::global().write().unwrap();
+        let mut cfg = Self::write_global();
         cfg.ignored_directory_names.insert(name.to_string());
         cfg.save();
     }
     pub fn global_remove_ignored_dir(name: &str) {
-        let mut cfg = Self::global().write().unwrap();
+        let mut cfg = Self::write_global();
         cfg.ignored_directory_names.remove(name);
         cfg.save();
     }
     pub fn global_get_ignored_extensions() -> HashSet<String> {
-        Self::global().read().unwrap().ignored_extensions.clone()
+        Self::read_global().ignored_extensions.clone()
     }
     pub fn global_add_ignored_extension(ext: &str) {
-        let mut cfg = Self::global().write().unwrap();
+        let mut cfg = Self::write_global();
         cfg.ignored_extensions.insert(ext.to_lowercase());
         // Remove from extra_supported to fix conflict
         cfg.extra_supported_extensions.remove(&ext.to_lowercase());
         cfg.save();
     }
     pub fn global_remove_ignored_extension(ext: &str) {
-        let mut cfg = Self::global().write().unwrap();
+        let mut cfg = Self::write_global();
         cfg.ignored_extensions.remove(&ext.to_lowercase());
         cfg.save();
     }
     pub fn global_get_extra_supported_extensions() -> HashSet<String> {
-        Self::global().read().unwrap().extra_supported_extensions.clone()
+        Self::read_global().extra_supported_extensions.clone()
     }
     pub fn global_add_extra_supported_extension(ext: &str) {
-        let mut cfg = Self::global().write().unwrap();
+        let mut cfg = Self::write_global();
         cfg.extra_supported_extensions.insert(ext.to_lowercase());
         // Remove from ignored to fix conflict
         cfg.ignored_extensions.remove(&ext.to_lowercase());
         cfg.save();
     }
     pub fn global_remove_extra_supported_extension(ext: &str) {
-        let mut cfg = Self::global().write().unwrap();
+        let mut cfg = Self::write_global();
         cfg.extra_supported_extensions.remove(&ext.to_lowercase());
         cfg.save();
     }
 
     // ---- Specific files (caren / ignoren) ----
     pub fn global_get_ignored_files() -> HashSet<String> {
-        Self::global().read().unwrap().ignored_files.clone()
+        Self::read_global().ignored_files.clone()
     }
     pub fn global_add_ignored_file(name: &str) {
-        let mut cfg = Self::global().write().unwrap();
+        let mut cfg = Self::write_global();
         cfg.ignored_files.insert(name.to_string());
         cfg.extra_supported_files.remove(name);
         cfg.save();
     }
     pub fn global_remove_ignored_file(name: &str) {
-        let mut cfg = Self::global().write().unwrap();
+        let mut cfg = Self::write_global();
         cfg.ignored_files.remove(name);
         cfg.save();
     }
     pub fn global_get_extra_supported_files() -> HashSet<String> {
-        Self::global().read().unwrap().extra_supported_files.clone()
+        Self::read_global().extra_supported_files.clone()
     }
     pub fn global_add_extra_supported_file(name: &str) {
-        let mut cfg = Self::global().write().unwrap();
+        let mut cfg = Self::write_global();
         cfg.extra_supported_files.insert(name.to_string());
         cfg.ignored_files.remove(name);
         cfg.save();
     }
     pub fn global_remove_extra_supported_file(name: &str) {
-        let mut cfg = Self::global().write().unwrap();
+        let mut cfg = Self::write_global();
         cfg.extra_supported_files.remove(name);
         cfg.save();
     }
 
     pub fn global_get_file_watcher_enabled() -> bool {
-        Self::global().read().unwrap().file_watcher_enabled
+        Self::read_global().file_watcher_enabled
     }
     pub fn global_set_file_watcher_enabled(enabled: bool) {
-        let mut cfg = Self::global().write().unwrap();
+        let mut cfg = Self::write_global();
         cfg.file_watcher_enabled = enabled;
         cfg.save();
     }
 
     pub fn global_get_color_enabled() -> bool {
-        Self::global().read().unwrap().color_enabled
+        Self::read_global().color_enabled
     }
     pub fn global_set_color_enabled(enabled: bool) {
-        let mut cfg = Self::global().write().unwrap();
+        let mut cfg = Self::write_global();
         cfg.color_enabled = enabled;
         cfg.save();
         colored::control::set_override(enabled);
     }
 
+    pub fn global_get_autosuggest_enabled() -> bool {
+        Self::read_global().autosuggest_enabled
+    }
+    pub fn global_set_autosuggest_enabled(enabled: bool) {
+        let mut cfg = Self::write_global();
+        cfg.autosuggest_enabled = enabled;
+        cfg.save();
+    }
+
     // Parse helpers
-    pub fn parse_line_numbers_state(state: &str) -> Option<bool> {
+    pub fn parse_on_off(state: &str) -> Option<bool> {
         match state.to_uppercase().as_str() {
             "ON" => Some(true),
             "OFF" => Some(false),
@@ -417,11 +456,11 @@ impl Config {
     }
 
     pub fn global_get_teleports() -> HashMap<String, PathBuf> {
-        Self::global().read().unwrap().teleports.clone()
+        Self::read_global().teleports.clone()
     }
     
     pub fn global_set_teleports(teleports: HashMap<String, PathBuf>) {
-        let mut cfg = Self::global().write().unwrap();
+        let mut cfg = Self::write_global();
         cfg.teleports = teleports;
         cfg.save();
     }
@@ -435,7 +474,7 @@ impl Config {
             return false;
         }
         
-        let mut cfg = Self::global().write().unwrap();
+        let mut cfg = Self::write_global();
         
         // Check if old alias exists
         if !cfg.run_aliases.contains_key(&old_lower) {
@@ -448,31 +487,34 @@ impl Config {
         }
         
         // Perform rename
-        let command = cfg.run_aliases.remove(&old_lower).unwrap();
-        cfg.run_aliases.insert(new_lower, command);
+        if let Some(command) = cfg.run_aliases.remove(&old_lower) {
+            cfg.run_aliases.insert(new_lower, command);
+        } else {
+            return false;
+        }
         cfg.save();
         
         true
     }
 
     pub fn global_get_run_aliases() -> HashMap<String, String> {
-        Self::global().read().unwrap().run_aliases.clone()
+        Self::read_global().run_aliases.clone()
     }
     
     pub fn global_add_run_alias(name: &str, command: &str) {
-        let mut cfg = Self::global().write().unwrap();
+        let mut cfg = Self::write_global();
         cfg.run_aliases.insert(name.to_lowercase(), command.to_string());
         cfg.save();
     }
     
     pub fn global_remove_run_alias(name: &str) {
-        let mut cfg = Self::global().write().unwrap();
+        let mut cfg = Self::write_global();
         cfg.run_aliases.remove(&name.to_lowercase());
         cfg.save();
     }
     
     pub fn global_update_run_alias(name: &str, command: &str) -> bool {
-        let mut cfg = Self::global().write().unwrap();
+        let mut cfg = Self::write_global();
         if let std::collections::hash_map::Entry::Occupied(mut e) = cfg.run_aliases.entry(name.to_lowercase()) {
             e.insert(command.to_string());
             cfg.save();
@@ -485,23 +527,23 @@ impl Config {
     // ---- Math functions (global only) ----
 
     pub fn global_get_math_fns() -> HashMap<String, String> {
-        Self::global().read().unwrap().math_functions.clone()
+        Self::read_global().math_functions.clone()
     }
 
     pub fn global_add_math_fn(name: &str, def: &str) {
-        let mut cfg = Self::global().write().unwrap();
+        let mut cfg = Self::write_global();
         cfg.math_functions.insert(name.to_lowercase(), def.to_string());
         cfg.save();
     }
 
     pub fn global_remove_math_fn(name: &str) {
-        let mut cfg = Self::global().write().unwrap();
+        let mut cfg = Self::write_global();
         cfg.math_functions.remove(&name.to_lowercase());
         cfg.save();
     }
 
     pub fn global_update_math_fn(name: &str, def: &str) -> bool {
-        let mut cfg = Self::global().write().unwrap();
+        let mut cfg = Self::write_global();
         if let std::collections::hash_map::Entry::Occupied(mut e) = cfg.math_functions.entry(name.to_lowercase()) {
             e.insert(def.to_string());
             cfg.save();
@@ -762,7 +804,7 @@ impl Config {
             Self::write_local_config(&local)?;
             print_success(&format!("Cleared {} run alias(es) from local config.", count));
         } else {
-            let mut cfg = Config::global().write().unwrap();
+            let mut cfg = Config::write_global();
             let count = cfg.run_aliases.len();
             cfg.run_aliases.clear();
             cfg.save();
@@ -772,11 +814,11 @@ impl Config {
     }
 
     pub fn global_get_watch_trigger_alias() -> Option<String> {
-        Self::global().read().unwrap().watch_trigger_alias.clone()
+        Self::read_global().watch_trigger_alias.clone()
     }
     
     pub fn global_set_watch_trigger_alias(alias: Option<String>) {
-        let mut cfg = Self::global().write().unwrap();
+        let mut cfg = Self::write_global();
         cfg.watch_trigger_alias = alias;
         cfg.save();
     }
@@ -859,4 +901,76 @@ struct LocalConfig {
     pub ignored_files: Option<Vec<String>>,
     pub extra_supported_files: Option<Vec<String>>,
     pub run_aliases: Option<HashMap<String, String>>,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_validate_alias_name_rejects_reserved() {
+        for cmd in [
+            "go", "cd", "help", "exit", "quit", "run", "r", "ral",
+            "dino", "math", "setc", "diff", "bkup", "view", "txt",
+        ] {
+            assert!(!validate_alias_name(cmd), "reserved '{}' should be rejected", cmd);
+        }
+    }
+
+    #[test]
+    fn test_validate_alias_name_rejects_at_hash() {
+        assert!(!validate_alias_name("@foo"));
+        assert!(!validate_alias_name("#bar"));
+    }
+
+    #[test]
+    fn test_validate_alias_name_accepts_custom() {
+        assert!(validate_alias_name("myalias"));
+        assert!(validate_alias_name("build_project"));
+        assert!(validate_alias_name("x"));
+    }
+
+    #[test]
+    fn test_validate_alias_name_accepts_uppercase() {
+        // The check compares the literal name against lowercase reserved words,
+        // so uppercase versions of reserved words are accepted as aliases.
+        assert!(validate_alias_name("GO"), "uppercase 'GO' is not in reserved list");
+        assert!(validate_alias_name("DINO"), "uppercase 'DINO' is not in reserved list");
+    }
+
+    #[test]
+    fn test_config_default_values() {
+        let cfg = Config::new();
+        assert_eq!(cfg.max_depth, 2);
+        assert_eq!(cfg.num_threads, 4);
+        assert!(!cfg.show_line_numbers);
+        assert!(!cfg.color_enabled);
+        assert!(!cfg.history_enabled);
+        assert!(!cfg.file_watcher_enabled);
+        assert!(cfg.teleports.is_empty());
+        assert!(cfg.run_aliases.is_empty());
+        assert!(cfg.ignored_directory_names.contains("target"));
+        assert!(cfg.ignored_directory_names.contains(".git"));
+        assert!(cfg.ignored_directory_names.contains("node_modules"));
+    }
+
+    #[test]
+    fn test_parse_on_off() {
+        assert_eq!(Config::parse_on_off("ON"), Some(true));
+        assert_eq!(Config::parse_on_off("on"), Some(true));
+        assert_eq!(Config::parse_on_off("On"), Some(true));
+        assert_eq!(Config::parse_on_off("OFF"), Some(false));
+        assert_eq!(Config::parse_on_off("off"), Some(false));
+        assert_eq!(Config::parse_on_off(""), None);
+        assert_eq!(Config::parse_on_off("invalid"), None);
+    }
+
+    #[test]
+    fn test_parse_num_threads() {
+        assert_eq!(Config::parse_num_threads("4"), Some(4));
+        assert_eq!(Config::parse_num_threads("1"), Some(1));
+        assert_eq!(Config::parse_num_threads("0"), None);
+        assert_eq!(Config::parse_num_threads("-1"), None);
+        assert_eq!(Config::parse_num_threads("abc"), None);
+    }
 }

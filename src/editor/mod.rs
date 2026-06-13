@@ -12,12 +12,13 @@ mod run;
 mod template;
 mod editor_config;
 mod completion;
+mod recovery;
 
 // ── re-exports for sibling modules ──────────────────────────────────────────
 
 pub(crate) use types::{
-    Editor, Mode, Snapshot, CursorPos,
-    MAX_UNDO, SIDEBAR_WIDTH, MAX_BUFFERS,
+    Editor, Mode, Snapshot, CursorPos, Tab,
+    MAX_UNDO, SIDEBAR_WIDTH, MAX_BUFFERS, MAX_TABS,
 };
 pub(crate) use completion::CompletionItem;
 

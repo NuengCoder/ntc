@@ -1,6 +1,6 @@
 use crate::config::Config;
 use crate::explorer::{generate_tree, TreeNode};
-use crate::filetype::{is_supported_format_with_config, FormatConfig};
+use crate::filetype::FormatConfig;
 use anyhow::Result;
 use std::path::{Path, PathBuf};
 use std::time::Instant;
@@ -147,43 +147,9 @@ fn format_tree_md(node: &TreeNode, prefix: &str, is_last: bool) -> String {
     output
 }
 
-fn collect_files(dir_path: &Path, fmt_cfg: &FormatConfig) -> Result<(Vec<PathBuf>, Vec<PathBuf>)> {
-    let mut supported = Vec::new();
-    let mut unsupported = Vec::new();
-    let ignored_dirs = Config::global_get_ignored_dirs();
+fn collect_files(dir_path: &Path, _fmt_cfg: &FormatConfig) -> Result<(Vec<PathBuf>, Vec<PathBuf>)> {
     let max_depth = Config::global_get_max_depth();
-    
-    let walker = walkdir::WalkDir::new(dir_path)
-        .max_depth(max_depth)
-        .into_iter()
-        .filter_entry(|e| {
-            if e.depth() == 0 {
-                return true;
-            }
-            if e.file_type().is_dir() {
-                let name = e.file_name().to_string_lossy().to_lowercase();
-                if ignored_dirs.contains(&name) {
-                    return false;
-                }
-            }
-            true
-        });
-    
-    for entry in walker.filter_map(|e| e.ok()) {
-        if entry.file_type().is_file() {
-            let path = entry.path().to_path_buf();
-            if is_supported_format_with_config(&path, fmt_cfg) {
-                supported.push(path);
-            } else {
-                unsupported.push(path);
-            }
-        }
-    }
-    
-    supported.sort();
-    unsupported.sort();
-    
-    Ok((supported, unsupported))
+    Ok(super::collect_report_files(dir_path, max_depth))
 }
 
 fn count_files(node: &TreeNode) -> u64 {

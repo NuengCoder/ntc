@@ -49,10 +49,11 @@ pub(super) fn contains_ampersands(s: &str) -> bool {
 
 /// Parse a call token like `py(hello)` into `("py", Some("hello"))`.
 /// Returns `(token, None)` if there are no parentheses.
+/// Strips trailing whitespace from the base name to handle `py (hello)`.
 pub(super) fn parse_call_syntax(token: &str) -> (&str, Option<&str>) {
     if let Some(paren_start) = token.find('(') {
         if token.ends_with(')') {
-            let base = &token[..paren_start];
+            let base = token[..paren_start].trim_end();
             let arg  = &token[paren_start + 1..token.len() - 1];
             return (base, Some(arg));
         }
@@ -417,4 +418,95 @@ pub(super) fn expand_command_line(input: &str) -> Vec<String> {
         }
     }
     result
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_split_on_ampersands_simple() {
+        let parts = split_on_ampersands("echo a && echo b");
+        assert_eq!(parts.len(), 2);
+        assert_eq!(parts[0], "echo a");
+        assert_eq!(parts[1], "echo b");
+    }
+
+    #[test]
+    fn test_split_on_ampersands_no_ampersands() {
+        let parts = split_on_ampersands("echo hello");
+        assert_eq!(parts.len(), 1);
+        assert_eq!(parts[0], "echo hello");
+    }
+
+    #[test]
+    fn test_split_on_ampersands_in_quotes() {
+        let parts = split_on_ampersands("echo \"a && b\"");
+        assert_eq!(parts.len(), 1);
+        assert!(parts[0].contains("a && b"));
+    }
+
+    #[test]
+    fn test_split_on_ampersands_empty_middle_skipped() {
+        let parts = split_on_ampersands("echo a &&  && echo b");
+        // Middle segment is whitespace-only, so it's skipped
+        assert_eq!(parts.len(), 2);
+        assert_eq!(parts[0], "echo a");
+        assert_eq!(parts[1], "echo b");
+    }
+
+    #[test]
+    fn test_parse_call_syntax_no_parens() {
+        let (name, arg) = parse_call_syntax("hello");
+        assert_eq!(name, "hello");
+        assert!(arg.is_none());
+    }
+
+    #[test]
+    fn test_parse_call_syntax_with_parens() {
+        let (name, arg) = parse_call_syntax("py(hello)");
+        assert_eq!(name, "py");
+        assert_eq!(arg, Some("hello"));
+    }
+
+    #[test]
+    fn test_parse_call_syntax_empty_arg() {
+        let (name, arg) = parse_call_syntax("run()");
+        assert_eq!(name, "run");
+        assert_eq!(arg, Some(""));
+    }
+
+    #[test]
+    fn test_parse_call_syntax_no_closing_paren() {
+        let (name, arg) = parse_call_syntax("run(");
+        assert_eq!(name, "run(");
+        assert!(arg.is_none());
+    }
+
+    #[test]
+    fn test_contains_ampersands_true() {
+        assert!(contains_ampersands("a && b"));
+    }
+
+    #[test]
+    fn test_contains_ampersands_false() {
+        assert!(!contains_ampersands("echo hello"));
+    }
+
+    #[test]
+    fn test_contains_ampersands_in_quotes() {
+        assert!(!contains_ampersands("echo \"a && b\""));
+    }
+
+    #[test]
+    fn test_expand_command_line_empty() {
+        let result = expand_command_line("");
+        assert!(result.is_empty());
+    }
+
+    #[test]
+    fn test_expand_command_line_whitespace() {
+        let result = expand_command_line("   ");
+        assert!(result.is_empty());
+    }
 }

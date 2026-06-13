@@ -165,12 +165,12 @@ pub struct TreeNode {
  
      // Move children into parents in reverse order (leaves first), so a parent
      // is never consumed before all its children have been moved into it.
-     for i in (1..n).rev() {
-         let child = nodes[i].take().unwrap();
-         let parent = nodes[parent_indices[i]].as_mut().unwrap();
-         parent.children.push(child);
-     }
-     let mut root_node = nodes[0].take().unwrap();
+    for i in (1..n).rev() {
+        let Some(child) = nodes[i].take() else { continue };
+        let Some(parent) = nodes[parent_indices[i]].as_mut() else { continue };
+        parent.children.push(child);
+    }
+    let Some(mut root_node) = nodes[0].take() else { return TreeNode { name: String::new(), path: String::new(), is_dir: false, is_ignored: false, is_supported: None, depth: 0, size: None, children: vec![] } };
  
      // ---- Phase 3: sort children (dirs first, then alpha) ----
      fn sort_children(nodes: &mut [TreeNode]) {
@@ -415,38 +415,4 @@ pub fn format_tree_with_sizes(
     pb: Option<&ProgressBar>,
 ) -> String {
     format_tree_inner(node, prefix, is_last, show_sizes, care, pb)
-}
- 
-/// Count total entries for progress bar
-pub fn count_entries(root_path: &str, max_depth_override: Option<usize>) -> u64 {
-    let max_depth = max_depth_override.unwrap_or(Config::global_get_max_depth());
-    let ignored_dirs = Config::global_get_ignored_dirs();
- 
-    WalkDir::new(root_path)
-        .max_depth(max_depth)
-        .into_iter()
-        .filter_entry(|e| {
-            if e.depth() == 0 {
-                return true;
-            }
-            if e.file_type().is_dir() {
-                let name = e.file_name().to_string_lossy().to_lowercase();
-                if ignored_dirs.contains(&name) {
-                    return false;
-                }
-            }
-            true
-        })
-        .count() as u64
-}
- 
-/// Count directory nodes in a tree (excludes the root itself).
-/// Used for sizing the progress bar when scanning directory sizes.
- /// Lives here so both cli.rs and shell.rs can share it without duplication.
-pub fn count_dirs_in_tree(node: &TreeNode) -> u64 {
-    let mut count = if node.is_dir && node.depth > 0 { 1 } else { 0 };
-    for child in &node.children {
-        count += count_dirs_in_tree(child);
-    }
-    count
 }

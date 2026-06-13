@@ -1,4 +1,5 @@
 use colored::*;
+use std::io::{self, Write};
 
 /// Pre‑process raw args to accept `-say`, `-print` as long options.
 pub(super) fn preprocess_args(args: Vec<String>) -> Vec<String> {
@@ -19,16 +20,16 @@ pub(super) fn print_logo() {
     );
     println!("  {} {} {}", 
         "Navigate".red(), 
-        "Tree".green(), 
-        "Cat".blue()
+        "Toolkit".green(), 
+        "Center".blue()
     );
     println!();
 }
 
 /// Print detailed help
 pub(super) fn print_help() {
-    println!("ntc {} - Navigate, Tree, Cat", env!("CARGO_PKG_VERSION").green().bold());
-    println!("A combined directory tree viewer and file concatenator.\n");
+    println!("ntc {} - Navigate, Toolkit, Center", env!("CARGO_PKG_VERSION").green().bold());
+    println!("A Combine of Navigation , Project Toolkit Center hub.\n");
     println!("{}", "USAGE:".cyan().bold());
     println!("    ntc [OPTIONS]");
     println!("    ntc -i <path> [-o <output>]");
@@ -44,6 +45,7 @@ pub(super) fn print_help() {
     println!("    --setC [ON|OFF]         Show or toggle color output");
     println!("    --setT [threads]        Show or set number of threads (default: 4)");
     println!("    --setH [path|ON|OFF]    Show/set history path or enable/disable");
+    println!("    --setA [ON|OFF]         Show/set autosuggest (ghost text)");
     println!("    --showcg                Show current configuration overview");
     println!("    --watch [ON|OFF]        Show/set file watcher state");
     println!("    --where                 Show ntc executable and config location");
@@ -51,7 +53,7 @@ pub(super) fn print_help() {
     println!("    --size                  Show current directory size");
     println!("    --view                  Quick view of current directory tree");
     println!("    --view --size           Quick view with directory sizes");
-    println!("    --view --care           Quick view with tree caring everything (sizes too)");
+
     println!("    --clear                 Clear the terminal screen");
     println!("    --version               Show version information");
     println!("    --math <EXPR>           Evaluate a math expression (e.g. --math \"3+4*5\")");
@@ -93,8 +95,29 @@ pub(super) fn print_help() {
     println!("    Teleport: tp, tp jump, tp to, @name");
     println!("    Reports: txt, txt --cp, json --cp, md --cp");
     println!("    Configuration: showcg, opencg, resetcg, restorecg");
+    println!("    Theme: theme, theme list, theme current, theme add/rm/edit, theme import/export");
     println!("    Run Aliases: ral add, ral edit, ral list, ral rm, ral cls, ral export, ral import");
     println!("    Ignore/Care: igcare, igcare export, igcare import, ignoresc, caresc");
     println!("    Math: math <expr>, math fun, math timer, math <file>.ntc.math");
+    println!("    File Ops: mkf, mkd, rmf, rmd, cp");
+    println!("    Tutorial: tutorial — Start interactive step-by-step tutorial");
     println!("    These commands only work inside the interactive shell (run 'ntc' alone).\n");
+}
+
+/// Generate shell completion script for the given shell type.
+pub(super) fn generate_completions(shell: &str) {
+    let script = match shell.to_lowercase().as_str() {
+        "bash" => include_str!("completions/ntc.bash"),
+        "zsh" => include_str!("completions/ntc.zsh"),
+        "fish" => include_str!("completions/ntc.fish"),
+        "powershell" => include_str!("completions/ntc.ps1"),
+        _ => {
+            eprintln!("Unsupported shell: {}. Use: bash, zsh, fish, powershell", shell);
+            return;
+        }
+    };
+    if let Err(e) = io::stdout().write_all(script.as_bytes()) {
+        eprintln!("Failed to write completions: {}", e);
+    }
+    let _ = io::stdout().flush();
 }

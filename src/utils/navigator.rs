@@ -39,11 +39,13 @@ impl Navigator {
         };
         
         if canonical.is_dir() {
+            let has_local_config = canonical.join("ntconfig.toml").exists();
             env::set_current_dir(&canonical)?;
             self.current_dir = canonical;
             
-            // Reload config to pick up any ntconfig.toml in the new directory
-            crate::config::Config::reload_global();
+            if has_local_config {
+                crate::config::Config::reload_global();
+            }
             
             Ok(())
         } else {
@@ -101,14 +103,19 @@ impl Navigator {
     /// Returns vector of (index, name) tuples.
     pub fn list_subdirs(&self) -> Result<Vec<(usize, String)>> {
         let mut dirs = Vec::new();
-        if let Ok(entries) = std::fs::read_dir(&self.current_dir) {
-            for entry in entries.flatten() {
-                let path = entry.path();
-                if path.is_dir() {
-                    if let Some(name) = path.file_name().and_then(|n| n.to_str()) {
-                        dirs.push(name.to_string());
+        match std::fs::read_dir(&self.current_dir) {
+            Ok(entries) => {
+                for entry in entries.flatten() {
+                    let path = entry.path();
+                    if path.is_dir() {
+                        if let Some(name) = path.file_name().and_then(|n| n.to_str()) {
+                            dirs.push(name.to_string());
+                        }
                     }
                 }
+            }
+            Err(e) => {
+                eprintln!("Warning: could not read directory '{}': {}", self.current_dir.display(), e);
             }
         }
         dirs.sort_by_cached_key(|a| a.to_lowercase());
@@ -116,22 +123,10 @@ impl Navigator {
     }
 }
 
-/// Clear the terminal screen in a cross-platform way.
+/// Clear the terminal screen using ANSI escape codes.
 pub fn clear_screen() {
-    #[cfg(windows)]
-    {
-        let _ = std::process::Command::new("cmd").args(["/c", "cls"]).status();
-    }
-    #[cfg(not(windows))]
-    {
-        // Try system clear command first (works better in WSL)
-        let status = std::process::Command::new("clear").status();
-        if status.is_err() {
-            // Fallback to ANSI if clear command not available
-            print!("\x1B[2J\x1B[1;1H");
-            let _ = std::io::Write::flush(&mut std::io::stdout());
-        }
-    }
+    print!("\x1B[2J\x1B[1;1H");
+    let _ = std::io::Write::flush(&mut std::io::stdout());
 }
 
 /// Remove Windows extended‑length prefix (\\?\) for display.

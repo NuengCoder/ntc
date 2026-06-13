@@ -1,7 +1,8 @@
 use anyhow::Result;
 use crossterm::event::{
-    Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers,
+    Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers, EnableMouseCapture,
 };
+use crossterm::execute;
 use crossterm::style::Color;
 
 use super::{
@@ -9,6 +10,7 @@ use super::{
     set_status_bar, sel_range,
     Editor, Mode,
 };
+use crate::editor::types::RunMessage;
 use crate::navigator::Navigator;
 use crate::search::search_files;
 use crate::teleport::TeleportManager;
@@ -152,6 +154,265 @@ impl Editor {
         self.ff_idx = 0;
     }
 
+    // ── run mode ──────────────────────────────────────────────────────────────
+
+    pub(crate) fn handle_run_event(&mut self, ev: Event, stdout: &mut std::io::Stdout) -> Result<()> {
+        // Forward resize events
+        if let Event::Resize(w, h) = ev {
+            self.term_w = w as usize;
+            self.term_h = h as usize;
+            self.mark_all_dirty();
+            return Ok(());
+        }
+
+        // Forward mouse events (sidebar, scrollbar, editor clicks)
+        if let Event::Mouse(m) = ev {
+            let eo = self.editor_offset();
+            let col = m.column as usize;
+            let split = self.run_split_row();
+
+            // Sidebar click — always handled (sidebar spans full height)
+            if self.sidebar.open && col < eo {
+                self.handle_mouse(m);
+                return Ok(());
+            }
+
+            // Scroll wheel in Run panel area
+            if m.row as usize >= split {
+                match m.kind {
+                    crossterm::event::MouseEventKind::ScrollUp => {
+                        if self.run_scroll > 0 {
+                            self.run_scroll = self.run_scroll.saturating_sub(3);
+                            self.mark_all_dirty();
+                        }
+                    }
+                    crossterm::event::MouseEventKind::ScrollDown => {
+                        let panel_h = self.run_panel_height();
+                        let max = self.run_lines.len().saturating_sub(panel_h);
+                        self.run_scroll = (self.run_scroll + 3).min(max);
+                        self.mark_all_dirty();
+                    }
+                    _ => {}
+                }
+                return Ok(());
+            }
+
+            // In editor area — forward to standard mouse handler
+            self.handle_mouse(m);
+            return Ok(());
+        }
+
+        // If user is typing a command (run_cmd_buf non-empty), handle that first
+        if !self.run_cmd_buf.is_empty() {
+            match ev {
+                Event::Key(KeyEvent { code, kind: KeyEventKind::Press, .. }) => match code {
+                    KeyCode::Esc => {
+                        self.run_cmd_buf.clear();
+                        self.mark_all_dirty();
+                    }
+                    KeyCode::Enter => {
+                        let cmd = self.run_cmd_buf.clone();
+                        self.run_cmd_buf.clear();
+                        if let Some(rest) = cmd.strip_prefix(":run ") {
+                            let rest = rest.trim();
+                            if !rest.is_empty() {
+                                self.start_run(rest);
+                            }
+                        } else if let Some(rest) = cmd.strip_prefix(":") {
+                            let rest = rest.trim();
+                            if !rest.is_empty() {
+                                self.run_lines.clear();
+                                self.run_scroll = 0;
+                                self.start_run(rest);
+                            }
+                        }
+                        self.mark_all_dirty();
+                    }
+                    KeyCode::Backspace => {
+                        self.run_cmd_buf.pop();
+                        self.mark_all_dirty();
+                    }
+                    KeyCode::Char(c) => {
+                        self.run_cmd_buf.push(c);
+                        self.mark_all_dirty();
+                    }
+                    _ => {}
+                },
+                _ => {}
+            }
+            return Ok(());
+        }
+
+        // Normal Run mode key handling
+        match ev {
+            Event::Key(KeyEvent { code: KeyCode::Esc, kind: KeyEventKind::Press, .. })
+            | Event::Key(KeyEvent { code: KeyCode::Char('q'), kind: KeyEventKind::Press, .. }) => {
+                // Kill running process if any
+                if let Some(mut child) = self.run_child.take() {
+                    let _ = child.kill();
+                    let _ = child.wait();
+                }
+                self.run_executing = None;
+                self.run_rx = None;
+                self.run_lines.clear();
+                self.run_scroll = 0;
+                self.mode = Mode::Normal;
+                let _ = execute!(stdout, EnableMouseCapture);
+                self.mark_all_dirty();
+            }
+            Event::Key(KeyEvent { code: KeyCode::Char(':'), kind: KeyEventKind::Press, .. }) => {
+                self.run_cmd_buf = ":".into();
+                self.mark_all_dirty();
+            }
+            Event::Key(KeyEvent {
+                code: KeyCode::Char('c'),
+                modifiers: KeyModifiers::CONTROL,
+                kind: KeyEventKind::Press,
+                ..
+            }) => {
+                if let Some(mut child) = self.run_child.take() {
+                    let _ = child.kill();
+                    let _ = child.wait();
+                    self.run_executing = None;
+                    self.run_rx = None;
+                    self.run_lines.push("^C".into());
+                    let panel_h = self.run_panel_height();
+                    self.run_scroll = self.run_lines.len().saturating_sub(panel_h);
+                    let _ = execute!(stdout, EnableMouseCapture);
+                    self.mark_all_dirty();
+                }
+            }
+            Event::Key(KeyEvent { code: KeyCode::Up, kind: KeyEventKind::Press, .. })
+            | Event::Key(KeyEvent { code: KeyCode::Char('k'), kind: KeyEventKind::Press, .. }) => {
+                if self.run_scroll > 0 {
+                    self.run_scroll -= 1;
+                    self.mark_all_dirty();
+                }
+            }
+            Event::Key(KeyEvent { code: KeyCode::Down, kind: KeyEventKind::Press, .. })
+            | Event::Key(KeyEvent { code: KeyCode::Char('j'), kind: KeyEventKind::Press, .. }) => {
+                let panel_h = self.run_panel_height();
+                if self.run_scroll + panel_h < self.run_lines.len() {
+                    self.run_scroll += 1;
+                    self.mark_all_dirty();
+                }
+            }
+            Event::Key(KeyEvent { code: KeyCode::PageUp, kind: KeyEventKind::Press, .. }) => {
+                let panel_h = self.run_panel_height();
+                self.run_scroll = self.run_scroll.saturating_sub(panel_h);
+                self.mark_all_dirty();
+            }
+            Event::Key(KeyEvent { code: KeyCode::PageDown, kind: KeyEventKind::Press, .. }) => {
+                let panel_h = self.run_panel_height();
+                let max = self.run_lines.len().saturating_sub(panel_h);
+                self.run_scroll = (self.run_scroll + panel_h).min(max);
+                self.mark_all_dirty();
+            }
+            Event::Key(KeyEvent { code: KeyCode::Home, kind: KeyEventKind::Press, .. }) => {
+                self.run_scroll = 0;
+                self.mark_all_dirty();
+            }
+            Event::Key(KeyEvent { code: KeyCode::End, kind: KeyEventKind::Press, .. }) => {
+                let panel_h = self.run_panel_height();
+                self.run_scroll = self.run_lines.len().saturating_sub(panel_h);
+                self.mark_all_dirty();
+            }
+            _ => {}
+        }
+        Ok(())
+    }
+
+    /// Spawn a shell command with real-time streaming output.
+    fn start_run(&mut self, cmd_line: &str) {
+        // Kill any previous child process
+        if let Some(mut old_child) = self.run_child.take() {
+            let _ = old_child.kill();
+            let _ = old_child.wait();
+        }
+        self.run_rx = None;
+        self.run_executing = None;
+
+        let cwd = std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from("."));
+        let cmd_line = cmd_line.to_string();
+
+        let child_result = (|| -> std::io::Result<std::process::Child> {
+            #[cfg(windows)]
+            {
+                std::process::Command::new("cmd")
+                    .args(["/C", &cmd_line])
+                    .current_dir(&cwd)
+                    .stdin(std::process::Stdio::null())
+                    .stdout(std::process::Stdio::piped())
+                    .stderr(std::process::Stdio::piped())
+                    .spawn()
+            }
+            #[cfg(not(windows))]
+            {
+                std::process::Command::new("sh")
+                    .args(["-c", &cmd_line])
+                    .current_dir(&cwd)
+                    .stdin(std::process::Stdio::null())
+                    .stdout(std::process::Stdio::piped())
+                    .stderr(std::process::Stdio::piped())
+                    .spawn()
+            }
+        })();
+
+        match child_result {
+            Ok(mut child) => {
+                let (tx, rx) = std::sync::mpsc::channel::<RunMessage>();
+
+                // Take stdout/stderr pipes before moving them into the thread
+                let stdout_pipe = child.stdout.take();
+                let stderr_pipe = child.stderr.take();
+
+                // Spawn reader thread (only takes pipes, not child itself)
+                std::thread::spawn(move || {
+                    use std::io::{BufRead, BufReader};
+
+                    let read_pipe = |reader: Option<Box<dyn std::io::Read + Send>>, tx: &std::sync::mpsc::Sender<RunMessage>| {
+                        if let Some(pipe) = reader {
+                            let buf = BufReader::new(pipe);
+                            for line in buf.lines() {
+                                if let Ok(l) = line {
+                                    if tx.send(RunMessage::Line(l)).is_err() {
+                                        break;
+                                    }
+                                }
+                            }
+                        }
+                    };
+
+                    read_pipe(stdout_pipe.map(|p| Box::new(p) as Box<dyn std::io::Read + Send>), &tx);
+                    read_pipe(stderr_pipe.map(|p| Box::new(p) as Box<dyn std::io::Read + Send>), &tx);
+
+                    let _ = tx.send(RunMessage::Done);
+                });
+
+                self.run_rx = Some(rx);
+                self.run_child = Some(child);
+                self.run_executing = Some(cmd_line);
+                self.run_lines.clear();
+                self.run_scroll = 0;
+                self.mode = Mode::Run;
+                self.status_msg = None;
+                self.mark_all_dirty();
+            }
+            Err(e) => {
+                self.status_msg = Some(format!("run: {}", e));
+            }
+        }
+    }
+
+    pub(crate) fn run_panel_height(&self) -> usize {
+        let split = self.run_split_row();
+        self.term_h.saturating_sub(4).saturating_sub(split).max(3)
+    }
+
+    pub(crate) fn run_split_row(&self) -> usize {
+        (self.term_h * 2 / 3).max(5)
+    }
+
     // ── gosc mode ─────────────────────────────────────────────────────────────
 
     pub(crate) fn handle_gosc_event(&mut self, ev: Event) -> Result<()> {
@@ -250,6 +511,13 @@ impl Editor {
                         self.mode = Mode::Help;
                         self.status_msg = None;
                     }
+                    (true, KeyCode::Char('f')) => {
+                        self.mode = Mode::Search;
+                        self.search_query.clear();
+                        self.search_matches.clear();
+                        self.search_match_idx = 0;
+                        self.mark_all_dirty();
+                    }
                     // ── Terminal zoom — block locally ─────────────────────────
                     (true, KeyCode::Char('='))
                     | (true, KeyCode::Char('-')) => {
@@ -259,8 +527,26 @@ impl Editor {
                         self.mode = Mode::Command;
                         self.cmd_buf.clear();
                     }
-                    // ── Multi-cursor: Esc clears extras, then exit only if none ──
-                    (false, KeyCode::Esc) | (true, KeyCode::Char('q')) => {
+                    // ── Ctrl+Q: close tab / quit ──────────────────────────────
+                    (true, KeyCode::Char('q')) => {
+                        if self.has_multiple_cursors() {
+                            self.clear_extra_cursors();
+                            self.status_msg = Some("Cleared extra cursors".into());
+                        } else {
+                            let should_quit = self.close_current_tab();
+                            if should_quit && self.exit_flow(stdout)? {
+                                return Err(anyhow::anyhow!("__exit__"));
+                            }
+                        }
+                    }
+                    // ── Ctrl+Shift+Q: close all tabs and quit ──────────────────
+                    (true, KeyCode::Char('Q')) => {
+                        if self.exit_flow(stdout)? {
+                            return Err(anyhow::anyhow!("__exit__"));
+                        }
+                    }
+                    // ── Esc: clear extra cursors or exit if last tab ───────────
+                    (false, KeyCode::Esc) => {
                         if self.has_multiple_cursors() {
                             self.clear_extra_cursors();
                             self.status_msg = Some("Cleared extra cursors".into());
@@ -272,12 +558,30 @@ impl Editor {
                     (true, KeyCode::Char('b')) => {
                         self.toggle_sidebar();
                     }
-                    // ── Ctrl+P: file finder ────────────────────────────────────
+                    // ── Ctrl+P: file finder (opens in new tab) ────────────────
                     (true, KeyCode::Char('p')) => {
                         self.mode = Mode::FileFinder;
                         self.ff_query.clear();
                         self.ff_results.clear();
                         self.ff_idx = 0;
+                        self.mark_all_dirty();
+                    }
+                    // ── Ctrl+T: also file finder (opens in new tab) ────────────
+                    (true, KeyCode::Char('t')) => {
+                        self.mode = Mode::FileFinder;
+                        self.ff_query.clear();
+                        self.ff_results.clear();
+                        self.ff_idx = 0;
+                        self.mark_all_dirty();
+                    }
+                    // ── Ctrl+PgDn: next tab ───────────────────────────────────
+                    (true, KeyCode::PageDown) => {
+                        self.next_tab();
+                        self.mark_all_dirty();
+                    }
+                    // ── Ctrl+PgUp: prev tab ───────────────────────────────────
+                    (true, KeyCode::PageUp) => {
+                        self.prev_tab();
                         self.mark_all_dirty();
                     }
                     // ── Ctrl+Tab / Ctrl+Shift+Tab: buffer switching ────────────
@@ -390,7 +694,7 @@ impl Editor {
                         }
                     }
                     (false, KeyCode::PageUp) => {
-                        let rows = self.term_h.saturating_sub(3);
+                        let rows = self.term_h.saturating_sub(4);
                         if self.has_multiple_cursors() {
                             self.for_each_cursor(false, |e| {
                                 e.cursor_y = e.cursor_y.saturating_sub(rows);
@@ -400,7 +704,7 @@ impl Editor {
                         }
                     }
                     (false, KeyCode::PageDown) => {
-                        let rows = self.term_h.saturating_sub(3);
+                        let rows = self.term_h.saturating_sub(4);
                         if self.has_multiple_cursors() {
                             self.for_each_cursor(false, |e| {
                                 e.cursor_y = (e.cursor_y + rows).min(e.lines.len().saturating_sub(1));
@@ -690,6 +994,39 @@ impl Editor {
             return Ok(false);
         }
 
+        // ── gs <pattern> — grep file contents across project ─────────────────
+        if let Some(pattern) = cmd.strip_prefix("gs ") {
+            let pattern = pattern.trim();
+            if pattern.is_empty() {
+                self.status_msg = Some("gs: missing pattern".into());
+            } else {
+                let root = std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from("."));
+                let matches = crate::utils::search::search_content(&root, pattern, 10);
+                let results: Vec<(String, std::path::PathBuf, f64)> = matches
+                    .iter()
+                    .map(|m| {
+                        let name = format!(
+                            "{}:{}: {}",
+                            m.file_path.file_name().map(|n| n.to_string_lossy()).unwrap_or_default(),
+                            m.line_number,
+                            m.line.trim()
+                        );
+                        (name, m.file_path.clone(), 0.0)
+                    })
+                    .collect();
+                if results.is_empty() {
+                    self.status_msg = Some(format!("gs: no matches for '{}'", pattern));
+                } else {
+                    self.ff_results = results;
+                    self.ff_idx = 0;
+                    self.ff_query = format!("gs:{}", pattern);
+                    self.mode = Mode::FileFinder;
+                    self.mark_all_dirty();
+                }
+            }
+            return Ok(false);
+        }
+
         // ── mkdir <path> — create directory ─────────────────────────────────
         if let Some(dir) = cmd.strip_prefix("mkdir ") {
             let dir = dir.trim();
@@ -734,12 +1071,107 @@ impl Editor {
             return Ok(false);
         }
 
-        // ── ne <path> — navigate & edit (open/create file) ──────────────────
-        if let Some(file) = cmd.strip_prefix("ne ") {
+        // ── mkf <path> — make file (alias for touch/new) ────────────────────
+        if let Some(file) = cmd.strip_prefix("mkf ") {
             let file = file.trim();
-            if file.is_empty() || file == "." {
+            if file.is_empty() {
+                self.status_msg = Some("mkf: missing operand".into());
+            } else {
+                let path = std::path::Path::new(file);
+                if !path.exists() {
+                    if let Some(parent) = path.parent() {
+                        if !parent.as_os_str().is_empty() {
+                            let _ = std::fs::create_dir_all(parent);
+                        }
+                    }
+                    match std::fs::write(path, "") {
+                        Ok(()) => {
+                            self.sidebar.rebuild_tree();
+                            self.mark_all_dirty();
+                        }
+                        Err(e) => {
+                            self.status_msg = Some(format!("mkf: {}", e));
+                            return Ok(false);
+                        }
+                    }
+                }
+                self.open_file(path);
+            }
+            return Ok(false);
+        }
+
+        // ── mkd <dir> — make directory (alias for mkdir) ─────────────────────
+        if let Some(dir) = cmd.strip_prefix("mkd ") {
+            let dir = dir.trim();
+            if dir.is_empty() {
+                self.status_msg = Some("mkd: missing operand".into());
+            } else if let Err(e) = std::fs::create_dir_all(std::path::Path::new(dir)) {
+                self.status_msg = Some(format!("mkd: {}", e));
+            } else {
                 self.sidebar.rebuild_tree();
                 self.mark_all_dirty();
+                self.status_msg = Some(format!("Created directory: {}", dir));
+            }
+            return Ok(false);
+        }
+
+        // ── rmd <target> — recursively remove directory ──────────────────────
+        if let Some(target) = cmd.strip_prefix("rmd ") {
+            let target = target.trim();
+            if target.is_empty() {
+                self.status_msg = Some("rmd: missing operand".into());
+            } else {
+                let path = std::path::Path::new(target);
+                if !path.exists() {
+                    self.status_msg = Some(format!("rmd: '{}' does not exist", target));
+                } else if !path.is_dir() {
+                    self.status_msg = Some(format!("rmd: '{}' is not a directory", target));
+                } else if let Err(e) = std::fs::remove_dir_all(path) {
+                    self.status_msg = Some(format!("rmd: {}", e));
+                } else {
+                    self.sidebar.rebuild_tree();
+                    self.mark_all_dirty();
+                    self.status_msg = Some(format!("Removed directory: {}", target));
+                }
+            }
+            return Ok(false);
+        }
+
+        // ── rmf <target> — force remove file or directory ─────────────────────
+        if let Some(target) = cmd.strip_prefix("rmf ") {
+            let target = target.trim();
+            if target.is_empty() {
+                self.status_msg = Some("rmf: missing operand".into());
+            } else {
+                let path = std::path::Path::new(target);
+                if !path.exists() {
+                    self.status_msg = Some(format!("rmf: '{}' does not exist", target));
+                } else {
+                    let result = if path.is_dir() {
+                        std::fs::remove_dir_all(path)
+                    } else {
+                        std::fs::remove_file(path)
+                    };
+                    match result {
+                        Ok(()) => {
+                            self.sidebar.rebuild_tree();
+                            self.mark_all_dirty();
+                            self.status_msg = Some(format!("Removed: {}", target));
+                        }
+                        Err(e) => {
+                            self.status_msg = Some(format!("rmf: {}", e));
+                        }
+                    }
+                }
+            }
+            return Ok(false);
+        }
+
+        // ── ne [path] — navigate & edit (open/create file) ──────────────────
+        if let Some(file) = cmd.strip_prefix("ne").map(|s| s.trim()) {
+            self.sidebar.rebuild_tree();
+            self.mark_all_dirty();
+            if file.is_empty() || file == "." {
                 self.status_msg = Some(format!("CWD: {}", std::env::current_dir().unwrap_or_default().display()));
             } else {
                 let path = std::path::Path::new(file);
@@ -755,10 +1187,15 @@ impl Editor {
             }
             return Ok(false);
         }
-        if cmd == "ne" {
-            self.sidebar.rebuild_tree();
-            self.mark_all_dirty();
-            self.status_msg = Some(format!("CWD: {}", std::env::current_dir().unwrap_or_default().display()));
+
+        // ── run <command> — execute shell command, stream output ────────────
+        if let Some(cmd_line) = cmd.strip_prefix("run ") {
+            let cmd_line = cmd_line.trim();
+            if cmd_line.is_empty() {
+                self.status_msg = Some("run: missing command".into());
+            } else {
+                self.start_run(cmd_line);
+            }
             return Ok(false);
         }
 
@@ -806,6 +1243,35 @@ impl Editor {
             return Ok(false);
         }
 
+        // ── theme <name> — switch to theme ─────────────────────────────────
+        if let Some(name) = cmd.strip_prefix("theme ") {
+            let name = name.trim();
+            if name.is_empty() {
+                let current = crate::utils::theme::ThemeManager::current();
+                self.status_msg = Some(format!("Current theme: {}", current.name));
+            } else if crate::utils::theme::ThemeManager::set_theme(name) {
+                self.mark_all_dirty();
+                self.status_msg = Some(format!("Switched to theme '{}'", name));
+            } else {
+                self.status_msg = Some(format!("Theme '{}' not found. Use 'theme list' to see available themes.", name));
+            }
+            return Ok(false);
+        }
+        if cmd == "theme list" || cmd == "theme ls" {
+            let themes = crate::utils::theme::ThemeManager::list_themes();
+            let current = crate::utils::theme::ThemeManager::current();
+            let mut msg = String::from("Themes:");
+            for t in &themes {
+                if t == &current.name {
+                    msg.push_str(&format!(" ✓{}", t));
+                } else {
+                    msg.push_str(&format!(" {}", t));
+                }
+            }
+            self.status_msg = Some(msg);
+            return Ok(false);
+        }
+
         // ── tp-add <name> — save CWD as teleport ────────────────────────────
         if let Some(name) = cmd.strip_prefix("tp-add ") {
             let name = name.trim();
@@ -828,6 +1294,37 @@ impl Editor {
                     }
                 }
             }
+            return Ok(false);
+        }
+
+        // ── mode switching ──────────────────────────────────────────────────
+        if cmd == "I" || cmd == "i" {
+            self.mode = Mode::Insert;
+            self.status_msg = None;
+            return Ok(false);
+        }
+        if cmd == "V" || cmd == "v" {
+            self.mode = Mode::Visual;
+            self.clear_selection();
+            self.status_msg =
+                Some("Visual mode — arrow keys to select, Esc to exit".into());
+            return Ok(false);
+        }
+        if cmd == "H" || cmd == "h" {
+            self.mode = Mode::Help;
+            self.status_msg = None;
+            return Ok(false);
+        }
+        if cmd == "F" || cmd == "f" {
+            self.mode = Mode::Search;
+            self.search_query.clear();
+            self.search_matches.clear();
+            self.search_match_idx = 0;
+            self.mark_all_dirty();
+            return Ok(false);
+        }
+        if cmd == "B" || cmd == "b" {
+            self.toggle_sidebar();
             return Ok(false);
         }
 
@@ -1130,11 +1627,12 @@ impl Editor {
                     }
                     (false, false, false, KeyCode::Left) => {
                         self.move_cursors(|e| {
-                            if e.has_selection() {
-                                let (ay, ab) = e.selection_anchor.unwrap();
-                                let ((sy, sb), _) = sel_range(e.cursor_y, e.cursor_byte, ay, ab);
-                                e.cursor_y = sy;
-                                e.cursor_byte = sb;
+                            if let Some((ay, ab)) = e.selection_anchor {
+                                if (ay, ab) != (e.cursor_y, e.cursor_byte) {
+                                    let ((sy, sb), _) = sel_range(e.cursor_y, e.cursor_byte, ay, ab);
+                                    e.cursor_y = sy;
+                                    e.cursor_byte = sb;
+                                }
                                 e.clear_selection();
                             } else if e.cursor_byte > 0 {
                                 e.cursor_byte = prev_char_byte(e.current(), e.cursor_byte);
@@ -1143,11 +1641,12 @@ impl Editor {
                     }
                     (false, false, false, KeyCode::Right) => {
                         self.move_cursors(|e| {
-                            if e.has_selection() {
-                                let (ay, ab) = e.selection_anchor.unwrap();
-                                let (_, (ey, eb)) = sel_range(e.cursor_y, e.cursor_byte, ay, ab);
-                                e.cursor_y = ey;
-                                e.cursor_byte = eb;
+                            if let Some((ay, ab)) = e.selection_anchor {
+                                if (ay, ab) != (e.cursor_y, e.cursor_byte) {
+                                    let (_, (ey, eb)) = sel_range(e.cursor_y, e.cursor_byte, ay, ab);
+                                    e.cursor_y = ey;
+                                    e.cursor_byte = eb;
+                                }
                                 e.clear_selection();
                             } else {
                                 let line = e.current();
@@ -1294,13 +1793,13 @@ impl Editor {
 
                     // ── Page up / down ────────────────────────────────────────
                     (false, _, _, KeyCode::PageUp) => {
-                        let rows = self.term_h.saturating_sub(3);
+                        let rows = self.term_h.saturating_sub(4);
                         self.move_cursors(|e| {
                             e.cursor_y = e.cursor_y.saturating_sub(rows);
                         });
                     }
                     (false, _, _, KeyCode::PageDown) => {
-                        let rows = self.term_h.saturating_sub(3);
+                        let rows = self.term_h.saturating_sub(4);
                         self.move_cursors(|e| {
                             e.cursor_y = (e.cursor_y + rows).min(e.lines.len().saturating_sub(1));
                         });

@@ -64,15 +64,34 @@ pub(crate) fn show_tree(
         let _ = crate::output::copy_to_clipboard(&tree_str, "Tree");
     }
 
-    for line in tree_str.lines() {
-        if line.contains("[ignored]") {
-            println!("{}", line.red().dimmed());
-        } else if line.contains("[Directory]") {
-            println!("{}", line.blue());
-        } else if line.trim().starts_with("├──") || line.trim().starts_with("└──") {
-            println!("{}", line.green());
-        } else {
-            println!("{}", line);
+    #[cfg(not(target_os = "android"))]
+    {
+        use colored::Colorize;
+        let theme = crate::utils::theme::ThemeManager::current();
+        for line in tree_str.lines() {
+            if line.contains("[ignored]") {
+                println!("{}", line.color(theme.shell.tree_ignored.to_colored()));
+            } else if line.contains("[Directory]") {
+                println!("{}", line.color(theme.shell.tree_dir.to_colored()));
+            } else if line.trim().starts_with("├──") || line.trim().starts_with("└──") {
+                println!("{}", line.color(theme.shell.tree_branch.to_colored()));
+            } else {
+                println!("{}", line);
+            }
+        }
+    }
+    #[cfg(target_os = "android")]
+    {
+        for line in tree_str.lines() {
+            if line.contains("[ignored]") {
+                println!("{}", line);
+            } else if line.contains("[Directory]") {
+                println!("{}", line);
+            } else if line.trim().starts_with("├──") || line.trim().starts_with("└──") {
+                println!("{}", line);
+            } else {
+                println!("{}", line);
+            }
         }
     }
 }
@@ -97,7 +116,7 @@ pub(super) fn gosc_loop(nav: &mut Navigator) -> Result<()> {
             println!("║ {}", "(no subdirectories)".dimmed());
         } else {
             for (i, name) in &dirs {
-                println!("║ {}. {}", i.to_string().yellow(), name.blue());
+                println!("║ {}. {}", i.to_string().yellow(), name.bright_purple());
             }
         }
         
@@ -262,10 +281,13 @@ pub(super) fn caresc_loop(nav: &mut Navigator) -> Result<()> {
 pub(super) fn open_with_fallback(config_path: &std::path::Path) {
     #[cfg(windows)]
     {
-        let status = std::process::Command::new("cmd")
-            .args(["start", "/C","", config_path.to_str().unwrap_or("")])
-            .status();
-        if status.is_ok() { return; }
+        let path_str = config_path.to_str().unwrap_or("");
+        if !path_str.is_empty() {
+            let status = std::process::Command::new("cmd")
+                .args(["/C", "start", "", path_str])
+                .status();
+            if status.is_ok() { return; }
+        }
     }
     #[cfg(target_os = "macos")]
     {
@@ -274,6 +296,17 @@ pub(super) fn open_with_fallback(config_path: &std::path::Path) {
     }
     #[cfg(target_os = "linux")]
     {
+        if let Ok(editor) = std::env::var("VISUAL").or_else(|_| std::env::var("EDITOR")) {
+            let parts: Vec<&str> = editor.split_whitespace().collect();
+            if let Some(cmd) = parts.first() {
+                let mut proc = std::process::Command::new(cmd);
+                for arg in &parts[1..] {
+                    proc.arg(arg);
+                }
+                proc.arg(config_path);
+                if proc.status().is_ok() { return; }
+            }
+        }
         if std::process::Command::new("xdg-open")
             .arg(config_path)
             .status()
@@ -476,7 +509,7 @@ pub(crate) fn ral_import(path_str: &str) -> Result<()> {
 
 pub(crate) fn igcare_export_all(name: &str) -> Result<()> {
     let path = export_path(name, "ntc.igcare");
-    let cfg = Config::global().read().unwrap();
+    let cfg = Config::read_global();
     write_igcare_file(&path, &cfg)?;
     drop(cfg);
     print_success(&format!("Exported all ignore/care settings to: {}", path.display()));
@@ -484,7 +517,7 @@ pub(crate) fn igcare_export_all(name: &str) -> Result<()> {
 }
 
 pub(crate) fn igcare_export_select(name: &str) -> Result<()> {
-    let cfg = Config::global().read().unwrap();
+    let cfg = Config::read_global();
 
     let category_labels = [
         "Ignored directories",

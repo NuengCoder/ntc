@@ -6,6 +6,7 @@ pub(crate) mod commands;
 pub(crate) mod entry;
 pub(crate) mod helpers;
 mod help;
+mod hinter;
 
 // Re-exports for external callers (lib.rs / main.rs)
 pub use entry::run_shell;

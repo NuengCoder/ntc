@@ -11,6 +11,7 @@ use crate::config::Config;
 use crate::filetype::FormatConfig;
 use crate::output::{print_error, print_info, print_success, print_warning};
 use anyhow::Result;
+use rayon::prelude::*;
 use sha2::{Sha256, Digest};
 
 use std::cmp::Reverse;
@@ -18,6 +19,7 @@ use std::collections::HashSet;
 use std::fs;
 use std::io::{self, Write, Read};
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use walkdir::WalkDir;
 
 // ============================================================================
@@ -79,6 +81,7 @@ impl BackupManager {
         let fmt_cfg      = FormatConfig::from_global();
 
         let walker = WalkDir::new(project_root)
+            .sort_by(|a, b| a.file_name().cmp(b.file_name()))
             .into_iter()
             .filter_entry(|e| {
                 if e.depth() == 0 { return true; }
@@ -89,13 +92,22 @@ impl BackupManager {
                 true
             });
 
-        let mut total_files  = 0usize;
+        struct BackupTask {
+            src: PathBuf,
+            dst: PathBuf,
+            rel_path: PathBuf,
+            size: u64,
+            modified: u64,
+        }
+
+        let mut tasks: Vec<BackupTask> = Vec::new();
+        let mut total_files   = 0usize;
         let mut skipped_count = 0usize;
 
+        // Phase 1: walk + validate (sequential — fast, mostly I/O)
         for entry in walker.filter_map(|e| e.ok()) {
             if !entry.file_type().is_file() { continue; }
 
-            // Safe strip_prefix — skip entry if somehow outside root (e.g. broken symlink)
             let rel_path = match entry.path().strip_prefix(project_root) {
                 Ok(p)  => p.to_path_buf(),
                 Err(_) => {
@@ -107,6 +119,14 @@ impl BackupManager {
                 }
             };
 
+            // Check for symlinks — skip them to avoid following links outside the project
+            if entry.path_is_symlink() {
+                print_warning(&format!("Skipping {} (symlink — not following)", rel_path.display()));
+                manifest.add_skipped_file(rel_path, SkipReason::IgnoredByConfig, Some("symlink (not followed)".to_string()));
+                skipped_count += 1;
+                continue;
+            }
+
             let metadata = match fs::metadata(entry.path()) {
                 Ok(m)  => m,
                 Err(e) => {
@@ -116,23 +136,17 @@ impl BackupManager {
             };
             let size = metadata.len();
 
-            // --- size limit ---
             if size > MAX_BACKUP_FILE_SIZE {
                 let size_mb = size / (1024 * 1024);
                 print_warning(&format!(
                     "Skipped {} ({} MB exceeds 50 MB limit)",
                     rel_path.display(), size_mb
                 ));
-                manifest.add_skipped_file(
-                    rel_path,
-                    SkipReason::TooLarge,
-                    Some(format!("{} MB", size_mb)),
-                );
+                manifest.add_skipped_file(rel_path, SkipReason::TooLarge, Some(format!("{} MB", size_mb)));
                 skipped_count += 1;
                 continue;
             }
 
-            // --- ignored filename ---
             let file_name = entry.file_name().to_string_lossy();
             if fmt_cfg.ignored_files.contains(&file_name.to_string()) {
                 manifest.add_skipped_file(rel_path, SkipReason::IgnoredByUser, None);
@@ -140,39 +154,56 @@ impl BackupManager {
                 continue;
             }
 
-            // --- ignored extension ---
             let ext = entry.path().extension()
                 .and_then(|e| e.to_str())
                 .unwrap_or("");
             if fmt_cfg.ignored_extensions.contains(&ext.to_lowercase()) {
-                manifest.add_skipped_file(
-                    rel_path,
-                    SkipReason::IgnoredByConfig,
-                    Some(format!(".{} extension ignored", ext)),
-                );
+                manifest.add_skipped_file(rel_path, SkipReason::IgnoredByConfig, Some(format!(".{} extension ignored", ext)));
                 skipped_count += 1;
                 continue;
             }
 
-            // --- copy + hash in a single file read ---
-            let dest_path = tmp_path.join(&rel_path);
-            if let Some(parent) = dest_path.parent() {
-                fs::create_dir_all(parent)?;
-            }
-            let (hash, _bytes_written) = Self::copy_and_hash(entry.path(), &dest_path)?;
-
-            // modified time — graceful fallback to 0 rather than aborting the backup
             let modified = metadata.modified()
                 .ok()
                 .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
                 .map(|d| d.as_secs())
                 .unwrap_or(0);
 
-            // is_new: file doesn't currently exist at the project root
-            // (always false during create_backup — the source IS the project root)
-            // Tracked here for future incremental-backup support.
-            manifest.add_file(rel_path, hash, size, modified, false);
-            total_files += 1;
+            tasks.push(BackupTask {
+                src: entry.path().to_path_buf(),
+                dst: tmp_path.join(&rel_path),
+                rel_path,
+                size,
+                modified,
+            });
+        }
+
+        // Phase 2: parallel copy + hash
+        let results: Vec<(PathBuf, Result<(String, u64)>, u64, u64)> = tasks
+            .into_par_iter()
+            .map(|task| {
+                let result = (|| -> Result<(String, u64)> {
+                    if let Some(parent) = task.dst.parent() {
+                        fs::create_dir_all(parent)?;
+                    }
+                    Self::copy_and_hash(&task.src, &task.dst)
+                })();
+                (task.rel_path, result, task.size, task.modified)
+            })
+            .collect();
+
+        // Phase 3: sequential manifest update
+        for (rel_path, result, size, modified) in results {
+            match result {
+                Ok((hash, _bytes)) => {
+                    manifest.add_file(rel_path, hash, size, modified, false);
+                    total_files += 1;
+                }
+                Err(e) => {
+                    print_warning(&format!("Failed to backup {}: {}", rel_path.display(), e));
+                    skipped_count += 1;
+                }
+            }
         }
 
         // Finalize manifest and write everything into tmp dir
@@ -514,26 +545,30 @@ impl BackupManager {
         }
         fs::create_dir_all(&undo_files_dir)?;
 
-        // Save originals of files that will be overwritten
-        for rel_path in &to_overwrite {
+        // Save originals of files that will be overwritten (parallel)
+        to_overwrite.par_iter().for_each(|rel_path| {
             let src = project_root.join(rel_path);
             let dst = undo_files_dir.join(rel_path);
             if let Some(parent) = dst.parent() {
-                fs::create_dir_all(parent)?;
+                let _ = fs::create_dir_all(parent);
             }
-            fs::copy(&src, &dst)?;
-        }
+            if let Err(e) = fs::copy(&src, &dst) {
+                print_warning(&format!(
+                    "Could not snapshot {} for undo ({}), continuing",
+                    rel_path.display(), e
+                ));
+            }
+        });
 
-        // FIX: Also save originals of files that will be deleted so undo can restore them.
-        // We reuse the undo_files_dir with a sub-prefix to avoid collisions.
+        // Also save originals of files that will be deleted so undo can restore them.
         let undo_deleted_dir = undo_dir.join("deleted");
         if !to_delete.is_empty() {
-            fs::create_dir_all(&undo_deleted_dir)?;
-            for rel_path in &to_delete {
+            let _ = fs::create_dir_all(&undo_deleted_dir);
+            to_delete.par_iter().for_each(|rel_path| {
                 let src = project_root.join(rel_path);
                 let dst = undo_deleted_dir.join(rel_path);
                 if let Some(parent) = dst.parent() {
-                    fs::create_dir_all(parent)?;
+                    let _ = fs::create_dir_all(parent);
                 }
                 if let Err(e) = fs::copy(&src, &dst) {
                     print_warning(&format!(
@@ -541,7 +576,7 @@ impl BackupManager {
                         rel_path.display(), e
                     ));
                 }
-            }
+            });
         }
 
         let undo_state = UndoState {
@@ -560,48 +595,44 @@ impl BackupManager {
             serde_json::to_string_pretty(&undo_state)?,
         )?;
 
-        // --- Perform the restore ---
-        let mut restored_count = 0usize;
-        let mut failed_count   = 0usize;
+        // --- Perform the restore (parallel) ---
+        let restored_count = AtomicUsize::new(0);
+        let deleted_count  = AtomicUsize::new(0);
+        let failed_count   = AtomicUsize::new(0);
 
         // 1. Copy backup files into project (overwrite + create)
-        for entry in &manifest.files {
+        manifest.files.par_iter().for_each(|entry| {
             let src = backup_path.join(&entry.rel_path);
             let dst = project_root.join(&entry.rel_path);
-
             if let Some(parent) = dst.parent() {
-                fs::create_dir_all(parent)?;
+                let _ = fs::create_dir_all(parent);
             }
-
             match fs::copy(&src, &dst) {
-                Ok(_)  => restored_count += 1,
+                Ok(_)  => { restored_count.fetch_add(1, Ordering::Relaxed); }
                 Err(e) => {
-                    print_warning(&format!(
-                        "Failed to restore {}: {}",
-                        entry.rel_path.display(), e
-                    ));
-                    failed_count += 1;
+                    print_warning(&format!("Failed to restore {}: {}", entry.rel_path.display(), e));
+                    failed_count.fetch_add(1, Ordering::Relaxed);
                 }
             }
-        }
+        });
 
-        // FIX: 2. Delete files that exist in the project but not in the backup
-        let mut deleted_count = 0usize;
-        for rel_path in &to_delete {
+        // 2. Delete files that exist in the project but not in the backup
+        to_delete.par_iter().for_each(|rel_path| {
             let target = project_root.join(rel_path);
             if target.exists() {
                 match fs::remove_file(&target) {
-                    Ok(_)  => deleted_count += 1,
+                    Ok(_)  => { deleted_count.fetch_add(1, Ordering::Relaxed); }
                     Err(e) => {
-                        print_warning(&format!(
-                            "Failed to delete extra file {}: {}",
-                            rel_path.display(), e
-                        ));
-                        failed_count += 1;
+                        print_warning(&format!("Failed to delete extra file {}: {}", rel_path.display(), e));
+                        failed_count.fetch_add(1, Ordering::Relaxed);
                     }
                 }
             }
-        }
+        });
+
+        let restored_count = restored_count.load(Ordering::Relaxed);
+        let deleted_count  = deleted_count.load(Ordering::Relaxed);
+        let failed_count   = failed_count.load(Ordering::Relaxed);
 
         let delete_msg = if deleted_count > 0 {
             format!(", {} extra file(s) removed", deleted_count)
@@ -648,26 +679,24 @@ impl BackupManager {
         let undo_state: UndoState =
             serde_json::from_str(&fs::read_to_string(&undo_metadata_path)?)?;
 
-        let mut restored_count = 0usize;
-        let mut failed         = false;
+        let restored_count    = AtomicUsize::new(0);
+        let deleted_count     = AtomicUsize::new(0);
+        let re_restored_count = AtomicUsize::new(0);
+        let failed            = AtomicBool::new(false);
 
-        // Restore overwritten files
-        for rel_path in &undo_state.overwritten_files {
+        // Restore overwritten files (parallel)
+        undo_state.overwritten_files.par_iter().for_each(|rel_path| {
             let src = undo_files_dir.join(rel_path);
             let dst = project_root.join(rel_path);
-
             if src.exists() {
                 if let Some(parent) = dst.parent() {
-                    fs::create_dir_all(parent)?;
+                    let _ = fs::create_dir_all(parent);
                 }
                 match fs::copy(&src, &dst) {
-                    Ok(_)  => restored_count += 1,
+                    Ok(_)  => { restored_count.fetch_add(1, Ordering::Relaxed); }
                     Err(e) => {
-                        print_warning(&format!(
-                            "Could not restore {}: {}",
-                            rel_path.display(), e
-                        ));
-                        failed = true;
+                        print_warning(&format!("Could not restore {}: {}", rel_path.display(), e));
+                        failed.store(true, Ordering::Relaxed);
                     }
                 }
             } else {
@@ -675,46 +704,37 @@ impl BackupManager {
                     "Could not restore {} (original missing from undo storage)",
                     rel_path.display()
                 ));
-                failed = true;
+                failed.store(true, Ordering::Relaxed);
             }
-        }
+        });
 
-        // Delete files that the restore created (they didn't exist before)
-        let mut deleted_count = 0usize;
-        for rel_path in &undo_state.new_files_created {
+        // Delete files that the restore created (parallel)
+        undo_state.new_files_created.par_iter().for_each(|rel_path| {
             let target = project_root.join(rel_path);
             if target.exists() {
                 match fs::remove_file(&target) {
-                    Ok(_)  => deleted_count += 1,
+                    Ok(_)  => { deleted_count.fetch_add(1, Ordering::Relaxed); }
                     Err(e) => {
-                        print_warning(&format!(
-                            "Could not delete restored file {}: {}",
-                            rel_path.display(), e
-                        ));
-                        failed = true;
+                        print_warning(&format!("Could not delete restored file {}: {}", rel_path.display(), e));
+                        failed.store(true, Ordering::Relaxed);
                     }
                 }
             }
-        }
+        });
 
-        // FIX: Restore files that the restore deleted (extra project files)
-        let mut re_restored_count = 0usize;
-        for rel_path in &undo_state.deleted_files {
+        // Restore files that the restore deleted (parallel)
+        undo_state.deleted_files.par_iter().for_each(|rel_path| {
             let src = undo_deleted_dir.join(rel_path);
             let dst = project_root.join(rel_path);
-
             if src.exists() {
                 if let Some(parent) = dst.parent() {
-                    fs::create_dir_all(parent)?;
+                    let _ = fs::create_dir_all(parent);
                 }
                 match fs::copy(&src, &dst) {
-                    Ok(_)  => re_restored_count += 1,
+                    Ok(_)  => { re_restored_count.fetch_add(1, Ordering::Relaxed); }
                     Err(e) => {
-                        print_warning(&format!(
-                            "Could not re-restore deleted file {}: {}",
-                            rel_path.display(), e
-                        ));
-                        failed = true;
+                        print_warning(&format!("Could not re-restore deleted file {}: {}", rel_path.display(), e));
+                        failed.store(true, Ordering::Relaxed);
                     }
                 }
             } else {
@@ -722,9 +742,14 @@ impl BackupManager {
                     "Could not re-restore {} (snapshot missing from undo storage)",
                     rel_path.display()
                 ));
-                failed = true;
+                failed.store(true, Ordering::Relaxed);
             }
-        }
+        });
+
+        let restored_count    = restored_count.load(Ordering::Relaxed);
+        let deleted_count     = deleted_count.load(Ordering::Relaxed);
+        let re_restored_count = re_restored_count.load(Ordering::Relaxed);
+        let failed            = failed.load(Ordering::Relaxed);
 
         // Only clean up undo storage if everything succeeded
         if !failed {

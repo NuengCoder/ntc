@@ -20,7 +20,9 @@ pub(super) fn line_comment_prefix(lang: SyntaxLanguage) -> &'static [u8] {
         | SyntaxLanguage::Pro
         | SyntaxLanguage::Dotenv
         | SyntaxLanguage::Ps1 => b"#",
-        SyntaxLanguage::NtcRal | SyntaxLanguage::NtcIgcare | SyntaxLanguage::NtcMath => b"#",
+        SyntaxLanguage::NtcRal | SyntaxLanguage::NtcIgcare | SyntaxLanguage::NtcMath | SyntaxLanguage::NtcTheme => b"#",
+        SyntaxLanguage::LockFile => b"#",
+        SyntaxLanguage::InnoSetup => b"//",
         SyntaxLanguage::Lua | SyntaxLanguage::Haskell | SyntaxLanguage::Elixir => {
             b"--"
         }
@@ -63,6 +65,14 @@ pub(super) fn has_xml_comments(lang: SyntaxLanguage) -> bool {
 
 pub(super) fn has_ps_block_comments(lang: SyntaxLanguage) -> bool {
     matches!(lang, SyntaxLanguage::Ps1)
+}
+
+pub(super) fn has_pascal_comments(lang: SyntaxLanguage) -> bool {
+    matches!(lang, SyntaxLanguage::InnoSetup)
+}
+
+pub(super) fn has_preprocessor(lang: SyntaxLanguage) -> bool {
+    matches!(lang, SyntaxLanguage::InnoSetup)
 }
 
 pub(super) fn is_char_literal_supported(lang: SyntaxLanguage) -> bool {
@@ -431,7 +441,7 @@ pub(super) fn is_keyword(lang: SyntaxLanguage, word: &str) -> bool {
             word,
             "module" | "go" | "require" | "replace" | "exclude" | "retract"
         ),
-        SyntaxLanguage::NtcRal | SyntaxLanguage::NtcIgcare => matches!(
+        SyntaxLanguage::NtcRal | SyntaxLanguage::NtcIgcare | SyntaxLanguage::NtcTheme => matches!(
             word,
             "true" | "false"
         ),
@@ -475,6 +485,16 @@ pub(super) fn is_keyword(lang: SyntaxLanguage, word: &str) -> bool {
                 | "Get-Help" | "Get-Command" | "Get-Module"
                 | "Get-Member" | "Format-Table" | "Format-List" | "Format-Wide"
         ),
+        SyntaxLanguage::InnoSetup => matches!(
+            word,
+            "and" | "array" | "begin" | "case" | "const" | "div" | "do" | "downto"
+                | "else" | "end" | "file" | "for" | "function" | "goto" | "if"
+                | "in" | "label" | "mod" | "nil" | "not" | "of" | "or" | "packed"
+                | "procedure" | "program" | "record" | "repeat" | "set" | "shl"
+                | "shr" | "string" | "then" | "to" | "type" | "unit" | "until"
+                | "uses" | "var" | "while" | "with"
+        ),
+        SyntaxLanguage::LockFile => matches!(word, "true" | "false"),
         SyntaxLanguage::Html | SyntaxLanguage::Xml | SyntaxLanguage::Pro | SyntaxLanguage::Markdown | SyntaxLanguage::Txt | SyntaxLanguage::GoSum | SyntaxLanguage::Dotenv | SyntaxLanguage::Css => false,
     }
 }
@@ -563,6 +583,7 @@ pub(super) fn is_type_name_upper_heuristic(lang: SyntaxLanguage) -> bool {
             | SyntaxLanguage::Scala
             | SyntaxLanguage::Dart
             | SyntaxLanguage::Haskell
+            | SyntaxLanguage::InnoSetup
     )
 }
 
@@ -650,6 +671,28 @@ pub(super) fn is_builtin(lang: SyntaxLanguage, word: &str) -> bool {
                 | "extra_supported_extensions" | "ignored_files"
                 | "extra_supported_files"
         ),
+        SyntaxLanguage::NtcTheme => matches!(
+            word,
+            "name" | "author" | "description"
+                | "keyword" | "string" | "comment" | "number"
+                | "type" | "builtin" | "function" | "operator"
+                | "punctuation" | "attribute" | "macro_token" | "regex" | "tag"
+                | "constant" | "normal"
+                | "prompt_bracket" | "prompt_path" | "prompt_watcher" | "prompt_arrow"
+                | "success" | "error" | "warning" | "info"
+                | "tree_branch" | "tree_dir" | "tree_file" | "tree_ignored" | "tree_size"
+                | "command_output" | "separator"
+                | "help_header" | "help_section" | "help_example"
+                | "teleport_name" | "alias_name" | "alias_command"
+                | "editor_bg" | "gutter_bg" | "status_bg" | "hint_bg"
+                | "sidebar_bg" | "sidebar_selected_bg" | "run_panel_bg"
+                | "gutter_text" | "status_text" | "status_modified" | "hint_text"
+                | "cursor_bg" | "cursor_text" | "extra_cursor_bg"
+                | "selection_bg" | "search_match_bg" | "search_current_bg"
+                | "border" | "scrollbar" | "scrollbar_thumb"
+                | "sidebar_dir" | "sidebar_file" | "sidebar_current" | "sidebar_selected"
+                | "run_header_fg" | "run_output_fg"
+        ),
         SyntaxLanguage::NtcMath => matches!(
             word,
             "sin" | "cos" | "tan" | "cot" | "sec" | "csc"
@@ -662,6 +705,87 @@ pub(super) fn is_builtin(lang: SyntaxLanguage, word: &str) -> bool {
                 | "tobinary" | "tohex" | "to8" | "tooctal" | "todecimal"
                 | "tohb" | "tohumanbytes" | "tohumanreadable"
         ),
+        SyntaxLanguage::InnoSetup => matches!(
+            word,
+            // Setup section properties
+            "AppName" | "AppVersion" | "AppPublisher" | "AppPublisherURL"
+                | "AppSupportURL" | "AppUpdatesURL" | "AppComments" | "AppContact"
+                | "AppReadmeFile" | "AppCopyright" | "AppModifyPath" | "AppMutex"
+                | "AppId" | "DefaultDirName" | "DefaultGroupName" | "UninstallDisplayIcon"
+                | "UninstallDisplayName" | "OutputDir" | "OutputBaseFilename"
+                | "Compression" | "SolidCompression" | "SetupIconFile" | "WizardImageFile"
+                | "WizardSmallImageFile" | "LicenseFile" | "InfoBeforeFile" | "InfoAfterFile"
+                | "PrivilegesRequired" | "ArchitecturesInstallIn64BitMode"
+                | "ArchitecturesAllowed" | "MinVersion" | "AppVerName" | "AllowNoIcons"
+                | "AlwaysShowDirOnReadyPage" | "AlwaysShowGroupOnReadyPage"
+                | "AlwaysRestart" | "ChangesAssociations" | "ChangesEnvironment"
+                | "CreateAppDir" | "DirExistsWarning" | "DisableDirPage"
+                | "DisableFinishedPage" | "DisableProgramGroupPage" | "DisableReadyMemo"
+                | "DisableReadyPage" | "DisableStartupPrompt" | "DisableWelcomePage"
+                | "EnableDirDoesntExistWarning" | "LanguageDetectionMethod"
+                | "MergeDuplicateFiles" | "OnlyBelowVersion"
+                | "OutputManifestFile" | "BackColor" | "BackColor2" | "BackSolid"
+                | "ShowLanguageDialog" | "SignedUninstaller" | "SignTool"
+                | "TouchDate" | "TouchTime" | "UsePreviousAppDir" | "UsePreviousGroup"
+                | "UsePreviousLanguage" | "UsePreviousSetupType" | "UsePreviousTasks"
+                | "UsePreviousUserInfo" | "VersionInfoCompany" | "VersionInfoCopyright"
+                | "VersionInfoDescription" | "VersionInfoOriginalFileName"
+                | "VersionInfoProductName" | "VersionInfoProductVersion" | "VersionInfoText"
+                | "VersionInfoVersion" | "WindowVisible" | "WindowStartMaximized"
+                | "WindowResizable" | "WindowShowCaption" | "WindowMarquee"
+                | "WindowProgressPercent" | "WindowTitle"
+                | "FlatComponentsList" | "CreateUninstallRegKey"
+                | "Uninstallable" | "UninstallLogMode"
+                | "UninstallDisplaySize" | "UninstallFilesDir" | "UninstallRestartComputer"
+                | "ShowComponentSizes"
+                | "ShowTasks" | "ShowUndisplayableLanguages"
+                // Files section properties
+                | "Source" | "DestDir" | "DestName" | "Excludes" | "Flags"
+                | "Permissions" | "FontInstall" | "StrongAssemblyName"
+                // Dirs section properties
+                | "Dir" | "Attributes"
+                // Tasks section properties
+                | "Name" | "Description" | "GroupDescription" | "Components"
+                // Components section properties
+                | "Types" | "ExtraDiskSpaceRequired" | "Check"
+                // Registry section properties
+                | "Root" | "Subkey" | "ValueType" | "ValueName" | "ValueData"
+                // Run section properties
+                | "Filename" | "Parameters" | "WorkingDir" | "StatusMsg" | "RunOnceId"
+                // CustomMessages section
+                // Code section
+                | "InitializeSetup" | "InitializeWizard" | "DeinitializeSetup"
+                | "CurStepChanged" | "CurUninstallStepChanged"
+                | "NextButtonClick" | "BackButtonClick" | "ShouldSkipPage"
+                | "UpdateReadyMemo" | "RegisterPreviousData"
+                | "CheckPassword" | "NeedRestart" | "PrepareToInstall"
+                | "InstallFonts" | "InitializeUninstall" | "DeinitializeUninstall"
+                // Built-in functions
+                | "ExpandConstant" | "GetEnv" | "GetCmdTail" | "ExtractTemporaryFile"
+                | "FileExists" | "DirExists" | "Win32MajorVersion" | "Win32MinorVersion"
+                | "IsWin64" | "IsAdmin" | "IsAdminLoggedOn"
+                | "IsPowerUserLoggedOn" | "IsGuestLoggedOn" | "IsTaskSelected"
+                | "IsComponentSelected" | "SuppressibleTaskMsgBox"
+                | "MainTitle" | "MainSubTitle" | "SetupMessage" | "FmtMessage"
+                | "Exec" | "ExecAsOriginalUser" | "ShellExec" | "ShellExecAsOriginalUser"
+                | "CreateDir" | "RemoveDir" | "GetDiskSpace" | "GetSpaceOnDisk"
+                | "GetWindowsDir" | "GetSystemDir" | "GetSysDir" | "GetWinDir"
+                | "GetTempDir" | "GetFontName" | "GetFontsize" | "GetProcAddress"
+                | "DelayExec" | "PostExec" | "Sleep" | "MsgBox" | "TaskMessageBox"
+                | "SuppressibleTaskMessageBox" | "SetMutex" | "CheckForMutexes"
+                | "RegQueryStringValue" | "RegQueryDWordValue" | "RegQueryBinaryValue"
+                | "RegWriteStringValue" | "RegWriteDWordValue" | "RegWriteBinaryValue"
+                | "RegDeleteKeyIfEmpty" | "RegDeleteKeyIncludingSubkeys" | "RegDeleteValue"
+                | "RegValueExists" | "GetRegistrySubkeyNames" | "GetRegistryValueNames"
+                | "IniKeyExists" | "IniSectionExists" | "SetIniString" | "GetIniString"
+                | "SetIniBool" | "GetIniBool" | "DeleteIniSection" | "DeleteIniEntry"
+                | "LoadStringFromFile" | "SaveStringToFile" | "LoadStringsFromFile"
+                | "SaveStringsToFile" | "RenameFile" | "DeleteFile" | "CopyFile"
+                | "FileCopy" | "FindFirst" | "FindNext" | "FindClose"
+                | "GetFileVersion" | "GetDriveLetters" | "DriveExists"
+                | "DiskFree" | "DiskSize" | "WrapText"
+        ),
+        SyntaxLanguage::LockFile => matches!(word, "name" | "version" | "source" | "dependencies" | "checksum"),
         _ => matches!(
             word,
             "true" | "false" | "null" | "nil" | "None" | "self" | "Self" | "this" | "super"
@@ -674,7 +798,7 @@ pub(super) fn is_function_call(_word: &str, next_byte: Option<u8>) -> bool {
 }
 
 pub(super) fn has_toml_fields(lang: SyntaxLanguage) -> bool {
-    matches!(lang, SyntaxLanguage::NtcRal | SyntaxLanguage::NtcIgcare)
+    matches!(lang, SyntaxLanguage::NtcRal | SyntaxLanguage::NtcIgcare | SyntaxLanguage::NtcTheme | SyntaxLanguage::InnoSetup | SyntaxLanguage::LockFile)
 }
 
 pub(super) fn is_constant(lang: SyntaxLanguage, word: &str) -> bool {

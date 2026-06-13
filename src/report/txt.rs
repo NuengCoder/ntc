@@ -1,11 +1,9 @@
 // src/report/txt.rs
 use crate::config::Config;
 use crate::explorer::{generate_tree, format_tree, TreeNode};
-use crate::filetype::{FormatConfig};
 use crate::output::{cat_file_with_line_numbers, format_separator, write_file};
 use anyhow::Result;
-use std::path::Path;
-use walkdir::WalkDir;
+use std::path::{Path, PathBuf};
 
 pub fn generate_txt_report(dir_path: &Path, output_path: &Path) -> Result<()> {
     let dir_name = dir_path.file_name().unwrap_or_default().to_string_lossy();
@@ -94,40 +92,6 @@ fn build_txt_content(
     Ok(content)
 }
 
-fn collect_files(dir_path: &Path, max_depth: usize) -> (Vec<std::path::PathBuf>, Vec<std::path::PathBuf>) {
-    let mut supported = Vec::new();
-    let mut unsupported = Vec::new();
-    let ignored_dirs = crate::config::Config::global_get_ignored_dirs();
-    let fmt_cfg = FormatConfig::from_global();
-
-    let walker = WalkDir::new(dir_path)
-        .max_depth(max_depth)
-        .into_iter()
-        .filter_entry(|e| {
-            if e.depth() == 0 {
-                return true;
-            }
-            if e.file_type().is_dir() {
-                let name = e.file_name().to_string_lossy().to_lowercase();
-                if ignored_dirs.contains(&name) {
-                    return false;
-                }
-            }
-            true
-        });
-
-    for entry in walker.filter_map(|e| e.ok()) {
-        if entry.file_type().is_file() {
-            let path = entry.path().to_path_buf();
-            if crate::filetype::is_supported_format_with_config(&path, &fmt_cfg) {
-                supported.push(path);
-            } else {
-                unsupported.push(path);
-            }
-        }
-    }
-
-    supported.sort();
-    unsupported.sort();
-    (supported, unsupported)
+fn collect_files(dir_path: &Path, max_depth: usize) -> (Vec<PathBuf>, Vec<PathBuf>) {
+    super::collect_report_files(dir_path, max_depth)
 }

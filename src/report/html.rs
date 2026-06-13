@@ -1,18 +1,16 @@
 use crate::config::Config;
 use crate::explorer::{generate_tree, format_tree, TreeNode};
-use crate::filetype::{is_supported_format_with_config, FormatConfig};
 use crate::output::cat_file_with_line_numbers;
 use anyhow::Result;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::time::Instant;
-use walkdir::WalkDir;
 
 pub struct HtmlReportGenerator;
 
 impl HtmlReportGenerator {
     pub fn generate(dir_path: &Path, output_path: &Path, depth: Option<usize>) -> Result<()> {
         let start = Instant::now();
-        let dir_name = dir_path.file_name().unwrap_or_default().to_string_lossy();
+        let dir_name = dir_path.file_name().map(|n| n.to_string_lossy()).unwrap_or_else(|| std::borrow::Cow::Borrowed("root"));
         eprintln!("📊 Generating HTML report for: {}", dir_name);
 
         // Generate tree (same as before)
@@ -29,12 +27,19 @@ impl HtmlReportGenerator {
             let content = cat_file_with_line_numbers(path, show_lines)
                 .unwrap_or_else(|e| format!("Error reading file: {}", e));
             let content_html = content
-                .replace("&", "&amp;")
-                .replace("<", "&lt;")
-                .replace(">", "&gt;");
+                .replace('&', "&amp;")
+                .replace('<', "&lt;")
+                .replace('>', "&gt;")
+                .replace('"', "&quot;")
+                .replace('\'', "&#x27;");
+            let escaped_name = name
+                .replace('&', "&amp;")
+                .replace('<', "&lt;")
+                .replace('>', "&gt;")
+                .replace('"', "&quot;");
             files_html.push_str(&format!(
                 r#"<div class="file"><div class="file-header">📄 {}</div><div class="file-content"><pre>{}</pre></div></div>"#,
-                name, content_html
+                escaped_name, content_html
             ));
         }
 
@@ -70,38 +75,9 @@ impl HtmlReportGenerator {
     }
 }
 
-fn collect_files(dir_path: &Path) -> (Vec<std::path::PathBuf>, Vec<std::path::PathBuf>) {
-    let mut supported = Vec::new();
-    let mut unsupported = Vec::new();
-    let ignored_dirs = Config::global_get_ignored_dirs();
+fn collect_files(dir_path: &Path) -> (Vec<PathBuf>, Vec<PathBuf>) {
     let max_depth = Config::global_get_max_depth();
-    let fmt_cfg = FormatConfig::from_global();
-
-    let walker = WalkDir::new(dir_path)
-        .max_depth(max_depth)
-        .into_iter()
-        .filter_entry(|e| {
-            if e.depth() == 0 { return true; }
-            if e.file_type().is_dir() {
-                let name = e.file_name().to_string_lossy().to_lowercase();
-                if ignored_dirs.contains(&name) { return false; }
-            }
-            true
-        });
-
-    for entry in walker.filter_map(|e| e.ok()) {
-        if entry.file_type().is_file() {
-            let path = entry.path().to_path_buf();
-            if is_supported_format_with_config(&path, &fmt_cfg) {
-                supported.push(path);
-            } else {
-                unsupported.push(path);
-            }
-        }
-    }
-    supported.sort();
-    unsupported.sort();
-    (supported, unsupported)
+    super::collect_report_files(dir_path, max_depth)
 }
 
 fn count_dirs(node: &TreeNode) -> u64 {

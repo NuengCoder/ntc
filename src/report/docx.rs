@@ -1,51 +1,15 @@
 use crate::config::Config;
 use crate::explorer::{generate_tree, format_tree};
-use crate::filetype::FormatConfig;
 use crate::output::cat_file_with_line_numbers;
 use anyhow::Result;
 use docx_rs::*;
 use std::fs::File;
-use std::path::Path;
-use walkdir::WalkDir;
+use std::path::{Path, PathBuf};
 
 const MONO_FONT: &str = "Courier New";
 
-fn collect_files(dir_path: &Path, max_depth: usize) -> (Vec<std::path::PathBuf>, Vec<std::path::PathBuf>) {
-    let mut supported = Vec::new();
-    let mut unsupported = Vec::new();
-    let ignored_dirs = Config::global_get_ignored_dirs();
-    let fmt_cfg = FormatConfig::from_global();
-
-    let walker = WalkDir::new(dir_path)
-        .max_depth(max_depth)
-        .into_iter()
-        .filter_entry(|e| {
-            if e.depth() == 0 {
-                return true;
-            }
-            if e.file_type().is_dir() {
-                let name = e.file_name().to_string_lossy().to_lowercase();
-                if ignored_dirs.contains(&name) {
-                    return false;
-                }
-            }
-            true
-        });
-
-    for entry in walker.filter_map(|e| e.ok()) {
-        if entry.file_type().is_file() {
-            let path = entry.path().to_path_buf();
-            if crate::filetype::is_supported_format_with_config(&path, &fmt_cfg) {
-                supported.push(path);
-            } else {
-                unsupported.push(path);
-            }
-        }
-    }
-
-    supported.sort();
-    unsupported.sort();
-    (supported, unsupported)
+fn collect_files(dir_path: &Path, max_depth: usize) -> (Vec<PathBuf>, Vec<PathBuf>) {
+    super::collect_report_files(dir_path, max_depth)
 }
 
 fn mono_run(text: &str, size: usize) -> Run {

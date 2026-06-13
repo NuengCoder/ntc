@@ -40,7 +40,9 @@ impl EditorConfig {
     /// Save to disk.
     pub fn save(&self) {
         if let Some(path) = Self::config_path() {
-            let _ = fs::create_dir_all(path.parent().unwrap());
+            if let Some(parent) = path.parent() {
+                let _ = fs::create_dir_all(parent);
+            }
             if let Ok(toml) = toml::to_string_pretty(self) {
                 let _ = fs::write(&path, toml);
             }

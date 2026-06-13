@@ -107,11 +107,10 @@ fn build_module_map(files: &[FileInfo], root: &Path) -> HashMap<String, PathBuf>
         map.entry(mod_path.clone()).or_insert_with(|| fi.path.clone());
 
         // For mod.rs / index.js style files, register the parent directory as well
-        if stem == "mod" || stem == "index" {
-            if !parent.is_empty() && parent != "." && parent != "\\" {
+        if (stem == "mod" || stem == "index")
+            && !parent.is_empty() && parent != "." && parent != "\\" {
                 map.entry(parent.clone()).or_insert_with(|| fi.path.clone());
             }
-        }
 
         // Also register aliases without common source root prefixes
         for root_dir in &source_roots {
@@ -135,9 +134,28 @@ fn resolve_import(import: &str, module_map: &HashMap<String, PathBuf>) -> Option
     // Normalize relative JS/TS/Python imports: strip leading "./" and "../"
     let import = if let Some(rest) = import.strip_prefix("./") {
         rest
-    } else if let Some(rest) = import.strip_prefix("../") {
-        // Last-resort fallback: skip relative parent navigation for simplicity
-        rest
+    } else if import.starts_with("../") {
+        // For relative parent navigation, try stripping all leading "../" segments
+        // and check if the remaining path exists in the module map
+        let mut remaining = import;
+        let mut parent_count = 0;
+        while let Some(rest) = remaining.strip_prefix("../") {
+            remaining = rest;
+            parent_count += 1;
+        }
+        // If we stripped at least one "../", try the remaining path
+        if parent_count > 0 && !remaining.is_empty() {
+            // Try direct lookup first, then fall back to original import
+            if module_map.contains_key(remaining) || module_map.keys().any(|k| k.ends_with(remaining)) {
+                // Return as-is, the prefix matching logic below will handle it
+                return module_map.get(remaining).cloned()
+                    .or_else(|| module_map.keys()
+                        .find(|k| k.ends_with(remaining))
+                        .and_then(|k| module_map.get(k))
+                        .cloned());
+            }
+        }
+        import
     } else {
         import
     };
@@ -184,7 +202,7 @@ fn resolve_import(import: &str, module_map: &HashMap<String, PathBuf>) -> Option
     best.map(|(_, p)| p)
 }
 
-fn scan_dependencies(files: &mut Vec<FileInfo>, root: &Path) {
+fn scan_dependencies(files: &mut [FileInfo], root: &Path) {
     let module_map = build_module_map(files, root);
     let mut import_map: HashMap<usize, HashSet<usize>> = HashMap::new();
 
@@ -237,24 +255,51 @@ fn scan_rust(content: &str) -> Vec<String> {
     let mut out = Vec::new();
     for line in content.lines() {
         let t = line.trim();
+
         if let Some(rest) = t.strip_prefix("use ") {
-            // Take the part before ;, {, space, or tab — but NOT : (which is part of ::)
-            let end = rest.find(|c| c == ';' || c == '{' || c == ' ' || c == '\t').unwrap_or(rest.len());
-            let clean = rest[..end].trim().trim_end_matches(':');
-            if clean.starts_with("crate::") {
-                out.push(clean.strip_prefix("crate::").unwrap_or(clean).replace("::", "/"));
-            } else if clean.starts_with("super::") {
-                let relative = clean.strip_prefix("super::").unwrap_or(clean);
-                out.push(relative.replace("::", "/"));
+            // Handle multi-import syntax: use foo::{Bar, Baz};
+            if let Some(brace_pos) = rest.find('{') {
+                let base = rest[..brace_pos].trim().trim_end_matches(':');
+                let inner = &rest[brace_pos + 1..];
+                let end = inner.find('}').unwrap_or(inner.len());
+                let items = inner[..end].split(',');
+                for item in items {
+                    let item = item.trim().trim_end_matches("::{");
+                    if !item.is_empty() {
+                        let full = if base.is_empty() || base == "crate" || base == "super" {
+                            if base == "crate" || base == "super" {
+                                format!("{}::{}", base, item)
+                            } else {
+                                item.to_string()
+                            }
+                        } else {
+                            format!("{}::{}", base, item)
+                        };
+                        process_rust_import(&full, &mut out);
+                    }
+                }
+            } else {
+                let end = rest.find([';', ' ', '\t']).unwrap_or(rest.len());
+                let clean = rest[..end].trim().trim_end_matches(':');
+                process_rust_import(clean, &mut out);
             }
         }
         if let Some(rest) = t.strip_prefix("mod ") {
-            let end = rest.find(|c| c == ';' || c == ' ' || c == '\t').unwrap_or(rest.len());
+            let end = rest.find([';', ' ', '\t']).unwrap_or(rest.len());
             let name = rest[..end].trim();
             out.push(name.to_string());
         }
     }
     out
+}
+
+fn process_rust_import(import: &str, out: &mut Vec<String>) {
+    if import.starts_with("crate::") {
+        out.push(import.strip_prefix("crate::").unwrap_or(import).replace("::", "/"));
+    } else if import.starts_with("super::") {
+        let relative = import.strip_prefix("super::").unwrap_or(import);
+        out.push(relative.replace("::", "/"));
+    }
 }
 
 fn scan_python(content: &str) -> Vec<String> {
@@ -263,7 +308,7 @@ fn scan_python(content: &str) -> Vec<String> {
         let t = line.trim();
         if let Some(rest) = t.strip_prefix("import ") {
             for token in rest.split(',') {
-                let name = token.trim().split_whitespace().next().unwrap_or(token.trim());
+                let name = token.split_whitespace().next().unwrap_or(token.trim());
                 if !name.starts_with('.') {
                     out.push(name.replace('.', "/"));
                 }
@@ -508,7 +553,7 @@ pub fn generate_xlsx_report(dir_path: &Path, output_path: &Path) -> Result<()> {
         let rel = relative_path(&fi.path, root).to_string_lossy();
         ws.write_string(row, 0, rel.as_ref())?;
         ws.write_string(row, 1, &fi.ext)?;
-        ws.write_string(row, 2, &human_readable_size(fi.size))?;
+        ws.write_string(row, 2, human_readable_size(fi.size))?;
         ws.write_number(row, 3, fi.lines as f64)?;
         ws.write_string(row, 4, fi.imports.join(", "))?;
         ws.write_string(row, 5, fi.imported_by.join(", "))?;

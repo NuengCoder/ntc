@@ -250,8 +250,8 @@ impl BackupIndex {
     /// ntc home directory (~/.ntc on Unix, %USERPROFILE%\.ntc on Windows)
     pub fn get_ntc_home() -> PathBuf {
         dirs::home_dir()
-            .expect("Could not determine home directory")
-            .join(".ntc")
+            .map(|h| h.join(".ntc"))
+            .unwrap_or_else(|| PathBuf::from(".ntc"))
     }
 
     /// Backup directory for a specific project

@@ -13,111 +13,107 @@ pub(crate) fn completions_for(lang: Option<SyntaxLanguage>, prefix: &str) -> Vec
     let lower = prefix.to_lowercase();
     let mut items = Vec::new();
 
-    match lang {
-        Some(SyntaxLanguage::NtcMath) => {
-            // Built-in functions
-            for name in crate::math::builtin_function_names() {
-                if name == "print" { continue; } // handled below with parens
-                if name.to_lowercase().starts_with(&lower) {
-                    let detail = match name {
-                        "sin" => "sine (radians)",
-                        "cos" => "cosine (radians)",
-                        "tan" => "tangent (radians)",
-                        "cot" => "cotangent (radians)",
-                        "sec" => "secant (radians)",
-                        "csc" => "cosecant (radians)",
-                        "asin" | "arcsin" => "inverse sine",
-                        "acos" | "arccos" => "inverse cosine",
-                        "atan" | "arctan" => "inverse tangent",
-                        "acot" | "arccot" => "inverse cotangent",
-                        "asec" | "arcsec" => "inverse secant",
-                        "acsc" | "arccsc" => "inverse cosecant",
-                        "sqrt" => "square root",
-                        "pow" => "power (x, y)",
-                        "abs" => "absolute value",
-                        "floor" => "round down",
-                        "ceil" | "ceiling" => "round up",
-                        "round" => "nearest integer",
-                        "ln" | "log" => "natural log",
-                        "log2" => "base-2 log",
-                        "log10" => "base-10 log",
-                        "sum" => "sum of values",
-                        "min" => "minimum value",
-                        "max" => "maximum value",
-                        "avg" | "average" | "mean" => "arithmetic mean",
-                        "rand" | "random" => "random integer in [min, max]",
-                        "print" => "print value(s)",
-                        "tobinary" => "to binary string",
-                        "tohex" => "to hex string",
-                        "to8" | "tooctal" => "to octal string",
-                        "todecimal" => "to decimal number",
-                        "tohb" | "tohumanbytes" | "tohumanreadable" => "human-readable bytes",
-                        _ => "",
-                    };
-                    items.push(CompletionItem {
-                        label: name.to_string(),
-                        detail: detail.to_string(),
-                        insert_text: name.to_string(),
-                    });
-                }
-            }
-
-            // Constants
-            for name in crate::math::constant_names() {
-                if name.to_lowercase().starts_with(&lower) {
-                    let val = match name {
-                        "PI" | "pi" => std::f64::consts::PI,
-                        "E" | "e" | "EXP" | "exp" => std::f64::consts::E,
-                        "PHI" | "phi" => 1.6180339887498948,
-                        "TAU" | "tau" => std::f64::consts::TAU,
-                        _ => 0.0,
-                    };
-                    items.push(CompletionItem {
-                        label: name.to_string(),
-                        detail: format!("= {}", val),
-                        insert_text: name.to_string(),
-                    });
-                }
-            }
-
-            // Keywords
-            for kw in &["return"] {
-                if kw.starts_with(&lower) {
-                    items.push(CompletionItem {
-                        label: kw.to_string(),
-                        detail: "return a value".to_string(),
-                        insert_text: kw.to_string(),
-                    });
-                }
-            }
-
-            // print() — insert with parentheses
-            if "print".starts_with(&lower) {
+    if let Some(SyntaxLanguage::NtcMath) = lang {
+        // Built-in functions
+        for name in crate::math::builtin_function_names() {
+            if name == "print" { continue; } // handled below with parens
+            if name.to_lowercase().starts_with(&lower) {
+                let detail = match name {
+                    "sin" => "sine (radians)",
+                    "cos" => "cosine (radians)",
+                    "tan" => "tangent (radians)",
+                    "cot" => "cotangent (radians)",
+                    "sec" => "secant (radians)",
+                    "csc" => "cosecant (radians)",
+                    "asin" | "arcsin" => "inverse sine",
+                    "acos" | "arccos" => "inverse cosine",
+                    "atan" | "arctan" => "inverse tangent",
+                    "acot" | "arccot" => "inverse cotangent",
+                    "asec" | "arcsec" => "inverse secant",
+                    "acsc" | "arccsc" => "inverse cosecant",
+                    "sqrt" => "square root",
+                    "pow" => "power (x, y)",
+                    "abs" => "absolute value",
+                    "floor" => "round down",
+                    "ceil" | "ceiling" => "round up",
+                    "round" => "nearest integer",
+                    "ln" | "log" => "natural log",
+                    "log2" => "base-2 log",
+                    "log10" => "base-10 log",
+                    "sum" => "sum of values",
+                    "min" => "minimum value",
+                    "max" => "maximum value",
+                    "avg" | "average" | "mean" => "arithmetic mean",
+                    "rand" | "random" => "random integer in [min, max]",
+                    "tobinary" => "to binary string",
+                    "tohex" => "to hex string",
+                    "to8" | "tooctal" => "to octal string",
+                    "todecimal" => "to decimal number",
+                    "tohb" | "tohumanbytes" | "tohumanreadable" => "human-readable bytes",
+                    _ => "",
+                };
                 items.push(CompletionItem {
-                    label: "print".to_string(),
-                    detail: "print value(s)".to_string(),
-                    insert_text: "print()".to_string(),
+                    label: name.to_string(),
+                    detail: detail.to_string(),
+                    insert_text: name.to_string(),
                 });
             }
+        }
 
-            // User-defined functions from config
-            let cfg = Config::global();
-            if let Ok(cfg_guard) = cfg.read() {
-                for (name, def) in &cfg_guard.math_functions {
-                    if name.starts_with(&lower) {
-                        let arrow = def.find("=>").unwrap_or(0);
-                        let params = def[..arrow].trim();
-                        let detail = format!("fn({})", params);
-                        items.push(CompletionItem {
-                            label: name.clone(),
-                            detail,
-                            insert_text: name.clone(),
-                        });
-                    }
+        // Constants
+        for name in crate::math::constant_names() {
+            if name.to_lowercase().starts_with(&lower) {
+                let val = match name {
+                    "PI" | "pi" => std::f64::consts::PI,
+                    "E" | "e" | "EXP" | "exp" => std::f64::consts::E,
+                    "PHI" | "phi" => 1.618_033_988_749_895,
+                    "TAU" | "tau" => std::f64::consts::TAU,
+                    _ => 0.0,
+                };
+                items.push(CompletionItem {
+                    label: name.to_string(),
+                    detail: format!("= {}", val),
+                    insert_text: name.to_string(),
+                });
+            }
+        }
+
+        // Keywords
+        for kw in &["return"] {
+            if kw.starts_with(&lower) {
+                items.push(CompletionItem {
+                    label: kw.to_string(),
+                    detail: "return a value".to_string(),
+                    insert_text: kw.to_string(),
+                });
+            }
+        }
+
+        // print() — insert with parentheses
+        if "print".starts_with(&lower) {
+            items.push(CompletionItem {
+                label: "print".to_string(),
+                detail: "print value(s)".to_string(),
+                insert_text: "print()".to_string(),
+            });
+        }
+
+        // User-defined functions from config
+        let cfg = Config::global();
+        if let Ok(cfg_guard) = cfg.read() {
+            for (name, def) in &cfg_guard.math_functions {
+                if name.starts_with(&lower) && !items.iter().any(|i| i.label == *name) {
+                    let arrow = def.find("=>").unwrap_or(0);
+                    let params = def[..arrow].trim();
+                    let detail = format!("fn({})", params);
+                    items.push(CompletionItem {
+                        label: name.clone(),
+                        detail,
+                        insert_text: name.clone(),
+                    });
                 }
             }
         }
-        _ => {}
     }
 
     // Sort: exact match first, then alphabetical
@@ -205,6 +201,7 @@ impl Editor {
 /// Get the word (identifier) under or before the cursor. Returns the word and its start byte.
 pub(crate) fn word_before_cursor(line: &str, cursor_byte: usize) -> Option<(String, usize)> {
     let byte = cursor_byte.min(line.len());
+    let byte = byte.min(line.floor_char_boundary(byte));
     let prefix = &line[..byte];
     let start = prefix
         .chars()

@@ -1,13 +1,11 @@
 use crate::config::Config;
 use crate::explorer::{generate_tree, format_tree};
-use crate::filetype::FormatConfig;
 use crate::output::cat_file_with_line_numbers;
 use anyhow::Result;
 use printpdf::*;
 use std::fs::File;
 use std::io::BufWriter;
-use std::path::Path;
-use walkdir::WalkDir;
+use std::path::{Path, PathBuf};
 
 const PAGE_W: Mm = Mm(210.0);
 const PAGE_H: Mm = Mm(297.0);
@@ -17,42 +15,8 @@ const TITLE_SIZE: f64 = 18.0;
 const HEADING_SIZE: f64 = 14.0;
 const LINE_HEIGHT: f64 = 4.5;
 
-fn collect_files(dir_path: &Path, max_depth: usize) -> (Vec<std::path::PathBuf>, Vec<std::path::PathBuf>) {
-    let mut supported = Vec::new();
-    let mut unsupported = Vec::new();
-    let ignored_dirs = Config::global_get_ignored_dirs();
-    let fmt_cfg = FormatConfig::from_global();
-
-    let walker = WalkDir::new(dir_path)
-        .max_depth(max_depth)
-        .into_iter()
-        .filter_entry(|e| {
-            if e.depth() == 0 {
-                return true;
-            }
-            if e.file_type().is_dir() {
-                let name = e.file_name().to_string_lossy().to_lowercase();
-                if ignored_dirs.contains(&name) {
-                    return false;
-                }
-            }
-            true
-        });
-
-    for entry in walker.filter_map(|e| e.ok()) {
-        if entry.file_type().is_file() {
-            let path = entry.path().to_path_buf();
-            if crate::filetype::is_supported_format_with_config(&path, &fmt_cfg) {
-                supported.push(path);
-            } else {
-                unsupported.push(path);
-            }
-        }
-    }
-
-    supported.sort();
-    unsupported.sort();
-    (supported, unsupported)
+fn collect_files(dir_path: &Path, max_depth: usize) -> (Vec<PathBuf>, Vec<PathBuf>) {
+    super::collect_report_files(dir_path, max_depth)
 }
 
 pub fn generate_pdf_report(dir_path: &Path, output_path: &Path) -> Result<()> {
@@ -62,7 +26,7 @@ pub fn generate_pdf_report(dir_path: &Path, output_path: &Path) -> Result<()> {
     let tree = generate_tree(dir_path.to_string_lossy().as_ref(), None, true, None);
 
     let (doc, first_page, first_layer) = PdfDocument::new(
-        &format!("{} directory report", dir_name),
+        format!("{} directory report", dir_name),
         PAGE_W,
         PAGE_H,
         "Layer 1".to_string(),

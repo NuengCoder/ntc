@@ -6,55 +6,563 @@ use crate::cli::helpers::{preprocess_args, print_logo, print_help};
 use anyhow::{bail, Result};
 use clap::{Arg, ArgAction, Command};
 use colored::*;
+use std::io::Write;
 use std::path::Path;
+
+fn handle_teleport_at(raw_args: &[String]) -> Result<bool> {
+    if raw_args.len() != 2 {
+        return Ok(true);
+    }
+    let arg = &raw_args[1];
+    if (!arg.starts_with('@') && !arg.starts_with('#')) || arg.len() <= 1 {
+        return Ok(true);
+    }
+    let tp_name = &arg[1..];
+    use crate::navigator::Navigator;
+    use crate::teleport::TeleportManager;
+
+    if let Some(path) = TeleportManager::get_path(tp_name) {
+        let clean_path = path.to_string_lossy().to_string();
+        let clean_path = Path::new(clean_path.strip_prefix(r"\\?\").unwrap_or(&clean_path)).to_path_buf();
+
+        let mut nav = Navigator::new()?;
+        match nav.go_to(&clean_path) {
+            Ok(()) => {
+                println!("✓ Teleported to '{}' -> {}", tp_name, clean_path.display());
+                println!();
+                print_logo();
+                crate::shell::run_shell_with_nav(nav)?;
+                Ok(false)
+            }
+            Err(e) => {
+                print_error(&format!("Failed to teleport to '{}': {}", tp_name, e));
+                Ok(false)
+            }
+        }
+    } else {
+        print_error(&format!("Teleport point not found: '{}'", tp_name));
+        println!("Use 'ntc --tp-list' to see all savepoints.");
+        Ok(false)
+    }
+}
+
+fn handle_simple_flags(matches: &clap::ArgMatches, known_flags: &[&str]) -> Result<bool> {
+    if matches.get_flag("version") {
+        println!("ntc {}", env!("CARGO_PKG_VERSION").green().bold());
+        return Ok(false);
+    }
+
+    if matches.get_flag("where_cli") {
+        let exe = std::env::current_exe().unwrap_or_default();
+        let cwd = std::env::current_dir().unwrap_or_default();
+        println!("ntc executable: {}", exe.display());
+        println!("Current directory: {}", cwd.display());
+        return Ok(false);
+    }
+
+    if matches.get_flag("clear") {
+        print!("\x1b[2J\x1b[1;1H");
+        let _ = std::io::stdout().flush();
+        return Ok(false);
+    }
+
+    if matches.get_flag("list") {
+        println!("ntc {} - Available command-line functions:\n", env!("CARGO_PKG_VERSION").green().bold());
+        for flag in known_flags {
+            println!("  {}", flag);
+        }
+        return Ok(false);
+    }
+
+    if matches.get_flag("help_extra") {
+        print_help();
+        return Ok(false);
+    }
+
+    if matches.get_flag("showcg") {
+        let w = 65;
+        println!();
+        println!("┌{}┐", "─".repeat(w));
+        println!("│{:^w$}│", "Current Configuration", w = w);
+        println!("├{}┤", "─".repeat(w));
+        println!("│ {:<20} {:<42} │", "Output Path:", Config::global_get_output_path().display().to_string());
+        println!("│ {:<20} {:<42} │", "Max Depth:", Config::global_get_max_depth().to_string());
+        println!("│ {:<20} {:<42} │", "Line Numbers:", if Config::global_get_show_line_numbers() { "ON" } else { "OFF" });
+        println!("│ {:<20} {:<42} │", "Threads:", Config::global_get_num_threads().to_string());
+        println!("│ {:<20} {:<42} │", "History:", if Config::global_get_history_enabled() { "ON" } else { "OFF" });
+        println!("│ {:<20} {:<42} │", "Watcher:", if Config::global_get_file_watcher_enabled() { "ON" } else { "OFF" });
+        println!("│ {:<20} {:<42} │", "Color:", if Config::global_get_color_enabled() { "ON" } else { "OFF" });
+        println!("└{}┘", "─".repeat(w));
+        println!();
+        return Ok(false);
+    }
+
+    if matches.get_flag("ignored") {
+        let dirs = Config::global_get_ignored_dirs();
+        let fmt_cfg = FormatConfig::from_global();
+        println!("Ignored directories: {:?}", dirs);
+        println!("Ignored extensions: {:?}", fmt_cfg.ignored_extensions);
+        println!("Extra supported extensions: {:?}", fmt_cfg.extra_extensions);
+        println!("Ignored files: {:?}", fmt_cfg.ignored_files);
+        println!("Extra supported files: {:?}", fmt_cfg.extra_files);
+        return Ok(false);
+    }
+
+    if matches.get_flag("size") {
+        let show_view = matches.get_flag("view_cli");
+        use crate::navigator::Navigator;
+        let nav = Navigator::new()?;
+        let total = crate::explorer::calculate_dir_size(nav.current_path());
+        println!("Path: {}", nav.display_path());
+        println!("┌─────────────────────────────────────────┐");
+        println!("│ Current Directory Size                  │");
+        println!("│ Bytes: {:>32} │", format!("{}", total));
+        println!("│ Human: {:>32} │", crate::explorer::human_readable_size(total));
+        println!("└─────────────────────────────────────────┘");
+        if show_view {
+            println!();
+            let mut tree = crate::explorer::generate_tree(
+                &nav.current_path().to_string_lossy(),
+                Some(1),
+                true,
+                None,
+            );
+            crate::explorer::compute_tree_sizes(&mut tree, None, false);
+            let tree_str = crate::explorer::format_tree_with_sizes(&tree, "", true, true, false, None);
+            println!("{}", tree_str);
+        }
+        return Ok(false);
+    }
+
+    if matches.get_flag("view_cli") && !matches.get_flag("size") {
+        use crate::navigator::Navigator;
+        let nav = Navigator::new()?;
+        let tree = crate::explorer::generate_tree(
+            &nav.current_path().to_string_lossy(),
+            Some(1),
+            true,
+            None,
+        );
+        let tree_str = crate::explorer::format_tree_with_sizes(&tree, "", true, false, false, None);
+        println!("{}", tree_str);
+        return Ok(false);
+    }
+
+    if let Some(text) = matches.get_one::<String>("say") {
+        println!("{}", text.green());
+        return Ok(false);
+    }
+
+    if matches.get_flag("dino") {
+        crate::game::run()?;
+        return Ok(false);
+    }
+
+    if let Some(exprs) = matches.get_many::<String>("math") {
+        let input: Vec<&str> = exprs.map(|s| s.as_str()).collect();
+        let joined = input.join(" ");
+        crate::math::run(&joined)?;
+        return Ok(false);
+    }
+
+    if let Some(shell) = matches.get_one::<String>("generate_completions") {
+        crate::cli::helpers::generate_completions(shell);
+        return Ok(false);
+    }
+
+    if matches.get_flag("lsp") {
+        let log_path = matches.get_one::<String>("lsp_log").map(|s| Path::new(s));
+        crate::lsp::run_server_with_logger(log_path)?;
+        return Ok(false);
+    }
+
+    Ok(true)
+}
+
+fn handle_watch_flag(matches: &clap::ArgMatches) -> Result<bool> {
+    if let Some(val) = matches.get_one::<String>("watch") {
+        if val.is_empty() {
+            let enabled = Config::global_get_file_watcher_enabled();
+            println!("File watcher: {}", if enabled { "ON" } else { "OFF" });
+        } else {
+            let upper = val.to_uppercase();
+            if upper == "ON" {
+                Config::global_set_file_watcher_enabled(true);
+                print_success("File watcher: ON (restart ntc to activate)");
+            } else if upper == "OFF" {
+                Config::global_set_file_watcher_enabled(false);
+                print_warning("File watcher: OFF (restart ntc to deactivate)");
+            } else {
+                print_error("Use --watch ON or --watch OFF");
+            }
+        }
+        return Ok(false);
+    } else if matches.contains_id("watch") {
+        let enabled = Config::global_get_file_watcher_enabled();
+        println!("File watcher: {}", if enabled { "ON" } else { "OFF" });
+        return Ok(false);
+    }
+    Ok(true)
+}
+
+fn handle_ignore_care(matches: &clap::ArgMatches) -> Result<bool> {
+    if let Some(names) = matches.get_many::<String>("ignore") {
+        for name in names {
+            Config::global_add_ignored_dir(name);
+            print_success(&format!("Now ignoring directory: {}", name));
+        }
+        return Ok(false);
+    }
+
+    if let Some(names) = matches.get_many::<String>("cared") {
+        for name in names {
+            Config::global_remove_ignored_dir(name);
+            print_success(&format!("No longer ignoring directory: {}", name));
+        }
+        return Ok(false);
+    }
+
+    if let Some(exts) = matches.get_many::<String>("ignoref") {
+        for ext in exts {
+            Config::global_add_ignored_extension(ext);
+            print_success(&format!("Now ignoring .{} files", ext));
+        }
+        return Ok(false);
+    }
+
+    if let Some(exts) = matches.get_many::<String>("caref") {
+        for ext in exts {
+            Config::global_add_extra_supported_extension(ext);
+            print_success(&format!("Now caring about .{} files", ext));
+        }
+        return Ok(false);
+    }
+
+    if let Some(files) = matches.get_many::<String>("ignoren") {
+        for file in files {
+            Config::global_add_ignored_file(file);
+            print_success(&format!("Now ignoring file: {}", file));
+        }
+        return Ok(false);
+    }
+
+    if let Some(files) = matches.get_many::<String>("caren") {
+        for file in files {
+            Config::global_add_extra_supported_file(file);
+            print_success(&format!("Now caring about file: {}", file));
+        }
+        return Ok(false);
+    }
+
+    Ok(true)
+}
+
+fn handle_setters(matches: &clap::ArgMatches) -> Result<bool> {
+    if let Some(val) = matches.get_one::<String>("setH") {
+        if val.is_empty() {
+            let enabled = Config::global_get_history_enabled();
+            let path = Config::global_get_history_path();
+            println!("History: {}", if enabled { "ON" } else { "OFF" });
+            match path {
+                Some(p) => println!("History path: {}", p.display()),
+                None => println!("History path: default"),
+            }
+        } else {
+            let upper = val.to_uppercase();
+            if upper == "ON" {
+                Config::global_set_history_enabled(true);
+                print_success("History: ON");
+            } else if upper == "OFF" {
+                Config::global_set_history_enabled(false);
+                print_warning("History: OFF");
+            } else if val == "default" {
+                Config::global_set_history_path(None);
+                print_success("History path reset to default");
+            } else {
+                let p = Path::new(val);
+                Config::global_set_history_path(Some(p.to_path_buf()));
+                print_success(&format!("History path set to: {}", p.display()));
+            }
+        }
+        return Ok(false);
+    } else if matches.contains_id("setH") {
+        let enabled = Config::global_get_history_enabled();
+        let path = Config::global_get_history_path();
+        println!("History: {}", if enabled { "ON" } else { "OFF" });
+        match path {
+            Some(p) => println!("History path: {}", p.display()),
+            None => println!("History path: default"),
+        }
+        return Ok(false);
+    }
+
+    if let Some(val) = matches.get_one::<String>("setO") {
+        if val.is_empty() {
+            println!("Current output path: {}", Config::global_get_output_path().display());
+        } else {
+            Config::global_set_output_path(Path::new(val));
+            print_success(&format!("Output path set to: {}", val));
+        }
+        return Ok(false);
+    } else if matches.contains_id("setO") {
+        println!("Current output path: {}", Config::global_get_output_path().display());
+        return Ok(false);
+    }
+
+    if let Some(val) = matches.get_one::<String>("setD") {
+        if val.is_empty() {
+            println!("Current max depth: {}", Config::global_get_max_depth());
+        } else {
+            match val.parse::<usize>() {
+                Ok(depth) => {
+                    if depth < 1 || depth > 20 {
+                        bail!("Invalid depth value: {}. Must be between 1 and 20.", val);
+                    }
+                    Config::global_set_max_depth(depth);
+                    print_success(&format!("Max depth set to: {}", Config::global_get_max_depth()));
+                }
+                Err(_) => bail!("Invalid depth value: {}. Must be a positive integer between 1 and 20.", val),
+            }
+        }
+        return Ok(false);
+    } else if matches.contains_id("setD") {
+        println!("Current max depth: {}", Config::global_get_max_depth());
+        return Ok(false);
+    }
+
+    if let Some(val) = matches.get_one::<String>("setL") {
+        if val.is_empty() {
+            let state = if Config::global_get_show_line_numbers() { "ON" } else { "OFF" };
+            println!("Line numbers: {}", state);
+        } else {
+            match Config::parse_on_off(val) {
+                Some(state) => {
+                    Config::global_set_show_line_numbers(state);
+                    print_success(&format!("Line numbers: {}", if state { "ON" } else { "OFF" }));
+                }
+                None => bail!("Invalid value for setL: {}. Use ON or OFF.", val),
+            }
+        }
+        return Ok(false);
+    } else if matches.contains_id("setL") {
+        let state = if Config::global_get_show_line_numbers() { "ON" } else { "OFF" };
+        println!("Line numbers: {}", state);
+        return Ok(false);
+    }
+
+    if let Some(val) = matches.get_one::<String>("setT") {
+        if val.is_empty() {
+            println!("Current threads: {}", Config::global_get_num_threads());
+        } else {
+            match Config::parse_num_threads(val) {
+                Some(threads) => {
+                    if threads < 1 || threads > 64 {
+                        bail!("Invalid thread count: {}. Must be between 1 and 64.", val);
+                    }
+                    Config::global_set_num_threads(threads);
+                    print_success(&format!("Threads set to: {}", Config::global_get_num_threads()));
+                }
+                None => bail!("Invalid thread count: {}. Must be a positive integer between 1 and 64.", val),
+            }
+        }
+        return Ok(false);
+    } else if matches.contains_id("setT") {
+        println!("Current threads: {}", Config::global_get_num_threads());
+        return Ok(false);
+    }
+
+    if let Some(val) = matches.get_one::<String>("setC") {
+        if val.is_empty() {
+            let state = if Config::global_get_color_enabled() { "ON" } else { "OFF" };
+            println!("Color output: {}", state);
+        } else {
+            match Config::parse_on_off(val) {
+                Some(state) => {
+                    Config::global_set_color_enabled(state);
+                    print_success(&format!("Color: {}", if state { "ON" } else { "OFF" }));
+                }
+                None => bail!("Invalid value for setC: {}. Use ON or OFF.", val),
+            }
+        }
+        return Ok(false);
+    } else if matches.contains_id("setC") {
+        let state = if Config::global_get_color_enabled() { "ON" } else { "OFF" };
+        println!("Color output: {}", state);
+        return Ok(false);
+    }
+
+    if let Some(val) = matches.get_one::<String>("setA") {
+        if val.is_empty() {
+            let state = if Config::global_get_autosuggest_enabled() { "ON" } else { "OFF" };
+            println!("Autosuggest (ghost text): {}", state);
+        } else {
+            match Config::parse_on_off(val) {
+                Some(state) => {
+                    Config::global_set_autosuggest_enabled(state);
+                    if state {
+                        print_success("Autosuggest: ON");
+                    } else {
+                        print_warning("Autosuggest: OFF");
+                    }
+                }
+                None => bail!("Invalid value for setA: {}. Use ON or OFF.", val),
+            }
+        }
+        return Ok(false);
+    } else if matches.contains_id("setA") {
+        let state = if Config::global_get_autosuggest_enabled() { "ON" } else { "OFF" };
+        println!("Autosuggest (ghost text): {}", state);
+        return Ok(false);
+    }
+
+    Ok(true)
+}
+
+fn handle_input(matches: &clap::ArgMatches) -> Result<bool> {
+    if let Some(input_path) = matches.get_one::<String>("input") {
+        let path = Path::new(input_path);
+        let copy_to_clipboard = matches.get_flag("copy");
+
+        if path.is_dir() {
+            let output_file = matches.get_one::<String>("output");
+            let format_str = matches.get_one::<String>("format").map(|s| s.as_str()).unwrap_or("txt");
+
+            let format = match format_str {
+                "html" => ReportFormat::Html,
+                "json" => ReportFormat::Json,
+                "md" => ReportFormat::Md,
+                "pdf" => ReportFormat::Pdf,
+                "docx" => ReportFormat::Docx,
+                "xlsx" => ReportFormat::Xlsx,
+                _ => ReportFormat::Txt,
+            };
+
+            if copy_to_clipboard {
+                if format.is_binary() {
+                    print_warning(&format!("{} report cannot be copied to clipboard (binary format)", format_str.to_uppercase()));
+                } else {
+                    let content = crate::report::generate_report_to_string(path, format)?;
+                    crate::output::copy_to_clipboard(&content, format_str)?;
+                    print_success(&format!("{} report copied to clipboard!", format_str.to_uppercase()));
+                }
+            } else if let Some(output) = output_file {
+                let output = crate::output::build_output_path(output);
+                generate_report_to(path, format, &output.to_string_lossy())?;
+            } else {
+                generate_report(path, format)?;
+            }
+        } else if path.is_file() {
+            if is_supported_format(path) {
+                let show_lines = Config::global_get_show_line_numbers();
+                let output_file = matches.get_one::<String>("output");
+                if let Some(output) = output_file {
+                    let content = crate::output::cat_file_with_line_numbers(path, show_lines)?;
+                    let output_path = crate::output::build_output_path(output);
+                    crate::output::write_file(&output_path, &content)?;
+                    print_success(&format!("File saved to: {}", output_path.display()));
+                } else {
+                    cat_file(path, show_lines)?;
+                }
+            } else {
+                print_warning(&format!("Skipped (not support format): {}", input_path));
+            }
+        } else {
+            bail!("Path not found: {}", input_path);
+        }
+        return Ok(false);
+    }
+    Ok(true)
+}
+
+fn handle_teleport_cmds(matches: &clap::ArgMatches) -> Result<bool> {
+    if matches.get_flag("tp_list") {
+        crate::teleport::TeleportManager::list()?;
+        return Ok(false);
+    }
+
+    if let Some(name) = matches.get_one::<String>("tp_add") {
+        let current_dir = std::env::current_dir()?;
+        crate::teleport::TeleportManager::add(name, current_dir)?;
+        return Ok(false);
+    }
+
+    if let Some(name) = matches.get_one::<String>("tp_rm") {
+        crate::teleport::TeleportManager::remove_by_name(name)?;
+        return Ok(false);
+    }
+
+    Ok(true)
+}
+
+fn handle_edit_init(matches: &clap::ArgMatches) -> Result<bool> {
+    if let Some(path) = matches.get_one::<String>("init") {
+        let p = std::path::Path::new(path);
+        let created = crate::editor::init_file(p)?;
+        crate::editor::edit_file(p)?;
+        if created {
+            eprintln!("Created template: {}", p.display());
+        }
+        return Ok(false);
+    }
+
+    if let Some(path) = matches.get_one::<String>("edit") {
+        crate::editor::edit_file(std::path::Path::new(path))?;
+        return Ok(false);
+    }
+
+    Ok(true)
+}
+
+fn handle_ral_igcare(matches: &clap::ArgMatches) -> Result<bool> {
+    if let Some(name) = matches.get_one::<String>("ral_export_all") {
+        crate::shell::helpers::ral_export_all(name)?;
+        return Ok(false);
+    }
+
+    if let Some(name) = matches.get_one::<String>("ral_export_select") {
+        use crate::navigator::Navigator;
+        let mut nav = Navigator::new()?;
+        crate::shell::helpers::ral_export_select(&mut nav, name)?;
+        return Ok(false);
+    }
+
+    if let Some(file) = matches.get_one::<String>("ral_import") {
+        crate::shell::helpers::ral_import(file)?;
+        return Ok(false);
+    }
+
+    if let Some(name) = matches.get_one::<String>("igcare_export_all") {
+        crate::shell::helpers::igcare_export_all(name)?;
+        return Ok(false);
+    }
+
+    if let Some(name) = matches.get_one::<String>("igcare_export_select") {
+        crate::shell::helpers::igcare_export_select(name)?;
+        return Ok(false);
+    }
+
+    if let Some(file) = matches.get_one::<String>("igcare_import") {
+        crate::shell::helpers::igcare_import(file)?;
+        return Ok(false);
+    }
+
+    Ok(true)
+}
 
 /// Parse command-line arguments and execute the appropriate action.
 pub fn run_cli() -> Result<bool> {
     let raw_args: Vec<String> = std::env::args().collect();
 
     // --- Handle @teleport shortcut from command line ---
-    // Check if first argument starts with @ (e.g., ntc @web)
-    if raw_args.len() == 2 {
-        let arg = &raw_args[1];
-        if (arg.starts_with('@') || arg.starts_with('#')) && arg.len() > 1 {
-            let tp_name = &arg[1..];
-            use crate::navigator::Navigator;
-            use crate::teleport::TeleportManager;
-
-            // Get the path without canonicalizing
-            if let Some(path) = TeleportManager::get_path(tp_name) {
-                // Clean the path - remove Windows extended prefix if present
-                let clean_path = path.to_string_lossy().to_string();
-                let clean_path = Path::new(clean_path.strip_prefix(r"\\?\").unwrap_or(&clean_path)).to_path_buf();
-                
-                // Create navigator and manually set current_dir
-                let mut nav = Navigator::new()?;
-                
-                // Try to go to the cleaned path
-                match nav.go_to(&clean_path) {
-                    Ok(()) => {
-                        println!("✓ Teleported to '{}' -> {}", tp_name, clean_path.display());
-                        println!();
-                        print_logo();
-                        crate::shell::run_shell_with_nav(nav)?;
-                        return Ok(false);
-                    }
-                    Err(e) => {
-                        print_error(&format!("Failed to teleport to '{}': {}", tp_name, e));
-                        return Ok(false);
-                    }
-                }
-            } else {
-                print_error(&format!("Teleport point not found: '{}'", tp_name));
-                println!("Use 'ntc --tp-list' to see all savepoints.");
-                return Ok(false);
-            }
-        }
+    if !handle_teleport_at(&raw_args)? {
+        return Ok(false);
     }
+
     let args = preprocess_args(raw_args);
 
     let known_flags = vec![
         "-i, --input <path>          Input file or directory",
+        "--generate-completions <SHELL>  Generate shell completions (bash|zsh|fish|powershell)",
         "-o, --output <file>         Output filename",
         "--cp                        Copy report to clipboard",
         "--setO [path]               Show or set output directory",
@@ -90,7 +598,7 @@ pub fn run_cli() -> Result<bool> {
         "--list, --fun               List all command-line functions",
         "--help                      Show help",
         "--tp-add <name>             Save current directory as teleport point",
-        "--tp-list                   List all teleport points", 
+        "--tp-list                   List all teleport points",
         "--tp-rm <name>              Remove teleport point",
         "ntc @<name>                 Launch and teleport to savepoint",
         "(no args)                   Launch interactive mode",
@@ -157,6 +665,14 @@ pub fn run_cli() -> Result<bool> {
                 .value_parser(clap::value_parser!(String)),
         )
         .arg(
+            Arg::new("setA")
+                .long("setA")
+                .value_name("STATE")
+                .help("Show or set autosuggest (ghost text) (ON/OFF)")
+                .num_args(0..=1)
+                .value_parser(clap::value_parser!(String)),
+        )
+        .arg(
             Arg::new("setH")
                 .long("setH")
                 .value_name("VALUE")
@@ -208,6 +724,7 @@ pub fn run_cli() -> Result<bool> {
         )
         .arg(
             Arg::new("help_extra")
+                .short('h')
                 .long("help")
                 .help("Show detailed help")
                 .action(ArgAction::SetTrue),
@@ -349,476 +866,33 @@ pub fn run_cli() -> Result<bool> {
                 .action(ArgAction::SetTrue)
                 .hide(true),
         )
+        .arg(
+            Arg::new("lsp_log")
+                .long("lsp-log")
+                .value_name("FILE")
+                .help("Path to write LSP debug log")
+                .num_args(1)
+                .hide(true),
+        )
+        .arg(
+            Arg::new("generate_completions")
+                .long("generate-completions")
+                .value_name("SHELL")
+                .help("Generate shell completion script (bash|zsh|fish|powershell)")
+                .num_args(1)
+                .value_parser(["bash", "zsh", "fish", "powershell"]),
+        )
         .try_get_matches_from(args)?;
 
-    // --- Handle --version ---
-    if matches.get_flag("version") {
-        println!("ntc {}", env!("CARGO_PKG_VERSION").green().bold());
-        return Ok(false);
-    }
-
-    // --- Handle --where ---
-    if matches.get_flag("where_cli") {
-        let exe = std::env::current_exe().unwrap_or_default();
-        let cwd = std::env::current_dir().unwrap_or_default();
-        println!("ntc executable: {}", exe.display());
-        println!("Current directory: {}", cwd.display());
-        return Ok(false);
-    }
-
-    // --- Handle --clear ---
-    if matches.get_flag("clear") {
-        let _ = std::process::Command::new("cmd").args(["/c", "cls"]).status();
-        return Ok(false);
-    }
-
-    // --- Handle --list / --fun ---
-    if matches.get_flag("list") {
-        println!("ntc {} - Available command-line functions:\n", env!("CARGO_PKG_VERSION").green().bold());
-        for flag in &known_flags {
-            println!("  {}", flag);
-        }
-        return Ok(false);
-    }
-
-    // --- Handle --help ---
-    if matches.get_flag("help_extra") {
-        print_help();
-        return Ok(false);
-    }
-
-    // --- Handle --showcg ---
-    if matches.get_flag("showcg") {
-        let w = 65;
-        println!();
-        println!("┌{}┐", "─".repeat(w));
-        println!("│{:^w$}│", "Current Configuration", w = w);
-        println!("├{}┤", "─".repeat(w));
-        println!("│ {:<20} {:<42} │", "Output Path:", Config::global_get_output_path().display().to_string());
-        println!("│ {:<20} {:<42} │", "Max Depth:", Config::global_get_max_depth().to_string());
-        println!("│ {:<20} {:<42} │", "Line Numbers:", if Config::global_get_show_line_numbers() { "ON" } else { "OFF" });
-        println!("│ {:<20} {:<42} │", "Threads:", Config::global_get_num_threads().to_string());
-        println!("│ {:<20} {:<42} │", "History:", if Config::global_get_history_enabled() { "ON" } else { "OFF" });
-        println!("│ {:<20} {:<42} │", "Watcher:", if Config::global_get_file_watcher_enabled() { "ON" } else { "OFF" });
-        println!("│ {:<20} {:<42} │", "Color:", if Config::global_get_color_enabled() { "ON" } else { "OFF" });
-        println!("└{}┘", "─".repeat(w));
-        println!();
-        return Ok(false);
-    }
-
-    // --- Handle --watch ---
-    if let Some(val) = matches.get_one::<String>("watch") {
-        if val.is_empty() {
-            let enabled = Config::global_get_file_watcher_enabled();
-            println!("File watcher: {}", if enabled { "ON" } else { "OFF" });
-        } else {
-            let upper = val.to_uppercase();
-            if upper == "ON" {
-                Config::global_set_file_watcher_enabled(true);
-                print_success("File watcher: ON (restart ntc to activate)");
-            } else if upper == "OFF" {
-                Config::global_set_file_watcher_enabled(false);
-                print_warning("File watcher: OFF (restart ntc to deactivate)");
-            } else {
-                print_error("Use --watch ON or --watch OFF");
-            }
-        }
-        return Ok(false);
-    } else if matches.contains_id("watch") {
-        let enabled = Config::global_get_file_watcher_enabled();
-        println!("File watcher: {}", if enabled { "ON" } else { "OFF" });
-        return Ok(false);
-    }
-
-    // --- Handle --ignored ---
-    if matches.get_flag("ignored") {
-        let dirs = Config::global_get_ignored_dirs();
-        let fmt_cfg = FormatConfig::from_global();
-        println!("Ignored directories: {:?}", dirs);
-        println!("Ignored extensions: {:?}", fmt_cfg.ignored_extensions);
-        println!("Extra supported extensions: {:?}", fmt_cfg.extra_extensions);
-        println!("Ignored files: {:?}", fmt_cfg.ignored_files);
-        println!("Extra supported files: {:?}", fmt_cfg.extra_files);
-        return Ok(false);
-    }
-
-    // --- Handle --ignore ---
-    if let Some(names) = matches.get_many::<String>("ignore") {
-        for name in names {
-            Config::global_add_ignored_dir(name);
-            print_success(&format!("Now ignoring directory: {}", name));
-        }
-        return Ok(false);
-    }
-
-    // --- Handle --cared ---
-    if let Some(names) = matches.get_many::<String>("cared") {
-        for name in names {
-            Config::global_remove_ignored_dir(name);
-            print_success(&format!("No longer ignoring directory: {}", name));
-        }
-        return Ok(false);
-    }
-
-    // --- Handle --ignoref ---
-    if let Some(exts) = matches.get_many::<String>("ignoref") {
-        for ext in exts {
-            Config::global_add_ignored_extension(ext);
-            print_success(&format!("Now ignoring .{} files", ext));
-        }
-        return Ok(false);
-    }
-
-    // --- Handle --caref ---
-    if let Some(exts) = matches.get_many::<String>("caref") {
-        for ext in exts {
-            Config::global_add_extra_supported_extension(ext);
-            print_success(&format!("Now caring about .{} files", ext));
-        }
-        return Ok(false);
-    }
-
-    // --- Handle --ignoren ---
-    if let Some(files) = matches.get_many::<String>("ignoren") {
-        for file in files {
-            Config::global_add_ignored_file(file);
-            print_success(&format!("Now ignoring file: {}", file));
-        }
-        return Ok(false);
-    }
-
-    // --- Handle --caren ---
-    if let Some(files) = matches.get_many::<String>("caren") {
-        for file in files {
-            Config::global_add_extra_supported_file(file);
-            print_success(&format!("Now caring about file: {}", file));
-        }
-        return Ok(false);
-    }
-
-    // --- Handle --setH ---
-    if let Some(val) = matches.get_one::<String>("setH") {
-        if val.is_empty() {
-            let enabled = Config::global_get_history_enabled();
-            let path = Config::global_get_history_path();
-            println!("History: {}", if enabled { "ON" } else { "OFF" });
-            match path {
-                Some(p) => println!("History path: {}", p.display()),
-                None => println!("History path: default"),
-            }
-        } else {
-            let upper = val.to_uppercase();
-            if upper == "ON" {
-                Config::global_set_history_enabled(true);
-                print_success("History: ON");
-            } else if upper == "OFF" {
-                Config::global_set_history_enabled(false);
-                print_warning("History: OFF");
-            } else if val == "default" {
-                Config::global_set_history_path(None);
-                print_success("History path reset to default");
-            } else {
-                let p = Path::new(val);
-                Config::global_set_history_path(Some(p.to_path_buf()));
-                print_success(&format!("History path set to: {}", p.display()));
-            }
-        }
-        return Ok(false);
-    } else if matches.contains_id("setH") {
-        let enabled = Config::global_get_history_enabled();
-        let path = Config::global_get_history_path();
-        println!("History: {}", if enabled { "ON" } else { "OFF" });
-        match path {
-            Some(p) => println!("History path: {}", p.display()),
-            None => println!("History path: default"),
-        }
-        return Ok(false);
-    }
-
-    // --- Handle --size ---
-    if matches.get_flag("size") {
-        let show_view = matches.get_flag("view_cli");
-        use crate::navigator::Navigator;
-        let nav = Navigator::new()?;
-        let total = crate::explorer::calculate_dir_size(nav.current_path());
-        println!("Path: {}", nav.display_path());
-        println!("┌─────────────────────────────────────────┐");
-        println!("│ Current Directory Size                  │");
-        println!("│ Bytes: {:>32} │", format!("{}", total));
-        println!("│ Human: {:>32} │", crate::explorer::human_readable_size(total));
-        println!("└─────────────────────────────────────────┘");
-        if show_view {
-            println!();
-            let mut tree = crate::explorer::generate_tree(
-                &nav.current_path().to_string_lossy(),
-                Some(1),
-                true,
-                None,
-            );
-            crate::explorer::compute_tree_sizes(&mut tree, None, false);
-            let tree_str = crate::explorer::format_tree_with_sizes(&tree, "", true, true, false, None);
-            println!("{}", tree_str);
-        }
-        return Ok(false);
-    }
-
-    // --- Handle --view (without --size) ---
-    if matches.get_flag("view_cli") && !matches.get_flag("size") {
-        use crate::navigator::Navigator;
-        let nav = Navigator::new()?;
-
-        let tree = crate::explorer::generate_tree(
-            &nav.current_path().to_string_lossy(),
-            Some(1),
-            true,
-            None,
-        );
-        let tree_str = crate::explorer::format_tree_with_sizes(&tree, "", true, false, false, None);
-        println!("{}", tree_str);
-        return Ok(false);
-    }
-
-    // --- Handle setO, setD, setL, setT ---
-    if let Some(val) = matches.get_one::<String>("setO") {
-        if val.is_empty() {
-            println!("Current output path: {}", Config::global_get_output_path().display());
-        } else {
-            Config::global_set_output_path(Path::new(val));
-            print_success(&format!("Output path set to: {}", val));
-        }
-        return Ok(false);
-    } else if matches.contains_id("setO") {
-        println!("Current output path: {}", Config::global_get_output_path().display());
-        return Ok(false);
-    }
-
-    if let Some(val) = matches.get_one::<String>("setD") {
-        if val.is_empty() {
-            println!("Current max depth: {}", Config::global_get_max_depth());
-        } else {
-            match val.parse::<usize>() {
-                Ok(depth) => {
-                    Config::global_set_max_depth(depth);
-                    print_success(&format!("Max depth set to: {}", Config::global_get_max_depth()));
-                }
-                Err(_) => bail!("Invalid depth value: {}. Must be a positive integer.", val),
-            }
-        }
-        return Ok(false);
-    } else if matches.contains_id("setD") {
-        println!("Current max depth: {}", Config::global_get_max_depth());
-        return Ok(false);
-    }
-
-    if let Some(val) = matches.get_one::<String>("setL") {
-        if val.is_empty() {
-            let state = if Config::global_get_show_line_numbers() { "ON" } else { "OFF" };
-            println!("Line numbers: {}", state);
-        } else {
-            match Config::parse_line_numbers_state(val) {
-                Some(state) => {
-                    Config::global_set_show_line_numbers(state);
-                    print_success(&format!("Line numbers: {}", if state { "ON" } else { "OFF" }));
-                }
-                None => bail!("Invalid value for setL: {}. Use ON or OFF.", val),
-            }
-        }
-        return Ok(false);
-    } else if matches.contains_id("setL") {
-        let state = if Config::global_get_show_line_numbers() { "ON" } else { "OFF" };
-        println!("Line numbers: {}", state);
-        return Ok(false);
-    }
-
-    if let Some(val) = matches.get_one::<String>("setT") {
-        if val.is_empty() {
-            println!("Current threads: {}", Config::global_get_num_threads());
-        } else {
-            match Config::parse_num_threads(val) {
-                Some(threads) => {
-                    Config::global_set_num_threads(threads);
-                    print_success(&format!("Threads set to: {}", Config::global_get_num_threads()));
-                }
-                None => bail!("Invalid thread count: {}. Must be a positive integer.", val),
-            }
-        }
-        return Ok(false);
-    } else if matches.contains_id("setT") {
-        println!("Current threads: {}", Config::global_get_num_threads());
-        return Ok(false);
-    }
-
-    // --- Handle --setC ---
-    if let Some(val) = matches.get_one::<String>("setC") {
-        if val.is_empty() {
-            let state = if Config::global_get_color_enabled() { "ON" } else { "OFF" };
-            println!("Color output: {}", state);
-        } else {
-            match Config::parse_line_numbers_state(val) {
-                Some(state) => {
-                    Config::global_set_color_enabled(state);
-                    print_success(&format!("Color: {}", if state { "ON" } else { "OFF" }));
-                }
-                None => bail!("Invalid value for setC: {}. Use ON or OFF.", val),
-            }
-        }
-        return Ok(false);
-    } else if matches.contains_id("setC") {
-        let state = if Config::global_get_color_enabled() { "ON" } else { "OFF" };
-        println!("Color output: {}", state);
-        return Ok(false);
-    }
-
-    // --- Handle -say / -print ---
-    if let Some(text) = matches.get_one::<String>("say") {
-        println!("{}", text.green());
-        return Ok(false);
-    }
-
-    // --- Handle -i (input) ---
-    if let Some(input_path) = matches.get_one::<String>("input") {
-        let path = Path::new(input_path);
-        let copy_to_clipboard = matches.get_flag("copy");
-
-        if path.is_dir() {
-            let output_file = matches.get_one::<String>("output");
-            let format_str = matches.get_one::<String>("format").map(|s| s.as_str()).unwrap_or("txt");
-            
-            let format = match format_str {
-                "html" => ReportFormat::Html,
-                "json" => ReportFormat::Json,
-                "md" => ReportFormat::Md,
-                "pdf" => ReportFormat::Pdf,
-                "docx" => ReportFormat::Docx,
-                "xlsx" => ReportFormat::Xlsx,
-                _ => ReportFormat::Txt,
-            };
-            
-            if copy_to_clipboard {
-                if format.is_binary() {
-                    print_warning(&format!("{} report cannot be copied to clipboard (binary format)", format_str.to_uppercase()));
-                } else {
-                    let content = crate::report::generate_report_to_string(path, format)?;
-                    crate::output::copy_to_clipboard(&content, format_str)?;
-                    print_success(&format!("{} report copied to clipboard!", format_str.to_uppercase()));
-                }
-            } else if let Some(output) = output_file {
-                generate_report_to(path, format, output)?;
-            } else {
-                generate_report(path, format)?;
-            }
-        } else if path.is_file() {
-            if is_supported_format(path) {
-                let show_lines = Config::global_get_show_line_numbers();
-                let output_file = matches.get_one::<String>("output");
-                if let Some(output) = output_file {
-                    let content = crate::output::cat_file_with_line_numbers(path, show_lines)?;
-                    let output_path = crate::output::build_output_path(output);
-                    crate::output::write_file(&output_path, &content)?;
-                    print_success(&format!("File saved to: {}", output_path.display()));
-                } else {
-                    cat_file(path, show_lines)?;
-                }
-            } else {
-                print_warning(&format!("Skipped (not support format): {}", input_path));
-            }
-        } else {
-            bail!("Path not found: {}", input_path);
-        }
-        return Ok(false);
-    }
-
-    // --- Handle teleport CLI commands ---
-    if matches.get_flag("tp_list") {
-        crate::teleport::TeleportManager::list()?;
-        return Ok(false);
-    }
-
-    if let Some(name) = matches.get_one::<String>("tp_add") {
-        let current_dir = std::env::current_dir()?;
-        crate::teleport::TeleportManager::add(name, current_dir)?;
-        return Ok(false);
-    }
-
-    if let Some(name) = matches.get_one::<String>("tp_rm") {
-        crate::teleport::TeleportManager::remove_by_name(name)?;
-        return Ok(false);
-    }
-
-    // --- Handle --init ---
-    if let Some(path) = matches.get_one::<String>("init") {
-        let p = std::path::Path::new(path);
-        let created = crate::editor::init_file(p)?;
-        crate::editor::edit_file(p)?;
-        if created {
-            eprintln!("Created template: {}", p.display());
-        }
-        return Ok(false);
-    }
-
-    // --- Handle --edit ---
-    if let Some(path) = matches.get_one::<String>("edit") {
-        crate::editor::edit_file(std::path::Path::new(path))?;
-        return Ok(false);
-    }
-
-    // --- Handle --dino ---
-    if matches.get_flag("dino") {
-        crate::game::run()?;
-        return Ok(false);
-    }
-
-    // --- Handle --math ---
-    if let Some(exprs) = matches.get_many::<String>("math") {
-        let input: Vec<&str> = exprs.map(|s| s.as_str()).collect();
-        let joined = input.join(" ");
-        crate::math::run(&joined)?;
-        return Ok(false);
-    }
-
-    // --- Handle --ral-export-all ---
-    if let Some(name) = matches.get_one::<String>("ral_export_all") {
-        crate::shell::helpers::ral_export_all(name)?;
-        return Ok(false);
-    }
-
-    // --- Handle --ral-export-select ---
-    if let Some(name) = matches.get_one::<String>("ral_export_select") {
-        use crate::navigator::Navigator;
-        let mut nav = Navigator::new()?;
-        crate::shell::helpers::ral_export_select(&mut nav, name)?;
-        return Ok(false);
-    }
-
-    // --- Handle --ral-import ---
-    if let Some(file) = matches.get_one::<String>("ral_import") {
-        crate::shell::helpers::ral_import(file)?;
-        return Ok(false);
-    }
-
-    // --- Handle --igcare-export-all ---
-    if let Some(name) = matches.get_one::<String>("igcare_export_all") {
-        crate::shell::helpers::igcare_export_all(name)?;
-        return Ok(false);
-    }
-
-    // --- Handle --igcare-export-select ---
-    if let Some(name) = matches.get_one::<String>("igcare_export_select") {
-        crate::shell::helpers::igcare_export_select(name)?;
-        return Ok(false);
-    }
-
-    // --- Handle --igcare-import ---
-    if let Some(file) = matches.get_one::<String>("igcare_import") {
-        crate::shell::helpers::igcare_import(file)?;
-        return Ok(false);
-    }
-
-    // --- Handle --lsp ---
-    if matches.get_flag("lsp") {
-        crate::lsp::run_server()?;
-        return Ok(false);
-    }
+    // Dispatch to handler functions in priority order
+    if !handle_simple_flags(&matches, &known_flags)? { return Ok(false); }
+    if !handle_watch_flag(&matches)? { return Ok(false); }
+    if !handle_ignore_care(&matches)? { return Ok(false); }
+    if !handle_setters(&matches)? { return Ok(false); }
+    if !handle_input(&matches)? { return Ok(false); }
+    if !handle_teleport_cmds(&matches)? { return Ok(false); }
+    if !handle_edit_init(&matches)? { return Ok(false); }
+    if !handle_ral_igcare(&matches)? { return Ok(false); }
 
     // --- No arguments: Launch interactive mode ---
     Ok(true)

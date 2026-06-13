@@ -7,8 +7,8 @@ use crossterm::style::Color;
 use super::{
     byte_to_col,
     gutter_width, set_status_bar, prompt_yes_no, sel_range,
-    Editor, Snapshot,
-    MAX_UNDO, MAX_BUFFERS,
+    Editor, Snapshot, Tab,
+    MAX_UNDO, MAX_BUFFERS, MAX_TABS,
 };
 
 impl Editor {
@@ -35,6 +35,127 @@ impl Editor {
     pub(crate) fn toggle_sidebar(&mut self) {
         self.sidebar.open = !self.sidebar.open;
         self.mark_all_dirty();
+    }
+
+    /// Save the current editor state into the active tab slot.
+    pub(crate) fn save_active_tab(&mut self) {
+        if self.active_tab < self.tabs.len() {
+            self.tabs[self.active_tab] = Tab::from_editor(self);
+        }
+    }
+
+    /// Restore editor state from a tab slot.
+    pub(crate) fn restore_tab(&mut self, idx: usize) {
+        if idx < self.tabs.len() {
+            let tab = self.tabs[idx].clone();
+            tab.apply_to(self);
+        }
+    }
+
+    /// Switch to a different tab by index.
+    pub(crate) fn switch_tab(&mut self, idx: usize) {
+        if idx == self.active_tab || idx >= self.tabs.len() {
+            return;
+        }
+        self.save_active_tab();
+        self.active_tab = idx;
+        self.restore_tab(idx);
+        self.mark_all_dirty();
+    }
+
+    /// Switch to the next tab (cycle forward).
+    pub(crate) fn next_tab(&mut self) {
+        if self.tabs.len() <= 1 {
+            return;
+        }
+        let next = (self.active_tab + 1) % self.tabs.len();
+        self.switch_tab(next);
+    }
+
+    /// Switch to the previous tab (cycle backward).
+    pub(crate) fn prev_tab(&mut self) {
+        if self.tabs.len() <= 1 {
+            return;
+        }
+        let prev = if self.active_tab == 0 {
+            self.tabs.len() - 1
+        } else {
+            self.active_tab - 1
+        };
+        self.switch_tab(prev);
+    }
+
+    /// Check if a path is a scratch buffer.
+    pub(crate) fn is_scratch_path(&self, path: &std::path::Path) -> bool {
+        path.file_name()
+            .and_then(|n| n.to_str())
+            .map(|n| n == ".scratch" || n == "scratch")
+            .unwrap_or(false)
+    }
+
+    /// Create a scratch tab: opens a .scratch file in the current directory.
+    pub(crate) fn open_scratch_tab(&mut self) {
+        let cwd = std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from("."));
+        let scratch_path = cwd.join(".scratch");
+        if !scratch_path.exists() {
+            let _ = std::fs::write(&scratch_path, "");
+        }
+        // If .scratch is already open in some tab, switch to it
+        for (i, tab) in self.tabs.iter().enumerate() {
+            if self.is_scratch_path(&tab.path) {
+                self.switch_tab(i);
+                return;
+            }
+        }
+        self.open_file(&scratch_path);
+    }
+
+    /// Close a specific tab by index.
+    /// Returns true if the editor should quit (last scratch tab closed).
+    pub(crate) fn close_tab(&mut self, idx: usize) -> bool {
+        if idx >= self.tabs.len() {
+            return false;
+        }
+        if idx == self.active_tab {
+            // Closing the active tab
+            if self.tabs.len() <= 1 {
+                // Last tab — if scratch, quit; otherwise create scratch then quit
+                if self.is_scratch_path(&self.path) {
+                    return true;
+                }
+                self.open_scratch_tab();
+                // Now there are 2+ tabs. Remove old one.
+                self.tabs.remove(0);
+                self.active_tab = 0;
+                self.restore_tab(0);
+                self.mark_all_dirty();
+                return false;
+            }
+            if self.modified {
+                let _ = self.save();
+            }
+            self.tabs.remove(idx);
+            if self.active_tab >= self.tabs.len() {
+                self.active_tab = self.tabs.len() - 1;
+            }
+            self.restore_tab(self.active_tab);
+            self.mark_all_dirty();
+            false
+        } else {
+            // Closing an inactive tab — just remove it
+            if idx < self.active_tab {
+                self.active_tab -= 1;
+            }
+            self.tabs.remove(idx);
+            // No editor state change needed
+            false
+        }
+    }
+
+    /// Close the current tab.
+    /// Returns true if the editor should quit.
+    pub(crate) fn close_current_tab(&mut self) -> bool {
+        self.close_tab(self.active_tab)
     }
 
     pub(crate) fn load_file(&mut self, path: &Path) {
@@ -75,10 +196,20 @@ impl Editor {
         self.status_msg = Some(format!("Opened {}", path.display()));
     }
 
+    /// Open a file in a new tab (or switch to existing tab if already open).
     pub(crate) fn open_file(&mut self, path: &Path) {
-        if path == self.path {
-            return;
+        // Check if the file is already open in another tab
+        for (i, tab) in self.tabs.iter().enumerate() {
+            if tab.path == path {
+                self.switch_tab(i);
+                return;
+            }
         }
+
+        // Save current tab state
+        self.save_active_tab();
+
+        // Remember current file in buffer stack (before loading new file)
         if self.buffer_stack.last() != Some(&self.path) {
             self.buffer_stack.push(self.path.clone());
             if self.buffer_stack.len() > MAX_BUFFERS {
@@ -86,7 +217,17 @@ impl Editor {
             }
         }
         self.buffer_idx = self.buffer_stack.len() - 1;
+
+        // Load the new file into current editor fields
         self.load_file(path);
+
+        // Register as a new tab (cap at MAX_TABS)
+        if self.tabs.len() >= MAX_TABS {
+            self.status_msg = Some(format!("Max tabs ({}) reached", MAX_TABS));
+        } else {
+            self.tabs.push(Tab::from_editor(self));
+            self.active_tab = self.tabs.len() - 1;
+        }
     }
 
     pub(crate) fn next_buffer(&mut self) {
@@ -95,6 +236,7 @@ impl Editor {
         }
         let next = (self.buffer_idx + 1) % self.buffer_stack.len();
         let path = self.buffer_stack[next].clone();
+        self.save_active_tab();
         self.load_file(&path);
         self.buffer_idx = next;
     }
@@ -109,6 +251,7 @@ impl Editor {
             self.buffer_idx - 1
         };
         let path = self.buffer_stack[prev].clone();
+        self.save_active_tab();
         self.load_file(&path);
         self.buffer_idx = prev;
     }
@@ -135,6 +278,12 @@ impl Editor {
             self.undo_stack.remove(0);
         }
         self.redo_stack.clear();
+
+        // Periodically save crash recovery snapshot
+        self.edit_count += 1;
+        if self.edit_count.is_multiple_of(30) {
+            self.save_recovery_snapshot();
+        }
     }
 
     pub(crate) fn undo(&mut self) {
@@ -224,7 +373,7 @@ impl Editor {
     }
 
     pub(crate) fn mark_all_dirty(&mut self) {
-        let rows = self.term_h.saturating_sub(3);
+        let rows = self.term_h.saturating_sub(4);
         self.dirty_start = 0;
         self.dirty_end = self.lines.len().max(rows);
     }
@@ -245,7 +394,7 @@ impl Editor {
     }
 
     pub(crate) fn scroll_visible(&mut self) {
-        let rows = self.term_h.saturating_sub(3); // -3: horizontal scroll bar + status + hint
+        let rows = self.term_h.saturating_sub(4); // tab bar + hscroll + status + hint
         if self.cursor_y < self.scroll {
             self.scroll = self.cursor_y;
         } else if self.cursor_y >= self.scroll + rows {
@@ -473,13 +622,14 @@ impl Editor {
                 insert_pos += 1;
             }
 
+            let last_part = parts.last().copied().unwrap_or("");
             self.lines
-                .insert(insert_pos, format!("{}{}", parts.last().unwrap(), right));
+                .insert(insert_pos, format!("{}{}", last_part, right));
             self.syntax.insert_line(insert_pos);
 
             self.dirty_end = self.dirty_end.max(self.lines.len());
             self.cursor_y = insert_pos;
-            self.cursor_byte = parts.last().unwrap().len();
+            self.cursor_byte = last_part.len();
         }
 
         self.modified = true;
@@ -632,9 +782,11 @@ impl Editor {
                 let _ = set_status_bar(stdout, Color::Red, Color::White, &format!(" {}", e));
                 return Ok(false);
             }
+            self.clear_recovery_snapshot();
             return Ok(true);
         }
         if !self.modified {
+            self.clear_recovery_snapshot();
             return Ok(true);
         }
         loop {
@@ -654,11 +806,254 @@ impl Editor {
                         continue;
                     }
                     let _ = set_status_bar(stdout, Color::Green, Color::White, " Saved ✓");
+                    self.clear_recovery_snapshot();
                     return Ok(true);
                 }
-                Some(false) => return Ok(true),
+                Some(false) => {
+                    self.clear_recovery_snapshot();
+                    return Ok(true);
+                }
                 None => return Ok(false),
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use super::super::CursorPos;
+
+    fn test_editor(content: &[&str]) -> Editor {
+        let dir = std::env::temp_dir().join("ntc_editor_test");
+        let _ = std::fs::create_dir_all(&dir);
+        let path = dir.join("test_editor.txt");
+        let lines: Vec<String> = content.iter().map(|s| s.to_string()).collect();
+        std::fs::write(&path, lines.join("\n")).unwrap();
+        let mut editor = Editor::new(&path).unwrap();
+        editor.lines = lines.clone();
+        if lines.is_empty() || lines[0].is_empty() {
+            editor.lines = lines;
+        }
+        editor
+    }
+
+    #[test]
+    fn test_snapshot_undo_redo() {
+        let mut editor = test_editor(&["line1", "line2", "line3"]);
+        editor.snapshot();
+        editor.lines[0] = "modified".to_string();
+        assert_eq!(editor.lines[0], "modified");
+
+        editor.undo();
+        assert_eq!(editor.lines[0], "line1");
+
+        editor.redo();
+        assert_eq!(editor.lines[0], "modified");
+    }
+
+    #[test]
+    fn test_undo_empty_stack() {
+        let mut editor = test_editor(&["line1"]);
+        // No snapshot taken yet
+        let before = editor.lines[0].clone();
+        editor.undo();
+        assert_eq!(editor.lines[0], before);
+    }
+
+    #[test]
+    fn test_redo_cleared_on_new_snapshot() {
+        let mut editor = test_editor(&["line1"]);
+        editor.snapshot();
+        editor.lines[0] = "change1".to_string();
+        editor.undo();
+        assert_eq!(editor.lines[0], "line1");
+
+        // New edit should clear redo
+        editor.snapshot();
+        editor.lines[0] = "change2".to_string();
+        editor.redo();
+        // Redo should do nothing since redo was cleared
+        assert_eq!(editor.lines[0], "change2");
+    }
+
+    #[test]
+    fn test_max_undo_capped() {
+        let mut editor = test_editor(&["line"]);
+        for i in 0..MAX_UNDO + 50 {
+            editor.snapshot();
+            editor.lines[0] = format!("change{}", i);
+        }
+        // Undo stack should be at most MAX_UNDO
+        assert!(editor.undo_stack.len() <= MAX_UNDO);
+    }
+
+    #[test]
+    fn test_has_selection_no_anchor() {
+        let editor = test_editor(&["hello world"]);
+        assert!(!editor.has_selection());
+    }
+
+    #[test]
+    fn test_has_selection_with_anchor() {
+        let mut editor = test_editor(&["hello world"]);
+        editor.selection_anchor = Some((0, 0));
+        editor.cursor_byte = 5;
+        assert!(editor.has_selection());
+    }
+
+    #[test]
+    fn test_has_selection_identical_positions() {
+        let mut editor = test_editor(&["hello world"]);
+        editor.selection_anchor = Some((0, 0));
+        editor.cursor_byte = 0;
+        assert!(!editor.has_selection());
+    }
+
+    #[test]
+    fn test_selected_text() {
+        let mut editor = test_editor(&["hello world"]);
+        editor.selection_anchor = Some((0, 0));
+        editor.cursor_byte = 5;
+        assert_eq!(editor.selected_text(), "hello");
+    }
+
+    #[test]
+    fn test_selected_text_multi_line() {
+        let mut editor = test_editor(&["hello", "world"]);
+        editor.selection_anchor = Some((0, 0));
+        editor.cursor_y = 1;
+        editor.cursor_byte = 3;
+        assert_eq!(editor.selected_text(), "hello\nwor");
+    }
+
+    #[test]
+    fn test_select_all() {
+        let mut editor = test_editor(&["line1", "line2", "line3"]);
+        editor.select_all();
+        assert!(editor.has_selection());
+        let (ay, _) = editor.selection_anchor.unwrap();
+        assert_eq!(ay, 0);
+        assert_eq!(editor.cursor_y, 2);
+    }
+
+    #[test]
+    fn test_delete_selection_single_line() {
+        let mut editor = test_editor(&["hello world"]);
+        editor.selection_anchor = Some((0, 0));
+        editor.cursor_byte = 5;
+        editor.modified = true;
+        editor.delete_selection();
+        assert_eq!(editor.lines[0], " world");
+    }
+
+    #[test]
+    fn test_delete_selection_multi_line() {
+        let mut editor = test_editor(&["hello", "cruel", "world"]);
+        editor.selection_anchor = Some((0, 0));
+        editor.cursor_y = 2;
+        editor.cursor_byte = 3; // Select from start of file to "wor" on line 2
+        editor.modified = true;
+        editor.delete_selection();
+        assert_eq!(editor.lines.len(), 1);
+        assert_eq!(editor.lines[0], "ld"); // remaining: "ld" from "world"[3..]
+    }
+
+    #[test]
+    fn test_clamp_cursor() {
+        let mut editor = test_editor(&["short"]);
+        editor.cursor_y = 100;
+        editor.cursor_byte = 100;
+        editor.clamp();
+        assert_eq!(editor.cursor_y, 0);
+        assert_eq!(editor.cursor_byte, 5); // "short".len()
+    }
+
+    #[test]
+    fn test_yank_line() {
+        let mut editor = test_editor(&["yank me"]);
+        editor.yank_line();
+        assert!(editor.clipboard.contains("yank me"));
+    }
+
+    #[test]
+    fn test_copy_selection_no_selection() {
+        let mut editor = test_editor(&["copy line"]);
+        editor.copy_selection();
+        assert!(editor.clipboard.contains("copy line"));
+    }
+
+    #[test]
+    fn test_copy_selection_with_selection() {
+        let mut editor = test_editor(&["hello world"]);
+        editor.selection_anchor = Some((0, 0));
+        editor.cursor_byte = 5;
+        editor.copy_selection();
+        assert_eq!(editor.clipboard, "hello");
+    }
+
+    #[test]
+    fn test_paste_fast_single_line() {
+        let mut editor = test_editor(&["hello world"]);
+        editor.cursor_byte = 5;
+        editor.paste_fast(" beautiful");
+        assert_eq!(editor.lines[0], "hello beautiful world");
+    }
+
+    #[test]
+    fn test_paste_fast_multi_line() {
+        let mut editor = test_editor(&["hello world"]);
+        editor.cursor_byte = 5;
+        editor.paste_fast("line1\nline2\nline3");
+        assert_eq!(editor.lines[0], "helloline1");
+        assert_eq!(editor.lines[1], "line2");
+        assert_eq!(editor.lines[2], "line3 world");
+    }
+
+    #[test]
+    fn test_paste_fast_empty() {
+        let mut editor = test_editor(&["hello"]);
+        editor.paste_fast("");
+        assert_eq!(editor.lines[0], "hello");
+    }
+
+    #[test]
+    fn test_select_word_under_cursor() {
+        let mut editor = test_editor(&["hello world"]);
+        editor.cursor_byte = 6; // at 'w' in "world"
+        let word = editor.select_word_under_cursor();
+        assert_eq!(word, Some("world".to_string()));
+    }
+
+    #[test]
+    fn test_clear_selection() {
+        let mut editor = test_editor(&["hello world"]);
+        editor.selection_anchor = Some((0, 0));
+        editor.cursor_byte = 5;
+        assert!(editor.has_selection());
+        editor.clear_selection();
+        assert!(!editor.has_selection());
+    }
+
+    #[test]
+    fn test_clear_extra_cursors() {
+        let mut editor = test_editor(&["line1", "line2", "line3"]);
+        editor.extra_cursors.push(CursorPos {
+            y: 1,
+            byte: 0,
+            anchor: None,
+        });
+        assert!(editor.has_multiple_cursors());
+        editor.clear_extra_cursors();
+        assert!(!editor.has_multiple_cursors());
+    }
+
+    #[test]
+    fn test_cut_selection() {
+        let mut editor = test_editor(&["hello world"]);
+        editor.selection_anchor = Some((0, 0));
+        editor.cursor_byte = 5;
+        editor.cut_selection();
+        assert_eq!(editor.lines[0], " world");
     }
 }

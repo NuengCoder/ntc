@@ -1,32 +1,33 @@
 use ntc::cli;
 use ntc::shell;
 use ntc::Config;
+use ntc::utils;
 use anyhow::Result;
 use colored::*;
 
+fn run() -> Result<bool> {
+    crate::utils::theme::ThemeManager::ensure_default_themes();
+    let _ = Config::global();
+    cli::run_cli()
+}
 
 fn main() -> Result<()> {
-    let _ = Config::global();
-
-    let launch_interactive = cli::run_cli()?;
+    let launch_interactive = run()?;
     if launch_interactive {
-        // Logo is now printed inside cli.rs for @ shortcut
-        // For regular interactive mode, we need to print it here
         println!();
-        println!("  {}  {}  {}", 
-            "N".blue().bold(), 
-            "T".blue().bold(), 
+        println!("  {}  {}  {}",
+            "N".blue().bold(),
+            "T".blue().bold(),
             "C".blue().bold()
         );
-        println!("  {} {} {}", 
-            "Navigate".red(), 
-            "Tree".green(), 
-            "Cat".blue()
+        println!("  {} {} {}",
+            "Navigate".red(),
+            "Toolkit".green(),
+            "Center".blue()
         );
         println!();
         shell::run_shell()?;
     }
-
     Config::save_global();
     Ok(())
 }

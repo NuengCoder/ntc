@@ -1,4 +1,4 @@
-use anyhow::Result;
+use anyhow::{bail, Result};
 use crossterm::{
     cursor::{Hide, Show, MoveTo},
     event::{self, Event, KeyCode, KeyEventKind},
@@ -163,7 +163,7 @@ fn frame_buffer(score: u64, high_score: u64, speed: f64, sy: usize, spikes: &[Sp
             }
 
             for b in birds {
-                if col >= b.x && col < b.x + 3 && row >= BIRD_Y && row <= BIRD_Y + 1 {
+                if col >= b.x && col < b.x + 3 && (BIRD_Y..=BIRD_Y + 1).contains(&row) {
                     let local = col - b.x;
                     let brow = row - BIRD_Y;
                     ch = match (brow, local) {
@@ -178,7 +178,7 @@ fn frame_buffer(score: u64, high_score: u64, speed: f64, sy: usize, spikes: &[Sp
                 }
             }
 
-            if col >= DINO_X && col < DINO_X + 4 && !over {
+            if (DINO_X..DINO_X + 4).contains(&col) && !over {
                 let drow = sy;
                 if row == drow.saturating_sub(3) {
                     ch = if col == DINO_X + 1 || col == DINO_X + 2 { '▀' } else { ' ' };
@@ -202,7 +202,7 @@ fn frame_buffer(score: u64, high_score: u64, speed: f64, sy: usize, spikes: &[Sp
                 if is_ground && ch == ' ' { ch = '▄'; }
             }
 
-            if over && row >= GROUND / 2 - 1 && row <= GROUND / 2 + 1 {
+            if over && (GROUND / 2 - 1..=GROUND / 2 + 1).contains(&row) {
                 let msg = " GAME OVER ";
                 let start = W / 2 - 5;
                 if col >= start && col < start + msg.len() {
@@ -227,7 +227,7 @@ fn frame_buffer(score: u64, high_score: u64, speed: f64, sy: usize, spikes: &[Sp
     buf
 }
 
-pub fn run() -> Result<()> {
+fn _run() -> Result<()> {
     execute!(stdout(), EnterAlternateScreen, Hide)?;
     terminal::enable_raw_mode()?;
 
@@ -265,7 +265,7 @@ pub fn run() -> Result<()> {
             if spawn_timer >= interval {
                 spawn_timer = 0.0;
 
-                let spawn_bird = score > 30 && (score / 50) % 2 == 0;
+                let spawn_bird = score > 30 && (score / 50).is_multiple_of(2);
                 let too_close = if !spikes.is_empty() { W - spikes.last().unwrap().x <= 18 } else { false };
 
                 if spawn_bird && !too_close && (birds.is_empty() || W - birds.last().unwrap().x > 25) {
@@ -307,12 +307,11 @@ pub fn run() -> Result<()> {
                     }
                 }
             }
-            if over {
-                if score > high_score {
+            if over
+                && score > high_score {
                     high_score = score;
                     DinoConfig { high_score }.save();
                 }
-            }
         }
 
         let sy = dino.sy();
@@ -347,11 +346,10 @@ pub fn run() -> Result<()> {
                                 dino.jump();
                             }
                         }
-                        KeyCode::Up => {
-                            if !over {
+                        KeyCode::Up
+                            if !over => {
                                 dino.jump();
                             }
-                        }
                         _ => {}
                     }
                 }
@@ -363,4 +361,18 @@ pub fn run() -> Result<()> {
     execute!(stdout(), LeaveAlternateScreen, Show)?;
     println!("Score: {}  |  High Score: {}  |  Saved: dino.toml", score, high_score);
     Ok(())
+}
+
+pub fn run() -> Result<()> {
+    let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| -> Result<()> {
+        _run()
+    }));
+    match result {
+        Ok(r) => r,
+        Err(_) => {
+            let _ = terminal::disable_raw_mode();
+            let _ = execute!(stdout(), LeaveAlternateScreen, Show);
+            bail!("Game crashed — terminal state restored");
+        }
+    }
 }

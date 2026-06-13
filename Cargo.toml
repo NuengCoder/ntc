@@ -1,8 +1,8 @@
 [package]
 name = "ntc"
-version = "2.1.0"
+version = "2.2.0"
 edition = "2021"
-description = "Navigate, Tree, Cat - A combined directory tree viewer and file concatenator"
+description = "Navigate, Toolkit, Center - A Combine of Navigation , Project Toolkit Center hub"
 authors = ["NuengCoder"]
 license = "MIT"
 
@@ -30,22 +30,24 @@ notify = "7"
 ctrlc = "3.4"
 serde_json = "1.0"
 sha2 = "0.10"
+rand = "0.8"
+libc = "0.2"
+crossterm = "0.28"
+
+[target.'cfg(not(target_os = "android"))'.dependencies]
+arboard = "3.4"
 printpdf = "0.5"
 docx-rs = "0.4"
 rust_xlsxwriter = "0.95"
-crossterm = "0.28"
-rand = "0.8"
-[target.'cfg(not(target_os = "android"))'.dependencies]
-arboard = "3.4"
 
 # Android/Termux specific
 [target.'cfg(target_os = "android")'.dependencies]
-# No arboard on Android
+# No arboard, printpdf, docx-rs, rust_xlsxwriter on Android
 
 [dev-dependencies]
 tempfile = "3.15"
 
-[build-dependencies]
+[target.'cfg(windows)'.build-dependencies]
 winres = "0.1"
 
 [package.metadata.deb]
@@ -53,6 +55,6 @@ maintainer = "Nueng <thilaphonneung@gmail.com>"
 copyright = "2026, Nueng"
 license-file = ["LICENSE", "3"]
 extended-description = """\
-ntc is a combined directory tree viewer and file concatenator.
+ntc is a  Combine of Navigation , Project Toolkit Center hub.
 It helps navigate, visualize, and report on directory structures."""
 depends = "$auto"  # Automatically detects if you need libc, etc.

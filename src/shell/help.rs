@@ -29,16 +29,34 @@ pub(super) fn print_interactive_help() {
     println!("  setH ON|OFF         Enable/disable history");
     println!("  setH <path>         Set custom history file path");
     println!("  setH default        Reset history to default location");
+    println!("  setA ON|OFF         Enable/disable autosuggest (ghost text)");
     println!("  showcg              Show current configuration overview");
     println!("  opencg              Open config.toml (default editor, fallback to built-in)");
     println!("  ne, ntceditor       Open file in built-in text editor");
     println!("  resetcg             Reset config to defaults (with backup option)");  
     println!("  restorecg           Restore config from backup");              
-    println!("  gencg               Create ntconfig.toml template (commented, for manual editing)");
-    println!("  gencg --all         Export current settings to ntconfig.toml (active config)");
+    println!("  local init          Create ntconfig.toml template (commented, for manual editing)");
+    println!("  local init --all    Export current settings to ntconfig.toml (active config)");
+    println!("  local deinit        Remove ntconfig.toml from current directory");
+    println!("  local help          Show local command usage");
     println!("  watch ON|OFF        Enable/disable file watcher");
     println!("  watch trigger <a>   Auto-run alias when watcher fires");
     println!("  watch trigger off   Disable auto-run");
+
+    println!();
+    println!("{}", "THEME COMMANDS:".cyan().bold());
+    println!("  theme                   Interactive theme manager (menu)");
+    println!("  theme list              List all available themes");
+    println!("  theme current           Show current theme name and details");
+    println!("  theme <name>            Switch to a theme by name");
+    println!("  theme add <name>        Create a new theme (opens in editor)");
+    println!("  theme rm <name>         Remove a theme");
+    println!("  theme edit <name>       Edit a theme in the built-in editor");
+    println!("  theme info <name>       Show theme metadata and color counts");
+    println!("  theme export <name>     Export theme to .ntc_theme file");
+    println!("  theme import <file>     Import theme from .ntc_theme file");
+    println!("  theme rnm <old> to <new>  Rename a theme");
+    println!("  theme reload            Reload themes from disk");
 
     println!();
     println!("{}", "TELEPORT COMMANDS:".cyan().bold());
@@ -47,7 +65,18 @@ pub(super) fn print_interactive_help() {
     println!("  tp list             List all teleport points");
     println!("  tp rm <name>        Remove teleport point");
     println!("  @<name>             Quick teleport shortcut");
+    println!("  tpb                 - Teleport back to previous location (undo tp)");
+    println!("  tpb history         - Show teleport navigation history");
+    println!("  tpb clear           - Clear teleport history");
 
+    println!();
+    println!("{}", "RAN / TASK RUNNER COMMANDS:".cyan().bold());
+    println!("  ran                        Run the 'standalone' target (default)");
+    println!("  ran <target>               Run a specific target from NTCRANFILE.toml");
+    println!("  ran init                   Create a NTCRANFILE.toml template");
+    println!("  ran deinit                 Remove NTCRANFILE.toml");
+    println!("  ran list                   List all targets in NTCRANFILE.toml");
+    println!("  ran help                   Show ran usage");
     println!();
     println!("{}", "RUN ALIAS COMMANDS:".cyan().bold());
     println!("  ral add <name> \"<command>\"         Create alias");
@@ -120,6 +149,7 @@ pub(super) fn print_interactive_help() {
     println!();
     println!();
     println!("{}", "SEARCH COMMANDS:".cyan().bold());
+    println!("  gs <pattern> [-d <n>]   Search file contents (simple grep)");
     println!("  fs <pattern> [-d <n>]   Search files by name (fuzzy fallback)");
     println!("  ds <pattern> [-d <n>]   Search directories by name");
     println!("  locate <pattern> [-d <n>]  Search both files and directories");
@@ -145,11 +175,27 @@ pub(super) fn print_interactive_help() {
 
     println!();
     println!("{}", "OTHER COMMANDS:".cyan().bold());
+    println!("  init [--ran|--local] Initialize project files (NTCRANFILE.toml + ntconfig.toml)");
+    println!("  deinit [--ran|--local] Remove project files");
     println!("  clear               Clear screen");
     println!("  version             Show version");
     println!("  where               Show locations");
     println!("  help                Show this help");
+    println!("  tutorial            Start the interactive step-by-step tutorial");
+    println!("  ui                  - Show current UI mode");
+    println!("  ui modern|classic   - Switch between modern and classic UI");
     println!("  exit, quit          Exit ntc");
+    println!();
+    println!("{}", "FILE OPERATIONS:".cyan().bold());
+    println!("  mkf <file>          Create a new file");
+    println!("  mkd <dir>           Create a new directory");
+    println!("  rmf <file>          Delete a file (with confirmation)");
+    println!("  rmd <dir>           Delete a directory (with confirmation)");
+    println!("  cp <src> <dst>      Copy a file");
+    println!();
+    println!("{}", "DINOSAUR GAME:".cyan().bold());
+    println!("  dino                Play Chrome-style dinosaur runner game");
+    println!("  Space/Up            Jump to avoid obstacles");
     println!();
     println!("{}", "MATH COMMANDS:".cyan().bold());
     println!("  math <expr>         Evaluate a math expression");
@@ -182,5 +228,8 @@ pub(super) fn print_tp_help() {
     println!("  tp rnm <old> to <new>  Rename savepoint");
     println!("  tp cls             Clear ALL savepoints");
     println!("  @<name>            Quick teleport shortcut");
+    println!("  tpb                 - Teleport back (undo last teleport)");
+    println!("  tpb history         - Show navigation stack");
+    println!("  tpb clear           - Clear navigation stack");
     println!();
 }

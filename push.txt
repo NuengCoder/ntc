@@ -1,31 +1,30 @@
-# Release workflow for ntc v2.0.0
+# Release workflow for ntc v2.2.0
 # =================================
 
 ## 1. Build binaries for all platforms
-cargo build --release
-cargo build --target x86_64-unknown-linux-gnu --release
+cargo build --release (linux and windows)
 cargo ndk --target aarch64-linux-android build --release
 
 ## 2. Package archives
-tar -czvf ntc-v2.0.0-linux-x86_64.tar.gz -C target/x86_64-unknown-linux-gnu/release ntc
-tar -czvf ntc-v2.0.0-aarch64-linux-android.tar.gz -C target/aarch64-linux-android/release ntc
+tar -czvf ntc-v2.2.0-linux-x86_64.tar.gz -C target/release ntc
+tar -czvf ntc-v2.2.0-aarch64-linux-android.tar.gz -C target/aarch64-linux-android/release ntc
 # Windows zip (using 7z or similar):
-# 7z a ntc-v2.0.0-windows-x86_64.zip .\target\release\ntc.exe
+ntc-v2.2.0-windows-x86_64.zip .\target\release\ntc.exe
 
 ## 3. Build .deb package
 cargo deb
-# Output: target/debian/ntc_2.0.0-1_amd64.deb
+# Output: target/debian/ntc_2.2.0-1_amd64.deb
 
 ## 4. Compute SHA256 hashes
-# Windows: certutil -hashfile ntc-v2.0.0-windows-x86_64.zip SHA256
-# Linux:   sha256sum ntc-v2.0.0-linux-x86_64.tar.gz
-# Android: sha256sum ntc-v2.0.0-aarch64-linux-android.tar.gz
-# Source:  sha256sum v2.0.0.tar.gz  (or download from GitHub)
+# Windows: certutil -hashfile ntc-v2.2.0-windows-x86_64.zip SHA256
+# Linux:   sha256sum ntc-v2.2.0-linux-x86_64.tar.gz
+# Android: sha256sum ntc-v2.2.0-aarch64-linux-android.tar.gz
+# Source:  sha256sum v2.2.0.tar.gz  (or download from GitHub)
 
 ## 5. Tag and push
 git add .
-git commit -m "version 2.0.0"
-git tag v2.0.0
+git commit -m "version 2.2.0"
+git tag v2.2.0
 git push origin main --tags
 
 ## 6. Create GitHub Release
@@ -37,7 +36,7 @@ git push origin main --tags
 
 ## 8. Submit PRs
 # Winget:  fork https://github.com/microsoft/winget-pkgs
-#          copy manifests/n/NuengCoder/ntc/2.0.0/ (from packaging/winget/)
+#          copy manifests/n/NuengCoder/ntc/2.2.0/ (from packaging/winget/)
 #          submit PR
 #
 # Termux:  fork https://github.com/termux/termux-packages

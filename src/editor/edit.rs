@@ -53,21 +53,20 @@ impl Editor {
         // Sort: for mutations, process bottom-to-top so earlier inserts don't
         // shift positions for later cursors.
         if reverse {
-            slots.sort_by(|a, b| (b.1.y, b.1.byte).cmp(&(a.1.y, a.1.byte)));
+            slots.sort_by_key(|b| std::cmp::Reverse((b.1.y, b.1.byte)));
         } else {
-            slots.sort_by(|a, b| (a.1.y, a.1.byte).cmp(&(b.1.y, b.1.byte)));
+            slots.sort_by_key(|a| (a.1.y, a.1.byte));
         }
 
-        let len = slots.len();
-        for i in 0..len {
-            let (_, cp) = slots[i];
+        for slot in slots.iter_mut() {
+            let (_, cp) = slot;
             self.cursor_y = cp.y;
             self.cursor_byte = cp.byte;
             self.selection_anchor = cp.anchor;
 
             f(self);
 
-            slots[i].1 = CursorPos {
+            slot.1 = CursorPos {
                 y: self.cursor_y,
                 byte: self.cursor_byte,
                 anchor: self.selection_anchor,

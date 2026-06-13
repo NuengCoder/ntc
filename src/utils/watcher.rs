@@ -189,7 +189,7 @@ impl WatcherHandle {
         let events = enrich_and_dedup(raw);
 
         // Read trigger alias from config at poll time (cheap read-lock).
-        let trigger_alias = Config::global().read().unwrap()
+        let trigger_alias = Config::read_global()
             .watch_trigger_alias
             .clone();
 
@@ -310,11 +310,6 @@ fn enrich_and_dedup(raw: Vec<PendingEvent>) -> Vec<WatchEvent> {
             name: ev.name,
             file_type,
         });
-
-        if out.len() >= MAX_DISPLAY_EVENTS + 1 {
-            // Keep collecting for the count, but stop enriching.
-            break;
-        }
     }
 
     out
@@ -325,6 +320,10 @@ fn enrich_and_dedup(raw: Vec<PendingEvent>) -> Vec<WatchEvent> {
 // ─────────────────────────────────────────────────────────────────────────────
 
 fn classify_file_type(path: &Path) -> String {
+    if !path.exists() {
+        return "Unknown".to_string();
+    }
+
     // Directory check first
     if path.is_dir() || path.extension().is_none() && !path.is_file() {
         return "directory".to_string();

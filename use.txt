@@ -1,5 +1,5 @@
 # NTC - Navigate, Tree, Cat
-## Version 2.1.0 - Complete User Guide
+## Version 2.2.0 - Complete User Guide
 
 NTC is a command-line tool that combines directory navigation, tree viewing, file concatenation, backup/restore, fuzzy search, built-in text editor, syntax highlighting, math expression evaluator, and a dinosaur runner game. It works on Windows, Linux/WSL, macOS, and Termux (Android).
 
@@ -12,22 +12,22 @@ NTC is a command-line tool that combines directory navigation, tree viewing, fil
 - Or install via winget: `winget install NuengCoder.ntc`
 
 ### Linux (Ubuntu/Debian)
-- Download `ntc_2.0.0-1_amd64.deb`
-- Run: `sudo dpkg -i ntc_2.0.0-1_amd64.deb`
+- Download `ntc_2.2.0-1_amd64.deb`
+- Run: `sudo dpkg -i ntc_2.2.0-1_amd64.deb`
 
 ### Linux (Other distributions)
-- Download `ntc-v2.0.0-linux-x86_64.tar.gz`
-- Extract: `tar -xzvf ntc-v2.0.0-linux-x86_64.tar.gz`
+- Download `ntc-v2.2.0-linux-x86_64.tar.gz`
+- Extract: `tar -xzvf ntc-v2.2.0-linux-x86_64.tar.gz`
 - Copy to PATH: `sudo mv ntc /usr/local/bin/`
 
 ### macOS (Intel & Apple Silicon)
-- Download `ntc-v2.0.0-macos-universal.tar.gz`
-- Extract: `tar -xzvf ntc-v2.0.0-macos-universal.tar.gz`
+- Download `ntc-v2.2.0-macos-universal.tar.gz`
+- Extract: `tar -xzvf ntc-v2.2.0-macos-universal.tar.gz`
 - Copy to PATH: `sudo mv ntc /usr/local/bin/`
 
 ### Termux (Android)
-- Download `ntc-v2.0.0-aarch64-linux-android.tar.gz`
-- Extract: `tar -xzvf ntc-v2.0.0-aarch64-linux-android.tar.gz`
+- Download `ntc-v2.2.0-aarch64-linux-android.tar.gz`
+- Extract: `tar -xzvf ntc-v2.2.0-aarch64-linux-android.tar.gz`
 - Copy: `cp ntc $PREFIX/bin/`
 - `chmod +x $PREFIX/bin/ntc`
 
@@ -44,6 +44,10 @@ Run a single command and exit:
   ntc -i . -f docx -o report.docx
   ntc -i . -f xlsx
   ntc --help
+  ntc --math "3+4*5"
+  ntc --dino
+  ntc --generate-completions bash
+  ntc --lsp
 
 ### Mode 2: Interactive Shell
 Launch the interactive shell and run multiple commands:
@@ -71,6 +75,7 @@ Launch the interactive shell and run multiple commands:
   view --depth <n>   - Same as -d
   view -s -d <n>     - Show tree with sizes and custom depth
   size               - Show total size of current directory
+  size --care        - Calculate total directory size including ignored dirs
 
 ## BACKUP & RESTORE
 
@@ -96,6 +101,57 @@ Launch the interactive shell and run multiple commands:
 ### Backup storage:
   Backups are stored in: ~/.ntc/backups/<project_hash>/bkup_<n>/
   Each backup includes an ignore.txt file listing skipped files and reasons.
+
+## TASK RUNNER (ran)
+
+ntc includes a built-in Make-like task runner using `NTCRANFILE.toml`:
+
+### Creating a ranfile:
+  ran init                   - Create NTCRANFILE.toml template
+  ran init --all             - Create with sample targets
+
+### Running targets:
+  ran <target>               - Execute target with dependency resolution
+  ran build                  # Run build target (auto-runs dependencies first)
+  ran test                   # Run test target
+
+### Managing targets:
+  ran list                   - List all targets with dependency chains
+  ran ls                     - Same as list
+  ran help                   - Show ranfile syntax and examples
+  ran deinit                 - Remove NTCRANFILE.toml
+
+### NTCRANFILE.toml format:
+  [vars]
+  CC = "gcc"
+  FLAGS = "-Wall -O2"
+
+  [targets.build]
+  deps = ["clean"]
+  cmd = "{{CC}} {{FLAGS}} -o program main.c"
+
+  [targets.test]
+  deps = ["build"]
+  cmd = "./program --test"
+
+  [targets.clean]
+  cmd = "rm -f *.o program"
+
+### Features:
+  - Topological sort: dependencies run before their dependents
+  - Cycle detection: circular dependencies are rejected
+  - Variable expansion: `$(VAR_NAME)` or `{{VAR_NAME}}` syntax
+  - Commands go through ntc's alias expansion system
+  - Integrated with top-level `init`/`deinit` commands
+
+### Top-level project initialization:
+  init                       - Create both NTCRANFILE.toml + ntconfig.toml
+  init --ran                 - Create only NTCRANFILE.toml
+  init --local               - Create only ntconfig.toml
+  init --all                 - Create both with sample content
+  deinit                     - Remove project files (asks per file)
+  deinit --ran               - Remove only NTCRANFILE.toml
+  deinit --local             - Remove only ntconfig.toml
 
 ## FILE & DIRECTORY SEARCH
 
@@ -125,11 +181,30 @@ Launch the interactive shell and run multiple commands:
   fsc <pattern>              - Search files, select one, display its contents
   fsc <pattern> -d <n>       - Search with custom depth
 
+### Wildcard / Glob Search:
+  fs, ds, fsc, fgo, and locate also support wildcard patterns:
+  - `*` or `%` — matches any sequence of characters (including empty)
+  - `_` — matches any single character
+  - `$` — anchors the pattern to the end of the name
+  - Examples:
+    fs *.rs                        # All Rust files
+    fs main_*                      # Files starting with "main_"
+    ds src$                        # Directories ending with "src"
+  - When wildcards are detected, exact/partial/fuzzy matching is bypassed
+
+### Grep content search (gs):
+  gs <pattern>               - Search file contents (case-insensitive substring match)
+  gs <pattern> -d <n>        - Search with custom depth
+  gs "TODO"                  # Find all files containing "TODO"
+  gs "fn main"               # Find Rust main functions
+  Results show: file path, line number, and matching line content
+
 ### How search works:
-  1. Exact matches (full filename equality, case-insensitive)
-  2. Partial matches (filename contains the pattern)
-  3. Fuzzy matches (Jaro-Winkler similarity >=75% for files, >=72% for directories)
-  4. Shows top 3 fuzzy suggestions when no exact or partial match found
+  1. Wildcard patterns: `*`, `%`, `_`, `$` — glob-style matching
+  2. Exact matches (full filename equality, case-insensitive)
+  3. Partial matches (filename contains the pattern)
+  4. Fuzzy matches (Jaro-Winkler similarity >=75% for files, >=72% for directories)
+  5. Shows top 3 fuzzy suggestions when no exact or partial match found
 
 ## GENERATING REPORTS
 
@@ -181,17 +256,29 @@ ntc includes a full-featured built-in text editor for editing files directly fro
   ntceditor <file>             - Same as ne
 
 ### Editor features:
-  - Multiple open files (buffers) with sidebar navigation
-  - Undo/redo with unlimited history
-  - Mouse support (click to position cursor, scroll)
-  - Line numbers and gutter
-  - Syntax highlighting for multiple languages
-  - Clipboard operations (cut, copy, paste)
-  - Word wrap and horizontal scrolling
-  - Auto-indentation and bracket pairing
-  - Multiple cursors and selection modes
-  - Search within file
-  - Configurable tab width and color theme
+  - **Multi-tab editing** with tab bar, tab switching (Ctrl+PgUp/PgDn), and buffer stack (Ctrl+Tab)
+  - **Tab close buttons** (✕) — click any tab's ✕ to close it; closing the last tab creates a scratch buffer
+  - **Sidebar** file explorer (Ctrl+B) with expand/collapse folders and directory icons (▶/▼)
+  - **Sidebar vertical scroll bar** — `█`/`░` thumb/track with click-to-jump and mouse wheel support
+  - **Multi-cursor editing** — Ctrl+D to add cursor at next occurrence, Ctrl+G to jump through matches
+  - **Undo/redo** with unlimited history
+  - **Mouse support** (click to position cursor, scroll, drag scroll bars)
+  - **Line numbers** and gutter with configurable width
+  - **Syntax highlighting** for 45+ languages including Inno Setup (.iss) and lock files (.lock)
+  - **Clipboard operations** (cut, copy, paste) with multi-line support
+  - **Word wrap** and horizontal scrolling
+  - **Auto-indentation** and bracket pairing
+  - **Search within file** (Ctrl+F) with next/previous navigation
+  - **`:gs <pattern>`** in command mode — grep file contents across project
+  - **`:run <command>`** — execute shell commands with live streaming output in split panel
+  - **`:gosc`** in command mode — continuous subdirectory navigation within editor
+  - **File finder** (Ctrl+P / Ctrl+T) — fuzzy search files across project and open in new tab
+  - **Command mode** (`:q`, `:w`, `:wq`, `:q!`) for quit/save operations
+  - **Crash recovery** — periodic SHA-256 hashed snapshots with auto-recovery prompt
+  - **Persistent sessions** — cursor, scroll, buffer stack restored on re-entry
+  - **Auto-completion** for .ntc.math files (functions, constants, keywords)
+  - **Configurable** tab width, color theme, auto-save, syntax toggle (editor.toml)
+  - **Template creation** — `ne --init file.rs` creates file from template by extension
 
 ### Editor key bindings:
 
@@ -228,6 +315,10 @@ ntc includes a full-featured built-in text editor for editing files directly fro
   Ctrl+W                        - Close buffer
   Ctrl+Tab                      - Switch to next buffer
   Ctrl+Shift+Tab                - Switch to previous buffer
+  Ctrl+B                        - Toggle sidebar
+  Ctrl+P / Ctrl+T               - File finder (fuzzy search files)
+  Ctrl+D                        - Add cursor at next occurrence
+  Ctrl+Q                        - Close tab (with scratch auto-open)
 
 #### Editor commands:
   :q                            - Quit editor
@@ -264,7 +355,23 @@ ntc includes a full-featured built-in text editor for editing files directly fro
   tp rm <name>                     - Remove a savepoint
   tp rm <number>                   - Remove by number
   tp cls                           - Clear ALL savepoints (asks confirmation)
-  tp                               - Interactive menu
+  tp info <name>                   - Show savepoint details
+  tp rnm <old> to <new>            - Rename a savepoint
+  tp help                          - Show teleport help
+
+## TELEPORT BACK (tpb)
+
+   tpb                  - Teleport back to previous location (undo last tp)
+   tpb history          - Show teleport navigation history
+   tpb clear            - Clear teleport history
+
+### Example workflow:
+   pwd                  # /home/user/desktop
+   tp add ntc           # Save current location as 'ntc'
+   tp jump ntc          # Teleport to /home/user/desktop/ntcli/ntc
+   tpb                  # Teleport back to /home/user/desktop
+   tpb                  # Teleport forward again? No, history is a stack
+   tp history           # Shows: 1. /home/user/desktop                             - Interactive menu
 
 ## RUN ALIASES (Custom Commands)
 
@@ -272,7 +379,7 @@ ntc includes a full-featured built-in text editor for editing files directly fro
   ral add <name> "<command>"       - Create new alias
   ral add <name>(x) "<cmd $x>"     - Create parameterised alias (single arg)
   ral add <name>(x,y) "<cmd $x $y>" - Create parameterised alias (multiple args)
-  
+
   Example: ral add ll "ls -la"
   Example: ral add py "python test.py"
   Example: ral add runc(x,y) "gcc -o $y $x.c && ./$y"
@@ -310,6 +417,7 @@ ntc includes a full-featured built-in text editor for editing files directly fro
   setD                             - Show max depth
   setL                             - Show line number setting
   setC                             - Show color setting
+  setA                             - Show autosuggest (ghost text) setting
   setT                             - Show thread count
   setH                             - Show history setting
 
@@ -318,11 +426,14 @@ ntc includes a full-featured built-in text editor for editing files directly fro
   setD <number>                    - Set max tree depth (1-20)
   setL ON|OFF                      - Enable/disable line numbers
   setC ON|OFF                      - Enable/disable color output
+  setA ON|OFF                      - Enable/disable autosuggest ghost text
   setT <number>                    - Set thread count (1-64)
   setH ON|OFF                      - Enable/disable command history
   setH <path>                      - Set custom history file path
   setH default                     - Reset history to default
   watch ON|OFF                     - Enable/disable file watcher
+  watch trigger <alias>            - Set alias to auto-run on file change
+  watch trigger off                - Disable trigger alias
 
 ### Config file management:
   opencg                           - Open config.toml (external editor, fallback to built-in)
@@ -333,6 +444,81 @@ ntc includes a full-featured built-in text editor for editing files directly fro
 
 ### Where things are stored:
   where                            - Show executable and config file locations
+
+## THEME MANAGEMENT
+
+ntc includes a fully customizable theme system with 61 configurable colors:
+
+### Theme commands:
+  theme                      - Interactive theme manager (numbered menu)
+  theme list                 - List all available themes
+  theme current              - Show current theme name and author
+  theme <name>               - Switch to a theme
+  theme add <name>           - Create a new theme (opens in editor)
+  theme rm <name>            - Remove a custom theme
+  theme edit <name>          - Edit a theme in the editor
+  theme info <name>          - Show theme metadata and color counts
+  theme export <name>        - Export theme to <name>.ntc_theme file
+  theme import <file>        - Import theme from .ntc_theme file
+  theme rnm <old> to <new>   - Rename a theme
+  theme reload               - Reload all themes from disk
+
+### What can be themed:
+  Syntax (15 colors):        keyword, string, comment, number, type, builtin,
+                             function, operator, punctuation, attribute,
+                             macro_token, regex, tag, constant, normal
+  Shell UI (20 colors):      prompt_bracket, prompt_path, prompt_watcher,
+                             prompt_arrow, success, error, warning, info,
+                             tree_branch, tree_dir, tree_file, tree_ignored,
+                             tree_size, command_output, separator,
+                             help_header, help_section, help_example,
+                             teleport_name, alias_name, alias_command
+  Editor UI (26 colors):     editor_bg, gutter_bg, status_bg, hint_bg,
+                             sidebar_bg, sidebar_selected_bg, run_panel_bg,
+                             gutter_text, status_text, status_modified, hint_text,
+                             cursor_bg, cursor_text, extra_cursor_bg,
+                             selection_bg, search_match_bg, search_current_bg,
+                             border, scrollbar, scrollbar_thumb,
+                             sidebar_dir, sidebar_file, sidebar_current,
+                             sidebar_selected, run_header_fg, run_output_fg
+
+### Built-in themes:
+  - `default` (dark theme)
+  - `light` (light theme)
+  - `example` (template with all colors documented)
+
+### Color format:
+  - Named: black, red, green, yellow, blue, magenta, cyan, white,
+           bright_black, bright_red, bright_green, bright_yellow,
+           bright_blue, bright_magenta, bright_cyan, bright_white
+  - RGB:   { r = 255, g = 128, b = 0 }
+  - ANSI:  { code = 196 }
+
+### Storage:
+  Themes stored as `.ntc_theme` files in `{config_dir}/ntc/themes/`
+  Current theme selection in `{config_dir}/ntc/theme.toml`
+
+## UI MODES
+
+ntc supports two UI styles:
+
+### Classic Mode (default)
+Traditional shell interface with minimal formatting.
+
+### Modern Mode
+Modern boxed interface with:
+- Clean box layout with borders
+- Git branch integration (shows current branch)
+- Visual separation between input and output
+- Status indicators and color-coded messages
+- Scrollable output area
+
+Switch between modes:
+  ui classic    - Use traditional interface
+  ui modern     - Use modern boxed interface
+  ui            - Show current mode
+
+Note: You need to restart ntc after changing UI mode.
 
 ### Config file locations:
   Windows: C:\Users\<user>\AppData\Roaming\ntc\config.toml
@@ -364,10 +550,10 @@ Place an `ntconfig.toml` file in any directory to override settings for that pro
   # In project directory
   ntc [project]> ignore build
   ✓ Now ignoring directory: build (local config)
-  
+
   ntc [project]> ral add test "cargo test"
   ✓ Alias 'test' -> 'cargo test' (local config)
-  
+
   ntc [project]> cd ..
   # Global settings restored
 
@@ -394,6 +580,14 @@ Place an `ntconfig.toml` file in any directory to override settings for that pro
   igcare import <file.ntc.igcare>  - Import settings from .ntc.igcare file
 
 Note: Commands automatically save to ntconfig.toml if present, otherwise to global config.
+
+## FILE WATCHER
+
+  watch ON|OFF                       - Enable/disable file watcher
+  watch trigger <alias>              - Set alias to auto-run on file change
+  watch trigger off                  - Disable trigger alias
+
+Features: Debounced event batching (400ms), ignore-aware, filetype-aware event classification.
 
 ## PIPING COMMANDS (Interactive Mode)
 
@@ -487,6 +681,40 @@ Play a Chrome-style dinosaur runner game right in your terminal.
   - Restart prompt on game over
   - Full terminal rendering with obstacles
 
+## LSP SERVER (for .ntc.math files)
+
+  ntc --lsp                         - Start ntc-math LSP server over stdio
+  ntc --lsp-log <path>              - Start with debug logging
+
+Features: Diagnostics (syntax errors with position), completions (functions, constants, user-defined), hover documentation, go-to-definition for user-defined functions.
+
+## SHELL COMPLETIONS
+
+  ntc --generate-completions bash        - Generate bash completions
+  ntc --generate-completions zsh         - Generate zsh completions
+  ntc --generate-completions fish        - Generate fish completions
+  ntc --generate-completions powershell  - Generate PowerShell completions
+
+## ADDITIONAL CLI FLAGS
+
+  --say <text> / --print <text>   - Print text to stdout
+  --size                          - Show current directory size
+  --view                          - Quick view of current directory tree
+  --view --size                   - Quick view with directory sizes
+  --clear                         - Clear the terminal screen
+  --version                       - Show version information
+  --where                         - Show ntc executable and config location
+  --list / --fun                  - List all command-line functions
+  --help                          - Show detailed help
+  --math <EXPR>                   - Evaluate a math expression (e.g., --math "3+4*5")
+  --dino                          - Play dinosaur runner game
+  --edit <file>                   - Open file in built-in text editor
+  --init <file>                   - Create starter file from template and open in editor
+  --tp-add <name>                 - Save current directory as teleport point
+  --tp-list                       - List all teleport points
+  --tp-rm <name>                  - Remove teleport point
+  ntc @<name>                     - Launch and teleport to savepoint
+
 ## SYNTAX HIGHLIGHTING
 
 The interactive shell and built-in editor support syntax highlighting for:
@@ -502,6 +730,8 @@ The interactive shell and built-in editor support syntax highlighting for:
   - Go (.go)
   - Ruby (.rb)
   - PHP (.php)
+  - Inno Setup (.iss) — Pascal keywords, sections, preprocessor, properties
+  - Lock files (.lock) — TOML-like headers, key=value, # comments
   - SQL (.sql)
   - And many more
 
@@ -577,6 +807,36 @@ The interactive shell and built-in editor support syntax highlighting for:
   resetcg                          # Reset with backup option
   restorecg                        # Restore from backup if needed
 
+### Example 11: Theme management
+  ntc
+  theme list                       # Show all themes
+  theme default                    # Switch to default theme
+  theme add mydark                 # Create a new theme in editor
+  theme export mydark              # Export to mydark.ntc_theme
+
+### Example 12: Task runner
+  ntc
+  ran init                         # Create NTCRANFILE.toml
+  ran build                        # Run build target
+  ran list                         # Show all targets
+
+### Example 13: Math expressions
+  ntc
+  math 3+4*5                       # → 23
+  math sin(PI/2)                   # → 1
+  math fun add square(x) = x^2
+  math square(12)                  # → 144
+
+### Example 14: Dinosaur game
+  ntc
+  dino                             # Press space to jump
+
+### Example 15: Wildcard search
+  ntc
+  fs *.rs                          # All Rust files
+  ds src$                          # Dirs ending with "src"
+  gs "TODO"                        # Grep for TODO comments
+
 ## REPORT STATISTICS INCLUDED
   - Total files and directories
   - Total size (bytes and human-readable)
@@ -608,6 +868,8 @@ The interactive shell and built-in editor support syntax highlighting for:
 20. Use PDF/DOCX/XLSX for professional report distribution
 21. Use ntconfig.toml for project-specific settings
 22. Back up your config with resetcg before major changes
+23. Use `theme export` to share custom themes across machines
+24. Use `gs` to quickly find where a function or variable is used across the project
 
 ## TROUBLESHOOTING
 
@@ -669,6 +931,7 @@ The interactive shell and built-in editor support syntax highlighting for:
 | Combined search | locate pattern |
 | Search + navigate | fgo pattern |
 | Search + display | fsc pattern |
+| Grep content | gs pattern |
 | Open built-in editor | ne file |
 | Create file from template | ne --init file.rs |
 | Text report | txt |
@@ -694,14 +957,25 @@ The interactive shell and built-in editor support syntax highlighting for:
 | Run alias | name |
 | Show config | showcg |
 | Open config file | opencg |
-| Toggle color | setc ON/OFF |
+| Toggle color | setC ON/OFF |
+| Toggle autosuggest | setA ON/OFF |
 | Reset config | resetcg |
 | Create local config | gencg |
 | Show locations | where |
+| Init project | init |
+| Deinit project | deinit |
+| Task runner | ran <target> |
+| List task targets | ran list |
+| Theme list | theme list |
+| Switch theme | theme default |
+| File watcher | watch ON/OFF |
+| Watch trigger | watch trigger <alias> |
+| LSP server | ntc --lsp |
+| Shell completions | ntc --generate-completions bash |
 | Exit | exit |
 
 ## SUPPORTED FILE EXTENSIONS (Default)
-  txt, md, rs, py, c, cpp, js, html, css, json, toml, yaml, xml, sh, java, go, rb, php, sql, ts, tsx, jsx, swift, kt, scala, dart, r, lua, hs, ex, exs, zig, nim, ntc.ral, ntc.igcare, ntc.math, and many more
+  txt, md, rs, py, c, cpp, js, html, css, json, toml, yaml, xml, sh, java, go, rb, php, sql, ts, tsx, jsx, swift, kt, scala, dart, r, lua, hs, ex, exs, zig, nim, iss, lock, ntc.ral, ntc.igcare, ntc.math, and many more
 
 ## PLATFORM DIFFERENCES
 
@@ -739,6 +1013,7 @@ The interactive shell and built-in editor support syntax highlighting for:
   - Syntax highlighting
 
 ## VERSION HISTORY
+  v2.2.0 - ntcEditor tab close buttons (✕), scratch auto-open, Inno Setup (.iss) syntax highlighting, lock file (.lock) syntax highlighting, sidebar vertical scroll bar, top-level init/deinit commands, fs/ds/locate wildcard patterns (*, %, _, $), gs grep content search, ran task runner, theme system (61 colors, 3 built-in themes, export/import), tpb teleport back, setA autosuggest toggle, setC color toggle, ral/igcare export/import, size --care, ne --init, watch trigger, shell completions, LSP server, shell refactored into modular commands, X close button click detection fix
   v2.1.0 - Math expression evaluator (built-in functions, constants, user functions, print(), .ntc.math script files), Dinosaur runner game (dino), RAL export/import (.ntc.ral), IGCARE export/import (.ntc.igcare), ntcEditor in-editor auto-completion for .ntc.math, LSP server for .ntc.math, NtcMath syntax highlighting with dedicated Constant token type
   v1.9.0 - Internal refactoring and library export support
   v1.8.0 - Backup & restore system (bkup, pldw, unpd), fuzzy file/directory search (fs, ds), view flags (-s, -d), go to / cd to teleport, RAL multiple arguments, 50MB file limit, ignore.txt generation, atomic backups, full undo support, Termux compatibility

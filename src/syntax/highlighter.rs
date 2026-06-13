@@ -2,6 +2,7 @@ use crate::syntax::types::{Token, TokenType, SyntaxLanguage};
 use crate::syntax::language::{
     is_ident_start, is_ident_continue, line_comment_prefix,
     has_block_comments, has_xml_comments, has_ps_block_comments,
+    has_pascal_comments, has_preprocessor,
     is_char_literal_supported, has_regex_literals, has_tag_syntax,
     is_rust_attr_start, has_annotation_at, has_css_at_rules,
     is_css_at_rule, is_css_property, is_keyword, is_type_name,
@@ -10,11 +11,14 @@ use crate::syntax::language::{
 };
 use super::types::detect_language;
 
+#[derive(Clone)]
 pub struct SyntaxHighlighter {
     pub language: Option<SyntaxLanguage>,
     in_block_comment: bool,
     in_xml_comment: bool,
     in_ps_comment: bool,
+    in_pascal_brace_comment: bool,
+    in_pascal_paren_comment: bool,
     in_regex: bool,
     token_cache: Vec<Option<Vec<Token>>>,
 }
@@ -27,6 +31,8 @@ impl SyntaxHighlighter {
             in_block_comment: false,
             in_xml_comment: false,
             in_ps_comment: false,
+            in_pascal_brace_comment: false,
+            in_pascal_paren_comment: false,
             in_regex: false,
             token_cache: Vec::new(),
         }
@@ -37,6 +43,8 @@ impl SyntaxHighlighter {
         self.in_block_comment = false;
         self.in_xml_comment = false;
         self.in_ps_comment = false;
+        self.in_pascal_brace_comment = false;
+        self.in_pascal_paren_comment = false;
         self.in_regex = false;
         self.token_cache.clear();
     }
@@ -58,12 +66,16 @@ impl SyntaxHighlighter {
         self.in_block_comment = false;
         self.in_xml_comment = false;
         self.in_ps_comment = false;
+        self.in_pascal_brace_comment = false;
+        self.in_pascal_paren_comment = false;
         self.in_regex = false;
     }
 
     pub fn insert_line(&mut self, idx: usize) {
         if idx < self.token_cache.len() {
             self.token_cache.insert(idx, None);
+        } else if idx == self.token_cache.len() {
+            self.token_cache.push(None);
         }
     }
 
@@ -107,8 +119,15 @@ impl SyntaxHighlighter {
 
         let bytes = line.as_bytes();
         let len = bytes.len();
-        let mut tokens: Vec<Token> = Vec::new();
+        let mut tokens: Vec<Token> = Vec::with_capacity(line.len() / 4 + 4);
         let mut i = 0;
+
+        let lc_prefix = line_comment_prefix(lang);
+        let md_first_non_ws = if matches!(lang, SyntaxLanguage::Markdown) {
+            bytes.iter().position(|b| !b.is_ascii_whitespace())
+        } else {
+            None
+        };
 
         if self.in_xml_comment && has_xml_comments(lang) {
             let start = 0;
@@ -185,13 +204,62 @@ impl SyntaxHighlighter {
             }
         }
 
+        if self.in_pascal_brace_comment && has_pascal_comments(lang) {
+            let start = 0;
+            while i < len {
+                if bytes[i] == b'}' {
+                    tokens.push(Token {
+                        start,
+                        end: i + 1,
+                        token_type: TokenType::Comment,
+                    });
+                    i += 1;
+                    self.in_pascal_brace_comment = false;
+                    break;
+                }
+                i += 1;
+            }
+            if self.in_pascal_brace_comment {
+                tokens.push(Token {
+                    start,
+                    end: len,
+                    token_type: TokenType::Comment,
+                });
+                return tokens;
+            }
+        }
+
+        if self.in_pascal_paren_comment && has_pascal_comments(lang) {
+            let start = 0;
+            while i + 1 < len {
+                if bytes[i] == b'*' && bytes[i + 1] == b')' {
+                    tokens.push(Token {
+                        start,
+                        end: i + 2,
+                        token_type: TokenType::Comment,
+                    });
+                    i += 2;
+                    self.in_pascal_paren_comment = false;
+                    break;
+                }
+                i += 1;
+            }
+            if self.in_pascal_paren_comment {
+                tokens.push(Token {
+                    start,
+                    end: len,
+                    token_type: TokenType::Comment,
+                });
+                return tokens;
+            }
+        }
+
         while i < len {
             if bytes[i].is_ascii_whitespace() {
                 i += 1;
                 continue;
             }
 
-            let lc_prefix = line_comment_prefix(lang);
             if !lc_prefix.is_empty()
                 && i + lc_prefix.len() <= len
                 && bytes[i..].starts_with(lc_prefix)
@@ -205,30 +273,22 @@ impl SyntaxHighlighter {
             }
 
             if matches!(lang, SyntaxLanguage::Markdown) {
-                let first_non_ws =
-                    bytes.iter().position(|b| !b.is_ascii_whitespace());
-                if Some(i) == first_non_ws && bytes[i] == b'#' {
-                    tokens.push(Token {
-                        start: i,
-                        end: len,
-                        token_type: TokenType::Keyword,
-                    });
+                if md_first_non_ws == Some(i) && bytes[i] == b'#' {
+                    tokens.push(Token { start: i, end: len, token_type: TokenType::Keyword });
                     return tokens;
                 }
                 if bytes[i] == b'`' {
                     let start = i;
-                    i += 1;
-                    while i < len && bytes[i] != b'`' {
-                        i += 1;
+                    let mut backtick_count = 0;
+                    while i < len && bytes[i] == b'`' { i += 1; backtick_count += 1; }
+                    while i < len {
+                        if bytes[i] == b'`' {
+                            let mut close_count = 0;
+                            while i < len && bytes[i] == b'`' { i += 1; close_count += 1; }
+                            if close_count == backtick_count { break; }
+                        } else { i += 1; }
                     }
-                    if i < len {
-                        i += 1;
-                    }
-                    tokens.push(Token {
-                        start,
-                        end: i,
-                        token_type: TokenType::Builtin,
-                    });
+                    tokens.push(Token { start, end: i, token_type: TokenType::Builtin });
                     continue;
                 }
             }
@@ -332,6 +392,65 @@ impl SyntaxHighlighter {
                     return tokens;
                 }
                 continue;
+            }
+
+            if has_pascal_comments(lang) {
+                if bytes[i] == b'{' {
+                    let start = i;
+                    i += 1;
+                    let mut closed = false;
+                    while i < len {
+                        if bytes[i] == b'}' {
+                            tokens.push(Token {
+                                start,
+                                end: i + 1,
+                                token_type: TokenType::Comment,
+                            });
+                            i += 1;
+                            closed = true;
+                            break;
+                        }
+                        i += 1;
+                    }
+                    if !closed {
+                        tokens.push(Token {
+                            start,
+                            end: len,
+                            token_type: TokenType::Comment,
+                        });
+                        self.in_pascal_brace_comment = true;
+                        return tokens;
+                    }
+                    continue;
+                }
+                if i + 1 < len && bytes[i] == b'(' && bytes[i + 1] == b'*' {
+                    let start = i;
+                    i += 2;
+                    let mut closed = false;
+                    while i + 1 < len {
+                        if bytes[i] == b'*' && bytes[i + 1] == b')' {
+                            tokens.push(Token {
+                                start,
+                                end: i + 2,
+                                token_type: TokenType::Comment,
+                            });
+                            i += 2;
+                            closed = true;
+                            break;
+                        }
+                        i += 1;
+                    }
+                    if !closed {
+                        tokens.push(Token {
+                            start,
+                            end: len,
+                            token_type: TokenType::Comment,
+                        });
+                        self.in_pascal_paren_comment = true;
+                        return tokens;
+                    }
+                    continue;
+                }
             }
 
             if bytes[i] == b'"' {
@@ -478,7 +597,9 @@ impl SyntaxHighlighter {
                 continue;
             }
 
-            if has_regex_literals(lang) && bytes[i] == b'/' && !self.in_regex {
+            if has_regex_literals(lang) && bytes[i] == b'/' && !self.in_regex
+                && (i == 0 || !matches!(bytes[i - 1], b'a'..=b'z' | b'A'..=b'Z' | b'0'..=b'9' | b')' | b']' | b'}' | b'_'))
+            {
                 let start = i;
                 i += 1;
                 let mut escaped = false;
@@ -531,43 +652,38 @@ impl SyntaxHighlighter {
                     {
                         i += 1;
                     }
+                    let mut sub_start = i;
                     while i < len && bytes[i] != b'>' {
                         if bytes[i] == b'{' {
                             let mut brace_depth = 1;
                             i += 1;
                             while i < len && brace_depth > 0 {
-                                if bytes[i] == b'{' {
-                                    brace_depth += 1;
-                                } else if bytes[i] == b'}' {
-                                    brace_depth -= 1;
-                                }
+                                if bytes[i] == b'{' { brace_depth += 1; }
+                                else if bytes[i] == b'}' { brace_depth -= 1; }
                                 i += 1;
                             }
                         } else if bytes[i] == b'"' || bytes[i] == b'\'' {
-                            let quote = bytes[i];
+                            let q = bytes[i];
+                            let qs = i;
                             i += 1;
-                            while i < len && bytes[i] != quote {
-                                if bytes[i] == b'\\' {
-                                    i += 2;
-                                    continue;
-                                }
+                            while i < len && bytes[i] != q {
+                                if bytes[i] == b'\\' { i += 2; continue; }
                                 i += 1;
                             }
-                            if i < len {
-                                i += 1;
+                            if i < len { i += 1; }
+                            if qs > sub_start {
+                                tokens.push(Token { start: sub_start, end: qs, token_type: TokenType::Tag });
                             }
+                            tokens.push(Token { start: qs, end: i, token_type: TokenType::String });
+                            sub_start = i;
                         } else {
                             i += 1;
                         }
                     }
-                    if i < len && bytes[i] == b'>' {
-                        i += 1;
+                    if i < len && bytes[i] == b'>' { i += 1; }
+                    if i > sub_start {
+                        tokens.push(Token { start: sub_start, end: i, token_type: TokenType::Tag });
                     }
-                    tokens.push(Token {
-                        start,
-                        end: i.min(len),
-                        token_type: TokenType::Tag,
-                    });
                     continue;
                 }
                 i = start;
@@ -601,6 +717,20 @@ impl SyntaxHighlighter {
                 continue;
             }
 
+            if has_preprocessor(lang) && bytes[i] == b'#' && i + 1 < len && is_ident_start(bytes[i + 1]) {
+                let start = i;
+                i += 1;
+                while i < len && is_ident_continue(bytes[i]) {
+                    i += 1;
+                }
+                tokens.push(Token {
+                    start,
+                    end: i,
+                    token_type: TokenType::Macro,
+                });
+                continue;
+            }
+
             if is_ident_start(bytes[i]) {
                 let start = i;
                 while i < len && is_ident_continue(bytes[i]) {
@@ -619,11 +749,12 @@ impl SyntaxHighlighter {
                     continue;
                 }
 
+                #[allow(clippy::if_same_then_else)]
                 let tt = if is_keyword(lang, word) {
                     TokenType::Keyword
                 } else if is_type_name(lang, word) {
                     TokenType::Type
-                } else if is_type_name_upper_heuristic(lang) && word.starts_with(|c: char| c.is_uppercase()) && word.len() > 1 {
+                } else if is_type_name_upper_heuristic(lang) && word.starts_with(|c: char| c.is_uppercase()) {
                     TokenType::Type
                 } else if is_constant(lang, word) {
                     TokenType::Constant
@@ -678,17 +809,11 @@ impl SyntaxHighlighter {
 
             let b = bytes[i];
             if b.is_ascii_punctuation() {
-                tokens.push(Token {
-                    start: i,
-                    end: i + 1,
-                    token_type: TokenType::Punctuation,
-                });
+                tokens.push(Token { start: i, end: i + 1, token_type: TokenType::Punctuation });
+            } else if !b.is_ascii() {
+                tokens.push(Token { start: i, end: i + 1, token_type: TokenType::Normal });
             } else {
-                tokens.push(Token {
-                    start: i,
-                    end: i + 1,
-                    token_type: TokenType::Operator,
-                });
+                tokens.push(Token { start: i, end: i + 1, token_type: TokenType::Operator });
             }
             i += 1;
         }

@@ -14,13 +14,40 @@ impl Editor {
     // ── render ───────────────────────────────────────────────────────────────
 
     pub(crate) fn render(&mut self, stdout: &mut std::io::Stdout) -> std::io::Result<()> {
-        let rows = self.term_h.saturating_sub(3); // -3: horizontal scroll bar + status + hint
+        let theme = crate::utils::theme::ThemeManager::current();
+        let is_run = self.mode == Mode::Run;
+        let total_editor_rows = if is_run {
+            self.run_split_row()
+        } else {
+            self.term_h.saturating_sub(3)
+        };
+        let rows = total_editor_rows.saturating_sub(1); // -1 for tab bar
+        let tab_bar_y = 0;
+        let content_y = 1;
+
         let cols = self.term_w;
         let eo = self.editor_offset();
         let editor_cols = cols.saturating_sub(eo);
         let gw = gutter_width(self.lines.len());
         let sb_col = cols.saturating_sub(1); // vertical scroll bar column (full width)
         let text_cols = editor_cols.saturating_sub(gw + 2); // +1 separator, +1 scroll bar
+
+        // ── tab bar ──────────────────────────────────────────────────────────
+        self.render_tab_bar(stdout, tab_bar_y, cols)?;
+
+        // ── vertical scroll bar slider info ──────────────────────────────────
+        let vscroll_thumb_start: Option<usize>;
+        let vscroll_thumb_height: usize;
+        let total_lines = self.lines.len();
+        if total_lines > rows {
+            let avail = rows;
+            vscroll_thumb_height = (avail * rows / total_lines).max(1);
+            let max_scroll = total_lines - rows;
+            vscroll_thumb_start = Some(self.scroll * (avail - vscroll_thumb_height) / max_scroll);
+        } else {
+            vscroll_thumb_start = None;
+            vscroll_thumb_height = 0;
+        }
 
         // ── sidebar ──────────────────────────────────────────────────────────
         if self.sidebar.open {
@@ -35,9 +62,10 @@ impl Editor {
 
         if has_text_work {
             let mut all_sel: Vec<((usize, usize), (usize, usize))> = Vec::new();
-            if self.has_selection() {
-                let (ay, ab) = self.selection_anchor.unwrap();
-                all_sel.push(super::sel_range(self.cursor_y, self.cursor_byte, ay, ab));
+            if let Some((ay, ab)) = self.selection_anchor {
+                if (ay, ab) != (self.cursor_y, self.cursor_byte) {
+                    all_sel.push(super::sel_range(self.cursor_y, self.cursor_byte, ay, ab));
+                }
             }
             for c in &self.extra_cursors {
                 if let Some((ay, ab)) = c.anchor {
@@ -48,21 +76,21 @@ impl Editor {
             }
 
             for i in ds..de {
+                let sy = content_y + i;
                 let idx = self.scroll + i;
                 if idx >= self.lines.len() {
-                    queue!(stdout, MoveTo(eo as u16, i as u16), Clear(ClearType::UntilNewLine))?;
-                    let total = self.lines.len();
-                    if total > rows {
-                        let thumb = self.scroll * (rows - 1) / (total - rows);
-                        let ch = if i == thumb { '▌' } else { '░' };
+                    queue!(stdout, MoveTo(eo as u16, sy as u16), Clear(ClearType::UntilNewLine))?;
+                    if let Some(ts) = vscroll_thumb_start {
+                        let in_thumb = i >= ts && i < ts + vscroll_thumb_height;
+                        let ch = if in_thumb { '█' } else { '░' };
                         queue!(
                             stdout,
-                            MoveTo(sb_col as u16, i as u16),
-                            SetForegroundColor(Color::Rgb {
-                                r: 108,
-                                g: 108,
-                                b: 128
-                            }),
+                            MoveTo(sb_col as u16, sy as u16),
+                            if in_thumb {
+                                SetForegroundColor(theme.editor.scrollbar_thumb.to_crossterm())
+                            } else {
+                                SetForegroundColor(theme.editor.scrollbar.to_crossterm())
+                            },
                             Print(ch),
                             ResetColor
                         )?;
@@ -83,16 +111,12 @@ impl Editor {
 
                 // ── gutter ──
                 let gutter_num = format!("{:>w$}", num, w = gw - 1);
-                queue!(stdout, MoveTo(eo as u16, i as u16))?;
+                queue!(stdout, MoveTo(eo as u16, sy as u16))?;
                 if is_cur {
                     queue!(
                         stdout,
-                        SetBackgroundColor(Color::Rgb {
-                            r: 44,
-                            g: 44,
-                            b: 58
-                        }),
-                        SetForegroundColor(Color::White),
+                        SetBackgroundColor(theme.editor.sidebar_selected_bg.to_crossterm()),
+                        SetForegroundColor(theme.editor.gutter_text.to_crossterm()),
                         Print(&gutter_num),
                         Print(" "),
                         ResetColor,
@@ -100,11 +124,7 @@ impl Editor {
                 } else {
                     queue!(
                         stdout,
-                        SetForegroundColor(Color::Rgb {
-                            r: 108,
-                            g: 108,
-                            b: 128
-                        }),
+                        SetForegroundColor(theme.editor.gutter_text.to_crossterm()),
                         Print(&gutter_num),
                         Print(" "),
                         ResetColor,
@@ -181,42 +201,30 @@ impl Editor {
                         false
                     };
 
-                    queue!(stdout, MoveTo(abs_x as u16, i as u16))?;
+                    queue!(stdout, MoveTo(abs_x as u16, sy as u16))?;
 
                     if in_search {
                         queue!(
                             stdout,
-                            SetBackgroundColor(Color::Rgb {
-                                r: 162,
-                                g: 119,
-                                b: 255
-                            }),
-                            SetForegroundColor(Color::Black),
+                            SetBackgroundColor(theme.editor.search_current_bg.to_crossterm()),
+                            SetForegroundColor(theme.editor.cursor_text.to_crossterm()),
                             Print(ch),
                             ResetColor
                         )?;
                     } else if in_search_other {
                         queue!(
                             stdout,
-                        SetBackgroundColor(Color::Rgb {
-                            r: 44,
-                            g: 44,
-                            b: 58
-                        }),
-                        SetForegroundColor(Color::White),
+                            SetBackgroundColor(theme.editor.search_match_bg.to_crossterm()),
+                            SetForegroundColor(theme.editor.status_text.to_crossterm()),
                             Print(ch),
                             ResetColor
                         )?;
                     } else if in_sel {
                         queue!(
                             stdout,
-                        SetBackgroundColor(Color::Rgb {
-                            r: 54,
-                            g: 51,
-                            b: 84
-                        }),
-                        SetForegroundColor(Color::White),
-                        Print(ch),
+                            SetBackgroundColor(theme.editor.selection_bg.to_crossterm()),
+                            SetForegroundColor(theme.editor.status_text.to_crossterm()),
+                            Print(ch),
                             ResetColor
                         )?;
                     } else if is_cur {
@@ -224,25 +232,13 @@ impl Editor {
                             self.syntax
                                 .token_type_at(idx, byte_start)
                                 .map(crate::syntax::color_for)
-                                .unwrap_or(Color::Rgb {
-                                    r: 216,
-                                    g: 216,
-                                    b: 224,
-                                })
+                                .unwrap_or(theme.syntax.normal.to_crossterm())
                         } else {
-                            Color::Rgb {
-                                r: 216,
-                                g: 216,
-                                b: 224,
-                            }
+                            theme.syntax.normal.to_crossterm()
                         };
                         queue!(
                             stdout,
-                            SetBackgroundColor(Color::Rgb {
-                                r: 28,
-                                g: 28,
-                                b: 36
-                            }),
+                            SetBackgroundColor(theme.editor.editor_bg.to_crossterm()),
                             SetForegroundColor(fg),
                             Print(ch),
                             ResetColor
@@ -252,17 +248,9 @@ impl Editor {
                             self.syntax
                                 .token_type_at(idx, byte_start)
                                 .map(crate::syntax::color_for)
-                                .unwrap_or(Color::Rgb {
-                                    r: 200,
-                                    g: 200,
-                                    b: 208,
-                                })
+                                .unwrap_or(theme.syntax.normal.to_crossterm())
                         } else {
-                            Color::Rgb {
-                                r: 200,
-                                g: 200,
-                                b: 208,
-                            }
+                            theme.syntax.normal.to_crossterm()
                         };
                         queue!(
                             stdout,
@@ -278,12 +266,8 @@ impl Editor {
                 if in_sel_mid && last_x < cols {
                     queue!(
                         stdout,
-                        MoveTo(last_x as u16, i as u16),
-                        SetBackgroundColor(Color::Rgb {
-                            r: 54,
-                            g: 51,
-                            b: 84
-                        }),
+                        MoveTo(last_x as u16, sy as u16),
+                        SetBackgroundColor(theme.editor.selection_bg.to_crossterm()),
                         Print(" ".repeat(cols - last_x)),
                         ResetColor
                     )?;
@@ -297,8 +281,8 @@ impl Editor {
                     if right_x < cols {
                         queue!(
                             stdout,
-                            MoveTo(right_x as u16, i as u16),
-                            SetForegroundColor(Color::DarkYellow),
+                            MoveTo(right_x as u16, sy as u16),
+                            SetForegroundColor(theme.editor.border.to_crossterm()),
                             Print("›"),
                             ResetColor
                         )?;
@@ -307,34 +291,31 @@ impl Editor {
                 if self.scroll_x > 0 {
                     queue!(
                         stdout,
-                        MoveTo((eo + gw) as u16, i as u16),
-                        SetForegroundColor(Color::DarkYellow),
+                        MoveTo((eo + gw) as u16, sy as u16),
+                        SetForegroundColor(theme.editor.border.to_crossterm()),
                         Print("‹"),
                         ResetColor
                     )?;
                 }
 
                 // ── scroll bar per-row ──
-                {
-                    let total = self.lines.len();
-                    if total > rows {
-                        let thumb = self.scroll * (rows - 1) / (total - rows);
-                        let ch = if i == thumb { '▌' } else { '░' };
-                        queue!(
-                            stdout,
-                            MoveTo(sb_col as u16, i as u16),
-                        SetForegroundColor(Color::Rgb {
-                            r: 108,
-                            g: 108,
-                            b: 128
-                        }),
+                if let Some(ts) = vscroll_thumb_start {
+                    let in_thumb = i >= ts && i < ts + vscroll_thumb_height;
+                    let ch = if in_thumb { '█' } else { '░' };
+                    queue!(
+                        stdout,
+                        MoveTo(sb_col as u16, sy as u16),
+                        if in_thumb {
+                            SetForegroundColor(theme.editor.scrollbar_thumb.to_crossterm())
+                        } else {
+                            SetForegroundColor(theme.editor.scrollbar.to_crossterm())
+                        },
                         Print(ch),
                         ResetColor
                     )?;
                 }
-            }
 
-            // Primary cursor
+                // Primary cursor
                 if is_cur {
                     let cursor_col = byte_to_col(self.current(), self.cursor_byte);
                     let screen_col = if cursor_col >= self.scroll_x {
@@ -351,9 +332,9 @@ impl Editor {
                         };
                         queue!(
                             stdout,
-                            MoveTo(screen_col as u16, i as u16),
-                            SetBackgroundColor(Color::White),
-                            SetForegroundColor(Color::Black),
+                            MoveTo(screen_col as u16, sy as u16),
+                            SetBackgroundColor(theme.editor.cursor_bg.to_crossterm()),
+                            SetForegroundColor(theme.editor.cursor_text.to_crossterm()),
                             Print(cursor_ch),
                             ResetColor,
                         )?;
@@ -377,9 +358,9 @@ impl Editor {
                             };
                             queue!(
                                 stdout,
-                                MoveTo(screen_col as u16, i as u16),
-                                SetBackgroundColor(Color::Rgb { r: 255, g: 140, b: 154 }),
-                                SetForegroundColor(Color::Black),
+                                MoveTo(screen_col as u16, sy as u16),
+                                SetBackgroundColor(theme.editor.extra_cursor_bg.to_crossterm()),
+                                SetForegroundColor(theme.editor.cursor_text.to_crossterm()),
                                 Print(cursor_ch),
                                 ResetColor,
                             )?;
@@ -407,7 +388,7 @@ impl Editor {
 
         // ── horizontal scroll bar ──────────────────────────────────────────
         {
-            let hrow = rows; // row index for the horizontal scroll bar (just above status)
+            let hrow = content_y + rows; // row index for the horizontal scroll bar (just above status)
             let max_vis = self
                 .lines
                 .iter()
@@ -423,8 +404,8 @@ impl Editor {
                 queue!(
                     stdout,
                     MoveTo(0, hrow as u16),
-                    SetBackgroundColor(Color::Rgb { r: 13, g: 13, b: 21 }),
-                    SetForegroundColor(Color::Rgb { r: 61, g: 61, b: 77 }),
+                    SetBackgroundColor(theme.editor.editor_bg.to_crossterm()),
+                    SetForegroundColor(theme.editor.scrollbar.to_crossterm()),
                     Print(" "),
                 )?;
                 for h in 1..avail + 1 {
@@ -437,9 +418,9 @@ impl Editor {
                         stdout,
                         MoveTo(h as u16, hrow as u16),
                         if h >= thumb_start && h < thumb_start + thumb_w {
-                            SetForegroundColor(Color::Rgb { r: 162, g: 119, b: 255 })
+                            SetForegroundColor(theme.editor.scrollbar_thumb.to_crossterm())
                         } else {
-                            SetForegroundColor(Color::Rgb { r: 61, g: 61, b: 77 })
+                            SetForegroundColor(theme.editor.scrollbar.to_crossterm())
                         },
                         Print(ch),
                         ResetColor,
@@ -449,7 +430,7 @@ impl Editor {
                     queue!(
                         stdout,
                         MoveTo((avail + 1) as u16, hrow as u16),
-                        SetForegroundColor(Color::Rgb { r: 61, g: 61, b: 77 }),
+                        SetForegroundColor(theme.editor.scrollbar.to_crossterm()),
                         Print(" "),
                         ResetColor,
                     )?;
@@ -464,6 +445,10 @@ impl Editor {
             }
         }
 
+        if is_run {
+            self.render_run_panel(stdout)?;
+        }
+
         self.render_status_bar(stdout)?;
         self.render_hint_bar(stdout)?;
         stdout.flush()?;
@@ -474,26 +459,108 @@ impl Editor {
         Ok(())
     }
 
-    fn render_sidebar(&self, stdout: &mut std::io::Stdout) -> std::io::Result<()> {
+    fn render_run_panel(&self, stdout: &mut std::io::Stdout) -> std::io::Result<()> {
+        let theme = crate::utils::theme::ThemeManager::current();
+        let split = self.run_split_row();
+        let panel_top = split + 1;
+        let panel_h = self.run_panel_height();
+        let cols = self.term_w;
+
+        // Clear the panel area and draw separator line
+        for row in split..panel_top + panel_h {
+            queue!(stdout, MoveTo(0, row as u16), Clear(ClearType::CurrentLine))?;
+        }
+
+        // Separator: execution header or "─ RUN OUTPUT ─────────────"
+        let sep_title = if let Some(ref cmd) = self.run_executing {
+            format!(" EXECUTING: {} ", cmd)
+        } else {
+            format!(" RUN OUTPUT  ({} lines, j/k scroll, Esc/q close) ", self.run_lines.len())
+        };
+        let sep_fill = cols.saturating_sub(sep_title.chars().count());
+        let sep = format!("{}{}", sep_title, "\u{2500}".repeat(sep_fill));
+        queue!(
+            stdout,
+            MoveTo(0, split as u16),
+            SetForegroundColor(theme.editor.run_header_fg.to_crossterm()),
+            Print(&sep),
+            ResetColor,
+        )?;
+
+        // Output lines (scrollable)
         let use_color = self.editor_cfg.color_enabled;
-        let rows = self.term_h.saturating_sub(3);
+        for i in 0..panel_h {
+            let idx = self.run_scroll + i;
+            let row = panel_top + i;
+            let line = self.run_lines.get(idx).map(|s| s.as_str()).unwrap_or("~");
+            let truncated = if line.len() > cols {
+                if line.is_char_boundary(cols) { &line[..cols] } else { &line[..line.floor_char_boundary(cols)] }
+            } else { line };
+            if use_color {
+                queue!(
+                    stdout,
+                    MoveTo(0, row as u16),
+                    SetBackgroundColor(theme.editor.run_panel_bg.to_crossterm()),
+                    SetForegroundColor(theme.editor.run_output_fg.to_crossterm()),
+                    Print(truncated),
+                    ResetColor,
+                    Clear(ClearType::UntilNewLine),
+                )?;
+            } else {
+                queue!(
+                    stdout,
+                    MoveTo(0, row as u16),
+                    Print(truncated),
+                    ResetColor,
+                    Clear(ClearType::UntilNewLine),
+                )?;
+            }
+        }
+
+        Ok(())
+    }
+
+    fn render_sidebar(&self, stdout: &mut std::io::Stdout) -> std::io::Result<()> {
+        let theme = crate::utils::theme::ThemeManager::current();
+        let use_color = self.editor_cfg.color_enabled;
+        let content_top = 1;
+        let rows = if self.mode == Mode::Run {
+            self.run_split_row().saturating_sub(1)
+        } else {
+            self.term_h.saturating_sub(4)
+        };
         let sw = SIDEBAR_WIDTH;
         let nodes = &self.sidebar.nodes;
         let scroll = self.sidebar.scroll;
         let num_visible = rows.min(nodes.len().saturating_sub(scroll));
+        let total_nodes = nodes.len();
+        let sb_col = sw.saturating_sub(1);
+
+        let vscroll_thumb_start: Option<usize>;
+        let vscroll_thumb_height: usize;
+        if total_nodes > rows {
+            let avail = rows;
+            vscroll_thumb_height = (avail * rows / total_nodes).max(1);
+            let max_scroll = total_nodes - rows;
+            vscroll_thumb_start = Some(scroll * (avail - vscroll_thumb_height) / max_scroll);
+        } else {
+            vscroll_thumb_start = None;
+            vscroll_thumb_height = 0;
+        }
 
         for i in 0..rows {
+            let sy = content_top + i;
             // Background for entire sidebar row
             let has_node = i < num_visible;
             let is_selected = has_node && (scroll + i) == self.sidebar.selected;
             let bg = if is_selected {
-                Color::Rgb { r: 44, g: 44, b: 58 }
+                theme.editor.sidebar_selected_bg.to_crossterm()
             } else {
-                Color::Rgb { r: 13, g: 13, b: 21 }
+                theme.editor.sidebar_bg.to_crossterm()
             };
             queue!(
                 stdout,
-                MoveTo(0, i as u16),
+                MoveTo(0, sy as u16),
                 SetBackgroundColor(bg),
                 Print(" ".repeat(sw)),
             )?;
@@ -509,26 +576,26 @@ impl Editor {
                     if node.is_dir {
                         let ind = if node.expanded { "▼" } else { "▶" };
                         let ind_fg = if use_color {
-                            Color::Rgb { r: 130, g: 226, b: 255 }
+                            theme.editor.sidebar_dir.to_crossterm()
                         } else {
-                            Color::White
+                            theme.editor.sidebar_file.to_crossterm()
                         };
                         queue!(
                             stdout,
-                            MoveTo(x as u16, i as u16),
+                            MoveTo(x as u16, sy as u16),
                             SetForegroundColor(ind_fg),
                             Print(ind),
                         )?;
                         x += 2;
                     } else {
                         let dot_fg = if use_color {
-                            Color::Rgb { r: 108, g: 108, b: 128 }
+                            theme.editor.gutter_text.to_crossterm()
                         } else {
-                            Color::White
+                            theme.editor.sidebar_file.to_crossterm()
                         };
                         queue!(
                             stdout,
-                            MoveTo(x as u16, i as u16),
+                            MoveTo(x as u16, sy as u16),
                             SetForegroundColor(dot_fg),
                             Print('·'),
                         )?;
@@ -547,32 +614,48 @@ impl Editor {
                             node.name.clone()
                         };
                         let fg = if !use_color {
-                            Color::White
+                            theme.editor.sidebar_selected.to_crossterm()
                         } else if is_open {
-                            Color::Rgb { r: 255, g: 202, b: 133 }
+                            theme.editor.sidebar_current.to_crossterm()
                         } else if is_selected {
-                            Color::White
+                            theme.editor.sidebar_selected.to_crossterm()
                         } else if node.is_dir {
-                            Color::Rgb { r: 120, g: 220, b: 232 }
+                            theme.editor.sidebar_dir.to_crossterm()
                         } else {
-                            Color::Rgb { r: 200, g: 200, b: 208 }
+                            theme.editor.sidebar_file.to_crossterm()
                         };
                         queue!(
                             stdout,
                             SetForegroundColor(fg),
-                            MoveTo(x as u16, i as u16),
+                            MoveTo(x as u16, sy as u16),
                             Print(&display),
                         )?;
                     }
                 }
             }
 
+            // Vertical scroll bar on the rightmost column of the sidebar
+            if let Some(ts) = vscroll_thumb_start {
+                let in_thumb = i >= ts && i < ts + vscroll_thumb_height;
+                let ch = if in_thumb { '█' } else { '░' };
+                queue!(
+                    stdout,
+                    MoveTo(sb_col as u16, sy as u16),
+                    if in_thumb {
+                        SetForegroundColor(theme.editor.scrollbar_thumb.to_crossterm())
+                    } else {
+                        SetForegroundColor(theme.editor.scrollbar.to_crossterm())
+                    },
+                    Print(ch),
+                )?;
+            }
+
             // Separator
             queue!(
                 stdout,
                 ResetColor,
-                MoveTo(sw as u16, i as u16),
-                SetForegroundColor(Color::Rgb { r: 61, g: 61, b: 77 }),
+                MoveTo(sw as u16, sy as u16),
+                SetForegroundColor(theme.editor.border.to_crossterm()),
                 Print('│'),
                 ResetColor,
             )?;
@@ -581,7 +664,97 @@ impl Editor {
         Ok(())
     }
 
+    fn render_tab_bar(&self, stdout: &mut std::io::Stdout, y: usize, cols: usize) -> std::io::Result<()> {
+        let theme = crate::utils::theme::ThemeManager::current();
+        let use_color = self.editor_cfg.color_enabled;
+        let active = self.active_tab;
+        let mut x = 0usize;
+
+        // Clear the tab bar row
+        queue!(
+            stdout,
+            MoveTo(0, y as u16),
+            SetBackgroundColor(theme.editor.sidebar_bg.to_crossterm()),
+            Clear(ClearType::UntilNewLine),
+        )?;
+
+        for (i, tab) in self.tabs.iter().enumerate() {
+            if x >= cols {
+                break;
+            }
+            let name = if self.is_scratch_path(&tab.path) {
+                "[scratch]".to_string()
+            } else {
+                tab.path
+                    .file_name()
+                    .map(|n| n.to_string_lossy().into_owned())
+                    .unwrap_or_else(|| "untitled".to_string())
+            };
+            let mark = if tab.modified { " ●" } else { "" };
+            let label = format!(" {} {} ", name, mark);
+            let close_btn = "✕";
+            let label_chars = label.chars().count();
+            let full_w = label_chars + 1 + close_btn.chars().count();
+            let is_active = i == active;
+
+            let (bg, fg) = if is_active {
+                let bg_c = if use_color { theme.editor.editor_bg.to_crossterm() } else { Color::Rgb { r: 18, g: 18, b: 28 } };
+                let fg_c = if use_color { theme.syntax.normal.to_crossterm() } else { Color::White };
+                (bg_c, fg_c)
+            } else {
+                let bg_c = if use_color { theme.editor.sidebar_bg.to_crossterm() } else { Color::Rgb { r: 18, g: 18, b: 28 } };
+                let fg_c = if use_color { theme.editor.gutter_text.to_crossterm() } else { Color::DarkGrey };
+                (bg_c, fg_c)
+            };
+
+            let close_fg = if use_color { theme.editor.gutter_text.to_crossterm() } else { Color::DarkGrey };
+
+            // Truncate if needed (prefer keeping close button)
+            let remaining = cols.saturating_sub(x);
+            if full_w > remaining {
+                // Not enough room for full tab — show what fits
+                let avail = remaining.saturating_sub(2); // leave room for close btn + ellipsis
+                    if avail > 3 {
+                        let truncated_name: String = name.chars().take(avail).collect();
+                        let short = format!(" {}… {} ", truncated_name, close_btn);
+                        queue!(
+                            stdout,
+                            MoveTo(x as u16, y as u16),
+                            SetBackgroundColor(bg),
+                            SetForegroundColor(fg),
+                            Print(&short),
+                            ResetColor,
+                        )?;
+                    }
+                    break;
+            }
+
+            // Draw label (name + modified marker)
+            queue!(
+                stdout,
+                MoveTo(x as u16, y as u16),
+                SetBackgroundColor(bg),
+                SetForegroundColor(fg),
+                Print(&label),
+            )?;
+            x += label_chars;
+
+            // Draw close button
+            queue!(
+                stdout,
+                SetForegroundColor(close_fg),
+                Print(close_btn),
+                ResetColor,
+            )?;
+            x += close_btn.chars().count();
+        }
+
+        queue!(stdout, ResetColor)?;
+        Ok(())
+    }
+
     fn render_status_bar(&self, stdout: &mut std::io::Stdout) -> std::io::Result<()> {
+        let theme = crate::utils::theme::ThemeManager::current();
         let sy = self.term_h.saturating_sub(2);
         let tag = if self.modified { " ●" } else { " ✓" };
         let mode_str = match self.mode {
@@ -593,17 +766,21 @@ impl Editor {
             Mode::Help => " [HELP]",
             Mode::FileFinder => " [FIND]",
             Mode::Gosc => " [GOSC]",
+            Mode::Run => " [RUN]",
         };
-        let sel_str = if self.has_selection() {
-            let (ay, ab) = self.selection_anchor.unwrap();
-            let ((sy2, sb), (ey, eb)) = super::sel_range(self.cursor_y, self.cursor_byte, ay, ab);
-            if sy2 == ey {
-                let chars = self.lines[sy2][sb..eb.min(self.lines[sy2].len())]
-                    .chars()
-                    .count();
-                format!(" [{} chars]", chars)
+        let sel_str = if let Some((ay, ab)) = self.selection_anchor {
+            if (ay, ab) == (self.cursor_y, self.cursor_byte) {
+                String::new()
             } else {
-                format!(" [{} lines]", ey - sy2 + 1)
+                let ((sy2, sb), (ey, eb)) = super::sel_range(self.cursor_y, self.cursor_byte, ay, ab);
+                if sy2 == ey {
+                    let chars = self.lines[sy2][sb..eb.min(self.lines[sy2].len())]
+                        .chars()
+                        .count();
+                    format!(" [{} chars]", chars)
+                } else {
+                    format!(" [{} lines]", ey - sy2 + 1)
+                }
             }
         } else {
             String::new()
@@ -631,7 +808,7 @@ impl Editor {
 
         let use_color = self.editor_cfg.color_enabled;
         let status_bg = if use_color {
-            Color::Rgb { r: 162, g: 119, b: 255 }
+            theme.editor.status_bg.to_crossterm()
         } else {
             Color::Rgb { r: 33, g: 33, b: 44 }
         };
@@ -639,7 +816,7 @@ impl Editor {
             stdout,
             MoveTo(0, sy as u16),
             SetBackgroundColor(status_bg),
-            SetForegroundColor(Color::White),
+            SetForegroundColor(theme.editor.status_text.to_crossterm()),
             Print(&full),
             ResetColor,
             Clear(ClearType::UntilNewLine),
@@ -648,6 +825,7 @@ impl Editor {
     }
 
     fn render_hint_bar(&self, stdout: &mut std::io::Stdout) -> std::io::Result<()> {
+        let theme = crate::utils::theme::ThemeManager::current();
         let hy = self.term_h.saturating_sub(1);
 
         let hint = match self.mode {
@@ -665,7 +843,7 @@ impl Editor {
             }
             Mode::Command => {
                 format!(
-                    ":{}  cd|back|gos|mkdir|touch|ne|tp|tp-add  Enter=exec  Esc=cancel",
+                    ":{}  cd|back|gos|gs|mkdir|touch|ne|tp|tp-add  Enter=exec  Esc=cancel",
                     self.cmd_buf
                 )
             }
@@ -691,11 +869,11 @@ impl Editor {
             Mode::Normal => {
                 if let Some(ref msg) = self.status_msg {
                     format!(
-                        " ✦ {}  │  ^I=insert  ^W=visual  :command  ^H=help  ^Q=quit",
+                        " ✦ {}  │  ^I=insert  ^W=visual  :command  ^H=help  ^Q=closeTab/quit",
                         msg
                     )
                 } else {
-                    " ^I=insert  ^W=visual  ^B=sidebar  ^P=files  :command  ^H=help  ^Q=quit".to_string()
+                    " ^I=insert  ^W=visual  ^B=sidebar  ^P=files  :command  ^H=help  ^Q=closeTab/quit  ^PgDn/PgUp=tabs  ^T=files".to_string()
                 }
             }
             Mode::FileFinder => {
@@ -710,6 +888,24 @@ impl Editor {
                     self.gosc_dirs.len()
                 )
             }
+            Mode::Run => {
+                if !self.run_cmd_buf.is_empty() {
+                    format!("{}  Enter=exec  Esc=cancel", self.run_cmd_buf)
+                } else {
+                    let visible = self.run_panel_height();
+                    let total = self.run_lines.len();
+                    let top = self.run_scroll + 1;
+                    let bot = (self.run_scroll + visible).min(total);
+                    if total > 0 {
+                        format!(
+                            " Run output — lines {}-{}/{}  :=cmd  ↑↓/j/k=scroll  Esc/q=close",
+                            top, bot, total
+                        )
+                    } else {
+                        " Run output — (empty)  :=cmd  Esc/q=close".to_string()
+                    }
+                }
+            }
         };
 
         let hint_trimmed = if hint.len() > self.term_w {
@@ -720,18 +916,14 @@ impl Editor {
 
         let use_color = self.editor_cfg.color_enabled;
         let hint_fg = if use_color {
-            Color::Rgb { r: 130, g: 226, b: 255 }
+            theme.editor.hint_text.to_crossterm()
         } else {
             Color::White
         };
         queue!(
             stdout,
             MoveTo(0, hy as u16),
-            SetBackgroundColor(Color::Rgb {
-                r: 21,
-                g: 21,
-                b: 29
-            }),
+            SetBackgroundColor(theme.editor.hint_bg.to_crossterm()),
             SetForegroundColor(hint_fg),
             Print(hint_trimmed),
             ResetColor,
@@ -741,7 +933,9 @@ impl Editor {
     }
 
     fn render_help_screen(&self, stdout: &mut std::io::Stdout) -> std::io::Result<()> {
-        let rows = self.term_h.saturating_sub(3);
+        let theme = crate::utils::theme::ThemeManager::current();
+        let content_top = 1;
+        let rows = self.term_h.saturating_sub(4);
         let cols = self.term_w;
 
         let help_lines = vec![
@@ -753,7 +947,12 @@ impl Editor {
             "  :auto on  enable auto-save on exit".to_string(),
             "  :auto off disable auto-save on exit".to_string(),
             "  ^H        open this help screen".to_string(),
-            "  ^Q / Esc  exit editor (with save prompt)".to_string(),
+            "  ^Q        close current tab / quit (if last tab)".to_string(),
+            "  ^Q+Shift  close all tabs and quit".to_string(),
+            "  ^PgDn     next tab".to_string(),
+            "  ^PgUp     previous tab".to_string(),
+            "  ^T        open file in new tab".to_string(),
+            "  mouse     click tab bar to switch tabs".to_string(),
             "  arrows    navigate cursor".to_string(),
             "".to_string(),
             " INSERT MODE (editing)".to_string(),
@@ -799,27 +998,33 @@ impl Editor {
             "  :gos <N>           navigate to Nth subdirectory".to_string(),
             "  :gosc              list numbered subdirectories".to_string(),
             "  :mkdir <dir>       create directory".to_string(),
+            "  :mkd <dir>         create directory (alias for :mkdir)".to_string(),
             "  :touch <file>      create new file".to_string(),
+            "  :mkf <file>        create new file (alias for :touch)".to_string(),
+            "  :rmd <target>      recursively delete directory".to_string(),
+            "  :rmf <target>      force delete file or directory".to_string(),
             "  :ne <file>         navigate & edit (create if missing)".to_string(),
             "  :ne .              show CWD in sidebar".to_string(),
+            "  :theme <name>      switch to theme by name".to_string(),
+            "  :theme list        list available themes".to_string(),
+            "  :theme             show current theme".to_string(),
             "  :tp <name>         jump to teleport savepoint".to_string(),
             "  :tp-add <name>     save CWD as teleport".to_string(),
+            "  :gs <pattern>       search file contents across project".to_string(),
+            "  :run <command>     execute shell command in split panel".to_string(),
             "  Esc                 cancel".to_string(),
             "".to_string(),
             "─".repeat(cols.min(60)),
         ];
 
         for i in 0..rows {
+            let sy = content_top + i;
             let idx = self.help_scroll + i;
             let line = help_lines.get(idx).map(|s| s.as_str()).unwrap_or("");
             queue!(
                 stdout,
-                MoveTo(0, i as u16),
-                SetForegroundColor(Color::Rgb {
-                    r: 200,
-                    g: 200,
-                    b: 208
-                }),
+                MoveTo(0, sy as u16),
+                SetForegroundColor(theme.syntax.normal.to_crossterm()),
                 Print(line),
                 ResetColor,
                 Clear(ClearType::UntilNewLine),
@@ -830,11 +1035,13 @@ impl Editor {
     }
 
     fn render_file_finder(&self, stdout: &mut std::io::Stdout) -> std::io::Result<()> {
+        let theme = crate::utils::theme::ThemeManager::current();
+        let content_top = 1;
         let cols = self.term_w;
-        let rows = self.term_h.saturating_sub(3);
+        let rows = self.term_h.saturating_sub(4);
         let max_results = rows.saturating_sub(2);
 
-        // Row 0: prompt
+        // Row 0: prompt (after tab bar)
         let prompt = format!(
             " Find: {}",
             if self.ff_query.is_empty() {
@@ -845,32 +1052,20 @@ impl Editor {
         );
         queue!(
             stdout,
-            MoveTo(0, 0),
-            SetBackgroundColor(Color::Rgb {
-                r: 28,
-                g: 28,
-                b: 36
-            }),
-            SetForegroundColor(Color::White),
+            MoveTo(0, content_top as u16),
+            SetBackgroundColor(theme.editor.sidebar_selected_bg.to_crossterm()),
+            SetForegroundColor(theme.editor.status_text.to_crossterm()),
             Print(&prompt),
             ResetColor,
             Clear(ClearType::UntilNewLine),
         )?;
 
-        // Row 1: separator
+        // Separator row
         queue!(
             stdout,
-            MoveTo(0, 1),
-            SetBackgroundColor(Color::Rgb {
-                r: 13,
-                g: 13,
-                b: 21
-            }),
-            SetForegroundColor(Color::Rgb {
-                r: 61,
-                g: 61,
-                b: 77
-            }),
+            MoveTo(0, (content_top + 1) as u16),
+            SetBackgroundColor(theme.editor.sidebar_bg.to_crossterm()),
+            SetForegroundColor(theme.editor.border.to_crossterm()),
             Print("─".repeat(cols.min(80))),
             ResetColor,
             Clear(ClearType::UntilNewLine),
@@ -883,8 +1078,8 @@ impl Editor {
                 .saturating_sub(max_results.saturating_sub(1));
             let end_idx = (start_idx + max_results).min(self.ff_results.len());
             for i in start_idx..end_idx {
-                let ri = 2 + (i - start_idx);
-                if ri >= rows {
+                let ri = content_top + 2 + (i - start_idx);
+                if ri >= content_top + rows {
                     break;
                 }
                 let (ref name, _, _) = self.ff_results[i];
@@ -901,12 +1096,8 @@ impl Editor {
                     queue!(
                         stdout,
                         MoveTo(0, ri as u16),
-                        SetBackgroundColor(Color::Rgb {
-                            r: 44,
-                            g: 44,
-                            b: 58
-                        }),
-                        SetForegroundColor(Color::White),
+                        SetBackgroundColor(theme.editor.selection_bg.to_crossterm()),
+                        SetForegroundColor(theme.editor.status_text.to_crossterm()),
                         Print(format!("  {}", display)),
                         ResetColor,
                         Clear(ClearType::UntilNewLine),
@@ -915,11 +1106,7 @@ impl Editor {
                     queue!(
                         stdout,
                         MoveTo(0, ri as u16),
-                        SetForegroundColor(Color::Rgb {
-                            r: 200,
-                            g: 200,
-                            b: 208
-                        }),
+                        SetForegroundColor(theme.syntax.normal.to_crossterm()),
                         Print(format!("  {}", display)),
                         ResetColor,
                         Clear(ClearType::UntilNewLine),
@@ -932,12 +1119,14 @@ impl Editor {
     }
 
     fn render_gosc(&self, stdout: &mut std::io::Stdout) -> std::io::Result<()> {
+        let theme = crate::utils::theme::ThemeManager::current();
+        let content_top = 1;
         let cols = self.term_w;
-        let rows = self.term_h.saturating_sub(3);
+        let rows = self.term_h.saturating_sub(4);
         let panel_w = 46usize.min(cols.saturating_sub(4));
         let panel_h = (self.gosc_dirs.len() + 5).min(rows.saturating_sub(4));
         let left = (cols.saturating_sub(panel_w)) / 2;
-        let top = (rows.saturating_sub(panel_h)) / 2;
+        let top = content_top + (rows.saturating_sub(panel_h)) / 2;
         let inner_w = panel_w.saturating_sub(4);
 
         // Clear panel area
@@ -945,11 +1134,7 @@ impl Editor {
             queue!(
                 stdout,
                 MoveTo(left as u16, (top + i) as u16),
-                SetBackgroundColor(Color::Rgb {
-                    r: 28,
-                    g: 28,
-                    b: 36
-                }),
+                SetBackgroundColor(theme.editor.sidebar_selected_bg.to_crossterm()),
                 Print(" ".repeat(panel_w)),
                 ResetColor,
             )?;
@@ -961,12 +1146,8 @@ impl Editor {
         queue!(
             stdout,
             MoveTo(title_x as u16, top as u16),
-            SetForegroundColor(Color::Cyan),
-            SetBackgroundColor(Color::Rgb {
-                r: 28,
-                g: 28,
-                b: 36
-            }),
+            SetForegroundColor(theme.editor.sidebar_dir.to_crossterm()),
+            SetBackgroundColor(theme.editor.sidebar_selected_bg.to_crossterm()),
             Print(title),
             ResetColor,
         )?;
@@ -976,16 +1157,8 @@ impl Editor {
         queue!(
             stdout,
             MoveTo((left + 1) as u16, (top + 1) as u16),
-            SetForegroundColor(Color::Rgb {
-                r: 61,
-                g: 61,
-                b: 77
-            }),
-            SetBackgroundColor(Color::Rgb {
-                r: 28,
-                g: 28,
-                b: 36
-            }),
+            SetForegroundColor(theme.editor.border.to_crossterm()),
+            SetBackgroundColor(theme.editor.sidebar_selected_bg.to_crossterm()),
             Print(&sep),
             ResetColor,
         )?;
@@ -1005,16 +1178,8 @@ impl Editor {
             queue!(
                 stdout,
                 MoveTo((left + 2) as u16, ri as u16),
-                SetForegroundColor(Color::Rgb {
-                    r: 200,
-                    g: 200,
-                    b: 208
-                }),
-                SetBackgroundColor(Color::Rgb {
-                    r: 28,
-                    g: 28,
-                    b: 36
-                }),
+                SetForegroundColor(theme.syntax.normal.to_crossterm()),
+                SetBackgroundColor(theme.editor.sidebar_selected_bg.to_crossterm()),
                 Print(&line),
                 ResetColor,
             )?;
@@ -1028,12 +1193,8 @@ impl Editor {
             queue!(
                 stdout,
                 MoveTo((left + 2) as u16, input_ri as u16),
-                SetForegroundColor(Color::Green),
-                SetBackgroundColor(Color::Rgb {
-                    r: 28,
-                    g: 28,
-                    b: 36
-                }),
+                SetForegroundColor(theme.shell.success.to_crossterm()),
+                SetBackgroundColor(theme.editor.sidebar_selected_bg.to_crossterm()),
                 Print(&input_label),
                 ResetColor,
                 Clear(ClearType::UntilNewLine),
@@ -1047,16 +1208,8 @@ impl Editor {
             queue!(
                 stdout,
                 MoveTo((left + 2) as u16, hint_ri as u16),
-                SetForegroundColor(Color::Rgb {
-                    r: 108,
-                    g: 108,
-                    b: 128
-                }),
-                SetBackgroundColor(Color::Rgb {
-                    r: 28,
-                    g: 28,
-                    b: 36
-                }),
+                SetForegroundColor(theme.editor.gutter_text.to_crossterm()),
+                SetBackgroundColor(theme.editor.sidebar_selected_bg.to_crossterm()),
                 Print(hint),
                 ResetColor,
                 Clear(ClearType::UntilNewLine),
@@ -1067,11 +1220,13 @@ impl Editor {
     }
 
     fn render_completion_popup(&self, stdout: &mut std::io::Stdout) -> std::io::Result<()> {
+        let theme = crate::utils::theme::ThemeManager::current();
         if !self.completion_visible || self.completion_items.is_empty() {
             return Ok(());
         }
 
-        let rows = self.term_h.saturating_sub(3);
+        let rows = self.term_h.saturating_sub(4);
+        let content_y = 1;
         let cols = self.term_w;
         let eo = self.editor_offset();
         let gw = gutter_width(self.lines.len());
@@ -1083,7 +1238,7 @@ impl Editor {
         } else {
             eo + gw
         };
-        let screen_cursor_y = self.cursor_y.saturating_sub(self.scroll);
+        let screen_cursor_y = content_y + self.cursor_y.saturating_sub(self.scroll);
 
         // Popup dimensions
         let max_visible = 10usize.min(rows.saturating_sub(screen_cursor_y + 2).max(3));
@@ -1112,8 +1267,8 @@ impl Editor {
         };
 
         // ── Draw popup background ──
-        let bg = Color::Rgb { r: 24, g: 24, b: 34 };
-        let border_fg = Color::Rgb { r: 80, g: 80, b: 100 };
+        let bg = theme.editor.sidebar_bg.to_crossterm();
+        let border_fg = theme.editor.border.to_crossterm();
         for i in 0..visible + 2 {
             let y = popup_y + i;
             if y >= rows { break; }
@@ -1136,7 +1291,7 @@ impl Editor {
             SetBackgroundColor(bg),
             SetForegroundColor(border_fg),
             Print("┌"),
-            SetForegroundColor(Color::Rgb { r: 108, g: 108, b: 128 }),
+            SetForegroundColor(theme.editor.gutter_text.to_crossterm()),
             Print(&title),
             SetForegroundColor(border_fg),
             Print("─".repeat(remaining)),
@@ -1167,14 +1322,14 @@ impl Editor {
                 queue!(
                     stdout,
                     MoveTo(popup_x as u16, y as u16),
-                    SetBackgroundColor(Color::Rgb { r: 44, g: 44, b: 68 }),
-                    SetForegroundColor(Color::White),
+                    SetBackgroundColor(theme.editor.selection_bg.to_crossterm()),
+                    SetForegroundColor(theme.editor.status_text.to_crossterm()),
                     Print(" "),
-                    SetForegroundColor(Color::Rgb { r: 162, g: 119, b: 255 }),
+                    SetForegroundColor(theme.syntax.keyword.to_crossterm()),
                     Print(&label),
-                    SetForegroundColor(Color::Rgb { r: 108, g: 108, b: 128 }),
+                    SetForegroundColor(theme.editor.gutter_text.to_crossterm()),
                     Print("  "),
-                    SetForegroundColor(Color::Rgb { r: 150, g: 150, b: 170 }),
+                    SetForegroundColor(theme.syntax.normal.to_crossterm()),
                     Print(&detail),
                     ResetColor,
                     Clear(ClearType::UntilNewLine),
@@ -1184,13 +1339,13 @@ impl Editor {
                     stdout,
                     MoveTo(popup_x as u16, y as u16),
                     SetBackgroundColor(bg),
-                    SetForegroundColor(Color::Rgb { r: 61, g: 61, b: 77 }),
+                    SetForegroundColor(theme.editor.border.to_crossterm()),
                     Print(" "),
-                    SetForegroundColor(Color::Rgb { r: 200, g: 200, b: 208 }),
+                    SetForegroundColor(theme.syntax.normal.to_crossterm()),
                     Print(&label),
-                    SetForegroundColor(Color::Rgb { r: 108, g: 108, b: 128 }),
+                    SetForegroundColor(theme.editor.gutter_text.to_crossterm()),
                     Print("  "),
-                    SetForegroundColor(Color::Rgb { r: 130, g: 130, b: 150 }),
+                    SetForegroundColor(theme.syntax.comment.to_crossterm()),
                     Print(&detail),
                     ResetColor,
                     Clear(ClearType::UntilNewLine),
@@ -1206,7 +1361,6 @@ impl Editor {
             } else {
                 "└".to_string()
             };
-            let _footer_w = footer.len().min(popup_w);
             queue!(
                 stdout,
                 MoveTo(popup_x as u16, bot_y as u16),
@@ -1217,7 +1371,6 @@ impl Editor {
                 Clear(ClearType::UntilNewLine),
             )?;
         }
-
         Ok(())
     }
 }

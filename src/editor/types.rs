@@ -1,5 +1,5 @@
 use std::io::{BufRead, BufReader};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result};
 
@@ -18,6 +18,21 @@ pub(crate) const SIDEBAR_WIDTH: usize = 30;
 /// Maximum number of recently opened files to keep in the buffer stack.
 pub(crate) const MAX_BUFFERS: usize = 16;
 
+/// Maximum number of open tabs.
+pub(crate) const MAX_TABS: usize = 32;
+
+/// Maximum lines to retain in the run output buffer.
+pub(crate) const MAX_RUN_LINES: usize = 10_000;
+
+/// Message sent from the reader thread to the run output handler.
+#[derive(Clone, Debug)]
+pub(crate) enum RunMessage {
+    /// A line of process output.
+    Line(String),
+    /// Signal that the process has finished and all output has been read.
+    Done,
+}
+
 // ── editor mode ──────────────────────────────────────────────────────────────
 
 #[derive(Clone, PartialEq, Debug)]
@@ -30,6 +45,7 @@ pub(crate) enum Mode {
     Help,
     FileFinder,
     Gosc,
+    Run,
 }
 
 // ── snapshot for undo/redo ────────────────────────────────────────────────────
@@ -193,6 +209,105 @@ impl Sidebar {
     }
 }
 
+// ── Tab (per-file state for multi-tab support) ──────────────────────────────
+
+/// Holds the complete state of one editor tab.
+/// When a tab is inactive, its state is stored here.
+/// When activated, the state is swapped onto the Editor's direct fields
+/// so that existing code working with `self.lines`, `self.cursor_y`, etc.
+/// continues to work unchanged.
+#[derive(Clone)]
+pub(crate) struct Tab {
+    pub(crate) path: PathBuf,
+    pub(crate) lines: Vec<String>,
+    pub(crate) modified: bool,
+    pub(crate) cursor_y: usize,
+    pub(crate) cursor_byte: usize,
+    pub(crate) scroll: usize,
+    pub(crate) scroll_x: usize,
+    pub(crate) selection_anchor: Option<(usize, usize)>,
+    pub(crate) undo_stack: Vec<Snapshot>,
+    pub(crate) redo_stack: Vec<Snapshot>,
+    pub(crate) search_query: String,
+    pub(crate) search_matches: Vec<(usize, usize, usize)>,
+    pub(crate) search_match_idx: usize,
+    pub(crate) dirty_start: usize,
+    pub(crate) dirty_end: usize,
+    pub(crate) prev_cursor_y: usize,
+    pub(crate) prev_cursor_byte: usize,
+    pub(crate) extra_cursors: Vec<CursorPos>,
+    pub(crate) last_added_cursor_idx: Option<usize>,
+    pub(crate) edit_count: usize,
+    pub(crate) dragging_vscroll: bool,
+    pub(crate) dragging_hscroll: bool,
+    pub(crate) syntax: crate::syntax::SyntaxHighlighter,
+    pub(crate) buffer_stack: Vec<PathBuf>,
+    pub(crate) buffer_idx: usize,
+}
+
+impl Tab {
+    /// Capture the current editor state into a Tab snapshot.
+    pub(crate) fn from_editor(e: &Editor) -> Self {
+        Self {
+            path: e.path.clone(),
+            lines: e.lines.clone(),
+            modified: e.modified,
+            cursor_y: e.cursor_y,
+            cursor_byte: e.cursor_byte,
+            scroll: e.scroll,
+            scroll_x: e.scroll_x,
+            selection_anchor: e.selection_anchor,
+            undo_stack: e.undo_stack.clone(),
+            redo_stack: e.redo_stack.clone(),
+            search_query: e.search_query.clone(),
+            search_matches: e.search_matches.clone(),
+            search_match_idx: e.search_match_idx,
+            dirty_start: e.dirty_start,
+            dirty_end: e.dirty_end,
+            prev_cursor_y: e.prev_cursor_y,
+            prev_cursor_byte: e.prev_cursor_byte,
+            extra_cursors: e.extra_cursors.clone(),
+            last_added_cursor_idx: e.last_added_cursor_idx,
+            edit_count: e.edit_count,
+            dragging_vscroll: e.dragging_vscroll,
+            dragging_hscroll: e.dragging_hscroll,
+            syntax: e.syntax.clone(),
+            buffer_stack: e.buffer_stack.clone(),
+            buffer_idx: e.buffer_idx,
+        }
+    }
+
+    /// Restore editor state from this Tab snapshot.
+    /// Clipboard is NOT restored from the tab — it stays shared globally.
+    pub(crate) fn apply_to(&self, e: &mut Editor) {
+        e.path = self.path.clone();
+        e.lines = self.lines.clone();
+        e.modified = self.modified;
+        e.cursor_y = self.cursor_y;
+        e.cursor_byte = self.cursor_byte;
+        e.scroll = self.scroll;
+        e.scroll_x = self.scroll_x;
+        e.selection_anchor = self.selection_anchor;
+        e.undo_stack = self.undo_stack.clone();
+        e.redo_stack = self.redo_stack.clone();
+        e.search_query = self.search_query.clone();
+        e.search_matches = self.search_matches.clone();
+        e.search_match_idx = self.search_match_idx;
+        e.dirty_start = self.dirty_start;
+        e.dirty_end = self.dirty_end;
+        e.prev_cursor_y = self.prev_cursor_y;
+        e.prev_cursor_byte = self.prev_cursor_byte;
+        e.extra_cursors = self.extra_cursors.clone();
+        e.last_added_cursor_idx = self.last_added_cursor_idx;
+        e.edit_count = self.edit_count;
+        e.dragging_vscroll = self.dragging_vscroll;
+        e.dragging_hscroll = self.dragging_hscroll;
+        e.syntax = self.syntax.clone();
+        e.buffer_stack = self.buffer_stack.clone();
+        e.buffer_idx = self.buffer_idx;
+    }
+}
+
 // ── Editor ───────────────────────────────────────────────────────────────────
 
 pub(crate) struct Editor {
@@ -273,6 +388,14 @@ pub(crate) struct Editor {
     pub(crate) gosc_dirs: Vec<String>,
     pub(crate) gosc_buf: String,
 
+    // Run mode state
+    pub(crate) run_lines: Vec<String>,
+    pub(crate) run_scroll: usize,
+    pub(crate) run_cmd_buf: String,
+    pub(crate) run_executing: Option<String>,
+    pub(crate) run_rx: Option<std::sync::mpsc::Receiver<RunMessage>>,
+    pub(crate) run_child: Option<std::process::Child>,
+
     // Recently opened files buffer stack
     pub(crate) buffer_stack: Vec<std::path::PathBuf>,
     pub(crate) buffer_idx: usize,
@@ -282,6 +405,19 @@ pub(crate) struct Editor {
     pub(crate) completion_idx: usize,
     pub(crate) completion_visible: bool,
     pub(crate) completion_prefix: String,
+
+    // Crash recovery: counter to periodically save recovery snapshots
+    pub(crate) edit_count: usize,
+
+    // Scroll bar drag state
+    pub(crate) dragging_vscroll: bool,
+    pub(crate) dragging_hscroll: bool,
+
+    // ── Multi-tab support ─────────────────────────────────────────────────
+    pub(crate) tabs: Vec<Tab>,
+    pub(crate) active_tab: usize,
+    // Set by mouse handler when close button on last tab is clicked
+    pub(crate) pending_quit: bool,
 }
 
 impl Editor {
@@ -340,13 +476,32 @@ impl Editor {
             ff_idx: 0,
             gosc_dirs: Vec::new(),
             gosc_buf: String::new(),
+            run_lines: Vec::new(),
+            run_scroll: 0,
+            run_cmd_buf: String::new(),
+            run_executing: None,
+            run_rx: None,
+            run_child: None,
             buffer_stack: vec![path.to_path_buf()],
             buffer_idx: 0,
             completion_items: Vec::new(),
             completion_idx: 0,
             completion_visible: false,
             completion_prefix: String::new(),
+            edit_count: 0,
+            dragging_vscroll: false,
+            dragging_hscroll: false,
+            tabs: Vec::new(),
+            active_tab: 0,
+            pending_quit: false,
         })
+    }
+
+    /// Finalise setup after construction: register the first tab and sync
+    /// the syntax highlighter used by Tab::from_editor.
+    pub(crate) fn init_tabs(&mut self) {
+        self.tabs.push(Tab::from_editor(self));
+        self.active_tab = 0;
     }
 
     // ── session persistence ──────────────────────────────────────────────────

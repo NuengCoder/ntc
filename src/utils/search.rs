@@ -10,6 +10,74 @@ use crate::fuzzy::{top_fuzzy_matches, top_fuzzy_dir_matches, MAX_FUZZY_SUGGESTIO
 use std::path::{Path, PathBuf};
 use walkdir::WalkDir;
 
+/// Check whether a pattern contains wildcard characters (`*`, `%`, `_`, `$`).
+pub fn has_wildcards(pattern: &str) -> bool {
+    pattern.contains('*') || pattern.contains('%') || pattern.contains('_') || pattern.contains('$')
+}
+
+/// Match a name against a wildcard pattern.
+/// Supports:
+///   `*` or `%` — match any sequence of characters (including empty)
+///   `_`        — match any single character
+///   `$`        — anchor at end of string (pattern must end with `$`)
+/// Matching is case-insensitive.
+pub fn matches_wildcard(pattern: &str, name: &str) -> bool {
+    let pattern = pattern.to_lowercase();
+    let name = name.to_lowercase();
+
+    let has_end_anchor = pattern.ends_with('$');
+    let pat = if has_end_anchor {
+        &pattern[..pattern.len() - 1]
+    } else {
+        pattern.as_str()
+    };
+
+    let pat_chars: Vec<char> = pat.chars().collect();
+    let name_chars: Vec<char> = name.chars().collect();
+
+    // Simple recursive/iterative matching
+    fn wildcard_match(pat: &[char], name: &[char]) -> bool {
+        if pat.is_empty() {
+            return name.is_empty();
+        }
+
+        let pc = pat[0];
+        if pc == '*' || pc == '%' {
+            // Try matching 0 or more characters
+            let rest = &pat[1..];
+            for i in 0..=name.len() {
+                if wildcard_match(rest, &name[i..]) {
+                    return true;
+                }
+            }
+            false
+        } else if pc == '_' {
+            if name.is_empty() {
+                return false;
+            }
+            wildcard_match(&pat[1..], &name[1..])
+        } else {
+            if name.is_empty() || pc != name[0] {
+                return false;
+            }
+            wildcard_match(&pat[1..], &name[1..])
+        }
+    }
+
+    if has_end_anchor {
+        // Match entire string exactly
+        wildcard_match(pat_chars.as_slice(), name_chars.as_slice())
+    } else {
+        // Match anywhere in the string (like a glob without start anchor)
+        for start in 0..=name_chars.len() {
+            if wildcard_match(pat_chars.as_slice(), &name_chars[start..]) {
+                return true;
+            }
+        }
+        false
+    }
+}
+
 // ============================================================================
 // Types
 // ============================================================================
@@ -170,6 +238,18 @@ pub fn search_files(root: &Path, pattern: &str, max_depth: usize) -> Vec<SearchR
     let pattern_lower = pattern.to_lowercase();
     let ignored_dirs = Config::global_get_ignored_dirs();
     let fmt_cfg = FormatConfig::from_global();
+    let use_wildcard = has_wildcards(pattern);
+
+    if use_wildcard {
+        let mut wild_matches: Vec<SearchResult> = Vec::new();
+        for (file_name, full_path) in walk_files(root, max_depth, &ignored_dirs, &fmt_cfg) {
+            if matches_wildcard(pattern, &file_name) {
+                wild_matches.push(SearchResult::exact(full_path, file_name));
+            }
+        }
+        wild_matches.sort_by_cached_key(|a| a.name.to_lowercase());
+        return wild_matches;
+    }
 
     let mut exact_matches: Vec<SearchResult> = Vec::new();
     let mut partial_matches: Vec<SearchResult> = Vec::new();
@@ -235,6 +315,18 @@ pub fn search_files(root: &Path, pattern: &str, max_depth: usize) -> Vec<SearchR
 pub fn search_directories(root: &Path, pattern: &str, max_depth: usize) -> Vec<SearchResult> {
     let pattern_lower = pattern.to_lowercase();
     let ignored_dirs = Config::global_get_ignored_dirs();
+    let use_wildcard = has_wildcards(pattern);
+
+    if use_wildcard {
+        let mut wild_matches: Vec<SearchResult> = Vec::new();
+        for (dir_name, full_path) in walk_dirs(root, max_depth, &ignored_dirs) {
+            if matches_wildcard(pattern, &dir_name) {
+                wild_matches.push(SearchResult::exact(full_path, dir_name));
+            }
+        }
+        wild_matches.sort_by_cached_key(|a| a.name.to_lowercase());
+        return wild_matches;
+    }
 
     let mut exact_matches: Vec<SearchResult> = Vec::new();
     let mut partial_matches: Vec<SearchResult> = Vec::new();
@@ -302,7 +394,7 @@ pub fn search_all(root: &Path, pattern: &str, max_depth: usize) -> Vec<SearchRes
 
     if has_exact {
         let mut results: Vec<SearchResult> = files.into_iter()
-            .chain(dirs.into_iter())
+            .chain(dirs)
             .filter(|r| r.match_kind == MatchKind::Exact)
             .collect();
         results.sort_by_cached_key(|a| a.name.to_lowercase());
@@ -311,7 +403,7 @@ pub fn search_all(root: &Path, pattern: &str, max_depth: usize) -> Vec<SearchRes
 
     if has_partial {
         let mut results: Vec<SearchResult> = files.into_iter()
-            .chain(dirs.into_iter())
+            .chain(dirs)
             .filter(|r| r.match_kind == MatchKind::Partial)
             .collect();
         results.sort_by_cached_key(|a| a.name.to_lowercase());
@@ -320,11 +412,91 @@ pub fn search_all(root: &Path, pattern: &str, max_depth: usize) -> Vec<SearchRes
 
     // Fuzzy — combine all fuzzy results, sorted by score descending
     let mut results: Vec<SearchResult> = files.into_iter()
-        .chain(dirs.into_iter())
+        .chain(dirs)
         .filter(|r| r.match_kind == MatchKind::Fuzzy)
         .collect();
     results.sort_by(|a, b| b.score.partial_cmp(&a.score).unwrap_or(std::cmp::Ordering::Equal));
     results
+}
+
+/// Result of a content search (grep)
+#[derive(Debug, Clone)]
+pub struct ContentMatch {
+    pub file_path: PathBuf,
+    pub line_number: usize,
+    pub line: String,
+}
+
+/// Search file contents for a pattern (case-insensitive).
+/// Only searches files that pass the ignore/care filters.
+/// Returns matches sorted by file path then line number.
+pub fn search_content(root: &Path, pattern: &str, max_depth: usize) -> Vec<ContentMatch> {
+    let pattern_lower = pattern.to_lowercase();
+    let ignored_dirs = Config::global_get_ignored_dirs();
+    let fmt_cfg = FormatConfig::from_global();
+
+    let mut results: Vec<ContentMatch> = Vec::new();
+
+    for (_file_name, full_path) in walk_files(root, max_depth, &ignored_dirs, &fmt_cfg) {
+        if let Ok(content) = std::fs::read_to_string(&full_path) {
+            for (i, line) in content.lines().enumerate() {
+                if line.to_lowercase().contains(&pattern_lower) {
+                    results.push(ContentMatch {
+                        file_path: full_path.clone(),
+                        line_number: i + 1,
+                        line: line.to_string(),
+                    });
+                }
+            }
+        }
+    }
+
+    results.sort_by(|a, b| {
+        a.file_path
+            .cmp(&b.file_path)
+            .then_with(|| a.line_number.cmp(&b.line_number))
+    });
+    results
+}
+
+/// Format content search results for display.
+pub fn format_content_results(results: &[ContentMatch], pattern: &str, max_depth: usize) -> String {
+    let depth_label = if max_depth == usize::MAX {
+        "unlimited".to_string()
+    } else {
+        max_depth.to_string()
+    };
+
+    let mut output = String::new();
+    output.push_str(&format!(
+        "\n🔍 Searching file contents for \"{}\" (max depth: {})...\n\n",
+        pattern, depth_label
+    ));
+
+    if results.is_empty() {
+        output.push_str("  No matches found.\n");
+        return output;
+    }
+
+    output.push_str(&format!("  Content matches ({}):\n", results.len()));
+    for (i, m) in results.iter().enumerate() {
+        let path_str = display_search_path(&m.file_path);
+        let line = m.line.trim();
+        let truncated = if line.len() > 120 {
+            format!("{}…", &line[..120])
+        } else {
+            line.to_string()
+        };
+        output.push_str(&format!(
+            "  {}. {}:{}: {}\n",
+            i + 1,
+            path_str,
+            m.line_number,
+            truncated
+        ));
+    }
+
+    output
 }
 
 // ============================================================================

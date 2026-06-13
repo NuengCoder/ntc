@@ -19,6 +19,8 @@ pub struct EditorSession {
 pub struct SessionState {
     pub last_directory: Option<PathBuf>,
     pub editor_session: Option<EditorSession>,
+    #[serde(default)]
+    pub nav_stack: Vec<PathBuf>,
 }
 
 impl SessionState {
@@ -39,12 +41,15 @@ impl SessionState {
         SessionState {
             last_directory: None,
             editor_session: None,
+            nav_stack: Vec::new(),
         }
     }
 
     pub fn save(&self) {
         if let Some(path) = Self::session_path() {
-            let _ = fs::create_dir_all(path.parent().unwrap());
+            if let Some(parent) = path.parent() {
+                let _ = fs::create_dir_all(parent);
+            }
             if let Ok(toml_str) = toml::to_string_pretty(self) {
                 let _ = fs::write(&path, toml_str);
             }
@@ -58,7 +63,15 @@ impl SessionState {
         &SESSION
     }
 
+    pub fn read_global() -> std::sync::RwLockReadGuard<'static, SessionState> {
+        Self::global().read().unwrap_or_else(|e| e.into_inner())
+    }
+
+    pub fn write_global() -> std::sync::RwLockWriteGuard<'static, SessionState> {
+        Self::global().write().unwrap_or_else(|e| e.into_inner())
+    }
+
     pub fn save_global() {
-        Self::global().read().unwrap().save();
+        Self::read_global().save();
     }
 }

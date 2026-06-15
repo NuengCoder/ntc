@@ -2,11 +2,10 @@ use crate::config::Config;
 use crate::filetype::FormatConfig;
 use crate::navigator::Navigator;
 use crate::output::{print_error, print_info, print_success, print_warning};
+use crate::utils::interactive::{InteractiveMenu, MenuItem};
 use crate::watcher;
 
 use anyhow::Result;
-use colored::*;
-use std::io::{self, Write};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::Arc;
@@ -18,8 +17,12 @@ mod config_commands;
 mod ignore;
 mod misc;
 mod nav;
+mod theme;
 mod ran_commands;
 mod report;
+
+#[cfg(feature = "image2doc")]
+mod image;
 
 
 // ============================================================================
@@ -110,7 +113,17 @@ pub(crate) fn execute_command(
         "mkd" => misc::cmd_mkd(args, nav),
         "rmd" => misc::cmd_rmd(args, nav),
         "rmf" => misc::cmd_rmf(args, nav),
-        "theme" => misc::cmd_theme(args, nav),
+        "theme" => theme::cmd_theme(args, nav),
+        "py_activate" => misc::cmd_venva(args, nav),
+        "py_deactivate" => misc::cmd_venvd(args, nav),
+        "showenv" => misc::cmd_show_env(args, nav),
+        #[cfg(feature = "image2doc")]
+        "image" | "img" => image::cmd_image(args, nav),
+        #[cfg(not(feature = "image2doc"))]
+        "image" | "img" => {
+            print_error("Image conversion not available (feature 'image2doc' disabled).");
+            Ok(false)
+        }
         _ => misc::cmd_fallback(input, nav, watcher_handle),
     }
 }
@@ -246,7 +259,7 @@ fn parse_search_args(args: &str) -> (String, usize) {
 }
 
 fn list_supported_files(nav: &Navigator) -> Result<Vec<(String, PathBuf)>> {
-    let fmt_cfg = FormatConfig::from_global();
+    let fmt_cfg = FormatConfig::from_both();
     let mut files = Vec::new();
     
     if let Ok(entries) = std::fs::read_dir(nav.current_path()) {
@@ -267,65 +280,35 @@ fn list_supported_files(nav: &Navigator) -> Result<Vec<(String, PathBuf)>> {
 }
 
 fn show_file_selection_menu(_nav: &Navigator, files: Vec<(String, PathBuf)>, copy_mode: bool) -> Result<()> {
-    println!();
-    println!("{}", "==================================================".cyan());
-    if copy_mode {
-        println!("{}", "📋 Select a file to COPY to clipboard".cyan().bold());
+    let title = if copy_mode {
+        "Select a file to COPY to clipboard"
     } else {
-        println!("{}", "📄 Select a file to DISPLAY".cyan().bold());
-    }
-    println!("{}", "==================================================".cyan());
-    
-    if files.is_empty() {
-        println!("  {}", "(no supported files)".dimmed());
-    } else {
-        for (i, (name, path)) in files.iter().enumerate() {
-            let size_str = get_file_size(path);
-            println!("  {}. {} {}", 
-                (i + 1).to_string().yellow(), 
-                name.blue(),
-                size_str.dimmed());
+        "Select a file to DISPLAY"
+    };
+
+    let items: Vec<MenuItem> = files
+        .iter()
+        .map(|(name, path)| MenuItem::with_detail(name, get_file_size(path)))
+        .collect();
+
+    let menu = InteractiveMenu::new(title)
+        .items(items)
+        .prompt(format!("Enter number (1-{}) or 0: ", files.len()));
+
+    if let Some(idx) = menu.run()? {
+        let (name, path) = &files[idx];
+        if copy_mode {
+            print_info(&format!("Copying '{}' to clipboard...", name));
+            let show_lines = Config::global_get_show_line_numbers();
+            let content = crate::output::cat_file_with_line_numbers(path, show_lines)?;
+            crate::output::copy_to_clipboard(&content, "TXT")?;
+            print_success(&format!("File '{}' copied to clipboard!", name));
+        } else {
+            let show_lines = Config::global_get_show_line_numbers();
+            crate::output::cat_file_with_syntax(path, show_lines)?;
         }
     }
-    
-    println!("  {}", "0. Cancel".red());
-    println!();
-    print!("{} ", format!("Enter number (1-{}) or 0: ", files.len()).green());
-    io::stdout().flush()?;
-    
-    let mut input = String::new();
-    io::stdin().read_line(&mut input)?;
-    let input = input.trim();
-    
-    if input == "0" || input.is_empty() {
-        println!("{}", "Cancelled.".dimmed());
-        return Ok(());
-    }
-    
-    match input.parse::<usize>() {
-        Ok(num) if num > 0 && num <= files.len() => {
-            let (name, path) = &files[num - 1];
-            if copy_mode {
-                println!();
-                print_info(&format!("Copying '{}' to clipboard...", name));
-                let show_lines = Config::global_get_show_line_numbers();
-                let content = crate::output::cat_file_with_line_numbers(path, show_lines)?;
-                crate::output::copy_to_clipboard(&content, "TXT")?;
-                print_success(&format!("File '{}' copied to clipboard!", name));
-            } else {
-                let show_lines = Config::global_get_show_line_numbers();
-                println!();
-                crate::output::cat_file_with_syntax(path, show_lines)?;
-            }
-        }
-        Ok(_) => {
-            print_error(&format!("Invalid number: {}", input));
-        }
-        Err(_) => {
-            print_error(&format!("Invalid input: {}", input));
-        }
-    }
-    
+
     Ok(())
 }
 

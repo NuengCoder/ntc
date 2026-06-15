@@ -80,6 +80,7 @@ pub fn validate_alias_name(name: &str) -> bool {
         "ne", "ntceditor", "igcare",
         "esc", "bkup", "pldw", "unpd", "gs", "fs", "ds", "diff", "fgo", "fsc", "locate",
         "dino", "math", "init", "deinit",
+        "image", "img", "python_activate", "python_deactivate", "python_showenv",
     ];
     
     if name.trim().is_empty() || name.contains(' ') {
@@ -148,12 +149,22 @@ impl Config {
     
     /// Load config from disk, then merge .ntconfig if present in current dir
     pub fn load() -> Self {
-        let mut cfg = if let Some(path) = Self::config_path() {
+        let cfg = if let Some(path) = Self::config_path() {
             if path.exists() {
-                if let Ok(content) = fs::read_to_string(&path) {
-                    toml::from_str::<Self>(&content).unwrap_or_else(|_| Self::new())
-                } else {
-                    Self::new()
+                match fs::read_to_string(&path) {
+                    Ok(content) => {
+                        match toml::from_str::<Self>(&content) {
+                            Ok(c) => c,
+                            Err(e) => {
+                                eprintln!("Warning: config file '{}' has invalid TOML ({}). Using defaults.", path.display(), e);
+                                Self::new()
+                            }
+                        }
+                    }
+                    Err(e) => {
+                        eprintln!("Warning: could not read config file '{}': {}. Using defaults.", path.display(), e);
+                        Self::new()
+                    }
                 }
             } else {
                 Self::new()
@@ -165,17 +176,10 @@ impl Config {
         // Apply color override at startup
         colored::control::set_override(cfg.color_enabled);
 
-        // Merge .ntconfig from current directory (only ignore/care and run_aliases)
-        if let Ok(cwd) = std::env::current_dir() {
-            let local_config = cwd.join("ntconfig.toml");
-            if local_config.exists() {
-                if let Ok(content) = fs::read_to_string(&local_config) {
-                    if let Ok(local) = toml::from_str::<LocalConfig>(&content) {
-                        cfg.merge_local(local);
-                    }
-                }
-            }
-        }
+        // Local ntconfig.toml is NOT merged into global Config.
+        // Local settings are read separately when needed (see `get_local_config()`
+        // and the combined query helpers below). This keeps global and local
+        // completely independent — deleting ntconfig.toml never affects global.
 
         cfg
     }
@@ -192,36 +196,153 @@ impl Config {
         *cfg = new_config;
     }
 
-    /// Merge .ntconfig settings (ONLY ignore/care and run_aliases)
-    /// Everything else (output_path, max_depth, teleports, etc.) stays global
-    fn merge_local(&mut self, local: LocalConfig) {
-        // ONLY merge ignore/care settings and run_aliases
-        // All other settings (output_path, max_depth, show_line_numbers, num_threads,
-        // history_path, history_enabled, file_watcher_enabled, teleports) are NEVER
-        // overridden by local config - they always come from global config
-        
-        if let Some(ref v) = local.ignored_directory_names {
-            self.ignored_directory_names = v.iter().cloned().collect();
-        }
-        if let Some(ref v) = local.ignored_extensions {
-            self.ignored_extensions = v.iter().cloned().collect();
-        }
-        if let Some(ref v) = local.extra_supported_extensions {
-            self.extra_supported_extensions = v.iter().cloned().collect();
-        }
-        if let Some(ref v) = local.ignored_files {
-            self.ignored_files = v.iter().cloned().collect();
-        }
-        if let Some(ref v) = local.extra_supported_files {
-            self.extra_supported_files = v.iter().cloned().collect();
-        }
-        // Merge run aliases (local overrides global if same name)
-        if let Some(ref v) = local.run_aliases {
-            for (name, cmd) in v {
-                self.run_aliases.insert(name.clone(), cmd.clone());
+    /// Read the local ntconfig.toml from the current directory, if it exists.
+    /// This is kept completely separate from the global Config — local settings
+    /// are never written into the global struct.
+    pub fn get_local_config() -> Option<LocalConfig> {
+        if let Ok(cwd) = std::env::current_dir() {
+            let local_path = cwd.join("ntconfig.toml");
+            if local_path.exists() {
+                if let Ok(content) = fs::read_to_string(&local_path) {
+                    if let Ok(local) = toml::from_str::<LocalConfig>(&content) {
+                        return Some(local);
+                    }
+                }
             }
         }
+        None
     }
+
+    /// Check if a directory name is ignored by either global or local config.
+    pub fn is_dir_ignored(name: &str) -> bool {
+        let cfg = Self::read_global();
+        if cfg.ignored_directory_names.contains(name) {
+            return true;
+        }
+        drop(cfg);
+        if let Some(local) = Self::get_local_config() {
+            if let Some(ref dirs) = local.ignored_directory_names {
+                if dirs.iter().any(|d| d == name) {
+                    return true;
+                }
+            }
+        }
+        false
+    }
+
+    /// Check if a file extension is ignored by either global or local config.
+    pub fn is_extension_ignored(ext: &str) -> bool {
+        let ext_lower = ext.to_lowercase();
+        let cfg = Self::read_global();
+        if cfg.ignored_extensions.contains(&ext_lower) {
+            return true;
+        }
+        drop(cfg);
+        if let Some(local) = Self::get_local_config() {
+            if let Some(ref exts) = local.ignored_extensions {
+                if exts.iter().any(|e| e.to_lowercase() == ext_lower) {
+                    return true;
+                }
+            }
+        }
+        false
+    }
+
+    /// Check if a filename is ignored by either global or local config.
+    pub fn is_file_ignored(name: &str) -> bool {
+        let cfg = Self::read_global();
+        if cfg.ignored_files.contains(name) {
+            return true;
+        }
+        drop(cfg);
+        if let Some(local) = Self::get_local_config() {
+            if let Some(ref files) = local.ignored_files {
+                if files.iter().any(|f| f == name) {
+                    return true;
+                }
+            }
+        }
+        false
+    }
+
+    /// Get the combined set of ignored directory names from global + local config.
+    pub fn get_ignored_dirs_combined() -> HashSet<String> {
+        let cfg = Self::read_global();
+        let mut dirs = cfg.ignored_directory_names.clone();
+        drop(cfg);
+        if let Some(local) = Self::get_local_config() {
+            if let Some(ref local_dirs) = local.ignored_directory_names {
+                for d in local_dirs {
+                    dirs.insert(d.clone());
+                }
+            }
+        }
+        dirs
+    }
+
+    /// Get the combined set of ignored extensions from global + local config.
+    pub fn get_ignored_extensions_combined() -> HashSet<String> {
+        let cfg = Self::read_global();
+        let mut exts = cfg.ignored_extensions.clone();
+        drop(cfg);
+        if let Some(local) = Self::get_local_config() {
+            if let Some(ref local_exts) = local.ignored_extensions {
+                for e in local_exts {
+                    exts.insert(e.to_lowercase());
+                }
+            }
+        }
+        exts
+    }
+
+    /// Get the combined set of ignored files from global + local config.
+    pub fn get_ignored_files_combined() -> HashSet<String> {
+        let cfg = Self::read_global();
+        let mut files = cfg.ignored_files.clone();
+        drop(cfg);
+        if let Some(local) = Self::get_local_config() {
+            if let Some(ref local_files) = local.ignored_files {
+                for f in local_files {
+                    files.insert(f.clone());
+                }
+            }
+        }
+        files
+    }
+
+    /// Get the combined set of extra supported extensions from global + local config.
+    pub fn get_extra_supported_extensions_combined() -> HashSet<String> {
+        let cfg = Self::read_global();
+        let mut exts = cfg.extra_supported_extensions.clone();
+        drop(cfg);
+        if let Some(local) = Self::get_local_config() {
+            if let Some(ref local_exts) = local.extra_supported_extensions {
+                for e in local_exts {
+                    exts.insert(e.to_lowercase());
+                }
+            }
+        }
+        exts
+    }
+
+    /// Get the combined set of extra supported files from global + local config.
+    pub fn get_extra_supported_files_combined() -> HashSet<String> {
+        let cfg = Self::read_global();
+        let mut files = cfg.extra_supported_files.clone();
+        drop(cfg);
+        if let Some(local) = Self::get_local_config() {
+            if let Some(ref local_files) = local.extra_supported_files {
+                for f in local_files {
+                    files.insert(f.clone());
+                }
+            }
+        }
+        files
+    }
+
+    // NOTE: merge_local() was removed. Local config is never merged into
+    // global. Use get_local_config(), is_dir_ignored(), get_ignored_dirs_combined(),
+    // etc. to check both global and local independently.
 
     /// Save this config instance to disk.
     /// Call only when you already hold a reference — do NOT re-acquire the
@@ -230,10 +351,20 @@ impl Config {
     pub fn save(&self) {
         if let Some(path) = Self::config_path() {
             if let Some(parent) = path.parent() {
-                let _ = fs::create_dir_all(parent);
+                if let Err(e) = fs::create_dir_all(parent) {
+                    eprintln!("Warning: failed to create config directory '{}': {}", parent.display(), e);
+                    return;
+                }
             }
-            if let Ok(toml) = toml::to_string_pretty(self) {
-                let _ = fs::write(&path, toml);
+            match toml::to_string_pretty(self) {
+                Ok(toml) => {
+                    if let Err(e) = fs::write(&path, toml) {
+                        eprintln!("Warning: failed to write config to '{}': {}", path.display(), e);
+                    }
+                }
+                Err(e) => {
+                    eprintln!("Warning: failed to serialize config: {}", e);
+                }
             }
         }
     }
@@ -273,6 +404,30 @@ impl Config {
     /// outside a write-lock section).
     pub fn save_global() {
         Self::read_global().save();
+    }
+
+    /// Replace the global config singleton with a custom instance.
+    /// Useful for testing or early initialization.
+    pub fn set_global(config: Config) {
+        *Self::global().write().unwrap() = config;
+    }
+
+    /// Temporarily inject a custom config, run `f`, then restore the original.
+    /// Returns the result of `f`.
+    ///
+    /// # Example
+    /// ```ignore
+    /// let result = Config::with_test_config(custom_cfg, || {
+    ///     // code that reads Config::global_get_*()
+    /// });
+    /// ```
+    pub fn with_test_config<R>(config: Config, f: impl FnOnce() -> R) -> R {
+        let mut guard = Self::global().write().unwrap();
+        let old = std::mem::replace(&mut *guard, config);
+        drop(guard);
+        let result = f();
+        *Self::global().write().unwrap() = old;
+        result
     }
 
     // ---- Convenience global methods ----
@@ -586,129 +741,137 @@ impl Config {
         Ok(())
     }
 
-    /// Add ignored directory to local config (or global if no local config)
-    pub fn local_add_ignored_dir(name: &str) -> std::result::Result<(), Box<dyn std::error::Error>> {
+    // ---- Generic local config mutation helpers ----
+    //
+    // These consolidate the repetitive "read-local-or-fall-back-to-global" pattern
+    // that appeared 8+ times in the codebase.
+
+    /// Modify a `Vec<String>` field on the local config (or global `HashSet` as fallback).
+    fn modify_local_vec(
+        local_field: fn(&mut LocalConfig) -> &mut Option<Vec<String>>,
+        global_add: fn(&str),
+        item: &str,
+        success_msg: &str,
+    ) {
         if Self::get_local_config_path().is_some() {
             let mut local = Self::read_local_config().unwrap_or_default();
-            if local.ignored_directory_names.is_none() {
-                local.ignored_directory_names = Some(Vec::new());
+            let vec = local_field(&mut local);
+            if vec.is_none() {
+                *vec = Some(Vec::new());
             }
-            if let Some(ref mut vec) = local.ignored_directory_names {
-                if !vec.contains(&name.to_string()) {
-                    vec.push(name.to_string());
+            if let Some(ref mut v) = vec {
+                if !v.contains(&item.to_string()) {
+                    v.push(item.to_string());
                 }
             }
-            Self::write_local_config(&local)?;
-            print_success(&format!("Now ignoring directory: {} (local config)", name));
+            if Self::write_local_config(&local).is_ok() {
+                print_success(&format!("{} (local config)", success_msg));
+            }
         } else {
-            Config::global_add_ignored_dir(name);
-            print_success(&format!("Now ignoring directory: {} (global config)", name));
+            global_add(item);
         }
+    }
+
+    /// Remove from a `Vec<String>` field on the local config (or global `HashSet` as fallback).
+    fn remove_from_local_vec(
+        local_field: fn(&mut LocalConfig) -> &mut Option<Vec<String>>,
+        global_remove: fn(&str),
+        item: &str,
+        success_msg: &str,
+    ) {
+        if Self::get_local_config_path().is_some() {
+            let mut local = Self::read_local_config().unwrap_or_default();
+            if let Some(ref mut vec) = local_field(&mut local) {
+                vec.retain(|x| x != item);
+                if vec.is_empty() {
+                    *local_field(&mut local) = None;
+                }
+            }
+            if Self::write_local_config(&local).is_ok() {
+                print_success(&format!("{} (local config)", success_msg));
+            }
+        } else {
+            global_remove(item);
+        }
+    }
+
+    /// Add ignored directory to local config (or global if no local config)
+    pub fn local_add_ignored_dir(name: &str) -> std::result::Result<(), Box<dyn std::error::Error>> {
+        Self::modify_local_vec(
+            |lc| &mut lc.ignored_directory_names,
+            Config::global_add_ignored_dir,
+            name,
+            &format!("Now ignoring directory: {}", name),
+        );
         Ok(())
     }
 
     /// Remove ignored directory from local config (or global if no local config)
     pub fn local_remove_ignored_dir(name: &str) -> std::result::Result<(), Box<dyn std::error::Error>> {
-        if Self::get_local_config_path().is_some() {
-            let mut local = Self::read_local_config().unwrap_or_default();
-            if let Some(ref mut vec) = local.ignored_directory_names {
-                vec.retain(|x| x != name);
-                if vec.is_empty() {
-                    local.ignored_directory_names = None;
-                }
-            }
-            Self::write_local_config(&local)?;
-            print_success(&format!("No longer ignoring directory: {} (local config)", name));
-        } else {
-            Config::global_remove_ignored_dir(name);
-            print_success(&format!("No longer ignoring directory: {} (global config)", name));
-        }
+        Self::remove_from_local_vec(
+            |lc| &mut lc.ignored_directory_names,
+            Config::global_remove_ignored_dir,
+            name,
+            &format!("No longer ignoring directory: {}", name),
+        );
         Ok(())
     }
 
     /// Add ignored extension to local config (or global if no local config)
     pub fn local_add_ignored_extension(ext: &str) -> std::result::Result<(), Box<dyn std::error::Error>> {
         let ext_lower = ext.to_lowercase();
-        if Self::get_local_config_path().is_some() {
-            let mut local = Self::read_local_config().unwrap_or_default();
-            if local.ignored_extensions.is_none() {
-                local.ignored_extensions = Some(Vec::new());
-            }
-            if let Some(ref mut vec) = local.ignored_extensions {
-                if !vec.contains(&ext_lower) {
-                    vec.push(ext_lower);
-                }
-            }
-            Self::write_local_config(&local)?;
-            print_success(&format!("Now ignoring .{} files (local config)", ext));
-        } else {
-            Config::global_add_ignored_extension(ext);
-            print_success(&format!("Now ignoring .{} files (global config)", ext));
+        // Pre-add to global's `ignored_extensions` before going through the helper
+        // so the fn pointer path can be used.
+        if Self::get_local_config_path().is_none() {
+            Config::global_add_ignored_extension(&ext_lower);
+            return Ok(());
         }
+        let mut local = Self::read_local_config().unwrap_or_default();
+        let vec = local.ignored_extensions.get_or_insert_with(Vec::new);
+        if !vec.contains(&ext_lower) {
+            vec.push(ext_lower.clone());
+        }
+        Self::write_local_config(&local)?;
+        print_success(&format!("Now ignoring .{} files (local config)", ext));
         Ok(())
     }
 
     /// Add extra supported extension to local config (or global if no local config)
     pub fn local_add_extra_supported_extension(ext: &str) -> std::result::Result<(), Box<dyn std::error::Error>> {
         let ext_lower = ext.to_lowercase();
-        if Self::get_local_config_path().is_some() {
-            let mut local = Self::read_local_config().unwrap_or_default();
-            if local.extra_supported_extensions.is_none() {
-                local.extra_supported_extensions = Some(Vec::new());
-            }
-            if let Some(ref mut vec) = local.extra_supported_extensions {
-                if !vec.contains(&ext_lower) {
-                    vec.push(ext_lower);
-                }
-            }
-            Self::write_local_config(&local)?;
-            print_success(&format!("Now caring about .{} files (local config)", ext));
-        } else {
-            Config::global_add_extra_supported_extension(ext);
-            print_success(&format!("Now caring about .{} files (global config)", ext));
+        if Self::get_local_config_path().is_none() {
+            Config::global_add_extra_supported_extension(&ext_lower);
+            return Ok(());
         }
+        let mut local = Self::read_local_config().unwrap_or_default();
+        let vec = local.extra_supported_extensions.get_or_insert_with(Vec::new);
+        if !vec.contains(&ext_lower) {
+            vec.push(ext_lower.clone());
+        }
+        Self::write_local_config(&local)?;
+        print_success(&format!("Now caring about .{} files (local config)", ext));
         Ok(())
     }
 
     /// Add ignored file to local config (or global if no local config)
     pub fn local_add_ignored_file(name: &str) -> std::result::Result<(), Box<dyn std::error::Error>> {
-        if Self::get_local_config_path().is_some() {
-            let mut local = Self::read_local_config().unwrap_or_default();
-            if local.ignored_files.is_none() {
-                local.ignored_files = Some(Vec::new());
-            }
-            if let Some(ref mut vec) = local.ignored_files {
-                if !vec.contains(&name.to_string()) {
-                    vec.push(name.to_string());
-                }
-            }
-            Self::write_local_config(&local)?;
-            print_success(&format!("Now ignoring file: {} (local config)", name));
-        } else {
-            Config::global_add_ignored_file(name);
-            print_success(&format!("Now ignoring file: {} (global config)", name));
-        }
+        Self::modify_local_vec(
+            |lc| &mut lc.ignored_files,
+            Config::global_add_ignored_file,
+            name,
+            &format!("Now ignoring file: {}", name),
+        );
         Ok(())
     }
 
     /// Add extra supported file to local config (or global if no local config)
     pub fn local_add_extra_supported_file(name: &str) -> std::result::Result<(), Box<dyn std::error::Error>> {
-        if Self::get_local_config_path().is_some() {
-            let mut local = Self::read_local_config().unwrap_or_default();
-            if local.extra_supported_files.is_none() {
-                local.extra_supported_files = Some(Vec::new());
-            }
-            if let Some(ref mut vec) = local.extra_supported_files {
-                if !vec.contains(&name.to_string()) {
-                    vec.push(name.to_string());
-                }
-            }
-            Self::write_local_config(&local)?;
-            print_success(&format!("Now caring about file: {} (local config)", name));
-        } else {
-            Config::global_add_extra_supported_file(name);
-            print_success(&format!("Now caring about file: {} (global config)", name));
-        }
+        Self::modify_local_vec(
+            |lc| &mut lc.extra_supported_files,
+            Config::global_add_extra_supported_file,
+            name,
+            &format!("Now caring about file: {}", name),
+        );
         Ok(())
     }
 
@@ -826,6 +989,7 @@ impl Config {
     // ---- Import helpers ----
 
     /// Import run aliases from a `.ntc.ral` file and merge into local or global config.
+    /// Batches writes: reads the target config once, applies all changes, writes once.
     pub fn import_run_aliases_from_file(path: &Path) -> std::result::Result<(), Box<dyn std::error::Error>> {
         let content = std::fs::read_to_string(path)?;
         #[derive(Deserialize)]
@@ -833,15 +997,33 @@ impl Config {
             run_aliases: Option<std::collections::HashMap<String, String>>,
         }
         let ral: RalFile = toml::from_str(&content)?;
-        if let Some(aliases) = ral.run_aliases {
+        let aliases = match ral.run_aliases {
+            Some(a) => a,
+            None => return Ok(()),
+        };
+
+        if Self::get_local_config_path().is_some() {
+            // Batch into local config: read once, apply all, write once
+            let mut local = Self::read_local_config().unwrap_or_default();
+            let map = local.run_aliases.get_or_insert_with(std::collections::HashMap::new);
             for (name, cmd) in &aliases {
-                Self::local_add_run_alias(name, cmd)?;
+                map.insert(name.to_lowercase(), cmd.clone());
             }
+            Self::write_local_config(&local)?;
+        } else {
+            // Batch into global config: write lock once, apply all, save once
+            let mut cfg = Self::write_global();
+            for (name, cmd) in &aliases {
+                cfg.run_aliases.insert(name.to_lowercase(), cmd.clone());
+            }
+            cfg.save();
         }
+        print_success(&format!("Imported {} alias(es).", aliases.len()));
         Ok(())
     }
 
     /// Import ignore/care settings from a `.ntc.igcare` file and merge into local or global config.
+    /// Batches writes: reads the target config once, applies all changes, writes once.
     pub fn import_igcare_from_file(path: &Path) -> std::result::Result<(), Box<dyn std::error::Error>> {
         let content = std::fs::read_to_string(path)?;
         #[derive(Deserialize)]
@@ -854,32 +1036,82 @@ impl Config {
         }
         let igc: IgcareFile = toml::from_str(&content)?;
 
-        // Merge each category — add each item to the current config
-        if let Some(ref dirs) = igc.ignored_directory_names {
-            for dir in dirs {
-                Self::local_add_ignored_dir(dir)?;
+        let mut total = 0usize;
+
+        if Self::get_local_config_path().is_some() {
+            // Batch into local config: read once, apply all, write once
+            let mut local = Self::read_local_config().unwrap_or_default();
+
+            let mut extend = |target: &mut Option<Vec<String>>, items: &[String]| {
+                let vec = target.get_or_insert_with(Vec::new);
+                for item in items {
+                    if !vec.contains(item) {
+                        vec.push(item.clone());
+                        total += 1;
+                    }
+                }
+            };
+
+            if let Some(ref dirs) = igc.ignored_directory_names {
+                extend(&mut local.ignored_directory_names, dirs);
             }
-        }
-        if let Some(ref exts) = igc.ignored_extensions {
-            for ext in exts {
-                Self::local_add_ignored_extension(ext)?;
+            if let Some(ref exts) = igc.ignored_extensions {
+                extend(&mut local.ignored_extensions, exts);
             }
-        }
-        if let Some(ref exts) = igc.extra_supported_extensions {
-            for ext in exts {
-                Self::local_add_extra_supported_extension(ext)?;
+            if let Some(ref exts) = igc.extra_supported_extensions {
+                extend(&mut local.extra_supported_extensions, exts);
             }
-        }
-        if let Some(ref files) = igc.ignored_files {
-            for file in files {
-                Self::local_add_ignored_file(file)?;
+            if let Some(ref files) = igc.ignored_files {
+                extend(&mut local.ignored_files, files);
             }
-        }
-        if let Some(ref files) = igc.extra_supported_files {
-            for file in files {
-                Self::local_add_extra_supported_file(file)?;
+            if let Some(ref files) = igc.extra_supported_files {
+                extend(&mut local.extra_supported_files, files);
             }
+
+            Self::write_local_config(&local)?;
+        } else {
+            // Batch into global config: write lock once, apply all, save once
+            let mut cfg = Self::write_global();
+
+            if let Some(ref dirs) = igc.ignored_directory_names {
+                for dir in dirs {
+                    if cfg.ignored_directory_names.insert(dir.clone()) {
+                        total += 1;
+                    }
+                }
+            }
+            if let Some(ref exts) = igc.ignored_extensions {
+                for ext in exts {
+                    if cfg.ignored_extensions.insert(ext.to_lowercase()) {
+                        total += 1;
+                    }
+                }
+            }
+            if let Some(ref exts) = igc.extra_supported_extensions {
+                for ext in exts {
+                    if cfg.extra_supported_extensions.insert(ext.to_lowercase()) {
+                        total += 1;
+                    }
+                }
+            }
+            if let Some(ref files) = igc.ignored_files {
+                for file in files {
+                    if cfg.ignored_files.insert(file.clone()) {
+                        total += 1;
+                    }
+                }
+            }
+            if let Some(ref files) = igc.extra_supported_files {
+                for file in files {
+                    if cfg.extra_supported_files.insert(file.clone()) {
+                        total += 1;
+                    }
+                }
+            }
+
+            cfg.save();
         }
+        print_success(&format!("Imported {} ignore/care setting(s).", total));
         Ok(())
     }
     
@@ -894,7 +1126,7 @@ impl Default for Config {
 /// Local config file (.ntconfig) - ONLY ignore/care and run_aliases
 /// All other settings are always global
 #[derive(Debug, Serialize, Deserialize, Default)]
-struct LocalConfig {
+pub struct LocalConfig {
     pub ignored_directory_names: Option<Vec<String>>,
     pub ignored_extensions: Option<Vec<String>>,
     pub extra_supported_extensions: Option<Vec<String>>,

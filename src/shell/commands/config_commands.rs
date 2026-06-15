@@ -421,7 +421,7 @@ pub fn cmd_restorecg(_args: &str, _nav: &mut Navigator) -> Result<bool> {
 
 pub fn cmd_local(args: &str, nav: &mut Navigator) -> Result<bool> {
     let parts: Vec<&str> = args.split_whitespace().collect();
-    let subcmd = parts.first().map(|s| *s).unwrap_or("");
+    let subcmd = parts.first().copied().unwrap_or("");
     let subargs = parts.get(1..).unwrap_or(&[]).join(" ");
 
     match subcmd {
@@ -656,7 +656,7 @@ fn cmd_local_help() {
     println!("  local deinit               Remove ntconfig.toml from current directory");
     println!("  local help                 Show this help");
     println!();
-    println!("{}", "The local ntconfig.toml overrides global ignore/care and run alias settings");
+    println!("The local ntconfig.toml overrides global ignore/care and run alias settings");
     println!("for the current directory only. It does NOT affect teleports, output path,");
     println!("max depth, or other global settings.");
     println!();

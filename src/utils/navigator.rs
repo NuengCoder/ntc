@@ -1,3 +1,5 @@
+use crate::filetype::strip_unc_prefix;
+use crate::shell::venv::{detect_active_venv, has_venv_in_dir};
 use anyhow::{Context, Result};
 use std::env;
 use std::path::{Path, PathBuf};
@@ -5,13 +7,21 @@ use std::path::{Path, PathBuf};
 /// Manages the current working directory state
 pub struct Navigator {
     current_dir: PathBuf,
+    venv_name: Option<String>,
 }
 
 impl Navigator {
     /// Create a new Navigator starting from the current directory
     pub fn new() -> Result<Self> {
         let current_dir = env::current_dir().context("Failed to get current directory")?;
-        Ok(Self { current_dir })
+        Ok(Self { 
+            current_dir,
+            venv_name: detect_active_venv(),
+        })
+    }
+
+    pub fn update_venv_name(&mut self, venv_name: Option<String>) {
+        self.venv_name = venv_name;
     }
 
     /// Get the current directory path (internal, may contain extended prefix)
@@ -22,6 +32,24 @@ impl Navigator {
     /// Get display‑ready path string (without `\\?\` prefix on Windows)
     pub fn display_path(&self) -> String {
         strip_extended_prefix(&self.current_dir)
+    }
+
+    /// Get the venv prefix for display
+    pub fn get_venv_prefix(&self) -> String {
+        match &self.venv_name {
+            Some(name) => format!("({}) ", name),
+            None => String::new(),
+        }
+    }
+    
+    /// Get colored venv prefix using theme
+    pub fn get_colored_venv_prefix(&self) -> String {
+        match &self.venv_name {
+            Some(name) => {
+                format!("({}) ", name)
+            }
+            None => String::new(),
+        }
     }
 
     /// Navigate to a specific directory
@@ -42,6 +70,23 @@ impl Navigator {
             let has_local_config = canonical.join("ntconfig.toml").exists();
             env::set_current_dir(&canonical)?;
             self.current_dir = canonical;
+            
+            // Re-detect venv after directory change
+            self.venv_name = detect_active_venv();  
+            
+            // Optional: Show hint if venv exists but not activated
+            if self.venv_name.is_none() && has_venv_in_dir(&self.current_dir) {
+                #[cfg(not(target_os = "android"))]
+                {
+                    use colored::Colorize;
+                    println!();
+                    println!("{}", "💡 Tip: Python virtual environment detected!".cyan());
+                    #[cfg(windows)]
+                    println!("   Run: .\\venv\\Scripts\\activate");
+                    #[cfg(not(windows))]
+                    println!("   Run: source ./venv/bin/activate");
+                }
+            }
             
             if has_local_config {
                 crate::config::Config::reload_global();
@@ -130,13 +175,7 @@ pub fn clear_screen() {
 }
 
 /// Remove Windows extended‑length prefix (\\?\) for display.
-/// On non-Windows platforms this is a straight string conversion.
 fn strip_extended_prefix(path: &Path) -> String {
-    let s = path.to_string_lossy();
-    #[cfg(windows)]
-    if let Some(stripped) = s.strip_prefix(r"\\?\") {
-        return stripped.to_string();
-    }
-    s.to_string()
+    strip_unc_prefix(path)
 }
 

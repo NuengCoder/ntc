@@ -1,10 +1,11 @@
 use crate::config::Config;
-use crate::explorer::{format_tree, format_tree_with_sizes, generate_tree};
+use crate::explorer::{format_tree, format_tree_with_sizes, generate_tree, calculate_total_size, human_readable_size};
 use crate::navigator::Navigator;
 use crate::output::{print_error, print_separator, print_success, print_warning};
 
 use anyhow::Result;
 use colored::*;
+use std::collections::HashSet;
 use std::io::{self, Write};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
@@ -109,6 +110,9 @@ pub(super) fn gosc_loop(nav: &mut Navigator) -> Result<()> {
         println!("║ {} go back 1 level", "-1".yellow());
         println!("║ {} go back 2 levels", "-2".yellow());
         println!("║ {} go back n levels", "-n".yellow());
+        println!("║ {} view --care -d 1 (files + care)", "v".yellow());
+        println!("║ {} size --care (total size)", "s".yellow());
+        println!("║ {} view -s --care -d 1 (files + sizes + care)", "vs".yellow());
         println!("║ {} exit gosc", "0".red());
         println!("╠──────────────────────────────────────────────────╣");
         
@@ -135,6 +139,58 @@ pub(super) fn gosc_loop(nav: &mut Navigator) -> Result<()> {
         if input == "0" {
             println!("{}", "Exiting gosc...".dimmed());
             break Ok(());
+        }
+        
+        // Handle v, s, vs commands - create output zone below the menu
+        match input {
+            "s" => {
+                // size --care: show total directory size
+                println!();
+                println!("{}", "─── Output Zone ───────────────────────────────────".cyan());
+                let total = run_with_spinner("Calculating directory size...", || {
+                    calculate_total_size(nav.current_path())
+                });
+                let bytes_str = format!("{}", total);
+                let human_str = human_readable_size(total);
+                let w = bytes_str.len().max(human_str.len()) + 18;
+                println!("┌{}┐", "─".repeat(w));
+                println!("│{:^w$}│", "Current Directory Size".cyan().bold(), w = w);
+                println!("├{}┤", "─".repeat(w));
+                println!("│ Bytes: {:<w$} │", bytes_str.yellow(), w = w - 9);
+                println!("│ Human: {:<w$} │", human_str.green().bold(), w = w - 9);
+                println!("└{}┘", "─".repeat(w));
+                println!("{}", "──────────────────────────────────────────────────".cyan());
+                println!();
+                print!("{} ", "Press Enter to continue...".dimmed());
+                let mut dummy = String::new();
+                std::io::stdin().read_line(&mut dummy)?;
+                continue;
+            }
+            "v" => {
+                // view --care -d 1: show files with care, depth 1
+                println!();
+                println!("{}", "─── Output Zone ───────────────────────────────────".cyan());
+                show_tree(nav, Some(1), false, true, false, false, true);
+                println!("{}", "──────────────────────────────────────────────────".cyan());
+                println!();
+                print!("{} ", "Press Enter to continue...".dimmed());
+                let mut dummy = String::new();
+                std::io::stdin().read_line(&mut dummy)?;
+                continue;
+            }
+            "vs" => {
+                // view -s --care -d 1: show files with sizes and care, depth 1
+                println!();
+                println!("{}", "─── Output Zone ───────────────────────────────────".cyan());
+                show_tree(nav, Some(1), false, true, true, false, true);
+                println!("{}", "──────────────────────────────────────────────────".cyan());
+                println!();
+                print!("{} ", "Press Enter to continue...".dimmed());
+                let mut dummy = String::new();
+                std::io::stdin().read_line(&mut dummy)?;
+                continue;
+            }
+            _ => {}
         }
         
         if let Some(back_str) = input.strip_prefix('-') {
@@ -224,7 +280,7 @@ pub(super) fn ignoresc_loop(nav: &mut Navigator) -> Result<()> {
 
 pub(super) fn caresc_loop(nav: &mut Navigator) -> Result<()> {
     loop {
-        let ignored = Config::global_get_ignored_dirs();
+        let ignored = Config::get_ignored_dirs_combined();
         let mut ignored_vec: Vec<String> = ignored.into_iter().collect();
         ignored_vec.sort_by_key(|a| a.to_lowercase());
         crate::navigator::clear_screen();
@@ -509,15 +565,36 @@ pub(crate) fn ral_import(path_str: &str) -> Result<()> {
 
 pub(crate) fn igcare_export_all(name: &str) -> Result<()> {
     let path = export_path(name, "ntc.igcare");
-    let cfg = Config::read_global();
-    write_igcare_file(&path, &cfg)?;
-    drop(cfg);
+    // Export combined (global + local) settings
+    let combined = CombinedIgcare {
+        ignored_directory_names: Config::get_ignored_dirs_combined(),
+        ignored_extensions: Config::get_ignored_extensions_combined(),
+        extra_supported_extensions: Config::get_extra_supported_extensions_combined(),
+        ignored_files: Config::get_ignored_files_combined(),
+        extra_supported_files: Config::get_extra_supported_files_combined(),
+    };
+    write_igcare_file(&path, &combined)?;
     print_success(&format!("Exported all ignore/care settings to: {}", path.display()));
     Ok(())
 }
 
+struct CombinedIgcare {
+    ignored_directory_names: HashSet<String>,
+    ignored_extensions: HashSet<String>,
+    extra_supported_extensions: HashSet<String>,
+    ignored_files: HashSet<String>,
+    extra_supported_files: HashSet<String>,
+}
+
 pub(crate) fn igcare_export_select(name: &str) -> Result<()> {
-    let cfg = Config::read_global();
+    // Use combined (global + local) settings for export
+    let combined = CombinedIgcare {
+        ignored_directory_names: Config::get_ignored_dirs_combined(),
+        ignored_extensions: Config::get_ignored_extensions_combined(),
+        extra_supported_extensions: Config::get_extra_supported_extensions_combined(),
+        ignored_files: Config::get_ignored_files_combined(),
+        extra_supported_files: Config::get_extra_supported_files_combined(),
+    };
 
     let category_labels = [
         "Ignored directories",
@@ -528,11 +605,11 @@ pub(crate) fn igcare_export_select(name: &str) -> Result<()> {
     ];
 
     let category_fields: [&std::collections::HashSet<String>; 5] = [
-        &cfg.ignored_directory_names,
-        &cfg.ignored_extensions,
-        &cfg.extra_supported_extensions,
-        &cfg.ignored_files,
-        &cfg.extra_supported_files,
+        &combined.ignored_directory_names,
+        &combined.ignored_extensions,
+        &combined.extra_supported_extensions,
+        &combined.ignored_files,
+        &combined.extra_supported_files,
     ];
 
     let total = category_fields.len();
@@ -582,14 +659,14 @@ pub(crate) fn igcare_export_select(name: &str) -> Result<()> {
             let mut sel: Vec<usize> = selected.iter().cloned().collect();
             sel.sort();
             let path = export_path(name, "ntc.igcare");
-            write_igcare_file_selective(&path, &cfg, &sel)?;
+            write_igcare_file_selective(&path, &combined, &sel)?;
             print_success(&format!("Exported {} category(ies) to: {}", sel.len(), path.display()));
             return Ok(());
         }
 
         if input == "a" {
             let path = export_path(name, "ntc.igcare");
-            write_igcare_file(&path, &cfg)?;
+            write_igcare_file(&path, &combined)?;
             print_success(&format!("Exported all ignore/care settings to: {}", path.display()));
             return Ok(());
         }
@@ -610,21 +687,21 @@ pub(crate) fn igcare_export_select(name: &str) -> Result<()> {
     }
 }
 
-fn write_igcare_file(path: &std::path::Path, cfg: &Config) -> Result<()> {
-    fn format_set(items: &std::collections::HashSet<String>) -> String {
-        if items.is_empty() {
-            return "[]".to_string();
-        }
-        let mut sorted: Vec<&String> = items.iter().collect();
-        sorted.sort();
-        let mut result = String::from("[\n");
-        for item in sorted {
-            result.push_str(&format!("    {:?},\n", item));
-        }
-        result.push(']');
-        result
+fn format_set(items: &std::collections::HashSet<String>) -> String {
+    if items.is_empty() {
+        return "[]".to_string();
     }
+    let mut sorted: Vec<&String> = items.iter().collect();
+    sorted.sort();
+    let mut result = String::from("[\n");
+    for item in sorted {
+        result.push_str(&format!("    {:?},\n", item));
+    }
+    result.push(']');
+    result
+}
 
+fn write_igcare_file(path: &std::path::Path, cfg: &CombinedIgcare) -> Result<()> {
     let mut content = String::from("# ntc ignore/care settings export\n");
     content.push_str("# Import with: igcare import <file>\n\n");
     content.push_str(&format!("ignored_directory_names = {}\n\n", format_set(&cfg.ignored_directory_names)));
@@ -639,23 +716,9 @@ fn write_igcare_file(path: &std::path::Path, cfg: &Config) -> Result<()> {
 
 fn write_igcare_file_selective(
     path: &std::path::Path,
-    cfg: &Config,
+    cfg: &CombinedIgcare,
     selections: &[usize],
 ) -> Result<()> {
-    fn format_set(items: &std::collections::HashSet<String>) -> String {
-        if items.is_empty() {
-            return "[]".to_string();
-        }
-        let mut sorted: Vec<&String> = items.iter().collect();
-        sorted.sort();
-        let mut result = String::from("[\n");
-        for item in sorted {
-            result.push_str(&format!("    {:?},\n", item));
-        }
-        result.push(']');
-        result
-    }
-
     let category_fields: Vec<(&str, &std::collections::HashSet<String>)> = vec![
         ("ignored_directory_names", &cfg.ignored_directory_names),
         ("ignored_extensions", &cfg.ignored_extensions),

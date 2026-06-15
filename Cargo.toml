@@ -1,6 +1,6 @@
 [package]
 name = "ntc"
-version = "2.2.0"
+version = "2.3.0"
 edition = "2021"
 description = "Navigate, Toolkit, Center - A Combine of Navigation , Project Toolkit Center hub"
 authors = ["NuengCoder"]
@@ -14,6 +14,11 @@ path = "src/main.rs"
 name = "ntc"
 path = "src/lib.rs"
 
+[features]
+default = ["image2doc"]
+image2doc = ["dep:image"]
+ocr = ["dep:tesseract", "dep:leptess"]
+
 [dependencies]
 clap = { version = "4.5", features = ["derive"] }
 walkdir = "2.5"
@@ -22,6 +27,7 @@ anyhow = "1.0"
 chrono = "0.4"
 dirs = "6.0"
 indicatif = "0.17"
+image =  { version = "0.24" , optional = true }
 serde = { version = "1.0", features = ["derive"] }
 toml = "0.8"
 colored = "2"
@@ -33,6 +39,8 @@ sha2 = "0.10"
 rand = "0.8"
 libc = "0.2"
 crossterm = "0.28"
+tesseract = { version = "0.13", optional = true }
+leptess = { version = "0.13", optional = true }
 
 [target.'cfg(not(target_os = "android"))'.dependencies]
 arboard = "3.4"
@@ -58,3 +66,5 @@ extended-description = """\
 ntc is a  Combine of Navigation , Project Toolkit Center hub.
 It helps navigate, visualize, and report on directory structures."""
 depends = "$auto"  # Automatically detects if you need libc, etc.
+
+

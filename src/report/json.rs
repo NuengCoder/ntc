@@ -60,7 +60,7 @@ impl JsonReportGenerator {
 }
 
 fn build_complete_json(tree: &TreeNode, dir_path: &Path, scan_time: f64) -> Result<serde_json::Value> {
-    let fmt_cfg = FormatConfig::from_global();
+    let fmt_cfg = FormatConfig::from_both();
     let (supported_files, unsupported_files) = collect_files_with_metadata(dir_path, &fmt_cfg)?;
     
     Ok(serde_json::json!({
@@ -83,7 +83,7 @@ fn build_complete_json(tree: &TreeNode, dir_path: &Path, scan_time: f64) -> Resu
         "configuration": {
             "max_depth": Config::global_get_max_depth(),
             "show_line_numbers": Config::global_get_show_line_numbers(),
-            "ignored_directories": Config::global_get_ignored_dirs().iter().collect::<Vec<_>>(),
+            "ignored_directories": Config::get_ignored_dirs_combined().iter().collect::<Vec<_>>(),
             "ignored_extensions": fmt_cfg.ignored_extensions.iter().collect::<Vec<_>>(),
             "extra_extensions": fmt_cfg.extra_extensions.iter().collect::<Vec<_>>()
         },
@@ -129,7 +129,7 @@ fn tree_to_json(node: &TreeNode) -> serde_json::Value {
 fn collect_files_with_metadata(dir_path: &Path, fmt_cfg: &FormatConfig) -> Result<(Vec<serde_json::Value>, Vec<serde_json::Value>)> {
     let mut supported = Vec::new();
     let mut unsupported = Vec::new();
-    let ignored_dirs = Config::global_get_ignored_dirs();
+    let ignored_dirs = Config::get_ignored_dirs_combined();
     let max_depth = Config::global_get_max_depth();
     
     let walker = walkdir::WalkDir::new(dir_path)

@@ -1,6 +1,7 @@
 use crate::config::Config;
 use std::collections::HashSet;
 use std::path::Path;
+use walkdir::DirEntry;
 
 /// Text file extensions that we can safely display
 const TEXT_EXTENSIONS: &[&str] = &[
@@ -18,7 +19,10 @@ const KNOWN_UNSUPPORTED_EXTENSIONS: &[&str] = &[
     "mp3", "wav", "ogg", "flac", "aac", "wma", "m4a",
     "mp4", "avi", "mkv", "mov", "wmv", "flv", "webm",
     "doc", "docx", "pdf", "xls", "xlsx", "ppt", "pptx",
-    "zip", "rar", "7z", "tar", "gz",
+    "zip", "rar", "7z", "tar", "gz","exe" , "dll" , "so" , 
+    "bin" , "iso" , "dmg" , "vmdk" , "qcow2", "apk" , "ipa" , 
+    "jar" , "war" , "ear" , "msi" , "deb" , "rpm", "qcow2" ,
+    "vhd" , "vhdx" , "img" , "ex4" ,"ex5"
 ];
 
 /// A snapshot of the config sets needed for format-checking.
@@ -41,6 +45,17 @@ impl FormatConfig {
             extra_files: cfg.extra_supported_files.clone(),
             ignored_extensions: cfg.ignored_extensions.clone(),
             extra_extensions: cfg.extra_supported_extensions.clone(),
+        }
+    }
+
+    /// Load all four sets combining both global AND local (ntconfig.toml) configs.
+    /// Local config stays independent — its values are never written into global.
+    pub fn from_both() -> Self {
+        Self {
+            ignored_files: Config::get_ignored_files_combined(),
+            extra_files: Config::get_extra_supported_files_combined(),
+            ignored_extensions: Config::get_ignored_extensions_combined(),
+            extra_extensions: Config::get_extra_supported_extensions_combined(),
         }
     }
 }
@@ -125,6 +140,38 @@ pub fn is_known_unsupported_format(path: &Path) -> bool {
     } else {
         false
     }
+}
+
+/// Create a WalkDir `filter_entry` closure that filters out ignored directories.
+/// `ignored_dirs` is a set of lowercase directory names to exclude.
+/// The closure returns `true` to include the entry, `false` to exclude it.
+/// The root entry (depth 0) is always included.
+pub fn make_ignored_dir_filter(
+    ignored_dirs: &HashSet<String>,
+) -> impl Fn(&DirEntry) -> bool + '_ {
+    move |e: &DirEntry| {
+        if e.depth() == 0 {
+            return true;
+        }
+        if e.file_type().is_dir() {
+            let name = e.file_name().to_string_lossy().to_lowercase();
+            if ignored_dirs.contains(&name) {
+                return false;
+            }
+        }
+        true
+    }
+}
+
+/// Strip Windows extended-length prefix (`\\?\`) from a path for display.
+/// On non-Windows platforms this is a no-op string conversion.
+pub fn strip_unc_prefix(path: &Path) -> String {
+    let s = path.to_string_lossy();
+    #[cfg(windows)]
+    if let Some(stripped) = s.strip_prefix(r"\\?\") {
+        return stripped.to_string();
+    }
+    s.to_string()
 }
 
 #[cfg(test)]

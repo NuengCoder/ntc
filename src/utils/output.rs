@@ -13,8 +13,65 @@ use arboard::Clipboard;
 // UI's body region instead of clobbering the input line)
 // ============================================================================
 
+/// RAII guard that restores stdout to its original handle on drop.
+/// This ensures stdout is always restored even if `f()` panics.
+#[cfg(windows)]
+struct StdoutGuard {
+    original_fd: std::os::windows::io::RawHandle,
+    tmp_file: std::path::PathBuf,
+}
+
+#[cfg(windows)]
+impl StdoutGuard {
+    fn new(_file: &std::fs::File, tmp_file: std::path::PathBuf) -> Self {
+        extern "system" {
+            fn GetStdHandle(nStdHandle: u32) -> std::os::windows::io::RawHandle;
+        }
+        const STD_OUTPUT_HANDLE: u32 = 0xFFFFFFF5u32;
+        let original_fd = unsafe { GetStdHandle(STD_OUTPUT_HANDLE) };
+        StdoutGuard { original_fd, tmp_file }
+    }
+}
+
+#[cfg(windows)]
+impl Drop for StdoutGuard {
+    fn drop(&mut self) {
+        extern "system" {
+            fn SetStdHandle(nStdHandle: u32, hHandle: std::os::windows::io::RawHandle) -> i32;
+        }
+        const STD_OUTPUT_HANDLE: u32 = 0xFFFFFFF5u32;
+        unsafe { SetStdHandle(STD_OUTPUT_HANDLE, self.original_fd) };
+        let _ = std::fs::remove_file(&self.tmp_file);
+    }
+}
+
+/// RAII guard that restores stdout to its original fd on drop.
+#[cfg(not(windows))]
+struct StdoutGuard {
+    saved_fd: i32,
+    tmp_file: std::path::PathBuf,
+}
+
+#[cfg(not(windows))]
+impl StdoutGuard {
+    fn new(_file: &std::fs::File, tmp_file: std::path::PathBuf) -> Self {
+        let saved_fd = unsafe { libc::dup(1) };
+        StdoutGuard { saved_fd, tmp_file }
+    }
+}
+
+#[cfg(not(windows))]
+impl Drop for StdoutGuard {
+    fn drop(&mut self) {
+        unsafe { libc::dup2(self.saved_fd, 1) };
+        unsafe { libc::close(self.saved_fd) };
+        let _ = std::fs::remove_file(&self.tmp_file);
+    }
+}
+
 /// Redirect stdout to a temporary file, capture output, then restore.
 /// This captures ALL output — `println!`, `print!`, colored crate, everything.
+/// Uses a RAII guard to ensure stdout is restored even if `f()` panics.
 #[cfg(windows)]
 fn with_stdout_captured<F: FnOnce()>(f: F) -> String {
     use std::os::windows::io::AsRawHandle;
@@ -30,13 +87,12 @@ fn with_stdout_captured<F: FnOnce()>(f: F) -> String {
         .expect("failed to create capture temp file");
 
     extern "system" {
-        fn GetStdHandle(nStdHandle: u32) -> RawHandle;
         fn SetStdHandle(nStdHandle: u32, hHandle: RawHandle) -> i32;
     }
     const STD_OUTPUT_HANDLE: u32 = 0xFFFFFFF5u32;
 
-    // Save the original stdout handle
-    let original_fd = unsafe { GetStdHandle(STD_OUTPUT_HANDLE) };
+    // Create guard that will restore stdout on drop (even during panic)
+    let guard = StdoutGuard::new(&file, tmp_file2);
 
     // Redirect stdout to our file
     unsafe { SetStdHandle(STD_OUTPUT_HANDLE, file.as_raw_handle()) };
@@ -47,17 +103,14 @@ fn with_stdout_captured<F: FnOnce()>(f: F) -> String {
     let _ = std::io::stdout().flush();
     drop(file);
 
-    // Restore original stdout
-    unsafe { SetStdHandle(STD_OUTPUT_HANDLE, original_fd) };
-
     // Read the captured output
-    let result = std::fs::read_to_string(&tmp_file2).unwrap_or_default();
-    let _ = std::fs::remove_file(&tmp_file2);
-    result
+    
+    std::fs::read_to_string(&guard.tmp_file).unwrap_or_default()
 }
 
 /// Redirect stdout to a temporary file, capture output, then restore.
 /// This captures ALL output — `println!`, `print!`, colored crate, everything.
+/// Uses a RAII guard to ensure stdout is restored even if `f()` panics.
 #[cfg(not(windows))]
 fn with_stdout_captured<F: FnOnce()>(f: F) -> String {
     use std::os::unix::io::AsRawFd;
@@ -73,7 +126,9 @@ fn with_stdout_captured<F: FnOnce()>(f: F) -> String {
         .expect("failed to create capture temp file");
 
     let fd = file.as_raw_fd();
-    let saved_fd = unsafe { libc::dup(1) };
+
+    // Create guard that will restore stdout on drop (even during panic)
+    let _guard = StdoutGuard::new(&file, tmp_file2);
 
     // Redirect stdout (fd 1) to our file
     unsafe { libc::dup2(fd, 1) };
@@ -84,13 +139,8 @@ fn with_stdout_captured<F: FnOnce()>(f: F) -> String {
     let _ = std::io::stdout().flush();
     drop(file);
 
-    // Restore original stdout
-    unsafe { libc::dup2(saved_fd, 1) };
-    unsafe { libc::close(saved_fd) };
-
     // Read the captured output
-    let result = std::fs::read_to_string(&tmp_file2).unwrap_or_default();
-    let _ = std::fs::remove_file(&tmp_file2);
+    let result = std::fs::read_to_string(&_guard.tmp_file).unwrap_or_default();
     result
 }
 
@@ -104,7 +154,7 @@ pub fn with_captured_output<F: FnOnce()>(f: F) -> String {
 /// Display file contents to stdout with optional line numbers.
 pub fn cat_file(file_path: &Path, show_lines: bool) -> Result<()> {
     let content = fs::read_to_string(file_path)
-        .with_context(|| format!("Failed to read file: {}", file_path.display()))?;
+        .with_context(|| format!("Failed to read file '{}'", file_path.display()))?;
 
     // Print filename header in cyan
     println!(
@@ -170,7 +220,7 @@ fn crossterm_to_ansi(c: crossterm::style::Color) -> String {
 /// to the plain `cat_file` behavior when the extension is unknown.
 pub fn cat_file_with_syntax(file_path: &Path, show_lines: bool) -> Result<()> {
     let content = fs::read_to_string(file_path)
-        .with_context(|| format!("Failed to read file: {}", file_path.display()))?;
+        .with_context(|| format!("Failed to read file '{}'", file_path.display()))?;
 
     let color_enabled = Config::global_get_color_enabled();
     let ext = file_path.extension().and_then(|e| e.to_str());
@@ -264,7 +314,7 @@ pub fn cat_file_with_syntax(file_path: &Path, show_lines: bool) -> Result<()> {
 /// Read file contents and return as string with optional line numbers.
 pub fn cat_file_with_line_numbers(file_path: &Path, show_lines: bool) -> Result<String> {
     let content = fs::read_to_string(file_path)
-        .with_context(|| format!("Failed to read file: {}", file_path.display()))?;
+        .with_context(|| format!("Failed to read file '{}'", file_path.display()))?;
 
     let filename = file_path.file_name().unwrap_or_default().to_string_lossy();
 
@@ -335,9 +385,10 @@ pub fn format_separator(title: &str) -> String {
     let right_padding = width.saturating_sub(title_len).saturating_sub(left_padding);
 
     format!(
-        "+{:-<left$}{}{left:-<right$}+\n",
+        "+{:-<left$}{}{:-<right$}+\n",
         "",
         title,
+        "",
         left = left_padding,
         right = right_padding
     )

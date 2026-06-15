@@ -132,7 +132,7 @@ pub(crate) fn completions_for(lang: Option<SyntaxLanguage>, prefix: &str) -> Vec
 impl Editor {
     pub(crate) fn trigger_completion(&mut self) {
         let line = self.current();
-        if let Some((word, _start_byte)) = word_before_cursor(line, self.cursor_byte) {
+        if let Some((word, _start_byte)) = word_before_cursor(line, self.cursor.byte) {
             let lang = self.syntax.language;
             let items = completions_for(lang, &word);
             if !items.is_empty() {
@@ -179,8 +179,8 @@ impl Editor {
         }
         let item = &self.completion_items[self.completion_idx];
         let line = self.current();
-        if let Some((_, start_byte)) = word_before_cursor(line, self.cursor_byte) {
-            let end_byte = self.cursor_byte;
+        if let Some((_, start_byte)) = word_before_cursor(line, self.cursor.byte) {
+            let end_byte = self.cursor.byte;
             // Replace the word with the completion
             let new_line = format!(
                 "{}{}{}",
@@ -188,11 +188,11 @@ impl Editor {
                 item.insert_text,
                 &line[end_byte..]
             );
-            self.lines[self.cursor_y] = new_line;
-            self.cursor_byte = start_byte + item.insert_text.len();
+            self.lines[self.cursor.y] = new_line;
+            self.cursor.byte = start_byte + item.insert_text.len();
             self.modified = true;
-            self.mark_dirty(self.cursor_y);
-            self.syntax.invalidate_line(self.cursor_y);
+            self.mark_dirty(self.cursor.y);
+            self.syntax.invalidate_line(self.cursor.y);
         }
         self.dismiss_completion();
     }

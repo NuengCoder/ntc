@@ -17,6 +17,11 @@ future_todo.txt
 *.dmg
 *.pkg
 
+# Scratch / temp markers
+.scratch
+src/.scratch
+src/**/.scratch
+
 # IDE files (optional)
 .vscode/
 .idea/
@@ -26,3 +31,6 @@ future_todo.txt
 # OS files
 .DS_Store
 Thumbs.db
+
+# Mimocode AI tool config
+.mimocode/

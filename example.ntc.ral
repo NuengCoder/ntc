@@ -1,0 +1,7 @@
+# ntc run aliases template
+# Import with: ral import <file>
+
+[run_aliases]
+# btr = "cargo build --release"
+# py = "python main.py"
+# hello = "echo Hello, World!"

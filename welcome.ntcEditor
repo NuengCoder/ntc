@@ -1,0 +1,38 @@
+╔═══════════════════════════════════════════════════════════════╗
+║                    Welcome to ntcEditor                                                                                      ║
+║                      version 2.3.0                                                                                           ║
+╚═══════════════════════════════════════════════════════════════╝
+
+A fast, terminal-based code editor built in Rust.
+
+Getting Started:
+  * Ctrl + I  ->  Start Editing (INSERT mode)
+  * Ctrl + W  ->  Start Viewing (VISUAL mode)
+  * Ctrl + H  ->  Open Help
+  * :         ->  Command mode
+
+Navigation:
+  * Arrow keys  ->  Move cursor
+  * Home / End  ->  Start / End of line
+  * PgUp/PgDn   ->  Page scroll
+  * Ctrl+PgDn   ->  Next tab
+  * Ctrl+PgUp   ->  Previous tab
+  * Mouse wheel ->  Scroll up/down
+
+File Operations:
+  * Ctrl + S  ->  Save
+  * Ctrl + P  ->  File finder
+  * Ctrl + T  ->  Open file in new tab
+  * Ctrl + Q  ->  Close tab / Quit
+
+Commands (press : then type):
+  * :w           ->  Save
+  * :q           ->  Quit
+  * :wq          ->  Save and quit
+  * :ne <file>   ->  Open/create file
+  * :cd <path>   ->  Change directory
+
+For full help, press Ctrl + H
+
+──────────────────────────────────────────────────────────────────
+Start editing: Ctrl + I    |    Visual mode: Ctrl + W    |    Help: Ctrl + H

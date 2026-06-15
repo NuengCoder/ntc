@@ -1,5 +1,5 @@
 use crate::config::Config;
-use crate::filetype::{is_supported_format_with_config, FormatConfig};
+use crate::filetype::{is_supported_format_with_config, make_ignored_dir_filter, FormatConfig};
 use indicatif::ProgressBar;
 use rayon::prelude::*;
 use std::collections::{HashMap, HashSet};
@@ -40,9 +40,9 @@ pub struct TreeNode {
          .unwrap_or_default()
          .to_string_lossy()
          .to_string();
-     let ignored_dirs = Config::global_get_ignored_dirs();
+     let ignored_dirs = Config::get_ignored_dirs_combined();
      // Fetch format config once for the entire walk — avoids 4 lock acquisitions per file.
-     let fmt_cfg = FormatConfig::from_global();
+     let fmt_cfg = FormatConfig::from_both();
       struct FlatNode {
           name: String,
           path: String,
@@ -69,22 +69,11 @@ pub struct TreeNode {
      let mut path_to_idx: HashMap<PathBuf, usize> = HashMap::new();
      path_to_idx.insert(root.to_path_buf(), 0);
  
-     let walker = WalkDir::new(root)
-         .max_depth(max_depth)
-         .sort_by(|a, b| a.file_name().cmp(b.file_name()))
-         .into_iter()
-         .filter_entry(|e| {
-             if e.depth() == 0 {
-                 return true;
-             }
-             if e.file_type().is_dir() {
-                 let name = e.file_name().to_string_lossy().to_lowercase();
-                 if ignored_dirs.contains(&name) {
-                     return false;
-                 }
-             }
-             true
-         });
+      let walker = WalkDir::new(root)
+          .max_depth(max_depth)
+          .sort_by(|a, b| a.file_name().cmp(b.file_name()))
+          .into_iter()
+          .filter_entry(make_ignored_dir_filter(&ignored_dirs));
  
      for entry in walker {
          if let Some(pb) = pb {
@@ -254,7 +243,7 @@ pub fn compute_tree_sizes(node: &mut TreeNode, pb: Option<&ProgressBar>, care: b
  /// Count files (respects ignored dirs)
  /// Count files (respects ignored dirs)
  pub fn count_files(path: &Path) -> u64 {
-    let ignored_dirs = Config::global_get_ignored_dirs();
+    let ignored_dirs = Config::get_ignored_dirs_combined();
     walk_files(path, &ignored_dirs).len() as u64
  }
  
@@ -279,7 +268,7 @@ pub fn compute_tree_sizes(node: &mut TreeNode, pb: Option<&ProgressBar>, care: b
  
 /// Calculate total size of a directory (parallel with rayon)
 pub fn calculate_dir_size(path: &Path) -> u64 {
-    let ignored_dirs = Config::global_get_ignored_dirs();
+    let ignored_dirs = Config::get_ignored_dirs_combined();
     walk_files(path, &ignored_dirs)
         .par_iter()
         .map(|p| std::fs::metadata(p).map(|m| m.len()).unwrap_or(0))
@@ -305,7 +294,7 @@ pub fn calculate_total_size(path: &Path) -> u64 {
 
  /// Calculate total size with progress bar (parallel)
  pub fn calculate_dir_size_with_progress(path: &Path, pb: &ProgressBar) -> u64 {
-    let ignored_dirs = Config::global_get_ignored_dirs();
+    let ignored_dirs = Config::get_ignored_dirs_combined();
     walk_files(path, &ignored_dirs)
         .par_iter()
         .map(|p| {

@@ -121,8 +121,8 @@ impl BackupDiff {
             .map(|n| n.to_string_lossy().to_string())
             .unwrap_or_else(|| "project".to_string());
 
-        let ignored_dirs = Config::global_get_ignored_dirs();
-        let fmt_cfg = FormatConfig::from_global();
+        let ignored_dirs = Config::get_ignored_dirs_combined();
+        let fmt_cfg = FormatConfig::from_both();
 
         let mut backup_files: HashMap<String, String> = HashMap::new();
         for entry in &manifest.files {

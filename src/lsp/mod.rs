@@ -357,7 +357,7 @@ fn run_server_inner(log_path: Option<&Path>) -> Result<()> {
                     "capabilities": {
                         "textDocumentSync": {
                             "openClose": true,
-                            "change": 2,
+                            "change": 1,
                             "save": true
                         },
                         "completionProvider": {

@@ -1,6 +1,6 @@
 use crossterm::event::{MouseButton, MouseEvent, MouseEventKind};
 
-use super::{byte_to_col, col_to_byte, gutter_width, Editor, SIDEBAR_WIDTH};
+use super::{byte_to_col, col_to_byte, gutter_width, Editor, MIN_SIDEBAR_WIDTH};
 
 impl Editor {
     fn screen_to_pos(&self, col: u16, row: u16) -> Option<(usize, usize)> {
@@ -12,7 +12,7 @@ impl Editor {
         if r >= rows {
             return None;
         }
-        let line_idx = self.scroll + r;
+        let line_idx = self.sv.offset + r;
         if line_idx >= self.lines.len() {
             return None;
         }
@@ -24,17 +24,17 @@ impl Editor {
             return Some((line_idx, 0));
         }
         let text_col = editor_c - gw;
-        let scroll_col = self.scroll_x + text_col;
+        let scroll_col = self.sv.x + text_col;
         let byte = col_to_byte(&self.lines[line_idx], scroll_col);
         Some((line_idx, byte))
     }
 
     fn scroll_from_vclick(&self, row: u16) -> usize {
         let rows = self.term_h.saturating_sub(4);
-        let r = if row >= 1 { (row - 1) as usize } else { return self.scroll; };
+        let r = if row >= 1 { (row - 1) as usize } else { return self.sv.offset; };
         let total = self.lines.len();
         if total <= rows || r >= rows {
-            return self.scroll;
+            return self.sv.offset;
         }
         let max_scroll = total - rows;
         r * max_scroll / rows
@@ -50,7 +50,7 @@ impl Editor {
             .unwrap_or(0);
         let avail = self.term_w.saturating_sub(2);
         if max_vis == 0 || col == 0 || col > avail {
-            return self.scroll_x;
+            return self.sv.x;
         }
         let gw = gutter_width(self.lines.len());
         let eo = self.editor_offset();
@@ -58,7 +58,7 @@ impl Editor {
         let text_cols = editor_cols.saturating_sub(gw + 2);
         let max = max_vis.saturating_sub(text_cols);
         if max == 0 {
-            return self.scroll_x;
+            return self.sv.x;
         }
         let target = (col as f64 / avail as f64 * max as f64) as usize;
         target.min(max)
@@ -122,11 +122,11 @@ impl Editor {
 
                 // Vertical scroll bar click
                 if col == sb_col && (m.row as usize) < 1 + content_rows && (m.row as usize) >= tab_bar_h {
-                    self.dragging_vscroll = true;
+                    self.sv.dragging_vscroll = true;
                     let target = self.scroll_from_vclick(m.row);
-                    self.scroll = target.min(self.lines.len().saturating_sub(content_rows));
-                    self.cursor_y = self.scroll;
-                    self.cursor_byte = 0;
+                    self.sv.offset = target.min(self.lines.len().saturating_sub(1));
+                    self.cursor.y = self.sv.offset;
+                    self.cursor.byte = 0;
                     self.clear_selection();
                     self.mark_all_dirty();
                     return;
@@ -135,16 +135,16 @@ impl Editor {
                 // Horizontal scroll bar click
                 if m.row as usize == hrow && col < self.term_w {
                     let new_x = self.scroll_x_from_hclick(m.column);
-                    if new_x != self.scroll_x {
-                        self.scroll_x = new_x;
-                        self.dragging_hscroll = true;
+                    if new_x != self.sv.x {
+                        self.sv.x = new_x;
+                        self.sv.dragging_hscroll = true;
                         self.mark_all_dirty();
                     }
                     return;
                 }
 
                 // Sidebar vertical scroll bar click
-                if self.sidebar.open && col == SIDEBAR_WIDTH - 1 && (m.row as usize) >= tab_bar_h && (m.row as usize) < 1 + content_rows {
+                if self.sidebar.open && col == self.sidebar.width - 1 && (m.row as usize) >= tab_bar_h && (m.row as usize) < 1 + content_rows {
                     let r = (m.row as usize).saturating_sub(tab_bar_h);
                     if r < content_rows {
                         let total = self.sidebar.nodes.len();
@@ -157,6 +157,12 @@ impl Editor {
                     return;
                 }
 
+                // Sidebar border drag — click on the separator column
+                if self.sidebar.open && col == self.sidebar.width && (m.row as usize) >= tab_bar_h && (m.row as usize) < 1 + content_rows {
+                    self.sidebar.dragging_border = true;
+                    return;
+                }
+
                 // Sidebar click
                 if self.sidebar.open && col < eo {
                     self.handle_sidebar_click(m.row);
@@ -166,46 +172,55 @@ impl Editor {
                     self.clear_extra_cursors();
                 }
                 if let Some((y, byte)) = self.screen_to_pos(m.column, m.row) {
-                    if y != self.cursor_y || byte != self.cursor_byte {
-                        self.cursor_y = y;
-                        self.cursor_byte = byte;
+                    if y != self.cursor.y || byte != self.cursor.byte {
+                        self.cursor.y = y;
+                        self.cursor.byte = byte;
                         self.clear_selection();
                     }
                 }
             }
             MouseEventKind::Drag(MouseButton::Left) => {
-                if self.dragging_vscroll {
+                if self.sv.dragging_vscroll {
                     let content_rows = self.term_h.saturating_sub(4);
                     let tab_bar_h = 1;
                     let r = if (m.row as usize) >= tab_bar_h { (m.row as usize) - tab_bar_h } else { return; };
                     if r < content_rows {
                         let total = self.lines.len();
-                        let max_scroll = total.saturating_sub(content_rows);
+                        let max_scroll = total.saturating_sub(1);
                         let target = r * max_scroll / content_rows;
-                        self.scroll = target.min(max_scroll);
-                        self.cursor_y = self.scroll;
-                        self.cursor_byte = 0;
+                        self.sv.offset = target.min(max_scroll);
+                        self.cursor.y = self.sv.offset;
+                        self.cursor.byte = 0;
                         self.mark_all_dirty();
                     }
                     return;
                 }
-                if self.dragging_hscroll {
+                if self.sv.dragging_hscroll {
                     let new_x = self.scroll_x_from_hclick(m.column);
-                    if new_x != self.scroll_x {
-                        self.scroll_x = new_x;
+                    if new_x != self.sv.x {
+                        self.sv.x = new_x;
                         self.mark_all_dirty();
                     }
                     return;
                 }
-                if self.selection_anchor.is_none() {
+                if self.sidebar.dragging_border {
+                    let col = m.column as usize;
+                    let new_width = col.clamp(MIN_SIDEBAR_WIDTH, self.term_w.saturating_sub(10));
+                    if new_width != self.sidebar.width {
+                        self.sidebar.width = new_width;
+                        self.mark_all_dirty();
+                    }
+                    return;
+                }
+                if self.cursor.selection_anchor.is_none() {
                     if self.has_multiple_cursors() {
                         self.clear_extra_cursors();
                     }
-                    self.selection_anchor = Some((self.cursor_y, self.cursor_byte));
+                    self.cursor.selection_anchor = Some((self.cursor.y, self.cursor.byte));
                 }
                 if let Some((y, byte)) = self.screen_to_pos(m.column, m.row) {
-                    self.cursor_y = y;
-                    self.cursor_byte = byte;
+                    self.cursor.y = y;
+                    self.cursor.byte = byte;
                 }
             }
             MouseEventKind::Down(MouseButton::Middle) => {
@@ -213,7 +228,7 @@ impl Editor {
                 let content_rows = self.term_h.saturating_sub(4);
                 let tab_bar_h = 1;
                 // Sidebar vertical scroll bar middle-click → jump
-                if self.sidebar.open && col == SIDEBAR_WIDTH - 1
+                if self.sidebar.open && col == self.sidebar.width - 1
                     && (m.row as usize) >= tab_bar_h && (m.row as usize) < 1 + content_rows
                 {
                     let r = (m.row as usize).saturating_sub(tab_bar_h);
@@ -228,8 +243,9 @@ impl Editor {
                 }
             }
             MouseEventKind::Up(MouseButton::Left) => {
-                self.dragging_vscroll = false;
-                self.dragging_hscroll = false;
+                self.sv.dragging_vscroll = false;
+                self.sv.dragging_hscroll = false;
+                self.sidebar.dragging_border = false;
             }
             MouseEventKind::ScrollUp => {
                 let content_rows = self.term_h.saturating_sub(4);
@@ -242,9 +258,10 @@ impl Editor {
                         self.mark_all_dirty();
                     }
                 } else if m.modifiers.contains(crossterm::event::KeyModifiers::ALT) {
-                    self.scroll_x = self.scroll_x.saturating_sub(3);
-                } else if self.scroll > 0 {
-                    self.scroll = self.scroll.saturating_sub(3);
+                    self.sv.x = self.sv.x.saturating_sub(3);
+                } else if self.sv.offset > 0 {
+                    self.sv.offset = self.sv.offset.saturating_sub(3);
+                    self.mark_all_dirty();
                 }
             }
             MouseEventKind::ScrollDown => {
@@ -260,19 +277,20 @@ impl Editor {
                     }
                 } else if m.modifiers.contains(crossterm::event::KeyModifiers::ALT) {
                     let max = self.max_scroll_x();
-                    self.scroll_x = (self.scroll_x + 3).min(max);
+                    self.sv.x = (self.sv.x + 3).min(max);
                 } else {
-                    if self.scroll + content_rows < self.lines.len() {
-                        self.scroll += 3;
+                    if self.sv.offset + 1 < self.lines.len() {
+                        self.sv.offset = (self.sv.offset + 3).min(self.lines.len().saturating_sub(1));
+                        self.mark_all_dirty();
                     }
                 }
             }
             MouseEventKind::ScrollLeft => {
-                self.scroll_x = self.scroll_x.saturating_sub(3);
+                self.sv.x = self.sv.x.saturating_sub(3);
             }
             MouseEventKind::ScrollRight => {
                 let max = self.max_scroll_x();
-                self.scroll_x = (self.scroll_x + 3).min(max);
+                self.sv.x = (self.sv.x + 3).min(max);
             }
             _ => {}
         }

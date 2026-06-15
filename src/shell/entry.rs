@@ -142,7 +142,14 @@ pub fn run_classic_shell(mut nav: Navigator) -> Result<()> {
         
         // NOTE: Prompt must stay plain text — colored prompts with ANSI codes
         // break rustyline's cursor positioning and line editing.
-        let prompt = format!("ntc [{}{}]> ", display_path, watcher_suffix);
+        let venv_prefix = nav.get_colored_venv_prefix();  // Use colored version
+
+        // Build the prompt
+        let prompt = if venv_prefix.is_empty() {
+            format!("ntc [{}{}]> ", display_path, watcher_suffix)
+        } else {
+            format!("{}ntc [{}{}]> ", venv_prefix, display_path, watcher_suffix)
+        };
         
         let line = match rl.readline(&prompt) {
             Ok(line) => {

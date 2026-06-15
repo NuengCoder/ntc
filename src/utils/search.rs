@@ -5,7 +5,7 @@
 // Cross-platform: Windows, Linux, macOS
 
 use crate::config::Config;
-use crate::filetype::FormatConfig;
+use crate::filetype::{make_ignored_dir_filter, strip_unc_prefix, FormatConfig};
 use crate::fuzzy::{top_fuzzy_matches, top_fuzzy_dir_matches, MAX_FUZZY_SUGGESTIONS};
 use std::path::{Path, PathBuf};
 use walkdir::WalkDir;
@@ -158,16 +158,7 @@ fn walk_files<'a>(
     WalkDir::new(root)
         .max_depth(walkdir_depth)
         .into_iter()
-        .filter_entry(move |e| {
-            if e.depth() == 0 {
-                return true;
-            }
-            if e.file_type().is_dir() {
-                let name = e.file_name().to_string_lossy().to_lowercase();
-                return !ignored_dirs.contains(&name);
-            }
-            true
-        })
+        .filter_entry(make_ignored_dir_filter(ignored_dirs))
         .filter_map(|e| e.ok())
         .filter(|e| e.file_type().is_file())
         .filter_map(move |e| {
@@ -200,16 +191,7 @@ fn walk_dirs<'a>(
     WalkDir::new(root)
         .max_depth(walkdir_depth)
         .into_iter()
-        .filter_entry(move |e| {
-            if e.depth() == 0 {
-                return true;
-            }
-            if e.file_type().is_dir() {
-                let name = e.file_name().to_string_lossy().to_lowercase();
-                return !ignored_dirs.contains(&name);
-            }
-            true
-        })
+        .filter_entry(make_ignored_dir_filter(ignored_dirs))
         .filter_map(|e| e.ok())
         .filter(|e| e.file_type().is_dir() && e.depth() > 0)
         .map(|e| {
@@ -236,8 +218,8 @@ fn walk_dirs<'a>(
 /// * `max_depth` - 0 = current dir only, n = recurse n levels, usize::MAX = unlimited
 pub fn search_files(root: &Path, pattern: &str, max_depth: usize) -> Vec<SearchResult> {
     let pattern_lower = pattern.to_lowercase();
-    let ignored_dirs = Config::global_get_ignored_dirs();
-    let fmt_cfg = FormatConfig::from_global();
+    let ignored_dirs = Config::get_ignored_dirs_combined();
+    let fmt_cfg = FormatConfig::from_both();
     let use_wildcard = has_wildcards(pattern);
 
     if use_wildcard {
@@ -314,7 +296,7 @@ pub fn search_files(root: &Path, pattern: &str, max_depth: usize) -> Vec<SearchR
 /// * `max_depth` - 0 = current dir only, n = recurse n levels, usize::MAX = unlimited
 pub fn search_directories(root: &Path, pattern: &str, max_depth: usize) -> Vec<SearchResult> {
     let pattern_lower = pattern.to_lowercase();
-    let ignored_dirs = Config::global_get_ignored_dirs();
+    let ignored_dirs = Config::get_ignored_dirs_combined();
     let use_wildcard = has_wildcards(pattern);
 
     if use_wildcard {
@@ -432,8 +414,8 @@ pub struct ContentMatch {
 /// Returns matches sorted by file path then line number.
 pub fn search_content(root: &Path, pattern: &str, max_depth: usize) -> Vec<ContentMatch> {
     let pattern_lower = pattern.to_lowercase();
-    let ignored_dirs = Config::global_get_ignored_dirs();
-    let fmt_cfg = FormatConfig::from_global();
+    let ignored_dirs = Config::get_ignored_dirs_combined();
+    let fmt_cfg = FormatConfig::from_both();
 
     let mut results: Vec<ContentMatch> = Vec::new();
 
@@ -505,12 +487,7 @@ pub fn format_content_results(results: &[ContentMatch], pattern: &str, max_depth
 
 /// Strip Windows extended-path prefix (\\?\) for clean terminal output.
 pub fn display_search_path(path: &Path) -> String {
-    let s = path.to_string_lossy();
-    #[cfg(windows)]
-    if let Some(stripped) = s.strip_prefix(r"\\?\") {
-        return stripped.to_string();
-    }
-    s.to_string()
+    strip_unc_prefix(path)
 }
 
 /// Format search results for display (used by shell.rs).

@@ -98,8 +98,8 @@ fn handle_simple_flags(matches: &clap::ArgMatches, known_flags: &[&str]) -> Resu
     }
 
     if matches.get_flag("ignored") {
-        let dirs = Config::global_get_ignored_dirs();
-        let fmt_cfg = FormatConfig::from_global();
+        let dirs = Config::get_ignored_dirs_combined();
+        let fmt_cfg = FormatConfig::from_both();
         println!("Ignored directories: {:?}", dirs);
         println!("Ignored extensions: {:?}", fmt_cfg.ignored_extensions);
         println!("Extra supported extensions: {:?}", fmt_cfg.extra_extensions);
@@ -171,8 +171,53 @@ fn handle_simple_flags(matches: &clap::ArgMatches, known_flags: &[&str]) -> Resu
     }
 
     if matches.get_flag("lsp") {
-        let log_path = matches.get_one::<String>("lsp_log").map(|s| Path::new(s));
+        let log_path = matches.get_one::<String>("lsp_log").map(Path::new);
         crate::lsp::run_server_with_logger(log_path)?;
+        return Ok(false);
+    }
+
+    // Handle image to document conversion
+    if let Some(image_path) = matches.get_one::<String>("image") {
+        use crate::image2doc::{convert_image, ConversionOptions, OutputFormat, save_conversion};
+        use std::path::Path;
+
+        let img_path = Path::new(image_path);
+        if !img_path.exists() {
+            print_error(&format!("Image not found: {}", image_path));
+            return Ok(false);
+        }
+
+        let fmt = matches.get_one::<String>("image-to")
+            .and_then(|s| s.parse().ok())
+            .unwrap_or(OutputFormat::Markdown);
+
+        let output_path = matches.get_one::<String>("output")
+            .map(|s| {
+                let p = Path::new(s);
+                if p.extension().is_none() {
+                    p.with_extension(fmt.extension())
+                } else {
+                    p.to_path_buf()
+                }
+            });
+
+        let options = ConversionOptions {
+            output_format: fmt,
+            output_path: output_path.clone(),
+            #[cfg(feature = "ocr")]
+            extract_text: true,
+            ..Default::default()
+        };
+
+        let result = convert_image(img_path, options)?;
+
+        if let Some(out) = &output_path {
+            save_conversion(&result, out)?;
+            print_success(&format!("Image converted and saved to: {}", out.display()));
+        } else {
+            println!("{}", result);
+        }
+
         return Ok(false);
     }
 
@@ -315,7 +360,7 @@ fn handle_setters(matches: &clap::ArgMatches) -> Result<bool> {
         } else {
             match val.parse::<usize>() {
                 Ok(depth) => {
-                    if depth < 1 || depth > 20 {
+                    if !(1..=20).contains(&depth) {
                         bail!("Invalid depth value: {}. Must be between 1 and 20.", val);
                     }
                     Config::global_set_max_depth(depth);
@@ -356,7 +401,7 @@ fn handle_setters(matches: &clap::ArgMatches) -> Result<bool> {
         } else {
             match Config::parse_num_threads(val) {
                 Some(threads) => {
-                    if threads < 1 || threads > 64 {
+                    if !(1..=64).contains(&threads) {
                         bail!("Invalid thread count: {}. Must be between 1 and 64.", val);
                     }
                     Config::global_set_num_threads(threads);
@@ -872,6 +917,22 @@ pub fn run_cli() -> Result<bool> {
                 .value_name("FILE")
                 .help("Path to write LSP debug log")
                 .num_args(1)
+                .hide(true),
+        )
+        .arg(
+            Arg::new("image")
+                .long("image")
+                .value_name("IMAGE")
+                .help("Convert image to document (JSON, MD, HTML, TXT)")
+                .num_args(1),
+        )
+        .arg(
+            Arg::new("image-to")
+                .long("image-to")
+                .value_name("FORMAT")
+                .help("Output format for image conversion: json, md, html, txt")
+                .num_args(1)
+                .value_parser(["json", "md", "markdown", "html", "txt", "text"])
                 .hide(true),
         )
         .arg(

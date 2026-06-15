@@ -27,6 +27,7 @@ pub fn cmd_ral(args: &str, nav: &mut Navigator) -> Result<bool> {
         println!("  ral info <name>                   Show alias details");
         println!("  ral list                          Show all aliases");
         println!("  ral cls                           Clear ALL aliases (asks confirmation)");
+        println!("  ral make [name]                   Create alias template in CWD");
         println!("  ral export --all <name>           Export all aliases to <name>.ntc.ral");
         println!("  ral export --select <name>        Select aliases to export to <name>.ntc.ral");
         println!("  ral import <file>                 Import aliases from a .ntc.ral file");
@@ -344,6 +345,29 @@ pub fn cmd_ral(args: &str, nav: &mut Navigator) -> Result<bool> {
                     println!("Example: ral import myaliases.ntc.ral");
                 } else {
                     ral_import(subargs)?;
+                }
+            }
+            "make" | "mk" => {
+                let name = if !subargs.is_empty() { subargs } else { "example" };
+                let path = std::env::current_dir().unwrap_or_default().join(format!("{}.ntc.ral", name));
+                if path.exists() {
+                    print_error(&format!("File already exists: {}", path.display()));
+                } else {
+                    let content = r#"# ntc run aliases template
+# Import with: ral import <file>
+
+[run_aliases]
+# btr = "cargo build --release"
+# py = "python main.py"
+# hello = "echo Hello, World!"
+"#;
+                    match std::fs::write(&path, content) {
+                        Ok(()) => {
+                            print_success(&format!("Created ral template: {}", path.display()));
+                            print_info("This is a local template file. Use 'ral import' to add aliases to your config.");
+                        }
+                        Err(e) => print_error(&format!("Failed to create file: {}", e)),
+                    }
                 }
             }
             _ => {

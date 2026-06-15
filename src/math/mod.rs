@@ -103,7 +103,7 @@ static TIMER_START: Mutex<Option<Instant>> = Mutex::new(None);
 
 fn handle_timer(args: &str) -> Result<()> {
     if args.is_empty() {
-        let mut timer = TIMER_START.lock().unwrap();
+        let mut timer = TIMER_START.lock().unwrap_or_else(|e| e.into_inner());
         if let Some(start) = *timer {
             let elapsed = start.elapsed();
             println!("Lap time: {}.{:03} seconds", elapsed.as_secs(), elapsed.subsec_millis());
@@ -223,30 +223,46 @@ fn eval_line(line: &str, vars: &mut HashMap<String, f64>, print_result: bool) ->
     Ok(())
 }
 
+/// Evaluate a math expression and return the result as a string (for testing).
+#[cfg(test)]
+fn eval_to_string(input: &str) -> Result<String> {
+    let trimmed = input.trim();
+    let tokens = tokenize(trimmed)?;
+    let mut parser = Parser::new(tokens);
+    let stmt = parser.parse_statement()?;
+    let mut vars = HashMap::new();
+    let result = eval(&stmt, &mut vars)?;
+    Ok(result.to_string())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
 
+    // ---- Arithmetic ----
+
     #[test]
     fn test_simple_arithmetic() {
-        assert!(run("1+2").is_ok());
-        assert!(run("3*4+5").is_ok());
-        assert!(run("10/2").is_ok());
-        assert!(run("2^8").is_ok());
+        assert_eq!(eval_to_string("1+2").unwrap(), "3");
+        assert_eq!(eval_to_string("3*4+5").unwrap(), "17");
+        assert_eq!(eval_to_string("10/2").unwrap(), "5");
+        assert_eq!(eval_to_string("2^8").unwrap(), "256");
     }
 
     #[test]
     fn test_parentheses() {
-        assert!(run("(1+2)*3").is_ok());
-        assert!(run("(2+3)*(4+5)").is_ok());
+        assert_eq!(eval_to_string("(1+2)*3").unwrap(), "9");
+        assert_eq!(eval_to_string("(2+3)*(4+5)").unwrap(), "45");
     }
+
+    // ---- Built-in functions ----
 
     #[test]
     fn test_builtin_functions() {
-        assert!(run("sin(0)").is_ok());
-        assert!(run("cos(0)").is_ok());
-        assert!(run("sqrt(4)").is_ok());
-        assert!(run("abs(-5)").is_ok());
+        assert_eq!(eval_to_string("sin(0)").unwrap(), "0");
+        assert_eq!(eval_to_string("cos(0)").unwrap(), "1");
+        assert_eq!(eval_to_string("sqrt(4)").unwrap(), "2");
+        assert_eq!(eval_to_string("abs(-5)").unwrap(), "5");
     }
 
     #[test]
@@ -279,20 +295,23 @@ mod tests {
 
     #[test]
     fn test_float_arithmetic() {
-        assert!(run("3.14 * 2").is_ok());
-        assert!(run("0.5 + 0.25").is_ok());
+        assert_eq!(eval_to_string("3.14 * 2").unwrap(), "6.28");
+        let v: f64 = eval_to_string("0.5 + 0.25").unwrap().parse().unwrap();
+        assert!((v - 0.75).abs() < 1e-10);
     }
 
     #[test]
     fn test_negation() {
-        assert!(run("-5 + 3").is_ok());
+        assert_eq!(eval_to_string("-5 + 3").unwrap(), "-2");
     }
 
     #[test]
     fn test_math_constants() {
-        assert!(run("PI").is_ok());
-        assert!(run("E").is_ok());
+        assert_eq!(eval_to_string("PI").unwrap(), "3.141592653589793");
+        assert_eq!(eval_to_string("E").unwrap(), "2.718281828459045");
     }
+
+    // ---- Tokenizer ----
 
     #[test]
     fn test_tokenize_simple() -> Result<()> {
@@ -314,5 +333,46 @@ mod tests {
         let (tokens, _) = crate::math::token::tokenize_with_pos(r#""hello world""#)?;
         assert_eq!(tokens.len(), 2);
         Ok(())
+    }
+
+    // ---- More comprehensive value assertions ----
+
+    #[test]
+    fn test_rand_returns_number() {
+        let result = eval_to_string("rand(1,100)").unwrap();
+        let v: f64 = result.parse().unwrap();
+        assert!((1.0..=100.0).contains(&v));
+    }
+
+    #[test]
+    fn test_tobinary() {
+        let result = eval_to_string("toBinary(255)").unwrap();
+        assert_eq!(result, "11111111");
+    }
+
+    #[test]
+    fn test_tohex() {
+        let result = eval_to_string("toHex(255)").unwrap();
+        assert_eq!(result, "FF");
+    }
+
+    #[test]
+    fn test_tohb() {
+        let result = eval_to_string("toHB(1048576)").unwrap();
+        assert_eq!(result, "1.00 MB");
+    }
+
+    #[test]
+    fn test_modulo_and_power() {
+        assert_eq!(eval_to_string("2^10").unwrap(), "1024");
+        assert_eq!(eval_to_string("pow(3,3)").unwrap(), "27");
+    }
+
+    #[test]
+    fn test_trig_functions() {
+        let sin_pi: f64 = eval_to_string("sin(PI)").unwrap().parse().unwrap();
+        assert!((sin_pi - 0.0).abs() < 1e-10, "sin(PI) should be ~0, got {}", sin_pi);
+        let cos_pi: f64 = eval_to_string("cos(PI)").unwrap().parse().unwrap();
+        assert!((cos_pi + 1.0).abs() < 1e-10, "cos(PI) should be ~-1, got {}", cos_pi);
     }
 }

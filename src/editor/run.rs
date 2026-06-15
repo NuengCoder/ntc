@@ -13,17 +13,37 @@ use crossterm::execute;
 use super::{Editor, Mode};
 use crate::editor::types::RunMessage;
 
+/// Drop guard that restores the terminal to a usable state on any exit path
+/// (normal return, error, or panic).
+struct TerminalGuard;
+
+impl TerminalGuard {
+    fn new() -> Self {
+        TerminalGuard
+    }
+}
+
+impl Drop for TerminalGuard {
+    fn drop(&mut self) {
+        let _ = terminal::disable_raw_mode();
+        let _ = execute!(std::io::stdout(), DisableMouseCapture, Show, LeaveAlternateScreen);
+    }
+}
+
 impl Editor {
     pub(crate) fn run(&mut self) -> Result<bool> {
         let mut stdout = stdout();
+        let _guard = TerminalGuard::new();
         execute!(stdout, EnterAlternateScreen, Hide, EnableMouseCapture)?;
         terminal::enable_raw_mode()?;
+
+        // Start file watcher for live reload
+        self.start_file_watcher();
 
         let result =
             std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| self.main_loop(&mut stdout)));
 
-        terminal::disable_raw_mode()?;
-        let _ = execute!(stdout, DisableMouseCapture, Show, LeaveAlternateScreen);
+        drop(_guard);
         let _ = stdout.flush();
         result.map_err(|e| {
             let msg = if let Some(s) = e.downcast_ref::<&str>() {
@@ -49,6 +69,14 @@ impl Editor {
                 self.syntax.invalidate_all(); // Force syntax to refresh colors
                 self.render(stdout)?;
             }
+            // ── Check for external file changes ──
+            if self.check_file_changed() {
+                self.render(stdout)?;
+            }
+            // ── Check for sidebar directory changes ──
+            if self.sidebar.check_changed() {
+                self.render(stdout)?;
+            }
             // ── wait for event, polling streaming output while process runs ──
             let ev = if self.mode == Mode::Run && self.run_executing.is_some() {
                 if !event::poll(Duration::from_millis(50))? {
@@ -72,10 +100,10 @@ impl Editor {
             );
 
             // Track previous state for dirty-region diffing
-            self.prev_cursor_y = self.cursor_y;
-            self.prev_cursor_byte = self.cursor_byte;
-            let old_scroll = self.scroll;
-            let old_scroll_x = self.scroll_x;
+            self.cursor.prev_y = self.cursor.y;
+            self.cursor.prev_byte = self.cursor.byte;
+            let old_scroll = self.sv.offset;
+            let old_scroll_x = self.sv.x;
 
             // Detect mouse scroll (should not affect cursor or be clamped by scroll_visible)
             let is_mouse_scroll = matches!(
@@ -169,16 +197,16 @@ impl Editor {
                     self.clamp();
                     self.scroll_visible();
                 }
-                if self.scroll != old_scroll || self.scroll_x != old_scroll_x {
+                if self.sv.offset != old_scroll || self.sv.x != old_scroll_x {
                     self.mark_all_dirty();
                 }
-                if self.prev_cursor_y != self.cursor_y || self.prev_cursor_byte != self.cursor_byte
+                if self.cursor.prev_y != self.cursor.y || self.cursor.prev_byte != self.cursor.byte
                 {
-                    self.mark_dirty(self.cursor_y);
-                    self.mark_dirty(self.prev_cursor_y);
+                    self.mark_dirty(self.cursor.y);
+                    self.mark_dirty(self.cursor.prev_y);
                 }
                 // Ensure extra cursor lines are always dirty for redraw
-                let extra_lines: Vec<usize> = self.extra_cursors.iter().map(|c| c.y).collect();
+                let extra_lines: Vec<usize> = self.cursor.extra_cursors.iter().map(|c| c.y).collect();
                 for y in extra_lines {
                     self.mark_dirty(y);
                 }
@@ -210,7 +238,7 @@ impl Editor {
                                 self.push_run_line("Process terminated".into());
                             }
                             let panel_h = self.run_panel_height();
-                            self.run_scroll = self.run_lines.len().saturating_sub(panel_h);
+                            self.sv.run = self.run_lines.len().saturating_sub(panel_h);
                         }
                         self.run_executing = None;
                         let _ = execute!(stdout, EnableMouseCapture);
@@ -218,7 +246,7 @@ impl Editor {
                     RunMessage::Line(line) => {
                         self.push_run_line(line);
                         let panel_h = self.run_panel_height();
-                        self.run_scroll = self.run_lines.len().saturating_sub(panel_h);
+                        self.sv.run = self.run_lines.len().saturating_sub(panel_h);
                     }
                 }
                 changed = true;

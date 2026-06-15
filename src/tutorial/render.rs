@@ -74,11 +74,7 @@ pub fn header(current: usize, total: usize) {
 
 fn progress_bar(current: usize, total: usize) -> String {
     let bar_width = 16;
-    let filled = if total > 0 {
-        (current * bar_width) / total
-    } else {
-        0
-    };
+    let filled = (current * bar_width).checked_div(total).unwrap_or(0);
     let empty = bar_width.saturating_sub(filled);
     let mut bar = String::with_capacity(bar_width + 2);
     bar.push('[');

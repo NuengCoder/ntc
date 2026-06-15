@@ -1,5 +1,65 @@
 # Changelog
 
+## [2.3.0] - 2026-06-15
+
+### Added
+
+#### 🎯 ntcEditor Enhancements
+
+**Editor Camera & Cursor**
+- Editor camera now always follows the primary cursor (auto-centers vertically)
+- `Ctrl+M` in Insert Mode — move cursor to middle of current line
+- Pre-tokenize look-ahead for next 10 lines beyond visible viewport (smoother scrolling)
+- Enter key smart indent — copies leading whitespace from previous line
+
+**Welcome Screen**
+- Replaced `.scratch` with `welcome.ntcEditor` — shows intro text with keybindings
+- Welcome screen displays getting started guide, navigation, and file operations
+
+#### 🎨 Theme System Enhancements
+
+- `theme edit` (no name) — opens theme directory in system file manager
+- `theme where` — show theme directory location and list theme files
+- `theme make [name]` — create theme template in current directory
+- Theme directory support for Windows, macOS, Linux, Android
+
+#### 📁 gosc Continuous Navigation
+
+- `v` — view with care and files (depth 1)
+- `s` — show total directory size with care
+- `vs` — view with care, files, and sizes (depth 1)
+- Output zone display below gosc menu for view/size results
+
+#### 🔧 Shell Commands
+
+- `ral make [name]` — create run alias template in current directory
+- `igcare make [name]` — create ignore/care template in current directory
+- Ignore/care commands now print success messages and info tips
+- `theme make [name]` — create theme template in current directory
+
+#### 🖼️ Image to Document
+
+- Basic image2doc feature for converting images to text/markdown/json
+- Android support for `termux-open` in image viewer
+
+#### 🛠️ Internal Improvements
+
+- Generic `InteractiveMenu` helper for consistent UI across commands
+- Unified report commands (txt/json/md/html/pdf/docx/xlsx)
+- Unified ignore/care command functions
+- Split `render.rs` (1424 lines) into modular files (mod/bars/panels/popups)
+
+### Fixed
+
+- Down key behavior — now moves cursor down normally (reverted broken change)
+- Home key now syncs horizontal scroll (`scroll_x = 0`)
+- Cut (Ctrl+X) and backspace now properly mark dirty regions for re-render
+- `theme make` command no longer conflicts with theme name switching
+- Ignore/care commands now provide feedback after operations
+- Clippy warnings fixed (identical if/else blocks, redundant closures)
+
+---
+
 ## [2.2.0] - 2026-06-13
 
 ### Added

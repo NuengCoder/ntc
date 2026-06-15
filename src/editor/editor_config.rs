@@ -12,7 +12,12 @@ pub struct EditorConfig {
     pub syntax_enabled: bool,
     #[serde(default)]
     pub color_enabled: bool,
+    /// Number of spaces per indentation level (default: 4).
+    #[serde(default = "default_tab_size")]
+    pub tab_size: usize,
 }
+
+fn default_tab_size() -> usize { 4 }
 
 fn default_true() -> bool {
     true

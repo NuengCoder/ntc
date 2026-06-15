@@ -12,8 +12,11 @@ use crate::syntax::SyntaxHighlighter;
 /// Maximum undo history depth.
 pub(crate) const MAX_UNDO: usize = 200;
 
-/// Width of the left sidebar (file explorer) in characters.
-pub(crate) const SIDEBAR_WIDTH: usize = 30;
+/// Minimum width of the left sidebar (file explorer) in characters.
+pub(crate) const MIN_SIDEBAR_WIDTH: usize = 15;
+
+/// Default width of the left sidebar (file explorer) in characters.
+pub(crate) const DEFAULT_SIDEBAR_WIDTH: usize = 30;
 
 /// Maximum number of recently opened files to keep in the buffer stack.
 pub(crate) const MAX_BUFFERS: usize = 16;
@@ -67,6 +70,81 @@ pub(crate) struct CursorPos {
     pub(crate) anchor: Option<(usize, usize)>,
 }
 
+// ── cursor state (sub-struct for Editor) ─────────────────────────────────────
+
+#[derive(Clone)]
+pub(crate) struct CursorState {
+    pub(crate) y: usize,
+    pub(crate) byte: usize,
+    pub(crate) selection_anchor: Option<(usize, usize)>,
+    pub(crate) extra_cursors: Vec<CursorPos>,
+    pub(crate) last_added_cursor_idx: Option<usize>,
+    pub(crate) prev_y: usize,
+    pub(crate) prev_byte: usize,
+}
+
+impl CursorState {
+    pub(crate) fn new() -> Self {
+        Self {
+            y: 0,
+            byte: 0,
+            selection_anchor: None,
+            extra_cursors: Vec::new(),
+            last_added_cursor_idx: None,
+            prev_y: 0,
+            prev_byte: 0,
+        }
+    }
+}
+
+// ── search state (sub-struct for Editor) ─────────────────────────────────────
+
+#[derive(Clone)]
+pub(crate) struct SearchState {
+    pub(crate) query: String,
+    pub(crate) matches: Vec<(usize, usize, usize)>,
+    pub(crate) match_idx: usize,
+}
+
+impl SearchState {
+    pub(crate) fn new() -> Self {
+        Self {
+            query: String::new(),
+            matches: Vec::new(),
+            match_idx: 0,
+        }
+    }
+}
+
+// ── scroll state (sub-struct for Editor) ─────────────────────────────────────
+
+#[derive(Clone)]
+pub(crate) struct ScrollState {
+    /// Vertical scroll offset (was `scroll`)
+    pub(crate) offset: usize,
+    /// Horizontal scroll offset (was `scroll_x`)
+    pub(crate) x: usize,
+    /// Help screen scroll offset (was `help_scroll`)
+    pub(crate) help: usize,
+    /// Run panel scroll offset (was `run_scroll`)
+    pub(crate) run: usize,
+    pub(crate) dragging_vscroll: bool,
+    pub(crate) dragging_hscroll: bool,
+}
+
+impl ScrollState {
+    pub(crate) fn new() -> Self {
+        Self {
+            offset: 0,
+            x: 0,
+            help: 0,
+            run: 0,
+            dragging_vscroll: false,
+            dragging_hscroll: false,
+        }
+    }
+}
+
 // ── file tree node ──────────────────────────────────────────────────────────
 
 #[derive(Clone)]
@@ -85,6 +163,11 @@ pub(crate) struct Sidebar {
     pub(crate) selected: usize,
     pub(crate) nodes: Vec<FileNode>,
     pub(crate) root: std::path::PathBuf,
+    pub(crate) width: usize,
+    pub(crate) dragging_border: bool,
+    // File watcher for live reload
+    pub(crate) watcher_rx: Option<std::sync::mpsc::Receiver<()>>,
+    pub(crate) _watcher: Option<notify::RecommendedWatcher>,
 }
 
 impl Sidebar {
@@ -96,13 +179,57 @@ impl Sidebar {
             selected: 0,
             nodes: Vec::new(),
             root,
+            width: DEFAULT_SIDEBAR_WIDTH,
+            dragging_border: false,
+            watcher_rx: None,
+            _watcher: None,
         };
         s.rebuild_tree();
+        s.start_watcher();
         s
+    }
+
+    /// Start watching the root directory for changes.
+    fn start_watcher(&mut self) {
+        use notify::{Watcher, RecursiveMode};
+        use std::sync::mpsc;
+
+        let (tx, rx) = mpsc::channel();
+        let path = self.root.clone();
+
+        let mut watcher = notify::recommended_watcher(move |res: notify::Result<notify::Event>| {
+            if let Ok(_event) = res {
+                let _ = tx.send(());
+            }
+        }).ok();
+
+        if let Some(ref mut w) = watcher {
+            let _ = w.watch(&path, RecursiveMode::NonRecursive);
+            self.watcher_rx = Some(rx);
+            self._watcher = watcher.take();
+        }
+    }
+
+    /// Check for directory changes and rebuild tree if needed.
+    /// Returns true if the tree was rebuilt.
+    pub(crate) fn check_changed(&mut self) -> bool {
+        if let Some(rx) = &self.watcher_rx {
+            if rx.try_recv().is_ok() {
+                self.rebuild_tree();
+                return true;
+            }
+        }
+        false
     }
 
     pub(crate) fn rebuild_tree(&mut self) {
         self.root = std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from("."));
+        // Save expanded directory paths before clearing
+        let expanded: std::collections::HashSet<std::path::PathBuf> = self.nodes
+            .iter()
+            .filter(|n| n.is_dir && n.expanded)
+            .map(|n| n.path.clone())
+            .collect();
         self.nodes.clear();
         // ".." entry for parent directory
         if let Some(parent) = self.root.parent() {
@@ -115,10 +242,21 @@ impl Sidebar {
             });
         }
         Self::add_children(&mut self.nodes, &self.root, 0, false);
+        // Restore expanded state
+        for node in &mut self.nodes {
+            if node.is_dir && expanded.contains(&node.path) {
+                node.expanded = true;
+            }
+        }
         self.selected = self.selected.min(self.nodes.len().saturating_sub(1));
     }
 
     fn add_children(out: &mut Vec<FileNode>, dir: &std::path::Path, depth: usize, expanded: bool) {
+        // Limit recursion depth to avoid stack overflow on deeply nested dirs
+        const MAX_DEPTH: usize = 64;
+        if depth >= MAX_DEPTH {
+            return;
+        }
         let entries = match std::fs::read_dir(dir) {
             Ok(e) => e,
             Err(_) => return,
@@ -213,99 +351,44 @@ impl Sidebar {
 
 /// Holds the complete state of one editor tab.
 /// When a tab is inactive, its state is stored here.
-/// When activated, the state is swapped onto the Editor's direct fields
-/// so that existing code working with `self.lines`, `self.cursor_y`, etc.
-/// continues to work unchanged.
-#[derive(Clone)]
-pub(crate) struct Tab {
-    pub(crate) path: PathBuf,
-    pub(crate) lines: Vec<String>,
-    pub(crate) modified: bool,
-    pub(crate) cursor_y: usize,
-    pub(crate) cursor_byte: usize,
-    pub(crate) scroll: usize,
-    pub(crate) scroll_x: usize,
-    pub(crate) selection_anchor: Option<(usize, usize)>,
-    pub(crate) undo_stack: Vec<Snapshot>,
-    pub(crate) redo_stack: Vec<Snapshot>,
-    pub(crate) search_query: String,
-    pub(crate) search_matches: Vec<(usize, usize, usize)>,
-    pub(crate) search_match_idx: usize,
-    pub(crate) dirty_start: usize,
-    pub(crate) dirty_end: usize,
-    pub(crate) prev_cursor_y: usize,
-    pub(crate) prev_cursor_byte: usize,
-    pub(crate) extra_cursors: Vec<CursorPos>,
-    pub(crate) last_added_cursor_idx: Option<usize>,
-    pub(crate) edit_count: usize,
-    pub(crate) dragging_vscroll: bool,
-    pub(crate) dragging_hscroll: bool,
-    pub(crate) syntax: crate::syntax::SyntaxHighlighter,
-    pub(crate) buffer_stack: Vec<PathBuf>,
-    pub(crate) buffer_idx: usize,
-}
+/// When activated, the state is swapped onto the Editor's direct fields.
+///
+/// To add a new field: add a `pub(crate) field_name: Type` line below AND
+/// add it to the `Editor` struct + `Editor::new()`. The macro keeps
+/// `from_editor` and `apply_to` in sync automatically.
+macro_rules! define_tab {
+    ($($field:ident: $ty:ty),+ $(,)?) => {
+        #[derive(Clone)]
+        pub(crate) struct Tab {
+            $( pub(crate) $field: $ty, )+
+        }
 
-impl Tab {
-    /// Capture the current editor state into a Tab snapshot.
-    pub(crate) fn from_editor(e: &Editor) -> Self {
-        Self {
-            path: e.path.clone(),
-            lines: e.lines.clone(),
-            modified: e.modified,
-            cursor_y: e.cursor_y,
-            cursor_byte: e.cursor_byte,
-            scroll: e.scroll,
-            scroll_x: e.scroll_x,
-            selection_anchor: e.selection_anchor,
-            undo_stack: e.undo_stack.clone(),
-            redo_stack: e.redo_stack.clone(),
-            search_query: e.search_query.clone(),
-            search_matches: e.search_matches.clone(),
-            search_match_idx: e.search_match_idx,
-            dirty_start: e.dirty_start,
-            dirty_end: e.dirty_end,
-            prev_cursor_y: e.prev_cursor_y,
-            prev_cursor_byte: e.prev_cursor_byte,
-            extra_cursors: e.extra_cursors.clone(),
-            last_added_cursor_idx: e.last_added_cursor_idx,
-            edit_count: e.edit_count,
-            dragging_vscroll: e.dragging_vscroll,
-            dragging_hscroll: e.dragging_hscroll,
-            syntax: e.syntax.clone(),
-            buffer_stack: e.buffer_stack.clone(),
-            buffer_idx: e.buffer_idx,
+        impl Tab {
+            pub(crate) fn from_editor(e: &Editor) -> Self {
+                Self { $( $field: e.$field.clone(), )+ }
+            }
+            pub(crate) fn apply_to(&self, e: &mut Editor) {
+                $( e.$field = self.$field.clone(); )+
+            }
         }
     }
+}
 
-    /// Restore editor state from this Tab snapshot.
-    /// Clipboard is NOT restored from the tab — it stays shared globally.
-    pub(crate) fn apply_to(&self, e: &mut Editor) {
-        e.path = self.path.clone();
-        e.lines = self.lines.clone();
-        e.modified = self.modified;
-        e.cursor_y = self.cursor_y;
-        e.cursor_byte = self.cursor_byte;
-        e.scroll = self.scroll;
-        e.scroll_x = self.scroll_x;
-        e.selection_anchor = self.selection_anchor;
-        e.undo_stack = self.undo_stack.clone();
-        e.redo_stack = self.redo_stack.clone();
-        e.search_query = self.search_query.clone();
-        e.search_matches = self.search_matches.clone();
-        e.search_match_idx = self.search_match_idx;
-        e.dirty_start = self.dirty_start;
-        e.dirty_end = self.dirty_end;
-        e.prev_cursor_y = self.prev_cursor_y;
-        e.prev_cursor_byte = self.prev_cursor_byte;
-        e.extra_cursors = self.extra_cursors.clone();
-        e.last_added_cursor_idx = self.last_added_cursor_idx;
-        e.edit_count = self.edit_count;
-        e.dragging_vscroll = self.dragging_vscroll;
-        e.dragging_hscroll = self.dragging_hscroll;
-        e.syntax = self.syntax.clone();
-        e.buffer_stack = self.buffer_stack.clone();
-        e.buffer_idx = self.buffer_idx;
-    }
+define_tab! {
+    path: PathBuf,
+    lines: Vec<String>,
+    modified: bool,
+    cursor: CursorState,
+    undo_stack: Vec<Snapshot>,
+    redo_stack: Vec<Snapshot>,
+    search: SearchState,
+    dirty_start: usize,
+    dirty_end: usize,
+    edit_count: usize,
+    sv: ScrollState,
+    syntax: crate::syntax::SyntaxHighlighter,
+    buffer_stack: Vec<PathBuf>,
+    buffer_idx: usize,
 }
 
 // ── Editor ───────────────────────────────────────────────────────────────────
@@ -315,22 +398,9 @@ pub(crate) struct Editor {
     pub(crate) path: std::path::PathBuf,
     pub(crate) modified: bool,
 
-    // Cursor
-    pub(crate) cursor_y: usize,
-    /// Byte offset into the current line (NOT char index).
-    pub(crate) cursor_byte: usize,
-
-    // Scroll
-    pub(crate) scroll: usize,
-    pub(crate) scroll_x: usize,
-
     // Terminal dimensions
     pub(crate) term_h: usize,
     pub(crate) term_w: usize,
-
-    // Selection: anchor is the OTHER end of the selection from the cursor.
-    // When None, no selection active.
-    pub(crate) selection_anchor: Option<(usize, usize)>,
 
     // Internal clipboard (always available cross-platform).
     pub(crate) clipboard: String,
@@ -342,25 +412,20 @@ pub(crate) struct Editor {
     // Editor mode.
     pub(crate) mode: Mode,
 
-    // Search state.
-    pub(crate) search_query: String,
-    pub(crate) search_matches: Vec<(usize, usize, usize)>,
-    pub(crate) search_match_idx: usize,
-
     // Status message (shown briefly in the hint area).
     pub(crate) status_msg: Option<String>,
 
     // Command mode buffer.
     pub(crate) cmd_buf: String,
 
-    // Help screen scroll offset.
-    pub(crate) help_scroll: usize,
-
     // Dirty region tracking
     pub(crate) dirty_start: usize,
     pub(crate) dirty_end: usize,
-    pub(crate) prev_cursor_y: usize,
-    pub(crate) prev_cursor_byte: usize,
+
+    // Sub-structs for grouped state
+    pub(crate) cursor: CursorState,
+    pub(crate) search: SearchState,
+    pub(crate) sv: ScrollState,
 
     // Paste batching (Windows: chars arrive as individual events)
     pub(crate) paste_buf: String,
@@ -370,11 +435,6 @@ pub(crate) struct Editor {
 
     // Syntax highlighting engine
     pub(crate) syntax: SyntaxHighlighter,
-
-    // Multi-cursor: extra cursors beyond the primary (cursor_y, cursor_byte)
-    pub(crate) extra_cursors: Vec<CursorPos>,
-    // Index into extra_cursors of the most recently added cursor (for jump-to-last)
-    pub(crate) last_added_cursor_idx: Option<usize>,
 
     // Left-side file explorer sidebar
     pub(crate) sidebar: Sidebar,
@@ -390,7 +450,6 @@ pub(crate) struct Editor {
 
     // Run mode state
     pub(crate) run_lines: Vec<String>,
-    pub(crate) run_scroll: usize,
     pub(crate) run_cmd_buf: String,
     pub(crate) run_executing: Option<String>,
     pub(crate) run_rx: Option<std::sync::mpsc::Receiver<RunMessage>>,
@@ -409,9 +468,9 @@ pub(crate) struct Editor {
     // Crash recovery: counter to periodically save recovery snapshots
     pub(crate) edit_count: usize,
 
-    // Scroll bar drag state
-    pub(crate) dragging_vscroll: bool,
-    pub(crate) dragging_hscroll: bool,
+    // File watcher for live reload on external changes
+    pub(crate) file_watcher_rx: Option<std::sync::mpsc::Receiver<()>>,
+    pub(crate) _file_watcher: Option<notify::RecommendedWatcher>,
 
     // ── Multi-tab support ─────────────────────────────────────────────────
     pub(crate) tabs: Vec<Tab>,
@@ -444,32 +503,22 @@ impl Editor {
             lines,
             path: path.to_path_buf(),
             modified: false,
-            cursor_y: 0,
-            cursor_byte: 0,
-            scroll: 0,
-            scroll_x: 0,
             term_h: th,
             term_w: tw,
-            selection_anchor: None,
             clipboard: String::new(),
             undo_stack: Vec::new(),
             redo_stack: Vec::new(),
             mode: Mode::Normal,
-            search_query: String::new(),
-            search_matches: Vec::new(),
-            search_match_idx: 0,
             status_msg: None,
             cmd_buf: String::new(),
-            help_scroll: 0,
             dirty_start: 0,
             dirty_end: 0,
-            prev_cursor_y: 0,
-            prev_cursor_byte: 0,
+            cursor: CursorState::new(),
+            search: SearchState::new(),
+            sv: ScrollState::new(),
             paste_buf: String::new(),
             editor_cfg: EditorConfig::load(),
             syntax,
-            extra_cursors: Vec::new(),
-            last_added_cursor_idx: None,
             sidebar: Sidebar::new(),
             ff_query: String::new(),
             ff_results: Vec::new(),
@@ -477,7 +526,6 @@ impl Editor {
             gosc_dirs: Vec::new(),
             gosc_buf: String::new(),
             run_lines: Vec::new(),
-            run_scroll: 0,
             run_cmd_buf: String::new(),
             run_executing: None,
             run_rx: None,
@@ -489,8 +537,8 @@ impl Editor {
             completion_visible: false,
             completion_prefix: String::new(),
             edit_count: 0,
-            dragging_vscroll: false,
-            dragging_hscroll: false,
+            file_watcher_rx: None,
+            _file_watcher: None,
             tabs: Vec::new(),
             active_tab: 0,
             pending_quit: false,
@@ -504,15 +552,62 @@ impl Editor {
         self.active_tab = 0;
     }
 
+    /// Start watching the current file for external changes.
+    pub(crate) fn start_file_watcher(&mut self) {
+        use notify::{Watcher, RecursiveMode};
+        use std::sync::mpsc;
+
+        let (tx, rx) = mpsc::channel();
+        let path = self.path.clone();
+
+        let mut watcher = notify::recommended_watcher(move |res: notify::Result<notify::Event>| {
+            if let Ok(event) = res {
+                if matches!(event.kind, notify::EventKind::Modify(_)) {
+                    let _ = tx.send(());
+                }
+            }
+        }).ok();
+
+        if let Some(ref mut w) = watcher {
+            let _ = w.watch(&path, RecursiveMode::NonRecursive);
+            self.file_watcher_rx = Some(rx);
+            self._file_watcher = watcher.take();
+        }
+    }
+
+    /// Check for external file changes and reload if needed.
+    /// Returns true if the file was reloaded.
+    pub(crate) fn check_file_changed(&mut self) -> bool {
+        if let Some(rx) = &self.file_watcher_rx {
+            if rx.try_recv().is_ok() {
+                // Reload file content
+                if let Ok(content) = std::fs::read_to_string(&self.path) {
+                    let new_lines: Vec<String> = content.lines().map(|l| l.to_string()).collect();
+                    let new_lines = if new_lines.is_empty() {
+                        vec![String::new()]
+                    } else {
+                        new_lines
+                    };
+                    self.lines = new_lines;
+                    self.syntax.resize_cache(self.lines.len());
+                    self.mark_all_dirty();
+                    self.status_msg = Some("File changed externally — reloaded".into());
+                    return true;
+                }
+            }
+        }
+        false
+    }
+
     // ── session persistence ──────────────────────────────────────────────────
 
     pub(crate) fn capture_session(&self) -> EditorSession {
         EditorSession {
             current_file: self.path.clone(),
-            cursor_y: self.cursor_y,
-            cursor_byte: self.cursor_byte,
-            scroll: self.scroll,
-            scroll_x: self.scroll_x,
+            cursor_y: self.cursor.y,
+            cursor_byte: self.cursor.byte,
+            scroll: self.sv.offset,
+            scroll_x: self.sv.x,
             buffer_stack: self.buffer_stack.clone(),
             buffer_idx: self.buffer_idx,
             sidebar_open: self.sidebar.open,
@@ -521,10 +616,10 @@ impl Editor {
 
     pub(crate) fn restore_from_session(&mut self, session: &EditorSession) {
         let max = self.lines.len().saturating_sub(1);
-        self.cursor_y = session.cursor_y.min(max);
-        self.cursor_byte = session.cursor_byte.min(self.current().len());
-        self.scroll = session.scroll.min(max);
-        self.scroll_x = session.scroll_x;
+        self.cursor.y = session.cursor_y.min(max);
+        self.cursor.byte = session.cursor_byte.min(self.current().len());
+        self.sv.offset = session.scroll.min(max);
+        self.sv.x = session.scroll_x;
         self.sidebar.open = session.sidebar_open;
         if !session.buffer_stack.is_empty() {
             self.buffer_stack = session.buffer_stack.clone();

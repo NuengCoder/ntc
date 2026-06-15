@@ -21,17 +21,23 @@ pub(crate) const RANFILE_TEMPLATE: &str = r##"# NTCRANFILE — ntc task runner c
 
 # ── Variables ──────────────────────────────────────────────────────────
 # Define variables here and reference them with $(VAR_NAME) in commands.
+# Variables can reference other variables (up to 10 levels of nesting).
 #
 # Example:
 #   CC     = "gcc"
 #   FLAGS  = "-Wall -O2"
 #   OUTDIR = "dist"
+#   ver    = "2.3.0"
+#   major  = "2"
+#   minor  = "3"
+#   version = "$(major).$(minor)"  # expands to "2.3"
 #
 # Then use them: cmd = "$(CC) $(FLAGS) main.c -o $(OUTDIR)/app"
 
 [vars]
 # CC = "gcc"
 # FLAGS = "-O2"
+# ver = "2.3.0"
 
 # ── Targets ────────────────────────────────────────────────────────────
 # Each target can have:
@@ -71,6 +77,16 @@ pub(crate) fn parse(path: &Path) -> Result<Ranfile> {
     let ranfile: Ranfile =
         toml::from_str(&content).with_context(|| format!("Failed to parse {}", RANFILE_NAME))?;
 
+    // Expand variables within the vars section itself (recursive expansion)
+    let mut expanded_vars = ranfile.vars.clone();
+    expand_vars_in_map(&mut expanded_vars);
+
+    // Create a new Ranfile with expanded vars
+    let ranfile = Ranfile {
+        vars: expanded_vars,
+        targets: ranfile.targets,
+    };
+
     // Validate: at least one target
     if ranfile.targets.is_empty() {
         anyhow::bail!("{} contains no [targets] section", RANFILE_NAME);
@@ -108,6 +124,58 @@ pub(crate) fn parse(path: &Path) -> Result<Ranfile> {
     }
 
     Ok(ranfile)
+}
+
+/// Expand $(VAR) references within a HashMap of variables.
+fn expand_vars_in_map(vars: &mut std::collections::HashMap<String, String>) {
+    // Multiple passes to handle chained references (a = "$(b)", b = "1" → a = "1")
+    for _ in 0..10 {
+        let snapshot = vars.clone();
+        let mut changed = false;
+        for (_key, value) in vars.iter_mut() {
+            let expanded = expand_vars(value, &snapshot);
+            if expanded != *value {
+                *value = expanded;
+                changed = true;
+            }
+        }
+        if !changed {
+            break;
+        }
+    }
+}
+
+/// Expand $(VAR_NAME) references in a string.
+fn expand_vars(s: &str, vars: &std::collections::HashMap<String, String>) -> String {
+    let mut result = String::with_capacity(s.len());
+    let mut chars = s.chars().peekable();
+
+    while let Some(ch) = chars.next() {
+        if ch == '$' && chars.peek() == Some(&'(') {
+            chars.next(); // consume '('
+            let mut var_name = String::new();
+            let mut found_close = false;
+            for c in chars.by_ref() {
+                if c == ')' {
+                    found_close = true;
+                    break;
+                }
+                var_name.push(c);
+            }
+            if found_close {
+                let expanded = vars.get(&var_name).map(|s| s.as_str()).unwrap_or("");
+                result.push_str(expanded);
+            } else {
+                // Unclosed $( — preserve the literal text
+                result.push_str("$(");
+                result.push_str(&var_name);
+            }
+        } else {
+            result.push(ch);
+        }
+    }
+
+    result
 }
 
 /// Check whether a dependency cycle exists starting from `target`.

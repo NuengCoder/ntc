@@ -244,6 +244,53 @@ sin(PI / 2)
     }
 }
 
+/// Return welcome screen content for the ntcEditor intro.
+pub fn generate_welcome_content() -> String {
+    let version = env!("CARGO_PKG_VERSION");
+    format!(
+r#"╔═══════════════════════════════════════════════════════════════╗
+║                    Welcome to ntcEditor                      ║
+║                      version {version}                         ║
+╚═══════════════════════════════════════════════════════════════╝
+
+A fast, terminal-based code editor built in Rust.
+
+Getting Started:
+  * Ctrl + I  ->  Start Editing (INSERT mode)
+  * Ctrl + W  ->  Start Viewing (VISUAL mode)
+  * Ctrl + H  ->  Open Help
+  * :         ->  Command mode
+
+Navigation:
+  * Arrow keys  ->  Move cursor
+  * Home / End  ->  Start / End of line
+  * PgUp/PgDn   ->  Page scroll
+  * Ctrl+PgDn   ->  Next tab
+  * Ctrl+PgUp   ->  Previous tab
+  * Mouse wheel ->  Scroll up/down
+
+File Operations:
+  * Ctrl + S  ->  Save
+  * Ctrl + P  ->  File finder
+  * Ctrl + T  ->  Open file in new tab
+  * Ctrl + Q  ->  Close tab / Quit
+
+Commands (press : then type):
+  * :w           ->  Save
+  * :q           ->  Quit
+  * :wq          ->  Save and quit
+  * :ne <file>   ->  Open/create file
+  * :cd <path>   ->  Change directory
+
+For full help, press Ctrl + H
+
+──────────────────────────────────────────────────────────────────
+Start editing: Ctrl + I    |    Visual mode: Ctrl + W    |    Help: Ctrl + H
+"#,
+        version = version
+    )
+}
+
 /// Create a starter file at `path` based on its extension.
 /// Returns `true` if a template was written (file did not exist).
 pub fn init_file(path: &Path) -> Result<bool> {
@@ -283,10 +330,10 @@ pub fn edit_file_with_session(path: &Path, restored: Option<EditorSession>) -> R
             super::recovery::RecoveryData::remove_recovery(path);
             let mut editor = Editor::new(path)?;
             editor.init_tabs();
-            editor.cursor_y = data.cursor_y.min(editor.lines.len().saturating_sub(1));
-            editor.cursor_byte = data.cursor_byte.min(editor.current().len());
-            editor.scroll = data.scroll.min(editor.lines.len().saturating_sub(1));
-            editor.scroll_x = data.scroll_x;
+            editor.cursor.y = data.cursor_y.min(editor.lines.len().saturating_sub(1));
+            editor.cursor.byte = data.cursor_byte.min(editor.current().len());
+            editor.sv.offset = data.scroll.min(editor.lines.len().saturating_sub(1));
+            editor.sv.x = data.scroll_x;
             editor.modified = true; // Mark as modified so user re-saves
             let result = match editor.run() {
                 Ok(v) => v,

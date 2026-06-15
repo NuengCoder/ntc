@@ -79,8 +79,8 @@ pub(crate) fn collect_report_files(
     dir_path: &Path,
     max_depth: usize,
 ) -> (Vec<PathBuf>, Vec<PathBuf>) {
-    let ignored_dirs = Config::global_get_ignored_dirs();
-    let fmt_cfg = FormatConfig::from_global();
+    let ignored_dirs = Config::get_ignored_dirs_combined();
+    let fmt_cfg = FormatConfig::from_both();
 
     let walker = WalkDir::new(dir_path)
         .max_depth(max_depth)

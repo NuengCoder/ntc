@@ -26,7 +26,8 @@ fn builtin_commands() -> Vec<&'static str> {
         "size", "tp", "opencg", "resetcg", "restorecg", "local",
         "ne", "ntceditor", "igcare",
         "esc", "bkup", "pldw", "unpd", "gs", "fs", "ds", "diff", "fgo", "fsc", "locate",
-        "dino", "math", "theme" , "tpb", "tutorial", "init", "deinit"
+        "dino", "math", "theme" , "tpb", "tutorial", "init", "deinit",
+        "image", "img" , "py_activate", "py_deactivate", "showenv",
     ]
 }
 
@@ -118,6 +119,7 @@ fn subcommands_for(parts: &[&str]) -> Vec<&'static str> {
                     "add", "edit", "rm", "remove",
                     "list", "ls", "info",
                     "rnm", "rename", "export", "import",
+                    "make", "mk",
                     "cls", "clear",
                 ]
             } else {
@@ -148,12 +150,13 @@ fn subcommands_for(parts: &[&str]) -> Vec<&'static str> {
         "tpb" => vec!["history", "hist", "h", "clear", "cls"],
         "theme" => vec![
             "add", "rm", "remove", "edit", "info", "export", "import",
+            "make", "mk", "where", "wh", "reload",
             "n", "number", "rnm", "rename", "list" , "ls" ,
         ],
         // igcare export / igcare import / igcare export --all / igcare export --select
         "igcare" => {
             if parts.len() == 1 {
-                vec!["export", "import"]
+                vec!["export", "import", "make", "mk"]
             } else {
                 match parts[1].to_lowercase().as_str() {
                     "export" => vec!["--all", "-a", "--select", "-s"],
@@ -164,7 +167,7 @@ fn subcommands_for(parts: &[&str]) -> Vec<&'static str> {
         // ran init / ran deinit / ran list
         "ran" if parts.len() == 1 => vec!["init", "deinit", "help", "list", "ls"],
         // seta ON|OFF, seto ON|OFF, setl ON|OFF, setc ON|OFF, sett ON|OFF, seth ON|OFF
-        "seta" | "seto" | "setl" | "setc" | "sett" | "seth" => vec!["ON", "OFF"],
+        "seta" | "setl" | "setc" | "sett" | "seth" => vec!["ON", "OFF"],
         // local init/deinit/help
         "local" => vec!["init", "--all", "-a", "deinit", "help"],
         // ui (now a no-op after modern mode removal)
@@ -242,8 +245,8 @@ impl Hinter for NtcHinter {
             // ── Level 1: suggest top-level commands ──────────────────────
 
             // Special case: @<name> suggests teleport save-points
-            if typed.starts_with('@') {
-                let teleport_part = &typed[1..]; // everything after @
+            if let Some(teleport_part) = typed.strip_prefix('@') {
+                // everything after @
                 if teleport_part.is_empty() {
                     return None;
                 }
@@ -292,8 +295,7 @@ impl Hinter for NtcHinter {
             let aliases = alias_names_for_command(parent_parts);
 
             // Also check if typed is @<name> inside a command argument
-            if last_part.starts_with('@') {
-                let teleport_part = &last_part[1..];
+            if let Some(teleport_part) = last_part.strip_prefix('@') {
                 if !teleport_part.is_empty() {
                     let all_teleports = TeleportManager::get_all();
                     let mut matches: Vec<String> = all_teleports

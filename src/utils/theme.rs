@@ -144,7 +144,7 @@ impl<'de> Deserialize<'de> for ThemeColor {
 }
 
 impl ThemeColor {
-    /// Convert to `colored::Color` for shell output
+    /// Convert to `colored::Color` for shell output (non-Android)
     #[cfg(not(target_os = "android"))]
     pub fn to_colored(&self) -> colored::Color {
         match self {
@@ -165,7 +165,34 @@ impl ThemeColor {
             ThemeColor::BrightCyan => colored::Color::BrightCyan,
             ThemeColor::BrightWhite => colored::Color::BrightWhite,
             ThemeColor::Rgb { r, g, b } => colored::Color::TrueColor { r: *r, g: *g, b: *b },
+            // colored 2.x has no ANSI 256-colour variant — fall back to White.
+            // The editor (crossterm) path handles ANSI codes correctly via Color::AnsiValue.
             ThemeColor::Ansi { code: _ } => colored::Color::White,
+        }
+    }
+
+    /// Convert to ANSI foreground color escape code (Android/Termux)
+    #[cfg(target_os = "android")]
+    pub fn to_ansi_fg(&self) -> String {
+        match self {
+            ThemeColor::Black => "\x1b[30m".to_string(),
+            ThemeColor::Red => "\x1b[31m".to_string(),
+            ThemeColor::Green => "\x1b[32m".to_string(),
+            ThemeColor::Yellow => "\x1b[33m".to_string(),
+            ThemeColor::Blue => "\x1b[34m".to_string(),
+            ThemeColor::Magenta => "\x1b[35m".to_string(),
+            ThemeColor::Cyan => "\x1b[36m".to_string(),
+            ThemeColor::White => "\x1b[37m".to_string(),
+            ThemeColor::BrightBlack => "\x1b[90m".to_string(),
+            ThemeColor::BrightRed => "\x1b[91m".to_string(),
+            ThemeColor::BrightGreen => "\x1b[92m".to_string(),
+            ThemeColor::BrightYellow => "\x1b[93m".to_string(),
+            ThemeColor::BrightBlue => "\x1b[94m".to_string(),
+            ThemeColor::BrightMagenta => "\x1b[95m".to_string(),
+            ThemeColor::BrightCyan => "\x1b[96m".to_string(),
+            ThemeColor::BrightWhite => "\x1b[97m".to_string(),
+            ThemeColor::Rgb { r, g, b } => format!("\x1b[38;2;{};{};{}m", r, g, b),
+            ThemeColor::Ansi { code } => format!("\x1b[38;5;{}m", code),
         }
     }
 
@@ -395,8 +422,11 @@ impl Theme {
         }
     }
 
+    #[deprecated(since = "2.3.0", note = "use default_theme() instead")]
     pub fn dark_theme() -> Self {
-        Self::default_theme()
+        let mut t = Self::default_theme();
+        t.name = "dark".into();
+        t
     }
 
     pub fn light_theme() -> Self {
@@ -481,12 +511,19 @@ impl Theme {
 // Shell color helpers
 // ============================================================================
 
-/// Apply a shell theme color to a string using the `colored` crate.
-/// Helper function to replace the older `themed!` macro.
+/// Apply a shell theme color to a string.
+/// On non-Android: uses the `colored` crate.
+/// On Android/Termux: uses raw ANSI escape codes.
 #[cfg(not(target_os = "android"))]
 pub fn paint_with_shell_color(s: &str, color: &ThemeColor) -> colored::ColoredString {
     use colored::Colorize;
     s.color(color.to_colored())
+}
+
+/// Android version: wraps string with ANSI foreground color + reset.
+#[cfg(target_os = "android")]
+pub fn paint_with_shell_color(s: &str, color: &ThemeColor) -> String {
+    format!("{}{}\x1b[0m", color.to_ansi_fg(), s)
 }
 
 /// Convenience: get shell color for a specific accessor, then paint a string.
@@ -497,6 +534,14 @@ pub fn shell_paint(s: &str, accessor: fn(&ShellTheme) -> &ThemeColor) -> colored
     let theme = ThemeManager::current();
     let color = accessor(&theme.shell);
     s.color(color.to_colored())
+}
+
+/// Android version: get shell color via accessor, then paint with ANSI escapes.
+#[cfg(target_os = "android")]
+pub fn shell_paint(s: &str, accessor: fn(&ShellTheme) -> &ThemeColor) -> String {
+    let theme = ThemeManager::current();
+    let color = accessor(&theme.shell);
+    format!("{}{}\x1b[0m", color.to_ansi_fg(), s)
 }
 
 // ============================================================================
@@ -513,7 +558,7 @@ impl ThemeManager {
         dirs::config_dir().map(|d| d.join("ntc").join("theme.toml"))
     }
     
-    fn themes_dir() -> Option<PathBuf> {
+    pub fn themes_dir() -> Option<PathBuf> {
         dirs::config_dir().map(|d| d.join("ntc").join("themes"))
     }
     
@@ -579,7 +624,34 @@ impl ThemeManager {
             });
         &INSTANCE
     }
-    
+
+    /// Replace the global ThemeManager's state with a custom instance.
+    /// Useful for testing or startup customization.
+    pub fn set_global(tm: ThemeManager) {
+        let g = Self::global();
+        let current = tm.current_theme.into_inner().unwrap();
+        let available = tm.available_themes.into_inner().unwrap();
+        *g.current_theme.write().unwrap() = current;
+        *g.available_themes.write().unwrap() = available;
+    }
+
+    /// Temporarily inject a custom ThemeManager, run `f`, then restore the
+    /// original. Returns the result of `f`.
+    pub fn with_test_theme<R>(tm: ThemeManager, f: impl FnOnce() -> R) -> R {
+        let g = Self::global();
+        let mut cur = g.current_theme.write().unwrap();
+        let mut av = g.available_themes.write().unwrap();
+        let old_cur = std::mem::replace(&mut *cur, tm.current_theme.into_inner().unwrap());
+        let old_av = std::mem::replace(&mut *av, tm.available_themes.into_inner().unwrap());
+        drop((cur, av));
+        let result = f();
+        let mut cur = g.current_theme.write().unwrap();
+        let mut av = g.available_themes.write().unwrap();
+        *cur = old_cur;
+        *av = old_av;
+        result
+    }
+
     pub fn current() -> std::sync::RwLockReadGuard<'static, Theme> {
         Self::global().current_theme.read().unwrap_or_else(|e| e.into_inner())
     }
@@ -587,7 +659,6 @@ impl ThemeManager {
     pub fn set_theme(name: &str) -> bool {
         let themes = Self::global().available_themes.read().unwrap_or_else(|e| e.into_inner());
         if let Some(theme) = themes.get(name) {
-            let _ = &themes;
             let mut current = Self::global().current_theme.write().unwrap_or_else(|e| e.into_inner());
             *current = theme.clone();
             Self::save_current(name);
@@ -619,25 +690,22 @@ impl ThemeManager {
             let _ = fs::create_dir_all(&themes_dir);
         }
         
-        let has_themes = Self::list_themes().iter().any(|name| {
-            name != "default" && name != "light"
-        });
+        // Only write files that don't already exist on disk.
+        // Previously this checked list_themes() which always returned
+        // ["default", "light"] from the hardcoded map — causing writes every startup.
+        let default_path = themes_dir.join("default.ntc_theme");
+        if !default_path.exists() {
+            let _ = fs::write(&default_path, Self::get_default_theme_content());
+        }
         
-        if !has_themes {
-            let default_path = themes_dir.join("default.ntc_theme");
-            if !default_path.exists() {
-                let _ = fs::write(&default_path, Self::get_default_theme_content());
-            }
-            
-            let light_path = themes_dir.join("light.ntc_theme");
-            if !light_path.exists() {
-                let _ = fs::write(&light_path, Self::get_light_theme_content());
-            }
-            
-            let example_path = themes_dir.join("example.ntc_theme");
-            if !example_path.exists() {
-                let _ = fs::write(&example_path, Self::get_example_theme_template());
-            }
+        let light_path = themes_dir.join("light.ntc_theme");
+        if !light_path.exists() {
+            let _ = fs::write(&light_path, Self::get_light_theme_content());
+        }
+        
+        let example_path = themes_dir.join("example.ntc_theme");
+        if !example_path.exists() {
+            let _ = fs::write(&example_path, Self::get_example_theme_template());
         }
         
         Self::reload_themes();
@@ -796,7 +864,7 @@ run_output_fg = { r = 40, g = 50, b = 60 }
 "#.to_string()
     }
     
-    fn get_example_theme_template() -> String {
+    pub fn get_example_theme_template() -> String {
         r#"# ntc Theme Template
 name = "mytheme"
 author = "Your Name"
@@ -936,7 +1004,7 @@ run_output_fg = { r = 180, g = 200, b = 210 }
     
     pub fn theme_exists(name: &str) -> bool {
         let themes = Self::global().available_themes.read().ok();
-        themes.map_or(false, |t| t.contains_key(name))
+        themes.is_some_and(|t| t.contains_key(name))
     }
     
     pub fn export_theme(name: &str, output_path: &std::path::Path) -> Result<(), String> {
@@ -1000,7 +1068,8 @@ macro_rules! ntc_shell_color {
         }
         #[cfg(target_os = "android")]
         {
-            $str.to_string()
+            let _theme = $crate::utils::theme::ThemeManager::current();
+            format!("{}{}\x1b[0m", _theme.shell.$field.to_ansi_fg(), $str)
         }
     }};
 }
@@ -1018,7 +1087,7 @@ macro_rules! themed {
         }
         #[cfg(target_os = "android")]
         {
-            $str.to_string()
+            format!("{}{}\x1b[0m", _color.to_ansi_fg(), $str)
         }
     }};
 }

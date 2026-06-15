@@ -70,10 +70,10 @@ impl Editor {
         let data = RecoveryData {
             original_path: self.path.to_string_lossy().to_string(),
             lines: self.lines.clone(),
-            cursor_y: self.cursor_y,
-            cursor_byte: self.cursor_byte,
-            scroll: self.scroll,
-            scroll_x: self.scroll_x,
+            cursor_y: self.cursor.y,
+            cursor_byte: self.cursor.byte,
+            scroll: self.sv.offset,
+            scroll_x: self.sv.x,
             timestamp: Local::now().to_rfc3339(),
         };
         if let Ok(json) = serde_json::to_string(&data) {

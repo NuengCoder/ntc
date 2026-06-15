@@ -1,6 +1,6 @@
 // src/lib.rs
 // ntc core library
-// Version: v1.9.0
+// Version: v2.3.0
 
 // Top-level modules (multi-file directories)
 pub mod cli;
@@ -14,6 +14,7 @@ pub mod shell;
 pub mod syntax;
 pub mod tutorial;
 pub mod utils;
+pub mod image2doc;
 
 // Re-export utils modules so existing paths like `crate::config::Config` still work
 // (consumed internally via `use crate::...` and externally via `use ntc::...`).

@@ -19,6 +19,18 @@
 [vars]
 # CC = "gcc"
 # FLAGS = "-O2"
+ver = "2.3.0"
+lux = "ntc-v$(ver)-linux-x86_64.tar.gz"
+adb = "ntc-v$(ver)-aarch64-linux-android.tar.gz"
+win = "ntc-v$(ver)-windows-x86_64.zip"
+deb = "ntc_$(ver)-1_amd64.deb"
+wini = "ntc-installer-$(ver).exe"
+
+lux_w = "target/release"
+adb_w = "target/aarch64-linux-android/release"
+win_w = "target/release/ntc.exe"
+deb_w = "target/debian/ntc_$(ver)-1_amd64.deb"
+wini_w = "installer/ntc-installer-$(ver).exe"
 
 # ── Targets ────────────────────────────────────────────────────────────
 # Each target can have:
@@ -37,13 +49,41 @@ cmd = "cargo build --release && echo done...!"
 deps = []
 cmd = "cargo build --release && start installer.iss"
 
-# [targets.lint]
-# deps = []
-# cmd = "ruff check ."
+[targets.android]
+deps = []
+cmd = "cargo ndk --target aarch64-linux-android build --release"
 
-# [targets.test]
-# deps = ["build"]
-# cmd = "echo Running tests..."
+[targets.debian]
+deps = []
+cmd = "cargo deb"
+
+[targets.tar]
+deps = []
+cmd = "tar -czvf $(lux) -C $(lux_w) ntc && tar -czvf $(adb) -C $(adb_w) ntc"
+
+[targets.zip]
+deps = []
+cmd = "powershell Compress-Archive -Path $(win_w) -DestinationPath $(win)"
+
+[targets.cpdeb]
+deps = []
+cmd = "cp $(deb_w) $(deb)"
+
+[targets.cpwin]
+deps = []
+cmd = "cp $(wini_w) $(wini)"
+
+[targets.setpack]
+deps = ["tar","zip","cpdeb","cpwin"]
+cmd = "echo pack setup completed!"
+
+[targets.rmpack]
+deps = []
+cmd = "rmf $(lux) && rmf $(adb) && rmf $(win) && rmf $(deb) && rmf $(wini)"
+
+[targets.push]
+deps = []
+cmd = "git add . && git commit -m version 2.3.0 && git tag v2.3.0 && git push origin main --tags"
 
 [targets.clean]
 deps = []

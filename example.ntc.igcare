@@ -1,0 +1,8 @@
+# ntc ignore/care settings template
+# Import with: igcare import <file>
+
+ignored_directory_names = []
+ignored_extensions = []
+extra_supported_extensions = []
+ignored_files = []
+extra_supported_files = []

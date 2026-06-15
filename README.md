@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="https://img.shields.io/badge/version-2.2.0-blue.svg" alt="Version 2.2.0"/>
+  <img src="https://img.shields.io/badge/version-2.3.0-blue.svg" alt="Version 2.3.0"/>
   <img src="https://img.shields.io/badge/platform-Windows%20%7C%20Linux%20%7C%20macOS%20%7C%20Android-lightgrey.svg" alt="Platforms"/>
   <img src="https://img.shields.io/badge/license-MIT-green.svg" alt="License"/>
 </p>
@@ -32,18 +32,19 @@
 
 | Category | Capabilities |
 |----------|-------------|
-| **Navigation** | `go`/`cd`, `back`, `gos`/`gosc`, `godrive`, teleport savepoints (`tp`), teleport back (`tpb`) |
+| **Navigation** | `go`/`cd`, `back`, `gos`/`gosc` (with `v`/`s`/`vs` view options), `godrive`, teleport savepoints (`tp`), teleport back (`tpb`) |
 | **File Search** | `fs` (wildcards + fuzzy + exact + partial), `ds` (dirs), `locate`, `gs` (grep), `fgo`/`fsc` |
 | **Backup** | `bkup` (atomic snapshots), `pldw` (restore), `unpd` (undo), `diff` |
-| **Editor** | Multi-tab, 45+ language syntax highlighting, sidebar, mouse support, undo/redo, multi-cursor, search, LSP, auto-completion, run mode, crash recovery |
+| **Editor** | Multi-tab, 45+ language syntax highlighting, sidebar, mouse support, undo/redo, multi-cursor, search, LSP, auto-completion, run mode, crash recovery, welcome screen |
 | **Task Runner** | `ran` — Make-like dependency-based task runner with `NTCRANFILE.toml` |
 | **Reports** | TXT, JSON, MD, HTML, PDF, DOCX, XLSX |
 | **Math** | Expression evaluator, built-in functions, user functions, timer, `.ntc.math` scripts |
-| **Aliases** | `ral` (parameterised, array args, defaults), `&&` chaining, recursive expansion, export/import |
+| **Aliases** | `ral` (parameterised, array args, defaults, `make` templates), `&&` chaining, recursive expansion, export/import |
 | **Config** | `setO`/`setD`/`setL`/`setC`/`setA`/`setT`/`setH`, local `ntconfig.toml`, `init`/`deinit` |
-| **Themes** | Full theme system — syntax, shell, editor colors. Export/import `.ntc_theme` files |
+| **Themes** | Full theme system — syntax, shell, editor colors. Export/import `.ntc_theme`, `make` templates, `where` to find directory |
 | **Watcher** | File watcher with debounced events, ignore-aware, trigger alias auto-run |
-| **Filters** | `ignore`/`cared` (dirs, extensions, filenames), export/import `.ntc.igcare` |
+| **Filters** | `ignore`/`cared` (dirs, extensions, filenames), export/import `.ntc.igcare`, `make` templates |
+| **Image2Doc** | Basic image to text/markdown/json conversion |
 | **Fun** | Dinosaur runner game (`dino`) |
 | **LSP** | Built-in LSP server for `.ntc.math` files (hover, completions, diagnostics, go-to-definition) |
 
@@ -120,10 +121,10 @@ runc(main,program)
 | Platform | Method |
 |----------|--------|
 | **Windows** | Inno Setup installer, manual `.exe` |
-| **Linux (Debian)** | `sudo dpkg -i ntc_2.2.0-1_amd64.deb` |
-| **Linux (other)** | Extract `ntc-v2.2.0-linux-x86_64.tar.gz` to PATH |
-| **macOS** | Extract `ntc-v2.2.0-macos-universal.tar.gz` to PATH |
-| **Termux** | Extract `ntc-v2.2.0-aarch64-linux-android.tar.gz` to `$PREFIX/bin/` |
+| **Linux (Debian)** | `sudo dpkg -i ntc_2.3.0-1_amd64.deb` |
+| **Linux (other)** | Extract `ntc-v2.3.0-linux-x86_64.tar.gz` to PATH |
+| **macOS** | Extract `ntc-v2.3.0-macos-universal.tar.gz` to PATH |
+| **Termux** | Extract `ntc-v2.3.0-aarch64-linux-android.tar.gz` to `$PREFIX/bin/` |
 | **Any (npm)** | `npm install -g @nuengcoder/ntc` |
 
 ---

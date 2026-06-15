@@ -46,6 +46,8 @@ pub fn compute_project_hash(project_root: &Path) -> String {
 
 pub struct BackupManager;
 
+type BackupTaskResult = (PathBuf, Result<(String, u64)>, u64, u64);
+
 impl BackupManager {
 
     // ========================================================================
@@ -77,8 +79,8 @@ impl BackupManager {
             backup_number,
         );
 
-        let ignored_dirs = Config::global_get_ignored_dirs();
-        let fmt_cfg      = FormatConfig::from_global();
+        let ignored_dirs = Config::get_ignored_dirs_combined();
+        let fmt_cfg      = FormatConfig::from_both();
 
         let walker = WalkDir::new(project_root)
             .sort_by(|a, b| a.file_name().cmp(b.file_name()))
@@ -179,7 +181,7 @@ impl BackupManager {
         }
 
         // Phase 2: parallel copy + hash
-        let results: Vec<(PathBuf, Result<(String, u64)>, u64, u64)> = tasks
+        let results: Vec<BackupTaskResult> = tasks
             .into_par_iter()
             .map(|task| {
                 let result = (|| -> Result<(String, u64)> {
@@ -402,8 +404,8 @@ impl BackupManager {
     /// Collect all current project files as a set of relative path strings.
     /// Respects the same ignored-dirs and ignored-extensions config as backups.
     fn collect_current_file_set(project_root: &Path) -> HashSet<String> {
-        let ignored_dirs = Config::global_get_ignored_dirs();
-        let fmt_cfg      = FormatConfig::from_global();
+        let ignored_dirs = Config::get_ignored_dirs_combined();
+        let fmt_cfg      = FormatConfig::from_both();
         let mut set      = HashSet::new();
 
         let walker = WalkDir::new(project_root)

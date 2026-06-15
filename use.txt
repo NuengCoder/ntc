@@ -1,5 +1,5 @@
 # NTC - Navigate, Tree, Cat
-## Version 2.2.0 - Complete User Guide
+## Version 2.3.0 - Complete User Guide
 
 NTC is a command-line tool that combines directory navigation, tree viewing, file concatenation, backup/restore, fuzzy search, built-in text editor, syntax highlighting, math expression evaluator, and a dinosaur runner game. It works on Windows, Linux/WSL, macOS, and Termux (Android).
 
@@ -12,22 +12,22 @@ NTC is a command-line tool that combines directory navigation, tree viewing, fil
 - Or install via winget: `winget install NuengCoder.ntc`
 
 ### Linux (Ubuntu/Debian)
-- Download `ntc_2.2.0-1_amd64.deb`
-- Run: `sudo dpkg -i ntc_2.2.0-1_amd64.deb`
+- Download `ntc_2.3.0-1_amd64.deb`
+- Run: `sudo dpkg -i ntc_2.3.0-1_amd64.deb`
 
 ### Linux (Other distributions)
-- Download `ntc-v2.2.0-linux-x86_64.tar.gz`
-- Extract: `tar -xzvf ntc-v2.2.0-linux-x86_64.tar.gz`
+- Download `ntc-v2.3.0-linux-x86_64.tar.gz`
+- Extract: `tar -xzvf ntc-v2.3.0-linux-x86_64.tar.gz`
 - Copy to PATH: `sudo mv ntc /usr/local/bin/`
 
 ### macOS (Intel & Apple Silicon)
-- Download `ntc-v2.2.0-macos-universal.tar.gz`
-- Extract: `tar -xzvf ntc-v2.2.0-macos-universal.tar.gz`
+- Download `ntc-v2.3.0-macos-universal.tar.gz`
+- Extract: `tar -xzvf ntc-v2.3.0-macos-universal.tar.gz`
 - Copy to PATH: `sudo mv ntc /usr/local/bin/`
 
 ### Termux (Android)
-- Download `ntc-v2.2.0-aarch64-linux-android.tar.gz`
-- Extract: `tar -xzvf ntc-v2.2.0-aarch64-linux-android.tar.gz`
+- Download `ntc-v2.3.0-aarch64-linux-android.tar.gz`
+- Extract: `tar -xzvf ntc-v2.3.0-aarch64-linux-android.tar.gz`
 - Copy: `cp ntc $PREFIX/bin/`
 - `chmod +x $PREFIX/bin/ntc`
 

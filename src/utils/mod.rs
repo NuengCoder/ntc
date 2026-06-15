@@ -8,6 +8,7 @@ pub mod config;
 pub mod explorer;
 pub mod filetype;
 pub mod fuzzy;
+pub mod interactive;
 pub mod navigator;
 pub mod output;
 pub mod search;

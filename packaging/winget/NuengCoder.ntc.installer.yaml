@@ -1,11 +1,11 @@
 PackageIdentifier: NuengCoder.ntc
-PackageVersion: 2.0.0
+PackageVersion: 2.3.0
 InstallerLocale: en-US
 InstallerType: portable
 Installers:
   - Architecture: x64
-    InstallerUrl: https://github.com/NuengCoder/ntc/releases/download/v2.0.0/ntc-v2.0.0-windows-x86_64.zip
-    InstallerSha256: DABF4CBD516DF819C2E08E33DE593835CB139892AB0DD4603A4492670C9BFBFF
+    InstallerUrl: https://github.com/NuengCoder/ntc/releases/download/v2.3.0/ntc-v2.3.0-windows-x86_64.zip
+    InstallerSha256: PLACEHOLDER_UPDATE_AFTER_BUILD
     Commands:
       - ntc
 ManifestType: installer

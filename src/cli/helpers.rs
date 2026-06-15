@@ -1,14 +1,38 @@
 use colored::*;
 use std::io::{self, Write};
 
-/// Pre‑process raw args to accept `-say`, `-print` as long options.
+/// Pre‑process raw args to accept `-say`, `-print`, `-image` as long options,
+/// and convert `image <path> to <format>` syntax into structured args.
 pub(super) fn preprocess_args(args: Vec<String>) -> Vec<String> {
-    args.into_iter()
-        .map(|arg| match arg.as_str() {
-            "-say" | "-print" => "--say".to_string(),
-            _ => arg,
-        })
-        .collect()
+    let mut out = Vec::new();
+    let mut i = 0;
+    while i < args.len() {
+        let arg = &args[i];
+        match arg.as_str() {
+            "-say" | "-print" => out.push("--say".to_string()),
+            "-image" => {
+                out.push("--image".to_string());
+                // Check if the next tokens follow: <path> to <format>
+                if i + 3 < args.len() && args[i + 2] == "to" {
+                    // image <path> to <format>
+                    out.push(args[i + 1].clone());           // <path>
+                    out.push("--image-to".to_string());      // our internal flag
+                    out.push(args[i + 3].clone());           // <format>
+                    i += 4;
+                    continue;
+                } else if i + 1 < args.len() {
+                    // image <path> (no to/format, just eat the path)
+                    out.push(args[i + 1].clone());
+                    i += 2;
+                    continue;
+                }
+            }
+            "-o" => out.push("--output".to_string()),
+            _ => out.push(arg.clone()),
+        }
+        i += 1;
+    }
+    out
 }
 
 pub(super) fn print_logo() {
@@ -53,6 +77,7 @@ pub(super) fn print_help() {
     println!("    --size                  Show current directory size");
     println!("    --view                  Quick view of current directory tree");
     println!("    --view --size           Quick view with directory sizes");
+    println!("    -image <path> to <fmt>  Convert image to document for AI (json|md|html|txt)");
 
     println!("    --clear                 Clear the terminal screen");
     println!("    --version               Show version information");
@@ -88,7 +113,8 @@ pub(super) fn print_help() {
     println!("    ntc --setL ON               Enable line numbers");
     println!("    ntc --showcg                Show configuration");
     println!("    ntc -say \"Hello World\"      Print Hello World");
-    println!("    ntc --watch ON              Enable file watcher\n");
+    println!("    ntc --watch ON              Enable file watcher");
+    println!("    ntc -image screenshot.png to json   Convert image to JSON for AI\n");
     println!("For interactive commands, launch ntc without arguments.");
     println!("{}", "INTERACTIVE-ONLY COMMANDS:".yellow().bold());
     println!("    Navigation: go, godrive, back, gos, gosc");

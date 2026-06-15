@@ -45,7 +45,7 @@ impl MarkdownReportGenerator {
 }
 
 fn build_markdown_content(tree: &TreeNode, dir_path: &Path, scan_time: f64) -> Result<String> {
-    let fmt_cfg = FormatConfig::from_global();
+    let fmt_cfg = FormatConfig::from_both();
     let (supported_files, unsupported_files) = collect_files(dir_path, &fmt_cfg)?;
     let total_size = crate::explorer::calculate_total_size(dir_path);
     

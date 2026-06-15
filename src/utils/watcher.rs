@@ -169,14 +169,14 @@ impl WatcherHandle {
         }
 
         // Debounce: wait until at least DEBOUNCE_MS since the last event.
-        let elapsed = self.last_event.lock().unwrap().elapsed();
+        let elapsed = self.last_event.lock().unwrap_or_else(|e| e.into_inner()).elapsed();
         if elapsed < Duration::from_millis(DEBOUNCE_MS) {
             return None;
         }
 
         // Drain the pending buffer.
         let raw: Vec<PendingEvent> = {
-            let mut lock = self.pending.lock().unwrap();
+            let mut lock = self.pending.lock().unwrap_or_else(|e| e.into_inner());
             std::mem::take(&mut *lock)
         };
         self.changed.store(false, Ordering::Release);
@@ -242,7 +242,7 @@ pub fn start_watcher(path: &Path) -> Result<WatcherHandle> {
             };
 
             // Filter: skip paths that belong to an ignored directory segment.
-            let ignored = Config::global_get_ignored_dirs();
+            let ignored = Config::get_ignored_dirs_combined();
             for path in &event.paths {
                 if is_in_ignored_dir(path, &ignored) {
                     continue;

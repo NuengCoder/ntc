@@ -10,7 +10,7 @@ pub(super) fn print_interactive_help() {
     println!("  cd <path>           Same as go");
     println!("  cd to <tp_name>     Teleport to a saved teleport point");
     println!("  gos                 List subdirectories and pick one");
-    println!("  gosc                Continuous navigation (0 to exit)");
+    println!("  gosc                Continuous navigation (0 to exit, v/s/vs for view)");
     println!("  godrive             List and select Windows drives");
     println!("  back                Go back to parent directory");
     println!("  back <n>            Go back n parent directories");
@@ -42,6 +42,10 @@ pub(super) fn print_interactive_help() {
     println!("  watch ON|OFF        Enable/disable file watcher");
     println!("  watch trigger <a>   Auto-run alias when watcher fires");
     println!("  watch trigger off   Disable auto-run");
+    println!("  showenv               - Show environment variables (first 5 PATH entries)");
+    println!("  showenv --all         - Show all PATH entries");
+    println!("  showenv -d <n>        - Show first n PATH entries (e.g., showenv -d 10)");
+    println!("  showenv --depth <n>   - Same as -d");
 
     println!();
     println!("{}", "THEME COMMANDS:".cyan().bold());
@@ -51,12 +55,14 @@ pub(super) fn print_interactive_help() {
     println!("  theme <name>            Switch to a theme by name");
     println!("  theme add <name>        Create a new theme (opens in editor)");
     println!("  theme rm <name>         Remove a theme");
-    println!("  theme edit <name>       Edit a theme in the built-in editor");
+    println!("  theme edit [name]       Edit a theme (or open theme directory)");
+    println!("  theme where             Show theme directory location");
     println!("  theme info <name>       Show theme metadata and color counts");
     println!("  theme export <name>     Export theme to .ntc_theme file");
     println!("  theme import <file>     Import theme from .ntc_theme file");
     println!("  theme rnm <old> to <new>  Rename a theme");
     println!("  theme reload            Reload themes from disk");
+    println!("  theme make [name]       Create theme template in CWD (default: example)");
 
     println!();
     println!("{}", "TELEPORT COMMANDS:".cyan().bold());
@@ -91,6 +97,7 @@ pub(super) fn print_interactive_help() {
     println!("  ral export --all <name>            Export all aliases to <name>.ntc.ral");
     println!("  ral export --select <name>         Select aliases to export to <name>.ntc.ral");
     println!("  ral import <file>                  Import aliases from a .ntc.ral file");
+    println!("  ral make [name]                    Create alias template in CWD (default: example)");
     println!("  <alias>                            Execute alias directly");
     println!("  <alias>(<arg>)                     Execute parameterised alias");
     println!("  run <alias>                        Execute alias with 'run'");
@@ -172,6 +179,7 @@ pub(super) fn print_interactive_help() {
     println!("  igcare export --all <name>     Export all settings to <name>.ntc.igcare");
     println!("  igcare export --select <name>  Select categories to export to <name>.ntc.igcare");
     println!("  igcare import <file>           Import settings from a .ntc.igcare file");
+    println!("  igcare make [name]             Create igcare template in CWD (default: example)");
 
     println!();
     println!("{}", "OTHER COMMANDS:".cyan().bold());
@@ -211,6 +219,17 @@ pub(super) fn print_interactive_help() {
     println!("    math fun add sq(x) = x^2");
     println!("    math sq(5)          → 25");
     println!();
+    println!("{}", "PYTHON COMMANDS:".cyan().bold());
+    println!("  py_activate       - Activate Python virtual environment");
+    println!("  py_deactivate     - Deactivate current virtual environment");
+    println!();
+    println!("{}", "IMAGE COMMANDS:".cyan().bold());
+    println!("  image                     Interactive image converter (pick from current dir)");
+    println!("  image <path>              Open image in default viewer");
+    println!("  image <path> to <fmt>     Convert and display output (json|md|html|txt|desc)");
+    println!("  image <path> out <fmt>    Convert and save to setO path");
+    println!("  image <path> --ocr        Enable OCR text extraction");
+    println!("  image <path> --layout     Enable UI layout detection");
 }
 
 pub(super) fn print_tp_help() {

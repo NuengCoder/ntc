@@ -1,0 +1,72 @@
+# ntc Theme Template
+name = "mytheme"
+author = "Your Name"
+description = "My custom theme"
+
+[syntax]
+keyword = "magenta"
+string = "green"
+comment = "bright_black"
+number = "yellow"
+type = "cyan"
+builtin = "red"
+function = "bright_blue"
+operator = "white"
+punctuation = "bright_black"
+attribute = "bright_magenta"
+macro_token = "bright_magenta"
+regex = "bright_yellow"
+tag = "bright_cyan"
+constant = "yellow"
+normal = "white"
+
+[shell]
+prompt_bracket = "cyan"
+prompt_path = "blue"
+prompt_watcher = "yellow"
+prompt_arrow = "green"
+success = "green"
+error = "red"
+warning = "yellow"
+info = "cyan"
+tree_branch = "green"
+tree_dir = "blue"
+tree_file = "white"
+tree_ignored = "bright_black"
+tree_size = "yellow"
+command_output = "white"
+separator = "cyan"
+help_header = "cyan"
+help_section = "cyan"
+help_example = "green"
+teleport_name = "bright_blue"
+alias_name = "blue"
+alias_command = "bright_black"
+
+[editor]
+editor_bg = { r = 13, g = 13, b = 21 }
+gutter_bg = { r = 13, g = 13, b = 21 }
+status_bg = { r = 162, g = 119, b = 255 }
+hint_bg = { r = 21, g = 21, b = 29 }
+sidebar_bg = { r = 13, g = 13, b = 21 }
+sidebar_selected_bg = { r = 44, g = 44, b = 58 }
+run_panel_bg = { r = 22, g = 22, b = 30 }
+gutter_text = { r = 108, g = 108, b = 128 }
+status_text = "white"
+status_modified = "yellow"
+hint_text = { r = 130, g = 226, b = 255 }
+cursor_bg = "white"
+cursor_text = "black"
+extra_cursor_bg = { r = 255, g = 140, b = 154 }
+selection_bg = { r = 54, g = 51, b = 84 }
+search_match_bg = { r = 44, g = 44, b = 58 }
+search_current_bg = { r = 162, g = 119, b = 255 }
+border = { r = 61, g = 61, b = 77 }
+scrollbar = { r = 61, g = 61, b = 77 }
+scrollbar_thumb = { r = 162, g = 119, b = 255 }
+sidebar_dir = { r = 120, g = 220, b = 232 }
+sidebar_file = { r = 200, g = 200, b = 208 }
+sidebar_current = { r = 255, g = 202, b = 133 }
+sidebar_selected = "white"
+run_header_fg = { r = 70, g = 130, b = 180 }
+run_output_fg = { r = 180, g = 200, b = 210 }

@@ -71,7 +71,7 @@ fn build_txt_content(
                 content.push('\n');
             }
             Err(e) => {
-                content.push_str(&format!("[Error reading file: {}]\n\n", e));
+                content.push_str(&format!("[Error reading file: {:#}]\n\n", e));
             }
         }
     }

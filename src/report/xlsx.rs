@@ -21,8 +21,8 @@ struct FileInfo {
 }
 
 fn collect_all_files(dir_path: &Path, max_depth: usize) -> Vec<FileInfo> {
-    let ignored_dirs = Config::global_get_ignored_dirs();
-    let fmt_cfg = FormatConfig::from_global();
+    let ignored_dirs = Config::get_ignored_dirs_combined();
+    let fmt_cfg = FormatConfig::from_both();
 
     let mut raw: Vec<PathBuf> = Vec::new();
     let walker = WalkDir::new(dir_path)
@@ -191,7 +191,7 @@ fn resolve_import(import: &str, module_map: &HashMap<String, PathBuf>) -> Option
             let prefix_len = mod_path.len();
             let next_char = import[prefix_len..].chars().next();
             if next_char.is_none() || next_char == Some('/') {
-                let replace = best.as_ref().map_or(true, |(len, _)| prefix_len > *len);
+                let replace = best.as_ref().is_none_or(|(len, _)| prefix_len > *len);
                 if replace {
                     best = Some((prefix_len, file_path.clone()));
                 }

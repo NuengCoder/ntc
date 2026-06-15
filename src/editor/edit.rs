@@ -30,7 +30,7 @@ impl Editor {
     where
         F: FnMut(&mut Editor),
     {
-        let n = self.extra_cursors.len();
+        let n = self.cursor.extra_cursors.len();
         if n == 0 {
             f(self);
             return;
@@ -41,12 +41,12 @@ impl Editor {
         slots.push((
             0,
             CursorPos {
-                y: self.cursor_y,
-                byte: self.cursor_byte,
-                anchor: self.selection_anchor,
+                y: self.cursor.y,
+                byte: self.cursor.byte,
+                anchor: self.cursor.selection_anchor,
             },
         ));
-        for (i, c) in self.extra_cursors.iter().enumerate() {
+        for (i, c) in self.cursor.extra_cursors.iter().enumerate() {
             slots.push((i + 1, *c));
         }
 
@@ -60,27 +60,27 @@ impl Editor {
 
         for slot in slots.iter_mut() {
             let (_, cp) = slot;
-            self.cursor_y = cp.y;
-            self.cursor_byte = cp.byte;
-            self.selection_anchor = cp.anchor;
+            self.cursor.y = cp.y;
+            self.cursor.byte = cp.byte;
+            self.cursor.selection_anchor = cp.anchor;
 
             f(self);
 
             slot.1 = CursorPos {
-                y: self.cursor_y,
-                byte: self.cursor_byte,
-                anchor: self.selection_anchor,
+                y: self.cursor.y,
+                byte: self.cursor.byte,
+                anchor: self.cursor.selection_anchor,
             };
         }
 
         // Write back
         for (slot, cp) in slots {
             if slot == 0 {
-                self.cursor_y = cp.y;
-                self.cursor_byte = cp.byte;
-                self.selection_anchor = cp.anchor;
+                self.cursor.y = cp.y;
+                self.cursor.byte = cp.byte;
+                self.cursor.selection_anchor = cp.anchor;
             } else {
-                self.extra_cursors[slot - 1] = cp;
+                self.cursor.extra_cursors[slot - 1] = cp;
             }
         }
     }
@@ -92,12 +92,12 @@ impl Editor {
         if is_ctrl_char(c) {
             return;
         }
-        let byte = self.cursor_byte.min(self.current().len());
+        let byte = self.cursor.byte.min(self.current().len());
         self.current_mut().insert(byte, c);
-        self.cursor_byte = byte + c.len_utf8();
+        self.cursor.byte = byte + c.len_utf8();
         self.modified = true;
-        self.mark_dirty(self.cursor_y);
-        self.syntax.invalidate_line(self.cursor_y);
+        self.mark_dirty(self.cursor.y);
+        self.syntax.invalidate_line(self.cursor.y);
     }
 
     pub(crate) fn insert_at(&mut self, c: char) {
@@ -120,25 +120,26 @@ impl Editor {
             return;
         }
         let line = self.current();
-        if self.cursor_byte > 0 {
-            let prev = prev_char_byte(line, self.cursor_byte);
+        if self.cursor.byte > 0 {
+            let prev = prev_char_byte(line, self.cursor.byte);
             self.snapshot();
             self.current_mut().remove(prev);
-            self.cursor_byte = prev;
+            self.cursor.byte = prev;
             self.modified = true;
-            self.mark_dirty(self.cursor_y);
-            self.syntax.invalidate_line(self.cursor_y);
-        } else if self.cursor_y > 0 {
+            self.mark_dirty(self.cursor.y);
+            self.syntax.invalidate_line(self.cursor.y);
+        } else if self.cursor.y > 0 {
             self.snapshot();
-            let prev_len = self.lines[self.cursor_y - 1].len();
-            let tail = self.lines.remove(self.cursor_y);
-            self.lines[self.cursor_y - 1].push_str(&tail);
-            self.syntax.invalidate_line(self.cursor_y - 1);
-            self.syntax.remove_line(self.cursor_y);
-            self.mark_dirty(self.cursor_y - 1);
-            self.mark_dirty(self.cursor_y);
-            self.cursor_y -= 1;
-            self.cursor_byte = prev_len;
+            let prev_len = self.lines[self.cursor.y - 1].len();
+            let tail = self.lines.remove(self.cursor.y);
+            self.lines[self.cursor.y - 1].push_str(&tail);
+            self.syntax.invalidate_line(self.cursor.y - 1);
+            self.syntax.remove_line(self.cursor.y);
+            self.mark_dirty(self.cursor.y - 1);
+            self.mark_dirty(self.cursor.y);
+            self.dirty_end = self.dirty_end.max(self.lines.len());
+            self.cursor.y -= 1;
+            self.cursor.byte = prev_len;
             self.modified = true;
         }
     }
@@ -152,7 +153,7 @@ impl Editor {
         let (byte, next_byte) = {
             let line = self.current();
             let byte_len = line.len();
-            let byte = self.cursor_byte.min(byte_len);
+            let byte = self.cursor.byte.min(byte_len);
             if byte < byte_len {
                 let nxt = (byte + 1..=byte_len)
                     .find(|&b| line.is_char_boundary(b))
@@ -166,29 +167,38 @@ impl Editor {
             self.snapshot();
             self.current_mut().drain(byte..next);
             self.modified = true;
-            self.mark_dirty(self.cursor_y);
-            self.syntax.invalidate_line(self.cursor_y);
-        } else if self.cursor_y + 1 < self.lines.len() {
+            self.mark_dirty(self.cursor.y);
+            self.syntax.invalidate_line(self.cursor.y);
+        } else if self.cursor.y + 1 < self.lines.len() {
             self.snapshot();
-            let next = self.lines.remove(self.cursor_y + 1);
+            let next = self.lines.remove(self.cursor.y + 1);
             self.current_mut().push_str(&next);
             self.modified = true;
-            self.mark_dirty(self.cursor_y);
-            self.syntax.invalidate_line(self.cursor_y);
-            self.syntax.remove_line(self.cursor_y + 1);
+            self.mark_dirty(self.cursor.y);
+            self.syntax.invalidate_line(self.cursor.y);
+            self.syntax.remove_line(self.cursor.y + 1);
         }
     }
 
     pub(crate) fn split_line(&mut self) {
-        let byte = self.cursor_byte.min(self.current().len());
+        let byte = self.cursor.byte.min(self.current().len());
         let rest = self.current_mut().split_off(byte);
-        self.lines.insert(self.cursor_y + 1, rest);
-        self.syntax.invalidate_line(self.cursor_y);
-        self.syntax.insert_line(self.cursor_y + 1);
-        self.mark_dirty(self.cursor_y);
+        self.lines.insert(self.cursor.y + 1, rest);
+        self.syntax.invalidate_line(self.cursor.y);
+        self.syntax.insert_line(self.cursor.y + 1);
+        self.mark_dirty(self.cursor.y);
         self.dirty_end = self.dirty_end.max(self.lines.len());
-        self.cursor_y += 1;
-        self.cursor_byte = 0;
+
+        // Smart indent: copy leading whitespace from previous line
+        let prev_line = &self.lines[self.cursor.y];
+        let indent_len = prev_line.bytes().take_while(|b| *b == b' ' || *b == b'\t').count();
+        if indent_len > 0 {
+            let indent: String = prev_line.chars().take(indent_len).collect();
+            self.lines[self.cursor.y + 1].insert_str(0, &indent);
+        }
+
+        self.cursor.y += 1;
+        self.cursor.byte = indent_len;
         self.modified = true;
     }
 
@@ -217,20 +227,20 @@ impl Editor {
                 return;
             }
             let line = e.current();
-            if e.cursor_byte > 0 {
-                let prev = prev_char_byte(line, e.cursor_byte);
+            if e.cursor.byte > 0 {
+                let prev = prev_char_byte(line, e.cursor.byte);
                 e.current_mut().remove(prev);
-                e.cursor_byte = prev;
+                e.cursor.byte = prev;
                 e.modified = true;
-                e.mark_dirty(e.cursor_y);
-            } else if e.cursor_y > 0 {
-                let prev_len = e.lines[e.cursor_y - 1].len();
-                let tail = e.lines.remove(e.cursor_y);
-                e.lines[e.cursor_y - 1].push_str(&tail);
-                e.mark_dirty(e.cursor_y - 1);
-                e.mark_dirty(e.cursor_y);
-                e.cursor_y -= 1;
-                e.cursor_byte = prev_len;
+                e.mark_dirty(e.cursor.y);
+            } else if e.cursor.y > 0 {
+                let prev_len = e.lines[e.cursor.y - 1].len();
+                let tail = e.lines.remove(e.cursor.y);
+                e.lines[e.cursor.y - 1].push_str(&tail);
+                e.mark_dirty(e.cursor.y - 1);
+                e.mark_dirty(e.cursor.y);
+                e.cursor.y -= 1;
+                e.cursor.byte = prev_len;
                 e.modified = true;
             }
         });
@@ -246,7 +256,7 @@ impl Editor {
             let (byte, next_byte) = {
                 let line = e.current();
                 let byte_len = line.len();
-                let byte = e.cursor_byte.min(byte_len);
+                let byte = e.cursor.byte.min(byte_len);
                 if byte < byte_len {
                     let nxt = (byte + 1..=byte_len)
                         .find(|&b| line.is_char_boundary(b))
@@ -259,12 +269,12 @@ impl Editor {
             if let Some(next) = next_byte {
                 e.current_mut().drain(byte..next);
                 e.modified = true;
-                e.mark_dirty(e.cursor_y);
-            } else if e.cursor_y + 1 < e.lines.len() {
-                let next = e.lines.remove(e.cursor_y + 1);
+                e.mark_dirty(e.cursor.y);
+            } else if e.cursor.y + 1 < e.lines.len() {
+                let next = e.lines.remove(e.cursor.y + 1);
                 e.current_mut().push_str(&next);
                 e.modified = true;
-                e.mark_dirty(e.cursor_y);
+                e.mark_dirty(e.cursor.y);
             }
         });
     }
@@ -285,12 +295,12 @@ impl Editor {
     pub(crate) fn multi_split_line(&mut self) {
         self.snapshot();
         self.for_each_cursor(true, |e| {
-            let byte = e.cursor_byte.min(e.current().len());
+            let byte = e.cursor.byte.min(e.current().len());
             let rest = e.current_mut().split_off(byte);
-            e.lines.insert(e.cursor_y + 1, rest);
-            e.mark_dirty(e.cursor_y);
-            e.cursor_y += 1;
-            e.cursor_byte = 0;
+            e.lines.insert(e.cursor.y + 1, rest);
+            e.mark_dirty(e.cursor.y);
+            e.cursor.y += 1;
+            e.cursor.byte = 0;
             e.modified = true;
         });
         self.mark_all_dirty();
@@ -301,16 +311,16 @@ impl Editor {
     pub(crate) fn kill_line(&mut self) {
         self.snapshot();
         if self.lines.len() > 1 {
-            self.lines.remove(self.cursor_y);
-            self.syntax.remove_line(self.cursor_y);
-            self.cursor_y = self.cursor_y.min(self.lines.len().saturating_sub(1));
+            self.lines.remove(self.cursor.y);
+            self.syntax.remove_line(self.cursor.y);
+            self.cursor.y = self.cursor.y.min(self.lines.len().saturating_sub(1));
         } else {
             self.lines[0].clear();
-            self.cursor_byte = 0;
+            self.cursor.byte = 0;
         }
-        self.mark_dirty(self.cursor_y);
+        self.mark_dirty(self.cursor.y);
         self.dirty_end = self.dirty_end.max(self.lines.len());
-        self.cursor_byte = self.cursor_byte.min(self.current().len());
+        self.cursor.byte = self.cursor.byte.min(self.current().len());
         self.modified = true;
         self.status_msg = Some("Line deleted".into());
     }
@@ -318,24 +328,24 @@ impl Editor {
     /// Jump to the most recently added cursor (like VSCode Ctrl+G with multi-cursor).
     /// Swaps the primary cursor with the last added extra cursor.
     pub(crate) fn jump_to_last_cursor(&mut self) {
-        let idx = match self.last_added_cursor_idx {
-            Some(i) if i < self.extra_cursors.len() => i,
+        let idx = match self.cursor.last_added_cursor_idx {
+            Some(i) if i < self.cursor.extra_cursors.len() => i,
             _ => {
                 self.status_msg = Some("No extra cursors to jump to".into());
                 return;
             }
         };
-        let target = self.extra_cursors[idx];
+        let target = self.cursor.extra_cursors[idx];
         let current = CursorPos {
-            y: self.cursor_y,
-            byte: self.cursor_byte,
-            anchor: self.selection_anchor,
+            y: self.cursor.y,
+            byte: self.cursor.byte,
+            anchor: self.cursor.selection_anchor,
         };
-        self.cursor_y = target.y;
-        self.cursor_byte = target.byte;
-        self.selection_anchor = target.anchor;
-        self.extra_cursors[idx] = current;
-        self.last_added_cursor_idx = None;
+        self.cursor.y = target.y;
+        self.cursor.byte = target.byte;
+        self.cursor.selection_anchor = target.anchor;
+        self.cursor.extra_cursors[idx] = current;
+        self.cursor.last_added_cursor_idx = None;
         self.mark_all_dirty();
         self.status_msg = Some(format!("Jumped to cursor {}", idx + 2));
     }
@@ -360,7 +370,7 @@ impl Editor {
 
         // Search from the primary cursor position (which is always the most recently
         // found occurrence). Searching from here skips the already-selected occurrence.
-        let (search_y, search_byte) = (self.cursor_y, self.cursor_byte);
+        let (search_y, search_byte) = (self.cursor.y, self.cursor.byte);
 
         let q = query.to_lowercase();
         let q_len = q.len();
@@ -376,22 +386,22 @@ impl Editor {
             let start = if li == search_y { search_byte } else { 0 };
             if let Some(pos) = lower[start..].find(&q) {
                 let abs_pos = start + pos;
-                let already_exists = pos_has_cursor(&self.extra_cursors, self.cursor_y, self.cursor_byte, li, abs_pos + q_len);
+                let already_exists = pos_has_cursor(&self.cursor.extra_cursors, self.cursor.y, self.cursor.byte, li, abs_pos + q_len);
                 if !already_exists {
                     let old_primary = CursorPos {
-                        y: self.cursor_y,
-                        byte: self.cursor_byte,
-                        anchor: self.selection_anchor,
+                        y: self.cursor.y,
+                        byte: self.cursor.byte,
+                        anchor: self.cursor.selection_anchor,
                     };
-                    self.extra_cursors.push(old_primary);
-                    self.cursor_y = li;
-                    self.cursor_byte = abs_pos + q_len;
-                    self.selection_anchor = Some((li, abs_pos));
-                    self.last_added_cursor_idx = Some(self.extra_cursors.len() - 1);
+                    self.cursor.extra_cursors.push(old_primary);
+                    self.cursor.y = li;
+                    self.cursor.byte = abs_pos + q_len;
+                    self.cursor.selection_anchor = Some((li, abs_pos));
+                    self.cursor.last_added_cursor_idx = Some(self.cursor.extra_cursors.len() - 1);
                     self.mark_all_dirty();
                     self.status_msg = Some(format!(
                         "Added cursor ({} total)",
-                        self.extra_cursors.len() + 1
+                        self.cursor.extra_cursors.len() + 1
                     ));
                 } else {
                     self.status_msg = Some("Already selected".into());
@@ -406,22 +416,22 @@ impl Editor {
             if let Some(pos) = lower[start..].find(&q) {
                 let abs_pos = start + pos;
                 if li < search_y || (li == search_y && abs_pos < search_byte) {
-                    let already_exists = pos_has_cursor(&self.extra_cursors, self.cursor_y, self.cursor_byte, li, abs_pos + q_len);
+                    let already_exists = pos_has_cursor(&self.cursor.extra_cursors, self.cursor.y, self.cursor.byte, li, abs_pos + q_len);
                     if !already_exists {
                         let old_primary = CursorPos {
-                            y: self.cursor_y,
-                            byte: self.cursor_byte,
-                            anchor: self.selection_anchor,
+                            y: self.cursor.y,
+                            byte: self.cursor.byte,
+                            anchor: self.cursor.selection_anchor,
                         };
-                        self.extra_cursors.push(old_primary);
-                        self.cursor_y = li;
-                        self.cursor_byte = abs_pos + q_len;
-                        self.selection_anchor = Some((li, abs_pos));
-                        self.last_added_cursor_idx = Some(self.extra_cursors.len() - 1);
+                        self.cursor.extra_cursors.push(old_primary);
+                        self.cursor.y = li;
+                        self.cursor.byte = abs_pos + q_len;
+                        self.cursor.selection_anchor = Some((li, abs_pos));
+                        self.cursor.last_added_cursor_idx = Some(self.cursor.extra_cursors.len() - 1);
                         self.mark_all_dirty();
                         self.status_msg = Some(format!(
                             "Added cursor ({} total) (wrap)",
-                            self.extra_cursors.len() + 1
+                            self.cursor.extra_cursors.len() + 1
                         ));
                     } else {
                         self.status_msg = Some("Already selected".into());
@@ -435,81 +445,84 @@ impl Editor {
 
     /// Move current line up (Alt+Up).
     pub(crate) fn move_line_up(&mut self) {
-        if self.cursor_y == 0 {
+        if self.cursor.y == 0 {
             return;
         }
         self.snapshot();
-        self.lines.swap(self.cursor_y, self.cursor_y - 1);
-        self.syntax.invalidate_line(self.cursor_y);
-        self.syntax.invalidate_line(self.cursor_y - 1);
-        self.mark_dirty(self.cursor_y);
-        self.mark_dirty(self.cursor_y - 1);
-        self.cursor_y -= 1;
+        self.lines.swap(self.cursor.y, self.cursor.y - 1);
+        self.syntax.invalidate_line(self.cursor.y);
+        self.syntax.invalidate_line(self.cursor.y - 1);
+        self.mark_dirty(self.cursor.y);
+        self.mark_dirty(self.cursor.y - 1);
+        self.cursor.y -= 1;
         self.modified = true;
     }
 
     pub(crate) fn move_line_down(&mut self) {
-        if self.cursor_y + 1 >= self.lines.len() {
+        if self.cursor.y + 1 >= self.lines.len() {
             return;
         }
         self.snapshot();
-        self.lines.swap(self.cursor_y, self.cursor_y + 1);
-        self.syntax.invalidate_line(self.cursor_y);
-        self.syntax.invalidate_line(self.cursor_y + 1);
-        self.mark_dirty(self.cursor_y);
-        self.mark_dirty(self.cursor_y + 1);
-        self.cursor_y += 1;
+        self.lines.swap(self.cursor.y, self.cursor.y + 1);
+        self.syntax.invalidate_line(self.cursor.y);
+        self.syntax.invalidate_line(self.cursor.y + 1);
+        self.mark_dirty(self.cursor.y);
+        self.mark_dirty(self.cursor.y + 1);
+        self.cursor.y += 1;
         self.modified = true;
     }
 
     /// Indent selected lines or current line (Tab with selection).
     pub(crate) fn indent_lines(&mut self) {
-        if let Some((ay, _ab)) = self.selection_anchor {
+        let tab = " ".repeat(self.editor_cfg.tab_size);
+        if let Some((ay, _ab)) = self.cursor.selection_anchor {
             self.snapshot();
-            let ((sy, _), (ey, _)) = sel_range(self.cursor_y, self.cursor_byte, ay, 0);
+            let ((sy, _), (ey, _)) = sel_range(self.cursor.y, self.cursor.byte, ay, 0);
             for row in sy..=ey.min(self.lines.len().saturating_sub(1)) {
-                self.lines[row].insert_str(0, "    ");
+                self.lines[row].insert_str(0, &tab);
                 self.mark_dirty(row);
                 self.syntax.invalidate_line(row);
             }
             self.modified = true;
         } else {
-            self.insert_at(' ');
-            self.insert_at(' ');
-            self.insert_at(' ');
-            self.insert_at(' ');
+            for _ in 0..self.editor_cfg.tab_size {
+                self.insert_at(' ');
+            }
         }
     }
 
     /// Dedent selected lines or current line (Shift+Tab).
     pub(crate) fn dedent_lines(&mut self) {
-        if let Some((ay, _ab)) = self.selection_anchor {
+        let tab_size = self.editor_cfg.tab_size;
+        if let Some((ay, _ab)) = self.cursor.selection_anchor {
             self.snapshot();
-            let ((sy, _), (ey, _)) = sel_range(self.cursor_y, self.cursor_byte, ay, 0);
+            let ((sy, _), (ey, _)) = sel_range(self.cursor.y, self.cursor.byte, ay, 0);
             for row in sy..=ey.min(self.lines.len().saturating_sub(1)) {
                 let spaces = self.lines[row]
                     .chars()
-                    .take(4)
-                    .filter(|&c| c == ' ')
+                    .take(tab_size)
+                    .filter(|&c| c == ' ' || c == '\t')
                     .count();
-                self.lines[row].drain(..spaces);
+                let to_remove = spaces.min(tab_size);
+                self.lines[row].drain(..to_remove);
                 self.mark_dirty(row);
                 self.syntax.invalidate_line(row);
             }
             self.modified = true;
         } else {
             // Dedent current line
-            let spaces = self.lines[self.cursor_y]
+            let spaces = self.lines[self.cursor.y]
                 .chars()
-                .take(4)
-                .filter(|&c| c == ' ')
+                .take(tab_size)
+                .filter(|&c| c == ' ' || c == '\t')
                 .count();
-            if spaces > 0 {
+            let to_remove = spaces.min(tab_size);
+            if to_remove > 0 {
                 self.snapshot();
-                self.lines[self.cursor_y].drain(..spaces);
-                self.mark_dirty(self.cursor_y);
-                self.syntax.invalidate_line(self.cursor_y);
-                self.cursor_byte = self.cursor_byte.saturating_sub(spaces);
+                self.lines[self.cursor.y].drain(..to_remove);
+                self.mark_dirty(self.cursor.y);
+                self.syntax.invalidate_line(self.cursor.y);
+                self.cursor.byte = self.cursor.byte.saturating_sub(to_remove);
                 self.modified = true;
             }
         }

@@ -1,7 +1,7 @@
 use crate::config::Config;
 use crate::filetype::is_supported_format;
 use crate::navigator::Navigator;
-use crate::output::{cat_file, cat_file_with_syntax, print_error,print_success, print_warning};
+use crate::output::{cat_file_with_syntax, print_error, print_success, print_warning};
 use crate::report::{generate_report, ReportFormat};
 use crate::shell::helpers::show_tree;
 use super::{list_supported_files, show_file_selection_menu};
@@ -46,7 +46,28 @@ pub fn cmd_view(args: &str, nav: &mut Navigator) -> Result<bool> {
     Ok(false)
 }
 
-pub fn cmd_txt(args: &str, nav: &mut Navigator) -> Result<bool> {
+enum ReportKind {
+    Text(ReportFormat, &'static str),
+    DirOnly(ReportFormat, &'static str),
+    DirOrFile(ReportFormat),
+}
+
+fn report_kind_for(cmd: &str) -> ReportKind {
+    match cmd {
+        "txt" => ReportKind::DirOrFile(ReportFormat::Txt),
+        "txtc" | "txtf" => unreachable!(),
+        "json" => ReportKind::Text(ReportFormat::Json, "JSON"),
+        "md" => ReportKind::Text(ReportFormat::Md, "Markdown"),
+        "html" => ReportKind::DirOrFile(ReportFormat::Html),
+        "pdf" => ReportKind::DirOnly(ReportFormat::Pdf, "PDF"),
+        "docx" => ReportKind::DirOnly(ReportFormat::Docx, "DOCX"),
+        "xlsx" => ReportKind::DirOnly(ReportFormat::Xlsx, "XLSX"),
+        _ => unreachable!(),
+    }
+}
+
+pub fn cmd_report(cmd: &str, args: &str, nav: &mut Navigator) -> Result<bool> {
+    let kind = report_kind_for(cmd);
     let parts: Vec<&str> = args.split_whitespace().collect();
     let copy_to_clipboard = parts.contains(&"--cp");
     let target_arg = if copy_to_clipboard {
@@ -61,20 +82,44 @@ pub fn cmd_txt(args: &str, nav: &mut Navigator) -> Result<bool> {
         Path::new(target_arg)
     };
 
-    if target.is_dir() {
-        if copy_to_clipboard {
-            let content = crate::report::generate_report_to_string(target, ReportFormat::Txt)?;
-            crate::output::copy_to_clipboard(&content, "TXT")?;
-            print_success("Directory tree copied to clipboard!");
-        } else {
-            generate_report(target, ReportFormat::Txt)?;
+    match kind {
+        ReportKind::Text(format, label) => {
+            if target.is_dir() {
+                if copy_to_clipboard {
+                    let content = crate::report::generate_report_to_string(target, format)?;
+                    crate::output::copy_to_clipboard(&content, label)?;
+                    print_success(&format!("{} report copied to clipboard!", label));
+                } else {
+                    generate_report(target, format)?;
+                }
+            } else {
+                print_error(&format!("{} report only works on directories", label));
+            }
         }
-    } else if target.is_file() {
-        if is_supported_format(target) {
-            let show_lines = Config::global_get_show_line_numbers();
-            cat_file_with_syntax(target, show_lines)?;
-        } else {
-            print_warning(&format!("Skipped (not support format): {}", target_arg));
+        ReportKind::DirOnly(format, label) => {
+            if target.is_dir() {
+                generate_report(target, format)?;
+            } else {
+                print_error(&format!("{} report only works on directories", label));
+            }
+        }
+        ReportKind::DirOrFile(format) => {
+            if target.is_dir() {
+                if copy_to_clipboard {
+                    let content = crate::report::generate_report_to_string(target, format)?;
+                    crate::output::copy_to_clipboard(&content, "TXT")?;
+                    print_success("Report copied to clipboard!");
+                } else {
+                    generate_report(target, format)?;
+                }
+            } else if target.is_file() {
+                if is_supported_format(target) {
+                    let show_lines = Config::global_get_show_line_numbers();
+                    cat_file_with_syntax(target, show_lines)?;
+                } else {
+                    print_warning(&format!("Skipped (not support format): {}", target_arg));
+                }
+            }
         }
     }
     Ok(false)
@@ -144,123 +189,30 @@ pub fn cmd_txtf(args: &str, nav: &mut Navigator) -> Result<bool> {
     Ok(false)
 }
 
+pub fn cmd_txt(args: &str, nav: &mut Navigator) -> Result<bool> {
+    cmd_report("txt", args, nav)
+}
+
 pub fn cmd_html(args: &str, nav: &mut Navigator) -> Result<bool> {
-    if args.is_empty() {
-        generate_report(nav.current_path(), ReportFormat::Html)?;
-    } else {
-        let target = Path::new(args);
-        if target.is_dir() {
-            generate_report(target, ReportFormat::Html)?;
-        } else if target.is_file() {
-            if is_supported_format(target) {
-                let show_lines = Config::global_get_show_line_numbers();
-                cat_file(target, show_lines)?;
-            } else {
-                print_warning(&format!("Skipped (not support format): {}", args));
-            }
-        } else {
-            print_error(&format!("Path not found: {}", args));
-        }
-    }
-    Ok(false)
+    cmd_report("html", args, nav)
 }
 
 pub fn cmd_json(args: &str, nav: &mut Navigator) -> Result<bool> {
-    let parts: Vec<&str> = args.split_whitespace().collect();
-    let copy_to_clipboard = parts.contains(&"--cp");
-    let target_arg = if copy_to_clipboard {
-        parts.iter().find(|&&p| p != "--cp").unwrap_or(&"").trim()
-    } else {
-        args
-    };
-
-    let target = if target_arg.is_empty() {
-        nav.current_path()
-    } else {
-        Path::new(target_arg)
-    };
-
-    if target.is_dir() {
-        if copy_to_clipboard {
-            let content = crate::report::generate_report_to_string(target, ReportFormat::Json)?;
-            crate::output::copy_to_clipboard(&content, "JSON")?;
-            print_success("JSON report copied to clipboard!");
-        } else {
-            generate_report(target, ReportFormat::Json)?;
-        }
-    } else {
-        print_error("JSON report only works on directories");
-    }
-    Ok(false)
+    cmd_report("json", args, nav)
 }
 
 pub fn cmd_md(args: &str, nav: &mut Navigator) -> Result<bool> {
-    let parts: Vec<&str> = args.split_whitespace().collect();
-    let copy_to_clipboard = parts.contains(&"--cp");
-    let target_arg = if copy_to_clipboard {
-        parts.iter().find(|&&p| p != "--cp").unwrap_or(&"").trim()
-    } else {
-        args
-    };
-
-    let target = if target_arg.is_empty() {
-        nav.current_path()
-    } else {
-        Path::new(target_arg)
-    };
-
-    if target.is_dir() {
-        if copy_to_clipboard {
-            let content = crate::report::generate_report_to_string(target, ReportFormat::Md)?;
-            crate::output::copy_to_clipboard(&content, "Markdown")?;
-            print_success("Markdown report copied to clipboard!");
-        } else {
-            generate_report(target, ReportFormat::Md)?;
-        }
-    } else {
-        print_error("Markdown report only works on directories");
-    }
-    Ok(false)
+    cmd_report("md", args, nav)
 }
 
 pub fn cmd_pdf(args: &str, nav: &mut Navigator) -> Result<bool> {
-    let target = if args.is_empty() {
-        nav.current_path()
-    } else {
-        Path::new(args)
-    };
-    if target.is_dir() {
-        generate_report(target, ReportFormat::Pdf)?;
-    } else {
-        print_error("PDF report only works on directories");
-    }
-    Ok(false)
+    cmd_report("pdf", args, nav)
 }
 
 pub fn cmd_docx(args: &str, nav: &mut Navigator) -> Result<bool> {
-    let target = if args.is_empty() {
-        nav.current_path()
-    } else {
-        Path::new(args)
-    };
-    if target.is_dir() {
-        generate_report(target, ReportFormat::Docx)?;
-    } else {
-        print_error("DOCX report only works on directories");
-    }
-    Ok(false)
+    cmd_report("docx", args, nav)
 }
 
 pub fn cmd_xlsx(args: &str, nav: &mut Navigator) -> Result<bool> {
-    let target = if args.is_empty() {
-        nav.current_path()
-    } else {
-        Path::new(args)
-    };
-    if target.is_dir() {
-        generate_report(target, ReportFormat::Xlsx)?;
-    } else {
-        print_error("XLSX report only works on directories");
-    }
-    Ok(false)
+    cmd_report("xlsx", args, nav)
 }

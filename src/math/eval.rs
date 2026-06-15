@@ -24,7 +24,8 @@ impl fmt::Display for EvalResult {
                 } else if n.is_nan() {
                     write!(f, "NaN")
                 } else if n.fract() == 0.0 && n.is_finite() && n.abs() < 1e15 {
-                    write!(f, "{}", *n as i128)
+                    let as_i64 = *n as i64;
+                    write!(f, "{}", as_i64)
                 } else {
                     write!(f, "{}", n)
                 }

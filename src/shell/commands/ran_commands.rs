@@ -144,7 +144,7 @@ fn run_target_cmd(cmd: &str, cwd: &Path) -> bool {
 fn print_ran_usage() {
     println!("{}", "ran — ntc task runner (like Make but ntc-native)".cyan().bold());
     println!();
-    println!("{}", "Usage:");
+    println!("Usage:");
     println!("  ran                        Run the 'standalone' target (default)");
     println!("  ran <target>               Run a specific target");
     println!("  ran init                   Create a {} in the current directory", RANFILE_NAME);
@@ -152,7 +152,7 @@ fn print_ran_usage() {
     println!("  ran list                   List all available targets");
     println!("  ran help                   Show this help");
     println!();
-    println!("{}", "NTCRANFILE.toml example:");
+    println!("NTCRANFILE.toml example:");
     println!("  [vars]");
     println!("  CC = \"gcc\"");
     println!("  FLAGS = \"-Wall -O2\"");

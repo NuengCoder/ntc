@@ -83,7 +83,7 @@ cmd = "rmf $(lux) && rmf $(adb) && rmf $(win) && rmf $(deb) && rmf $(wini)"
 
 [targets.push]
 deps = []
-cmd = "git add . && git commit -m version 2.3.0 && git tag v2.3.0 && git push origin main --tags"
+cmd = "git add . && git commit -m $(ver) && git tag v$(ver) && git push origin main --tags"
 
 [targets.clean]
 deps = []

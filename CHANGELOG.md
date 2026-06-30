@@ -72,7 +72,7 @@
 - Buffer switching via Ctrl+Tab / Ctrl+Shift+Tab (recently opened files stack)
 - Crash recovery with periodic SHA-256-hashed snapshots and auto-recovery prompt
 - Persistent editor sessions — cursor position, scroll, buffer stack restored on re-entry
-- File finder (Ctrl+P / Ctrl+T) — fuzzy file search across project, opens in new tab
+- File finder (Ctrl+P / Ctrl+N) — fuzzy file search across project, opens in new tab
 
 **Editor Commands & Run Mode**
 - Command mode (`:q`, `:w`, `:wq`, `:q!`) for quitting/saving

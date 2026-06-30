@@ -344,10 +344,14 @@ pub(super) fn inject_template_defaults(template: &str, defaults: &[(String, Stri
     result
 }
 
+/// Public entry point: expand aliases in a command (no && splitting).
+pub(super) fn expand_aliases(cmd: &str) -> String {
+    expand_aliases_rec(cmd, 0)
+}
+
 /// Recursively expand aliases in a command (no && splitting).
 /// Supports parameterised calls: `py(hello)` with template `python $x.py` -> `python hello.py`
-#[allow(clippy::only_used_in_recursion)]
-fn expand_aliases(cmd: &str, depth: usize) -> String {
+fn expand_aliases_rec(cmd: &str, depth: usize) -> String {
     const MAX_DEPTH: usize = 5;
     if depth > MAX_DEPTH {
         return cmd.to_string();
@@ -395,7 +399,7 @@ fn expand_aliases(cmd: &str, depth: usize) -> String {
         } else {
             format!("{} {}", expanded_template, rest)
         };
-        expand_aliases(&new_cmd, depth + 1)
+        expand_aliases_rec(&new_cmd, depth + 1)
     } else {
         cmd.to_string()
     }
@@ -410,7 +414,7 @@ pub(super) fn expand_command_line(input: &str) -> Vec<String> {
     let parts = split_on_ampersands(input);
     let mut result = Vec::new();
     for part in parts {
-        let expanded = expand_aliases(&part, 0);
+        let expanded = expand_aliases(&part);
         if contains_ampersands(&expanded) {
             result.extend(expand_command_line(&expanded));
         } else if !expanded.trim().is_empty() {

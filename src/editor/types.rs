@@ -1,31 +1,28 @@
+use std::collections::HashMap;
 use std::io::{BufRead, BufReader};
 use std::path::{Path, PathBuf};
+use std::time::Instant;
 
+use std::sync::atomic::AtomicUsize;
 use anyhow::{Context, Result};
 
 use crate::editor::editor_config::EditorConfig;
 use crate::session::EditorSession;
+use crate::session::SessionSnapshot;
+use crate::session::TabSnapshot;
 use crate::syntax::SyntaxHighlighter;
 
-// ── constants ────────────────────────────────────────────────────────────────
+/// Set by cmd_ne when opening a file via `file:line`.
+/// Editor::init_tabs reads and clears it to jump to the target line.
+pub(crate) static GOTO_LINE: AtomicUsize = AtomicUsize::new(0);
 
-/// Maximum undo history depth.
-pub(crate) const MAX_UNDO: usize = 200;
+// ── constants ────────────────────────────────────────────────────────────────
 
 /// Minimum width of the left sidebar (file explorer) in characters.
 pub(crate) const MIN_SIDEBAR_WIDTH: usize = 15;
 
 /// Default width of the left sidebar (file explorer) in characters.
 pub(crate) const DEFAULT_SIDEBAR_WIDTH: usize = 30;
-
-/// Maximum number of recently opened files to keep in the buffer stack.
-pub(crate) const MAX_BUFFERS: usize = 16;
-
-/// Maximum number of open tabs.
-pub(crate) const MAX_TABS: usize = 32;
-
-/// Maximum lines to retain in the run output buffer.
-pub(crate) const MAX_RUN_LINES: usize = 10_000;
 
 /// Message sent from the reader thread to the run output handler.
 #[derive(Clone, Debug)]
@@ -42,19 +39,29 @@ pub(crate) enum RunMessage {
 pub(crate) enum Mode {
     Normal,
     Insert,
+    InsertMulti,
     Search,
     Visual,
     Command,
     Help,
     FileFinder,
     Gosc,
+    Jump,
+    Query,
+}
+
+/// Which panel has keyboard focus.
+#[derive(Clone, Copy, PartialEq, Debug)]
+pub(crate) enum Focus {
+    Editor,
     Run,
+    Terminal,
 }
 
 // ── snapshot for undo/redo ────────────────────────────────────────────────────
 
-#[derive(Clone)]
-pub(crate) struct Snapshot {
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
+pub struct Snapshot {
     pub(crate) lines: Vec<String>,
     pub(crate) cursor_y: usize,
     pub(crate) cursor_byte: usize,
@@ -63,7 +70,7 @@ pub(crate) struct Snapshot {
 
 // ── cursor ───────────────────────────────────────────────────────────────────
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, serde::Serialize, serde::Deserialize)]
 pub(crate) struct CursorPos {
     pub(crate) y: usize,
     pub(crate) byte: usize,
@@ -104,6 +111,10 @@ pub(crate) struct SearchState {
     pub(crate) query: String,
     pub(crate) matches: Vec<(usize, usize, usize)>,
     pub(crate) match_idx: usize,
+    /// Set to true when lines change, triggering a rebuild on next search
+    pub(crate) dirty: bool,
+    /// Cached query that matches were built from
+    pub(crate) cached_query: String,
 }
 
 impl SearchState {
@@ -112,7 +123,14 @@ impl SearchState {
             query: String::new(),
             matches: Vec::new(),
             match_idx: 0,
+            dirty: false,
+            cached_query: String::new(),
         }
+    }
+
+    /// Invalidate the search cache when the document changes.
+    pub(crate) fn mark_dirty(&mut self) {
+        self.dirty = true;
     }
 }
 
@@ -128,6 +146,8 @@ pub(crate) struct ScrollState {
     pub(crate) help: usize,
     /// Run panel scroll offset (was `run_scroll`)
     pub(crate) run: usize,
+    /// Terminal panel horizontal scroll offset
+    pub(crate) terminal_scroll_x: usize,
     pub(crate) dragging_vscroll: bool,
     pub(crate) dragging_hscroll: bool,
 }
@@ -139,6 +159,7 @@ impl ScrollState {
             x: 0,
             help: 0,
             run: 0,
+            terminal_scroll_x: 0,
             dragging_vscroll: false,
             dragging_hscroll: false,
         }
@@ -165,9 +186,15 @@ pub(crate) struct Sidebar {
     pub(crate) root: std::path::PathBuf,
     pub(crate) width: usize,
     pub(crate) dragging_border: bool,
-    // File watcher for live reload
+    // File watcher for live reload (Windows only)
+    #[cfg(windows)]
     pub(crate) watcher_rx: Option<std::sync::mpsc::Receiver<()>>,
+    #[cfg(windows)]
     pub(crate) _watcher: Option<notify::RecommendedWatcher>,
+    // Directory listing cache: path -> (timestamp, dirs, files)
+    pub(crate) dir_cache: HashMap<PathBuf, (Instant, Vec<FileNode>, Vec<FileNode>)>,
+    // Cache TTL in seconds (default: 5)
+    pub(crate) cache_ttl_secs: u64,
 }
 
 impl Sidebar {
@@ -181,15 +208,21 @@ impl Sidebar {
             root,
             width: DEFAULT_SIDEBAR_WIDTH,
             dragging_border: false,
+            #[cfg(windows)]
             watcher_rx: None,
+            #[cfg(windows)]
             _watcher: None,
+            dir_cache: HashMap::new(),
+            cache_ttl_secs: 5,
         };
         s.rebuild_tree();
+        #[cfg(windows)]
         s.start_watcher();
         s
     }
 
-    /// Start watching the root directory for changes.
+    /// Start watching the root directory for changes (Windows only).
+    #[cfg(windows)]
     fn start_watcher(&mut self) {
         use notify::{Watcher, RecursiveMode};
         use std::sync::mpsc;
@@ -210,15 +243,28 @@ impl Sidebar {
         }
     }
 
+    /// Invalidate all cached directory listings.
+    #[allow(dead_code)]
+    pub(crate) fn invalidate_cache(&mut self) {
+        self.dir_cache.clear();
+    }
+
     /// Check for directory changes and rebuild tree if needed.
     /// Returns true if the tree was rebuilt.
+    #[cfg(windows)]
     pub(crate) fn check_changed(&mut self) -> bool {
         if let Some(rx) = &self.watcher_rx {
             if rx.try_recv().is_ok() {
+                self.invalidate_cache();
                 self.rebuild_tree();
                 return true;
             }
         }
+        false
+    }
+
+    #[cfg(not(windows))]
+    pub(crate) fn check_changed(&mut self) -> bool {
         false
     }
 
@@ -241,25 +287,45 @@ impl Sidebar {
                 depth: 0,
             });
         }
-        Self::add_children(&mut self.nodes, &self.root, 0, false);
-        // Restore expanded state
-        for node in &mut self.nodes {
-            if node.is_dir && expanded.contains(&node.path) {
-                node.expanded = true;
+        Self::add_children(&mut self.nodes, &self.root, 0, false, &mut self.dir_cache, self.cache_ttl_secs);
+        // Restore expanded state — properly populate children of expanded dirs
+        let mut i = 0;
+        while i < self.nodes.len() {
+            if self.nodes[i].is_dir && !self.nodes[i].expanded && expanded.contains(&self.nodes[i].path) {
+                let mut children = Vec::new();
+                Self::add_children(
+                    &mut children,
+                    &self.nodes[i].path,
+                    self.nodes[i].depth + 1,
+                    true,
+                    &mut self.dir_cache,
+                    self.cache_ttl_secs,
+                );
+                self.nodes[i].expanded = true;
+                self.nodes.splice(i + 1..i + 1, children);
             }
+            i += 1;
         }
         self.selected = self.selected.min(self.nodes.len().saturating_sub(1));
     }
 
-    fn add_children(out: &mut Vec<FileNode>, dir: &std::path::Path, depth: usize, expanded: bool) {
-        // Limit recursion depth to avoid stack overflow on deeply nested dirs
-        const MAX_DEPTH: usize = 64;
-        if depth >= MAX_DEPTH {
-            return;
+    fn get_cached_children(
+        cache: &mut HashMap<PathBuf, (Instant, Vec<FileNode>, Vec<FileNode>)>,
+        dir: &std::path::Path,
+        cache_ttl: u64,
+    ) -> Option<(Vec<FileNode>, Vec<FileNode>)> {
+        if let Some((timestamp, cached_dirs, cached_files)) = cache.get(dir) {
+            if timestamp.elapsed().as_secs() < cache_ttl {
+                return Some((cached_dirs.clone(), cached_files.clone()));
+            }
         }
+        None
+    }
+
+    fn read_children(dir: &std::path::Path, depth: usize) -> (Vec<FileNode>, Vec<FileNode>) {
         let entries = match std::fs::read_dir(dir) {
             Ok(e) => e,
-            Err(_) => return,
+            Err(_) => return (Vec::new(), Vec::new()),
         };
         let mut dirs: Vec<FileNode> = Vec::new();
         let mut files: Vec<FileNode> = Vec::new();
@@ -295,11 +361,33 @@ impl Sidebar {
         }
         dirs.sort_by_key(|a| a.name.to_lowercase());
         files.sort_by_key(|a| a.name.to_lowercase());
+        (dirs, files)
+    }
+
+    fn add_children(
+        out: &mut Vec<FileNode>,
+        dir: &std::path::Path,
+        depth: usize,
+        expanded: bool,
+        cache: &mut HashMap<PathBuf, (Instant, Vec<FileNode>, Vec<FileNode>)>,
+        cache_ttl: u64,
+    ) {
+        // Limit recursion depth to avoid stack overflow on deeply nested dirs
+        const MAX_DEPTH: usize = 64;
+        if depth >= MAX_DEPTH {
+            return;
+        }
+        let (dirs, files) = if let Some(cached) = Self::get_cached_children(cache, dir, cache_ttl) {
+            cached
+        } else {
+            let (dirs, files) = Self::read_children(dir, depth);
+            cache.insert(dir.to_path_buf(), (Instant::now(), dirs.clone(), files.clone()));
+            (dirs, files)
+        };
         if expanded {
             out.extend(dirs);
             out.extend(files);
         } else {
-            // Show dirs (collapsed) and files at this level
             for d in dirs {
                 out.push(FileNode {
                     expanded: false,
@@ -317,7 +405,7 @@ impl Sidebar {
         self.nodes[idx].expanded = true;
         let node = self.nodes[idx].clone();
         let mut children = Vec::new();
-        Self::add_children(&mut children, &node.path, node.depth + 1, true);
+        Self::add_children(&mut children, &node.path, node.depth + 1, true, &mut self.dir_cache, self.cache_ttl_secs);
         let insert_at = idx + 1;
         self.nodes.splice(insert_at..insert_at, children);
     }
@@ -389,6 +477,126 @@ define_tab! {
     syntax: crate::syntax::SyntaxHighlighter,
     buffer_stack: Vec<PathBuf>,
     buffer_idx: usize,
+    jump_buf: String,
+    prev_mode: Mode,
+    cursor_visible: bool,
+    last_blink: Instant,
+}
+
+// ── gs search: doubly circular linked list ──────────────────────────────────
+
+pub(crate) struct GsResultNode {
+    pub(crate) display: String,
+    pub(crate) path: std::path::PathBuf,
+    pub(crate) line_number: usize,
+    pub(crate) prev: Option<usize>,
+    pub(crate) next: Option<usize>,
+}
+
+pub(crate) struct GsResultList {
+    pub(crate) nodes: Vec<GsResultNode>,
+    pub(crate) head: Option<usize>,
+    pub(crate) tail: Option<usize>,
+    pub(crate) current: Option<usize>,
+}
+
+impl GsResultList {
+    pub(crate) fn new() -> Self {
+        Self {
+            nodes: Vec::new(),
+            head: None,
+            tail: None,
+            current: None,
+        }
+    }
+
+    pub(crate) fn clear(&mut self) {
+        self.nodes.clear();
+        self.head = None;
+        self.tail = None;
+        self.current = None;
+    }
+
+    pub(crate) fn push_back(&mut self, display: String, path: std::path::PathBuf, line_number: usize) {
+        let idx = self.nodes.len();
+        let prev = self.tail;
+        self.nodes.push(GsResultNode {
+            display,
+            path,
+            line_number,
+            prev,
+            next: None,
+        });
+        if let Some(t) = self.tail {
+            self.nodes[t].next = Some(idx);
+        }
+        self.tail = Some(idx);
+        if self.head.is_none() {
+            self.head = Some(idx);
+        }
+    }
+
+    pub(crate) fn build_circular(&mut self) {
+        if let (Some(h), Some(t)) = (self.head, self.tail) {
+            self.nodes[t].next = Some(h);
+            self.nodes[h].prev = Some(t);
+            self.current = Some(h);
+        }
+    }
+
+    pub(crate) fn len(&self) -> usize {
+        self.nodes.len()
+    }
+
+    pub(crate) fn is_empty(&self) -> bool {
+        self.nodes.is_empty()
+    }
+
+    pub(crate) fn current_path(&self) -> Option<&std::path::Path> {
+        self.current.map(|i| self.nodes[i].path.as_path())
+    }
+
+    pub(crate) fn current_line(&self) -> Option<usize> {
+        self.current.map(|i| self.nodes[i].line_number)
+    }
+
+    pub(crate) fn current_index(&self) -> Option<usize> {
+        self.current
+    }
+
+    pub(crate) fn move_next(&mut self) {
+        if let Some(cur) = self.current {
+            self.current = self.nodes[cur].next;
+        }
+    }
+
+    pub(crate) fn move_prev(&mut self) {
+        if let Some(cur) = self.current {
+            self.current = self.nodes[cur].prev;
+        }
+    }
+
+    pub(crate) fn nth_display(&self, idx: usize) -> Option<&str> {
+        self.nodes.get(idx).map(|n| n.display.as_str())
+    }
+}
+
+pub(crate) struct GsSearchState {
+    pub(crate) query: String,
+    pub(crate) results: GsResultList,
+    pub(crate) loading: bool,
+    pub(crate) loading_pattern: String,
+}
+
+impl GsSearchState {
+    pub(crate) fn new() -> Self {
+        Self {
+            query: String::new(),
+            results: GsResultList::new(),
+            loading: false,
+            loading_pattern: String::new(),
+        }
+    }
 }
 
 // ── Editor ───────────────────────────────────────────────────────────────────
@@ -441,19 +649,33 @@ pub(crate) struct Editor {
 
     // File finder (Ctrl+P) state
     pub(crate) ff_query: String,
-    pub(crate) ff_results: Vec<(String, std::path::PathBuf, f64)>,
+    pub(crate) ff_results: Vec<(String, std::path::PathBuf, f64, usize)>,
     pub(crate) ff_idx: usize,
+    /// Cached file index for fast file finder: (timestamp, files)
+    pub(crate) file_index: Option<(std::time::Instant, Vec<(String, std::path::PathBuf)>)>,
+
+    // Gs content search state
+    pub(crate) gs_state: GsSearchState,
 
     // Gosc mode state
     pub(crate) gosc_dirs: Vec<String>,
     pub(crate) gosc_buf: String,
 
+    // Query mode state
+    pub(crate) query_buf: String,
+    pub(crate) qal_aliases: HashMap<String, String>,
+
     // Run mode state
     pub(crate) run_lines: Vec<String>,
     pub(crate) run_cmd_buf: String,
     pub(crate) run_executing: Option<String>,
+    pub(crate) last_run_cmd: Option<String>,
     pub(crate) run_rx: Option<std::sync::mpsc::Receiver<RunMessage>>,
     pub(crate) run_child: Option<std::process::Child>,
+    pub(crate) stored_run_split: usize,
+    pub(crate) dragging_run_border: bool,
+    pub(crate) run_panel_open: bool,
+    pub(crate) focus: Focus,
 
     // Recently opened files buffer stack
     pub(crate) buffer_stack: Vec<std::path::PathBuf>,
@@ -468,8 +690,10 @@ pub(crate) struct Editor {
     // Crash recovery: counter to periodically save recovery snapshots
     pub(crate) edit_count: usize,
 
-    // File watcher for live reload on external changes
+    // File watcher for live reload on external changes (Windows only)
+    #[cfg(windows)]
     pub(crate) file_watcher_rx: Option<std::sync::mpsc::Receiver<()>>,
+    #[cfg(windows)]
     pub(crate) _file_watcher: Option<notify::RecommendedWatcher>,
 
     // ── Multi-tab support ─────────────────────────────────────────────────
@@ -477,6 +701,23 @@ pub(crate) struct Editor {
     pub(crate) active_tab: usize,
     // Set by mouse handler when close button on last tab is clicked
     pub(crate) pending_quit: bool,
+
+    // Jump mode state
+    pub(crate) jump_buf: String,
+    pub(crate) prev_mode: Mode,
+
+    // Cursor blinking
+    pub(crate) cursor_visible: bool,
+    pub(crate) last_blink: Instant,
+
+    // Session auto-save timer
+    pub(crate) last_session_save: Instant,
+
+    // Frame buffer for double-buffered rendering
+    pub(crate) framebuffer: Option<super::render::framebuffer::FrameBuffer>,
+
+    // Terminal state for embedded terminal
+    pub(crate) terminal: Option<super::terminal::TerminalState>,
 }
 
 impl Editor {
@@ -497,8 +738,13 @@ impl Editor {
             content
         };
         let (tw, th) = crate::editor::helpers::term_size();
+        let editor_cfg = EditorConfig::load();
         let mut syntax = crate::syntax::SyntaxHighlighter::new(path.extension().and_then(|e| e.to_str()));
         syntax.resize_cache(lines.len());
+        // Pre-tokenize entire file if small enough for instant scrolling
+        if editor_cfg.syntax_enabled && lines.len() <= 5000 {
+            syntax.pre_tokenize_up_to(lines.len(), &lines);
+        }
         Ok(Self {
             lines,
             path: path.to_path_buf(),
@@ -517,19 +763,28 @@ impl Editor {
             search: SearchState::new(),
             sv: ScrollState::new(),
             paste_buf: String::new(),
-            editor_cfg: EditorConfig::load(),
+            editor_cfg,
             syntax,
             sidebar: Sidebar::new(),
             ff_query: String::new(),
             ff_results: Vec::new(),
             ff_idx: 0,
+            file_index: None,
+            gs_state: GsSearchState::new(),
             gosc_dirs: Vec::new(),
             gosc_buf: String::new(),
+            query_buf: String::new(),
+            qal_aliases: HashMap::new(),
             run_lines: Vec::new(),
             run_cmd_buf: String::new(),
             run_executing: None,
+            last_run_cmd: None,
             run_rx: None,
             run_child: None,
+            stored_run_split: (th * 2 / 3).max(5),
+            dragging_run_border: false,
+            run_panel_open: false,
+            focus: Focus::Editor,
             buffer_stack: vec![path.to_path_buf()],
             buffer_idx: 0,
             completion_items: Vec::new(),
@@ -537,11 +792,20 @@ impl Editor {
             completion_visible: false,
             completion_prefix: String::new(),
             edit_count: 0,
+            #[cfg(windows)]
             file_watcher_rx: None,
+            #[cfg(windows)]
             _file_watcher: None,
             tabs: Vec::new(),
             active_tab: 0,
             pending_quit: false,
+            jump_buf: String::new(),
+            prev_mode: Mode::Normal,
+            cursor_visible: true,
+            last_blink: Instant::now(),
+            last_session_save: Instant::now(),
+            framebuffer: None,
+            terminal: None,
         })
     }
 
@@ -552,7 +816,17 @@ impl Editor {
         self.active_tab = 0;
     }
 
-    /// Start watching the current file for external changes.
+    /// Jump the cursor to line `line` (1-based). Called before run().
+    pub(crate) fn goto_line(&mut self, line: usize) {
+        if line > 0 && !self.lines.is_empty() {
+            self.cursor.y = (line.saturating_sub(1)).min(self.lines.len().saturating_sub(1));
+            self.cursor.byte = 0;
+            self.scroll_visible();
+        }
+    }
+
+    /// Start watching the current file for external changes (Windows only).
+    #[cfg(windows)]
     pub(crate) fn start_file_watcher(&mut self) {
         use notify::{Watcher, RecursiveMode};
         use std::sync::mpsc;
@@ -575,8 +849,12 @@ impl Editor {
         }
     }
 
+    #[cfg(not(windows))]
+    pub(crate) fn start_file_watcher(&mut self) {}
+
     /// Check for external file changes and reload if needed.
     /// Returns true if the file was reloaded.
+    #[cfg(windows)]
     pub(crate) fn check_file_changed(&mut self) -> bool {
         if let Some(rx) = &self.file_watcher_rx {
             if rx.try_recv().is_ok() {
@@ -596,6 +874,11 @@ impl Editor {
                 }
             }
         }
+        false
+    }
+
+    #[cfg(not(windows))]
+    pub(crate) fn check_file_changed(&mut self) -> bool {
         false
     }
 
@@ -624,6 +907,47 @@ impl Editor {
         if !session.buffer_stack.is_empty() {
             self.buffer_stack = session.buffer_stack.clone();
             self.buffer_idx = session.buffer_idx.min(self.buffer_stack.len().saturating_sub(1));
+        }
+    }
+
+    /// Capture the full state of all tabs for session persistence.
+    pub(crate) fn capture_full_session(&mut self) -> SessionSnapshot {
+        self.save_active_tab();
+        let tabs: Vec<TabSnapshot> = self.tabs.iter().map(|tab| {
+            TabSnapshot {
+                path: tab.path.clone(),
+                cursor_y: tab.cursor.y,
+                cursor_byte: tab.cursor.byte,
+                scroll: tab.sv.offset,
+                scroll_x: tab.sv.x,
+                modified: tab.modified,
+                undo_stack: tab.undo_stack.clone(),
+                redo_stack: tab.redo_stack.clone(),
+            }
+        }).collect();
+        SessionSnapshot {
+            tabs,
+            active_tab: self.active_tab,
+            buffer_stack: self.buffer_stack.clone(),
+            buffer_idx: self.buffer_idx,
+            sidebar_open: self.sidebar.open,
+            timestamp: chrono::Local::now().format("%Y-%m-%d %H:%M:%S").to_string(),
+        }
+    }
+
+    /// Restore a specific tab's state from a snapshot.
+    pub(crate) fn restore_tab_from_snapshot(&mut self, idx: usize, snapshot: &SessionSnapshot) {
+        if let Some(tab_snap) = snapshot.tabs.get(idx) {
+            if idx < self.tabs.len() {
+                let max_y = self.tabs[idx].lines.len().saturating_sub(1);
+                self.tabs[idx].cursor.y = tab_snap.cursor_y.min(max_y);
+                self.tabs[idx].cursor.byte = tab_snap.cursor_byte.min(self.tabs[idx].lines[max_y].len());
+                self.tabs[idx].sv.offset = tab_snap.scroll.min(max_y);
+                self.tabs[idx].sv.x = tab_snap.scroll_x;
+                self.tabs[idx].modified = tab_snap.modified;
+                self.tabs[idx].undo_stack = tab_snap.undo_stack.clone();
+                self.tabs[idx].redo_stack = tab_snap.redo_stack.clone();
+            }
         }
     }
 }

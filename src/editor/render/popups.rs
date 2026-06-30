@@ -11,45 +11,64 @@ impl Editor {
         let content_top = 1;
         let rows = self.term_h.saturating_sub(5);
         let cols = self.term_w;
+        let eo = self.editor_offset();
+        let editor_cols = cols.saturating_sub(eo);
+        let sb_col = cols.saturating_sub(1);
 
         let help_lines = vec![
-            "─".repeat(cols.min(60)),
-            " NORMAL MODE (read-only)".to_string(),
-            "  ^I        enter Insert mode".to_string(),
+            "─".repeat(editor_cols.min(60)),
+" NORMAL MODE (read-only)".to_string(),
+            "  ^O        enter Insert mode".to_string(),
             "  ^W        enter Visual mode".to_string(),
+            "  ^G        jump to line number (Jump mode)".to_string(),
             "  :         open command line".to_string(),
+            "  ^E        open command line (alt)".to_string(),
             "  :auto on  enable auto-save on exit".to_string(),
             "  :auto off disable auto-save on exit".to_string(),
             "  ^H        open this help screen".to_string(),
             "  ^Q        close current tab / quit (if last tab)".to_string(),
-            "  ^Q+Shift  close all tabs and quit".to_string(),
+            "  ^Q+Shift  close all tabs".to_string(),
             "  ^PgDn     next tab".to_string(),
             "  ^PgUp     previous tab".to_string(),
-            "  ^T        open file in new tab".to_string(),
+            "  ^N        open file in new tab".to_string(),
+            "  ^F        find / search in file".to_string(),
+            "  ^D        add cursor at next occurrence".to_string(),
+            "  ^Alt+D    split primary cursor".to_string(),
             "  mouse     click tab bar, scroll wheel to navigate".to_string(),
-            "  arrows    navigate cursor".to_string(),
+            "  arrows    move primary cursor".to_string(),
+            "  Sh+arrows word-level movement".to_string(),
             "".to_string(),
-            " INSERT MODE (editing)".to_string(),
+" INSERT MODE (editing)".to_string(),
             "  ^C        copy selection".to_string(),
             "  ^F        find / search".to_string(),
+            "  ^N        open file in new tab".to_string(),
+            "  ^G        jump to line (returns to Insert)".to_string(),
             "  ^Z        undo".to_string(),
             "  ^R        redo".to_string(),
             "  ^Y        yank (copy) current line".to_string(),
             "  ^A        select all".to_string(),
             "  ^L        select current line".to_string(),
             "  ^D        find next occurrence".to_string(),
+            "  ^Alt+D    split cursor at selection".to_string(),
             "  ^X        cut selection".to_string(),
             "  ^S        save".to_string(),
             "  ^W        enter Visual mode".to_string(),
+            "  ^E        open command line".to_string(),
             "  Esc       return to Normal mode".to_string(),
             "  ^Q        quit (with save prompt)".to_string(),
             "  ^H        help".to_string(),
             "  Home      start of line".to_string(),
             "  End       end of line".to_string(),
+            "  ^D auto   enters Insert* (multi-cursor)".to_string(),
+            "            Esc returns to Insert".to_string(),
             "".to_string(),
-            " VISUAL MODE (selection)".to_string(),
+" VISUAL MODE (selection)".to_string(),
             "  arrows    extend selection".to_string(),
-            "  ^I        enter Insert mode".to_string(),
+            "  ^F        find / search".to_string(),
+            "  ^N        open file in new tab".to_string(),
+            "  ^G        jump to line (returns to Visual)".to_string(),
+            "  ^O        enter Insert mode".to_string(),
+            "  ^E        open command line".to_string(),
             "  ^C        copy + exit".to_string(),
             "  ^X        cut + exit".to_string(),
             "  ^Q        quit (with save prompt)".to_string(),
@@ -77,6 +96,8 @@ impl Editor {
             "  :mkf <file>        create new file (alias for :touch)".to_string(),
             "  :rmd <target>      recursively delete directory".to_string(),
             "  :rmf <target>      force delete file or directory".to_string(),
+            "  :rnmf <src> <dst>  rename file".to_string(),
+            "  :rnmd <src> <dst>  rename directory".to_string(),
             "  :ne <file>         navigate & edit (create if missing)".to_string(),
             "  :ne .              show CWD in sidebar".to_string(),
             "  :theme <name>      switch to theme by name".to_string(),
@@ -85,24 +106,99 @@ impl Editor {
             "  :tp <name>         jump to teleport savepoint".to_string(),
             "  :tp-add <name>     save CWD as teleport".to_string(),
             "  :gs <pattern>       search file contents across project".to_string(),
-            "  :run <command>     execute shell command in split panel".to_string(),
+            "  :run <command>     execute command in persistent run panel".to_string(),
             "  Esc                 cancel".to_string(),
             "".to_string(),
-            "─".repeat(cols.min(60)),
+            " QUERY MODE (Ctrl+Alt+Q in Insert, :x in Command)".to_string(),
+            "  /s /l                 clear selection".to_string(),
+            "  /s /l /a              select all lines".to_string(),
+            "  /s /l N to M          select lines N..M (1-indexed)".to_string(),
+            "  /s /l N to M /e str   filter selected lines containing str".to_string(),
+            "  /p old to new         replace all 'old' with 'new' in selection".to_string(),
+            "  /upper                uppercase selection (selection required)".to_string(),
+            "  /lower                lowercase selection (selection required)".to_string(),
+            "  /add <text> to #end   append text to each selected line".to_string(),
+            "  /add <text> to #start prepend text to each selected line".to_string(),
+            "  /set <pat> to #end    right-align first occurrence of pat".to_string(),
+            "  /set <pat> to #start  left-align first occurrence of pat".to_string(),
+            "  /qal add <n> <q>      add query alias (e.g. /qal sw /p ${1} to ${2})".to_string(),
+            "  /qal rm <n>           remove alias".to_string(),
+            "  /qal info <n>         show alias".to_string(),
+            "  /qal edit <n> <q>     update alias".to_string(),
+            "  /qal rnm <a> to <b>   rename alias".to_string(),
+            "  /qal list             list aliases".to_string(),
+            "  /q <name> [args]      run alias".to_string(),
+            "  <name> [args]         run alias directly (no /)".to_string(),
+            "  /undo                 undo".to_string(),
+            "  /redo                 redo".to_string(),
+            "  /exit /quit /Esc      exit Query Mode".to_string(),
+            "  ;                     chain multiple commands".to_string(),
+            "  ${1} ${2}             alias positional params".to_string(),
+            "  ${1:-default}         alias param with default".to_string(),
+            "  ${1[]}                alias array param (all remaining args)".to_string(),
+            "".to_string(),
+            " TERMINAL / RUN PANEL".to_string(),
+            "  Ctrl+T          toggle terminal panel".to_string(),
+            "  :run <command>  execute command, opens persistent run panel".to_string(),
+            "  mouse           click panel to focus, click editor to return".to_string(),
+            "  Esc (in panel)  run: close | terminal: return to editor".to_string(),
+            "  drag ─── row    resize panel height".to_string(),
+            "".to_string(),
+            "─".repeat(editor_cols.min(60)),
         ];
 
-        for i in 0..rows {
-            let sy = content_top + i;
-            let idx = self.sv.help + i;
-            let line = help_lines.get(idx).map(|s| s.as_str()).unwrap_or("");
-            queue!(
-                stdout,
-                MoveTo(0, sy as u16),
-                SetForegroundColor(theme.syntax.normal.to_crossterm()),
-                Print(line),
-                ResetColor,
-                Clear(ClearType::UntilNewLine),
-            )?;
+        let total_lines = help_lines.len();
+        let max_scroll = total_lines.saturating_sub(rows);
+        let help_scroll = self.sv.help.min(max_scroll);
+
+        // Vertical scrollbar
+        if total_lines > rows {
+            let avail = rows;
+            let thumb_height = (avail * rows / total_lines).max(1);
+            let thumb_start = help_scroll * (avail - thumb_height) / max_scroll;
+
+            for i in 0..rows {
+                let sy = content_top + i;
+                let idx = help_scroll + i;
+                let line = help_lines.get(idx).map(|s| s.as_str()).unwrap_or("");
+                queue!(
+                    stdout,
+                    MoveTo(eo as u16, sy as u16),
+                    SetForegroundColor(theme.syntax.normal.to_crossterm()),
+                    Print(line),
+                    ResetColor,
+                    Clear(ClearType::UntilNewLine),
+                )?;
+
+                // Draw scrollbar
+                let in_thumb = i >= thumb_start && i < thumb_start + thumb_height;
+                let ch = if in_thumb { '█' } else { '░' };
+                queue!(
+                    stdout,
+                    MoveTo(sb_col as u16, sy as u16),
+                    if in_thumb {
+                        SetForegroundColor(theme.editor.scrollbar_thumb.to_crossterm())
+                    } else {
+                        SetForegroundColor(theme.editor.scrollbar.to_crossterm())
+                    },
+                    Print(ch),
+                    ResetColor,
+                )?;
+            }
+        } else {
+            for i in 0..rows {
+                let sy = content_top + i;
+                let idx = help_scroll + i;
+                let line = help_lines.get(idx).map(|s| s.as_str()).unwrap_or("");
+                queue!(
+                    stdout,
+                    MoveTo(eo as u16, sy as u16),
+                    SetForegroundColor(theme.syntax.normal.to_crossterm()),
+                    Print(line),
+                    ResetColor,
+                    Clear(ClearType::UntilNewLine),
+                )?;
+            }
         }
 
         Ok(())
@@ -110,22 +206,29 @@ impl Editor {
 
     pub(crate) fn render_file_finder(&self, stdout: &mut std::io::Stdout) -> std::io::Result<()> {
         let theme = crate::utils::theme::ThemeManager::current();
+        let eo = self.editor_offset();
         let content_top = 1;
-        let cols = self.term_w;
-        let rows = self.term_h.saturating_sub(4);
+        let editor_cols = self.term_w.saturating_sub(eo);
+        let rows = self.term_h.saturating_sub(1);
         let max_results = rows.saturating_sub(2);
 
-        let prompt = format!(
-            " Find: {}",
-            if self.ff_query.is_empty() {
-                "Type to search..."
-            } else {
-                &self.ff_query
-            }
-        );
+        let is_gs = self.ff_query.starts_with("gs:");
+
+        let prompt = if is_gs {
+            format!(" gs: {}", self.ff_query)
+        } else {
+            format!(
+                " Find: {}",
+                if self.ff_query.is_empty() {
+                    "Type to search..."
+                } else {
+                    &self.ff_query
+                }
+            )
+        };
         queue!(
             stdout,
-            MoveTo(0, content_top as u16),
+            MoveTo(eo as u16, content_top as u16),
             SetBackgroundColor(theme.editor.sidebar_selected_bg.to_crossterm()),
             SetForegroundColor(theme.editor.status_text.to_crossterm()),
             Print(&prompt),
@@ -135,53 +238,124 @@ impl Editor {
 
         queue!(
             stdout,
-            MoveTo(0, (content_top + 1) as u16),
+            MoveTo(eo as u16, (content_top + 1) as u16),
             SetBackgroundColor(theme.editor.sidebar_bg.to_crossterm()),
             SetForegroundColor(theme.editor.border.to_crossterm()),
-            Print("─".repeat(cols.min(80))),
+            Print("─".repeat(editor_cols.min(80))),
             ResetColor,
             Clear(ClearType::UntilNewLine),
         )?;
 
-        if !self.ff_results.is_empty() {
-            let start_idx = self
-                .ff_idx
-                .saturating_sub(max_results.saturating_sub(1));
-            let end_idx = (start_idx + max_results).min(self.ff_results.len());
-            for i in start_idx..end_idx {
-                let ri = content_top + 2 + (i - start_idx);
-                if ri >= content_top + rows {
-                    break;
+        if is_gs {
+            if self.gs_state.loading {
+                let loading_msg = format!("  finding... {} pls wait", self.gs_state.loading_pattern);
+                let ri = content_top + 2;
+                if ri < content_top + rows {
+                    queue!(
+                        stdout,
+                        MoveTo(eo as u16, ri as u16),
+                        SetForegroundColor(theme.editor.hint_text.to_crossterm()),
+                        Print(&loading_msg),
+                        ResetColor,
+                        Clear(ClearType::UntilNewLine),
+                    )?;
                 }
-                let (ref name, _, _) = self.ff_results[i];
-                let is_selected = i == self.ff_idx;
-                let display = if name.chars().count() > cols.saturating_sub(4) {
-                    name.chars()
-                        .take(cols.saturating_sub(5))
-                        .collect::<String>()
-                        + "…"
+            } else if !self.gs_state.results.is_empty() {
+                let total = self.gs_state.results.len();
+                let max_vis = max_results.min(total);
+                let cur = self.gs_state.results.current_index().unwrap_or(0);
+                let half = max_vis / 2;
+                let start_idx = if cur > half {
+                    cur.saturating_sub(half).min(total.saturating_sub(max_vis))
                 } else {
-                    name.clone()
+                    0
                 };
-                if is_selected {
-                    queue!(
-                        stdout,
-                        MoveTo(0, ri as u16),
-                        SetBackgroundColor(theme.editor.selection_bg.to_crossterm()),
-                        SetForegroundColor(theme.editor.status_text.to_crossterm()),
-                        Print(format!("  {}", display)),
-                        ResetColor,
-                        Clear(ClearType::UntilNewLine),
-                    )?;
+
+                for offset in 0..max_vis {
+                    let idx = (start_idx + offset) % total;
+                    let ri = content_top + 2 + offset;
+                    if ri >= content_top + rows {
+                        break;
+                    }
+                    let display_str = self.gs_state.results.nth_display(idx).unwrap_or("");
+                    let is_selected = idx == cur;
+                    let display = if display_str.chars().count() > editor_cols.saturating_sub(4) {
+                        display_str.chars()
+                            .take(editor_cols.saturating_sub(5))
+                            .collect::<String>()
+                            + "…"
+                    } else {
+                        display_str.to_string()
+                    };
+                    if is_selected {
+                        queue!(
+                            stdout,
+                            MoveTo(eo as u16, ri as u16),
+                            SetBackgroundColor(theme.editor.selection_bg.to_crossterm()),
+                            SetForegroundColor(theme.editor.status_text.to_crossterm()),
+                            Print(format!("  {}", display)),
+                            ResetColor,
+                            Clear(ClearType::UntilNewLine),
+                        )?;
+                    } else {
+                        queue!(
+                            stdout,
+                            MoveTo(eo as u16, ri as u16),
+                            SetForegroundColor(theme.syntax.normal.to_crossterm()),
+                            Print(format!("  {}", display)),
+                            ResetColor,
+                            Clear(ClearType::UntilNewLine),
+                        )?;
+                    }
+                }
+            }
+        } else {
+            if !self.ff_results.is_empty() {
+                let max_vis = max_results.min(self.ff_results.len());
+                let half = max_vis / 2;
+                let start_idx = if self.ff_idx > half {
+                    self.ff_idx
+                        .saturating_sub(half)
+                        .min(self.ff_results.len().saturating_sub(max_vis))
                 } else {
-                    queue!(
-                        stdout,
-                        MoveTo(0, ri as u16),
-                        SetForegroundColor(theme.syntax.normal.to_crossterm()),
-                        Print(format!("  {}", display)),
-                        ResetColor,
-                        Clear(ClearType::UntilNewLine),
-                    )?;
+                    0
+                };
+                let end_idx = (start_idx + max_vis).min(self.ff_results.len());
+                for i in start_idx..end_idx {
+                    let ri = content_top + 2 + (i - start_idx);
+                    if ri >= content_top + rows {
+                        break;
+                    }
+                    let (ref name, _, _, _) = self.ff_results[i];
+                    let is_selected = i == self.ff_idx;
+                    let display = if name.chars().count() > editor_cols.saturating_sub(4) {
+                        name.chars()
+                            .take(editor_cols.saturating_sub(5))
+                            .collect::<String>()
+                            + "…"
+                    } else {
+                        name.clone()
+                    };
+                    if is_selected {
+                        queue!(
+                            stdout,
+                            MoveTo(eo as u16, ri as u16),
+                            SetBackgroundColor(theme.editor.selection_bg.to_crossterm()),
+                            SetForegroundColor(theme.editor.status_text.to_crossterm()),
+                            Print(format!("  {}", display)),
+                            ResetColor,
+                            Clear(ClearType::UntilNewLine),
+                        )?;
+                    } else {
+                        queue!(
+                            stdout,
+                            MoveTo(eo as u16, ri as u16),
+                            SetForegroundColor(theme.syntax.normal.to_crossterm()),
+                            Print(format!("  {}", display)),
+                            ResetColor,
+                            Clear(ClearType::UntilNewLine),
+                        )?;
+                    }
                 }
             }
         }

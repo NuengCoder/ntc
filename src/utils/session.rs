@@ -15,12 +15,38 @@ pub struct EditorSession {
     pub sidebar_open: bool,
 }
 
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct TabSnapshot {
+    pub path: PathBuf,
+    pub cursor_y: usize,
+    pub cursor_byte: usize,
+    pub scroll: usize,
+    pub scroll_x: usize,
+    pub modified: bool,
+    #[serde(default)]
+    pub undo_stack: Vec<crate::editor::Snapshot>,
+    #[serde(default)]
+    pub redo_stack: Vec<crate::editor::Snapshot>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct SessionSnapshot {
+    pub tabs: Vec<TabSnapshot>,
+    pub active_tab: usize,
+    pub buffer_stack: Vec<PathBuf>,
+    pub buffer_idx: usize,
+    pub sidebar_open: bool,
+    pub timestamp: String,
+}
+
 #[derive(Debug, Serialize, Deserialize)]
 pub struct SessionState {
     pub last_directory: Option<PathBuf>,
     pub editor_session: Option<EditorSession>,
     #[serde(default)]
     pub nav_stack: Vec<PathBuf>,
+    #[serde(default)]
+    pub session_snapshot: Option<SessionSnapshot>,
 }
 
 impl SessionState {
@@ -42,6 +68,7 @@ impl SessionState {
             last_directory: None,
             editor_session: None,
             nav_stack: Vec::new(),
+            session_snapshot: None,
         }
     }
 

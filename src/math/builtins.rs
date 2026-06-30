@@ -1,7 +1,14 @@
 use std::collections::HashMap;
 
 use anyhow::{bail, Result};
-use rand::Rng;
+fn random_range(lo: f64, hi: f64) -> f64 {
+    use rand::RngExt;
+    let lo_int = lo.ceil() as i64;
+    let hi_int = hi.floor() as i64;
+    if lo_int >= hi_int { return lo; }
+    let mut rng = rand::rng();
+    rng.random_range(lo_int..=hi_int) as f64
+}
 
 use super::ast::Parser;
 use super::eval::EvalResult;
@@ -93,11 +100,10 @@ fn eval_builtin(name: &str, args: &[EvalResult]) -> Result<EvalResult> {
         // Random
         "rand" | "random" => {
             check_args(name, 2, &nums)?;
-            let lo = nums[0].ceil() as i64;
-            let hi = nums[1].floor() as i64;
+            let lo = nums[0];
+            let hi = nums[1];
             if lo >= hi { bail!("rand requires min < max"); }
-            let mut rng = rand::thread_rng();
-            Ok(EvalResult::Num(rng.gen_range(lo..=hi) as f64))
+            Ok(EvalResult::Num(random_range(lo, hi)))
         }
 
         // Conversions (number-based)

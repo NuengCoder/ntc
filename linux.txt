@@ -1,0 +1,18 @@
+ntc Linux Install Instructions
+─────────────────────────────────────────
+
+1. Build:
+   cargo build --release
+
+2. Install to user bin:
+   cp target/release/ntc ~/.local/bin/
+   chmod +x ~/.local/bin/ntc
+
+   Or system-wide:
+   sudo cp target/release/ntc /usr/local/bin/
+
+3. Verify:
+   ntc --version
+
+4. Pack into archive (optional):
+   tar -czvf ntc-v$(ver)-linux-x86_64.tar.gz -C target/release ntc

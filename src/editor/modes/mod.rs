@@ -1,0 +1,12 @@
+mod search;
+mod finder;
+mod run;
+mod gosc;
+mod normal;
+mod command;
+mod help;
+mod visual;
+mod insert;
+mod jump;
+mod terminal;
+mod query;

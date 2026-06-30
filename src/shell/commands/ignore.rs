@@ -1,9 +1,11 @@
+//! Shell commands for managing ignore/care filtering:
+//! `ignore`, `care`, `igcared`, `igcare` (export/import).
+
 use crate::config::Config;
 use crate::filetype::FormatConfig;
 use crate::navigator::Navigator;
 use crate::output::{print_error, print_info, print_success};
-use crate::shell::helpers::{show_tree, ignoresc_loop, caresc_loop, igcare_export_all, igcare_export_select, igcare_import};
-use crate::utils::interactive::{InteractiveMenu, MenuItem};
+use crate::shell::helpers::{igcare_export_all, igcare_export_select, igcare_import};
 
 use anyhow::Result;
 use colored::*;
@@ -21,13 +23,61 @@ fn apply_igcare(args: &str, usage: &str, action: fn(&str) -> std::result::Result
         Config::reload_global();
         if count > 0 {
             print_success(&format!("{} {} item(s)", action_desc, count));
-            print_info("Run 'ignored' to see current ignore/care settings");
+            print_info("Run 'igcared' to see current ignore/care settings");
         }
     }
     Ok(false)
 }
 
-pub fn cmd_ignored(_args: &str, _nav: &mut Navigator) -> Result<bool> {
+pub fn cmd_ignore(args: &str, _nav: &mut Navigator) -> Result<bool> {
+    let parts: Vec<&str> = args.splitn(2, ' ').collect();
+    let subcmd = parts.first().copied().unwrap_or("");
+    let subargs = parts.get(1).unwrap_or(&"").trim();
+
+    match subcmd {
+        "dir"  => apply_igcare(subargs, "Usage: ignore dir <name>[, <name>, ...]", Config::local_add_ignored_dir, "Ignored directories:"),
+        "ext"  => apply_igcare(subargs, "Usage: ignore ext <ext>[, <ext>, ...]", Config::local_add_ignored_extension, "Ignored extensions:"),
+        "file" => apply_igcare(subargs, "Usage: ignore file <name>[, <name>, ...]", Config::local_add_ignored_file, "Ignored files:"),
+        _ => {
+            println!("{}", "ignore — Manage ignored items".cyan().bold());
+            println!("  ignore dir <name>[, ...]     Ignore directories");
+            println!("  ignore ext <ext>[, ...]      Ignore file extensions");
+            println!("  ignore file <name>[, ...]    Ignore specific files");
+            println!();
+            println!("{}", "Examples:".green());
+            println!("  ignore dir temp,logs");
+            println!("  ignore ext log,tmp,bak");
+            println!("  ignore file Cargo.lock");
+            Ok(false)
+        }
+    }
+}
+
+pub fn cmd_care(args: &str, _nav: &mut Navigator) -> Result<bool> {
+    let parts: Vec<&str> = args.splitn(2, ' ').collect();
+    let subcmd = parts.first().copied().unwrap_or("");
+    let subargs = parts.get(1).unwrap_or(&"").trim();
+
+    match subcmd {
+        "dir"  => apply_igcare(subargs, "Usage: care dir <name>[, <name>, ...]", Config::local_remove_ignored_dir, "Un-ignored directories:"),
+        "ext"  => apply_igcare(subargs, "Usage: care ext <ext>[, <ext>, ...]", Config::local_add_extra_supported_extension, "Extra supported extensions:"),
+        "file" => apply_igcare(subargs, "Usage: care file <name>[, <name>, ...]", Config::local_add_extra_supported_file, "Extra supported files:"),
+        _ => {
+            println!("{}", "care — Manage cared (un-ignored) items".cyan().bold());
+            println!("  care dir <name>[, ...]       Stop ignoring directories");
+            println!("  care ext <ext>[, ...]        Add extra supported extensions");
+            println!("  care file <name>[, ...]      Add extra supported files");
+            println!();
+            println!("{}", "Examples:".green());
+            println!("  care dir build,dist");
+            println!("  care ext log,rb");
+            println!("  care file .env");
+            Ok(false)
+        }
+    }
+}
+
+pub fn cmd_igcared(_args: &str, _nav: &mut Navigator) -> Result<bool> {
     let is_local = Config::get_local_config_path().is_some();
 
     println!();
@@ -62,30 +112,6 @@ pub fn cmd_ignored(_args: &str, _nav: &mut Navigator) -> Result<bool> {
         println!("{}", "   or run 'local deinit' to revert to global-only filtering.".dimmed());
     }
     Ok(false)
-}
-
-pub fn cmd_ignore(args: &str, _nav: &mut Navigator) -> Result<bool> {
-    apply_igcare(args, "Usage: ignore <name>[, <name>, ...]", Config::local_add_ignored_dir, "Ignored directories:")
-}
-
-pub fn cmd_cared(args: &str, _nav: &mut Navigator) -> Result<bool> {
-    apply_igcare(args, "Usage: cared <name>[, <name>, ...]", Config::local_remove_ignored_dir, "Un-ignored directories:")
-}
-
-pub fn cmd_ignoref(args: &str, _nav: &mut Navigator) -> Result<bool> {
-    apply_igcare(args, "Usage: ignoref <ext>[, <ext>, ...]", Config::local_add_ignored_extension, "Ignored extensions:")
-}
-
-pub fn cmd_caref(args: &str, _nav: &mut Navigator) -> Result<bool> {
-    apply_igcare(args, "Usage: caref <ext>[, <ext>, ...]", Config::local_add_extra_supported_extension, "Extra supported extensions:")
-}
-
-pub fn cmd_ignoren(args: &str, _nav: &mut Navigator) -> Result<bool> {
-    apply_igcare(args, "Usage: ignoren <file>[, <file>, ...]", Config::local_add_ignored_file, "Ignored files:")
-}
-
-pub fn cmd_caren(args: &str, _nav: &mut Navigator) -> Result<bool> {
-    apply_igcare(args, "Usage: caren <file>[, <file>, ...]", Config::local_add_extra_supported_file, "Extra supported files:")
 }
 
 pub fn cmd_igcare(args: &str, _nav: &mut Navigator) -> Result<bool> {
@@ -165,56 +191,5 @@ extra_supported_files = []
             }
         }
     }
-    Ok(false)
-}
-
-pub fn cmd_ignores(_args: &str, nav: &mut Navigator) -> Result<bool> {
-    let dirs = nav.list_subdirs()?;
-    let items: Vec<MenuItem> = dirs.iter().map(|(_, name)| MenuItem::simple(name)).collect();
-
-    let menu = InteractiveMenu::new("ignores — Select directory to ignore")
-        .items(items)
-        .prompt("Ignore which directory?");
-
-    if let Some(idx) = menu.run()? {
-        if let Some((_, name)) = dirs.get(idx) {
-            let _ = Config::local_add_ignored_dir(name);
-            Config::reload_global();
-            print_success(&format!("Ignored directory: {}", name));
-            print_info("Run 'ignored' to see all ignore/care settings");
-        }
-    }
-    Ok(false)
-}
-
-pub fn cmd_ignoresc(nav: &mut Navigator) -> Result<bool> {
-    ignoresc_loop(nav)?;
-    show_tree(nav, Some(1), false, false, false, false, false);
-    Ok(false)
-}
-
-pub fn cmd_cares(_args: &str, _nav: &mut Navigator) -> Result<bool> {
-    let ignored = Config::get_ignored_dirs_combined();
-    let mut ignored_vec: Vec<String> = ignored.into_iter().collect();
-    ignored_vec.sort_by_key(|a| a.to_lowercase());
-
-    let items: Vec<MenuItem> = ignored_vec.iter().map(MenuItem::simple).collect();
-    let menu = InteractiveMenu::new("cares — Select ignored directory to un-ignore")
-        .items(items)
-        .prompt("Care about which directory?");
-
-    if let Some(idx) = menu.run()? {
-        let name = &ignored_vec[idx];
-        let _ = Config::local_remove_ignored_dir(name);
-        Config::reload_global();
-        print_success(&format!("Un-ignored directory: {}", name));
-        print_info("Run 'ignored' to see all ignore/care settings");
-    }
-    Ok(false)
-}
-
-pub fn cmd_caresc(nav: &mut Navigator) -> Result<bool> {
-    caresc_loop(nav)?;
-    show_tree(nav, Some(1), false, false, false, false, false);
     Ok(false)
 }

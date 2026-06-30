@@ -7,6 +7,7 @@
 use crate::config::Config;
 use crate::filetype::{make_ignored_dir_filter, strip_unc_prefix, FormatConfig};
 use crate::fuzzy::{top_fuzzy_matches, top_fuzzy_dir_matches, MAX_FUZZY_SUGGESTIONS};
+use rayon::prelude::*;
 use std::path::{Path, PathBuf};
 use walkdir::WalkDir;
 
@@ -147,7 +148,7 @@ struct Candidate {
 ///
 /// Note: WalkDir's own max_depth(0) means root only (no children at all).
 /// We translate: our 0 → WalkDir 1 (files in root dir), our n → WalkDir n+1.
-fn walk_files<'a>(
+pub(crate) fn walk_files<'a>(
     root: &'a Path,
     max_depth: usize,
     ignored_dirs: &'a std::collections::HashSet<String>,
@@ -417,21 +418,27 @@ pub fn search_content(root: &Path, pattern: &str, max_depth: usize) -> Vec<Conte
     let ignored_dirs = Config::get_ignored_dirs_combined();
     let fmt_cfg = FormatConfig::from_both();
 
-    let mut results: Vec<ContentMatch> = Vec::new();
+    let paths: Vec<PathBuf> = walk_files(root, max_depth, &ignored_dirs, &fmt_cfg)
+        .map(|(_, p)| p)
+        .collect();
 
-    for (_file_name, full_path) in walk_files(root, max_depth, &ignored_dirs, &fmt_cfg) {
-        if let Ok(content) = std::fs::read_to_string(&full_path) {
-            for (i, line) in content.lines().enumerate() {
-                if line.to_lowercase().contains(&pattern_lower) {
-                    results.push(ContentMatch {
-                        file_path: full_path.clone(),
-                        line_number: i + 1,
-                        line: line.to_string(),
-                    });
-                }
-            }
-        }
-    }
+    let mut results: Vec<ContentMatch> = paths
+        .par_iter()
+        .filter_map(|path| {
+            let content = std::fs::read_to_string(path).ok()?;
+            let matches: Vec<ContentMatch> = content.lines()
+                .enumerate()
+                .filter(|(_, line)| line.to_lowercase().contains(&pattern_lower))
+                .map(|(i, line)| ContentMatch {
+                    file_path: path.clone(),
+                    line_number: i + 1,
+                    line: line.to_string(),
+                })
+                .collect();
+            if matches.is_empty() { None } else { Some(matches) }
+        })
+        .flatten()
+        .collect();
 
     results.sort_by(|a, b| {
         a.file_path

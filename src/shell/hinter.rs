@@ -6,6 +6,7 @@ use rustyline::hint::Hinter;
 use rustyline::Context;
 
 use crate::config::Config;
+use crate::ntpkg;
 use crate::ranfile::parser as ran_parser;
 use crate::teleport::TeleportManager;
 
@@ -16,23 +17,23 @@ pub(crate) static ALIAS_GENERATION: AtomicU64 = AtomicU64::new(0);
 /// Built-in commands for the ntc shell (lowercase).
 fn builtin_commands() -> Vec<&'static str> {
     vec![
-        "go", "cd", "godrive", "god", "back", "b", "view", "ls",
-        "txt", "txtc", "txtf", "html", "json", "md", "pdf", "docx", "xlsx",
-        "seto", "setd", "setl", "sett", "seth", "setc",
-        "watch", "clear", "version", "where",
+        "cd", "godrive", "god", "back", "b", "view", "ls",
+        "report", "txtc", "txtf",
+        "config", "clear", "version", "where",
         "gos", "gosc", "ral", "ran", "run", "r", "showcg", "help", "exit", "quit",
-        "ignored", "ignore", "cared", "ignoref", "caref", "ignoren", "caren",
-        "ignores", "ignoresc", "cares", "caresc",
+        "ignore", "care", "igcared",
         "size", "tp", "opencg", "resetcg", "restorecg", "local",
         "ne", "ntceditor", "igcare",
-        "esc", "bkup", "pldw", "unpd", "gs", "fs", "ds", "diff", "fgo", "fsc", "locate",
+        "esc", "backup", "gs", "fs", "ds", "fgo", "fsc", "locate",
         "dino", "math", "theme" , "tpb", "tutorial", "init", "deinit",
+        "rnmf", "rnmd",
         "image", "img" , "py_activate", "py_deactivate", "showenv",
+        "ntpkg", "tl", "http", "dl", "up", "ping", "dns", "smtp", "serve",
     ]
 }
 
 /// Returns the list of teleport save-point names for commands that accept them
-/// as arguments (go, cd, tp jump/to/rm/rnm/info).
+/// as arguments (cd, tp jump/to/rm/rnm/info).
 fn teleport_names_for_command(parts: &[&str]) -> Vec<String> {
     if parts.is_empty() {
         return vec![];
@@ -40,8 +41,8 @@ fn teleport_names_for_command(parts: &[&str]) -> Vec<String> {
 
     let root = parts[0].to_lowercase();
     match root.as_str() {
-        // go/cd can take a teleport name as argument
-        "go" | "cd" => TeleportManager::get_all().into_keys().collect(),
+        // cd can take a teleport name as argument
+        "cd" => TeleportManager::get_all().into_keys().collect(),
         // tp subcommands that accept a teleport name as argument
         "tp" if parts.len() >= 2 => match parts[1].to_lowercase().as_str() {
             "jump" | "to" | "rm" | "info" => TeleportManager::get_all().into_keys().collect(),
@@ -100,6 +101,71 @@ fn ran_target_names_for_command(parts: &[&str]) -> Vec<String> {
     }
 }
 
+/// Returns the list of ntpkg argument completions (languages, versions, installed packages).
+fn ntpkg_names_for_command(parts: &[&str]) -> Vec<String> {
+    if parts.len() < 2 {
+        return vec![];
+    }
+
+    let root = parts[0].to_lowercase();
+    if root != "ntpkg" {
+        return vec![];
+    }
+
+    let sub = parts[1].to_lowercase();
+    match sub.as_str() {
+        // ntpkg install <lang> [version]
+        "install" | "i" => {
+            if parts.len() == 2 {
+                // Suggest supported languages
+                ntpkg::sources::list_supported_languages()
+                    .into_iter()
+                    .map(|s| s.to_string())
+                    .collect()
+            } else if parts.len() == 3 {
+                // Suggest cached versions for the specified language
+                let lang = parts[2];
+                ntpkg::sources::peek_cached_versions(lang)
+            } else {
+                vec![]
+            }
+        }
+        // ntpkg uninstall <lang> [version]
+        "uninstall" | "rm" => installed_package_names(parts.len()),
+        // ntpkg use <lang> <version>
+        "use" => installed_package_names(parts.len()),
+        // ntpkg which <lang> [version]
+        "which" => installed_package_names(parts.len()),
+        // ntpkg available <lang>
+        "available" | "avail" => {
+            if parts.len() == 2 {
+                ntpkg::sources::list_supported_languages()
+                    .into_iter()
+                    .map(|s| s.to_string())
+                    .collect()
+            } else {
+                vec![]
+            }
+        }
+        _ => vec![],
+    }
+}
+
+fn installed_package_names(depth: usize) -> Vec<String> {
+    if depth != 2 {
+        return vec![];
+    }
+    match ntpkg::manager::list_packages() {
+        Ok(pkgs) => {
+            let mut names: Vec<String> = pkgs.into_iter().map(|(n, _, _)| n).collect();
+            names.sort();
+            names.dedup();
+            names
+        }
+        Err(_) => vec![],
+    }
+}
+
 /// Returns possible subcommand completions for a command path.
 /// `parts` is the prefix path (the words before the one being typed).
 ///   - If `parts.len() == 1` (e.g. `["ral"]`), returns the subcommands of `ral`.
@@ -135,17 +201,7 @@ fn subcommands_for(parts: &[&str]) -> Vec<&'static str> {
             "add", "jump", "to", "info", "list", "ls",
             "rm", "rnm", "rename", "cls", "help",
         ],
-        // watch ON / watch OFF / watch trigger
-        "watch" => {
-            if parts.len() == 1 {
-                vec!["ON", "OFF", "trigger"]
-            } else {
-                match parts[1].to_lowercase().as_str() {
-                    "trigger" => vec!["off"],
-                    _ => vec![],
-                }
-            }
-        }
+        // (watch is now a subcommand of config)
         // tpb history / tpb clear
         "tpb" => vec!["history", "hist", "h", "clear", "cls"],
         "theme" => vec![
@@ -166,12 +222,88 @@ fn subcommands_for(parts: &[&str]) -> Vec<&'static str> {
         }
         // ran init / ran deinit / ran list
         "ran" if parts.len() == 1 => vec!["init", "deinit", "help", "list", "ls"],
-        // seta ON|OFF, seto ON|OFF, setl ON|OFF, setc ON|OFF, sett ON|OFF, seth ON|OFF
-        "seta" | "setl" | "setc" | "sett" | "seth" => vec!["ON", "OFF"],
+        // config output / config depth / config linenumbers / config color / config autosuggest / config threads / config history / config watch
+        "config" => {
+            if parts.len() == 1 {
+                vec!["output", "out", "depth", "d", "linenumbers", "ln", "line", "color", "c", "autosuggest", "as", "threads", "t", "history", "h", "watch", "w"]
+            } else {
+                match parts[1].to_lowercase().as_str() {
+                    "watch" | "w" if parts.len() == 2 => vec!["ON", "OFF", "trigger"],
+                    "watch" | "w" if parts.len() >= 3 => vec!["off"],
+                    _ => vec![],
+                }
+            }
+        }
+        // backup create / backup restore / backup undo / backup clear / backup recreate / backup diff / backup list
+        "backup" if parts.len() == 1 => vec!["create", "cr", "restore", "rs", "undo", "ud", "clear", "cl", "recreate", "re", "diff", "list", "ls"],
+        // backup undo --cls / backup undo --force
+        "backup" if parts.len() >= 2 && matches!(parts[1], "undo" | "ud") => vec!["--cls", "--clear", "--force", "-f"],
+        // backup clear --force
+        "backup" if parts.len() >= 2 && matches!(parts[1], "clear" | "cl") => vec!["--force", "-f"],
+        // backup recreate --force
+        "backup" if parts.len() >= 2 && matches!(parts[1], "recreate" | "re") => vec!["--force", "-f"],
+        // report txt / report json / report md / report html / report pdf / report docx / report xlsx
+        "report" if parts.len() == 1 => vec!["txt", "json", "md", "html", "pdf", "docx", "xlsx"],
+        // ignore dir / ignore ext / ignore file
+        "ignore" if parts.len() == 1 => vec!["dir", "ext", "file"],
+        // care dir / care ext / care file
+        "care" if parts.len() == 1 => vec!["dir", "ext", "file"],
         // local init/deinit/help
         "local" => vec!["init", "--all", "-a", "deinit", "help"],
+        // init --all / init --ran / init --local
+        "init" if parts.len() == 1 => vec!["--all", "-a", "--ran", "--local"],
+        // deinit --all / deinit --ran / deinit --local
+        "deinit" if parts.len() == 1 => vec!["--all", "-a", "--ran", "--local"],
+        // showenv --all / showenv -d
+        "showenv" if parts.len() == 1 => vec!["--all", "-a", "-d", "--depth"],
+        // size --care
+        "size" if parts.len() == 1 => vec!["--care"],
+        // view flags
+        "view" if parts.len() == 1 => vec!["-s", "--size", "-c", "--cp", "--care", "-d", "--depth"],
         // ui (now a no-op after modern mode removal)
         "ui" => vec!["classic"],
+        // ntpkg install / ntpkg uninstall / ntpkg list / ntpkg use / ntpkg which / ntpkg available
+        "ntpkg" => vec![
+            "install", "i",
+            "uninstall", "rm",
+            "list", "ls",
+            "use",
+            "which",
+            "available", "avail",
+            "help",
+        ],
+        // tl file / tl ext / tl dir
+        "tl" if parts.len() == 1 => vec!["file", "ext", "dir"],
+        // dl flags
+        "dl" if !parts.is_empty() => vec!["--progress", "--resume", "--stop", "--cancel", "-o", "--output"],
+        // ping flags
+        "ping" if !parts.is_empty() => vec!["-c", "--count"],
+        // dns flags
+        "dns" if !parts.is_empty() => vec!["-t", "--type"],
+        // serve flags
+        "serve" if !parts.is_empty() => vec!["--port", "-p", "--bind", "-b", "--https", "-s", "--tunnel", "-t", "--spa", "--web-dir", "-w", "--help", "-h"],
+        // smtp flags
+        "smtp" if parts.len() == 1 => vec!["-i", "--server", "--id-ls"],
+        "smtp" if parts.len() >= 2 => vec![
+            "-i", "--server", "-p", "--port", "-u", "--user",
+            "-pwd", "--password", "--id", "--id-ls", "--id-info",
+            "--id-rm", "-t", "--to", "-c", "--cc", "--bcc",
+            "-s", "--subject", "-b", "--body", "-f", "--attach",
+            "-h", "--help",
+        ],
+        // up flags
+        "up" if !parts.is_empty() => vec!["-H", "--header", "-d", "--data", "--post"],
+        // http methods then flags
+        "http" if parts.len() == 1 => vec!["GET", "POST", "PUT", "DELETE", "PATCH", "HEAD"],
+        "http" if parts.len() >= 2 => vec![
+            "-H", "--header", "-d", "--data", "--json",
+            "-q", "--query", "-a", "--auth", "--bearer",
+            "-t", "--timeout", "-s", "--silent",
+            "-o", "--output", "-v", "--verbose",
+            "--no-pretty", "-h", "--help",
+        ],
+        // ne --init <file> / ne --super <file>
+        "ne" | "ntceditor" if parts.len() == 1 => vec!["--init", "--super"],
         // Default: no known subcommands
         _ => vec![],
     }
@@ -317,7 +449,7 @@ impl Hinter for NtcHinter {
                 }
             }
 
-            // Match against teleport names (for commands like go, cd, tp jump, tp to, tp rm, etc.)
+            // Match against teleport names (for commands like cd, tp jump, tp to, tp rm, etc.)
             if !teleports.is_empty() {
                 let lower = last_part.to_lowercase();
                 let mut matches: Vec<&str> = teleports
@@ -374,7 +506,27 @@ impl Hinter for NtcHinter {
                     let rest = &matches[0][typed.len() - last_word_start..];
                     return Some(rest.to_string());
                 }
-                // If no unique ran target match, fall through to subcommands
+                // If no unique ran target match, fall through to ntpkg names
+            }
+
+            // Match against ntpkg argument names (languages, versions, installed packages)
+            let ntpkg_names = ntpkg_names_for_command(parent_parts);
+            if !ntpkg_names.is_empty() {
+                let lower = last_part.to_lowercase();
+                let mut matches: Vec<&str> = ntpkg_names
+                    .iter()
+                    .filter(|name| name.starts_with(&lower) && name.len() > last_part.len())
+                    .map(|s| s.as_str())
+                    .collect();
+                matches.sort();
+                matches.dedup();
+
+                if matches.len() == 1 {
+                    let last_word_start = typed.len() - last_part.len();
+                    let rest = &matches[0][typed.len() - last_word_start..];
+                    return Some(rest.to_string());
+                }
+                // If no unique ntpkg name match, fall through to subcommands
             }
 
             let subs = subcommands_for(parent_parts);

@@ -3,7 +3,7 @@ use crossterm::style::{Print, ResetColor, SetBackgroundColor, SetForegroundColor
 use crossterm::terminal::{Clear, ClearType};
 use crossterm::queue;
 
-use super::super::{Editor, Mode};
+use super::super::{Editor, Focus};
 
 impl Editor {
     pub(crate) fn render_run_panel(&self, stdout: &mut std::io::Stdout) -> std::io::Result<()> {
@@ -12,22 +12,31 @@ impl Editor {
         let panel_top = split + 1;
         let panel_h = self.run_panel_height();
         let cols = self.term_w;
+        let eo = self.editor_offset();
+        let editor_cols = cols.saturating_sub(eo);
 
         for row in split..panel_top + panel_h {
-            queue!(stdout, MoveTo(0, row as u16), Clear(ClearType::CurrentLine))?;
+            queue!(stdout, MoveTo(eo as u16, row as u16), Clear(ClearType::UntilNewLine))?;
         }
 
         let sep_title = if let Some(ref cmd) = self.run_executing {
             format!(" EXECUTING: {} ", cmd)
+        } else if let Some(ref cmd) = self.last_run_cmd {
+            format!(" RUN: {}  ({} lines) ", cmd, self.run_lines.len())
         } else {
             format!(" RUN OUTPUT  ({} lines, j/k scroll, Esc/q close) ", self.run_lines.len())
         };
-        let sep_fill = cols.saturating_sub(sep_title.chars().count());
+        let sep_fill = editor_cols.saturating_sub(sep_title.chars().count());
         let sep = format!("{}{}", sep_title, "\u{2500}".repeat(sep_fill));
+        let sep_fg = if self.focus == Focus::Run {
+            theme.editor.run_header_fg
+        } else {
+            theme.editor.run_header_unfocused_fg
+        };
         queue!(
             stdout,
-            MoveTo(0, split as u16),
-            SetForegroundColor(theme.editor.run_header_fg.to_crossterm()),
+            MoveTo(eo as u16, split as u16),
+            SetForegroundColor(sep_fg.to_crossterm()),
             Print(&sep),
             ResetColor,
         )?;
@@ -37,13 +46,13 @@ impl Editor {
             let idx = self.sv.run + i;
             let row = panel_top + i;
             let line = self.run_lines.get(idx).map(|s| s.as_str()).unwrap_or("~");
-            let truncated = if line.len() > cols {
-                if line.is_char_boundary(cols) { &line[..cols] } else { &line[..line.floor_char_boundary(cols)] }
+            let truncated = if line.len() > editor_cols {
+                if line.is_char_boundary(editor_cols) { &line[..editor_cols] } else { &line[..line.floor_char_boundary(editor_cols)] }
             } else { line };
             if use_color {
                 queue!(
                     stdout,
-                    MoveTo(0, row as u16),
+                    MoveTo(eo as u16, row as u16),
                     SetBackgroundColor(theme.editor.run_panel_bg.to_crossterm()),
                     SetForegroundColor(theme.editor.run_output_fg.to_crossterm()),
                     Print(truncated),
@@ -53,7 +62,7 @@ impl Editor {
             } else {
                 queue!(
                     stdout,
-                    MoveTo(0, row as u16),
+                    MoveTo(eo as u16, row as u16),
                     Print(truncated),
                     ResetColor,
                     Clear(ClearType::UntilNewLine),
@@ -67,12 +76,8 @@ impl Editor {
     pub(crate) fn render_sidebar(&self, stdout: &mut std::io::Stdout) -> std::io::Result<()> {
         let theme = crate::utils::theme::ThemeManager::current();
         let use_color = self.editor_cfg.color_enabled;
-        let content_top = 1;
-        let rows = if self.mode == Mode::Run {
-            self.run_split_row().saturating_sub(1)
-        } else {
-            self.term_h.saturating_sub(4)
-        };
+        let content_top = 0;
+        let rows = self.term_h;
         let sw = self.sidebar.width;
         let nodes = &self.sidebar.nodes;
         let scroll = self.sidebar.scroll;
@@ -199,6 +204,198 @@ impl Editor {
                 Print('│'),
                 ResetColor,
             )?;
+        }
+
+        Ok(())
+    }
+
+    pub(crate) fn render_terminal_panel(&self, stdout: &mut std::io::Stdout) -> std::io::Result<()> {
+        let theme = crate::utils::theme::ThemeManager::current();
+        let split = self.run_split_row();
+        let panel_top = split + 1;
+        let panel_h = self.run_panel_height();
+        let cols = self.term_w;
+        let eo = self.editor_offset();
+        let editor_cols = cols.saturating_sub(eo);
+        let sb_col = cols.saturating_sub(1);
+
+        // Separator header
+        let sep_title = if let Some(ref term) = self.terminal {
+            format!(" {} ", term.title)
+        } else {
+            " TERMINAL ".to_string()
+        };
+        let sep_fill = editor_cols.saturating_sub(sep_title.chars().count());
+        let sep = format!("{}{}", sep_title, "\u{2500}".repeat(sep_fill));
+        let sep_fg = if self.focus == Focus::Terminal {
+            theme.editor.run_header_fg
+        } else {
+            theme.editor.run_header_unfocused_fg
+        };
+        queue!(
+            stdout,
+            MoveTo(eo as u16, split as u16),
+            SetForegroundColor(sep_fg.to_crossterm()),
+            Print(&sep),
+            ResetColor,
+        )?;
+
+        if let Some(ref term) = self.terminal {
+            let default_bg = (30, 30, 30);
+            let default_fg = (204, 204, 204);
+            let total = term.total_lines();
+            let scroll = self.sv.run.min(total.saturating_sub(1));
+            let scroll_x = self.sv.terminal_scroll_x;
+            let sb_len = term.scrollback.len();
+
+            // Cursor screen position (in absolute line indexes)
+            let cursor_abs_y = sb_len + term.cursor_y;
+
+            // Scrollbar
+            let vscroll_thumb_height;
+            let vscroll_thumb_start;
+            if total > panel_h {
+                vscroll_thumb_height = (panel_h * panel_h / total).max(1);
+                let max_scroll = total - panel_h;
+                vscroll_thumb_start = max_scroll.checked_div(1).map_or(0, |_| {
+                    scroll * (panel_h - vscroll_thumb_height) / max_scroll
+                });
+            } else {
+                vscroll_thumb_height = 0;
+                vscroll_thumb_start = 0;
+            }
+
+            let selection_range = term.selection_range();
+
+            for i in 0..panel_h {
+                let row = panel_top + i;
+                let line_idx = scroll + i;
+
+                // Set background for the entire row
+                queue!(
+                    stdout,
+                    MoveTo(eo as u16, row as u16),
+                    SetBackgroundColor(crossterm::style::Color::Rgb {
+                        r: default_bg.0, g: default_bg.1, b: default_bg.2,
+                    }),
+                    SetForegroundColor(crossterm::style::Color::Rgb {
+                        r: default_fg.0, g: default_fg.1, b: default_fg.2,
+                    }),
+                    Clear(ClearType::UntilNewLine),
+                )?;
+
+                // Check if this line has any selection cells
+                let sel_on_line = selection_range.map(|((sy, _), (ey, _))| {
+                    line_idx >= sy && line_idx <= ey
+                }).unwrap_or(false);
+
+                if line_idx < total {
+                    let line = term.get_line(line_idx);
+                    let mut last_fg = default_fg;
+                    let mut last_bg = default_bg;
+                    let mut need_move = true;
+                    let is_cursor_line = term.cursor_visible && line_idx == cursor_abs_y;
+
+                    let sel_start = selection_range.map(|r| r.0);
+                    let sel_end = selection_range.map(|r| r.1);
+
+                    let max_cells = editor_cols.saturating_sub(1);
+                    for (x, (ci, cell)) in (eo..).zip(line.iter().enumerate().skip(scroll_x).take(max_cells)) {
+                        let in_sel = sel_on_line && sel_start.zip(sel_end).map(|((sy, sx), (ey, ex))| {
+                            if line_idx == sy && line_idx == ey {
+                                ci >= sx && ci < ex
+                            } else if line_idx == sy {
+                                ci >= sx
+                            } else if line_idx == ey {
+                                ci < ex
+                            } else {
+                                true
+                            }
+                        }).unwrap_or(false);
+
+                        let is_cursor = is_cursor_line && ci == term.cursor_x;
+                        let (fg, bg) = if is_cursor {
+                            (default_bg, default_fg)
+                        } else if in_sel {
+                            (cell.bg, cell.fg)
+                        } else {
+                            (cell.fg, cell.bg)
+                        };
+
+                        let fg_changed = fg != last_fg;
+                        let bg_changed = bg != last_bg;
+
+                        if need_move || fg_changed || bg_changed {
+                            queue!(stdout, MoveTo(x as u16, row as u16))?;
+                            if fg_changed {
+                                queue!(stdout, SetForegroundColor(crossterm::style::Color::Rgb {
+                                    r: fg.0, g: fg.1, b: fg.2,
+                                }))?;
+                                last_fg = fg;
+                            }
+                            if bg_changed {
+                                queue!(stdout, SetBackgroundColor(crossterm::style::Color::Rgb {
+                                    r: bg.0, g: bg.1, b: bg.2,
+                                }))?;
+                                last_bg = bg;
+                            }
+                            need_move = false;
+                        }
+                        queue!(stdout, Print(if is_cursor { ' ' } else { cell.ch }))?;
+                    }
+
+                    // Left overflow indicator
+                    if scroll_x > 0 && line_idx < total {
+                        queue!(
+                            stdout,
+                            MoveTo(eo as u16, row as u16),
+                            SetForegroundColor(crossterm::style::Color::Rgb {
+                                r: default_fg.0, g: default_fg.1, b: default_fg.2,
+                            }),
+                            SetBackgroundColor(crossterm::style::Color::Rgb {
+                                r: default_bg.0, g: default_bg.1, b: default_bg.2,
+                            }),
+                            Print('\u{2039}'),
+                        )?;
+                    }
+
+                    // Right overflow indicator
+                    if line_idx < total && line.len() > scroll_x + max_cells {
+                        queue!(
+                            stdout,
+                            MoveTo((eo + max_cells - 1) as u16, row as u16),
+                            SetForegroundColor(crossterm::style::Color::Rgb {
+                                r: default_fg.0, g: default_fg.1, b: default_fg.2,
+                            }),
+                            SetBackgroundColor(crossterm::style::Color::Rgb {
+                                r: default_bg.0, g: default_bg.1, b: default_bg.2,
+                            }),
+                            Print('\u{203A}'),
+                        )?;
+                    }
+                }
+
+                // Render scrollbar on right edge
+                if vscroll_thumb_height > 0 {
+                    let in_thumb = i >= vscroll_thumb_start && i < vscroll_thumb_start + vscroll_thumb_height;
+                    let ch = if in_thumb { '\u{2588}' } else { '\u{2591}' };
+                    queue!(
+                        stdout,
+                        MoveTo(sb_col as u16, row as u16),
+                        SetBackgroundColor(crossterm::style::Color::Rgb {
+                            r: default_bg.0, g: default_bg.1, b: default_bg.2,
+                        }),
+                        SetForegroundColor(if in_thumb {
+                            theme.editor.scrollbar_thumb.to_crossterm()
+                        } else {
+                            theme.editor.scrollbar.to_crossterm()
+                        }),
+                        Print(ch),
+                        ResetColor,
+                    )?;
+                }
+            }
+            queue!(stdout, ResetColor)?;
         }
 
         Ok(())

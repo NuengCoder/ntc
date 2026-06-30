@@ -1,0 +1,3 @@
+#define a(nice) cat \
+                dog \
+                fish\

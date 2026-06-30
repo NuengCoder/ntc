@@ -23,13 +23,6 @@ pub struct LayoutElement {
     pub font_size_pt: Option<u32>,     // Estimated font size in points
 }
 
-/// A node in the hierarchical layout tree
-#[derive(Debug, Clone)]
-#[allow(dead_code)]
-pub struct LayoutNode {
-    pub element: LayoutElement,
-    pub children: Vec<LayoutNode>,
-}
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum ElementType {
@@ -137,47 +130,6 @@ pub fn detect_layout(img: &DynamicImage) -> Result<Vec<LayoutElement>> {
 /// Classify the image type (screenshot, photo, document, etc.)
 pub fn classify(img: &DynamicImage, edge_density: f32, text_density: f32) -> Classification {
     classify_image(img, edge_density, text_density)
-}
-
-/// Build a hierarchical layout tree from flat layout elements.
-/// Elements are nested as children if fully contained within a parent's bounds.
-#[allow(dead_code)]
-pub fn build_layout_tree(elements: Vec<LayoutElement>) -> Vec<LayoutNode> {
-    // Sort by area descending so larger containers come first
-    let mut sorted: Vec<LayoutElement> = elements;
-    sorted.sort_by(|a, b| {
-        let area_a = a.bounds.2 * a.bounds.3;
-        let area_b = b.bounds.2 * b.bounds.3;
-        area_b.cmp(&area_a)
-    });
-
-    let mut nodes: Vec<LayoutNode> = sorted.into_iter().map(|e| LayoutNode {
-        element: e,
-        children: Vec::new(),
-    }).collect();
-
-    // Assign children: if node B is fully inside node A, B is child of A
-    let mut i = 0;
-    while i < nodes.len() {
-        let mut j = i + 1;
-        while j < nodes.len() {
-            let (ax, ay, aw, ah) = nodes[i].element.bounds;
-            let (bx, by, bw, bh) = nodes[j].element.bounds;
-            // Check if j is fully inside i (with small tolerance)
-            let inside = bx >= ax && by >= ay
-                && bx + bw <= ax + aw
-                && by + bh <= ay + ah;
-            if inside {
-                let child = nodes.remove(j);
-                nodes[i].children.push(child);
-            } else {
-                j += 1;
-            }
-        }
-        i += 1;
-    }
-
-    nodes
 }
 
 /// Sort layout elements into reading order (top-to-bottom, left-to-right),

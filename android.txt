@@ -1,0 +1,17 @@
+ntc Android Install Instructions
+─────────────────────────────────────────
+
+1. Windows
+   ran android
+
+2. Pack into archive:
+   tar -czvf ntc-v$(ver)-aarch64-linux-android.tar.gz -C target/aarch64-linux-android/release ntc
+
+3. Android
+   adb push ntc-v$(ver)-aarch64-linux-android.tar.gz /sdcard/Download/
+   cp /sdcard/Download/ntc-v$(ver)-aarch64-linux-android.tar.gz ~/
+   tar -xzvf ntc-v$(ver)-aarch64-linux-android.tar.gz
+   mv ntc $PREFIX/bin/
+   chmod +x $PREFIX/bin/ntc
+   rm ntc-v$(ver)-aarch64-linux-android.tar.gz
+   ntc --version

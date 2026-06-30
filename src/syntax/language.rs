@@ -56,6 +56,7 @@ pub(super) fn has_block_comments(lang: SyntaxLanguage) -> bool {
             | SyntaxLanguage::GoMod
             | SyntaxLanguage::Css
             | SyntaxLanguage::Ps1
+            | SyntaxLanguage::Glsl
     )
 }
 
@@ -72,7 +73,7 @@ pub(super) fn has_pascal_comments(lang: SyntaxLanguage) -> bool {
 }
 
 pub(super) fn has_preprocessor(lang: SyntaxLanguage) -> bool {
-    matches!(lang, SyntaxLanguage::InnoSetup)
+    matches!(lang, SyntaxLanguage::InnoSetup | SyntaxLanguage::Glsl)
 }
 
 pub(super) fn is_char_literal_supported(lang: SyntaxLanguage) -> bool {
@@ -485,6 +486,18 @@ pub(super) fn is_keyword(lang: SyntaxLanguage, word: &str) -> bool {
                 | "Get-Help" | "Get-Command" | "Get-Module"
                 | "Get-Member" | "Format-Table" | "Format-List" | "Format-Wide"
         ),
+        SyntaxLanguage::Glsl => matches!(
+            word,
+            "break" | "continue" | "do" | "for" | "while" | "if" | "else"
+                | "switch" | "case" | "default" | "discard" | "return"
+                | "attribute" | "const" | "uniform" | "varying" | "layout"
+                | "centroid" | "flat" | "smooth" | "noperspective"
+                | "in" | "out" | "inout" | "buffer" | "shared"
+                | "coherent" | "volatile" | "restrict" | "readonly" | "writeonly"
+                | "subroutine" | "struct" | "void" | "true" | "false"
+                | "precision" | "highp" | "mediump" | "lowp"
+                | "invariant" | "precise"
+        ),
         SyntaxLanguage::InnoSetup => matches!(
             word,
             "and" | "array" | "begin" | "case" | "const" | "div" | "do" | "downto"
@@ -501,6 +514,48 @@ pub(super) fn is_keyword(lang: SyntaxLanguage, word: &str) -> bool {
 
 pub(super) fn is_type_name(lang: SyntaxLanguage, word: &str) -> bool {
     match lang {
+        SyntaxLanguage::Glsl => matches!(
+            word,
+            "float" | "double" | "int" | "uint" | "bool"
+                | "vec2" | "vec3" | "vec4"
+                | "ivec2" | "ivec3" | "ivec4"
+                | "uvec2" | "uvec3" | "uvec4"
+                | "dvec2" | "dvec3" | "dvec4"
+                | "bvec2" | "bvec3" | "bvec4"
+                | "mat2" | "mat3" | "mat4"
+                | "mat2x2" | "mat2x3" | "mat2x4"
+                | "mat3x2" | "mat3x3" | "mat3x4"
+                | "mat4x2" | "mat4x3" | "mat4x4"
+                | "dmat2" | "dmat3" | "dmat4"
+                | "sampler1D" | "sampler2D" | "sampler3D"
+                | "samplerCube" | "samplerCubeShadow"
+                | "sampler1DArray" | "sampler2DArray"
+                | "sampler1DShadow" | "sampler2DShadow"
+                | "sampler1DArrayShadow" | "sampler2DArrayShadow"
+                | "sampler2DRect" | "sampler2DRectShadow"
+                | "samplerBuffer" | "sampler2DMS" | "sampler2DMSArray"
+                | "sampler3DRect"
+                | "isampler1D" | "isampler2D" | "isampler3D"
+                | "isamplerCube" | "isampler1DArray" | "isampler2DArray"
+                | "isampler2DRect" | "isamplerBuffer"
+                | "isampler2DMS" | "isampler2DMSArray"
+                | "usampler1D" | "usampler2D" | "usampler3D"
+                | "usamplerCube" | "usampler1DArray" | "usampler2DArray"
+                | "usampler2DRect" | "usamplerBuffer"
+                | "usampler2DMS" | "usampler2DMSArray"
+                | "image1D" | "image2D" | "image3D"
+                | "imageCube" | "image1DArray" | "image2DArray"
+                | "image2DRect" | "imageBuffer"
+                | "image2DMS" | "image2DMSArray"
+                | "iimage1D" | "iimage2D" | "iimage3D"
+                | "iimageCube" | "iimage1DArray" | "iimage2DArray"
+                | "iimage2DRect" | "iimageBuffer"
+                | "iimage2DMS" | "iimage2DMSArray"
+                | "uimage1D" | "uimage2D" | "uimage3D"
+                | "uimageCube" | "uimage1DArray" | "uimage2DArray"
+                | "uimage2DRect" | "uimageBuffer"
+                | "uimage2DMS" | "uimage2DMSArray"
+        ),
         SyntaxLanguage::Rust => matches!(
             word,
             "i8" | "i16" | "i32" | "i64" | "i128" | "isize" | "u8" | "u16" | "u32"
@@ -691,7 +746,7 @@ pub(super) fn is_builtin(lang: SyntaxLanguage, word: &str) -> bool {
                 | "selection_bg" | "search_match_bg" | "search_current_bg"
                 | "border" | "scrollbar" | "scrollbar_thumb"
                 | "sidebar_dir" | "sidebar_file" | "sidebar_current" | "sidebar_selected"
-                | "run_header_fg" | "run_output_fg"
+                | "run_header_fg" | "run_header_unfocused_fg" | "run_output_fg"
         ),
         SyntaxLanguage::NtcMath => matches!(
             word,
@@ -784,6 +839,86 @@ pub(super) fn is_builtin(lang: SyntaxLanguage, word: &str) -> bool {
                 | "FileCopy" | "FindFirst" | "FindNext" | "FindClose"
                 | "GetFileVersion" | "GetDriveLetters" | "DriveExists"
                 | "DiskFree" | "DiskSize" | "WrapText"
+        ),
+        SyntaxLanguage::Glsl => matches!(
+            word,
+            // Built-in variables
+            "gl_VertexID" | "gl_InstanceID" | "gl_VertexIndex" | "gl_InstanceIndex"
+                | "gl_Position" | "gl_PointSize" | "gl_ClipDistance" | "gl_CullDistance"
+                | "gl_FragCoord" | "gl_FrontFacing" | "gl_PointCoord"
+                | "gl_SampleID" | "gl_SamplePosition" | "gl_SampleMaskIn" | "gl_SampleMask"
+                | "gl_FragColor" | "gl_FragData" | "gl_FragDepth" | "gl_LastFragDepth"
+                | "gl_PrimitiveID" | "gl_Layer" | "gl_ViewportIndex" | "gl_ViewportMask"
+                | "gl_PatchVerticesIn" | "gl_TessLevelOuter" | "gl_TessLevelInner"
+                | "gl_TessCoord" | "gl_InvocationID"
+                | "gl_GlobalInvocationID" | "gl_LocalInvocationID" | "gl_LocalInvocationIndex"
+                | "gl_WorkGroupSize" | "gl_WorkGroupID" | "gl_NumWorkGroups"
+                | "gl_SubgroupSize" | "gl_SubgroupInvocationID"
+                | "gl_SubgroupEqMask" | "gl_SubgroupGeMask" | "gl_SubgroupGtMask"
+                | "gl_SubgroupLeMask" | "gl_SubgroupLtMask"
+                | "gl_BaseVertex" | "gl_BaseInstance" | "gl_DrawID"
+                | "gl_DeviceIndex" | "gl_ViewIndex"
+                // Built-in constants
+                | "gl_MaxVertexAttribs" | "gl_MaxTextureImageUnits"
+                | "gl_MaxVertexTextureImageUnits" | "gl_MaxCombinedTextureImageUnits"
+                | "gl_MaxVaryingVectors" | "gl_MaxVertexUniformComponents"
+                | "gl_MaxFragmentUniformComponents" | "gl_MaxVaryingFloats"
+                | "gl_MaxVertexOutputVectors" | "gl_MaxFragmentInputVectors"
+                | "gl_MaxDrawBuffers" | "gl_MaxClipDistances"
+                | "gl_MaxComputeWorkGroupCount" | "gl_MaxComputeWorkGroupSize"
+                | "gl_MaxComputeUniformComponents" | "gl_MaxComputeAtomicCounters"
+                | "gl_MaxComputeAtomicCounterBuffers"
+                | "gl_MaxGeometryInputComponents" | "gl_MaxGeometryOutputComponents"
+                | "gl_MaxGeometryTotalOutputComponents"
+                | "gl_MaxTessControlInputComponents" | "gl_MaxTessControlOutputComponents"
+                | "gl_MaxTessPatchComponents"
+                | "gl_MaxTessEvaluationInputComponents" | "gl_MaxTessEvaluationOutputComponents"
+                // Built-in functions: math
+                | "sin" | "cos" | "tan" | "asin" | "acos" | "atan" | "sinh" | "cosh" | "tanh"
+                | "asinh" | "acosh" | "atanh"
+                | "pow" | "exp" | "log" | "exp2" | "log2"
+                | "sqrt" | "inversesqrt"
+                | "abs" | "sign" | "floor" | "ceil" | "trunc" | "round" | "roundEven"
+                | "fract" | "mod" | "modf" | "min" | "max" | "clamp"
+                | "mix" | "step" | "smoothstep"
+                | "length" | "distance" | "dot" | "cross" | "normalize"
+                | "faceforward" | "reflect" | "refract"
+                | "matrixCompMult" | "transpose" | "determinant" | "inverse"
+                | "outerProduct"
+                | "lessThan" | "greaterThan" | "lessThanEqual" | "greaterThanEqual"
+                | "equal" | "notEqual" | "any" | "all" | "not"
+                | "isnan" | "isinf" | "isfinite" | "isnormal"
+                | "floatBitsToInt" | "floatBitsToUint" | "intBitsToFloat" | "uintBitsToFloat"
+                | "frexp" | "ldexp"
+                | "packUnorm2x16" | "unpackUnorm2x16"
+                | "packSnorm2x16" | "unpackSnorm2x16"
+                | "packHalf2x16" | "unpackHalf2x16"
+                | "packDouble2x32" | "unpackDouble2x32"
+                // Built-in functions: texture
+                | "texture" | "textureLod" | "textureProj" | "textureGrad"
+                | "textureLodOffset" | "textureProjLod" | "textureProjGrad"
+                | "textureGather" | "textureGatherOffset" | "textureGatherOffsets"
+                | "textureSize" | "textureQueryLod" | "textureQueryLevels"
+                | "texelFetch" | "texelFetchOffset"
+                // Built-in functions: derivative
+                | "dFdx" | "dFdy" | "fwidth" | "dFdxFine" | "dFdyFine" | "fwidthFine"
+                | "dFdxCoarse" | "dFdyCoarse" | "fwidthCoarse"
+                // Built-in functions: compute / memory
+                | "barrier" | "memoryBarrier" | "memoryBarrierAtomicCounter"
+                | "memoryBarrierBuffer" | "memoryBarrierImage" | "memoryBarrierShared"
+                | "groupMemoryBarrier"
+                | "atomicAdd" | "atomicMin" | "atomicMax" | "atomicAnd"
+                | "atomicOr" | "atomicXor" | "atomicExchange" | "atomicCompSwap"
+                | "atomicCounterIncrement" | "atomicCounterDecrement" | "atomicCounter"
+                | "imageLoad" | "imageStore" | "imageSize"
+                | "imageAtomicAdd" | "imageAtomicMin" | "imageAtomicMax"
+                | "imageAtomicAnd" | "imageAtomicOr" | "imageAtomicXor"
+                | "imageAtomicExchange" | "imageAtomicCompSwap"
+                | "subpassLoad"
+                // Built-in functions: interpolation
+                | "interpolateAtCentroid" | "interpolateAtSample" | "interpolateAtOffset"
+                // Built-in functions: packing
+                | "packSnorm4x8" | "packUnorm4x8" | "unpackSnorm4x8" | "unpackUnorm4x8"
         ),
         SyntaxLanguage::LockFile => matches!(word, "name" | "version" | "source" | "dependencies" | "checksum"),
         _ => matches!(

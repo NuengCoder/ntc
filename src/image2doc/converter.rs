@@ -16,7 +16,7 @@ pub struct ImageData {
 
 /// Load image and detect its format from the decoder
 pub fn load_image(path: &Path) -> Result<(DynamicImage, ImageFormat)> {
-    let reader = image::io::Reader::open(path)
+    let reader = image::ImageReader::open(path)
         .with_context(|| format!("Failed to open image: {}", path.display()))?;
     let format = reader
         .format()

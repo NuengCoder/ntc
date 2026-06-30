@@ -10,7 +10,11 @@ const TEXT_EXTENSIONS: &[&str] = &[
     "sh", "bat", "sql", "r", "swift", "kt", "scala", "lua", "perl",
     "csv", "gitignore", "dockerfile", "makefile", "readme", "license",
     "jsx", "jsp", "tsx", "dart", "cs", "kts", "mq4", "mq5", "mqh" , "c3",
-    "nim" , "jai" , "zig" , "m" , "iss" , "ntc.ral" , "ntc.igcare","ntc.math","ntc_theme"
+    "nim" , "jai" , "zig" , "m" , "iss" , "ntc.ral" , "ntc.igcare","ntc.math","ntc_theme",
+    "vert","frag","vs","fs","gs","vsh","fsh","gsh","csh",
+    "glsl","geom","comp","tesc","tese",
+    "rgen","rint","rahit","rchit","rmiss","rcall",
+    "mesh","task","hlsl","spvasm",
 ];
 
 /// Known file extensions that are unsupported but should appear in tree
@@ -22,7 +26,8 @@ const KNOWN_UNSUPPORTED_EXTENSIONS: &[&str] = &[
     "zip", "rar", "7z", "tar", "gz","exe" , "dll" , "so" , 
     "bin" , "iso" , "dmg" , "vmdk" , "qcow2", "apk" , "ipa" , 
     "jar" , "war" , "ear" , "msi" , "deb" , "rpm", "qcow2" ,
-    "vhd" , "vhdx" , "img" , "ex4" ,"ex5"
+    "vhd" , "vhdx" , "img" , "ex4" ,"ex5",
+    "spv" , "spirv"
 ];
 
 /// A snapshot of the config sets needed for format-checking.

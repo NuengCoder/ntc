@@ -1,5 +1,5 @@
 use crate::config::Config;
-use crate::explorer::{human_readable_size, calculate_dir_size, calculate_total_size};
+use crate::explorer::{human_readable_size, format_duration, calculate_dir_size, calculate_total_size};
 use crate::filetype::is_supported_format;
 use crate::navigator::{clear_screen, Navigator};
 use crate::output::{cat_file, print_error, print_success, print_warning, print_info};
@@ -82,7 +82,30 @@ pub fn cmd_exit(_args: &str, _nav: &mut Navigator) -> Result<bool> {
 
 pub fn cmd_ne(args: &str, nav: &mut Navigator) -> Result<bool> {
     let args = args.trim();
-    let raw_path = if let Some(init_path) = args.strip_prefix("--init ") {
+    let raw_path = if let Some(hyper_args) = args.strip_prefix("--hyper ") {
+        let mut parts = hyper_args.trim().splitn(3, ' ');
+        let name = parts.next().unwrap_or("").trim();
+        let mut lang = "c";
+        if let Some(p) = parts.next() {
+            if p == "--lang" {
+                if let Some(l) = parts.next() { lang = l.trim(); }
+            }
+        }
+        if name.is_empty() || name.contains('.') {
+            print_error("Usage: ne --hyper <name> --lang <lang>  (name must not contain extension)");
+            return Ok(false);
+        }
+        match crate::editor::init_hyper_project(name, lang) {
+            Ok(_) => eprintln!("Created hyper project: {}", name),
+            Err(e) => print_error(&format!("Hyper project error: {}", e)),
+        }
+        return Ok(false);
+    } else if let Some(super_path) = args.strip_prefix("--super ") {
+        let p = std::path::PathBuf::from(super_path.trim());
+        let _ = crate::editor::init_super_file(&p);
+        eprintln!("Created super template: {}", p.display());
+        p
+    } else if let Some(init_path) = args.strip_prefix("--init ") {
         let p = std::path::PathBuf::from(init_path.trim());
         let _ = crate::editor::init_file(&p);
         eprintln!("Created template: {}", p.display());
@@ -97,7 +120,23 @@ pub fn cmd_ne(args: &str, nav: &mut Navigator) -> Result<bool> {
         print_info(&format!("Opened welcome screen in {}", nav.current_path().display()));
         welcome
     } else {
-        std::path::PathBuf::from(args.trim())
+        // Support "file:line" syntax (e.g. main.rs:42, src/main.rs:42)
+        let trimmed = args.trim();
+        if let Some((file_part, line_part)) = trimmed.rsplit_once(':') {
+            if let Ok(line) = line_part.parse::<usize>() {
+                if line > 0 {
+                    let p = std::path::PathBuf::from(file_part);
+                    crate::editor::GOTO_LINE.store(line, std::sync::atomic::Ordering::SeqCst);
+                    p
+                } else {
+                    std::path::PathBuf::from(trimmed)
+                }
+            } else {
+                std::path::PathBuf::from(trimmed)
+            }
+        } else {
+            std::path::PathBuf::from(trimmed)
+        }
     };
     let path = if raw_path.is_dir() {
         let welcome = raw_path.join("welcome.ntcEditor");
@@ -121,7 +160,16 @@ pub fn cmd_ne(args: &str, nav: &mut Navigator) -> Result<bool> {
 }
 
 pub fn cmd_size(args: &str, nav: &mut Navigator) -> Result<bool> {
-    let care = args.trim() == "--care";
+    let mut care = false;
+    let mut show_time = false;
+    for arg in args.split_whitespace() {
+        match arg {
+            "--care" => care = true,
+            "--time" | "-t" => show_time = true,
+            _ => {}
+        }
+    }
+    let start = std::time::Instant::now();
     let total = if care {
         run_with_spinner("Calculating directory size...", || {
             calculate_total_size(nav.current_path())
@@ -131,10 +179,12 @@ pub fn cmd_size(args: &str, nav: &mut Navigator) -> Result<bool> {
             calculate_dir_size(nav.current_path())
         })
     };
+    let elapsed = start.elapsed();
     let bytes_str = format!("{}", total);
     let human_str = human_readable_size(total);
+    let time_str = format_duration(elapsed);
     let max_label = 8;
-    let max_value = bytes_str.len().max(human_str.len());
+    let max_value = bytes_str.len().max(human_str.len()).max(time_str.len());
     let w = max_label + max_value + 10;
 
     println!();
@@ -143,6 +193,10 @@ pub fn cmd_size(args: &str, nav: &mut Navigator) -> Result<bool> {
     println!("├{}┤", "─".repeat(w));
     println!("│ Bytes: {:<w$} │", bytes_str.yellow(), w = w - 9);
     println!("│ Human: {:<w$} │", human_str.green().bold(), w = w - 9);
+    if show_time {
+        println!("├{}┤", "─".repeat(w));
+        println!("│ Time:  {:<w$} │", time_str.cyan(), w = w - 9);
+    }
     println!("└{}┘", "─".repeat(w));
     Ok(false)
 }
@@ -255,14 +309,27 @@ pub fn cmd_tp(args: &str, nav: &mut Navigator) -> Result<bool> {
 
 pub fn cmd_gs(args: &str, nav: &mut Navigator) -> Result<bool> {
     if args.is_empty() {
-        print_error("Usage: gs <pattern> [-d <depth>]");
+        print_error("Usage: gs <pattern> [-d <depth>] [-i]");
         println!("  gs main             # search file contents using config depth");
         println!("  gs main -d 5        # search up to 5 levels deep");
-        println!("  gs fn main          # search for 'fn' in source code");
+        println!("  gs -i main          # interactive mode (browse results, Enter to open)");
+        println!("  gs -i main -d 3     # interactive mode with depth limit");
         return Ok(false);
     }
-    let (pattern, max_depth) = parse_search_args(args);
+    let interactive = args.split_whitespace().any(|s| s == "-i");
+    let clean_args = if interactive {
+        args.split_whitespace()
+            .filter(|s| *s != "-i")
+            .collect::<Vec<_>>()
+            .join(" ")
+    } else {
+        args.to_string()
+    };
+    let (pattern, max_depth) = parse_search_args(&clean_args);
     let results = crate::search::search_content(nav.current_path(), &pattern, max_depth);
+    if interactive {
+        return super::gs_interactive::run_gs_interactive(results, nav.current_path());
+    }
     let output  = crate::search::format_content_results(&results, &pattern, max_depth);
     print!("{}", output);
     Ok(false)
@@ -488,6 +555,70 @@ pub fn cmd_rmf(args: &str, _nav: &mut Navigator) -> Result<bool> {
                 Ok(()) => print_success(&format!("Removed: {}", args)),
                 Err(e) => print_error(&format!("rmf: {}", e)),
             }
+        }
+    }
+    Ok(false)
+}
+
+pub fn cmd_rnmf(args: &str, _nav: &mut Navigator) -> Result<bool> {
+    let args = args.trim();
+    if args.is_empty() {
+        print_error("rnmf: missing operand");
+        println!("  Usage: rnmf <old_name> <new_name>");
+        return Ok(false);
+    }
+    let parts: Vec<&str> = args.splitn(2, ' ').collect();
+    if parts.len() < 2 {
+        print_error("rnmf: missing operand");
+        println!("  Usage: rnmf <old_name> <new_name>");
+        return Ok(false);
+    }
+    let old = parts[0];
+    let new = parts[1];
+    let old_path = std::path::Path::new(old);
+    let new_path = std::path::Path::new(new);
+    if !old_path.exists() {
+        print_error(&format!("rnmf: '{}' does not exist", old));
+    } else if old_path.is_dir() {
+        print_error(&format!("rnmf: '{}' is a directory (use rnmd instead)", old));
+    } else if new_path.exists() {
+        print_error(&format!("rnmf: '{}' already exists", new));
+    } else {
+        match std::fs::rename(old_path, new_path) {
+            Ok(()) => print_success(&format!("Renamed '{}' -> '{}'", old, new)),
+            Err(e) => print_error(&format!("rnmf: {}", e)),
+        }
+    }
+    Ok(false)
+}
+
+pub fn cmd_rnmd(args: &str, _nav: &mut Navigator) -> Result<bool> {
+    let args = args.trim();
+    if args.is_empty() {
+        print_error("rnmd: missing operand");
+        println!("  Usage: rnmd <old_name> <new_name>");
+        return Ok(false);
+    }
+    let parts: Vec<&str> = args.splitn(2, ' ').collect();
+    if parts.len() < 2 {
+        print_error("rnmd: missing operand");
+        println!("  Usage: rnmd <old_name> <new_name>");
+        return Ok(false);
+    }
+    let old = parts[0];
+    let new = parts[1];
+    let old_path = std::path::Path::new(old);
+    let new_path = std::path::Path::new(new);
+    if !old_path.exists() {
+        print_error(&format!("rnmd: '{}' does not exist", old));
+    } else if !old_path.is_dir() {
+        print_error(&format!("rnmd: '{}' is not a directory", old));
+    } else if new_path.exists() {
+        print_error(&format!("rnmd: '{}' already exists", new));
+    } else {
+        match std::fs::rename(old_path, new_path) {
+            Ok(()) => print_success(&format!("Renamed directory '{}' -> '{}'", old, new)),
+            Err(e) => print_error(&format!("rnmd: {}", e)),
         }
     }
     Ok(false)

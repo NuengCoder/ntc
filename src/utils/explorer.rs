@@ -4,9 +4,70 @@ use indicatif::ProgressBar;
 use rayon::prelude::*;
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
+use std::sync::Mutex;
+use std::time::Instant;
 use walkdir::WalkDir;
 
-#[derive(Debug)]
+type TreeCacheKey = (String, usize, bool, bool, bool);
+type TreeCacheValue = (Instant, TreeNode);
+type TreeCache = std::sync::LazyLock<Mutex<HashMap<TreeCacheKey, TreeCacheValue>>>;
+
+// Tree output cache: key = (root_path, max_depth, include_files, show_sizes, care_sizes)
+// Value = (timestamp, cached tree)
+static TREE_CACHE: TreeCache =
+    std::sync::LazyLock::new(|| Mutex::new(HashMap::new()));
+
+/// Per-file size cache. Populated by calculate_total_size/calculate_dir_size,
+/// read by compute_tree_sizes to avoid redundant fs::metadata calls between
+/// chained commands like `size --care && view --size --care`.
+static FILE_SIZE_CACHE: std::sync::LazyLock<Mutex<HashMap<PathBuf, u64>>> =
+    std::sync::LazyLock::new(|| Mutex::new(HashMap::new()));
+
+fn get_cached_size(path: &Path) -> Option<u64> {
+    FILE_SIZE_CACHE.lock().ok()?.get(path).copied()
+}
+
+fn set_cached_size(path: PathBuf, size: u64) {
+    if let Ok(mut cache) = FILE_SIZE_CACHE.lock() {
+        cache.insert(path, size);
+    }
+}
+
+/// Clear the file-size cache.
+pub fn invalidate_size_cache() {
+    if let Ok(mut cache) = FILE_SIZE_CACHE.lock() {
+        cache.clear();
+    }
+}
+
+/// Invalidate the tree cache. Call this when the filesystem is known to have changed.
+pub fn invalidate_tree_cache() {
+    if let Ok(mut cache) = TREE_CACHE.lock() {
+        cache.clear();
+    }
+    invalidate_size_cache();
+}
+
+/// Get a cached tree if available and fresh (TTL: 5 seconds).
+fn get_cached_tree(key: &(String, usize, bool, bool, bool)) -> Option<TreeNode> {
+    if let Ok(cache) = TREE_CACHE.lock() {
+        if let Some((ts, tree)) = cache.get(key) {
+            if ts.elapsed().as_secs() < 5 {
+                return Some(tree.clone());
+            }
+        }
+    }
+    None
+}
+
+/// Store a tree in the cache.
+fn set_cached_tree(key: (String, usize, bool, bool, bool), tree: TreeNode) {
+    if let Ok(mut cache) = TREE_CACHE.lock() {
+        cache.insert(key, (Instant::now(), tree));
+    }
+}
+
+#[derive(Debug, Clone)]
 pub struct TreeNode {
     pub name: String,
     pub path: String,
@@ -35,6 +96,13 @@ pub struct TreeNode {
  ) -> TreeNode {
     let max_depth = max_depth_override.unwrap_or(Config::global_get_max_depth());
     let root = Path::new(root_path);
+
+    // Check tree cache
+    let cache_key = (root_path.to_string(), max_depth, include_files, false, false);
+    if let Some(cached) = get_cached_tree(&cache_key) {
+        return cached;
+    }
+
      let root_name = root
          .file_name()
          .unwrap_or_default()
@@ -198,9 +266,12 @@ pub struct TreeNode {
          }
      }
 
-     // Return the root node of the assembled tree
-      root_node
-}
+      // Cache the result for fast repeated lookups
+      set_cached_tree(cache_key, root_node.clone());
+
+      // Return the root node of the assembled tree
+       root_node
+ }
  
  // =========================================================================
  // Pre-computed tree sizing (replaces repeated calculate_dir_size calls)
@@ -216,14 +287,19 @@ pub fn compute_tree_sizes(node: &mut TreeNode, pb: Option<&ProgressBar>, care: b
          if child.is_dir {
              compute_tree_sizes(child, pb, care);
          } else {
-             child.size = std::fs::metadata(&child.path).map(|m| m.len()).ok();
+             let path = Path::new(&child.path);
+             child.size = get_cached_size(path)
+                 .or_else(|| std::fs::metadata(path).map(|m| m.len()).ok());
+             if let Some(s) = child.size {
+                 set_cached_size(PathBuf::from(&child.path), s);
+             }
          }
      });
- 
+
      if !node.is_dir {
          return;
      }
- 
+
      let total = if care {
          calculate_total_size(Path::new(&node.path))
      } else {
@@ -271,7 +347,14 @@ pub fn calculate_dir_size(path: &Path) -> u64 {
     let ignored_dirs = Config::get_ignored_dirs_combined();
     walk_files(path, &ignored_dirs)
         .par_iter()
-        .map(|p| std::fs::metadata(p).map(|m| m.len()).unwrap_or(0))
+        .map(|p| {
+            if let Some(size) = get_cached_size(p) {
+                return size;
+            }
+            let size = std::fs::metadata(p).map(|m| m.len()).unwrap_or(0);
+            set_cached_size(p.clone(), size);
+            size
+        })
         .sum()
 }
 
@@ -288,7 +371,14 @@ fn walk_files_all(path: &Path) -> Vec<PathBuf> {
 pub fn calculate_total_size(path: &Path) -> u64 {
     walk_files_all(path)
         .par_iter()
-        .map(|p| std::fs::metadata(p).map(|m| m.len()).unwrap_or(0))
+        .map(|p| {
+            if let Some(size) = get_cached_size(p) {
+                return size;
+            }
+            let size = std::fs::metadata(p).map(|m| m.len()).unwrap_or(0);
+            set_cached_size(p.clone(), size);
+            size
+        })
         .sum()
 }
 
@@ -299,13 +389,18 @@ pub fn calculate_total_size(path: &Path) -> u64 {
         .par_iter()
         .map(|p| {
             pb.inc(1);
-            std::fs::metadata(p).map(|m| m.len()).unwrap_or(0)
+            if let Some(size) = get_cached_size(p) {
+                return size;
+            }
+            let size = std::fs::metadata(p).map(|m| m.len()).unwrap_or(0);
+            set_cached_size(p.clone(), size);
+            size
         })
         .sum()
  }
 
- /// Convert bytes to human-readable string
- pub fn human_readable_size(bytes: u64) -> String {
+/// Convert bytes to human-readable string
+pub fn human_readable_size(bytes: u64) -> String {
     const UNITS: &[&str] = &["B", "KB", "MB", "GB", "TB", "PB"];
     if bytes == 0 {
         return "0 B".to_string();
@@ -320,6 +415,19 @@ pub fn calculate_total_size(path: &Path) -> u64 {
         format!("{} {}", bytes, UNITS[unit_idx])
     } else {
         format!("{:.2} {}", size, UNITS[unit_idx])
+    }
+}
+
+/// Format a Duration into a human-readable elapsed time string.
+pub fn format_duration(d: std::time::Duration) -> String {
+    let total_ms = d.as_millis();
+    if total_ms < 1000 {
+        format!("{}ms", total_ms)
+    } else if total_ms < 60_000 {
+        format!("{}.{:03}s", total_ms / 1000, total_ms % 1000)
+    } else {
+        let secs = total_ms / 1000;
+        format!("{}m {:02}s", secs / 60, secs % 60)
     }
 }
  

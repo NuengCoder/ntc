@@ -1,6 +1,4 @@
-#[allow(dead_code)]
 pub struct TutorialStep {
-    pub id: &'static str,
     pub title: &'static str,
     pub lines: &'static [&'static str],
     pub demo: Option<&'static str>,
@@ -9,7 +7,6 @@ pub struct TutorialStep {
 
 pub const STEPS: &[TutorialStep] = &[
     TutorialStep {
-        id: "welcome",
         title: "Welcome to NTC",
         lines: &[
             "NTC (Navigate, Toolkit, Center) is a modern command-line tool for",
@@ -26,24 +23,21 @@ pub const STEPS: &[TutorialStep] = &[
         try_it: Some("Type \'help\' at any time to see all available commands"),
     },
     TutorialStep {
-        id: "navigation",
         title: "Navigation",
         lines: &[
             "NTC organizes your filesystem as an interactive directory tree.",
             "You can move around and inspect your project structure easily:",
             "",
-            "  go <path>      — Navigate to a directory and show its tree",
-            "  cd <path>      — Same as go",
+            "  cd <path>      — Navigate to a directory and show its tree",
             "  back           — Return to the previous directory",
             "  where          — Print your current directory path",
             "  gos            — List subdirectories and pick one",
             "  godrive        — Browse Windows drives (Windows only)",
         ],
         demo: Some("where"),
-        try_it: Some("Try: go ..  to go up one level"),
+        try_it: Some("Try: cd ..  to go up one level"),
     },
     TutorialStep {
-        id: "search",
         title: "Searching Files and Directories",
         lines: &[
             "Quickly find files and directories by name or pattern:",
@@ -60,7 +54,6 @@ pub const STEPS: &[TutorialStep] = &[
         try_it: Some("Try: fs *.rs   (or any pattern you like)"),
     },
     TutorialStep {
-        id: "reports",
         title: "Project Reports",
         lines: &[
             "Generate reports of your project structure and content:",
@@ -78,7 +71,6 @@ pub const STEPS: &[TutorialStep] = &[
         try_it: Some("Try: txt -d 2  for a deeper report"),
     },
     TutorialStep {
-        id: "file-ops",
         title: "File Operations",
         lines: &[
             "Create and manage files and directories:",
@@ -95,7 +87,6 @@ pub const STEPS: &[TutorialStep] = &[
         try_it: Some("Try: mkd test_dir  to create a directory"),
     },
     TutorialStep {
-        id: "editor",
         title: "Built-in Text Editor",
         lines: &[
             "NTC includes a full-featured terminal text editor:",
@@ -114,7 +105,6 @@ pub const STEPS: &[TutorialStep] = &[
         try_it: Some("Try: ne myfile.txt  then press i to type, Esc, :wq to save & quit"),
     },
     TutorialStep {
-        id: "themes",
         title: "Themes",
         lines: &[
             "Customize the look and feel of NTC:",
@@ -132,7 +122,6 @@ pub const STEPS: &[TutorialStep] = &[
         try_it: Some("Try: theme default  or  theme light"),
     },
     TutorialStep {
-        id: "backups",
         title: "Backups",
         lines: &[
             "Protect your work with the built-in backup system:",
@@ -149,7 +138,6 @@ pub const STEPS: &[TutorialStep] = &[
         try_it: Some("Try: bkup  to create your first backup"),
     },
     TutorialStep {
-        id: "configuration",
         title: "Configuration",
         lines: &[
             "Configure NTC to match your workflow:",
@@ -167,7 +155,6 @@ pub const STEPS: &[TutorialStep] = &[
         try_it: Some("Try: setD 3  to change tree depth to 3"),
     },
     TutorialStep {
-        id: "teleports",
         title: "Teleport Shortcuts",
         lines: &[
             "Create shortcuts to frequently used directories:",
@@ -184,7 +171,6 @@ pub const STEPS: &[TutorialStep] = &[
         try_it: Some("Try: tp add work C:\\Users\\YourName\\Projects\\work"),
     },
     TutorialStep {
-        id: "aliases",
         title: "Aliases",
         lines: &[
             "Create command shortcuts and custom commands:",
@@ -199,15 +185,14 @@ pub const STEPS: &[TutorialStep] = &[
             "They support chaining with && for multi-step commands.",
         ],
         demo: Some("ral list"),
-        try_it: Some("Try: ral add ll go .  then type ll to test it"),
+        try_it: Some("Try: ral add ll cd .  then type ll to test it"),
     },
     TutorialStep {
-        id: "completion",
         title: "You're All Set!",
         lines: &[
             "You've completed the NTC tutorial. Here's a quick recap:",
             "",
-            "  Navigation  — go, cd, back, where",
+            "  Navigation  — cd, back, where",
             "  Search      — fs, ds, locate, fgo",
             "  Reports     — txt, html, json, md",
             "  File Ops    — mkf, mkd, rmf, rmd",

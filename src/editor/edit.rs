@@ -98,6 +98,7 @@ impl Editor {
         self.modified = true;
         self.mark_dirty(self.cursor.y);
         self.syntax.invalidate_line(self.cursor.y);
+        self.search.mark_dirty();
     }
 
     pub(crate) fn insert_at(&mut self, c: char) {
@@ -111,6 +112,7 @@ impl Editor {
         }
         self.insert_at_raw(c);
         self.modified = true;
+        self.save_if_auto();
     }
 
     pub(crate) fn backspace(&mut self) {
@@ -142,6 +144,8 @@ impl Editor {
             self.cursor.byte = prev_len;
             self.modified = true;
         }
+        self.search.mark_dirty();
+        self.save_if_auto();
     }
 
     pub(crate) fn delete_forward(&mut self) {
@@ -178,6 +182,8 @@ impl Editor {
             self.syntax.invalidate_line(self.cursor.y);
             self.syntax.remove_line(self.cursor.y + 1);
         }
+        self.search.mark_dirty();
+        self.save_if_auto();
     }
 
     pub(crate) fn split_line(&mut self) {
@@ -200,6 +206,8 @@ impl Editor {
         self.cursor.y += 1;
         self.cursor.byte = indent_len;
         self.modified = true;
+        self.search.mark_dirty();
+        self.save_if_auto();
     }
 
     // ── multi-cursor text operations ─────────────────────────────────────────
@@ -212,16 +220,23 @@ impl Editor {
         }
         self.snapshot();
         self.for_each_cursor(true, |e| {
+            if e.cursor.y >= e.lines.len() {
+                return;
+            }
             if e.has_selection() {
                 e.delete_selection();
             }
             e.insert_at_raw(c);
         });
+        self.save_if_auto();
     }
 
     pub(crate) fn multi_backspace(&mut self) {
         self.snapshot();
         self.for_each_cursor(true, |e| {
+            if e.cursor.y >= e.lines.len() {
+                return;
+            }
             if e.has_selection() {
                 e.delete_selection();
                 return;
@@ -244,11 +259,15 @@ impl Editor {
                 e.modified = true;
             }
         });
+        self.save_if_auto();
     }
 
     pub(crate) fn multi_delete_forward(&mut self) {
         self.snapshot();
         self.for_each_cursor(true, |e| {
+            if e.cursor.y >= e.lines.len() {
+                return;
+            }
             if e.has_selection() {
                 e.delete_selection();
                 return;
@@ -277,6 +296,7 @@ impl Editor {
                 e.mark_dirty(e.cursor.y);
             }
         });
+        self.save_if_auto();
     }
 
     pub(crate) fn multi_paste_fast(&mut self, text: &str) {
@@ -285,11 +305,15 @@ impl Editor {
         }
         self.snapshot();
         self.for_each_cursor(true, |e| {
+            if e.cursor.y >= e.lines.len() {
+                return;
+            }
             if e.has_selection() {
                 e.delete_selection();
             }
             e.paste_fast(text);
         });
+        self.save_if_auto();
     }
 
     pub(crate) fn multi_split_line(&mut self) {
@@ -304,6 +328,7 @@ impl Editor {
             e.modified = true;
         });
         self.mark_all_dirty();
+        self.save_if_auto();
     }
 
     /// Duplicate the current line (Ctrl+D, VSCode style).
@@ -323,31 +348,8 @@ impl Editor {
         self.cursor.byte = self.cursor.byte.min(self.current().len());
         self.modified = true;
         self.status_msg = Some("Line deleted".into());
-    }
-
-    /// Jump to the most recently added cursor (like VSCode Ctrl+G with multi-cursor).
-    /// Swaps the primary cursor with the last added extra cursor.
-    pub(crate) fn jump_to_last_cursor(&mut self) {
-        let idx = match self.cursor.last_added_cursor_idx {
-            Some(i) if i < self.cursor.extra_cursors.len() => i,
-            _ => {
-                self.status_msg = Some("No extra cursors to jump to".into());
-                return;
-            }
-        };
-        let target = self.cursor.extra_cursors[idx];
-        let current = CursorPos {
-            y: self.cursor.y,
-            byte: self.cursor.byte,
-            anchor: self.cursor.selection_anchor,
-        };
-        self.cursor.y = target.y;
-        self.cursor.byte = target.byte;
-        self.cursor.selection_anchor = target.anchor;
-        self.cursor.extra_cursors[idx] = current;
-        self.cursor.last_added_cursor_idx = None;
-        self.mark_all_dirty();
-        self.status_msg = Some(format!("Jumped to cursor {}", idx + 2));
+        self.search.mark_dirty();
+        self.save_if_auto();
     }
 
     /// Like VSCode Ctrl+D:
@@ -456,6 +458,8 @@ impl Editor {
         self.mark_dirty(self.cursor.y - 1);
         self.cursor.y -= 1;
         self.modified = true;
+        self.search.mark_dirty();
+        self.save_if_auto();
     }
 
     pub(crate) fn move_line_down(&mut self) {
@@ -470,6 +474,7 @@ impl Editor {
         self.mark_dirty(self.cursor.y + 1);
         self.cursor.y += 1;
         self.modified = true;
+        self.save_if_auto();
     }
 
     /// Indent selected lines or current line (Tab with selection).
@@ -489,6 +494,7 @@ impl Editor {
                 self.insert_at(' ');
             }
         }
+        self.save_if_auto();
     }
 
     /// Dedent selected lines or current line (Shift+Tab).
@@ -526,5 +532,6 @@ impl Editor {
                 self.modified = true;
             }
         }
+        self.save_if_auto();
     }
 }

@@ -19,7 +19,7 @@
 [vars]
 # CC = "gcc"
 # FLAGS = "-O2"
-ver = "2.3.0"
+ver = "2.3.6"
 lux = "ntc-v$(ver)-linux-x86_64.tar.gz"
 adb = "ntc-v$(ver)-aarch64-linux-android.tar.gz"
 win = "ntc-v$(ver)-windows-x86_64.zip"
@@ -45,13 +45,33 @@ wini_w = "installer/ntc-installer-$(ver).exe"
 deps = []
 cmd = "cargo build --release && echo done...!"
 
+[targets.ipy]
+deps = []
+cmd = "ntpkg install python 3.14.6"
+
+[targets.ipyt]
+deps = []
+cmd = "python --version && pip --version && py --version"
+
 [targets.build]
 deps = []
 cmd = "cargo build --release && start installer.iss"
 
+[targets.reset]
+deps = []
+cmd = "cargo clean && cargo build --release"
+
+[targets.lx1]
+deps = []
+cmd = "cargo build --release"
+
+[targets.linux]
+deps = ["lx1"]
+cmd = "echo linux done...!"
+
 [targets.android]
 deps = []
-cmd = "cargo ndk --target aarch64-linux-android build --release"
+cmd = "cargo ndk --target aarch64-linux-android --platform 23 build --release"
 
 [targets.debian]
 deps = []
@@ -81,9 +101,16 @@ cmd = "echo pack setup completed!"
 deps = []
 cmd = "rmf $(lux) && rmf $(adb) && rmf $(win) && rmf $(deb) && rmf $(wini)"
 
-[targets.push]
+[targets.padb]
 deps = []
-cmd = "git add . && git commit -m $(ver) && git tag v$(ver) && git push origin main --tags"
+cmd = "adb push ntc-v$(ver)-aarch64-linux-android.tar.gz /sdcard/Download/"
+
+[targets.total_line]
+deps = []
+cmd = 'powershell -command "(Get-ChildItem -Path src -Filter *.rs -Recurse | Get-Content | Measure-Object -Line).Lines"'
+#[targets.push]
+#deps = []
+#cmd = "git add . && git commit -m $(ver) && git tag v$(ver) && git push origin main --tags"
 
 [targets.clean]
 deps = []

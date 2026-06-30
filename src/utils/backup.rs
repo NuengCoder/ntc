@@ -237,6 +237,17 @@ impl BackupManager {
         Ok(final_path)
     }
 
+    /// Check if a file's content matches an expected SHA-256 hex hash.
+    /// Returns `false` if the file cannot be read.
+    fn file_hash_matches(path: &Path, expected_hex: &str) -> bool {
+        if let Ok(content) = std::fs::read(path) {
+            let hex = format!("{:x}", sha2::Sha256::digest(&content));
+            hex == expected_hex
+        } else {
+            false
+        }
+    }
+
     /// Copy a file from `src` to `dst` while computing its SHA-256 hash,
     /// avoiding a second full file read just for hashing.
     /// Returns `(hex_hash, bytes_written)`.
@@ -472,14 +483,21 @@ impl BackupManager {
         // Collect current project files (same ignore rules as backup).
         let current_file_set = Self::collect_current_file_set(project_root);
 
-        // Classify each file in the manifest as overwrite or new
+        // Classify each file in the manifest as overwrite or new.
+        // If the file content is already identical to the backup, skip it
+        // to avoid unnecessary disk I/O and undo snapshots.
         let mut to_overwrite: Vec<PathBuf> = Vec::new();
         let mut to_create:    Vec<PathBuf> = Vec::new();
+        let mut unchanged:    Vec<PathBuf> = Vec::new();
 
         for entry in &manifest.files {
             let target = project_root.join(&entry.rel_path);
             if target.exists() {
-                to_overwrite.push(entry.rel_path.clone());
+                if Self::file_hash_matches(&target, &entry.hash) {
+                    unchanged.push(entry.rel_path.clone());
+                } else {
+                    to_overwrite.push(entry.rel_path.clone());
+                }
             } else {
                 to_create.push(entry.rel_path.clone());
             }
@@ -635,19 +653,19 @@ impl BackupManager {
         let restored_count = restored_count.load(Ordering::Relaxed);
         let deleted_count  = deleted_count.load(Ordering::Relaxed);
         let failed_count   = failed_count.load(Ordering::Relaxed);
+        let unchanged_count = unchanged.len();
 
-        let delete_msg = if deleted_count > 0 {
-            format!(", {} extra file(s) removed", deleted_count)
-        } else {
-            String::new()
-        };
+        let parts: Vec<String> = [
+            format!("{} restored", restored_count),
+            if unchanged_count > 0 { format!("{} unchanged (skipped)", unchanged_count) } else { String::new() },
+            if deleted_count > 0 { format!("{} removed", deleted_count) } else { String::new() },
+            if failed_count > 0 { format!("{} failed", failed_count) } else { String::new() },
+        ].into_iter().filter(|s| !s.is_empty()).collect();
 
         print_success(&format!(
-            "Restored backup #{} ({} files{}{})",
+            "Restored backup #{} ({})",
             backup_number,
-            restored_count,
-            delete_msg,
-            if failed_count > 0 { format!(", {} failed", failed_count) } else { String::new() }
+            parts.join(", ")
         ));
 
         if !to_overwrite.is_empty() || !to_create.is_empty() || !to_delete.is_empty() {
@@ -686,10 +704,23 @@ impl BackupManager {
         let re_restored_count = AtomicUsize::new(0);
         let failed            = AtomicBool::new(false);
 
-        // Restore overwritten files (parallel)
+        // Helper: check if two files have identical content (byte comparison).
+        let files_are_equal = |a: &Path, b: &Path| -> bool {
+            match (std::fs::read(a), std::fs::read(b)) {
+                (Ok(ac), Ok(bc)) => ac == bc,
+                _ => false,
+            }
+        };
+
+        // Restore overwritten files (parallel).
+        // Skip files that already match the undo content (no change needed).
         undo_state.overwritten_files.par_iter().for_each(|rel_path| {
             let src = undo_files_dir.join(rel_path);
             let dst = project_root.join(rel_path);
+            if src.exists() && dst.exists() && files_are_equal(&src, &dst) {
+                restored_count.fetch_add(1, Ordering::Relaxed);
+                return;
+            }
             if src.exists() {
                 if let Some(parent) = dst.parent() {
                     let _ = fs::create_dir_all(parent);
@@ -724,10 +755,15 @@ impl BackupManager {
             }
         });
 
-        // Restore files that the restore deleted (parallel)
+        // Restore files that the restore deleted (parallel).
+        // Skip files that already match the undo content.
         undo_state.deleted_files.par_iter().for_each(|rel_path| {
             let src = undo_deleted_dir.join(rel_path);
             let dst = project_root.join(rel_path);
+            if src.exists() && dst.exists() && files_are_equal(&src, &dst) {
+                re_restored_count.fetch_add(1, Ordering::Relaxed);
+                return;
+            }
             if src.exists() {
                 if let Some(parent) = dst.parent() {
                     let _ = fs::create_dir_all(parent);

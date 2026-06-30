@@ -54,6 +54,7 @@ pub enum SyntaxLanguage {
     OCaml,
     R,
     Julia,
+    Glsl,
     Erlang,
     Xml,
     Yaml,
@@ -141,6 +142,14 @@ pub fn detect_language(ext: &str) -> Option<SyntaxLanguage> {
         "txt" | "text" | "log" => Some(SyntaxLanguage::Txt),
         "mod" => Some(SyntaxLanguage::GoMod),
         "sum" => Some(SyntaxLanguage::GoSum),
+        "glsl" | "vert" | "vs" | "vsh"
+        | "frag" | "fs" | "fsh"
+        | "geom" | "gs" | "gsh"
+        | "tesc" | "tese"
+        | "comp" | "csh"
+        | "rgen" | "rint" | "rahit" | "rchit" | "rmiss" | "rcall"
+        | "mesh" | "task"
+        | "hlsl" | "spvasm" => Some(SyntaxLanguage::Glsl),
         "css" | "scss" | "less" | "sass" | "qss" => Some(SyntaxLanguage::Css),
         "bat" | "cmd" => Some(SyntaxLanguage::Bat),
         "ps1" | "psm1" | "psd1" | "pssc" => Some(SyntaxLanguage::Ps1),

@@ -14,12 +14,13 @@ mod editor_config;
 mod completion;
 mod recovery;
 mod commands;
+pub(crate) mod terminal;
 
 // ── re-exports for sibling modules ──────────────────────────────────────────
 
 pub(crate) use types::{
-    Editor, Mode, Snapshot, CursorPos, Tab,
-    MAX_UNDO, MIN_SIDEBAR_WIDTH, MAX_BUFFERS, MAX_TABS,
+    Editor, Focus, Mode, Snapshot, CursorPos, Tab, GOTO_LINE,
+    MIN_SIDEBAR_WIDTH,
 };
 pub(crate) use completion::CompletionItem;
 
@@ -36,4 +37,4 @@ pub(crate) use helpers::{
 
 // ── public API ──────────────────────────────────────────────────────────────
 
-pub use template::{edit_file, edit_file_with_session, init_file, generate_template, generate_welcome_content};
+pub use template::{edit_file, edit_file_with_session, init_file, generate_template, generate_super_template, init_super_file, generate_welcome_content, init_hyper_project};

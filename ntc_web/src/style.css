@@ -1,7 +1,7 @@
 :root {
-  --bg: #0a0a1a;
-  --surface: #111128;
-  --surface2: #1a1a3e;
+  --bg: #05050f;
+  --surface: #0c0c1e;
+  --surface2: #151530;
   --accent: #00d4ff;
   --accent2: #ff6ec7;
   --accent3: #ffd700;
@@ -17,20 +17,143 @@ body {
   background: var(--bg);
   color: var(--text);
   min-height: 100vh;
-  background-image:
-    radial-gradient(1px 1px at 10% 20%, rgba(255,255,255,.4) 0, transparent 100%),
-    radial-gradient(1px 1px at 30% 60%, rgba(255,255,255,.3) 0, transparent 100%),
-    radial-gradient(1.5px 1.5px at 50% 10%, rgba(255,255,255,.5) 0, transparent 100%),
-    radial-gradient(1px 1px at 70% 40%, rgba(255,255,255,.3) 0, transparent 100%),
-    radial-gradient(1px 1px at 85% 70%, rgba(255,255,255,.4) 0, transparent 100%),
-    radial-gradient(1.5px 1.5px at 20% 80%, rgba(255,255,255,.5) 0, transparent 100%),
-    radial-gradient(1px 1px at 90% 15%, rgba(255,255,255,.3) 0, transparent 100%),
-    radial-gradient(1px 1px at 45% 90%, rgba(255,255,255,.4) 0, transparent 100%),
-    radial-gradient(1px 1px at 5% 50%, rgba(255,255,255,.2) 0, transparent 100%),
-    radial-gradient(2px 2px at 60% 85%, rgba(255,200,100,.6) 0, transparent 100%);
+  overflow-x: hidden;
+  position: relative;
 }
 
-.app { max-width: 960px; margin: 0 auto; padding: 20px; }
+/* ── Deep space background ── */
+body::before {
+  content: '';
+  position: fixed; inset: 0;
+  z-index: -1;
+  background:
+    /* Nebula clouds */
+    radial-gradient(ellipse 600px 300px at 15% 25%, rgba(80,20,120,.15) 0, transparent 100%),
+    radial-gradient(ellipse 500px 400px at 75% 60%, rgba(20,60,120,.12) 0, transparent 100%),
+    radial-gradient(ellipse 400px 250px at 50% 80%, rgba(120,40,80,.08) 0, transparent 100%),
+    /* Stars - small dim */
+    radial-gradient(1px 1px at 8% 12%, rgba(255,255,255,.3) 0, transparent 100%),
+    radial-gradient(1px 1px at 22% 33%, rgba(255,255,255,.2) 0, transparent 100%),
+    radial-gradient(1px 1px at 38% 18%, rgba(255,255,255,.25) 0, transparent 100%),
+    radial-gradient(1px 1px at 92% 8%, rgba(255,255,255,.35) 0, transparent 100%),
+    radial-gradient(1px 1px at 45% 70%, rgba(255,255,255,.2) 0, transparent 100%),
+    radial-gradient(1px 1px at 55% 45%, rgba(255,255,255,.15) 0, transparent 100%),
+    radial-gradient(1px 1px at 12% 88%, rgba(255,255,255,.3) 0, transparent 100%),
+    radial-gradient(1px 1px at 88% 92%, rgba(255,200,100,.2) 0, transparent 100%),
+    radial-gradient(1px 1px at 65% 15%, rgba(255,255,255,.25) 0, transparent 100%),
+    radial-gradient(1px 1px at 78% 35%, rgba(255,150,200,.2) 0, transparent 100%),
+    radial-gradient(1px 1px at 32% 55%, rgba(200,200,255,.15) 0, transparent 100%),
+    /* Medium stars */
+    radial-gradient(2px 2px at 5% 30%, rgba(255,255,255,.5) 0, transparent 100%),
+    radial-gradient(2px 2px at 50% 10%, rgba(255,200,100,.6) 0, transparent 100%),
+    radial-gradient(2px 2px at 90% 50%, rgba(200,220,255,.5) 0, transparent 100%),
+    radial-gradient(2px 2px at 70% 80%, rgba(255,180,200,.4) 0, transparent 100%),
+    radial-gradient(2px 2px at 35% 40%, rgba(180,200,255,.5) 0, transparent 100%),
+    radial-gradient(2px 2px at 15% 65%, rgba(255,220,150,.45) 0, transparent 100%),
+    /* Large bright stars with glow */
+    radial-gradient(4px 4px at 18% 22%, rgba(255,255,255,.9) 0, transparent 100%),
+    radial-gradient(3px 3px at 82% 18%, rgba(200,220,255,.8) 0, transparent 100%),
+    radial-gradient(3px 3px at 40% 85%, rgba(255,200,100,.7) 0, transparent 100%),
+    /* Large star glows */
+    radial-gradient(15px 15px at 18% 22%, rgba(255,255,255,.08) 0, transparent 100%),
+    radial-gradient(12px 12px at 82% 18%, rgba(200,220,255,.06) 0, transparent 100%),
+    radial-gradient(12px 12px at 40% 85%, rgba(255,200,100,.06) 0, transparent 100%);
+}
+
+/* ── Sun (top left) ── */
+body::after {
+  content: '';
+  position: fixed;
+  z-index: -1;
+  /* Sun body */
+  top: -40px; left: -40px;
+  width: 140px; height: 140px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 40% 40%, #fff4a0, #ffcc00 30%, #ff8800 60%, transparent 100%);
+  box-shadow:
+    0 0 60px 20px rgba(255,200,0,.3),
+    0 0 120px 50px rgba(255,150,0,.15),
+    0 0 200px 80px rgba(255,100,0,.08);
+  animation: sunPulse 4s ease-in-out infinite;
+}
+
+@keyframes sunPulse {
+  0%, 100% { box-shadow: 0 0 60px 20px rgba(255,200,0,.3), 0 0 120px 50px rgba(255,150,0,.15), 0 0 200px 80px rgba(255,100,0,.08); }
+  50% { box-shadow: 0 0 70px 25px rgba(255,200,0,.35), 0 0 140px 60px rgba(255,150,0,.18), 0 0 240px 100px rgba(255,100,0,.1); }
+}
+
+/* ── Moon (top right) ── */
+.moon {
+  position: fixed;
+  z-index: -1;
+  top: 20px; right: 40px;
+  width: 80px; height: 80px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 35%, #e8e8f0, #c0c0d0 40%, #9090a0 100%);
+  box-shadow:
+    0 0 20px 8px rgba(200,200,255,.1),
+    inset -8px -4px 12px rgba(0,0,0,.15),
+    inset 4px 4px 12px rgba(255,255,255,.1);
+  overflow: hidden;
+}
+.moon::before {
+  content: '';
+  position: absolute;
+  border-radius: 50%;
+  background: rgba(120,120,140,.25);
+  width: 18px; height: 16px; top: 18px; left: 22px;
+  box-shadow:
+    28px 20px 0 -3px rgba(120,120,140,.2),
+    8px 32px 0 -4px rgba(120,120,140,.15),
+    -5px 10px 0 -2px rgba(120,120,140,.2);
+}
+.moon::after {
+  content: '';
+  position: absolute;
+  border-radius: 50%;
+  background: rgba(100,100,120,.2);
+  width: 10px; height: 8px; top: 35px; left: 38px;
+  box-shadow:
+    -12px 15px 0 -2px rgba(100,100,120,.15),
+    18px -5px 0 -3px rgba(100,100,120,.1);
+}
+
+/* ── Meteor ── */
+.meteor {
+  position: fixed;
+  z-index: -1;
+  width: 4px; height: 4px;
+  background: #fff;
+  border-radius: 50%;
+  box-shadow: 0 0 6px 2px rgba(255,200,100,.6);
+  animation: meteor 6s linear infinite;
+}
+.meteor::before {
+  content: '';
+  position: absolute;
+  top: 50%; right: 4px;
+  width: 80px; height: 1.5px;
+  background: linear-gradient(to left, rgba(255,200,100,.8), rgba(255,200,100,.4), transparent);
+  transform: translateY(-50%);
+}
+.meteor:nth-child(2) {
+  top: 15%; left: 70%;
+  animation-delay: -3s;
+  animation-duration: 7s;
+}
+.meteor:nth-child(2)::before {
+  width: 60px;
+}
+
+@keyframes meteor {
+  0% { transform: translate(0, 0); opacity: 0; }
+  5% { opacity: 1; }
+  20% { opacity: 1; }
+  30% { opacity: 0; transform: translate(-200px, 300px); }
+  100% { opacity: 0; transform: translate(-200px, 300px); }
+}
+
+.app { max-width: 960px; margin: 0 auto; padding: 20px; position: relative; }
 
 .top-bar {
   display: flex; align-items: center; justify-content: space-between;
@@ -73,7 +196,7 @@ body {
   border: 2px dashed var(--border); border-radius: 8px;
   padding: 16px; text-align: center; margin-bottom: 12px;
   transition: all .15s; cursor: pointer;
-  background: rgba(17,17,40,.5);
+  background: rgba(12,12,30,.7);
 }
 .upload-area.drag { border-color: var(--accent); background: rgba(0,212,255,.08); }
 .upload-btn {

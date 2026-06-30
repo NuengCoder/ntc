@@ -223,34 +223,40 @@ impl Editor {
             return Ok(false);
         }
 
-        if let Some(pattern) = cmd.strip_prefix("gs ") {
+        if let Some(pattern) = cmd.strip_prefix("gs") {
             let pattern = pattern.trim();
             if pattern.is_empty() {
-                self.status_msg = Some("gs: missing pattern".into());
+                self.ff_query = "gs:".to_string();
+                self.gs_state.query.clear();
+                self.gs_state.results.clear();
+                self.gs_state.loading = false;
+                self.gs_state.loading_pattern.clear();
+                self.mode = Mode::FileFinder;
+                self.mark_all_dirty();
             } else {
+                self.ff_query = format!("gs:{}", pattern);
+                self.gs_state.query = pattern.to_string();
+                self.gs_state.loading = true;
+                self.gs_state.loading_pattern = pattern.to_string();
+                self.gs_state.results.clear();
+                self.mode = Mode::FileFinder;
+                self.mark_all_dirty();
                 let root = std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from("."));
                 let matches = crate::utils::search::search_content(&root, pattern, 10);
-                let results: Vec<(String, std::path::PathBuf, f64)> = matches
-                    .iter()
-                    .map(|m| {
-                        let name = format!(
-                            "{}:{}: {}",
-                            m.file_path.file_name().map(|n| n.to_string_lossy()).unwrap_or_default(),
-                            m.line_number,
-                            m.line.trim()
-                        );
-                        (name, m.file_path.clone(), 0.0)
-                    })
-                    .collect();
-                if results.is_empty() {
-                    self.status_msg = Some(format!("gs: no matches for '{}'", pattern));
-                } else {
-                    self.ff_results = results;
-                    self.ff_idx = 0;
-                    self.ff_query = format!("gs:{}", pattern);
-                    self.mode = Mode::FileFinder;
-                    self.mark_all_dirty();
+                let mut list = crate::editor::types::GsResultList::new();
+                for m in &matches {
+                    let display = format!(
+                        "{}:{}: {}",
+                        m.file_path.file_name().map(|n| n.to_string_lossy()).unwrap_or_default(),
+                        m.line_number,
+                        m.line.trim()
+                    );
+                    list.push_back(display, m.file_path.clone(), m.line_number);
                 }
+                list.build_circular();
+                self.gs_state.results = list;
+                self.gs_state.loading = false;
+                self.mark_all_dirty();
             }
             return Ok(false);
         }
@@ -533,6 +539,14 @@ impl Editor {
             self.mark_all_dirty();
             return Ok(false);
         }
+        if cmd == "x" {
+            self.prev_mode = Mode::Normal;
+            self.mode = Mode::Query;
+            self.query_buf.clear();
+            self.mark_all_dirty();
+            return Ok(false);
+        }
+
         if cmd == "B" || cmd == "b" {
             self.toggle_sidebar();
             return Ok(false);

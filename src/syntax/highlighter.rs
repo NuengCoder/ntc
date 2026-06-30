@@ -99,6 +99,24 @@ impl SyntaxHighlighter {
         self.token_cache[idx].as_deref().unwrap_or(&[])
     }
 
+    /// Pre-tokenize all lines up to `max_idx`. Useful for pre-filling the cache
+    /// for small-to-medium files on load so scrolling is instant.
+    pub fn pre_tokenize_up_to(&mut self, max_idx: usize, lines: &[String]) {
+        if self.language.is_none() {
+            return;
+        }
+        let end = max_idx.min(lines.len());
+        if self.token_cache.len() < end {
+            self.token_cache.resize(end, None);
+        }
+        for (idx, line) in lines.iter().enumerate().take(end) {
+            if self.token_cache[idx].is_none() {
+                let tokens = self.tokenize_internal(line);
+                self.token_cache[idx] = Some(tokens);
+            }
+        }
+    }
+
     pub fn token_type_at(&self, idx: usize, byte: usize) -> Option<TokenType> {
         self.token_cache
             .get(idx)
@@ -749,18 +767,15 @@ impl SyntaxHighlighter {
                     continue;
                 }
 
-                #[allow(clippy::if_same_then_else)]
                 let tt = if is_keyword(lang, word) {
                     TokenType::Keyword
-                } else if is_type_name(lang, word) {
-                    TokenType::Type
-                } else if is_type_name_upper_heuristic(lang) && word.starts_with(|c: char| c.is_uppercase()) {
+                } else if is_type_name(lang, word)
+                    || (is_type_name_upper_heuristic(lang) && word.starts_with(|c: char| c.is_uppercase()))
+                {
                     TokenType::Type
                 } else if is_constant(lang, word) {
                     TokenType::Constant
-                } else if is_builtin(lang, word) {
-                    TokenType::Builtin
-                } else if matches!(lang, SyntaxLanguage::Css) && is_css_property(word) {
+                } else if is_builtin(lang, word) || (matches!(lang, SyntaxLanguage::Css) && is_css_property(word)) {
                     TokenType::Builtin
                 } else if is_function_call(word, next) {
                     TokenType::Function

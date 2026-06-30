@@ -1,0 +1,7 @@
+#Window --Install Instruction
+
+Two Option Here:
+
+1. Just Download The Zip and Unzip then running the .exe 
+
+2. Just Running the ntc-installer.exe

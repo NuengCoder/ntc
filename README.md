@@ -271,7 +271,7 @@ Features: Topological sort, cycle detection, variable expansion (`$(VAR_NAME)` /
 - **Search within file** (Ctrl+F) with next/previous navigation (Ctrl+G / Ctrl+Shift+G)
 - **`gs <pattern>`** in command mode — grep file contents across project
 - **`:run <command>`** — execute shell commands with live streaming output in split panel
-- **File finder** (Ctrl+P / Ctrl+T) — fuzzy search files across project and open in new tab
+- **File finder** (Ctrl+P / Ctrl+N) — fuzzy search files across project and open in new tab
 - **Command mode** (`:q` quit, `:w` save, `:wq` save & quit, `:q!` force quit)
 - **Crash recovery** — periodic SHA-256 hashed snapshots with auto-recovery prompt
 - **Persistent sessions** — cursor, scroll, buffer stack restored on re-entry
@@ -303,7 +303,7 @@ Features: Topological sort, cycle detection, variable expansion (`$(VAR_NAME)` /
 | Ctrl+W | Close buffer |
 | Ctrl+Tab / Ctrl+Shift+Tab | Switch to next/previous buffer |
 | Ctrl+B | Toggle sidebar |
-| Ctrl+P / Ctrl+T | File finder |
+| Ctrl+P / Ctrl+N | File finder |
 | Ctrl+D | Add cursor at next occurrence |
 | Ctrl+Q | Close tab (with scratch auto-open) |
 

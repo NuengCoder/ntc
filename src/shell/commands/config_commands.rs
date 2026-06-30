@@ -1,3 +1,6 @@
+//! Config management commands: `config` (settings subcommands), `showcg`,
+//! `opencg`, `resetcg`, `restorecg`, `local`, `init`, `deinit`.
+
 use crate::config::Config;
 use crate::navigator::Navigator;
 use crate::output::{print_error, print_success, print_warning, print_info};
@@ -8,7 +11,45 @@ use colored::*;
 use std::io::{self, Write};
 use std::path::{Path, PathBuf};
 
-pub fn cmd_seto(args: &str, _nav: &mut Navigator) -> Result<bool> {
+pub fn cmd_config(args: &str, _nav: &mut Navigator) -> Result<bool> {
+    let parts: Vec<&str> = args.splitn(2, ' ').collect();
+    let subcmd = parts.first().copied().unwrap_or("");
+    let subargs = parts.get(1).unwrap_or(&"").trim();
+
+    match subcmd {
+        "output" | "out" => config_output(subargs),
+        "depth" | "d" => config_depth(subargs),
+        "linenumbers" | "ln" | "line" => config_linenumbers(subargs),
+        "color" | "c" => config_color(subargs),
+        "autosuggest" | "as" => config_autosuggest(subargs),
+        "threads" | "t" => config_threads(subargs),
+        "history" | "h" => config_history(subargs),
+        "watch" | "w" => config_watch(subargs),
+        _ => {
+            println!("{}", "config — View or change configuration settings".cyan().bold());
+            println!();
+            println!("{}", "Settings:".yellow());
+            println!("  config output [path]        Show/set output path");
+            println!("  config depth [n]            Show/set max depth (1-20)");
+            println!("  config linenumbers ON|OFF   Show/set line numbers");
+            println!("  config color ON|OFF         Show/set color");
+            println!("  config autosuggest ON|OFF   Show/set autosuggest");
+            println!("  config threads [n]          Show/set thread count");
+            println!("  config history [on|off|path] Show/set history");
+            println!("  config watch ON|OFF         Show/set file watcher");
+            println!();
+            println!("{}", "Examples:".green());
+            println!("  config output C:\\reports");
+            println!("  config depth 4");
+            println!("  config linenumbers ON");
+            println!("  config history off");
+            println!("  config watch ON");
+            Ok(false)
+        }
+    }
+}
+
+fn config_output(args: &str) -> Result<bool> {
     if args.is_empty() {
         println!("Current output path: {}", Config::global_get_output_path().display());
     } else {
@@ -18,7 +59,7 @@ pub fn cmd_seto(args: &str, _nav: &mut Navigator) -> Result<bool> {
     Ok(false)
 }
 
-pub fn cmd_setd(args: &str, _nav: &mut Navigator) -> Result<bool> {
+fn config_depth(args: &str) -> Result<bool> {
     if args.is_empty() {
         println!("Current max depth: {}", Config::global_get_max_depth());
     } else {
@@ -33,7 +74,7 @@ pub fn cmd_setd(args: &str, _nav: &mut Navigator) -> Result<bool> {
     Ok(false)
 }
 
-pub fn cmd_setl(args: &str, _nav: &mut Navigator) -> Result<bool> {
+fn config_linenumbers(args: &str) -> Result<bool> {
     if args.is_empty() {
         let state = if Config::global_get_show_line_numbers() { "ON" } else { "OFF" };
         println!("Line numbers: {}", state);
@@ -49,7 +90,7 @@ pub fn cmd_setl(args: &str, _nav: &mut Navigator) -> Result<bool> {
     Ok(false)
 }
 
-pub fn cmd_setc(args: &str, _nav: &mut Navigator) -> Result<bool> {
+fn config_color(args: &str) -> Result<bool> {
     if args.is_empty() {
         let state = if Config::global_get_color_enabled() { "ON" } else { "OFF" };
         println!("Color output: {}", state);
@@ -65,7 +106,7 @@ pub fn cmd_setc(args: &str, _nav: &mut Navigator) -> Result<bool> {
     Ok(false)
 }
 
-pub fn cmd_seta(args: &str, _nav: &mut Navigator) -> Result<bool> {
+fn config_autosuggest(args: &str) -> Result<bool> {
     if args.is_empty() {
         let state = if Config::global_get_autosuggest_enabled() { "ON" } else { "OFF" };
         println!("Autosuggest (ghost text): {}", state);
@@ -86,7 +127,7 @@ pub fn cmd_seta(args: &str, _nav: &mut Navigator) -> Result<bool> {
     Ok(false)
 }
 
-pub fn cmd_sett(args: &str, _nav: &mut Navigator) -> Result<bool> {
+fn config_threads(args: &str) -> Result<bool> {
     if args.is_empty() {
         println!("Current threads: {}", Config::global_get_num_threads());
     } else {
@@ -101,7 +142,7 @@ pub fn cmd_sett(args: &str, _nav: &mut Navigator) -> Result<bool> {
     Ok(false)
 }
 
-pub fn cmd_seth(args: &str, _nav: &mut Navigator) -> Result<bool> {
+fn config_history(args: &str) -> Result<bool> {
     if args.is_empty() {
         let enabled = Config::global_get_history_enabled();
         let path = Config::global_get_history_path();
@@ -130,7 +171,7 @@ pub fn cmd_seth(args: &str, _nav: &mut Navigator) -> Result<bool> {
     Ok(false)
 }
 
-pub fn cmd_watch(args: &str, _nav: &mut Navigator) -> Result<bool> {
+fn config_watch(args: &str) -> Result<bool> {
     if args.is_empty() {
         let enabled = Config::global_get_file_watcher_enabled();
         let trigger = Config::global_get_watch_trigger_alias();
@@ -139,9 +180,9 @@ pub fn cmd_watch(args: &str, _nav: &mut Navigator) -> Result<bool> {
             Some(ref a) => println!("Trigger alias: {}", a.cyan()),
             None        => println!("Trigger alias: {}", "none".dimmed()),
         }
-        println!("Usage: watch ON|OFF");
-        println!("       watch trigger <alias>   Auto-run alias on change");
-        println!("       watch trigger off        Disable auto-run");
+        println!("Usage: config watch ON|OFF");
+        println!("       config watch trigger <alias>   Auto-run alias on change");
+        println!("       config watch trigger off        Disable auto-run");
     } else {
         let upper = args.to_uppercase();
         if upper == "ON" {
@@ -170,7 +211,7 @@ pub fn cmd_watch(args: &str, _nav: &mut Navigator) -> Result<bool> {
                     }
                 }
             } else {
-                print_error("Use: watch ON | watch OFF | watch trigger <alias> | watch trigger off");
+                print_error("Use: config watch ON | config watch OFF | config watch trigger <alias> | config watch trigger off");
             }
         }
     }

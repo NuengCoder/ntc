@@ -15,6 +15,7 @@ pub mod syntax;
 pub mod tutorial;
 pub mod utils;
 pub mod image2doc;
+pub mod ntpkg;
 
 // Re-export utils modules so existing paths like `crate::config::Config` still work
 // (consumed internally via `use crate::...` and externally via `use ntc::...`).

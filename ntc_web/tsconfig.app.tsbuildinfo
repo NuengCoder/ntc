@@ -1,0 +1,1 @@
+{"root":["./src/app.tsx","./src/api.ts","./src/main.tsx","./src/types.ts","./src/vite-env.d.ts","./src/components/breadcrumb.tsx","./src/components/confirmdialog.tsx","./src/components/filelist.tsx","./src/components/newfolderdialog.tsx","./src/components/renamedialog.tsx","./src/components/uploadarea.tsx"],"version":"5.7.3"}

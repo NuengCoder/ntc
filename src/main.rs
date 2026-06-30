@@ -6,7 +6,7 @@ use anyhow::Result;
 use colored::*;
 
 fn run() -> Result<bool> {
-    crate::utils::theme::ThemeManager::ensure_default_themes();
+    utils::theme::ThemeManager::ensure_default_themes();
     let _ = Config::global();
     cli::run_cli()
 }

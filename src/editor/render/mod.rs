@@ -1,4 +1,5 @@
 mod bars;
+pub(crate) mod framebuffer;
 mod panels;
 mod popups;
 
@@ -13,8 +14,9 @@ use super::{byte_to_col, char_col_width, gutter_width, Editor, Mode};
 impl Editor {
     pub(crate) fn render(&mut self, stdout: &mut std::io::Stdout) -> std::io::Result<()> {
         let theme = crate::utils::theme::ThemeManager::current();
-        let is_run = self.mode == Mode::Run;
-        let total_editor_rows = if is_run {
+        let is_run = self.run_panel_open;
+        let is_terminal = self.terminal.is_some();
+        let total_editor_rows = if is_run || is_terminal {
             self.run_split_row()
         } else {
             self.term_h.saturating_sub(4)
@@ -30,7 +32,20 @@ impl Editor {
         let sb_col = cols.saturating_sub(1);
         let text_cols = editor_cols.saturating_sub(gw + 2);
 
-        self.render_tab_bar(stdout, tab_bar_y, cols)?;
+        // Initialize or resize framebuffer if enabled
+        if self.editor_cfg.frame_buffer_enabled {
+            if self.framebuffer.is_none() {
+                self.framebuffer = Some(framebuffer::FrameBuffer::new(cols, self.term_h));
+            } else if let Some(ref mut fb) = self.framebuffer {
+                fb.resize(cols, self.term_h);
+            }
+        }
+
+        if self.sidebar.open {
+            self.render_sidebar(stdout)?;
+        }
+
+        self.render_tab_bar(stdout, tab_bar_y, eo, editor_cols)?;
 
         let vscroll_thumb_start: Option<usize>;
         let vscroll_thumb_height: usize;
@@ -43,10 +58,6 @@ impl Editor {
         } else {
             vscroll_thumb_start = None;
             vscroll_thumb_height = 0;
-        }
-
-        if self.sidebar.open {
-            self.render_sidebar(stdout)?;
         }
 
         let vis_start = self.sv.offset;
@@ -304,7 +315,7 @@ impl Editor {
                     )?;
                 }
 
-                if is_cur {
+                if is_cur && (self.cursor_visible || self.editor_cfg.cursor_blink_rate_ms == 0) {
                     let cursor_col = byte_to_col(self.current(), self.cursor.byte);
                     let screen_col = if cursor_col >= self.sv.x {
                         eo + gw + (cursor_col - self.sv.x)
@@ -328,54 +339,62 @@ impl Editor {
                         )?;
                     }
                 }
-                for ec in &self.cursor.extra_cursors {
-                    if ec.y == idx {
-                        let cursor_col = byte_to_col(&self.lines[idx], ec.byte);
-                        let screen_col = if cursor_col >= self.sv.x {
-                            eo + gw + (cursor_col - self.sv.x)
-                        } else {
-                            eo + gw
-                        };
-                        if screen_col < cols {
-                            let line_s = &self.lines[idx];
-                            let cursor_ch = if ec.byte < line_s.len() {
-                                line_s[ec.byte..].chars().next().unwrap_or(' ')
+                if self.cursor_visible || self.editor_cfg.cursor_blink_rate_ms == 0 {
+                    for ec in &self.cursor.extra_cursors {
+                        if ec.y == idx {
+                            let cursor_col = byte_to_col(&self.lines[idx], ec.byte);
+                            let screen_col = if cursor_col >= self.sv.x {
+                                eo + gw + (cursor_col - self.sv.x)
                             } else {
-                                ' '
+                                eo + gw
                             };
-                            queue!(
-                                stdout,
-                                MoveTo(screen_col as u16, sy as u16),
-                                SetBackgroundColor(theme.editor.extra_cursor_bg.to_crossterm()),
-                                SetForegroundColor(theme.editor.cursor_text.to_crossterm()),
-                                Print(cursor_ch),
-                                ResetColor,
-                            )?;
+                            if screen_col < cols {
+                                let line_s = &self.lines[idx];
+                                let cursor_ch = if ec.byte < line_s.len() {
+                                    line_s[ec.byte..].chars().next().unwrap_or(' ')
+                                } else {
+                                    ' '
+                                };
+                                queue!(
+                                    stdout,
+                                    MoveTo(screen_col as u16, sy as u16),
+                                    SetBackgroundColor(theme.editor.extra_cursor_bg.to_crossterm()),
+                                    SetForegroundColor(theme.editor.cursor_text.to_crossterm()),
+                                    Print(cursor_ch),
+                                    ResetColor,
+                                )?;
+                            }
                         }
                     }
                 }
             }
         }
 
-        // Pre-tokenize next 10 lines beyond visible area for smooth scrolling
+        // Pre-tokenize lines above and below visible area for smooth scrolling
         {
             let syntax_enabled = self.editor_cfg.syntax_enabled;
             if syntax_enabled && self.syntax.language.is_some() {
+                let n = self.editor_cfg.pre_tokenize_lines;
+                let total = self.lines.len();
+
+                // Below visible area
                 let vis_end = self.sv.offset + rows;
-                let pre_end = (vis_end + 10).min(self.lines.len());
+                let pre_end = (vis_end + n).min(total);
                 for idx in vis_end..pre_end {
-                    let line = &self.lines[idx];
-                    self.syntax.tokenize_line(idx, line);
+                    self.syntax.tokenize_line(idx, &self.lines[idx]);
+                }
+
+                // Above visible area (for scrolling up)
+                let vis_start = self.sv.offset;
+                let pre_start = vis_start.saturating_sub(n);
+                for idx in pre_start..vis_start {
+                    self.syntax.tokenize_line(idx, &self.lines[idx]);
                 }
             }
         }
 
         if matches!(self.mode, Mode::Help) {
             self.render_help_screen(stdout)?;
-        }
-
-        if matches!(self.mode, Mode::FileFinder) {
-            self.render_file_finder(stdout)?;
         }
 
         if matches!(self.mode, Mode::Gosc) {
@@ -395,19 +414,19 @@ impl Editor {
                 .max()
                 .unwrap_or(0);
             if max_vis > text_cols {
-                let avail = cols.saturating_sub(2);
-                let thumb_start = self.sv.x * avail / max_vis;
-                let thumb_end = (self.sv.x + text_cols).min(max_vis) * avail / max_vis;
+                let h_avail = editor_cols.saturating_sub(2);
+                let thumb_start = self.sv.x * h_avail / max_vis;
+                let thumb_end = (self.sv.x + text_cols).min(max_vis) * h_avail / max_vis;
                 let thumb_w = (thumb_end.saturating_sub(thumb_start)).max(1);
 
                 queue!(
                     stdout,
-                    MoveTo(0, hrow as u16),
+                    MoveTo(eo as u16, hrow as u16),
                     SetBackgroundColor(theme.editor.editor_bg.to_crossterm()),
                     SetForegroundColor(theme.editor.scrollbar.to_crossterm()),
                     Print(" "),
                 )?;
-                for h in 1..avail + 1 {
+                for h in 0..h_avail {
                     let ch = if h >= thumb_start && h < thumb_start + thumb_w {
                         '━'
                     } else {
@@ -415,7 +434,7 @@ impl Editor {
                     };
                     queue!(
                         stdout,
-                        MoveTo(h as u16, hrow as u16),
+                        MoveTo((eo + 1 + h) as u16, hrow as u16),
                         if h >= thumb_start && h < thumb_start + thumb_w {
                             SetForegroundColor(theme.editor.scrollbar_thumb.to_crossterm())
                         } else {
@@ -425,10 +444,10 @@ impl Editor {
                         ResetColor,
                     )?;
                 }
-                if avail + 1 < cols {
+                if eo + 1 + h_avail < cols {
                     queue!(
                         stdout,
-                        MoveTo((avail + 1) as u16, hrow as u16),
+                        MoveTo((eo + 1 + h_avail) as u16, hrow as u16),
                         SetForegroundColor(theme.editor.scrollbar.to_crossterm()),
                         Print(" "),
                         ResetColor,
@@ -438,7 +457,7 @@ impl Editor {
             } else {
                 queue!(
                     stdout,
-                    MoveTo(0, hrow as u16),
+                    MoveTo(eo as u16, hrow as u16),
                     Clear(ClearType::UntilNewLine),
                 )?;
             }
@@ -448,10 +467,27 @@ impl Editor {
             self.render_run_panel(stdout)?;
         }
 
-        self.render_cwd_bar(stdout)?;
-        self.render_status_bar(stdout)?;
-        self.render_hint_bar(stdout)?;
-        stdout.flush()?;
+        if self.terminal.is_some() {
+            self.render_terminal_panel(stdout)?;
+        }
+
+        self.render_cwd_bar(stdout, eo)?;
+        self.render_status_bar(stdout, eo)?;
+        self.render_hint_bar(stdout, eo)?;
+
+        // ── Overlays that draw on top of everything ──
+        if matches!(self.mode, Mode::FileFinder) {
+            self.render_file_finder(stdout)?;
+        }
+
+        // Use framebuffer diffing if enabled, otherwise just flush
+        if self.editor_cfg.frame_buffer_enabled {
+            if let Some(ref mut fb) = self.framebuffer {
+                fb.diff_and_flush(stdout)?;
+            }
+        } else {
+            stdout.flush()?;
+        }
 
         self.dirty_start = 0;
         self.dirty_end = 0;

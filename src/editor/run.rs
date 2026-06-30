@@ -1,5 +1,5 @@
 use std::io::{stdout, Write};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use anyhow::Result;
 use crossterm::cursor::{Hide, Show};
@@ -10,7 +10,7 @@ use crossterm::event::{
 use crossterm::terminal::{self, EnterAlternateScreen, LeaveAlternateScreen};
 use crossterm::execute;
 
-use super::{Editor, Mode};
+use super::{Editor, Focus, Mode};
 use crate::editor::types::RunMessage;
 
 /// Drop guard that restores the terminal to a usable state on any exit path
@@ -75,11 +75,48 @@ impl Editor {
             }
             // ── Check for sidebar directory changes ──
             if self.sidebar.check_changed() {
+                self.file_index = None; // Invalidate file finder cache too
                 self.render(stdout)?;
             }
+            // ── Blink tick — runs even when no input arrives ──
+            let blink_rate = self.editor_cfg.cursor_blink_rate_ms;
+            if blink_rate > 0
+                && self.last_blink.elapsed().as_millis() as u64 >= blink_rate
+            {
+                self.cursor_visible = !self.cursor_visible;
+                self.last_blink = Instant::now();
+                self.mark_dirty(self.cursor.y);
+                let ec_ys: Vec<usize> = self.cursor.extra_cursors.iter().map(|c| c.y).collect();
+                for y in ec_ys {
+                    self.mark_dirty(y);
+                }
+                self.render(stdout)?;
+            }
+            // ── Terminal cursor blink — only when focused ──
+            if let Some(ref mut term) = self.terminal {
+                if self.focus == Focus::Terminal {
+                    term.tick_cursor(blink_rate);
+                } else if !term.cursor_visible {
+                    term.cursor_visible = true;
+                    term.dirty = true;
+                }
+            }
+            // ── Session auto-save ──
+            if self.editor_cfg.session_auto_save_secs > 0
+                && self.last_session_save.elapsed().as_secs() >= self.editor_cfg.session_auto_save_secs
+            {
+                let snapshot = self.capture_full_session();
+                let mut session = crate::session::SessionState::write_global();
+                session.session_snapshot = Some(snapshot);
+                session.save();
+                self.last_session_save = Instant::now();
+            }
             // ── wait for event, polling streaming output while process runs ──
-            let ev = if self.mode == Mode::Run && self.run_executing.is_some() {
-                if !event::poll(Duration::from_millis(50))? {
+            let poll_ms = self.editor_cfg.poll_rate_ms.min(50);
+            let has_run = self.run_panel_open && self.run_executing.is_some();
+            let has_term = self.terminal.is_some();
+            let ev = if has_run {
+                if !event::poll(Duration::from_millis(poll_ms))? {
                     self.poll_run_output(stdout);
                     if self.dirty_end > 0 {
                         self.render(stdout)?;
@@ -87,7 +124,43 @@ impl Editor {
                     continue;
                 }
                 event::read()?
+            } else if has_term {
+                if !event::poll(Duration::from_millis(poll_ms))? {
+                    let mut is_dirty = false;
+                    let mut follow = false;
+                    if let Some(ref mut term) = self.terminal {
+                        term.poll_output();
+                        is_dirty = term.dirty;
+                        follow = term.follow_mode;
+                    }
+                    if is_dirty {
+                        // Auto-scroll to cursor if follow mode is on
+                        if follow {
+                            if let Some(ref term) = self.terminal {
+                                let panel_h = self.run_panel_height();
+                                let total = term.total_lines();
+                                let cursor_abs_y = term.scrollback.len() + term.cursor_y;
+                                self.sv.run = (cursor_abs_y + 1).saturating_sub(panel_h).min(total.saturating_sub(panel_h));
+                            }
+                        }
+                        // Horizontal follow — keep cursor in visible range
+                        if let Some(ref term) = self.terminal {
+                            let editor_cols = self.term_w.saturating_sub(self.editor_offset());
+                            term.ensure_cursor_visible_x(&mut self.sv.terminal_scroll_x, editor_cols.saturating_sub(1));
+                        }
+                        self.mark_all_dirty();
+                        self.render(stdout)?;
+                        if let Some(ref mut term) = self.terminal {
+                            term.clear_dirty();
+                        }
+                    }
+                    continue;
+                }
+                event::read()?
             } else {
+                if !event::poll(Duration::from_millis(poll_ms))? {
+                    continue;
+                }
                 event::read()?
             };
 
@@ -120,7 +193,7 @@ impl Editor {
 
             // Paste batching (Windows: rapid Char events in Insert mode)
             let mut handled = false;
-            if matches!(self.mode, Mode::Insert) {
+            if matches!(self.mode, Mode::Insert | Mode::InsertMulti) {
                 if let Event::Key(KeyEvent {
                     code: KeyCode::Char(c),
                     modifiers,
@@ -175,21 +248,33 @@ impl Editor {
                         return Ok(true);
                     }
                 }
-                match self.mode.clone() {
-                    Mode::Search => self.handle_search_event(ev)?,
-                    Mode::Visual => self.handle_visual_event(ev, stdout)?,
-                    Mode::Command => self.handle_command_event(ev, stdout)?,
-                    Mode::Help => self.handle_help_event(ev)?,
-                    Mode::Insert => self.handle_insert_event(ev, stdout)?,
-                    Mode::Normal => self.handle_normal_event(ev, stdout)?,
-                    Mode::FileFinder => self.handle_file_finder_event(ev)?,
-                    Mode::Gosc => self.handle_gosc_event(ev)?,
-                    Mode::Run => self.handle_run_event(ev, stdout)?,
+                match self.focus {
+                    Focus::Run => self.handle_run_event(ev, stdout)?,
+                    Focus::Terminal => self.handle_terminal_event(ev, stdout)?,
+                    Focus::Editor => match self.mode.clone() {
+                        Mode::Search => self.handle_search_event(ev)?,
+                        Mode::Visual => self.handle_visual_event(ev, stdout)?,
+                        Mode::Command => self.handle_command_event(ev, stdout)?,
+                        Mode::Help => self.handle_help_event(ev)?,
+                        Mode::Insert => self.handle_insert_event(ev, stdout)?,
+                        Mode::InsertMulti => self.handle_insert_multi_event(ev, stdout)?,
+                        Mode::Jump => self.handle_jump_event(ev)?,
+                        Mode::Normal => self.handle_normal_event(ev, stdout)?,
+                        Mode::FileFinder => self.handle_file_finder_event(ev)?,
+                        Mode::Gosc => self.handle_gosc_event(ev)?,
+                        Mode::Query => self.handle_query_event(ev)?,
+                    },
                 }
             }
 
             if is_resize {
                 self.mark_all_dirty();
+                // Resize the embedded terminal if active
+                if let Some(ref mut term) = self.terminal {
+                    let (tw, th) = crate::editor::helpers::term_size();
+                    let term_h = (th as f64 * 0.4) as u16;
+                    term.resize(tw as u16, term_h);
+                }
             }
 
             if !skip_render {
@@ -204,19 +289,47 @@ impl Editor {
                 {
                     self.mark_dirty(self.cursor.y);
                     self.mark_dirty(self.cursor.prev_y);
-                }
-                // Ensure extra cursor lines are always dirty for redraw
-                let extra_lines: Vec<usize> = self.cursor.extra_cursors.iter().map(|c| c.y).collect();
-                for y in extra_lines {
-                    self.mark_dirty(y);
+                    self.last_blink = Instant::now();
+                    self.cursor_visible = true;
                 }
                 self.render(stdout)?;
 
                 // Poll streaming output after render too
-                if self.mode == Mode::Run {
+                if self.run_panel_open {
                     self.poll_run_output(stdout);
                     if self.dirty_end > 0 {
                         self.render(stdout)?;
+                    }
+                }
+
+                // Poll terminal output
+                if self.terminal.is_some() {
+                    let mut is_dirty = false;
+                    let mut follow = false;
+                    if let Some(ref mut term) = self.terminal {
+                        term.poll_output();
+                        is_dirty = term.dirty;
+                        follow = term.follow_mode;
+                    }
+                    if is_dirty {
+                        if follow {
+                            if let Some(ref term) = self.terminal {
+                                let panel_h = self.run_panel_height();
+                                let total = term.total_lines();
+                                let cursor_abs_y = term.scrollback.len() + term.cursor_y;
+                                self.sv.run = (cursor_abs_y + 1).saturating_sub(panel_h).min(total.saturating_sub(panel_h));
+                            }
+                        }
+                        // Horizontal follow — keep cursor in visible range
+                        if let Some(ref term) = self.terminal {
+                            let editor_cols = self.term_w.saturating_sub(self.editor_offset());
+                            term.ensure_cursor_visible_x(&mut self.sv.terminal_scroll_x, editor_cols.saturating_sub(1));
+                        }
+                        self.mark_all_dirty();
+                        self.render(stdout)?;
+                        if let Some(ref mut term) = self.terminal {
+                            term.clear_dirty();
+                        }
                     }
                 }
             }
@@ -240,7 +353,7 @@ impl Editor {
                             let panel_h = self.run_panel_height();
                             self.sv.run = self.run_lines.len().saturating_sub(panel_h);
                         }
-                        self.run_executing = None;
+                        self.last_run_cmd = self.run_executing.take();
                         let _ = execute!(stdout, EnableMouseCapture);
                     }
                     RunMessage::Line(line) => {
@@ -261,8 +374,7 @@ impl Editor {
     }
 
     fn push_run_line(&mut self, line: String) {
-        use crate::editor::types::MAX_RUN_LINES;
-        if self.run_lines.len() >= MAX_RUN_LINES {
+        if self.run_lines.len() >= self.editor_cfg.max_run_lines {
             self.run_lines.remove(0);
         }
         self.run_lines.push(line);

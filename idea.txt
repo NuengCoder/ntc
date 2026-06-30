@@ -1,0 +1,47 @@
+=== Feature Ideas ===
+
+[keep] 6.  Hex Viewer/Editor (:hex in ntcEditor)
+         - Byte-level hex dump with offset | hex | ASCII columns
+         - Navigate with arrows/PgUp/PgDn, jump to offset (:goto 0x1A4)
+         - Edit bytes in-place with undo support (reuse editor/core/undo.rs)
+         - Large file support via mmap (no loading entire file into memory)
+         - Theme-aware rendering (reuse existing 61-color theme system)
+         - New file: src/editor/hex/mod.rs, src/editor/render/hex.rs
+
+[keep] 8.  System Monitor Widget (sys)
+         - Live terminal dashboard: CPU per-core, memory, swap, disk, top processes
+         - Keybindings: sort by column, k=kill, /=filter, q=quit
+         - Cross-platform: Windows/Linux/macOS/Android via sysinfo crate
+         - Exportable: sys --json, sys --format pdf (reuse report system)
+         - Reuse crossterm for raw rendering, indicatif for progress bars
+         - New file: src/shell/commands/sysmon.rs
+
+[keep] 12. HTTP API Client (http)
+         - ntc http GET https://api.example.com (wraps ureq, already a dep)
+         - Syntax-highlighted JSON response, status code, headers
+         - Request history, save collections as .ntc.http files
+         - Reuse existing colored output and theme system
+         - New file: src/shell/commands/http_client.rs
+
+[D]    D.  Clipboard History Manager (clip)
+         - clip list   — show last 6 clipboard entries
+         - clip select 3 — copy entry #3 back to clipboard
+         - clip clear  — clear history
+         - Uses arboard (already a dependency)
+         - New file: src/shell/commands/clipboard.rs
+
+[G]    G.  Interactive Grep (gs -i)
+         - gs -i <pattern> enters interactive mode with crossterm raw terminal
+         - Scrollable results list: file:line:content per row
+         - Arrow keys / PgUp / PgDn / j/k to navigate
+         - Enter opens file in ntcEditor at matching line
+         - Preview panel shows surrounding context of selected match
+         - / to filter within results, q/Esc to quit
+         - New file: src/shell/commands/gs_interactive.rs
+
+[planned] Backup restore improvements
+         - backup restore --choose        — pick snapshot from interactive menu
+         - backup restore --deleted       — restore only deleted files from latest backup
+         - backup restore --choose --deleted — pick snapshot, restore only deleted
+         - Reuse existing InteractiveMenu from utils/interactive.rs
+         - Modify src/shell/commands/backup.rs

@@ -8,6 +8,7 @@ ntc_history.txt
 *.toml.tmp
 push.txt
 future_todo.txt
+specs.ps1
 
 # Generated binaries
 *.exe
@@ -34,3 +35,6 @@ Thumbs.db
 
 # Mimocode AI tool config
 .mimocode/
+
+# Node.js
+node_modules/

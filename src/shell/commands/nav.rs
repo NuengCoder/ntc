@@ -1,3 +1,5 @@
+//! Navigation commands: `cd`, `back`, `godrive`, `gos`, `gosc`, `fgo`, `where`.
+
 use crate::explorer::human_readable_size;
 use crate::navigator::{clear_screen, Navigator};
 use crate::output::{print_error, print_success};
@@ -10,13 +12,13 @@ use colored::*;
 use std::io::{self, Write};
 use std::path::{Path, PathBuf};
 
-pub fn cmd_go(args: &str, nav: &mut Navigator) -> Result<bool> {
+pub fn cmd_cd(args: &str, nav: &mut Navigator) -> Result<bool> {
     if args.is_empty() {
-        println!("Usage: go <directory_path>");
-        println!("       go to <tp_name>      Teleport to savepoint");
-        println!("Example: go C:\\Users");
-        println!("         go subdir");
-        println!("         go to work         # Teleport to 'work' savepoint");
+        println!("Usage: cd <directory_path>");
+        println!("       cd to <tp_name>      Teleport to savepoint");
+        println!("Example: cd C:\\Users");
+        println!("         cd subdir");
+        println!("         cd to work         # Teleport to 'work' savepoint");
     } else {
         let parts: Vec<&str> = args.split_whitespace().collect();
         if parts.len() >= 2 && parts[0].to_lowercase() == "to" {

@@ -66,19 +66,40 @@ pub fn run_shell() -> Result<()> {
             let _ = nav.go_to(last_dir);
         }
     }
-    run_shell_with_nav(nav)
+    let initial = crate::cli::take_initial_command();
+    run_shell_with_nav(nav, initial.as_deref())
 }
 
-pub fn run_shell_with_nav(nav: Navigator) -> Result<()> {
-    run_classic_shell(nav)
+pub fn run_shell_with_command(initial: &str) -> Result<()> {
+    let mut nav = Navigator::new()?;
+    run_shell_with_nav(nav, Some(initial))
 }
 
-pub fn run_classic_shell(mut nav: Navigator) -> Result<()> {
-    if std::env::var("NTC_SHELL").is_ok() {
-        print_warning("Already inside an ntc shell — nested shells are not supported.");
-        return Ok(());
+pub fn run_shell_with_nav(nav: Navigator, initial_command: Option<&str>) -> Result<()> {
+    run_classic_shell(nav, initial_command)
+}
+
+pub fn run_classic_shell(mut nav: Navigator, initial_cmd: Option<&str>) -> Result<()> {
+    // Inject active ntpkg runtime bin directories into PATH
+    let pkg_dirs = crate::ntpkg::build_package_path_entries();
+    if !pkg_dirs.is_empty() {
+        let path_sep = if cfg!(windows) { ";" } else { ":" };
+        let current_path = std::env::var("PATH").unwrap_or_default();
+        let mut new_path = String::new();
+        for dir in &pkg_dirs {
+            if !new_path.is_empty() {
+                new_path.push_str(path_sep);
+            }
+            new_path.push_str(&dir.to_string_lossy());
+        }
+        if !current_path.is_empty() {
+            new_path.push_str(path_sep);
+            new_path.push_str(&current_path);
+        }
+        std::env::set_var("PATH", &new_path);
+        let count = pkg_dirs.len();
+        print_info(&format!("ntpkg: {} runtime{} active in PATH", count, if count == 1 { "" } else { "s" }));
     }
-    std::env::set_var("NTC_SHELL", "1");
 
     let mut rl = Editor::<NtcHelper, FileHistory>::with_config(RlConfig::default())
         .map_err(|e| anyhow::anyhow!("Failed to create line editor: {}", e))?;
@@ -107,6 +128,21 @@ pub fn run_classic_shell(mut nav: Navigator) -> Result<()> {
     println!();
     println!("{}", "Type 'help' for available commands, 'exit' to quit.".dimmed());
     show_tree(&nav, Some(1), false, false, false, false, false);
+
+    // Execute initial command if provided (e.g. "ntc serve 8080")
+    if let Some(cmd) = initial_cmd {
+        let cmd = cmd.trim();
+        if !cmd.is_empty() {
+            let expanded = expand_command_line(cmd);
+            for cmd in expanded {
+                match execute_command(&cmd, &mut nav, &watcher_handle) {
+                    Ok(_)  => {}
+                    Err(e) => print_error(&format!("{}", e)),
+                }
+            }
+            // If command returned exit (e.g. "serve" returns Ok(false)), still show prompt
+        }
+    }
     
     loop {
         // Check if theme changed

@@ -31,7 +31,7 @@ fn handle_teleport_at(raw_args: &[String]) -> Result<bool> {
                 println!("✓ Teleported to '{}' -> {}", tp_name, clean_path.display());
                 println!();
                 print_logo();
-                crate::shell::run_shell_with_nav(nav)?;
+                crate::shell::run_shell_with_nav(nav, None)?;
                 Ok(false)
             }
             Err(e) => {
@@ -110,6 +110,8 @@ fn handle_simple_flags(matches: &clap::ArgMatches, known_flags: &[&str]) -> Resu
 
     if matches.get_flag("size") {
         let show_view = matches.get_flag("view_cli");
+        let show_time = matches.get_flag("time");
+        let start = std::time::Instant::now();
         use crate::navigator::Navigator;
         let nav = Navigator::new()?;
         let total = crate::explorer::calculate_dir_size(nav.current_path());
@@ -118,6 +120,10 @@ fn handle_simple_flags(matches: &clap::ArgMatches, known_flags: &[&str]) -> Resu
         println!("│ Current Directory Size                  │");
         println!("│ Bytes: {:>32} │", format!("{}", total));
         println!("│ Human: {:>32} │", crate::explorer::human_readable_size(total));
+        if show_time {
+            println!("├─────────────────────────────────────────┤");
+            println!("│ Time:  {:>32} │", crate::explorer::format_duration(start.elapsed()));
+        }
         println!("└─────────────────────────────────────────┘");
         if show_view {
             println!();
@@ -135,6 +141,8 @@ fn handle_simple_flags(matches: &clap::ArgMatches, known_flags: &[&str]) -> Resu
     }
 
     if matches.get_flag("view_cli") && !matches.get_flag("size") {
+        let show_time = matches.get_flag("time");
+        let start = std::time::Instant::now();
         use crate::navigator::Navigator;
         let nav = Navigator::new()?;
         let tree = crate::explorer::generate_tree(
@@ -144,7 +152,14 @@ fn handle_simple_flags(matches: &clap::ArgMatches, known_flags: &[&str]) -> Resu
             None,
         );
         let tree_str = crate::explorer::format_tree_with_sizes(&tree, "", true, false, false, None);
-        println!("{}", tree_str);
+        if show_time {
+            println!("{}", tree_str);
+            println!("┌─────────────────────────────────────────┐");
+            println!("│ Time:  {:>32} │", crate::explorer::format_duration(start.elapsed()));
+            println!("└─────────────────────────────────────────┘");
+        } else {
+            println!("{}", tree_str);
+        }
         return Ok(false);
     }
 
@@ -558,6 +573,15 @@ fn handle_edit_init(matches: &clap::ArgMatches) -> Result<bool> {
     Ok(true)
 }
 
+fn handle_hyper(matches: &clap::ArgMatches) -> Result<bool> {
+    if let Some(name) = matches.get_one::<String>("hyper") {
+        let lang = matches.get_one::<String>("lang").map(|s| s.as_str()).unwrap_or("c");
+        crate::editor::init_hyper_project(name, lang)?;
+        return Ok(false);
+    }
+    Ok(true)
+}
+
 fn handle_ral_igcare(matches: &clap::ArgMatches) -> Result<bool> {
     if let Some(name) = matches.get_one::<String>("ral_export_all") {
         crate::shell::helpers::ral_export_all(name)?;
@@ -794,6 +818,13 @@ pub fn run_cli() -> Result<bool> {
                 .action(ArgAction::SetTrue),
         )
         .arg(
+            Arg::new("time")
+                .long("time")
+                .short('t')
+                .help("Show elapsed time (use with --size or --view)")
+                .action(ArgAction::SetTrue),
+        )
+        .arg(
             Arg::new("where_cli")
                 .long("where")
                 .help("Show ntc executable location")
@@ -848,6 +879,21 @@ pub fn run_cli() -> Result<bool> {
                 .value_name("FILE")
                 .help("Create starter file from template and open in editor")
                 .num_args(1),
+        )
+        .arg(
+            Arg::new("hyper")
+                .long("hyper")
+                .value_name("PROJECT")
+                .help("Create hyper project scaffold (DSA library)")
+                .num_args(1),
+        )
+        .arg(
+            Arg::new("lang")
+                .long("lang")
+                .value_name("LANG")
+                .help("Language for hyper project")
+                .num_args(1)
+                .value_parser(["c"]),
         )
         .arg(
             Arg::new("ral_export_all")
@@ -943,7 +989,24 @@ pub fn run_cli() -> Result<bool> {
                 .num_args(1)
                 .value_parser(["bash", "zsh", "fish", "powershell"]),
         )
-        .try_get_matches_from(args)?;
+        .try_get_matches_from(args);
+
+    let matches = match matches {
+        Ok(m) => m,
+        Err(e) => {
+            // Unknown args → forward to shell (e.g. "ntc serve 8080")
+            if e.kind() == clap::error::ErrorKind::UnknownArgument
+                || e.kind() == clap::error::ErrorKind::InvalidSubcommand
+            {
+                let raw: Vec<String> = std::env::args().skip(1).collect();
+                if !raw.is_empty() {
+                    set_initial_command(raw.join(" "));
+                }
+                return Ok(true);
+            }
+            return Err(e.into());
+        }
+    };
 
     // Dispatch to handler functions in priority order
     if !handle_simple_flags(&matches, &known_flags)? { return Ok(false); }
@@ -952,9 +1015,28 @@ pub fn run_cli() -> Result<bool> {
     if !handle_setters(&matches)? { return Ok(false); }
     if !handle_input(&matches)? { return Ok(false); }
     if !handle_teleport_cmds(&matches)? { return Ok(false); }
+    if !handle_hyper(&matches)? { return Ok(false); }
     if !handle_edit_init(&matches)? { return Ok(false); }
     if !handle_ral_igcare(&matches)? { return Ok(false); }
 
     // --- No arguments: Launch interactive mode ---
     Ok(true)
+}
+
+// ── Initial command injection ──────────────────────────────────────
+// Allows "ntc serve 8080" to bypass clap and run directly in the shell
+
+use std::sync::Mutex;
+static INITIAL_COMMAND: Mutex<Option<String>> = Mutex::new(None);
+
+/// Set the initial command to execute in the shell (from unrecognized CLI args).
+fn set_initial_command(cmd: String) {
+    if let Ok(mut guard) = INITIAL_COMMAND.lock() {
+        *guard = Some(cmd);
+    }
+}
+
+/// Take and clear the initial command (called by shell at startup).
+pub fn take_initial_command() -> Option<String> {
+    INITIAL_COMMAND.lock().ok()?.take()
 }

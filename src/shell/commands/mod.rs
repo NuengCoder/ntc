@@ -14,12 +14,19 @@ use std::sync::Arc;
 mod alias_commands;
 mod backup;
 mod config_commands;
+mod downloader;
+mod gs_interactive;
+mod http_client;
 mod ignore;
+mod serve;
+mod smtp_client;
+mod sysmon;
 mod misc;
 mod nav;
 mod theme;
 mod ran_commands;
 mod report;
+mod tl;
 
 #[cfg(feature = "image2doc")]
 mod image;
@@ -30,7 +37,6 @@ mod image;
 // ============================================================================
 
 /// Execute a single command (already fully expanded)
-#[allow(clippy::only_used_in_recursion)]
 pub(crate) fn execute_command(
     input: &str,
     nav: &mut Navigator,
@@ -41,27 +47,14 @@ pub(crate) fn execute_command(
     let args = parts.get(1).unwrap_or(&"").trim();
 
     match cmd.as_str() {
-        "go" | "cd" => nav::cmd_go(args, nav),
+        "cd" => nav::cmd_cd(args, nav),
         "godrive" | "god" => nav::cmd_godrive(args, nav),
         "back" | "b" => nav::cmd_back(args, nav),
         "view" => report::cmd_view(args, nav),
-        "txt" => report::cmd_txt(args, nav),
+        "report" => report::cmd_report(args, nav),
         "txtc" => report::cmd_txtc(args, nav),
         "txtf" => report::cmd_txtf(args, nav),
-        "html" => report::cmd_html(args, nav),
-        "json" => report::cmd_json(args, nav),
-        "md" => report::cmd_md(args, nav),
-        "pdf" => report::cmd_pdf(args, nav),
-        "docx" => report::cmd_docx(args, nav),
-        "xlsx" => report::cmd_xlsx(args, nav),
-        "seto" => config_commands::cmd_seto(args, nav),
-        "setd" => config_commands::cmd_setd(args, nav),
-        "setl" => config_commands::cmd_setl(args, nav),
-        "setc" => config_commands::cmd_setc(args, nav),
-        "seta" => config_commands::cmd_seta(args, nav),
-        "sett" => config_commands::cmd_sett(args, nav),
-        "seth" => config_commands::cmd_seth(args, nav),
-        "watch" => config_commands::cmd_watch(args, nav),
+        "config" => config_commands::cmd_config(args, nav),
         "clear" => misc::cmd_clear(args, nav),
         "dino" => misc::cmd_dino(args, nav),
         "math" => misc::cmd_math(args, nav),
@@ -69,10 +62,6 @@ pub(crate) fn execute_command(
         "where" => nav::cmd_where(nav),
         "gos" => nav::cmd_gos(nav),
         "gosc" => nav::cmd_gosc(nav),
-        "ignores" => ignore::cmd_ignores(args, nav),
-        "ignoresc" => ignore::cmd_ignoresc(nav),
-        "cares" => ignore::cmd_cares(args, nav),
-        "caresc" => ignore::cmd_caresc(nav),
         "ral" => alias_commands::cmd_ral(args, nav),
         "ran" => ran_commands::cmd_ran(args, nav),
         "run" | "r" => alias_commands::cmd_run(args, nav),
@@ -85,25 +74,21 @@ pub(crate) fn execute_command(
         "init" => config_commands::cmd_init(args, nav),
         "deinit" => config_commands::cmd_deinit(args, nav),
         "help" => misc::cmd_help(args, nav),
+        "http" => http_client::cmd_http(args, nav),
         "tutorial" | "guide" => misc::cmd_tutorial(args, nav),
         "exit" | "quit" | "esc" => misc::cmd_exit(args, nav),
-        "ignored" => ignore::cmd_ignored(args, nav),
         "ignore" => ignore::cmd_ignore(args, nav),
-        "cared" => ignore::cmd_cared(args, nav),
-        "ignoref" => ignore::cmd_ignoref(args, nav),
-        "caref" => ignore::cmd_caref(args, nav),
-        "ignoren" => ignore::cmd_ignoren(args, nav),
-        "caren" => ignore::cmd_caren(args, nav),
+        "care" => ignore::cmd_care(args, nav),
+        "igcared" => ignore::cmd_igcared(args, nav),
         "igcare" => ignore::cmd_igcare(args, nav),
         "size" => misc::cmd_size(args, nav),
         "tp" => misc::cmd_tp(args, nav),
         "tpb" => misc::cmd_tpb(args, nav),
         "ui" => misc::cmd_ui(args, nav),
-        "bkup" => backup::cmd_bkup(args, nav),
-        "pldw" => backup::cmd_pldw(args, nav),
-        "unpd" => backup::cmd_unpd(args, nav),
-        "diff" => backup::cmd_diff(args, nav),
+        "backup" => backup::cmd_backup(args, nav),
         "fs" => misc::cmd_fs(args, nav),
+        "dl" => downloader::cmd_dl(args, nav),
+        "dns" => downloader::cmd_dns(args, nav),
         "ds" => misc::cmd_ds(args, nav),
         "gs" => misc::cmd_gs(args, nav),
         "fgo" => nav::cmd_fgo(args, nav),
@@ -113,7 +98,14 @@ pub(crate) fn execute_command(
         "mkd" => misc::cmd_mkd(args, nav),
         "rmd" => misc::cmd_rmd(args, nav),
         "rmf" => misc::cmd_rmf(args, nav),
+        "rnmf" => misc::cmd_rnmf(args, nav),
+        "rnmd" => misc::cmd_rnmd(args, nav),
+        "sys" | "top" => sysmon::cmd_sys(args, nav),
         "theme" => theme::cmd_theme(args, nav),
+        "up" => downloader::cmd_up(args, nav),
+        "ping" => downloader::cmd_ping(args, nav),
+        "smtp" => smtp_client::cmd_smtp(args, nav),
+        "serve" => serve::cmd_serve(args, nav),
         "py_activate" => misc::cmd_venva(args, nav),
         "py_deactivate" => misc::cmd_venvd(args, nav),
         "showenv" => misc::cmd_show_env(args, nav),
@@ -124,6 +116,8 @@ pub(crate) fn execute_command(
             print_error("Image conversion not available (feature 'image2doc' disabled).");
             Ok(false)
         }
+        "ntpkg" => crate::ntpkg::cmd_ntpkg(args, nav),
+        "tl" => tl::cmd_tl(args, nav),
         _ => misc::cmd_fallback(input, nav, watcher_handle),
     }
 }
@@ -158,29 +152,28 @@ fn execute_system_command(cmd: &str, cwd: &Path) -> Result<bool> {
 
 static CHILD_PID: AtomicU32 = AtomicU32::new(0);
 
-fn init_ctrlc_handler() {
-    use std::sync::Once;
-    static INIT: Once = Once::new();
-    INIT.call_once(|| {
-        let _ = ctrlc::set_handler(move || {
-            let pid = CHILD_PID.load(Ordering::SeqCst);
-            if pid > 0 {
-                #[cfg(windows)]
-                {
-                    let _ = std::process::Command::new("taskkill")
-                        .args(["/F", "/T", "/PID", &pid.to_string()])
-                        .stdout(std::process::Stdio::null())
-                        .stderr(std::process::Stdio::null())
-                        .status();
-                }
-                #[cfg(not(windows))]
-                {
-                    let _ = std::process::Command::new("kill")
-                        .args(["-TERM", &pid.to_string()])
-                        .status();
-                }
+pub fn init_ctrlc_handler() {
+    use std::sync::atomic::AtomicBool;
+    static INIT: AtomicBool = AtomicBool::new(false);
+    INIT.store(true, Ordering::SeqCst);
+    let _ = ctrlc::set_handler(move || {
+        let pid = CHILD_PID.load(Ordering::SeqCst);
+        if pid > 0 {
+            #[cfg(windows)]
+            {
+                let _ = std::process::Command::new("taskkill")
+                    .args(["/F", "/T", "/PID", &pid.to_string()])
+                    .stdout(std::process::Stdio::null())
+                    .stderr(std::process::Stdio::null())
+                    .status();
             }
-        });
+            #[cfg(not(windows))]
+            {
+                let _ = std::process::Command::new("kill")
+                    .args(["-TERM", &pid.to_string()])
+                    .status();
+            }
+        }
     });
 }
 

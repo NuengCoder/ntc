@@ -2,6 +2,7 @@ use crate::editor::Editor;
 
 impl Editor {
     pub(crate) fn push_to_system_clipboard(text: &str) {
+        crate::shell::commands::clipboard::push_clip(text);
         #[cfg(not(target_os = "android"))]
         {
             if let Ok(mut cb) = arboard::Clipboard::new() {

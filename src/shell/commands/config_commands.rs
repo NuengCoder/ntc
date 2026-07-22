@@ -25,6 +25,7 @@ pub fn cmd_config(args: &str, _nav: &mut Navigator) -> Result<bool> {
         "threads" | "t" => config_threads(subargs),
         "history" | "h" => config_history(subargs),
         "watch" | "w" => config_watch(subargs),
+        "qsc" => config_qsc(subargs),
         _ => {
             println!("{}", "config — View or change configuration settings".cyan().bold());
             println!();
@@ -37,6 +38,7 @@ pub fn cmd_config(args: &str, _nav: &mut Navigator) -> Result<bool> {
             println!("  config threads [n]          Show/set thread count");
             println!("  config history [on|off|path] Show/set history");
             println!("  config watch ON|OFF         Show/set file watcher");
+            println!("  config qsc \"#c 0\"           Show/set QSC global hotkey");
             println!();
             println!("{}", "Examples:".green());
             println!("  config output C:\\reports");
@@ -218,6 +220,46 @@ fn config_watch(args: &str) -> Result<bool> {
     Ok(false)
 }
 
+fn config_qsc(args: &str) -> Result<bool> {
+    if args.is_empty() {
+        match Config::global_get_qsc() {
+            Some(ref hk) => {
+                let mut parts = Vec::new();
+                if hk.ctrl  { parts.push("Ctrl".to_string()); }
+                if hk.shift { parts.push("Shift".to_string()); }
+                if hk.alt   { parts.push("Alt".to_string()); }
+                parts.push(hk.key.clone());
+                println!("QSC hotkey: {}", parts.join("+").cyan());
+            }
+            None => println!("QSC hotkey: {}", "not configured".dimmed()),
+        }
+        println!("Usage: config qsc \"#c 0\"");
+        println!("       config qsc \"#c #s a\"");
+        println!("       config qsc \"#c #s #a F1\"");
+        println!("       config qsc off");
+    } else {
+        match Config::parse_qsc(args) {
+            Some(hk) => {
+                Config::global_set_qsc(Some(hk.clone()));
+                let mut parts = Vec::new();
+                if hk.ctrl  { parts.push("Ctrl".to_string()); }
+                if hk.shift { parts.push("Shift".to_string()); }
+                if hk.alt   { parts.push("Alt".to_string()); }
+                parts.push(hk.key.clone());
+                print_success(&format!("QSC hotkey set to: {}", parts.join("+")));
+            }
+            None if args.trim().eq_ignore_ascii_case("off") => {
+                Config::global_set_qsc(None);
+                print_success("QSC hotkey disabled.");
+            }
+            None => {
+                print_error(&format!("Invalid QSC format: '{}'. Use '#c #s 0' style.", args));
+            }
+        }
+    }
+    Ok(false)
+}
+
 pub fn cmd_showcg(_args: &str, _nav: &mut Navigator) -> Result<bool> {
     let w = 65;
     println!();
@@ -231,6 +273,18 @@ pub fn cmd_showcg(_args: &str, _nav: &mut Navigator) -> Result<bool> {
     println!("│ {:<20} {:<42} │", "History:", if Config::global_get_history_enabled() { "ON".green() } else { "OFF".red() });
     println!("│ {:<20} {:<42} │", "Watcher:", if Config::global_get_file_watcher_enabled() { "ON".green() } else { "OFF".red() });
     println!("│ {:<20} {:<42} │", "Color:", if Config::global_get_color_enabled() { "ON".green() } else { "OFF".red() });
+    let qsc_display = match Config::global_get_qsc() {
+        Some(ref hk) => {
+            let mut parts = Vec::new();
+            if hk.ctrl  { parts.push("Ctrl"); }
+            if hk.shift { parts.push("Shift"); }
+            if hk.alt   { parts.push("Alt"); }
+            parts.push(&hk.key);
+            parts.join("+").cyan().to_string()
+        }
+        None => "OFF".dimmed().to_string(),
+    };
+    println!("│ {:<20} {:<42} │", "QSC Hotkey:", qsc_display);
     println!("└{}┘", "─".repeat(w));
     println!();
     Ok(false)

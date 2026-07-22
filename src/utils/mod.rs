@@ -16,3 +16,4 @@ pub mod teleport;
 pub mod watcher;
 pub mod session;
 pub mod theme;
+pub mod qsc;

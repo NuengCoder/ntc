@@ -183,15 +183,18 @@ pub fn completion() {
     println!("You now know the essentials of NTC:");
     println!();
     let highlights = [
-        ("Navigation", "go, cd, back, where"),
-        ("Search", "fs, ds, locate, fgo"),
-        ("Reports", "txt, html, json, md"),
-        ("Editor", "ne, --init"),
-        ("Themes", "theme list, theme <name>"),
-        ("Backups", "bkup, pldw, unpd, diff"),
-        ("Config", "setO, setD, showcg, watch"),
-        ("Teleports", "tp-add, @shortcut"),
-        ("Aliases", "ral add/list, run"),
+        ("Navigation", "cd, back, gosc, where"),
+        ("Teleport", "tp add/jump, @name, tpb"),
+        ("Aliases", "ral add/list/run, ran"),
+        ("View/Search", "view, fs, ds, locate, gs"),
+        ("Reports", "report txt/html/json/md/..."),
+        ("Config", "config depth/color/watch, showcg"),
+        ("Backups", "backup create/restore/undo/diff"),
+        ("File Ops", "mkf, mkd, rmf, rmd, cp, txtc/txtf"),
+        ("Themes", "theme list/switch/add/rm"),
+        ("Hotkey", "config qsc, qsc listen"),
+        ("Network", "sys/top, serve"),
+        ("Editor", "ne — Normal/Insert/Command/Search modes"),
     ];
     for (feature, cmds) in &highlights {
         println!(

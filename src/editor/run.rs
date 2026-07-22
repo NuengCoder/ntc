@@ -263,6 +263,7 @@ impl Editor {
                         Mode::FileFinder => self.handle_file_finder_event(ev)?,
                         Mode::Gosc => self.handle_gosc_event(ev)?,
                         Mode::Query => self.handle_query_event(ev)?,
+                        Mode::Hex => self.handle_hex_event(ev, stdout)?,
                     },
                 }
             }

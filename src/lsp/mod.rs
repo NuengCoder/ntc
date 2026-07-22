@@ -1,5 +1,5 @@
 // src/lsp/mod.rs
-// Minimal LSP server for .ntc.math files using manual JSON-RPC over stdio.
+// Minimal LSP server for .ntc.math and .mq4/.mq5/.mqh files using manual JSON-RPC over stdio.
 
 use std::collections::HashMap;
 use std::io::{self, BufRead, Write};
@@ -10,6 +10,7 @@ use serde_json::Value;
 
 use crate::config::Config;
 use crate::math;
+use crate::mql;
 
 // ── document store ──────────────────────────────────────────────────────────
 
@@ -59,6 +60,7 @@ fn make_diagnostic(
     message: &str,
     byte_offset: usize,
     severity: u32,
+    source: &str,
 ) -> Value {
     let (line, col) = byte_to_lsp_position(text, byte_offset);
     // Estimate range: from the error position to end of line
@@ -72,7 +74,7 @@ fn make_diagnostic(
         },
         "severity": severity,
         "message": message,
-        "source": "ntc-math"
+        "source": source
     })
 }
 
@@ -127,6 +129,10 @@ fn constant_value(name: &str) -> Option<f64> {
 
 fn is_ntc_math_uri(uri: &str) -> bool {
     uri.ends_with(".ntc.math") || uri.ends_with(".math")
+}
+
+fn is_mql_uri(uri: &str) -> bool {
+    uri.ends_with(".mq4") || uri.ends_with(".mq5") || uri.ends_with(".mqh")
 }
 
 // ── JSON-RPC message I/O ─────────────────────────────────────────────────────
@@ -190,6 +196,8 @@ fn publish_diagnostics(
 ) -> Result<()> {
     let mut diagnostics = Vec::new();
     let content = store.get(uri).unwrap_or("");
+    let is_math = is_ntc_math_uri(uri);
+    let source = if is_math { "ntc-math" } else { "ntc-mql" };
 
     for (line_idx, line) in content.lines().enumerate() {
         let trimmed = line.trim();
@@ -205,11 +213,17 @@ fn publish_diagnostics(
             })
             .sum::<usize>();
 
-        match math::validate(trimmed) {
+        let result = if is_math {
+            math::validate(trimmed)
+        } else {
+            mql::validate(trimmed)
+        };
+
+        match result {
             Ok(()) => {}
             Err((msg, offset_in_line)) => {
                 let absolute_offset = line_byte_offset + offset_in_line;
-                diagnostics.push(make_diagnostic(content, &msg, absolute_offset, 1));
+                diagnostics.push(make_diagnostic(content, &msg, absolute_offset, 1, source));
             }
         }
     }
@@ -368,8 +382,8 @@ fn run_server_inner(log_path: Option<&Path>) -> Result<()> {
                         "definitionProvider": true
                     },
                     "serverInfo": {
-                        "name": "ntc-math-lsp",
-                        "version": "2.1.0"
+                        "name": "ntc-lsp",
+                        "version": "2.2.0"
                     }
                 });
                 if let Some(req_id) = &id {
@@ -405,7 +419,7 @@ fn run_server_inner(log_path: Option<&Path>) -> Result<()> {
                 if let Some(params) = msg.get("params") {
                     let uri = params["textDocument"]["uri"].as_str().unwrap_or("");
                     let text = params["textDocument"]["text"].as_str().unwrap_or("");
-                    if is_ntc_math_uri(uri) {
+                    if is_ntc_math_uri(uri) || is_mql_uri(uri) {
                         store.open(uri, text);
                         publish_diagnostics(&mut writer, &store, uri, &logger)?;
                     }
@@ -415,7 +429,7 @@ fn run_server_inner(log_path: Option<&Path>) -> Result<()> {
             "textDocument/didChange" => {
                 if let Some(params) = msg.get("params") {
                     let uri = params["textDocument"]["uri"].as_str().unwrap_or("");
-                    if is_ntc_math_uri(uri) {
+                    if is_ntc_math_uri(uri) || is_mql_uri(uri) {
                         if let Some(content_changes) = params["contentChanges"].as_array() {
                             if let Some(change) = content_changes.last() {
                                 let text = change["text"].as_str().unwrap_or("");
@@ -430,7 +444,7 @@ fn run_server_inner(log_path: Option<&Path>) -> Result<()> {
             "textDocument/didSave" => {
                 if let Some(params) = msg.get("params") {
                     let uri = params["textDocument"]["uri"].as_str().unwrap_or("");
-                    if is_ntc_math_uri(uri) {
+                    if is_ntc_math_uri(uri) || is_mql_uri(uri) {
                         if let Some(text) = params.get("text").and_then(|t| t.as_str()) {
                             store.change(uri, text);
                         }
@@ -442,7 +456,7 @@ fn run_server_inner(log_path: Option<&Path>) -> Result<()> {
             "textDocument/didClose" => {
                 if let Some(params) = msg.get("params") {
                     let uri = params["textDocument"]["uri"].as_str().unwrap_or("");
-                    if is_ntc_math_uri(uri) {
+                    if is_ntc_math_uri(uri) || is_mql_uri(uri) {
                         store.close(uri);
                         let diag_notif = serde_json::json!({
                             "jsonrpc": "2.0",
@@ -465,6 +479,7 @@ fn run_server_inner(log_path: Option<&Path>) -> Result<()> {
                     let params = msg.get("params");
                     let uri = params.and_then(|p| p["textDocument"]["uri"].as_str()).unwrap_or("");
                     let is_math = is_ntc_math_uri(uri);
+                    let is_mql = is_mql_uri(uri);
 
                     if is_math {
                         for name in math::builtin_function_names() {
@@ -497,6 +512,76 @@ fn run_server_inner(log_path: Option<&Path>) -> Result<()> {
                             }));
                         }
                         drop(cfg_guard);
+                    }
+
+                    if is_mql {
+                        for name in mql::keyword_names() {
+                            items.push(serde_json::json!({
+                                "label": name,
+                                "kind": 14,
+                                "detail": "[other]",
+                                "insertText": name
+                            }));
+                        }
+                        for name in mql::type_names() {
+                            items.push(serde_json::json!({
+                                "label": name,
+                                "kind": 22,
+                                "detail": "[built-in]",
+                                "insertText": name
+                            }));
+                        }
+                        for name in mql::builtin_function_names() {
+                            items.push(serde_json::json!({
+                                "label": name,
+                                "kind": 3,
+                                "detail": "[Fun]",
+                                "insertText": name
+                            }));
+                        }
+                        for name in mql::constant_names() {
+                            items.push(serde_json::json!({
+                                "label": name,
+                                "kind": 21,
+                                "detail": "[constant]",
+                                "insertText": name
+                            }));
+                        }
+                        if let Some(content) = store.get(uri) {
+                            let lines: Vec<String> = content.lines().map(String::from).collect();
+                            for v in mql::extract_variables(&lines) {
+                                items.push(serde_json::json!({
+                                    "label": v.name,
+                                    "kind": 6,
+                                    "detail": format!("[Var] {}", v.type_name),
+                                    "insertText": v.name
+                                }));
+                            }
+                            for name in mql::extract_includes(&lines) {
+                                items.push(serde_json::json!({
+                                    "label": name,
+                                    "kind": 9,
+                                    "detail": "[file.mqh]",
+                                    "insertText": name
+                                }));
+                            }
+                            for (name, _) in mql::extract_classes(&lines) {
+                                items.push(serde_json::json!({
+                                    "label": name,
+                                    "kind": 22,
+                                    "detail": "[class]",
+                                    "insertText": name
+                                }));
+                            }
+                            for (name, _) in mql::extract_structs(&lines) {
+                                items.push(serde_json::json!({
+                                    "label": name,
+                                    "kind": 22,
+                                    "detail": "[struct]",
+                                    "insertText": name
+                                }));
+                            }
+                        }
                     }
 
                     let resp = serde_json::json!({
@@ -554,6 +639,74 @@ fn run_server_inner(log_path: Option<&Path>) -> Result<()> {
                                     }
                                     drop(cfg_guard);
                                 }
+                            }
+                        }
+                    }
+
+                    if is_mql_uri(uri) {
+                        if let Some(text) = store.get(uri) {
+                            let byte_offset = pos_to_byte_offset(text, pos_line, pos_col);
+                            if let Some(word) = word_at_offset(text, byte_offset) {
+                                if let Some(doc) = mql::hover_info_detailed(word) {
+                                    hover_contents = Some(format!("**{}**  \n```\n{}\n```", word, doc));
+                                } else if let Some(doc) = mql::hover_info(word) {
+                                    hover_contents = Some(format!("**{}**  \n{}", word, doc));
+                                    } else {
+                                        let lines: Vec<String> = text.lines().map(String::from).collect();
+                                        let mut found = false;
+                                        for func in mql::extract_user_functions(&lines) {
+                                            if func.name == word {
+                                                let sig = if func.params.is_empty() {
+                                                    format!("{} {}", func.return_type, func.name)
+                                                } else {
+                                                    let lines: Vec<String> = func.params
+                                                        .split(',')
+                                                        .map(|p| {
+                                                            let p = p.trim();
+                                                            let t: Vec<&str> = p.split_whitespace().collect();
+                                                            if t.len() >= 2 {
+                                                                format!("  {}: {}", t[t.len()-1], t[..t.len()-1].join(" "))
+                                                            } else {
+                                                                format!("  {}", p)
+                                                            }
+                                                        })
+                                                        .collect();
+                                                    format!("{}{}\n{}\n{}", func.name, "(", lines.join("\n"), ")")
+                                                };
+                                                if let Some(box_content) = mql::extract_comment_box(&lines, func.line) {
+                                                    hover_contents = Some(format!("**{}**  \n{}\n\n```\n{}\n```", word, sig, box_content));
+                                                } else {
+                                                    hover_contents = Some(format!("**{}**  \n{}", word, sig));
+                                                }
+                                                found = true;
+                                                break;
+                                            }
+                                        }
+                                        if !found {
+                                            for (name, line) in mql::extract_classes(&lines) {
+                                                if name == word {
+                                                    if let Some(box_content) = mql::extract_comment_box(&lines, line) {
+                                                        hover_contents = Some(format!("**[class] {}**  \n```\n{}\n```", word, box_content));
+                                                    } else {
+                                                        hover_contents = Some(format!("**[class] {}**", word));
+                                                    }
+                                                    break;
+                                                }
+                                            }
+                                        }
+                                        if hover_contents.is_none() {
+                                            for (name, line) in mql::extract_structs(&lines) {
+                                                if name == word {
+                                                    if let Some(box_content) = mql::extract_comment_box(&lines, line) {
+                                                        hover_contents = Some(format!("**[struct] {}**  \n```\n{}\n```", word, box_content));
+                                                    } else {
+                                                        hover_contents = Some(format!("**[struct] {}**", word));
+                                                    }
+                                                    break;
+                                                }
+                                            }
+                                        }
+                                    }
                             }
                         }
                     }

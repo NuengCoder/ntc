@@ -675,6 +675,141 @@ impl BackupManager {
         Ok(())
     }
 
+    /// Restore only files that were deleted from the project since the backup was
+    /// taken — files present in the backup snapshot but missing from the current
+    /// project tree. No overwrites, no extra deletions.
+    pub fn restore_deleted_only(
+        project_root: &Path,
+        backup_number: usize,
+        interactive: bool,
+    ) -> Result<()> {
+        let project_hash  = compute_project_hash(project_root);
+        let backup_path   = BackupIndex::get_backup_path(&project_hash, backup_number);
+        let manifest_path = backup_path.join(".manifest.json");
+
+        if !manifest_path.exists() {
+            print_error(&format!("Backup #{} not found.", backup_number));
+            return Ok(());
+        }
+
+        let manifest = BackupManifest::load(&manifest_path)?;
+
+        let backup_file_set: HashSet<String> = manifest.files
+            .iter()
+            .map(|e| e.rel_path.to_string_lossy().replace('\\', "/"))
+            .collect();
+
+        let current_file_set = Self::collect_current_file_set(project_root);
+
+        // Files that were in the backup but are missing from the project == "deleted"
+        let mut to_restore: Vec<PathBuf> = Vec::new();
+        for backup_rel in &backup_file_set {
+            let normalised = backup_rel.replace('\\', "/");
+            if !current_file_set.contains(&normalised) {
+                to_restore.push(PathBuf::from(backup_rel));
+            }
+        }
+
+        if to_restore.is_empty() {
+            print_info("No deleted files to restore — project already matches the backup snapshot.");
+            return Ok(());
+        }
+
+        // Interactive confirmation
+        if interactive {
+            println!();
+            println!(
+                "  {} files will be restored (were present in backup but are gone now):",
+                to_restore.len()
+            );
+            for p in to_restore.iter().take(20) {
+                println!("    + {}", p.display());
+            }
+            if to_restore.len() > 20 {
+                println!("    ... and {} more", to_restore.len() - 20);
+            }
+            println!();
+            print!("Continue with restore-deleted? (y/N): ");
+            io::stdout().flush()?;
+            let mut input = String::new();
+            io::stdin().read_line(&mut input)?;
+            if !matches!(input.trim().to_lowercase().as_str(), "y" | "yes") {
+                print_info("Restore cancelled.");
+                return Ok(());
+            }
+        }
+
+        // --- Build undo snapshot ---
+        let undo_dir       = BackupIndex::get_undo_dir(&project_hash);
+        let undo_files_dir = BackupIndex::get_undo_files_dir(&project_hash);
+
+        if undo_dir.exists() {
+            fs::remove_dir_all(&undo_dir)?;
+        }
+        fs::create_dir_all(&undo_files_dir)?;
+
+        // We only *create* files, so undo simply needs to delete them again.
+        let new_files_created: Vec<PathBuf> = to_restore.clone();
+
+        // No overwritten or deleted files in this operation.
+        let overwritten_files: Vec<PathBuf> = Vec::new();
+        let deleted_files: Vec<PathBuf> = Vec::new();
+
+        let undo_state = UndoState {
+            restored_at: std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap_or_default()
+                .as_secs(),
+            restored_from: backup_number,
+            overwritten_files,
+            new_files_created,
+            deleted_files,
+        };
+        fs::write(
+            BackupIndex::get_undo_state_path(&project_hash),
+            serde_json::to_string_pretty(&undo_state)?,
+        )?;
+
+        // --- Perform the restore (parallel) ---
+        let restored_count = AtomicUsize::new(0);
+        let failed_count   = AtomicUsize::new(0);
+
+        to_restore.par_iter().for_each(|rel_path| {
+            let src = backup_path.join(rel_path);
+            let dst = project_root.join(rel_path);
+            if let Some(parent) = dst.parent() {
+                let _ = fs::create_dir_all(parent);
+            }
+            match fs::copy(&src, &dst) {
+                Ok(_)  => { restored_count.fetch_add(1, Ordering::Relaxed); }
+                Err(e) => {
+                    print_warning(&format!("Failed to restore {}: {}", rel_path.display(), e));
+                    failed_count.fetch_add(1, Ordering::Relaxed);
+                }
+            }
+        });
+
+        let restored_count = restored_count.load(Ordering::Relaxed);
+        let failed_count   = failed_count.load(Ordering::Relaxed);
+
+        let parts: Vec<String> = [
+            format!("{} restored", restored_count),
+            if failed_count > 0 { format!("{} failed", failed_count) } else { String::new() },
+        ].into_iter().filter(|s| !s.is_empty()).collect();
+
+        print_success(&format!(
+            "Restored deleted files from backup #{} ({})",
+            backup_number,
+            parts.join(", ")
+        ));
+
+        if restored_count > 0 {
+            print_info("Previous state saved. Use 'unpd' to undo this restore.");
+        }
+
+        Ok(())
+    }
+
     // ========================================================================
     // UNDO
     // ========================================================================

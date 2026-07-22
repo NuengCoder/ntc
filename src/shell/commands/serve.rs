@@ -30,8 +30,10 @@ fn ensure_db() -> Result<rusqlite::Connection> {
     conn.execute_batch("CREATE TABLE IF NOT EXISTS files (
         id INTEGER PRIMARY KEY AUTOINCREMENT, filename TEXT NOT NULL,
         path TEXT NOT NULL DEFAULT '/', is_dir INTEGER DEFAULT 0,
-        size INTEGER DEFAULT 0, disk_name TEXT,
+        size INTEGER DEFAULT 0, disk_name TEXT, data BLOB,
         uploaded_at TEXT DEFAULT (datetime('now')))")?;
+    // Migration: add data column for existing databases
+    let _ = conn.execute_batch("ALTER TABLE files ADD COLUMN data BLOB");
     Ok(conn)
 }
 
@@ -153,16 +155,40 @@ fn handle_connection(
         }
     }
 
-    // Read body
+    // Read body (only for methods that have one)
     let mut body = Vec::new();
-    if content_length > 0 {
-        if content_length > 1024 * 1024 * 1024 {
+    let has_body = method == "POST" || method == "PUT" || method == "PATCH";
+    if has_body {
+        let max_body = MAX_UPLOAD as usize;
+        if content_length > 0 && content_length > max_body {
             respond(&mut stream, 413, "text/plain", b"413 Payload Too Large");
             return;
         }
-        let mut buf = vec![0u8; content_length];
-        if reader.read_exact(&mut buf).is_err() { return; }
-        body = buf;
+        let mut buf = vec![0u8; 65536];
+        let mut total = 0usize;
+        let need = if content_length > 0 { content_length } else { usize::MAX };
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(120);
+        loop {
+            if std::time::Instant::now() > deadline {
+                respond(&mut stream, 408, "text/plain", b"408 Request Timeout");
+                return;
+            }
+            reader.get_ref().set_read_timeout(Some(std::time::Duration::from_secs(10))).ok();
+            match reader.read(&mut buf) {
+                Ok(0) => break,
+                Ok(n) => {
+                    total += n;
+                    if total > max_body {
+                        respond(&mut stream, 413, "text/plain", b"413 Payload Too Large");
+                        return;
+                    }
+                    body.extend_from_slice(&buf[..n]);
+                    if total >= need { break; }
+                }
+                Err(ref e) if e.kind() == std::io::ErrorKind::WouldBlock || e.kind() == std::io::ErrorKind::TimedOut => continue,
+                Err(_) => return,
+            }
+        }
     }
 
     // Route
@@ -265,6 +291,14 @@ fn lock(db: &Arc<Mutex<rusqlite::Connection>>) -> std::sync::MutexGuard<'_, rusq
 
 const MAX_UPLOAD: u64 = 1024 * 1024 * 1024;
 
+fn is_executable(name: &str) -> bool {
+    let low = name.to_lowercase();
+    let exts = [".exe", ".dll", ".msi", ".bat", ".cmd", ".ps1", ".apk", ".ipa",
+        ".sh", ".bin", ".jar", ".vb", ".vbs", ".wasm", ".appimage", ".deb",
+        ".rpm", ".msix", ".msp", ".scr", ".cpl", ".gadget", ".wsf", ".pyz"];
+    exts.iter().any(|e| low.ends_with(e))
+}
+
 // ── API: List files ───────────────────────────────────────────────────────
 
 fn api_list_files(query: &str, db: Arc<Mutex<rusqlite::Connection>>) -> Vec<u8> {
@@ -289,10 +323,15 @@ fn api_download(query: &str, db: Arc<Mutex<rusqlite::Connection>>) -> Vec<u8> {
     let q = parse_query(query);
     let id: i64 = match q.get("id").and_then(|s| s.parse().ok()) { Some(i) => i, None => return json_error(400) };
     let db = lock(&db);
-    let (filename, disk_name): (String, Option<String>) = match db.query_row("SELECT filename, disk_name FROM files WHERE id = ?1 AND is_dir = 0", params![id], |row| Ok((row.get(0)?, row.get(1)?))) {
-        Ok(r) => r, Err(_) => return json_error(404),
+    let (filename, disk_name, blob): (String, Option<String>, Option<Vec<u8>>) = match db.query_row(
+        "SELECT filename, disk_name, data FROM files WHERE id = ?1 AND is_dir = 0", params![id],
+        |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?))
+    ) { Ok(r) => r, Err(_) => return json_error(404) };
+    let data = match (disk_name, blob) {
+        (Some(d), _) => match std::fs::read(files_dir().join(&d)) { Ok(d) => d, Err(_) => return json_error(404) },
+        (_, Some(b)) => b,
+        _ => return json_error(404),
     };
-    let data = match disk_name { Some(d) => match std::fs::read(files_dir().join(&d)) { Ok(d) => d, Err(_) => return json_error(404) }, None => return json_error(404) };
     let ct = mime_guess::from_path(&filename).first_or_octet_stream().to_string();
     let head = format!("HTTP/1.1 200 OK\r\nContent-Type: {}\r\nContent-Disposition: attachment; filename=\"{}\"\r\nContent-Length: {}\r\nConnection: close\r\nAccess-Control-Allow-Origin: *\r\n\r\n", ct, filename, data.len());
     let mut r = head.into_bytes();
@@ -356,10 +395,16 @@ fn api_upload(body: &[u8], boundary: &str, db: Arc<Mutex<rusqlite::Connection>>)
 
     let db = lock(&db);
     for (filename, data) in &files {
-        let nanos = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap_or_default().as_nanos();
-        let disk = format!("{}-{}", nanos, filename);
-        if std::fs::write(files_dir().join(&disk), data).is_err() { return json_error(500); }
-        if db.execute("INSERT INTO files (filename, path, is_dir, size, disk_name) VALUES (?1, ?2, 0, ?3, ?4)", params![filename, dest_path, data.len() as i64, disk]).is_err() { return json_error(500); }
+        if is_executable(filename) {
+            if db.execute("INSERT INTO files (filename, path, is_dir, size, data) VALUES (?1, ?2, 0, ?3, ?4)",
+                params![filename, dest_path, data.len() as i64, data]).is_err() { return json_error(500); }
+        } else {
+            let nanos = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap_or_default().as_nanos();
+            let disk = format!("{}-{}", nanos, filename);
+            if std::fs::write(files_dir().join(&disk), data).is_err() { return json_error(500); }
+            if db.execute("INSERT INTO files (filename, path, is_dir, size, disk_name) VALUES (?1, ?2, 0, ?3, ?4)",
+                params![filename, dest_path, data.len() as i64, disk]).is_err() { return json_error(500); }
+        }
     }
     json_ok(serde_json::to_vec(&serde_json::json!({"path": dest_path, "uploaded": files.len()})).unwrap())
 }

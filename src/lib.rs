@@ -8,6 +8,8 @@ pub mod editor;
 pub mod game;
 pub mod lsp;
 pub mod math;
+pub mod mql;
+pub mod nfe;
 pub mod ranfile;
 pub mod report;
 pub mod shell;

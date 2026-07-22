@@ -5,4 +5,3 @@ mod helpers;
 mod run;
 
 pub use run::run_cli;
-pub use run::take_initial_command;

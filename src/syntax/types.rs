@@ -81,6 +81,8 @@ pub enum SyntaxLanguage {
     InnoSetup,
     /// .lock — package lock file (TOML-like format)
     LockFile,
+    /// .mq4 / .mq5 / .mqh — MetaQuotes Language (MQL4/MQL5)
+    Mql,
 }
 
 pub fn color_for(tt: TokenType) -> Color {
@@ -161,6 +163,7 @@ pub fn detect_language(ext: &str) -> Option<SyntaxLanguage> {
         "ntc_theme" => Some(SyntaxLanguage::NtcTheme),
         "iss" => Some(SyntaxLanguage::InnoSetup),
         "lock" => Some(SyntaxLanguage::LockFile),
+        "mq4" | "mq5" | "mqh" => Some(SyntaxLanguage::Mql),
         _ => None,
     }
 }

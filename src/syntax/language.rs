@@ -57,6 +57,7 @@ pub(super) fn has_block_comments(lang: SyntaxLanguage) -> bool {
             | SyntaxLanguage::Css
             | SyntaxLanguage::Ps1
             | SyntaxLanguage::Glsl
+            | SyntaxLanguage::Mql
     )
 }
 
@@ -73,7 +74,7 @@ pub(super) fn has_pascal_comments(lang: SyntaxLanguage) -> bool {
 }
 
 pub(super) fn has_preprocessor(lang: SyntaxLanguage) -> bool {
-    matches!(lang, SyntaxLanguage::InnoSetup | SyntaxLanguage::Glsl)
+    matches!(lang, SyntaxLanguage::InnoSetup | SyntaxLanguage::Glsl | SyntaxLanguage::Mql)
 }
 
 pub(super) fn is_char_literal_supported(lang: SyntaxLanguage) -> bool {
@@ -498,6 +499,20 @@ pub(super) fn is_keyword(lang: SyntaxLanguage, word: &str) -> bool {
                 | "precision" | "highp" | "mediump" | "lowp"
                 | "invariant" | "precise"
         ),
+        SyntaxLanguage::Mql => matches!(
+            word,
+            "break" | "case" | "continue" | "default" | "do" | "else" | "for"
+                | "if" | "return" | "switch" | "while"
+                | "extern" | "static" | "const" | "input" | "sinput"
+                | "enum" | "struct" | "class"
+                | "virtual" | "override"
+                | "private" | "protected" | "public"
+                | "new" | "delete" | "this"
+                | "true" | "false" | "void"
+                | "template" | "typename" | "typedef" | "using" | "namespace"
+                | "inline" | "export" | "friend" | "operator"
+                | "catch" | "throw" | "try" | "goto"
+        ),
         SyntaxLanguage::InnoSetup => matches!(
             word,
             "and" | "array" | "begin" | "case" | "const" | "div" | "do" | "downto"
@@ -615,6 +630,18 @@ pub(super) fn is_type_name(lang: SyntaxLanguage, word: &str) -> bool {
                 | "AbstractString" | "AbstractArray" | "AbstractDict" | "AbstractSet"
                 | "AbstractVector" | "AbstractMatrix" | "DataType" | "Function"
                 | "Module" | "Expr" | "IO" | "Ptr"
+        ),
+        SyntaxLanguage::Mql => matches!(
+            word,
+            "int" | "double" | "string" | "bool" | "char" | "short" | "long"
+                | "float" | "uchar" | "ushort" | "uint" | "ulong"
+                | "datetime" | "color"
+                | "MqlTick" | "MqlRates" | "MqlTradeRequest" | "MqlTradeResult"
+                | "MqlTradeCheckResult" | "MqlDateTime" | "MqlBookInfo"
+                | "MqlParam" | "MqlStr" | "MqlTradeTransaction"
+                | "ENUM_TIMEFRAMES" | "ENUM_SYMBOL_INFO" | "ENUM_ACCOUNT_INFO"
+                | "ENUM_TRADE_REQUEST_ACTIONS" | "ENUM_ORDER_TYPE"
+                | "ENUM_ORDER_STATE" | "ENUM_POSITION_TYPE" | "ENUM_DEAL_TYPE"
         ),
         SyntaxLanguage::Erlang => matches!(
             word,
@@ -920,6 +947,117 @@ pub(super) fn is_builtin(lang: SyntaxLanguage, word: &str) -> bool {
                 // Built-in functions: packing
                 | "packSnorm4x8" | "packUnorm4x8" | "unpackSnorm4x8" | "unpackUnorm4x8"
         ),
+        SyntaxLanguage::Mql => matches!(
+            word,
+            // Trading
+            "OrderSend" | "OrderSelect" | "OrderClose" | "OrderDelete" | "OrderModify"
+                | "OrderGetTicket" | "OrderGetInteger" | "OrderGetDouble" | "OrderGetString"
+                | "OrdersTotal" | "OrderCalcMargin" | "OrderCheck"
+                | "PositionSelect" | "PositionSelectByTicket" | "PositionGetTicket"
+                | "PositionGetInteger" | "PositionGetDouble" | "PositionGetString"
+                | "PositionsTotal"
+                | "HistorySelect" | "HistorySelectByPosition"
+                | "HistoryDealGetTicket" | "HistoryDealGetInteger" | "HistoryDealGetDouble"
+                | "HistoryDealGetString" | "HistoryDealsTotal"
+                | "HistoryOrderGetTicket" | "HistoryOrderGetInteger" | "HistoryOrderGetDouble"
+                | "HistoryOrderGetString" | "HistoryOrdersTotal"
+            // Series
+                | "iClose" | "iOpen" | "iHigh" | "iLow" | "iVolume" | "iTime"
+                | "iHighest" | "iLowest" | "iBars" | "iBarShift"
+                | "CopyRates" | "CopyOpen" | "CopyHigh" | "CopyLow" | "CopyClose"
+                | "CopyVolume" | "CopyTime" | "CopySpread" | "CopyTickVolume" | "CopyRealVolume"
+                | "Bars" | "SeriesInfoInteger"
+            // Indicators
+                | "iMA" | "iMACD" | "iRSI" | "iStochastic" | "iADX" | "iBands" | "iSAR"
+                | "iCustom" | "iCCI" | "iATR" | "iMFI" | "iOBV"
+                | "iEnvelopes" | "iForce" | "iOsMA" | "iRVI"
+            // Objects
+                | "ObjectCreate" | "ObjectName" | "ObjectDelete" | "ObjectsDeleteAll"
+                | "ObjectFind" | "ObjectMove" | "ObjectsTotal" | "ObjectType"
+                | "ObjectSetInteger" | "ObjectSetDouble" | "ObjectSetString"
+                | "ObjectGetInteger" | "ObjectGetDouble" | "ObjectGetString"
+            // Chart
+                | "ChartId" | "ChartSymbol" | "ChartPeriod" | "ChartRedraw"
+                | "ChartOpen" | "ChartClose" | "ChartFirst" | "ChartNext"
+                | "ChartSetInteger" | "ChartSetDouble" | "ChartSetString"
+                | "ChartGetInteger" | "ChartGetDouble" | "ChartGetString"
+                | "ChartNavigate" | "ChartIndicatorAdd" | "ChartIndicatorDelete"
+                | "ChartIndicatorGet" | "ChartIndicatorsTotal" | "ChartWindowFind"
+                | "ChartApplyTemplate" | "ChartSaveTemplate"
+            // Account
+                | "AccountInfoInteger" | "AccountInfoDouble" | "AccountInfoString"
+                | "AccountBalance" | "AccountCredit" | "AccountCompany"
+                | "AccountCurrency" | "AccountEquity" | "AccountFreeMargin"
+                | "AccountFreeMarginCheck" | "AccountLeverage" | "AccountMargin"
+                | "AccountName" | "AccountNumber" | "AccountProfit"
+                | "AccountServer" | "AccountStopoutLevel" | "AccountStopoutMode"
+            // Terminal
+                | "TerminalInfoInteger" | "TerminalInfoDouble" | "TerminalInfoString"
+                | "IsConnected" | "IsDemo" | "IsDllsAllowed" | "IsExpertEnabled"
+                | "IsLibrariesAllowed" | "IsOptimization" | "IsTesting"
+                | "IsTradeAllowed" | "IsVisualMode" | "UninitializeReason"
+            // Symbol
+                | "Symbol" | "Period" | "SymbolInfoInteger" | "SymbolInfoDouble"
+                | "SymbolInfoString" | "SymbolSelect" | "SymbolsTotal" | "SymbolName"
+                | "MarketBookAdd" | "MarketBookGet" | "MarketBookRelease"
+            // Time
+                | "TimeCurrent" | "TimeLocal" | "TimeGMT" | "TimeTradeServer"
+                | "TimeDaylightSavings" | "TimeDayOfWeek" | "TimeDayOfYear"
+                | "TimeHour" | "TimeMinute" | "TimeMonth" | "TimeSeconds" | "TimeYear" | "TimeDay"
+                | "TimeToString" | "StringToTime"
+            // Common
+                | "Alert" | "Print" | "Comment" | "PlaySound" | "MessageBox"
+                | "SendNotification" | "SendMail" | "Sleep"
+                | "GetTickCount" | "GetTickCount64"
+                | "MathAbs" | "MathArccos" | "MathArcsin" | "MathArctan"
+                | "MathCeil" | "MathCos" | "MathExp" | "MathFloor"
+                | "MathLog" | "MathMax" | "MathMin" | "MathMod" | "MathPow"
+                | "MathRand" | "MathRound" | "MathSin" | "MathSqrt" | "MathSrand"
+                | "MathTan" | "MathIsValidNumber"
+                | "NormalizeDouble"
+            // String
+                | "StringLen" | "StringTrimLeft" | "StringTrimRight" | "StringConcatenate"
+                | "StringSubstr" | "StringReplace" | "StringSetCharacter" | "StringSplit"
+                | "StringFill" | "StringCompare" | "StringToLower" | "StringToUpper"
+                | "StringToInteger" | "StringToDouble" | "StringFormat"
+                | "IntegerToString" | "DoubleToString" | "EnumToString"
+                | "ShortToString" | "ShortArrayToString" | "CharArrayToString"
+                | "StringToShortArray" | "StringToCharArray"
+            // File
+                | "FileOpen" | "FileClose" | "FileRead" | "FileWrite" | "FileWriteString"
+                | "FileReadString" | "FileReadBool" | "FileReadDatetime" | "FileReadDouble"
+                | "FileReadFloat" | "FileReadInteger" | "FileReadLong" | "FileReadNumber"
+                | "FileFlush" | "FileSeek" | "FileTell" | "FileSize"
+                | "FileIsEnding" | "FileIsExist" | "FileDelete" | "FileCopy" | "FileMove"
+                | "FileGetInteger" | "FileFindFirst" | "FileFindNext" | "FileFindClose"
+                | "FolderCreate" | "FolderDelete" | "FolderClean"
+            // Event / Expert
+                | "OnTick" | "OnStart" | "OnTimer" | "OnInit" | "OnDeinit"
+                | "OnChartEvent" | "OnCalculate" | "OnTrade" | "OnTradeTransaction"
+                | "OnBookEvent" | "OnTester" | "OnTesterPass" | "OnTesterDeinit"
+                | "EventSetTimer" | "EventSetMillisecondTimer" | "EventKillTimer" | "EventChartCustom"
+            // Indicator
+                | "IndicatorBuffers" | "SetIndexBuffer" | "SetIndexStyle" | "SetIndexArrow"
+                | "SetIndexDrawBegin" | "SetIndexEmptyValue" | "SetIndexLabel" | "SetIndexShift"
+                | "SetLevelValue" | "SetLevelStyle" | "IndicatorDigits" | "IndicatorShortName"
+                | "IndicatorSetInteger" | "IndicatorSetDouble" | "IndicatorSetString"
+                | "PlotIndexSetInteger" | "PlotIndexSetDouble" | "PlotIndexSetString"
+                | "IndicatorCreate" | "IndicatorParameters" | "IndicatorRelease"
+            // Resource / Text
+                | "ResourceCreate" | "ResourceReadImage" | "ResourceSave"
+                | "TextSetFont" | "TextOut" | "TextGetSize"
+            // Window
+                | "WindowExpertName" | "WindowHandle" | "WindowFind" | "WindowIsVisible"
+                | "WindowOnDropped" | "WindowPriceMax" | "WindowPriceMin"
+                | "WindowPriceOnDropped" | "WindowBarsPerChart" | "WindowScreenShot"
+                | "WindowXOnDropped" | "WindowYOnDropped" | "WindowTimeOnDropped"
+                | "WindowFirstVisibleBar" | "WindowRedraw"
+            // Global variables
+                | "GlobalVariableSet" | "GlobalVariableGet" | "GlobalVariableDel"
+                | "GlobalVariableCheck" | "GlobalVariableTemp" | "GlobalVariableName"
+                | "GlobalVariableSetOnCondition" | "GlobalVariablesDeleteAll"
+                | "GlobalVariablesFlush" | "GlobalVariableTime"
+        ),
         SyntaxLanguage::LockFile => matches!(word, "name" | "version" | "source" | "dependencies" | "checksum"),
         _ => matches!(
             word,
@@ -938,6 +1076,45 @@ pub(super) fn has_toml_fields(lang: SyntaxLanguage) -> bool {
 
 pub(super) fn is_constant(lang: SyntaxLanguage, word: &str) -> bool {
     match lang {
+        SyntaxLanguage::Mql => matches!(
+            word,
+            "OP_BUY" | "OP_SELL" | "OP_BUYLIMIT" | "OP_SELLLIMIT"
+                | "OP_BUYSTOP" | "OP_SELLSTOP"
+                | "PRICE_CLOSE" | "PRICE_OPEN" | "PRICE_HIGH" | "PRICE_LOW"
+                | "PRICE_MEDIAN" | "PRICE_TYPICAL" | "PRICE_WEIGHTED"
+                | "MODE_OPEN" | "MODE_CLOSE" | "MODE_HIGH" | "MODE_LOW"
+                | "MODE_VOLUME" | "MODE_TIME" | "MODE_BID" | "MODE_ASK"
+                | "MODE_POINT" | "MODE_DIGITS" | "MODE_SPREAD" | "MODE_STOPLEVEL"
+                | "MODE_LOTSIZE" | "MODE_TICKVALUE" | "MODE_TICKSIZE"
+                | "MODE_SWAPLONG" | "MODE_SWAPSHORT"
+                | "MODE_STARTING" | "MODE_EXPIRATION" | "MODE_TRADEALLOWED"
+                | "MODE_MINLOT" | "MODE_LOTSTEP" | "MODE_MAXLOT" | "MODE_FREEZELEVEL"
+                | "MODE_MARGINREQUIRED"
+                | "EMPTY_VALUE" | "EMPTY" | "NULL" | "WHOLE_ARRAY"
+                | "CLR_NONE" | "INVALID_HANDLE"
+                | "FILE_REWRITE" | "FILE_READ" | "FILE_WRITE" | "FILE_BIN"
+                | "FILE_CSV" | "FILE_TXT" | "FILE_COMMON"
+                | "OBJ_VLINE" | "OBJ_HLINE" | "OBJ_TREND" | "OBJ_TRENDBYANGLE"
+                | "OBJ_CYCLES" | "OBJ_CHANNEL" | "OBJ_STDDEVCHANNEL" | "OBJ_REGRESSION"
+                | "OBJ_ARROW" | "OBJ_ARROW_BUY" | "OBJ_ARROW_SELL" | "OBJ_ARROW_STOP"
+                | "OBJ_ARROW_THUMB_UP" | "OBJ_ARROW_THUMB_DOWN" | "OBJ_ARROW_CHECK"
+                | "OBJ_ELLIPSE" | "OBJ_FIBO" | "OBJ_FIBOFAN" | "OBJ_FIBOTIMES"
+                | "OBJ_FIBOARC" | "OBJ_FIBOCHANNEL"
+                | "OBJ_RECTANGLE" | "OBJ_LABEL" | "OBJ_TEXT" | "OBJ_EDIT" | "OBJ_BUTTON"
+                | "OBJ_CHART" | "OBJ_BITMAP" | "OBJ_BITMAP_LABEL" | "OBJ_RECTANGLE_LABEL"
+                | "TRADE_ACTION_DEAL" | "TRADE_ACTION_PENDING" | "TRADE_ACTION_SLTP"
+                | "TRADE_ACTION_MODIFY" | "TRADE_ACTION_REMOVE" | "TRADE_ACTION_CLOSE_BY"
+                | "ORDER_TYPE_BUY" | "ORDER_TYPE_SELL"
+                | "ORDER_TYPE_BUY_LIMIT" | "ORDER_TYPE_SELL_LIMIT"
+                | "ORDER_TYPE_BUY_STOP" | "ORDER_TYPE_SELL_STOP"
+                | "ORDER_STATE_STARTED" | "ORDER_STATE_PLACED" | "ORDER_STATE_CANCELED"
+                | "ORDER_STATE_PARTIAL" | "ORDER_STATE_FILLED"
+                | "ORDER_STATE_REJECTED" | "ORDER_STATE_EXPIRED"
+                | "POSITION_TYPE_BUY" | "POSITION_TYPE_SELL"
+                | "DEAL_TYPE_BUY" | "DEAL_TYPE_SELL"
+                | "PERIOD_M1" | "PERIOD_M5" | "PERIOD_M15" | "PERIOD_M30"
+                | "PERIOD_H1" | "PERIOD_H4" | "PERIOD_D1" | "PERIOD_W1" | "PERIOD_MN1"
+        ),
         SyntaxLanguage::NtcMath => matches!(
             word,
             "PI" | "pi" | "E" | "e" | "EXP" | "exp"

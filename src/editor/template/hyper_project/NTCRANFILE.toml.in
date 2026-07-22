@@ -1,0 +1,30 @@
+# NTCRANFILE — ntc task runner configuration for {name}
+#   ran build          compile main demo
+#   ran run            build + run main demo
+#   ran build_lib      compile the ntc_lib example separately
+#   ran run_lib        build + run ntc_lib example
+#   ran clean          remove build artifacts
+
+[vars]
+CC    = "gcc"
+FLAGS = "-Wall -Wextra -O2 -g"
+
+[targets.build]
+deps = []
+cmd = "$(CC) $(FLAGS) -o {name} ntc_main.c dsa/*.c debug/debug.c os/os.c ntclib/ntc_lib.c"
+
+[targets.run]
+deps = ["build"]
+cmd = "./{name}"
+
+[targets.build_lib]
+deps = []
+cmd = "$(CC) $(FLAGS) -o {name}_lib ntc_lib.c dsa/*.c debug/debug.c os/os.c ntclib/ntc_lib.c"
+
+[targets.run_lib]
+deps = ["build_lib"]
+cmd = "./{name}_lib"
+
+[targets.clean]
+deps = []
+cmd = "rm -f {name} {name}_lib *.o demo_output.txt"

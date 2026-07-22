@@ -13,8 +13,11 @@ use std::sync::Arc;
 // ── submodules ──────────────────────────────────────────────────────────
 mod alias_commands;
 mod backup;
+pub(crate) mod clipboard;
 mod config_commands;
 mod downloader;
+mod encode_decode;
+mod fmt;
 mod gs_interactive;
 mod http_client;
 mod ignore;
@@ -22,11 +25,18 @@ mod serve;
 mod smtp_client;
 mod sysmon;
 mod misc;
+mod mode;
 mod nav;
 mod theme;
+mod todo;
 mod ran_commands;
 mod report;
 mod tl;
+mod qr;
+mod pathman;
+mod qsc;
+
+pub(crate) mod upgrade;
 
 #[cfg(feature = "image2doc")]
 mod image;
@@ -57,7 +67,12 @@ pub(crate) fn execute_command(
         "config" => config_commands::cmd_config(args, nav),
         "clear" => misc::cmd_clear(args, nav),
         "dino" => misc::cmd_dino(args, nav),
+        "encode" => encode_decode::cmd_encode(args, nav),
+        "decode" => encode_decode::cmd_decode(args, nav),
+        "fmt" => fmt::cmd_fmt(args, nav),
+        "cvcode" => encode_decode::cmd_cvcode(args, nav),
         "math" => misc::cmd_math(args, nav),
+        "mode" => mode::cmd_mode(args, nav),
         "version" => misc::cmd_version(args, nav),
         "where" => nav::cmd_where(nav),
         "gos" => nav::cmd_gos(nav),
@@ -117,7 +132,21 @@ pub(crate) fn execute_command(
             Ok(false)
         }
         "ntpkg" => crate::ntpkg::cmd_ntpkg(args, nav),
+        "ntpx" => crate::ntpkg::cmd_ntpx(args, nav),
+        "clip" => clipboard::cmd_clip(args, nav),
+        "qr" => qr::cmd_qr(args, nav),
+        "qsc" => qsc::cmd_qsc(args, nav),
         "tl" => tl::cmd_tl(args, nav),
+        "usrpath" => pathman::cmd_usrpath(args, nav),
+        "syspath" => pathman::cmd_syspath(args, nav),
+        "explorer" | "nfe" => {
+            let path = if args.is_empty() { None } else { Some(std::path::Path::new(args)) };
+            crate::nfe::run_explorer(path)?;
+            Ok(false)
+        }
+        "todo" | "td" => todo::cmd_todo(args, nav),
+        "say" | "print" => misc::cmd_say(args, nav),
+        "pathcp" => misc::cmd_pathcp(args, nav),
         _ => misc::cmd_fallback(input, nav, watcher_handle),
     }
 }

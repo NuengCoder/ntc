@@ -478,7 +478,7 @@ impl Editor {
         };
         let screen_cursor_y = content_y + self.cursor.y.saturating_sub(self.sv.offset);
 
-        let max_visible = 10usize.min(rows.saturating_sub(screen_cursor_y + 2).max(3));
+        let max_visible = 12usize.min(rows.saturating_sub(screen_cursor_y + 2).max(3));
         let count = self.completion_items.len();
         let visible = count.min(max_visible);
 
@@ -585,17 +585,115 @@ impl Editor {
 
         let bot_y = popup_y + 1 + visible;
         if bot_y < rows {
-            let footer = if count > visible {
-                format!("└── {} more ({} total) ──", count - visible, count)
-            } else {
-                "└".to_string()
-            };
             queue!(
                 stdout,
                 MoveTo(popup_x as u16, bot_y as u16),
                 SetBackgroundColor(bg),
                 SetForegroundColor(border_fg),
-                Print(&footer),
+                Print("└"),
+                ResetColor,
+                Clear(ClearType::UntilNewLine),
+            )?;
+        }
+        Ok(())
+    }
+
+    pub(crate) fn render_hover_popup(&self, stdout: &mut std::io::Stdout) -> std::io::Result<()> {
+        let theme = crate::utils::theme::ThemeManager::current();
+        let text = match &self.hover_text {
+            Some(t) => t,
+            None => return Ok(()),
+        };
+        if text.is_empty() {
+            return Ok(());
+        }
+
+        let rows = self.term_h.saturating_sub(4);
+        let content_y = 1;
+        let cols = self.term_w;
+        let eo = self.editor_offset();
+        let gw = gutter_width(self.lines.len());
+
+        let cursor_col = byte_to_col(self.current(), self.cursor.byte);
+        let screen_cursor_x = if cursor_col >= self.sv.x {
+            eo + gw + (cursor_col - self.sv.x)
+        } else {
+            eo + gw
+        };
+        let screen_cursor_y = content_y + self.cursor.y.saturating_sub(self.sv.offset);
+
+        let lines: Vec<&str> = text.lines().collect();
+        let visible = lines.len().min(20).min(rows.saturating_sub(screen_cursor_y + 2).max(3));
+        let max_w = lines.iter().take(visible).map(|l| l.len()).max().unwrap_or(40);
+        let popup_w = (max_w + 4).min(cols.saturating_sub(screen_cursor_x + 1).min(60));
+        let popup_x = screen_cursor_x.min(cols.saturating_sub(popup_w + 1));
+
+        let popup_y = if screen_cursor_y.saturating_add(visible) + 2 < rows {
+            screen_cursor_y + 1
+        } else {
+            let needed = visible + 2;
+            if screen_cursor_y >= needed {
+                screen_cursor_y - needed + 1
+            } else {
+                1
+            }
+        };
+
+        let bg = theme.editor.sidebar_bg.to_crossterm();
+        let border_fg = theme.editor.border.to_crossterm();
+
+        for i in 0..visible + 2 {
+            let y = popup_y + i;
+            if y >= rows { break; }
+            queue!(
+                stdout,
+                MoveTo(popup_x as u16, y as u16),
+                SetBackgroundColor(bg),
+                SetForegroundColor(border_fg),
+                Print(" ".repeat(popup_w)),
+                ResetColor,
+            )?;
+        }
+
+        queue!(
+            stdout,
+            MoveTo(popup_x as u16, popup_y as u16),
+            SetBackgroundColor(bg),
+            SetForegroundColor(border_fg),
+            Print("┌"),
+            SetForegroundColor(theme.editor.gutter_text.to_crossterm()),
+            Print(" info "),
+            SetForegroundColor(border_fg),
+            Print("─".repeat(popup_w.saturating_sub(7))),
+            ResetColor,
+        )?;
+
+        for (i, line_text) in lines.iter().enumerate().take(visible) {
+            let y = popup_y + 1 + i;
+            let display = if line_text.len() > popup_w.saturating_sub(4) {
+                format!(" {}…", &line_text[..popup_w.saturating_sub(5)])
+            } else {
+                format!(" {}", line_text)
+            };
+            queue!(
+                stdout,
+                MoveTo(popup_x as u16, y as u16),
+                SetBackgroundColor(bg),
+                SetForegroundColor(theme.editor.status_text.to_crossterm()),
+                Print(&display),
+                ResetColor,
+                Clear(ClearType::UntilNewLine),
+            )?;
+        }
+
+        let bot_y = popup_y + 1 + visible;
+        if bot_y < rows {
+            queue!(
+                stdout,
+                MoveTo(popup_x as u16, bot_y as u16),
+                SetBackgroundColor(bg),
+                SetForegroundColor(border_fg),
+                Print("└"),
                 ResetColor,
                 Clear(ClearType::UntilNewLine),
             )?;

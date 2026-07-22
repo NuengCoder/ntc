@@ -4,6 +4,7 @@
 use crate::backup::BackupManager;
 use crate::backup_diff::BackupDiff;
 use crate::backup_manifest::display_path;
+use crate::utils::interactive::{InteractiveMenu, MenuItem};
 use crate::navigator::{clear_screen, Navigator};
 use crate::output::{print_error, print_success, print_info};
 use crate::shell::helpers::show_tree;
@@ -30,6 +31,9 @@ pub fn cmd_backup(args: &str, nav: &mut Navigator) -> Result<bool> {
             println!("  backup create             Create a new backup");
             println!("  backup list               List all backups");
             println!("  backup restore [num]      Restore a backup (interactive if no num)");
+            println!("  backup restore --choose   Pick a backup from an interactive menu");
+            println!("  backup restore --deleted  Restore only files deleted since the backup");
+            println!("  backup restore --choose --deleted  Pick + restore-deleted");
             println!("  backup undo               Undo last restore");
             println!("  backup undo --cls         Clear undo history");
             println!("  backup undo --force       Clear undo history (no confirm)");
@@ -159,52 +163,104 @@ fn confirm_recreate(nav: &mut Navigator) -> Result<bool> {
 }
 
 fn cmd_restore(args: &str, nav: &mut Navigator) -> Result<bool> {
-    if args.is_empty() {
-        let backups = BackupManager::list_backups(nav.current_path())?;
-        if backups.is_empty() {
-            print_info("No backups found for this project. Use 'backup create' to make one.");
-            return Ok(false);
-        }
-        println!();
-        println!("{}", "==================================================".cyan());
-        println!("{}", "📦 Available Backups (newest first)".cyan().bold());
-        println!("{}", "==================================================".cyan());
-        for (i, (num, date, size, file_count)) in backups.iter().enumerate() {
-            println!(
-                "  {}. Backup #{} — {} — {} — {} files",
-                i + 1, num, date, size, file_count
-            );
-        }
-        println!("  {}", "0. Cancel".red());
-        println!();
-        print!("{} ", format!("Select backup to restore (1-{}): ", backups.len()).green());
-        io::stdout().flush()?;
-        let mut input = String::new();
-        io::stdin().read_line(&mut input)?;
-        let input = input.trim();
-        if input == "0" || input.is_empty() {
-            println!("{}", "Restore cancelled.".dimmed());
-            return Ok(false);
-        }
-        match input.parse::<usize>() {
-            Ok(n) if n >= 1 && n <= backups.len() => {
-                let backup_num = backups[n - 1].0;
-                BackupManager::restore_backup(nav.current_path(), backup_num, true)?;
-                clear_screen();
-                show_tree(nav, Some(1), false, false, false, false, false);
+    let tokens: Vec<&str> = args.split_whitespace().collect();
+    let has_choose  = tokens.contains(&"--choose");
+    let has_deleted = tokens.contains(&"--deleted");
+    let has_force   = tokens.contains(&"--force") || tokens.contains(&"-f");
+
+    // Extract explicit backup number if present
+    let explicit_num = tokens.iter().find_map(|t| t.parse::<usize>().ok());
+
+    let project_root = nav.current_path().to_path_buf();
+
+    let backup_number = match explicit_num {
+        Some(n) => n,
+        None if has_choose || has_deleted => {
+            match pick_backup_interactive(&project_root)? {
+                Some(n) => n,
+                None => return Ok(false),
             }
-            Ok(_)  => print_error(&format!("Invalid selection: {}", input)),
-            Err(_) => print_error(&format!("Invalid input: {}", input)),
         }
-    } else if let Ok(num) = args.parse::<usize>() {
-        BackupManager::restore_backup(nav.current_path(), num, true)?;
-        clear_screen();
-        show_tree(nav, Some(1), false, false, false, false, false);
+        None if args.is_empty() => {
+            // Original stdin-based interactive picker (backward compat)
+            let backups = BackupManager::list_backups(&project_root)?;
+            if backups.is_empty() {
+                print_info("No backups found for this project. Use 'backup create' to make one.");
+                return Ok(false);
+            }
+            println!();
+            println!("{}", "==================================================".cyan());
+            println!("{}", "  Available Backups (newest first)".cyan().bold());
+            println!("{}", "==================================================".cyan());
+            for (i, (num, date, size, file_count)) in backups.iter().enumerate() {
+                println!(
+                    "  {}. Backup #{} — {} — {} — {} files",
+                    i + 1, num, date, size, file_count
+                );
+            }
+            println!("  {}", "0. Cancel".red());
+            println!();
+            print!("{} ", format!("Select backup to restore (1-{}): ", backups.len()).green());
+            io::stdout().flush()?;
+            let mut input = String::new();
+            io::stdin().read_line(&mut input)?;
+            let input = input.trim();
+            if input == "0" || input.is_empty() {
+                println!("{}", "Restore cancelled.".dimmed());
+                return Ok(false);
+            }
+            match input.parse::<usize>() {
+                Ok(n) if n >= 1 && n <= backups.len() => backups[n - 1].0,
+                _ => {
+                    print_error(&format!("Invalid selection: {}", input));
+                    return Ok(false);
+                }
+            }
+        }
+        _ => {
+            print_error(&format!("Invalid argument: {}", args));
+            println!("Usage: backup restore [--choose] [--deleted] [num]");
+            return Ok(false);
+        }
+    };
+
+    let result = if has_deleted {
+        BackupManager::restore_deleted_only(&project_root, backup_number, !has_force)
     } else {
-        print_error(&format!("Invalid argument: {}", args));
-        println!("Usage: backup restore [number]");
+        BackupManager::restore_backup(&project_root, backup_number, !has_force)
+    };
+
+    match result {
+        Ok(()) => {
+            clear_screen();
+            show_tree(nav, Some(1), false, false, false, false, false);
+        }
+        Err(e) => print_error(&format!("{}", e)),
     }
+
     Ok(false)
+}
+
+/// Present an InteractiveMenu of available backups and return the chosen number.
+fn pick_backup_interactive(project_root: &std::path::Path) -> Result<Option<usize>> {
+    let backups = BackupManager::list_backups(project_root)?;
+    if backups.is_empty() {
+        print_info("No backups found for this project. Use 'backup create' to make one.");
+        return Ok(None);
+    }
+
+    let items: Vec<MenuItem> = backups.iter().map(|(num, date, size, count)| {
+        MenuItem::with_detail(
+            format!("Backup #{}", num),
+            format!("{} — {} — {} files", date, size, count),
+        )
+    }).collect();
+
+    let menu = InteractiveMenu::new("Select a backup to restore from")
+        .items(items)
+        .prompt(format!("Enter number (1-{}) or 0: ", backups.len()));
+
+    menu.run().map(|opt| opt.map(|i| backups[i].0))
 }
 
 fn cmd_undo(args: &str, nav: &mut Navigator) -> Result<bool> {

@@ -486,74 +486,91 @@ pub fn cmd_tpb(args: &str, nav: &mut Navigator) -> Result<bool> {
     Ok(false)
 }
 
+fn split_args(args: &str) -> Vec<String> {
+    args.split(',')
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty())
+        .collect()
+}
+
 pub fn cmd_mkf(args: &str, _nav: &mut Navigator) -> Result<bool> {
-    let args = args.trim();
-    if args.is_empty() {
+    let items = split_args(args);
+    if items.is_empty() {
         print_error("mkf: missing operand");
-    } else {
-        let path = std::path::Path::new(args);
-        if !path.exists() {
-            if let Some(parent) = path.parent() {
-                if !parent.as_os_str().is_empty() {
-                    let _ = std::fs::create_dir_all(parent);
-                }
+        return Ok(false);
+    }
+    for item in &items {
+        let path = std::path::Path::new(item);
+        if path.exists() {
+            print_warning(&format!("Already exists: {}", item));
+            continue;
+        }
+        if let Some(parent) = path.parent() {
+            if !parent.as_os_str().is_empty() {
+                let _ = std::fs::create_dir_all(parent);
             }
-            match std::fs::write(path, "") {
-                Ok(()) => print_success(&format!("Created file: {}", args)),
-                Err(e) => print_error(&format!("mkf: {}", e)),
-            }
-        } else {
-            print_warning(&format!("Already exists: {}", args));
+        }
+        match std::fs::write(path, "") {
+            Ok(()) => print_success(&format!("Created file: {}", item)),
+            Err(e) => print_error(&format!("mkf: {}: {}", item, e)),
         }
     }
     Ok(false)
 }
 
 pub fn cmd_mkd(args: &str, _nav: &mut Navigator) -> Result<bool> {
-    let args = args.trim();
-    if args.is_empty() {
+    let items = split_args(args);
+    if items.is_empty() {
         print_error("mkd: missing operand");
-    } else if let Err(e) = std::fs::create_dir_all(std::path::Path::new(args)) {
-        print_error(&format!("mkd: {}", e));
-    } else {
-        print_success(&format!("Created directory: {}", args));
+        return Ok(false);
+    }
+    for item in &items {
+        if let Err(e) = std::fs::create_dir_all(std::path::Path::new(item)) {
+            print_error(&format!("mkd: {}: {}", item, e));
+        } else {
+            print_success(&format!("Created directory: {}", item));
+        }
     }
     Ok(false)
 }
 
 pub fn cmd_rmd(args: &str, _nav: &mut Navigator) -> Result<bool> {
-    let args = args.trim();
-    if args.is_empty() {
+    let items = split_args(args);
+    if items.is_empty() {
         print_error("rmd: missing operand");
-    } else {
-        let path = std::path::Path::new(args);
+        return Ok(false);
+    }
+    for item in &items {
+        let path = std::path::Path::new(item);
         if !path.exists() {
-            print_error(&format!("rmd: '{}' does not exist", args));
+            print_error(&format!("rmd: '{}' does not exist", item));
         } else if !path.is_dir() {
-            print_error(&format!("rmd: '{}' is not a directory", args));
+            print_error(&format!("rmd: '{}' is not a directory", item));
         } else if let Err(e) = std::fs::remove_dir_all(path) {
-            print_error(&format!("rmd: {}", e));
+            print_error(&format!("rmd: {}: {}", item, e));
         } else {
-            print_success(&format!("Removed directory: {}", args));
+            print_success(&format!("Removed directory: {}", item));
         }
     }
     Ok(false)
 }
 
 pub fn cmd_rmf(args: &str, _nav: &mut Navigator) -> Result<bool> {
-    let args = args.trim();
-    if args.is_empty() {
+    let items = split_args(args);
+    if items.is_empty() {
         print_error("rmf: missing operand");
-    } else {
-        let path = std::path::Path::new(args);
+        return Ok(false);
+    }
+    for item in &items {
+        let path = std::path::Path::new(item);
         if !path.exists() {
-            print_error(&format!("rmf: '{}' does not exist", args));
+            print_error(&format!("rmf: '{}' does not exist", item));
         } else if path.is_dir() {
-            print_error(&format!("rmf: '{}' is a directory (use rmd instead)", args));
+            print_error(&format!("rmf: '{}' is a directory (use rmd instead)", item));
         } else {
             match std::fs::remove_file(path) {
-                Ok(()) => print_success(&format!("Removed: {}", args)),
-                Err(e) => print_error(&format!("rmf: {}", e)),
+                Ok(()) => print_success(&format!("Removed: {}", item)),
+                Err(e) => print_error(&format!("rmf: {}: {}", item, e)),
             }
         }
     }
@@ -842,6 +859,100 @@ pub fn cmd_venvd(_args: &str, nav: &mut Navigator) -> Result<bool> {
     let current_path = nav.current_path().to_path_buf();
     nav.go_to(&current_path)?; // Refresh display
     print_success("Deactivated virtual environment");
+    Ok(false)
+}
+
+pub fn cmd_pathcp(_args: &str, nav: &mut Navigator) -> Result<bool> {
+    let path = nav.current_path().to_string_lossy().to_string();
+    crate::output::copy_to_clipboard(&path, "path")?;
+    print_success(&format!("Path copied to clipboard: {}", path));
+    Ok(false)
+}
+
+const MAX_SAY_LOOP: i32 = 10000;
+
+fn tokenize_quoted(input: &str) -> Vec<String> {
+    let mut parts: Vec<String> = Vec::new();
+    let mut current = String::new();
+    let mut in_quotes = false;
+    for ch in input.chars() {
+        match ch {
+            '"' => in_quotes = !in_quotes,
+            ' ' | '\t' if !in_quotes => {
+                if !current.is_empty() {
+                    parts.push(std::mem::take(&mut current));
+                }
+            }
+            _ => current.push(ch),
+        }
+    }
+    if !current.is_empty() {
+        parts.push(current);
+    }
+    parts
+}
+
+pub fn cmd_say(args: &str, _nav: &mut Navigator) -> Result<bool> {
+    let tokens = tokenize_quoted(args);
+
+    let mut text = String::new();
+    let mut loop_count: i32 = 1;
+    let mut use_tabs = false; // -t → space-separated single line; else newline-separated
+
+    let mut i = 0;
+    while i < tokens.len() {
+        let token = &tokens[i];
+        if token == "--loop" {
+            i += 1;
+            if i < tokens.len() {
+                if let Ok(n) = tokens[i].parse::<i32>() {
+                    if n <= 0 {
+                        print_warning("--loop value cannot be less than 1, using 1");
+                        loop_count = 1;
+                    } else if n > MAX_SAY_LOOP {
+                        print_warning(&format!("--loop value exceeds max ({}), clamping", MAX_SAY_LOOP));
+                        loop_count = MAX_SAY_LOOP;
+                    } else {
+                        loop_count = n;
+                    }
+                } else {
+                    print_warning(&format!("Invalid --loop value '{}', using 1", tokens[i]));
+                }
+            } else {
+                print_warning("--loop requires a number, using 1");
+            }
+        } else if token == "-n" {
+            use_tabs = false;
+        } else if token == "-t" {
+            use_tabs = true;
+        } else {
+            if !text.is_empty() {
+                text.push(' ');
+            }
+            text.push_str(token);
+        }
+        i += 1;
+    }
+
+    if text.is_empty() {
+        print_error("Usage: say <text> [--loop N] [-n|-t]");
+        print_info("  say \"hello world\" --loop 5 -n   # 5 lines");
+        print_info("  say \"hello world\" --loop 3 -t   # 1 line, 3 times");
+        return Ok(false);
+    }
+
+    if use_tabs {
+        let line = (0..loop_count)
+            .map(|_| text.as_str())
+            .collect::<Vec<&str>>()
+            .join(" ");
+        println!("{}", line);
+    } else {
+        for _ in 0..loop_count {
+            println!("{}", text);
+        }
+    }
+
     Ok(false)
 }
 

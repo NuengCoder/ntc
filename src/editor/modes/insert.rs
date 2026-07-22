@@ -87,6 +87,8 @@ impl Editor {
                         self.clear_extra_cursors();
                         self.mode = Mode::Normal;
                         self.status_msg = None;
+                        self.hover_sig_active = false;
+                        self.hover_text = None;
                     }
                     (true, _, _, KeyCode::Char('t')) => {
                         if self.terminal.is_some() {
@@ -448,24 +450,22 @@ impl Editor {
                     }
 
                     (false, false, _, KeyCode::Backspace) => {
-                        if self.completion_visible {
-                            self.dismiss_completion();
-                        }
                         if self.has_multiple_cursors() {
                             self.multi_backspace();
                         } else {
                             self.backspace();
                         }
+                        self.trigger_completion();
+                        self.trigger_function_signature();
                     }
                     (false, false, _, KeyCode::Delete) => {
-                        if self.completion_visible {
-                            self.dismiss_completion();
-                        }
                         if self.has_multiple_cursors() {
                             self.multi_delete_forward();
                         } else {
                             self.delete_forward();
                         }
+                        self.trigger_completion();
+                        self.trigger_function_signature();
                     }
 
                     (false, false, false, KeyCode::Char(c))
@@ -487,6 +487,7 @@ impl Editor {
             _ => {}
         }
 
+        self.trigger_function_signature();
         Ok(())
     }
 

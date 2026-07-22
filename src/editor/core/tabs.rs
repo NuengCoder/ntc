@@ -1,7 +1,41 @@
-use std::io::BufRead;
 use std::path::Path;
 
+use anyhow::Context;
+
 use crate::editor::{Editor, Mode, Tab};
+
+pub(crate) fn read_file_lines(path: &Path) -> anyhow::Result<Vec<String>> {
+    let bytes = std::fs::read(path)
+        .with_context(|| format!("Cannot open {}", path.display()))?;
+    if bytes.is_empty() {
+        return Ok(vec![]);
+    }
+    let content = if bytes.starts_with(b"\xef\xbb\xbf") {
+        encoding_rs::UTF_8.decode_without_bom_handling(&bytes[3..]).0.into_owned()
+    } else if bytes.starts_with(b"\xff\xfe") {
+        encoding_rs::UTF_16LE.decode_without_bom_handling(&bytes[2..]).0.into_owned()
+    } else if bytes.starts_with(b"\xfe\xff") {
+        encoding_rs::UTF_16BE.decode_without_bom_handling(&bytes[2..]).0.into_owned()
+    } else {
+        let (decoded, had_errors) = encoding_rs::UTF_8.decode_without_bom_handling(&bytes);
+        if had_errors {
+            encoding_rs::WINDOWS_1252.decode_without_bom_handling(&bytes).0.into_owned()
+        } else {
+            decoded.into_owned()
+        }
+    };
+    let mut lines: Vec<String> = Vec::new();
+    for line in content.lines() {
+        lines.push(line.to_string());
+    }
+    if content.ends_with('\n') {
+        lines.push(String::new());
+    }
+    if lines.is_empty() {
+        lines.push(String::new());
+    }
+    Ok(lines)
+}
 
 impl Editor {
     pub(crate) fn has_multiple_cursors(&self) -> bool {
@@ -136,14 +170,7 @@ impl Editor {
 
     pub(crate) fn load_file(&mut self, path: &Path) -> bool {
         let content: Vec<String> = if path.exists() {
-            let file = match std::fs::File::open(path) {
-                Ok(f) => f,
-                Err(e) => {
-                    self.status_msg = Some(format!("Cannot open {}: {}", path.display(), e));
-                    return false;
-                }
-            };
-            match std::io::BufReader::new(file).lines().collect::<std::io::Result<Vec<_>>>() {
+            match read_file_lines(path) {
                 Ok(content) => content,
                 Err(e) => {
                     self.status_msg = Some(format!("Error reading {}: {}", path.display(), e));

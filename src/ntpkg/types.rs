@@ -58,11 +58,13 @@ pub struct PackageInfo {
 
 /// Describes where to download a runtime from
 #[derive(Debug, Clone)]
-#[allow(dead_code)]
 pub struct PackageSource {
+    #[allow(dead_code)]
     pub name: String,
+    #[allow(dead_code)]
     pub version: String,
     pub urls: HashMap<String, String>,
+    #[allow(dead_code)]
     pub sha256: HashMap<String, String>,
     pub archive_type: ArchiveType,
 }
@@ -75,11 +77,15 @@ pub struct RuntimeBinaries {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-#[allow(dead_code)]
 pub enum ArchiveType {
+    #[cfg_attr(windows, allow(dead_code))]
     TarGz,
+    #[cfg_attr(any(windows, target_os = "macos"), allow(dead_code))]
+    TarXz,
     Zip,
+    #[allow(dead_code)]
     Msi,
+    #[allow(dead_code)]
     Pkg,
 }
 

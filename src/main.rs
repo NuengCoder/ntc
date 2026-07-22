@@ -11,20 +11,73 @@ fn run() -> Result<bool> {
     cli::run_cli()
 }
 
+const RAINBOW: [(u8, u8, u8); 7] = [
+    (255, 77, 77),
+    (255, 165, 0),
+    (255, 230, 50),
+    (77, 255, 77),
+    (50, 200, 255),
+    (77, 77, 255),
+    (200, 77, 255),
+];
+
+fn rainbow(s: &str, offset: usize) -> String {
+    s.chars().enumerate().map(|(i, c)|
+        format!("{}", c.to_string().truecolor(
+            RAINBOW[(offset + i) % 7].0,
+            RAINBOW[(offset + i) % 7].1,
+            RAINBOW[(offset + i) % 7].2,
+        ))
+    ).collect()
+}
+
+fn print_logo() {
+    let n = [
+        "█     █",
+        "██    █",
+        "███   █",
+        "█ ██  █",
+        "█  ██ █",
+        "█   ███",
+        "█     █",
+    ];
+    let t = [
+        "███████",
+        "   █   ",
+        "   █   ",
+        "   █   ",
+        "   █   ",
+        "   █   ",
+        "   █   ",
+    ];
+    let c = [
+        "███████",
+        "█      ",
+        "█      ",
+        "█      ",
+        "█      ",
+        "█      ",
+        "███████",
+    ];
+    for i in 0..7 {
+        println!(" {}  {}  {}",
+            rainbow(n[i], 0),
+            rainbow(t[i], 0),
+            rainbow(c[i], 0),
+        );
+    }
+    println!(" {}  {}  {}",
+        rainbow("Navigate", 0),
+        rainbow("Toolkit", 0),
+        rainbow("Center", 0),
+    );
+}
+
 fn main() -> Result<()> {
     let launch_interactive = run()?;
     if launch_interactive {
         println!();
-        println!("  {}  {}  {}",
-            "N".blue().bold(),
-            "T".blue().bold(),
-            "C".blue().bold()
-        );
-        println!("  {} {} {}",
-            "Navigate".red(),
-            "Toolkit".green(),
-            "Center".blue()
-        );
+        print_logo();
         println!();
         shell::run_shell()?;
     }

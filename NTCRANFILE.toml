@@ -19,7 +19,7 @@
 [vars]
 # CC = "gcc"
 # FLAGS = "-O2"
-ver = "2.3.6"
+ver = "2.4.0"
 lux = "ntc-v$(ver)-linux-x86_64.tar.gz"
 adb = "ntc-v$(ver)-aarch64-linux-android.tar.gz"
 win = "ntc-v$(ver)-windows-x86_64.zip"
@@ -104,6 +104,10 @@ cmd = "rmf $(lux) && rmf $(adb) && rmf $(win) && rmf $(deb) && rmf $(wini)"
 [targets.padb]
 deps = []
 cmd = "adb push ntc-v$(ver)-aarch64-linux-android.tar.gz /sdcard/Download/"
+
+[targets.deploy]
+deps = []
+cmd = "C:\\Users\\Trivico\\cloudflared.exe tunnel --url http://localhost:8080"
 
 [targets.total_line]
 deps = []

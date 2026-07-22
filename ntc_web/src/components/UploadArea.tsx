@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react'
+import { useState, useRef, useCallback } from 'react'
 import { uploadFile } from '../api'
 
 interface Props {
@@ -6,32 +6,63 @@ interface Props {
   onUploaded: () => void
 }
 
+interface FileProgress {
+  name: string
+  pct: number
+  done: boolean
+  failed: boolean
+}
+
 export function UploadArea({ currentPath, onUploaded }: Props) {
   const [dragging, setDragging] = useState(false)
   const [uploading, setUploading] = useState(false)
-  const [progress, setProgress] = useState('')
+  const [progList, setProgList] = useState<FileProgress[]>([])
   const inputRef = useRef<HTMLInputElement>(null)
 
-  async function handleFiles(files: FileList) {
+  const handleFiles = useCallback(async (files: FileList) => {
+    const arr = Array.from(files)
     setUploading(true)
-    const total = files.length
-    let done = 0
-    let failed = 0
-    for (const file of files) {
-      done++
-      setProgress(`${done}/${total}: ${file.name}…`)
+    setProgList(arr.map(f => ({ name: f.name, pct: 0, done: false, failed: false })))
+
+    const total = arr.length
+    let ok = 0
+    let fail = 0
+
+    for (let i = 0; i < total; i++) {
+      const file = arr[i]
       try {
-        await uploadFile(currentPath, file)
-      } catch (e) {
-        failed++
-        console.error('Upload failed:', file.name, e)
+        await uploadFile(currentPath, file, (pct) => {
+          setProgList(prev => {
+            const next = [...prev]
+            next[i] = { ...next[i], pct }
+            return next
+          })
+        })
+        ok++
+        setProgList(prev => {
+          const next = [...prev]
+          next[i] = { ...next[i], pct: 100, done: true }
+          return next
+        })
+      } catch {
+        fail++
+        setProgList(prev => {
+          const next = [...prev]
+          next[i] = { ...next[i], failed: true, done: true }
+          return next
+        })
       }
     }
+
     setUploading(false)
-    setProgress(failed > 0 ? `Uploaded ${done - failed}/${total} (${failed} failed)` : `Uploaded ${done} file${done === 1 ? '' : 's'}`)
-    setTimeout(() => setProgress(''), 3000)
+    if (fail > 0) {
+      setProgList([{ name: `Uploaded ${ok}/${total} (${fail} failed)`, pct: 100, done: true, failed: false }])
+    } else {
+      setProgList([{ name: `Uploaded ${ok} file${ok === 1 ? '' : 's'}`, pct: 100, done: true, failed: false }])
+    }
+    setTimeout(() => setProgList([]), 3000)
     onUploaded()
-  }
+  }, [currentPath, onUploaded])
 
   return (
     <div
@@ -47,15 +78,30 @@ export function UploadArea({ currentPath, onUploaded }: Props) {
         hidden
         onChange={e => e.target.files && handleFiles(e.target.files)}
       />
-      {uploading ? (
-        <span className="upload-status">{progress}</span>
-      ) : (
+      <div className="upload-progress-list">
+        {progList.map((p, i) => (
+          <div key={i} className="upload-progress-item">
+            <div className="upload-progress-info">
+              <span className={`upload-progress-name ${p.failed ? 'failed' : ''}`}>
+                {p.name}
+              </span>
+              {p.done ? null : <span className="upload-progress-pct">{p.pct}%</span>}
+              {p.failed && <span className="upload-progress-pct failed">FAILED</span>}
+            </div>
+            {!p.done && (
+              <div className="upload-progress-bar-bg">
+                <div className="upload-progress-bar-fill" style={{ width: `${p.pct}%` }} />
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+      {!uploading && progList.length === 0 && (
         <>
           <button className="upload-btn" onClick={() => inputRef.current?.click()}>
             + Upload Files
           </button>
           <span className="upload-hint">or drop files here</span>
-          {progress && <span className="upload-status" style={{ display: 'block', marginTop: 6 }}>{progress}</span>}
         </>
       )}
     </div>

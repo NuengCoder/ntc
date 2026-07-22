@@ -66,20 +66,14 @@ pub fn run_shell() -> Result<()> {
             let _ = nav.go_to(last_dir);
         }
     }
-    let initial = crate::cli::take_initial_command();
-    run_shell_with_nav(nav, initial.as_deref())
+    run_shell_with_nav(nav)
 }
 
-pub fn run_shell_with_command(initial: &str) -> Result<()> {
-    let mut nav = Navigator::new()?;
-    run_shell_with_nav(nav, Some(initial))
+pub fn run_shell_with_nav(nav: Navigator) -> Result<()> {
+    run_classic_shell(nav)
 }
 
-pub fn run_shell_with_nav(nav: Navigator, initial_command: Option<&str>) -> Result<()> {
-    run_classic_shell(nav, initial_command)
-}
-
-pub fn run_classic_shell(mut nav: Navigator, initial_cmd: Option<&str>) -> Result<()> {
+pub fn run_classic_shell(mut nav: Navigator) -> Result<()> {
     // Inject active ntpkg runtime bin directories into PATH
     let pkg_dirs = crate::ntpkg::build_package_path_entries();
     if !pkg_dirs.is_empty() {
@@ -129,21 +123,6 @@ pub fn run_classic_shell(mut nav: Navigator, initial_cmd: Option<&str>) -> Resul
     println!("{}", "Type 'help' for available commands, 'exit' to quit.".dimmed());
     show_tree(&nav, Some(1), false, false, false, false, false);
 
-    // Execute initial command if provided (e.g. "ntc serve 8080")
-    if let Some(cmd) = initial_cmd {
-        let cmd = cmd.trim();
-        if !cmd.is_empty() {
-            let expanded = expand_command_line(cmd);
-            for cmd in expanded {
-                match execute_command(&cmd, &mut nav, &watcher_handle) {
-                    Ok(_)  => {}
-                    Err(e) => print_error(&format!("{}", e)),
-                }
-            }
-            // If command returned exit (e.g. "serve" returns Ok(false)), still show prompt
-        }
-    }
-    
     loop {
         // Check if theme changed
         if crate::utils::theme::ThemeManager::take_theme_changed() {
@@ -278,4 +257,3 @@ pub fn run_classic_shell(mut nav: Navigator, initial_cmd: Option<&str>) -> Resul
     
     Ok(())
 }
-

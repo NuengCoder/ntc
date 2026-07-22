@@ -1,5 +1,125 @@
 # Changelog
 
+## [2.4.0] - 2026-07-22
+
+### Major Features
+
+#### 📦 ntpkg — Package Manager for Language Runtimes
+- `ntpkg install <lang> [version]` — Download & install any supported runtime
+- `ntpkg uninstall <lang> [version]` — Remove an installed runtime
+- `ntpkg list` — Show all installed runtimes
+- `ntpkg use <lang> <version>` — Activate a specific version
+- `ntpkg which <lang>` — Show path to the active runtime
+- `ntpkg available [lang]` — List supported languages or available versions
+- `ntpx <pkg> [binary] [args]` — Run any installed package's binary directly
+- **Supported packages (30+):** python, node, git, gh, java, kotlin, swift, php, zig, go, rust, msys2, ruby, lua, dotnet, flutter, kubectl, helm, kind, kustomize, docker, docker-compose, act, scala, opencode, mimocode, kilocode, omniroute, cloudflare, sqlite, sqlitestudio
+- Platform-aware downloads with automatic arch detection
+- Version management with interactive selection menus
+
+#### 🔄 Command Architecture Redesign
+- `backup` — unified command with subcommands:
+  - `backup create` — create snapshot (replaces `bkup`)
+  - `backup restore` — interactive restore (replaces `pldw`)
+  - `backup undo` — undo last restore (replaces `unpd`)
+  - `backup diff` — show diff vs backup (replaces `diff`)
+  - `backup clear`, `backup list`, `backup recreate`
+- `report` — unified reporting with subcommands:
+  - `report txt`, `report json`, `report md`, `report html`, `report pdf`, `report docx`, `report xlsx`
+  - Replaces top-level `txt`/`json`/`md`/`html`/`pdf`/`docx`/`xlsx` commands
+- `config` — consolidated configuration:
+  - `config show`, `config open`, `config reset`, `config restore`, `config local`, `config init`, `config deinit`
+
+#### 🪟 Windows PATH Management
+- `usrpath show` / `syspath show` — display PATH entries with numbered indices
+- `usrpath add <path>` / `syspath add <path>` — add directory to PATH
+- `usrpath rm <n|path>` / `syspath rm <n|path>` — remove by index or path
+- `usrpath move <n> <m>` / `syspath move <n> <m>` — reorder PATH entries
+- `mode admin` — re-launch ntc as Administrator
+- `mode normal` — return to normal user mode
+
+### New Shell Commands
+
+#### 📱 QR Code
+- `qr` — generate QR codes from text or data
+- `qsc` — scan and decode QR codes from images
+
+#### 🔤 Text Utilities
+- `encode` — encode text to various formats
+- `decode` — decode from various formats
+- `cvcode` — convert between encoding formats
+- `fmt` — format structured data (json, yaml, toml)
+
+#### 📋 Productivity
+- `todo` — simple task management (add, list, done, clear)
+- `clipboard` — clipboard operations (copy, paste, clear)
+
+#### 📡 Network & System
+- `serve` — HTTP file server with React web UI (browse, upload, download)
+- `smtp` — SMTP email client (send, compose with attachments)
+- `http` — HTTP client (GET, POST, PUT, DELETE with headers/body)
+- `dl` — file downloader with progress bar
+- `up` — file uploader
+- `dns` — DNS lookup tool
+- `ping` — ICMP ping utility
+- `sys` / `top` — real-time system monitoring dashboard (CPU, memory, processes)
+
+### 🎨 Editor Enhancements
+- **Hex Editor Mode** — binary file editing with hex/ASCII side-by-side view
+- **Hyper Template** — full C project scaffolding with DSA library, OS abstraction, debug utilities
+- **Rich Template System** — extensible template engine for code generation
+- **Terminal Mode** — integrated terminal panel within editor
+- **Welcome Screen** — improved intro with keybinding reference
+- **Framebuffer Renderer** — optimized rendering pipeline
+- **Template Management** — `template edit`, create, list templates
+
+### 🔬 MQL Module
+- Mini Query Language for data extraction and analysis
+- MQL check, extract, hover, and lexicon tools
+
+### 🛠️ Infrastructure & Internal
+- `ntc --upgrade` — self-upgrade mechanism (checks GitHub releases, downloads & replaces binary)
+- GitHub Actions CI workflow — automated build and test on push
+- Cross-platform termios patches for terminal handling
+- `rust-toolchain.toml` — pinned Rust toolchain version
+
+### ⚠️ Breaking Changes
+- `bkup` → `backup create` (alias removed; use `backup create`)
+- `pldw` → `backup restore` (alias removed; use `backup restore`)
+- `unpd` → `backup undo` (alias removed; use `backup undo`)
+- `diff` → `backup diff` (alias removed; use `backup diff`)
+- `txt` → `report txt` (alias removed; use `report txt`)
+- `json` → `report json`
+- `md` → `report md`
+- `html` → `report html`
+- `pdf` → `report pdf`
+- `docx` → `report docx`
+- `xlsx` → `report xlsx`
+- `showcg` → `config show`
+- `opencg` → `config open`
+- `resetcg` → `config reset`
+- `restorecg` → `config restore`
+- `gencg` → `config local`
+- `setO` / `setD` / `setL` / `setC` / `setA` / `setT` / `setH` → `config set <key> <value>`
+
+### 🔧 Refactoring & Code Quality
+- Editor core split into submodules: clipboard, edit, nav, save, search, tabs, tests, undo
+- Editor modes refactored into dedicated modules: command, finder, gosc, help, insert, jump, normal, query, run, search, terminal, visual
+- Render system modularized with framebuffer support
+- Output system split into capture, clipboard, display, and theme modules
+- Config system refactored into `utils::config::globals` and `utils::config::mod`
+- Theme manager extracted into `utils::theme::manager`
+- Shell commands modularized (30+ command modules)
+
+### 🐛 Bug Fixes
+- Various editor rendering and cursor positioning fixes
+- Cross-platform clipboard handling improvements
+- Backup system atomicity and error handling
+- PATH normalization (trailing slash, case-insensitive dedup)
+- Watcher debounce and filetype classification fixes
+- Syntax highlighting edge cases for Pascal, lock files, and Inno Setup
+
+---
+
 ## [2.3.0] - 2026-06-15
 
 ### Added

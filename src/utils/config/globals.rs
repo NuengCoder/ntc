@@ -565,6 +565,62 @@ impl Config {
         cfg.save();
     }
 
+    // ---- QSC (Quick Short Command) ----
+
+    pub fn global_get_qsc() -> Option<crate::config::QscHotkey> {
+        Self::read_global().qsc.clone()
+    }
+
+    pub fn global_set_qsc(hotkey: Option<crate::config::QscHotkey>) {
+        let mut cfg = Self::write_global();
+        cfg.qsc = hotkey;
+        cfg.save();
+    }
+
+    /// Parse a QSC hotkey string like `"#c #s #a 0"` or `"#c a"` or `"off"`.
+    /// Returns None for "off", Some(hotkey) on success.
+    pub fn parse_qsc(input: &str) -> Option<crate::config::QscHotkey> {
+        let trimmed = input.trim();
+        if trimmed.eq_ignore_ascii_case("off") || trimmed.is_empty() {
+            return None;
+        }
+        let mut ctrl = false;
+        let mut shift = false;
+        let mut alt = false;
+        let mut key: Option<String> = None;
+
+        for token in trimmed.split_whitespace() {
+            match token {
+                "#c" => ctrl = true,
+                "#s" => shift = true,
+                "#a" => alt = true,
+                _ => {
+                    if token.starts_with('#') {
+                        return None;
+                    }
+                    key = Some(token.to_uppercase());
+                }
+            }
+        }
+
+        let key = key?;
+        // Validate: single char or F1-F12
+        if key.len() == 1 {
+            let c = key.chars().next().unwrap();
+            if !c.is_alphanumeric() {
+                return None;
+            }
+        } else if !["F1","F2","F3","F4","F5","F6","F7","F8","F9","F10","F11","F12"].contains(&key.as_str()) {
+            return None;
+        }
+        // Require at least one modifier
+        if !ctrl && !shift && !alt {
+            return None;
+        }
+
+        Some(crate::config::QscHotkey { ctrl, shift, alt, key })
+    }
+
     // ---- Import helpers ----
 
     /// Import run aliases from a `.ntc.ral` file and merge into local or global config.

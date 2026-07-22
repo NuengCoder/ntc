@@ -8,6 +8,15 @@ use std::fs;
 use std::path::PathBuf;
 use std::sync::RwLock;
 
+/// QSC (Quick Short Command) hotkey configuration
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct QscHotkey {
+    pub ctrl: bool,
+    pub shift: bool,
+    pub alt: bool,
+    pub key: String,
+}
+
 pub(crate) mod globals;
 
 /// Global configuration (persisted to disk)
@@ -66,6 +75,10 @@ pub struct Config {
     /// Whether autosuggest (ghost text) is enabled in the shell
     #[serde(default = "default_autosuggest_enabled")]
     pub autosuggest_enabled: bool,
+
+    /// QSC (Quick Short Command) global hotkey, if configured
+    #[serde(default)]
+    pub qsc: Option<QscHotkey>,
 }
 
 // Single source of truth for alias name validation.
@@ -84,7 +97,7 @@ pub fn validate_alias_name(name: &str) -> bool {
         "dino", "math", "init", "deinit", "diff", "bkup",
         "tl",
         "image", "img", "python_activate", "python_deactivate", "python_showenv",
-        "smtp",
+        "smtp", "clip", "qsc",
     ];
     
     if name.trim().is_empty() || name.contains(' ') {
@@ -143,6 +156,7 @@ impl Config {
             run_aliases: HashMap::new(),
             math_functions: HashMap::new(),
             watch_trigger_alias: None,
+            qsc: None,
         }
     }
 

@@ -298,6 +298,7 @@ impl Editor {
             }
             _ => {}
         }
+        self.update_hover();
         Ok(())
     }
 }

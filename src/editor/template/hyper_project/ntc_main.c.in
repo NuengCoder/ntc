@@ -1,0 +1,145 @@
+#include "header/ntc.h"
+#include <stdio.h>
+#include <string.h>
+
+static void print_int_data(void* data) {
+    printf("%d ", *(int*)data);
+}
+
+static void print_graph_vertex(int id, void* data) {
+    (void)id;
+    printf("%s ", (char*)data);
+}
+
+int main(void) {
+    printf("=== {name} — Hyper Project Demo ===\n\n");
+
+    // ── ArrayList Demo ──
+    printf("1. ArrayList:\n");
+    ArrayList* list = arraylist_create(4);
+    int nums[] = {10, 20, 30, 40, 50};
+    for (int i = 0; i < 5; i++)
+        arraylist_append(list, &nums[i]);
+    printf("   Size: %d, Capacity: %d\n", arraylist_size(list), arraylist_capacity(list));
+    for (int i = 0; i < arraylist_size(list); i++)
+        printf("   list[%d] = %d\n", i, *(int*)arraylist_get(list, i));
+    arraylist_destroy(list, NULL);
+
+    // ── LinkedList Demo ──
+    printf("\n2. LinkedList:\n");
+    LinkedList* ll = linkedlist_create();
+    linkedlist_push_front(ll, &nums[0]);
+    linkedlist_push_back(ll, &nums[1]);
+    linkedlist_push_back(ll, &nums[2]);
+    printf("   Front: %d, Size: %d\n", *(int*)linkedlist_peek_front(ll), linkedlist_size(ll));
+    // Traverse and print
+    LLNode* cur = ll->head;
+    printf("   Elements: ");
+    while (cur) { printf("%d ", *(int*)cur->data); cur = cur->next; }
+    printf("\n");
+    linkedlist_destroy(ll, NULL);
+
+    // ── Stack Demo ──
+    printf("\n3. Stack:\n");
+    Stack* st = stack_create(4);
+    for (int i = 0; i < 4; i++) stack_push(st, &nums[i]);
+    printf("   Popped: %d %d %d\n", *(int*)stack_pop(st), *(int*)stack_pop(st), *(int*)stack_pop(st));
+    stack_destroy(st, NULL);
+
+    // ── Queue Demo ──
+    printf("\n4. Queue:\n");
+    Queue* q = queue_create(4);
+    for (int i = 0; i < 4; i++) queue_enqueue(q, &nums[i]);
+    printf("   Dequeued: %d %d %d\n", *(int*)queue_dequeue(q), *(int*)queue_dequeue(q), *(int*)queue_dequeue(q));
+    queue_destroy(q, NULL);
+
+    // ── BinaryTree Demo ──
+    printf("\n5. BinaryTree:\n");
+    BinaryTree* bt = binarytree_create(ntc_compare_int);
+    int btv[] = {50, 30, 70, 20, 40, 60, 80};
+    for (int i = 0; i < 7; i++) binarytree_insert(bt, &btv[i]);
+    printf("   Inorder: ");
+    binarytree_inorder(bt, print_int_data);
+    printf("\n   Size: %d\n", binarytree_size(bt));
+    binarytree_destroy(bt, NULL);
+
+    // ── HashMap Demo ──
+    printf("\n6. HashMap:\n");
+    HashMap* hm = hashmap_create(16);
+    int h1 = 100, h2 = 200, h3 = 300;
+    hashmap_put(hm, "alpha", &h1);
+    hashmap_put(hm, "beta", &h2);
+    hashmap_put(hm, "gamma", &h3);
+    printf("   alpha = %d\n", *(int*)hashmap_get(hm, "alpha"));
+    printf("   Has 'beta': %s\n", hashmap_has_key(hm, "beta") ? "yes" : "no");
+    printf("   Size: %d\n", hashmap_size(hm));
+    int kc = 0;
+    char** ks = hashmap_keys(hm, &kc);
+    printf("   Keys: ");
+    for (int i = 0; i < kc; i++) { printf("%s ", ks[i]); free(ks[i]); }
+    printf("\n");
+    free(ks);
+    hashmap_destroy(hm, NULL);
+
+    // ── Graph Demo ──
+    printf("\n7. Graph (BFS):\n");
+    Graph* g = graph_create(8, 1);
+    char* labels[] = { (char*)"A", (char*)"B", (char*)"C", (char*)"D", (char*)"E" };
+    int gids[5];
+    for (int i = 0; i < 5; i++) gids[i] = graph_add_vertex(g, labels[i]);
+    graph_add_edge(g, gids[0], gids[1], 1);
+    graph_add_edge(g, gids[0], gids[2], 1);
+    graph_add_edge(g, gids[1], gids[3], 1);
+    graph_add_edge(g, gids[2], gids[4], 1);
+    printf("   BFS from A: ");
+    graph_bfs(g, gids[0], print_graph_vertex);
+    printf("\n   Vertices: %d\n", graph_vertex_count(g));
+    graph_destroy(g, NULL);
+
+    // ── OS timer Demo ──
+    printf("\n8. OS Timer:\n");
+    double t1 = os_timer_ms();
+    int s = 0;
+    for (int i = 0; i < 1000000; i++) s += i;
+    double t2 = os_timer_ms();
+    printf("   Loop took: %.2f ms (sum=%d)\n", t2 - t1, s);
+
+    // ── Linear Search + Binary Search Demo ──
+    printf("\n9. Search Algorithms:\n");
+    int search_arr[] = {7, 12, 19, 3, 88, 55, 42, 31, 64, 28};
+    int search_n = 10;
+    int lkey = 55;
+    int li = lsearch_int(search_arr, search_n, lkey);
+    printf("   lsearch_int(%d) = %s\n", lkey, li >= 0 ? "found" : "not found");
+    if (li >= 0) printf("     at index %d\n", li);
+
+    // Sort for binary search (using timsort)
+    void* sort_ptrs[10];
+    for (int i = 0; i < search_n; i++) sort_ptrs[i] = &search_arr[i];
+    ntc_sort(sort_ptrs, search_n, ntc_compare_int);
+    int sorted[10];
+    for (int i = 0; i < search_n; i++) sorted[i] = *(int*)sort_ptrs[i];
+    printf("   Sorted: ");
+    for (int i = 0; i < search_n; i++) printf("%d ", sorted[i]);
+    printf("\n");
+    int bkey = 42;
+    int bi = bsearch_int(sorted, search_n, bkey);
+    printf("   bsearch_int(%d) = %s\n", bkey, bi >= 0 ? "found" : "not found");
+    if (bi >= 0) printf("     at index %d\n", bi);
+
+    // String search demo
+    char* words[] = { (char*)"cherry", (char*)"apple", (char*)"banana", (char*)"date", (char*)"elderberry" };
+    int wn = 5;
+    int wli = lsearch_str(words, wn, "banana");
+    printf("   lsearch_str('banana') = %s\n", wli >= 0 ? "found" : "not found");
+    void* wptrs[5];
+    for (int i = 0; i < wn; i++) wptrs[i] = words[i];
+    ntc_sort(wptrs, wn, ntc_compare_str);
+    char* sorted_words[5];
+    for (int i = 0; i < wn; i++) sorted_words[i] = (char*)wptrs[i];
+    int wbi = bsearch_str(sorted_words, wn, "date");
+    printf("   bsearch_str('date') = %s\n", wbi >= 0 ? "found" : "not found");
+
+    printf("\n=== Demo Complete ===\n");
+    return 0;
+}

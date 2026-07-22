@@ -88,6 +88,53 @@ impl Editor {
             }
         }
 
+        if cmd == "hex" || cmd == "hx" {
+            self.enter_hex_mode();
+            return Ok(false);
+        }
+
+        if let Some(rest) = cmd.strip_prefix("goto ") {
+            let rest = rest.trim();
+            let addr = if let Some(h) = rest.strip_prefix("0x").or_else(|| rest.strip_prefix("0X")) {
+                usize::from_str_radix(h, 16).ok()
+            } else {
+                rest.parse::<usize>().ok()
+            };
+            match addr {
+                Some(a) if self.hex.is_some() => {
+                    let hex = self.hex.as_mut().unwrap();
+                    let target = a.min(hex.data.len().saturating_sub(1));
+                    hex.cursor = target;
+                    hex.offset = (target / 16) * 16;
+                    hex.nibble = false;
+                    hex.pending_byte = 0;
+                    self.status_msg = Some(format!("Jumped to offset 0x{:X}", target));
+                    self.mode = Mode::Hex;
+                }
+                Some(a) => {
+                    // Normal line jump for decimal
+                    let target = a.saturating_sub(1).min(self.lines.len().saturating_sub(1));
+                    self.cursor.y = target;
+                    self.cursor.byte = 0;
+                    self.status_msg = Some(format!("Jumped to line {}", a));
+                }
+                None => {
+                    self.status_msg = Some("goto: usage goto <addr> or goto 0x<hex>".into());
+                }
+            }
+            return Ok(false);
+        }
+
+        if cmd == "q!" || cmd == "quit!" {
+            if self.hex.is_some() {
+                self.hex = None;
+                self.mode = Mode::Normal;
+                self.status_msg = Some("Exited hex mode (changes discarded)".into());
+                return Ok(false);
+            }
+            return self.exit_flow(stdout);
+        }
+
         if cmd == "q" || cmd == "quit" {
             self.mode = Mode::Normal;
             return self.exit_flow(stdout);
@@ -103,12 +150,26 @@ impl Editor {
         }
 
         if cmd == "w" || cmd == "write" {
-            match self.save() {
-                Ok(()) => {
-                    self.status_msg = Some("Saved ".into());
+            if let Some(ref hex) = self.hex {
+                match std::fs::write(&hex.path, &hex.data) {
+                    Ok(()) => {
+                        if let Some(ref mut h) = self.hex {
+                            h.modified = false;
+                        }
+                        self.status_msg = Some("Hex saved".into());
+                    }
+                    Err(e) => {
+                        self.status_msg = Some(format!("Hex save failed: {}", e));
+                    }
                 }
-                Err(e) => {
-                    self.status_msg = Some(format!("Save failed: {}", e));
+            } else {
+                match self.save() {
+                    Ok(()) => {
+                        self.status_msg = Some("Saved ".into());
+                    }
+                    Err(e) => {
+                        self.status_msg = Some(format!("Save failed: {}", e));
+                    }
                 }
             }
             return Ok(false);

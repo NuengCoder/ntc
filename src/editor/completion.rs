@@ -1,5 +1,5 @@
-use crate::syntax::SyntaxLanguage;
 use crate::config::Config;
+use crate::syntax::SyntaxLanguage;
 use super::Editor;
 
 #[derive(Clone, Debug)]
@@ -7,126 +7,343 @@ pub(crate) struct CompletionItem {
     pub(crate) label: String,
     pub(crate) detail: String,
     pub(crate) insert_text: String,
+    pub(crate) category: u8,
 }
 
-pub(crate) fn completions_for(lang: Option<SyntaxLanguage>, prefix: &str) -> Vec<CompletionItem> {
+fn score_candidate(prefix: &str, label: &str) -> u32 {
+    if prefix.is_empty() || label.is_empty() {
+        return 0;
+    }
+    let lower_p = prefix.to_lowercase();
+    let lower_l = label.to_lowercase();
+    if label == prefix {
+        return 100;
+    }
+    if lower_l == lower_p {
+        return 90;
+    }
+    if lower_l.starts_with(&lower_p) {
+        return 80;
+    }
+    0
+}
+
+fn extract_variables(lines: &[String], lang: Option<SyntaxLanguage>) -> Vec<CompletionItem> {
+    if lang != Some(SyntaxLanguage::Mql) {
+        return Vec::new();
+    }
+    let infos = crate::mql::extract_variables(lines);
+    infos
+        .into_iter()
+        .map(|v| CompletionItem {
+            label: v.name.clone(),
+            detail: format!("[Var] {}", v.type_name),
+            insert_text: v.name,
+            category: 0,
+        })
+        .collect()
+}
+
+fn extract_includes(lines: &[String], lang: Option<SyntaxLanguage>) -> Vec<CompletionItem> {
+    if lang != Some(SyntaxLanguage::Mql) {
+        return Vec::new();
+    }
+    let names = crate::mql::extract_includes(lines);
+    names
+        .into_iter()
+        .map(|n| CompletionItem {
+            label: n.clone(),
+            detail: "[file.mqh]".to_string(),
+            insert_text: n,
+            category: 4,
+        })
+        .collect()
+}
+
+fn extract_classes(lines: &[String], lang: Option<SyntaxLanguage>) -> Vec<CompletionItem> {
+    if lang != Some(SyntaxLanguage::Mql) {
+        return Vec::new();
+    }
+    let classes = crate::mql::extract_classes(lines);
+    classes
+        .into_iter()
+        .map(|(n, _)| CompletionItem {
+            label: n.clone(),
+            detail: "[class]".to_string(),
+            insert_text: n,
+            category: 2,
+        })
+        .collect()
+}
+
+fn extract_user_functions(lines: &[String], lang: Option<SyntaxLanguage>) -> Vec<CompletionItem> {
+    if lang != Some(SyntaxLanguage::Mql) {
+        return Vec::new();
+    }
+    let funcs = crate::mql::extract_user_functions(lines);
+    funcs
+        .into_iter()
+        .map(|f| {
+            let detail = if f.return_type.is_empty() {
+                "[Fun]".to_string()
+            } else {
+                format!("[Fun] {}", f.return_type)
+            };
+            CompletionItem {
+                label: f.name.clone(),
+                detail,
+                insert_text: f.name,
+                category: 1,
+            }
+        })
+        .collect()
+}
+
+fn extract_structs(lines: &[String], lang: Option<SyntaxLanguage>) -> Vec<CompletionItem> {
+    if lang != Some(SyntaxLanguage::Mql) {
+        return Vec::new();
+    }
+    let structs = crate::mql::extract_structs(lines);
+    structs
+        .into_iter()
+        .map(|(n, _)| CompletionItem {
+            label: n.clone(),
+            detail: "[struct]".to_string(),
+            insert_text: n,
+            category: 2,
+        })
+        .collect()
+}
+
+pub(crate) fn completions_for(
+    lang: Option<SyntaxLanguage>,
+    prefix: &str,
+    vars: &[CompletionItem],
+    includes: &[CompletionItem],
+    classes: &[CompletionItem],
+    structs: &[CompletionItem],
+    user_funcs: &[CompletionItem],
+) -> Vec<CompletionItem> {
+    let mut scored: Vec<(u32, CompletionItem)> = Vec::new();
     let lower = prefix.to_lowercase();
-    let mut items = Vec::new();
 
-    if let Some(SyntaxLanguage::NtcMath) = lang {
-        // Built-in functions
-        for name in crate::math::builtin_function_names() {
-            if name == "print" { continue; } // handled below with parens
-            if name.to_lowercase().starts_with(&lower) {
-                let detail = match name {
-                    "sin" => "sine (radians)",
-                    "cos" => "cosine (radians)",
-                    "tan" => "tangent (radians)",
-                    "cot" => "cotangent (radians)",
-                    "sec" => "secant (radians)",
-                    "csc" => "cosecant (radians)",
-                    "asin" | "arcsin" => "inverse sine",
-                    "acos" | "arccos" => "inverse cosine",
-                    "atan" | "arctan" => "inverse tangent",
-                    "acot" | "arccot" => "inverse cotangent",
-                    "asec" | "arcsec" => "inverse secant",
-                    "acsc" | "arccsc" => "inverse cosecant",
-                    "sqrt" => "square root",
-                    "pow" => "power (x, y)",
-                    "abs" => "absolute value",
-                    "floor" => "round down",
-                    "ceil" | "ceiling" => "round up",
-                    "round" => "nearest integer",
-                    "ln" | "log" => "natural log",
-                    "log2" => "base-2 log",
-                    "log10" => "base-10 log",
-                    "sum" => "sum of values",
-                    "min" => "minimum value",
-                    "max" => "maximum value",
-                    "avg" | "average" | "mean" => "arithmetic mean",
-                    "rand" | "random" => "random integer in [min, max]",
-                    "tobinary" => "to binary string",
-                    "tohex" => "to hex string",
-                    "to8" | "tooctal" => "to octal string",
-                    "todecimal" => "to decimal number",
-                    "tohb" | "tohumanbytes" | "tohumanreadable" => "human-readable bytes",
-                    _ => "",
-                };
-                items.push(CompletionItem {
-                    label: name.to_string(),
+    fn push(
+        scored: &mut Vec<(u32, CompletionItem)>,
+        prefix: &str,
+        label: &str,
+        detail: &str,
+        insert_text: &str,
+        category: u8,
+    ) {
+        let s = score_candidate(prefix, label);
+        if s > 0 {
+            scored.push((
+                s,
+                CompletionItem {
+                    label: label.to_string(),
                     detail: detail.to_string(),
-                    insert_text: name.to_string(),
-                });
+                    insert_text: insert_text.to_string(),
+                    category,
+                },
+            ));
+        }
+    }
+
+    if let Some(lang) = lang {
+        match lang {
+            SyntaxLanguage::NtcMath => {
+                for name in crate::math::builtin_function_names() {
+                    if name == "print" {
+                        continue;
+                    }
+                    let detail = match name {
+                        "sin" => "sine (radians)",
+                        "cos" => "cosine (radians)",
+                        "tan" => "tangent (radians)",
+                        "cot" => "cotangent (radians)",
+                        "sec" => "secant (radians)",
+                        "csc" => "cosecant (radians)",
+                        "asin" | "arcsin" => "inverse sine",
+                        "acos" | "arccos" => "inverse cosine",
+                        "atan" | "arctan" => "inverse tangent",
+                        "acot" | "arccot" => "inverse cotangent",
+                        "asec" | "arcsec" => "inverse secant",
+                        "acsc" | "arccsc" => "inverse cosecant",
+                        "sqrt" => "square root",
+                        "pow" => "power (x, y)",
+                        "abs" => "absolute value",
+                        "floor" => "round down",
+                        "ceil" | "ceiling" => "round up",
+                        "round" => "nearest integer",
+                        "ln" | "log" => "natural log",
+                        "log2" => "base-2 log",
+                        "log10" => "base-10 log",
+                        "sum" => "sum of values",
+                        "min" => "minimum value",
+                        "max" => "maximum value",
+                        "avg" | "average" | "mean" => "arithmetic mean",
+                        "rand" | "random" => "random integer in [min, max]",
+                        "tobinary" => "to binary string",
+                        "tohex" => "to hex string",
+                        "to8" | "tooctal" => "to octal string",
+                        "todecimal" => "to decimal number",
+                        "tohb" | "tohumanbytes" | "tohumanreadable" => "human-readable bytes",
+                        _ => "",
+                    };
+                    push(&mut scored, prefix, name, detail, name, 1);
+                }
+                for name in crate::math::constant_names() {
+                    let val = match name {
+                        "PI" | "pi" => std::f64::consts::PI,
+                        "E" | "e" | "EXP" | "exp" => std::f64::consts::E,
+                        "PHI" | "phi" => 1.618_033_988_749_895,
+                        "TAU" | "tau" => std::f64::consts::TAU,
+                        _ => 0.0,
+                    };
+                    push(&mut scored, prefix, name, &format!("= {}", val), name, 3);
+                }
+                for kw in &["return"] {
+                    push(&mut scored, prefix, kw, "return a value", kw, 5);
+                }
+                if "print".starts_with(&lower) {
+                    push(&mut scored, prefix, "print", "print value(s)", "print()", 1);
+                }
+                let cfg = Config::global();
+                if let Ok(cfg_guard) = cfg.read() {
+                    for (name, def) in &cfg_guard.math_functions {
+                        let arrow = def.find("=>").unwrap_or(0);
+                        let params = def[..arrow].trim();
+                        push(
+                            &mut scored,
+                            prefix,
+                            name,
+                            &format!("fn({})", params),
+                            name,
+                            1,
+                        );
+                    }
+                }
+            }
+
+            SyntaxLanguage::Mql => {
+                for v in vars {
+                    let s = score_candidate(prefix, &v.label);
+                    if s > 0 {
+                        scored.push((s, v.clone()));
+                    }
+                }
+                for v in includes {
+                    let s = score_candidate(prefix, &v.label);
+                    if s > 0 {
+                        scored.push((s, v.clone()));
+                    }
+                }
+                for v in classes {
+                    let s = score_candidate(prefix, &v.label);
+                    if s > 0 {
+                        scored.push((s, v.clone()));
+                    }
+                }
+                for v in structs {
+                    let s = score_candidate(prefix, &v.label);
+                    if s > 0 {
+                        scored.push((s, v.clone()));
+                    }
+                }
+                for v in user_funcs {
+                    let s = score_candidate(prefix, &v.label);
+                    if s > 0 {
+                        scored.push((s, v.clone()));
+                    }
+                }
+                for name in crate::mql::builtin_function_names() {
+                    push(&mut scored, prefix, name, "[Fun]", name, 1);
+                }
+                for name in crate::mql::type_names() {
+                    push(&mut scored, prefix, name, "[built-in]", name, 2);
+                }
+                for name in crate::mql::constant_names() {
+                    push(&mut scored, prefix, name, "[constant]", name, 3);
+                }
+                for name in crate::mql::keyword_names() {
+                    push(&mut scored, prefix, name, "[other]", name, 5);
+                }
+            }
+
+            _ => {}
+        }
+    }
+
+    // Group by category, sort each group by score descending
+    let mut grouped: std::collections::HashMap<u8, Vec<(u32, CompletionItem)>> =
+        std::collections::HashMap::new();
+    for item in scored {
+        grouped.entry(item.1.category).or_default().push(item);
+    }
+    for items in grouped.values_mut() {
+        items.sort_by(|(sa, _), (sb, _)| sb.cmp(sa));
+    }
+
+    let mut final_items: Vec<(u32, CompletionItem)> = Vec::new();
+    // Phase 1: take top 2 from every category
+    for cat in 0..=5u8 {
+        if let Some(mut items) = grouped.remove(&cat) {
+            let take = items.len().min(2);
+            for item in items.drain(..take) {
+                final_items.push(item);
+            }
+            if !items.is_empty() {
+                grouped.entry(cat).or_default().extend(items);
             }
         }
+    }
 
-        // Constants
-        for name in crate::math::constant_names() {
-            if name.to_lowercase().starts_with(&lower) {
-                let val = match name {
-                    "PI" | "pi" => std::f64::consts::PI,
-                    "E" | "e" | "EXP" | "exp" => std::f64::consts::E,
-                    "PHI" | "phi" => 1.618_033_988_749_895,
-                    "TAU" | "tau" => std::f64::consts::TAU,
-                    _ => 0.0,
-                };
-                items.push(CompletionItem {
-                    label: name.to_string(),
-                    detail: format!("= {}", val),
-                    insert_text: name.to_string(),
-                });
+    // Phase 2: redistribute remaining budget
+    let mut budget = 12usize.saturating_sub(final_items.len());
+    if budget > 0 {
+        // 2a: [file.mqh] (cat=4) gets priority for all extras
+        if let Some(items) = grouped.remove(&4) {
+            for item in items {
+                if budget == 0 {
+                    break;
+                }
+                final_items.push(item);
+                budget -= 1;
             }
         }
-
-        // Keywords
-        for kw in &["return"] {
-            if kw.starts_with(&lower) {
-                items.push(CompletionItem {
-                    label: kw.to_string(),
-                    detail: "return a value".to_string(),
-                    insert_text: kw.to_string(),
-                });
+        // 2b: each remaining category gets +1 (max total = 3)
+        for cat in [0, 1, 2, 3, 5] {
+            if budget == 0 {
+                break;
+            }
+            if let Some(items) = grouped.remove(&cat) {
+                if let Some(item) = items.into_iter().next() {
+                    final_items.push(item);
+                    budget -= 1;
+                }
             }
         }
-
-        // print() — insert with parentheses
-        if "print".starts_with(&lower) {
-            items.push(CompletionItem {
-                label: "print".to_string(),
-                detail: "print value(s)".to_string(),
-                insert_text: "print()".to_string(),
-            });
-        }
-
-        // User-defined functions from config
-        let cfg = Config::global();
-        if let Ok(cfg_guard) = cfg.read() {
-            for (name, def) in &cfg_guard.math_functions {
-                if name.starts_with(&lower) && !items.iter().any(|i| i.label == *name) {
-                    let arrow = def.find("=>").unwrap_or(0);
-                    let params = def[..arrow].trim();
-                    let detail = format!("fn({})", params);
-                    items.push(CompletionItem {
-                        label: name.clone(),
-                        detail,
-                        insert_text: name.clone(),
-                    });
+        // 2c: any leftover budget — drain whatever is left
+        if budget > 0 {
+            for cat in 0..=5u8 {
+                if budget == 0 {
+                    break;
+                }
+                if let Some(items) = grouped.remove(&cat) {
+                    for item in items {
+                        if budget == 0 {
+                            break;
+                        }
+                        final_items.push(item);
+                        budget -= 1;
+                    }
                 }
             }
         }
     }
 
-    // Sort: exact match first, then alphabetical
-    items.sort_by(|a, b| {
-        let a_exact = a.label.to_lowercase() == lower;
-        let b_exact = b.label.to_lowercase() == lower;
-        if a_exact != b_exact {
-            return b_exact.cmp(&a_exact);
-        }
-        a.label.cmp(&b.label)
-    });
-
-    items
+    final_items.truncate(12);
+    final_items.into_iter().map(|(_, item)| item).collect()
 }
 
 impl Editor {
@@ -134,14 +351,23 @@ impl Editor {
         let line = self.current();
         if let Some((word, _start_byte)) = word_before_cursor(line, self.cursor.byte) {
             let lang = self.syntax.language;
-            let items = completions_for(lang, &word);
+            let vars = extract_variables(&self.lines, lang);
+            let includes = extract_includes(&self.lines, lang);
+            let classes = extract_classes(&self.lines, lang);
+            let structs = extract_structs(&self.lines, lang);
+            let user_funcs = extract_user_functions(&self.lines, lang);
+            let items = completions_for(lang, &word, &vars, &includes, &classes, &structs, &user_funcs);
             if !items.is_empty() {
                 self.completion_items = items;
                 self.completion_idx = 0;
                 self.completion_visible = true;
                 self.completion_prefix = word.clone();
                 self.mark_all_dirty();
+            } else {
+                self.dismiss_completion();
             }
+        } else {
+            self.dismiss_completion();
         }
     }
 
@@ -181,7 +407,6 @@ impl Editor {
         let line = self.current();
         if let Some((_, start_byte)) = word_before_cursor(line, self.cursor.byte) {
             let end_byte = self.cursor.byte;
-            // Replace the word with the completion
             let new_line = format!(
                 "{}{}{}",
                 &line[..start_byte],
@@ -198,7 +423,6 @@ impl Editor {
     }
 }
 
-/// Get the word (identifier) under or before the cursor. Returns the word and its start byte.
 pub(crate) fn word_before_cursor(line: &str, cursor_byte: usize) -> Option<(String, usize)> {
     let byte = cursor_byte.min(line.len());
     let byte = byte.min(line.floor_char_boundary(byte));

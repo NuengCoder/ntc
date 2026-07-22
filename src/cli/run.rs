@@ -1,8 +1,10 @@
 use crate::config::Config;
 use crate::filetype::{FormatConfig, is_supported_format};
+use crate::navigator::Navigator;
 use crate::output::{cat_file, print_error, print_success, print_warning};
 use crate::report::{generate_report, generate_report_to, ReportFormat};
 use crate::cli::helpers::{preprocess_args, print_logo, print_help};
+use crate::shell::commands::execute_command;
 use anyhow::{bail, Result};
 use clap::{Arg, ArgAction, Command};
 use colored::*;
@@ -31,7 +33,7 @@ fn handle_teleport_at(raw_args: &[String]) -> Result<bool> {
                 println!("✓ Teleported to '{}' -> {}", tp_name, clean_path.display());
                 println!();
                 print_logo();
-                crate::shell::run_shell_with_nav(nav, None)?;
+                crate::shell::run_shell_with_nav(nav)?;
                 Ok(false)
             }
             Err(e) => {
@@ -50,6 +52,10 @@ fn handle_simple_flags(matches: &clap::ArgMatches, known_flags: &[&str]) -> Resu
     if matches.get_flag("version") {
         println!("ntc {}", env!("CARGO_PKG_VERSION").green().bold());
         return Ok(false);
+    }
+
+    if matches.get_flag("upgrade") {
+        return crate::shell::commands::upgrade::cmd_upgrade();
     }
 
     if matches.get_flag("where_cli") {
@@ -622,6 +628,14 @@ fn handle_ral_igcare(matches: &clap::ArgMatches) -> Result<bool> {
 pub fn run_cli() -> Result<bool> {
     let raw_args: Vec<String> = std::env::args().collect();
 
+    // --- Direct dispatch: `ntc qsc daemon` → enter hidden daemon loop without shell ---
+    if raw_args.len() >= 3
+        && raw_args[1].to_lowercase() == "qsc"
+        && raw_args[2].to_lowercase() == "daemon"
+    {
+        crate::utils::qsc::run();
+    }
+
     // --- Handle @teleport shortcut from command line ---
     if !handle_teleport_at(&raw_args)? {
         return Ok(false);
@@ -655,6 +669,7 @@ pub fn run_cli() -> Result<bool> {
         "--caren <file>              Care about a specific file",
         "--clear                     Clear the terminal screen",
         "--version                   Show version information",
+        "--upgrade                   Check for updates and upgrade ntc",
         "--where                     Show ntc executable and config location",
         "--ral-export-all <name>     Export all run aliases to <name>.ntc.ral",
         "--ral-export-select <name>  Select run aliases to export to <name>.ntc.ral",
@@ -662,6 +677,7 @@ pub fn run_cli() -> Result<bool> {
         "--igcare-export-all <name>  Export all ignore/care settings to <name>.ntc.igcare",
         "--igcare-export-select <name>  Select categories to export to <name>.ntc.igcare",
         "--igcare-import <file>      Import ignore/care settings from .ntc.igcare file",
+        "-x, --explorer [PATH]       Launch NTC File Explorer TUI",
         "--dino                      Play the dinosaur runner game",
         "--math <EXPR>               Evaluate a math expression (e.g. --math \"3+4*5\")",
         "--list, --fun               List all command-line functions",
@@ -782,6 +798,12 @@ pub fn run_cli() -> Result<bool> {
             Arg::new("version")
                 .long("version")
                 .help("Show version information")
+                .action(ArgAction::SetTrue),
+        )
+        .arg(
+            Arg::new("upgrade")
+                .long("upgrade")
+                .help("Check for updates and upgrade ntc to the latest version")
                 .action(ArgAction::SetTrue),
         )
         .arg(
@@ -966,6 +988,15 @@ pub fn run_cli() -> Result<bool> {
                 .hide(true),
         )
         .arg(
+            Arg::new("explorer")
+                .short('x')
+                .long("explorer")
+                .value_name("PATH")
+                .help("Launch NTC File Explorer TUI (optional starting path)")
+                .num_args(0..=1)
+                .value_parser(clap::value_parser!(String)),
+        )
+        .arg(
             Arg::new("image")
                 .long("image")
                 .value_name("IMAGE")
@@ -994,13 +1025,15 @@ pub fn run_cli() -> Result<bool> {
     let matches = match matches {
         Ok(m) => m,
         Err(e) => {
-            // Unknown args → forward to shell (e.g. "ntc serve 8080")
+            // Unknown args → dispatch directly via shell (e.g. "ntc pathcp")
             if e.kind() == clap::error::ErrorKind::UnknownArgument
                 || e.kind() == clap::error::ErrorKind::InvalidSubcommand
             {
                 let raw: Vec<String> = std::env::args().skip(1).collect();
                 if !raw.is_empty() {
-                    set_initial_command(raw.join(" "));
+                    let mut nav = Navigator::new()?;
+                    execute_command(&raw.join(" "), &mut nav, &None)?;
+                    return Ok(false);
                 }
                 return Ok(true);
             }
@@ -1019,24 +1052,15 @@ pub fn run_cli() -> Result<bool> {
     if !handle_edit_init(&matches)? { return Ok(false); }
     if !handle_ral_igcare(&matches)? { return Ok(false); }
 
+    // --- Handle explorer TUI ---
+    if matches.contains_id("explorer") {
+        let path = matches.get_one::<String>("explorer").map(|s| std::path::Path::new(s));
+        crate::nfe::run_explorer(path)?;
+        return Ok(false);
+    }
+
     // --- No arguments: Launch interactive mode ---
     Ok(true)
 }
 
-// ── Initial command injection ──────────────────────────────────────
-// Allows "ntc serve 8080" to bypass clap and run directly in the shell
 
-use std::sync::Mutex;
-static INITIAL_COMMAND: Mutex<Option<String>> = Mutex::new(None);
-
-/// Set the initial command to execute in the shell (from unrecognized CLI args).
-fn set_initial_command(cmd: String) {
-    if let Ok(mut guard) = INITIAL_COMMAND.lock() {
-        *guard = Some(cmd);
-    }
-}
-
-/// Take and clear the initial command (called by shell at startup).
-pub fn take_initial_command() -> Option<String> {
-    INITIAL_COMMAND.lock().ok()?.take()
-}

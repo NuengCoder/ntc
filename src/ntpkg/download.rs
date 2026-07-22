@@ -87,13 +87,13 @@ pub fn verify_sha256(path: &Path, expected: &str) -> Result<bool> {
 }
 
 /// Extract an archive to `dest_dir`.
-#[allow(dead_code)]
 pub fn extract_archive(archive_path: &Path, dest_dir: &Path, kind: ArchiveType) -> Result<()> {
     fs::create_dir_all(dest_dir)
         .with_context(|| format!("Failed to create {}", dest_dir.display()))?;
 
     match kind {
         ArchiveType::TarGz => extract_tar_gz(archive_path, dest_dir),
+        ArchiveType::TarXz => extract_tar_xz(archive_path, dest_dir),
         ArchiveType::Zip => extract_zip(archive_path, dest_dir),
         ArchiveType::Msi | ArchiveType::Pkg => {
             // MSI/PKG installers are copied as-is for manual install
@@ -122,6 +122,20 @@ fn extract_tar_gz(archive_path: &Path, dest_dir: &Path) -> Result<()> {
     Ok(())
 }
 
+fn extract_tar_xz(archive_path: &Path, dest_dir: &Path) -> Result<()> {
+    use tar::Archive;
+    use xz2::read::XzDecoder;
+
+    let file = fs::File::open(archive_path)
+        .with_context(|| format!("Failed to open {}", archive_path.display()))?;
+    let decoder = XzDecoder::new(file);
+    let mut archive = Archive::new(decoder);
+    archive
+        .unpack(dest_dir)
+        .with_context(|| format!("Failed to extract tar.xz to {}", dest_dir.display()))?;
+    Ok(())
+}
+
 fn extract_zip(archive_path: &Path, dest_dir: &Path) -> Result<()> {
     let file = fs::File::open(archive_path)
         .with_context(|| format!("Failed to open {}", archive_path.display()))?;
@@ -134,7 +148,6 @@ fn extract_zip(archive_path: &Path, dest_dir: &Path) -> Result<()> {
 }
 
 /// Find a binary file inside an extracted directory tree.
-#[allow(dead_code)]
 pub fn find_binary(extract_dir: &Path, binary_name: &str) -> Option<PathBuf> {
     let target_name = if cfg!(windows) {
         format!("{}.exe", binary_name)
@@ -146,7 +159,7 @@ pub fn find_binary(extract_dir: &Path, binary_name: &str) -> Option<PathBuf> {
 }
 
 fn extract_package_name(url: &str) -> Option<String> {
-    let name_versions = ["python", "node", "ruby", "go", "dotnet"];
+    let name_versions = ["python", "node", "ruby", "go", "dotnet", "java", "kotlin", "swift", "php", "zig", "msys2", "lua", "flutter", "kubectl", "helm", "kind", "kustomize", "docker", "docker-compose", "act", "devops-tool", "scala", "opencode", "mimocode", "kilocode", "sqlitestudio", "sqlite"];
     for nv in &name_versions {
         if url.contains(nv) {
             return Some(nv.to_string());

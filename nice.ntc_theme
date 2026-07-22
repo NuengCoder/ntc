@@ -1,0 +1,164 @@
+name = "nice"
+author = "NuengCoder"
+description = "VS Code Default Dark+ inspired theme for coding"
+
+[syntax]
+keyword = "bright_cyan"
+string = "bright_green"
+comment = "bright_black"
+number = "bright_green"
+type = "cyan"
+builtin = "bright_red"
+function = "bright_yellow"
+operator = "yellow"
+punctuation = "yellow"
+attribute = "bright_cyan"
+macro_token = "bright_magenta"
+regex = "bright_red"
+tag = "bright_cyan"
+constant = "cyan"
+normal = "bright_white"
+
+[shell]
+prompt_bracket = "bright_cyan"
+prompt_path = "cyan"
+prompt_watcher = "yellow"
+prompt_arrow = "green"
+success = "green"
+error = "red"
+warning = "yellow"
+info = "cyan"
+tree_dir = "bright_magenta"
+tree_file = "yellow"
+tree_ignored = "bright_black"
+tree_size = "yellow"
+command_output = "yellow"
+separator = "cyan"
+help_header = "cyan"
+help_section = "cyan"
+help_example = "green"
+teleport_name = "bright_blue"
+alias_name = "blue"
+alias_command = "bright_black"
+
+[shell.tree_branch]
+r = 30
+g = 220
+b = 220
+
+[editor]
+status_text = "white"
+status_modified = "yellow"
+cursor_bg = "white"
+cursor_text = "black"
+sidebar_selected = "white"
+
+[editor.editor_bg]
+r = 21
+g = 19
+b = 26
+
+[editor.gutter_bg]
+r = 24
+g = 22
+b = 30
+
+[editor.status_bg]
+r = 130
+g = 100
+b = 210
+
+[editor.hint_bg]
+r = 28
+g = 26
+b = 34
+
+[editor.sidebar_bg]
+r = 21
+g = 19
+b = 26
+
+[editor.sidebar_selected_bg]
+r = 50
+g = 45
+b = 65
+
+[editor.run_panel_bg]
+r = 26
+g = 24
+b = 32
+
+[editor.gutter_text]
+r = 100
+g = 95
+b = 118
+
+[editor.hint_text]
+r = 140
+g = 222
+b = 255
+
+[editor.extra_cursor_bg]
+r = 255
+g = 140
+b = 154
+
+[editor.selection_bg]
+r = 58
+g = 50
+b = 85
+
+[editor.search_match_bg]
+r = 48
+g = 43
+b = 63
+
+[editor.search_current_bg]
+r = 130
+g = 100
+b = 210
+
+[editor.border]
+r = 50
+g = 46
+b = 62
+
+[editor.scrollbar]
+r = 38
+g = 35
+b = 48
+
+[editor.scrollbar_thumb]
+r = 130
+g = 100
+b = 210
+
+[editor.sidebar_dir]
+r = 134
+g = 215
+b = 235
+
+[editor.sidebar_file]
+r = 200
+g = 200
+b = 215
+
+[editor.sidebar_current]
+r = 255
+g = 208
+b = 145
+
+[editor.run_header_fg]
+r = 95
+g = 145
+b = 205
+
+[editor.run_header_unfocused_fg]
+r = 45
+g = 85
+b = 120
+
+[editor.run_output_fg]
+r = 185
+g = 198
+b = 212

@@ -7,7 +7,7 @@ use crossterm::{execute, queue};
 use std::collections::{HashMap, HashSet};
 use std::io::{stdout, Write};
 use std::time::Instant;
-use sysinfo::{Disks, Networks, System};
+use sysinfo::{Disks, System};
 
 const REFRESH_MS: u64 = 1500;
 
@@ -17,7 +17,6 @@ enum SortBy { Cpu, Mem, Pid, Name }
 struct SysMon {
     sys: System,
     disks: Disks,
-    networks: Networks,
     sort_by: SortBy,
     sort_asc: bool,
     show_cpu: bool,
@@ -31,6 +30,7 @@ struct SysMon {
     depth_map: HashMap<sysinfo::Pid, usize>,
     expanded: HashSet<sysinfo::Pid>,
     killed: HashSet<sysinfo::Pid>,
+    last_refresh: Instant,
 }
 
 impl SysMon {
@@ -40,12 +40,10 @@ impl SysMon {
         std::thread::sleep(std::time::Duration::from_millis(200));
         sys.refresh_all();
         let disks = Disks::new();
-        let networks = Networks::new();
         let (w, h) = terminal_size();
         let mut sm = Self {
             sys,
             disks,
-            networks,
             sort_by: SortBy::Cpu,
             sort_asc: false,
             show_cpu: true,
@@ -59,15 +57,17 @@ impl SysMon {
             depth_map: HashMap::new(),
             expanded: HashSet::new(),
             killed: HashSet::new(),
+            last_refresh: Instant::now(),
         };
         sm.refresh_filtered();
         sm
     }
 
     fn refresh(&mut self) {
+        let now = Instant::now();
+        self.last_refresh = now;
         self.sys.refresh_all();
         self.disks = Disks::new();
-        self.networks = Networks::new();
         self.refresh_filtered();
     }
 
@@ -179,8 +179,14 @@ impl SysMon {
     }
 
     fn used_rows(&self) -> usize {
-        let cpu_rows = if self.show_cpu { 3 + self.sys.cpus().len() } else { 1 };
-        cpu_rows + 1 + 1 + 1 + self.disks.len() + 1
+        // sep-after-header + MEM + SWAP + disks + per-core-cpu-grid + sep-after-metrics
+        let cpu_rows = if self.show_cpu {
+            let cpus = self.sys.cpus().len();
+            let cell_w = 22; // "C 0 [---------- 100%]" ~22 chars
+            let num_cols = (self.term_w / cell_w).max(1);
+            (cpus + num_cols - 1) / num_cols
+        } else { 0 };
+        1 + 1 + 1 + self.disks.len() + cpu_rows + 1
     }
 
     fn render(&mut self, stdout: &mut std::io::Stdout) -> std::io::Result<()> {
@@ -216,49 +222,16 @@ impl SysMon {
         queue!(stdout, MoveTo(0, row), Print(&"\u{2500}".repeat(cols)), ResetColor)?;
         row += 1;
 
-        let bar_cols = cols.saturating_sub(12).max(10);
-
-        // ── CPU ──
-        let cpus = self.sys.cpus();
-        let cpu_count = cpus.len();
-        let global_cpu: f32 = cpus.iter().map(|c| c.cpu_usage()).sum::<f32>() / cpu_count.max(1) as f32;
-        queue!(
-            stdout, MoveTo(0, row),
-            SetForegroundColor(fg_info),
-            Print(&format!(" CPU  global: {global_cpu:5.1}%  ({cpu_count} cores)")),
-            ResetColor,
-        )?;
-        row += 1;
-        if self.show_cpu {
-            for (i, cpu) in cpus.iter().enumerate() {
-                if row >= (self.term_h as u16).saturating_sub(1) { break; }
-                let pct = cpu.cpu_usage() as usize;
-                let bar = render_bar(pct, bar_cols);
-                let fg = if pct > 80 { fg_err } else if pct > 50 { fg_warn } else { fg_success };
-                queue!(
-                    stdout, MoveTo(2, row),
-                    SetForegroundColor(fg),
-                    Print(&format!("CPU{i:>2}  {bar}  {pct:3}%")),
-                    ResetColor,
-                )?;
-                row += 1;
-            }
-        }
-        if row < self.term_h as u16 {
-            queue!(stdout, MoveTo(0, row), Print(&"\u{2500}".repeat(cols)), ResetColor)?;
-            row += 1;
-        }
-
         // ── Memory ──
         let total_mem = self.sys.total_memory();
         let used_mem = self.sys.used_memory();
         let mem_pct = used_mem.checked_mul(100).and_then(|v| v.checked_div(total_mem)).unwrap_or(0) as usize;
-        let bar = render_bar(mem_pct, bar_cols);
+        let bar = render_text_bar(mem_pct);
         let fg = if mem_pct > 80 { fg_err } else if mem_pct > 50 { fg_warn } else { fg_success };
         queue!(
             stdout, MoveTo(0, row),
             SetForegroundColor(fg),
-            Print(&format!(" MEM  {bar}  {mem_pct:3}%  {} / {}", format_size(used_mem), format_size(total_mem))),
+            Print(&format!(" MEM  {bar}  {} / {}", format_size(used_mem), format_size(total_mem))),
             ResetColor,
         )?;
         row += 1;
@@ -267,20 +240,15 @@ impl SysMon {
         let total_swap = self.sys.total_swap();
         let used_swap = self.sys.used_swap();
         let swap_pct = used_swap.checked_mul(100).and_then(|v| v.checked_div(total_swap)).unwrap_or(0) as usize;
-        let bar = render_bar(swap_pct, bar_cols);
+        let bar = render_text_bar(swap_pct);
         let fg = if swap_pct > 80 { fg_err } else if swap_pct > 50 { fg_warn } else { fg_success };
         queue!(
             stdout, MoveTo(0, row),
             SetForegroundColor(fg),
-            Print(&format!(" SWAP {bar}  {swap_pct:3}%  {} / {}", format_size(used_swap), format_size(total_swap))),
+            Print(&format!(" SWAP {bar}  {} / {}", format_size(used_swap), format_size(total_swap))),
             ResetColor,
         )?;
         row += 1;
-
-        if row < self.term_h as u16 {
-            queue!(stdout, MoveTo(0, row), Print(&"\u{2500}".repeat(cols)), ResetColor)?;
-            row += 1;
-        }
 
         // ── Disks ──
         for disk in &self.disks {
@@ -289,18 +257,49 @@ impl SysMon {
             let avail = disk.available_space();
             let used = total.saturating_sub(avail);
             let pct = used.checked_mul(100).and_then(|v| v.checked_div(total)).unwrap_or(0) as usize;
-            let bar = render_bar(pct, bar_cols);
+            let bar = render_text_bar(pct);
             let mount = disk.mount_point().to_string_lossy();
             let fg = if pct > 85 { fg_err } else if pct > 60 { fg_warn } else { fg_success };
             queue!(
                 stdout, MoveTo(0, row),
                 SetForegroundColor(fg),
-                Print(&format!(" {mount} {bar}  {pct:3}%  {} / {}", format_size(used), format_size(total))),
+                Print(&format!(" {mount} {bar}  {} / {}", format_size(used), format_size(total))),
                 ResetColor,
             )?;
             row += 1;
         }
 
+        // ── Per-core CPU grid (toggled by 'c') ──
+        if self.show_cpu {
+            let cpus = self.sys.cpus();
+            let core_label_w = 4; // "C 0 " or "C10 "
+            let bar16 = render_text_bar(100); // max width bar for column sizing
+            let cell_w = core_label_w + 1 + bar16.len(); // label + space + bar
+            let num_cols = ((cols as usize) / cell_w).max(1);
+            let num_rows = (cpus.len() + num_cols - 1) / num_cols;
+
+            for ri in 0..num_rows {
+                if row >= (self.term_h as u16).saturating_sub(1) { break; }
+                let mut line_x = 2u16;
+                for ci in 0..num_cols {
+                    let idx = ri * num_cols + ci;
+                    if idx >= cpus.len() { break; }
+                    let pct = cpus[idx].cpu_usage() as usize;
+                    let bar = render_text_bar(pct);
+                    let fg = if pct > 80 { fg_err } else if pct > 50 { fg_warn } else { fg_success };
+                    queue!(
+                        stdout, MoveTo(line_x, row),
+                        SetForegroundColor(fg),
+                        Print(&format!("C{:>2} {}", idx, bar)),
+                        ResetColor,
+                    )?;
+                    line_x += cell_w as u16;
+                }
+                row += 1;
+            }
+        }
+
+        // Separator after metrics
         if row < self.term_h as u16 {
             queue!(stdout, MoveTo(0, row), Print(&"\u{2500}".repeat(cols)), ResetColor)?;
             row += 1;
@@ -443,25 +442,25 @@ fn terminal_size() -> (usize, usize) {
     crossterm::terminal::size().map(|(w, h)| (w as usize, h as usize)).unwrap_or((80, 24))
 }
 
-fn render_bar(pct: usize, cols: usize) -> String {
-    if cols < 3 { return String::new(); }
-    let fill = (pct * cols / 100).min(cols);
-    let empty = cols.saturating_sub(fill);
-    format!("[{}{}]", "\u{2588}".repeat(fill), "\u{2591}".repeat(empty))
+fn render_text_bar(pct: usize) -> String {
+    let pct_str = pct.to_string();
+    let fill = (pct * 10 / 100).min(10);
+    let empty = 10usize.saturating_sub(fill);
+    format!("[{}{} {}%]", "-".repeat(fill), " ".repeat(empty), pct_str)
 }
 
 fn format_size(bytes: u64) -> String {
-    const UNITS: &[&str] = &["B", "KB", "MB", "GB", "TB"];
-    let mut size = bytes as f64;
-    let mut unit = 0;
-    while size >= 1024.0 && unit < UNITS.len().saturating_sub(1) {
-        size /= 1024.0;
-        unit += 1;
+    const UNITS: &[&str] = &["B", "K", "M", "G", "T"];
+    let mut value = bytes as f64;
+    let mut unit_idx = 0;
+    while value >= 1024.0 && unit_idx + 1 < UNITS.len() {
+        value /= 1024.0;
+        unit_idx += 1;
     }
-    if unit == 0 {
-        format!("{}{}", bytes, UNITS[unit])
+    if value < 10.0 {
+        format!("{:.1}{}", value, UNITS[unit_idx])
     } else {
-        format!("{:.1}{}", size, UNITS[unit])
+        format!("{:.0}{}", value, UNITS[unit_idx])
     }
 }
 

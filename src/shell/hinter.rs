@@ -26,9 +26,13 @@ fn builtin_commands() -> Vec<&'static str> {
         "ne", "ntceditor", "igcare",
         "esc", "backup", "gs", "fs", "ds", "fgo", "fsc", "locate",
         "dino", "math", "theme" , "tpb", "tutorial", "init", "deinit",
+        "explorer", "nfe",
         "rnmf", "rnmd",
         "image", "img" , "py_activate", "py_deactivate", "showenv",
-        "ntpkg", "tl", "http", "dl", "up", "ping", "dns", "smtp", "serve",
+        "ntpkg", "ntpx", "tl", "http", "dl", "up", "ping", "dns", "smtp", "serve", "clip", "qsc",
+        "todo", "encode", "decode", "cvcode", "fmt", "qr",
+        "usrpath", "syspath", "mode",
+        "pathcp", "say", "print",
     ]
 }
 
@@ -101,14 +105,23 @@ fn ran_target_names_for_command(parts: &[&str]) -> Vec<String> {
     }
 }
 
-/// Returns the list of ntpkg argument completions (languages, versions, installed packages).
+/// Returns the list of ntpkg/ntpx argument completions (languages, versions, installed packages).
 fn ntpkg_names_for_command(parts: &[&str]) -> Vec<String> {
     if parts.len() < 2 {
         return vec![];
     }
 
     let root = parts[0].to_lowercase();
-    if root != "ntpkg" {
+    if root != "ntpkg" && root != "ntpx" {
+        return vec![];
+    }
+
+    if root == "ntpx" {
+        // ntpx <pkg> [binary?] [args...]
+        // Suggest installed package names at depth 1
+        if parts.len() == 2 {
+            return installed_package_names(2);
+        }
         return vec![];
     }
 
@@ -225,7 +238,7 @@ fn subcommands_for(parts: &[&str]) -> Vec<&'static str> {
         // config output / config depth / config linenumbers / config color / config autosuggest / config threads / config history / config watch
         "config" => {
             if parts.len() == 1 {
-                vec!["output", "out", "depth", "d", "linenumbers", "ln", "line", "color", "c", "autosuggest", "as", "threads", "t", "history", "h", "watch", "w"]
+                vec!["output", "out", "depth", "d", "linenumbers", "ln", "line", "color", "c", "autosuggest", "as", "threads", "t", "history", "h", "watch", "w", "qsc"]
             } else {
                 match parts[1].to_lowercase().as_str() {
                     "watch" | "w" if parts.len() == 2 => vec!["ON", "OFF", "trigger"],
@@ -236,6 +249,8 @@ fn subcommands_for(parts: &[&str]) -> Vec<&'static str> {
         }
         // backup create / backup restore / backup undo / backup clear / backup recreate / backup diff / backup list
         "backup" if parts.len() == 1 => vec!["create", "cr", "restore", "rs", "undo", "ud", "clear", "cl", "recreate", "re", "diff", "list", "ls"],
+        // backup restore --choose / --deleted / --force
+        "backup" if parts.len() >= 2 && matches!(parts[1], "restore" | "rs") => vec!["--choose", "--deleted", "--force", "-f"],
         // backup undo --cls / backup undo --force
         "backup" if parts.len() >= 2 && matches!(parts[1], "undo" | "ud") => vec!["--cls", "--clear", "--force", "-f"],
         // backup clear --force
@@ -262,16 +277,19 @@ fn subcommands_for(parts: &[&str]) -> Vec<&'static str> {
         "view" if parts.len() == 1 => vec!["-s", "--size", "-c", "--cp", "--care", "-d", "--depth"],
         // ui (now a no-op after modern mode removal)
         "ui" => vec!["classic"],
-        // ntpkg install / ntpkg uninstall / ntpkg list / ntpkg use / ntpkg which / ntpkg available
+        // ntpkg install / ntpkg uninstall / ntpkg list / ntpkg use / ntpkg which / ntpkg available / ntpkg search / ntpkg info
         "ntpkg" => vec![
             "install", "i",
             "uninstall", "rm",
             "list", "ls",
+            "search",
+            "info",
             "use",
             "which",
             "available", "avail",
             "help",
         ],
+        "ntpx" => vec![], // Completions come from ntpkg_names_for_command
         // tl file / tl ext / tl dir
         "tl" if parts.len() == 1 => vec!["file", "ext", "dir"],
         // dl flags
@@ -302,8 +320,30 @@ fn subcommands_for(parts: &[&str]) -> Vec<&'static str> {
             "-o", "--output", "-v", "--verbose",
             "--no-pretty", "-h", "--help",
         ],
-        // ne --init <file> / ne --super <file>
-        "ne" | "ntceditor" if parts.len() == 1 => vec!["--init", "--super"],
+        // ne --init <file> / ne --super <file> / ne --hyper <name> --lang <lang>
+        "ne" | "ntceditor" if parts.len() == 1 => vec!["--init", "--super", "--hyper"],
+        "ne" | "ntceditor" if parts.len() >= 2 && parts[1] == "--hyper" => vec!["--lang"],
+        // clip list / select / clear
+        "clip" if parts.len() == 1 => vec!["list", "ls", "select", "sel", "clear", "cl"],
+        // qsc listen / stop / status
+        "qsc" if parts.len() == 1 => vec!["listen", "start", "stop", "status", "stat", "startup"],
+        // todo info / add / rm / clear
+        "todo" if parts.len() == 1 => vec!["info", "add", "rm", "remove", "clear", "cl", "list", "ls"],
+        // encode b2 / b64 / hex / url
+        "encode" if parts.len() == 1 => vec!["b2", "b64", "base64", "hex", "url"],
+        // decode b2 / b64 / hex / url
+        "decode" if parts.len() == 1 => vec!["b2", "b64", "base64", "hex", "url"],
+        // fmt json / yaml / toml
+        "fmt" if parts.len() == 1 => vec!["json", "yaml", "toml"],
+        // qr encode / decode
+        "qr" if parts.len() == 1 => vec!["encode", "en", "decode", "de"],
+        // mode subcommands
+        "mode" if parts.len() == 1 => vec!["admin", "normal"],
+        // usrpath / syspath subcommands
+        "usrpath" | "syspath" if parts.len() == 1 => vec!["show", "ls", "add", "rm", "remove", "move", "mv"],
+        "usrpath" | "syspath" if parts.len() >= 2 && matches!(parts[1], "add") => vec!["--cwd", "--here"],
+        // say flags
+        "say" | "print" if parts.len() == 1 => vec!["--loop", "-n", "-t"],
         // Default: no known subcommands
         _ => vec![],
     }

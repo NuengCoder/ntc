@@ -1,5 +1,6 @@
 mod bars;
 pub(crate) mod framebuffer;
+mod hex;
 mod panels;
 mod popups;
 
@@ -47,23 +48,28 @@ impl Editor {
 
         self.render_tab_bar(stdout, tab_bar_y, eo, editor_cols)?;
 
-        let vscroll_thumb_start: Option<usize>;
-        let vscroll_thumb_height: usize;
-        let total_lines = self.lines.len();
-        if total_lines > rows {
-            let avail = rows;
-            vscroll_thumb_height = (avail * rows / total_lines).max(1);
-            let max_scroll = total_lines.saturating_sub(1);
-            vscroll_thumb_start = Some(self.sv.offset * (avail - vscroll_thumb_height) / max_scroll);
-        } else {
-            vscroll_thumb_start = None;
-            vscroll_thumb_height = 0;
+        if self.mode == Mode::Hex {
+            self.render_hex_view(stdout)?;
         }
 
-        let vis_start = self.sv.offset;
-        let ds = self.dirty_start.saturating_sub(vis_start).min(rows);
-        let de = self.dirty_end.saturating_sub(vis_start).min(rows);
-        let has_text_work = ds < rows && de > ds;
+        if self.mode != Mode::Hex {
+            let vscroll_thumb_start: Option<usize>;
+            let vscroll_thumb_height: usize;
+            let total_lines = self.lines.len();
+            if total_lines > rows {
+                let avail = rows;
+                vscroll_thumb_height = (avail * rows / total_lines).max(1);
+                let max_scroll = total_lines.saturating_sub(1);
+                vscroll_thumb_start = Some(self.sv.offset * (avail - vscroll_thumb_height) / max_scroll);
+            } else {
+                vscroll_thumb_start = None;
+                vscroll_thumb_height = 0;
+            }
+
+            let vis_start = self.sv.offset;
+            let ds = self.dirty_start.saturating_sub(vis_start).min(rows);
+            let de = self.dirty_end.saturating_sub(vis_start).min(rows);
+            let has_text_work = ds < rows && de > ds;
 
         if has_text_work {
             let mut all_sel: Vec<((usize, usize), (usize, usize))> = Vec::new();
@@ -403,6 +409,8 @@ impl Editor {
 
         if self.completion_visible {
             self.render_completion_popup(stdout)?;
+        } else if self.hover_text.is_some() {
+            self.render_hover_popup(stdout)?;
         }
 
         {
@@ -461,7 +469,8 @@ impl Editor {
                     Clear(ClearType::UntilNewLine),
                 )?;
             }
-        }
+            }
+        } // end if self.mode != Mode::Hex
 
         if is_run {
             self.render_run_panel(stdout)?;

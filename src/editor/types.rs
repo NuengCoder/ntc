@@ -1,5 +1,4 @@
 use std::collections::HashMap;
-use std::io::{BufRead, BufReader};
 use std::path::{Path, PathBuf};
 use std::time::Instant;
 
@@ -48,6 +47,7 @@ pub(crate) enum Mode {
     Gosc,
     Jump,
     Query,
+    Hex,
 }
 
 /// Which panel has keyboard focus.
@@ -321,6 +321,7 @@ impl Sidebar {
         }
         None
     }
+
 
     fn read_children(dir: &std::path::Path, depth: usize) -> (Vec<FileNode>, Vec<FileNode>) {
         let entries = match std::fs::read_dir(dir) {
@@ -687,6 +688,10 @@ pub(crate) struct Editor {
     pub(crate) completion_visible: bool,
     pub(crate) completion_prefix: String,
 
+    // Hover popup (normal mode, word under cursor)
+    pub(crate) hover_text: Option<String>,
+    pub(crate) hover_sig_active: bool,
+
     // Crash recovery: counter to periodically save recovery snapshots
     pub(crate) edit_count: usize,
 
@@ -718,16 +723,28 @@ pub(crate) struct Editor {
 
     // Terminal state for embedded terminal
     pub(crate) terminal: Option<super::terminal::TerminalState>,
+
+    // Hex viewer/editor state
+    pub(crate) hex: Option<HexViewer>,
+}
+
+#[derive(Clone)]
+pub(crate) struct HexViewer {
+    pub(crate) data: Vec<u8>,
+    pub(crate) path: std::path::PathBuf,
+    pub(crate) cursor: usize,
+    pub(crate) offset: usize,
+    pub(crate) modified: bool,
+    pub(crate) undo_stack: Vec<Vec<(usize, u8)>>,
+    pub(crate) redo_stack: Vec<Vec<(usize, u8)>>,
+    pub(crate) nibble: bool, // false=high nibble, true=low nibble
+    pub(crate) pending_byte: u8, // accumulated high nibble value
 }
 
 impl Editor {
     pub(crate) fn new(path: &Path) -> Result<Self> {
         let content: Vec<String> = if path.exists() {
-            let file = std::fs::File::open(path)
-                .with_context(|| format!("Cannot open {}", path.display()))?;
-            BufReader::new(file)
-                .lines()
-                .collect::<std::io::Result<Vec<_>>>()
+            crate::editor::core::read_file_lines(path)
                 .with_context(|| format!("Cannot read {}", path.display()))?
         } else {
             vec![]
@@ -791,6 +808,8 @@ impl Editor {
             completion_idx: 0,
             completion_visible: false,
             completion_prefix: String::new(),
+            hover_text: None,
+            hover_sig_active: false,
             edit_count: 0,
             #[cfg(windows)]
             file_watcher_rx: None,
@@ -806,6 +825,7 @@ impl Editor {
             last_session_save: Instant::now(),
             framebuffer: None,
             terminal: None,
+            hex: None,
         })
     }
 
@@ -949,5 +969,102 @@ impl Editor {
                 self.tabs[idx].redo_stack = tab_snap.redo_stack.clone();
             }
         }
+    }
+
+    /// Update hover text for the word under the cursor (normal mode).
+    /// Only checks MQL files; other languages are left for future expansion.
+    pub(crate) fn update_hover(&mut self) {
+        use crate::syntax::SyntaxLanguage;
+        let lang = self.syntax.language;
+        if !matches!(lang, Some(SyntaxLanguage::Mql)) {
+            self.hover_text = None;
+            return;
+        }
+        let line = self.current();
+        if line.is_empty() || self.cursor.byte >= line.len() {
+            self.hover_text = None;
+            return;
+        }
+        let prefix = &line[..self.cursor.byte];
+        let suffix = &line[self.cursor.byte..];
+        let start = prefix
+            .chars()
+            .rev()
+            .take_while(|c| c.is_alphanumeric() || *c == '_')
+            .map(|c| c.len_utf8())
+            .sum::<usize>();
+        let end = suffix
+            .chars()
+            .take_while(|c| c.is_alphanumeric() || *c == '_')
+            .map(|c| c.len_utf8())
+            .sum::<usize>();
+        let word_byte = self.cursor.byte.saturating_sub(start);
+        let word = &line[word_byte..word_byte + end + start];
+
+        if word.is_empty() {
+            self.hover_text = None;
+            return;
+        }
+
+        if let Some(doc) = crate::mql::hover_info_detailed(word) {
+            self.hover_text = Some(doc);
+            return;
+        }
+        if let Some(doc) = crate::mql::hover_info(word) {
+            self.hover_text = Some(doc.to_string());
+            return;
+        }
+
+        for func in crate::mql::extract_user_functions(&self.lines) {
+            if func.name == word {
+                let formatted = if func.params.is_empty() {
+                    format!("{} {}", func.return_type, func.name)
+                } else {
+                    let lines: Vec<String> = func.params
+                        .split(',')
+                        .map(|p| {
+                            let p = p.trim();
+                            let t: Vec<&str> = p.split_whitespace().collect();
+                            if t.len() >= 2 {
+                                format!("  {}: {}", t[t.len()-1], t[..t.len()-1].join(" "))
+                            } else {
+                                format!("  {}", p)
+                            }
+                        })
+                        .collect();
+                    format!("{}{}\n{}\n{}", func.name, "(", lines.join("\n"), ")")
+                };
+                let mut display = formatted;
+                if let Some(box_content) = crate::mql::extract_comment_box(&self.lines, func.line) {
+                    display.push_str(&format!("\n\n{}", box_content));
+                }
+                self.hover_text = Some(display);
+                return;
+            }
+        }
+
+        for (name, line) in crate::mql::extract_classes(&self.lines) {
+            if name == word {
+                if let Some(box_content) = crate::mql::extract_comment_box(&self.lines, line) {
+                    self.hover_text = Some(format!("[class] {}\n\n{}", name, box_content));
+                } else {
+                    self.hover_text = Some(format!("[class] {}", name));
+                }
+                return;
+            }
+        }
+
+        for (name, line) in crate::mql::extract_structs(&self.lines) {
+            if name == word {
+                if let Some(box_content) = crate::mql::extract_comment_box(&self.lines, line) {
+                    self.hover_text = Some(format!("[struct] {}\n\n{}", name, box_content));
+                } else {
+                    self.hover_text = Some(format!("[struct] {}", name));
+                }
+                return;
+            }
+        }
+
+        self.hover_text = None;
     }
 }

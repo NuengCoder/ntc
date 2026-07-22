@@ -4,6 +4,7 @@ mod types;
 mod unicode;
 mod helpers;
 mod core;
+mod hex;
 mod edit;
 mod modes;
 mod render;
@@ -19,7 +20,7 @@ pub(crate) mod terminal;
 // ── re-exports for sibling modules ──────────────────────────────────────────
 
 pub(crate) use types::{
-    Editor, Focus, Mode, Snapshot, CursorPos, Tab, GOTO_LINE,
+    Editor, Focus, Mode, Snapshot, CursorPos, Tab, HexViewer, GOTO_LINE,
     MIN_SIDEBAR_WIDTH,
 };
 pub(crate) use completion::CompletionItem;

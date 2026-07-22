@@ -136,64 +136,81 @@ impl Editor {
         Ok(())
     }
 
+    fn mode_label(&self) -> &'static str {
+        match self.focus {
+            Focus::Run => "[Run]",
+            Focus::Terminal => "[Term]",
+            Focus::Editor => match self.mode {
+                Mode::Normal => "[Normal]",
+                Mode::Insert => "[Insert]",
+                Mode::InsertMulti => "[Insert *]",
+                Mode::Visual => "[Visual]",
+                Mode::Search => "[Search]",
+                Mode::Command => "[Command]",
+                Mode::Help => "[Help]",
+                Mode::FileFinder => "[Finder]",
+                Mode::Gosc => "[Gosc]",
+                Mode::Jump => "[Jump]",
+                Mode::Query => "[Query]",
+                Mode::Hex => "[HEX]",
+            },
+        }
+    }
+
     pub(crate) fn render_status_bar(&self, stdout: &mut std::io::Stdout, x_offset: usize) -> std::io::Result<()> {
         let theme = crate::utils::theme::ThemeManager::current();
         let sy = self.term_h.saturating_sub(2);
         let avail_w = self.term_w.saturating_sub(x_offset);
-        let tag = if self.modified { " ●" } else { " ✓" };
-        let mode_str = match self.mode {
-            Mode::Normal => "",
-            Mode::Insert => " [INSERT]",
-            Mode::InsertMulti => " [INSERT*]",
-            Mode::Jump => " [JUMP]",
-            Mode::Search => " [SEARCH]",
-            Mode::Visual => " [VISUAL]",
-            Mode::Command => " [COMMAND]",
-            Mode::Help => " [HELP]",
-            Mode::FileFinder => " [FIND]",
-            Mode::Gosc => " [GOSC]",
-            Mode::Query => " [QUERY]",
-        };
-        let panel_str = match self.focus {
-            Focus::Run => " [RUN]",
-            Focus::Terminal => " [TERM]",
-            Focus::Editor => "",
-        };
-        let sel_str = if let Some((ay, ab)) = self.cursor.selection_anchor {
-            if (ay, ab) == (self.cursor.y, self.cursor.byte) {
-                String::new()
-            } else {
-                let ((sy2, sb), (ey, eb)) = super::super::sel_range(self.cursor.y, self.cursor.byte, ay, ab);
-                if sy2 == ey {
-                    let chars = self.lines[sy2][sb..eb.min(self.lines[sy2].len())]
-                        .chars()
-                        .count();
-                    format!(" [{} chars]", chars)
-                } else {
-                    format!(" [{} lines]", ey - sy2 + 1)
-                }
-            }
-        } else {
-            String::new()
-        };
-        let col = byte_to_col(self.current(), self.cursor.byte) + 1;
-        let total = self.lines.len();
-        let status = format!(
-            " {}{}   Ln {}/{}  Col {}{}{}{}  ",
-            self.path
-                .file_name()
-                .map(|n| n.to_string_lossy().into_owned())
-                .unwrap_or_default(),
-            tag,
-            self.cursor.y + 1,
-            total,
-            col,
-            sel_str,
-            mode_str,
-            panel_str,
-        );
+        let label = self.mode_label();
 
-        let right = if self.modified { "modified" } else { "saved" };
+        let (status, right) = if self.mode == Mode::Hex {
+            let hex = self.hex.as_ref().unwrap();
+            let tag = if hex.modified { " ●" } else { " ✓" };
+            let cursor_str = format!("Off 0x{:X}/0x{:X}", hex.cursor, hex.data.len().saturating_sub(1));
+            let status = format!(
+                " {} {}{}   {}  ",
+                label,
+                self.path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default(),
+                tag,
+                cursor_str,
+            );
+            let right = if hex.modified { "modified" } else { "saved" };
+            (status, right.to_string())
+        } else {
+            let tag = if self.modified { " ●" } else { " ✓" };
+            let sel_str = if let Some((ay, ab)) = self.cursor.selection_anchor {
+                if (ay, ab) == (self.cursor.y, self.cursor.byte) {
+                    String::new()
+                } else {
+                    let ((sy2, sb), (ey, eb)) = super::super::sel_range(self.cursor.y, self.cursor.byte, ay, ab);
+                    if sy2 == ey {
+                        let chars = self.lines[sy2][sb..eb.min(self.lines[sy2].len())]
+                            .chars()
+                            .count();
+                        format!(" [{} chars]", chars)
+                    } else {
+                        format!(" [{} lines]", ey - sy2 + 1)
+                    }
+                }
+            } else {
+                String::new()
+            };
+            let col = byte_to_col(self.current(), self.cursor.byte) + 1;
+            let total = self.lines.len();
+            let status = format!(
+                " {} {}{}   Ln {}/{}  Col {}{}  ",
+                label,
+                self.path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default(),
+                tag,
+                self.cursor.y + 1,
+                total,
+                col,
+                sel_str,
+            );
+            let right = if self.modified { "modified" } else { "saved" };
+            (status, right.to_string())
+        };
+
         let pad = avail_w.saturating_sub(status.len() + right.len() + 2);
         let full = format!("{}{}{} ", status, " ".repeat(pad), right);
 
@@ -335,6 +352,17 @@ impl Editor {
                         self.gosc_dirs.len()
                     );
                     (String::new(), hint)
+                }
+                Mode::Hex => {
+                    let msg = if self.hex.as_ref().map(|h| h.modified).unwrap_or(false) {
+                        let hex = self.hex.as_ref().unwrap();
+                        format!(" ✦ Hex offset 0x{:X}  modified  │ 0-9/a-f=edit  u=undo  ^R=redo  :=cmd  :w=save  Esc=exit", hex.cursor)
+                    } else if let Some(ref hex) = self.hex {
+                        format!(" Hex offset 0x{:X}  │ 0-9/a-f=edit  u=undo  ^R=redo  :=cmd  :w=save  Esc=exit", hex.cursor)
+                    } else {
+                        String::new()
+                    };
+                    (msg, String::new())
                 }
                 Mode::Query => {
                     let hint = if self.query_buf.is_empty() {

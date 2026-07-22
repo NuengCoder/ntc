@@ -7,7 +7,7 @@ use crossterm::event::{self, DisableMouseCapture, EnableMouseCapture, Event, Key
 use crossterm::style::{Print, ResetColor, SetForegroundColor, SetBackgroundColor};
 use crossterm::terminal::{self, Clear, ClearType, EnterAlternateScreen, LeaveAlternateScreen};
 use crossterm::{execute, queue};
-use std::io::{stdout, Write};
+use std::io::{stdout, Read, Write};
 use std::path::Path;
 
 const PREVIEW_LINES: usize = 4;
@@ -22,19 +22,6 @@ struct GsInteractive {
 }
 
 impl GsInteractive {
-    fn new(matches: Vec<ContentMatch>) -> Self {
-        let all: Vec<usize> = (0..matches.len()).collect();
-        let (w, h) = terminal_size();
-        Self {
-            matches,
-            filtered: all,
-            selected: 0,
-            scroll_offset: 0,
-            term_h: h,
-            term_w: w,
-        }
-    }
-
     fn total(&self) -> usize {
         self.filtered.len()
     }
@@ -113,62 +100,69 @@ impl GsInteractive {
                 queue!(
                     stdout,
                     MoveTo(0, row as u16),
-            SetForegroundColor(theme.editor.selection_bg.to_crossterm()),
+                    SetForegroundColor(theme.editor.selection_bg.to_crossterm()),
+                    SetBackgroundColor(theme.editor.selection_bg.to_crossterm()),
+                    Print(truncated),
+                    ResetColor,
+                )?;
+            } else {
+                queue!(
+                    stdout,
+                    MoveTo(0, row as u16),
+                    Print(truncated),
+                    ResetColor,
+                )?;
+            }
+        }
+
+        // ── Preview separator ──
+        if preview_top < self.term_h {
+            queue!(stdout, MoveTo(0, preview_top as u16), Print(&sep), ResetColor)?;
+        }
+
+        // ── Preview panel ──
+        if let Some(m) = self.selected_match() {
+            let file_path = &m.file_path;
+            let line_num = m.line_number;
+            let start = line_num.saturating_sub(PREVIEW_LINES);
+            let _end = line_num + PREVIEW_LINES;
+            let mut buf = Vec::new();
+            let content = std::fs::File::open(file_path)
+                .and_then(|f| {
+                    f.take(100_000).read_to_end(&mut buf).map(|_| {
+                        String::from_utf8_lossy(&buf).into_owned()
+                    })
+                })
+                .unwrap_or_default();
+            let lines: Vec<&str> = content.lines().collect();
+
+            for i in 0..=PREVIEW_LINES * 2 {
+                let row = preview_top + 1 + i;
+                if row >= self.term_h { break; }
+                let src_line = start + i;
+                let prefix = format!("{:>6} ", src_line);
+
+                let display = if src_line >= 1 && src_line <= lines.len() {
+                    let text = lines[src_line - 1];
+                    let available = cols.saturating_sub(7);
+                    let text = if text.len() > available { &text[..available] } else { text };
+                    format!("{}{}", prefix, text)
+                } else {
+                    format!("{}~", prefix)
+                };
+
+                let truncated = if display.len() > cols { &display[..cols] } else { &display };
+
+                if src_line == line_num {
+                    queue!(
+                        stdout,
+                        MoveTo(0, row as u16),
+                        SetForegroundColor(theme.editor.selection_bg.to_crossterm()),
                         SetBackgroundColor(theme.editor.selection_bg.to_crossterm()),
                         Print(truncated),
                         ResetColor,
                     )?;
                 } else {
-                    queue!(
-                        stdout,
-                        MoveTo(0, row as u16),
-                        Print(truncated),
-                        ResetColor,
-                    )?;
-                }
-            }
-
-            // ── Preview separator ──
-            if preview_top < self.term_h {
-                queue!(stdout, MoveTo(0, preview_top as u16), Print(&sep), ResetColor)?;
-            }
-
-            // ── Preview panel ──
-            if let Some(m) = self.selected_match() {
-                let file_path = &m.file_path;
-                let line_num = m.line_number;
-                let start = line_num.saturating_sub(PREVIEW_LINES);
-                let _end = line_num + PREVIEW_LINES;
-                let content = std::fs::read_to_string(file_path).unwrap_or_default();
-                let lines: Vec<&str> = content.lines().collect();
-
-                for i in 0..=PREVIEW_LINES * 2 {
-                    let row = preview_top + 1 + i;
-                    if row >= self.term_h { break; }
-                    let src_line = start + i;
-                    let prefix = format!("{:>6} ", src_line);
-
-                    let display = if src_line >= 1 && src_line <= lines.len() {
-                        let text = lines[src_line - 1];
-                        let available = cols.saturating_sub(7);
-                        let text = if text.len() > available { &text[..available] } else { text };
-                        format!("{}{}", prefix, text)
-                    } else {
-                        format!("{}~", prefix)
-                    };
-
-                    let truncated = if display.len() > cols { &display[..cols] } else { &display };
-
-                    if src_line == line_num {
-                        queue!(
-                            stdout,
-                            MoveTo(0, row as u16),
-                            SetForegroundColor(theme.editor.selection_bg.to_crossterm()),
-                            SetBackgroundColor(theme.editor.selection_bg.to_crossterm()),
-                            Print(truncated),
-                            ResetColor,
-                        )?;
-                    } else {
                     queue!(
                         stdout,
                         MoveTo(0, row as u16),
@@ -204,12 +198,23 @@ pub fn run_gs_interactive(matches: Vec<ContentMatch>, _root: &Path) -> Result<bo
         return Ok(false);
     }
 
-    let mut gs = GsInteractive::new(matches);
     let mut stdout = stdout();
     let _guard = TerminalGuard;
 
     execute!(stdout, EnterAlternateScreen, Hide, EnableMouseCapture)?;
     terminal::enable_raw_mode()?;
+
+    // Re-query terminal size after entering alternate screen
+    let (w, h) = terminal_size();
+    let all: Vec<usize> = (0..matches.len()).collect();
+    let mut gs = GsInteractive {
+        matches,
+        filtered: all,
+        selected: 0,
+        scroll_offset: 0,
+        term_h: h,
+        term_w: w,
+    };
 
     gs.ensure_visible();
     gs.render(&mut stdout)?;

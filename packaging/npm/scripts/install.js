@@ -12,11 +12,12 @@ function getPlatformInfo() {
   const arch = process.arch;
 
   const map = {
-    'darwin-x64':     { file: `ntc-v${VERSION}-macos-x86_64.tar.gz`,     bin: 'ntc' },
-    'darwin-arm64':   { file: `ntc-v${VERSION}-macos-universal.tar.gz`,  bin: 'ntc' },
-    'win32-x64':      { file: `ntc-v${VERSION}-windows-x86_64.zip`,      bin: 'ntc.exe' },
-    'linux-x64':      { file: `ntc-v${VERSION}-linux-x86_64.tar.gz`,          bin: 'ntc' },
-    'linux-arm64':    { file: `ntc-v${VERSION}-linux-aarch64.tar.gz`,         bin: 'ntc' },
+    'darwin-x64':     { file: `ntc-v${VERSION}-macos-x86_64.tar.gz`,    bin: 'ntc' },
+    'darwin-arm64':   { file: `ntc-v${VERSION}-macos-aarch64.tar.gz`,   bin: 'ntc' },
+    'win32-x64':      { file: `ntc-v${VERSION}-windows-x86_64.zip`,     bin: 'ntc.exe' },
+    'win32-arm64':    { file: `ntc-v${VERSION}-windows-arm64.zip`,      bin: 'ntc.exe' },
+    'linux-x64':      { file: `ntc-v${VERSION}-linux-x86_64.tar.gz`,    bin: 'ntc' },
+    'linux-arm64':    { file: `ntc-v${VERSION}-linux-aarch64.tar.gz`,   bin: 'ntc' },
     'android-arm64':  { file: `ntc-v${VERSION}-aarch64-linux-android.tar.gz`, bin: 'ntc' },
   };
 

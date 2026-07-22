@@ -17,7 +17,7 @@
 
 ntc is an all-in-one terminal productivity tool that replaces a dozen separate utilities with a single, cohesive experience.
 
-**Navigate** — Move through your filesystem with `go`/`cd`, teleport savepoints (`tp`), directory picker (`gos`/`gosc`), and drive navigation.
+**Navigate** — Move through your filesystem with `cd`, teleport savepoints (`tp`), directory picker (`gos`/`gosc`), and drive navigation.
 
 **Edit** — Built-in multi-tab text editor (`ne`) with syntax highlighting for 45+ languages, hex editor, multi-cursor, LSP, search, undo/redo, and a template engine for code generation.
 

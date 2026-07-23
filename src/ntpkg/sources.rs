@@ -64,6 +64,7 @@ fn fetch_available_versions(name: &str) -> Result<Vec<String>> {
         "msys2"     => fetch_msys2_versions()?,
         "ruby"      => fetch_ruby_versions()?,
         "lua"       => fetch_lua_versions()?,
+        "nim"       => fetch_nim_versions()?,
         "dotnet"    => fetch_dotnet_versions()?,
         "flutter"   => fetch_flutter_versions()?,
         "kubectl"   => fetch_kubectl_versions()?,
@@ -109,6 +110,7 @@ pub fn get_source(name: &str, version: &str) -> Option<PackageSource> {
         "msys2"     => msys2_source(version),
         "ruby"      => ruby_source(version),
         "lua"       => lua_source(version),
+        "nim"       => nim_source(version),
         "dotnet"    => dotnet_source(version),
         "flutter"   => flutter_source(version),
         "kubectl"   => kubectl_source(version),
@@ -141,7 +143,7 @@ pub fn get_source(name: &str, version: &str) -> Option<PackageSource> {
 
 /// List all supported languages.
 pub fn list_supported_languages() -> Vec<&'static str> {
-    vec!["python", "node", "cloudflare", "git", "gh", "java", "kotlin", "swift", "php", "zig", "go", "rust", "msys2", "ruby", "lua", "dotnet", "flutter", "kubectl", "helm", "kind", "kustomize", "docker", "docker-compose", "act", "devops-tool", "scala", "opencode", "mimocode", "kilocode", "omniroute", "sqlite", "sqlitestudio"]
+    vec!["python", "node", "cloudflare", "git", "gh", "java", "kotlin", "swift", "php", "zig", "go", "rust", "msys2", "ruby", "lua", "nim", "dotnet", "flutter", "kubectl", "helm", "kind", "kustomize", "docker", "docker-compose", "act", "devops-tool", "scala", "opencode", "mimocode", "kilocode", "omniroute", "sqlite", "sqlitestudio"]
 }
 
 /// List all supported packages with short descriptions.
@@ -162,6 +164,7 @@ pub fn list_packages_with_descriptions() -> Vec<(&'static str, &'static str)> {
         ("msys2",          "MSYS2 (Windows GCC toolchain)"),
         ("ruby",           "Ruby programming language"),
         ("lua",            "Lua scripting language"),
+        ("nim",            "Nim programming language"),
         ("dotnet",         ".NET SDK"),
         ("flutter",        "Flutter UI toolkit"),
         ("kubectl",        "Kubernetes CLI"),
@@ -1500,6 +1503,85 @@ fn lua_source(version: &str) -> Option<PackageSource> {
         sha256: HashMap::new(),
         archive_type: ArchiveType::TarGz,
     })
+}
+
+// ── Nim ──────────────────────────────────────────────────────────────
+
+fn fetch_nim_versions() -> Result<Vec<String>> {
+    let url = "https://api.github.com/repos/nim-lang/Nim/tags?per_page=100";
+    let response = ureq::get(url)
+        .header("User-Agent", "ntc")
+        .call()
+        .context("Failed to fetch Nim versions from GitHub")?;
+
+    let mut body = response.into_body();
+    let mut raw = String::new();
+    body.as_reader()
+        .read_to_string(&mut raw)
+        .context("Failed to read GitHub response body")?;
+
+    let tags: Vec<serde_json::Value> = serde_json::from_str(&raw)
+        .context("Failed to parse GitHub tags JSON")?;
+
+    let mut versions: Vec<String> = Vec::new();
+    for tag_entry in tags {
+        let tag = tag_entry["name"].as_str().unwrap_or("");
+        let stripped = tag.strip_prefix('v').unwrap_or(tag);
+        if is_nim_valid_version(stripped) && !versions.iter().any(|v| v == stripped) {
+            versions.push(stripped.to_string());
+        }
+    }
+
+    versions.sort_by(|a, b| {
+        let a_parts: Vec<u32> = a.split('.').filter_map(|p| p.parse().ok()).collect();
+        let b_parts: Vec<u32> = b.split('.').filter_map(|p| p.parse().ok()).collect();
+        b_parts.cmp(&a_parts)
+    });
+
+    Ok(versions)
+}
+
+fn is_nim_valid_version(s: &str) -> bool {
+    if s.is_empty() {
+        return false;
+    }
+    let parts: Vec<&str> = s.split('.').collect();
+    if parts.len() != 3 {
+        return false;
+    }
+    parts.iter().all(|p| p.chars().all(|c| c.is_ascii_digit()))
+}
+
+fn nim_source(version: &str) -> Option<PackageSource> {
+    let base = format!("https://nim-lang.org/download/nim-{version}");
+
+    let mut urls = HashMap::new();
+    urls.insert("linux-x86_64".to_string(), format!("{base}-linux_x64.tar.xz"));
+    urls.insert("linux-aarch64".to_string(), format!("{base}-linux_arm64.tar.xz"));
+    urls.insert("macos-x86_64".to_string(), format!("{base}-macosx_x64.tar.xz"));
+    urls.insert("macos-aarch64".to_string(), format!("{base}-macosx_arm64.tar.xz"));
+    urls.insert("windows-x86_64".to_string(), format!("{base}_x64.zip"));
+
+    let archive_type = platform_nim_archive();
+
+    Some(PackageSource {
+        name: "nim".to_string(),
+        version: version.to_string(),
+        urls,
+        sha256: HashMap::new(),
+        archive_type,
+    })
+}
+
+fn platform_nim_archive() -> ArchiveType {
+    #[cfg(any(target_os = "linux", target_os = "macos"))]
+    { ArchiveType::TarXz }
+
+    #[cfg(target_os = "windows")]
+    { ArchiveType::Zip }
+
+    #[cfg(not(any(target_os = "linux", target_os = "macos", target_os = "windows")))]
+    { ArchiveType::TarXz }
 }
 
 // ── .NET SDK ─────────────────────────────────────────────────────────

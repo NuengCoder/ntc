@@ -80,6 +80,10 @@ pub fn install_package(name: &str, version: &str) -> Result<()> {
         return installers::install_lua(name, version, &source, &vdir);
     }
 
+    if name == "nim" {
+        return installers::install_nim(name, version, &source, &vdir);
+    }
+
     if name == "dotnet" {
         return installers::install_dotnet(name, version, &source, &vdir);
     }

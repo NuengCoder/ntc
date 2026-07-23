@@ -159,7 +159,7 @@ pub fn find_binary(extract_dir: &Path, binary_name: &str) -> Option<PathBuf> {
 }
 
 fn extract_package_name(url: &str) -> Option<String> {
-    let name_versions = ["python", "node", "ruby", "go", "dotnet", "java", "kotlin", "swift", "php", "zig", "msys2", "lua", "flutter", "kubectl", "helm", "kind", "kustomize", "docker", "docker-compose", "act", "devops-tool", "scala", "opencode", "mimocode", "kilocode", "sqlitestudio", "sqlite"];
+    let name_versions = ["python", "node", "ruby", "go", "dotnet", "java", "kotlin", "swift", "php", "zig", "msys2", "lua", "nim", "flutter", "kubectl", "helm", "kind", "kustomize", "docker", "docker-compose", "act", "devops-tool", "scala", "opencode", "mimocode", "kilocode", "sqlitestudio", "sqlite"];
     for nv in &name_versions {
         if url.contains(nv) {
             return Some(nv.to_string());

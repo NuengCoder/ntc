@@ -1,4 +1,5 @@
 use crate::editor::{byte_to_col, gutter_width, sel_range, Editor};
+use crate::t;
 
 impl Editor {
     pub(crate) fn clamp(&mut self) {
@@ -166,7 +167,8 @@ impl Editor {
         self.cursor.last_added_cursor_idx = Some(self.cursor.extra_cursors.len() - 1);
         self.mark_all_dirty();
         self.status_msg = Some(format!(
-            "Split cursor ({} total)",
+            "{} ({})",
+            t!("editor.nav_split_cursor"),
             self.cursor.extra_cursors.len() + 1
         ));
     }
@@ -176,7 +178,7 @@ impl Editor {
         self.cursor.y = self.lines.len().saturating_sub(1);
         self.cursor.byte = self.lines[self.cursor.y].len();
         self.mark_all_dirty();
-        self.status_msg = Some("Selected all".into());
+        self.status_msg = Some(t!("editor.nav_selected_all"));
     }
 
     pub(crate) fn select_line(&mut self) {
@@ -184,7 +186,7 @@ impl Editor {
         self.cursor.selection_anchor = Some((self.cursor.y, 0));
         self.cursor.byte = self.current().len();
         self.mark_dirty(self.cursor.y);
-        self.status_msg = Some("Line selected".into());
+        self.status_msg = Some(t!("editor.nav_line_selected"));
     }
 
     pub(crate) fn select_word_under_cursor(&mut self) -> Option<String> {

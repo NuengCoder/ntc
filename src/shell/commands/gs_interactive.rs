@@ -1,16 +1,22 @@
-use crate::search::ContentMatch;
-use crate::output::print_info;
 use crate::navigator::Navigator;
+use crate::output::print_info;
+use crate::search::ContentMatch;
+use crate::t;
 use anyhow::Result;
-use crossterm::cursor::{Hide, Show, MoveTo};
-use crossterm::event::{self, DisableMouseCapture, EnableMouseCapture, Event, KeyCode, KeyEventKind};
-use crossterm::style::{Print, ResetColor, SetForegroundColor, SetBackgroundColor};
+use crossterm::cursor::{Hide, MoveTo, Show};
+use crossterm::event::{
+    self, DisableMouseCapture, EnableMouseCapture, Event, KeyCode, KeyEventKind,
+};
+use crossterm::style::{Print, ResetColor, SetBackgroundColor, SetForegroundColor};
 use crossterm::terminal::{self, Clear, ClearType, EnterAlternateScreen, LeaveAlternateScreen};
 use crossterm::{execute, queue};
-use std::io::{stdout, Read, Write};
-use std::path::Path;
+use std::collections::HashMap;
+use std::fs::File;
+use std::io::{stdout, BufRead, BufReader, Write};
+use std::path::{Path, PathBuf};
 
 const PREVIEW_LINES: usize = 4;
+const MAX_CACHED_FILE_LINES: usize = 50_000;
 
 struct GsInteractive {
     matches: Vec<ContentMatch>,
@@ -19,6 +25,7 @@ struct GsInteractive {
     scroll_offset: usize,
     term_h: usize,
     term_w: usize,
+    file_cache: HashMap<PathBuf, Vec<String>>,
 }
 
 impl GsInteractive {
@@ -35,6 +42,23 @@ impl GsInteractive {
         self.filtered.get(self.selected).map(|&i| &self.matches[i])
     }
 
+    fn get_file_lines(&mut self, path: &Path) -> Vec<String> {
+        if !self.file_cache.contains_key(path) {
+            let mut lines = Vec::new();
+            if let Ok(file) = File::open(path) {
+                let reader = BufReader::new(file);
+                for line in reader.lines().take(MAX_CACHED_FILE_LINES) {
+                    match line {
+                        Ok(l) => lines.push(l),
+                        Err(_) => break,
+                    }
+                }
+            }
+            self.file_cache.insert(path.to_path_buf(), lines);
+        }
+        self.file_cache.get(path).cloned().unwrap_or_default()
+    }
+
     fn ensure_visible(&mut self) {
         let rh = self.result_h().max(1);
         if self.selected < self.scroll_offset {
@@ -44,7 +68,7 @@ impl GsInteractive {
         }
     }
 
-    fn render(&self, stdout: &mut std::io::Stdout) -> std::io::Result<()> {
+    fn render(&mut self, stdout: &mut std::io::Stdout) -> std::io::Result<()> {
         let theme = crate::utils::theme::ThemeManager::current();
         let cols = self.term_w;
         let rh = self.result_h().max(1);
@@ -61,7 +85,11 @@ impl GsInteractive {
             global_total,
             total,
         );
-        let truncated = if header.len() > cols { &header[..cols] } else { &header };
+        let truncated = if header.len() > cols {
+            &header[..cols]
+        } else {
+            &header
+        };
         queue!(
             stdout,
             MoveTo(0, 0),
@@ -80,9 +108,15 @@ impl GsInteractive {
         for i in 0..rh {
             let idx = self.scroll_offset + i;
             let row = 2 + i;
-            if row >= self.term_h { break; }
+            if row >= self.term_h {
+                break;
+            }
             if idx >= total {
-                queue!(stdout, MoveTo(0, row as u16), Clear(ClearType::UntilNewLine))?;
+                queue!(
+                    stdout,
+                    MoveTo(0, row as u16),
+                    Clear(ClearType::UntilNewLine)
+                )?;
                 continue;
             }
             let m = &self.matches[self.filtered[idx]];
@@ -91,9 +125,17 @@ impl GsInteractive {
                 "{}:{}: {}",
                 m.file_path.display(),
                 m.line_number,
-                if line.len() > cols.saturating_sub(20) { &line[..cols.saturating_sub(23)] } else { line }
+                if line.len() > cols.saturating_sub(20) {
+                    &line[..cols.saturating_sub(23)]
+                } else {
+                    line
+                }
             );
-            let truncated = if display.len() > cols { &display[..cols] } else { &display };
+            let truncated = if display.len() > cols {
+                &display[..cols]
+            } else {
+                &display
+            };
 
             let is_selected = idx == self.selected;
             if is_selected {
@@ -106,70 +148,66 @@ impl GsInteractive {
                     ResetColor,
                 )?;
             } else {
-                queue!(
-                    stdout,
-                    MoveTo(0, row as u16),
-                    Print(truncated),
-                    ResetColor,
-                )?;
+                queue!(stdout, MoveTo(0, row as u16), Print(truncated), ResetColor,)?;
             }
         }
 
         // ── Preview separator ──
         if preview_top < self.term_h {
-            queue!(stdout, MoveTo(0, preview_top as u16), Print(&sep), ResetColor)?;
+            queue!(
+                stdout,
+                MoveTo(0, preview_top as u16),
+                Print(&sep),
+                ResetColor
+            )?;
         }
 
         // ── Preview panel ──
-        if let Some(m) = self.selected_match() {
-            let file_path = &m.file_path;
-            let line_num = m.line_number;
-            let start = line_num.saturating_sub(PREVIEW_LINES);
-            let _end = line_num + PREVIEW_LINES;
-            let mut buf = Vec::new();
-            let content = std::fs::File::open(file_path)
-                .and_then(|f| {
-                    f.take(100_000).read_to_end(&mut buf).map(|_| {
-                        String::from_utf8_lossy(&buf).into_owned()
-                    })
-                })
-                .unwrap_or_default();
-            let lines: Vec<&str> = content.lines().collect();
+        let (file_path, line_num) = match self.selected_match() {
+            Some(m) => (m.file_path.clone(), m.line_number),
+            None => return Ok(()),
+        };
+        let start = line_num.saturating_sub(PREVIEW_LINES);
+        let lines = self.get_file_lines(&file_path);
 
-            for i in 0..=PREVIEW_LINES * 2 {
-                let row = preview_top + 1 + i;
-                if row >= self.term_h { break; }
-                let src_line = start + i;
-                let prefix = format!("{:>6} ", src_line);
+        for i in 0..=PREVIEW_LINES * 2 {
+            let row = preview_top + 1 + i;
+            if row >= self.term_h {
+                break;
+            }
+            let src_line = start + i;
+            let prefix = format!("{:>6} ", src_line);
 
-                let display = if src_line >= 1 && src_line <= lines.len() {
-                    let text = lines[src_line - 1];
-                    let available = cols.saturating_sub(7);
-                    let text = if text.len() > available { &text[..available] } else { text };
-                    format!("{}{}", prefix, text)
+            let display = if src_line >= 1 && src_line <= lines.len() {
+                let text = &lines[src_line - 1];
+                let available = cols.saturating_sub(7);
+                let text = if text.len() > available {
+                    &text[..available]
                 } else {
-                    format!("{}~", prefix)
+                    text
                 };
+                format!("{}{}", prefix, text)
+            } else {
+                format!("{}~", prefix)
+            };
 
-                let truncated = if display.len() > cols { &display[..cols] } else { &display };
+            let truncated = if display.len() > cols {
+                &display[..cols]
+            } else {
+                &display
+            };
 
-                if src_line == line_num {
-                    queue!(
-                        stdout,
-                        MoveTo(0, row as u16),
-                        SetForegroundColor(theme.editor.selection_bg.to_crossterm()),
-                        SetBackgroundColor(theme.editor.selection_bg.to_crossterm()),
-                        Print(truncated),
-                        ResetColor,
-                    )?;
-                } else {
-                    queue!(
-                        stdout,
-                        MoveTo(0, row as u16),
-                        Print(truncated),
-                        ResetColor,
-                    )?;
-                }
+            if src_line == line_num {
+                queue!(
+                    stdout,
+                    MoveTo(0, row as u16),
+                    SetForegroundColor(theme.editor.selection_bg.to_crossterm()),
+                    SetBackgroundColor(theme.editor.selection_bg.to_crossterm()),
+                    Print(truncated),
+                    ResetColor,
+                )?;
+            } else {
+                queue!(stdout, MoveTo(0, row as u16), Print(truncated), ResetColor,)?;
             }
         }
 
@@ -188,13 +226,18 @@ struct TerminalGuard;
 impl Drop for TerminalGuard {
     fn drop(&mut self) {
         let _ = terminal::disable_raw_mode();
-        let _ = execute!(std::io::stdout(), DisableMouseCapture, Show, LeaveAlternateScreen);
+        let _ = execute!(
+            std::io::stdout(),
+            DisableMouseCapture,
+            Show,
+            LeaveAlternateScreen
+        );
     }
 }
 
 pub fn run_gs_interactive(matches: Vec<ContentMatch>, _root: &Path) -> Result<bool> {
     if matches.is_empty() {
-        print_info("No matches found.");
+        print_info(&t!("cmd.gs.no_matches"));
         return Ok(false);
     }
 
@@ -207,6 +250,13 @@ pub fn run_gs_interactive(matches: Vec<ContentMatch>, _root: &Path) -> Result<bo
     // Re-query terminal size after entering alternate screen
     let (w, h) = terminal_size();
     let all: Vec<usize> = (0..matches.len()).collect();
+    let total = matches.len();
+    if total > 10_000 {
+        print_info(&format!(
+            "Large result set ({} matches). Performance may degrade.",
+            total
+        ));
+    }
     let mut gs = GsInteractive {
         matches,
         filtered: all,
@@ -214,6 +264,7 @@ pub fn run_gs_interactive(matches: Vec<ContentMatch>, _root: &Path) -> Result<bo
         scroll_offset: 0,
         term_h: h,
         term_w: w,
+        file_cache: HashMap::new(),
     };
 
     gs.ensure_visible();
@@ -226,7 +277,9 @@ pub fn run_gs_interactive(matches: Vec<ContentMatch>, _root: &Path) -> Result<bo
         let ev = event::read()?;
         match ev {
             Event::Key(ke) => {
-                if ke.kind != KeyEventKind::Press { continue; }
+                if ke.kind != KeyEventKind::Press {
+                    continue;
+                }
                 match ke.code {
                     KeyCode::Esc | KeyCode::Char('q') => break Ok(false),
                     KeyCode::Enter => {
@@ -243,12 +296,16 @@ pub fn run_gs_interactive(matches: Vec<ContentMatch>, _root: &Path) -> Result<bo
                         break Ok(false);
                     }
                     KeyCode::Up | KeyCode::Char('k') => {
-                        if gs.selected > 0 { gs.selected -= 1; }
+                        if gs.selected > 0 {
+                            gs.selected -= 1;
+                        }
                         gs.ensure_visible();
                         gs.render(&mut stdout)?;
                     }
                     KeyCode::Down | KeyCode::Char('j') => {
-                        if gs.selected + 1 < gs.total() { gs.selected += 1; }
+                        if gs.selected + 1 < gs.total() {
+                            gs.selected += 1;
+                        }
                         gs.ensure_visible();
                         gs.render(&mut stdout)?;
                     }
@@ -286,21 +343,23 @@ pub fn run_gs_interactive(matches: Vec<ContentMatch>, _root: &Path) -> Result<bo
                 gs.ensure_visible();
                 gs.render(&mut stdout)?;
             }
-            Event::Mouse(m) => {
-                match m.kind {
-                    crossterm::event::MouseEventKind::ScrollUp => {
-                        if gs.selected > 0 { gs.selected -= 1; }
-                        gs.ensure_visible();
-                        gs.render(&mut stdout)?;
+            Event::Mouse(m) => match m.kind {
+                crossterm::event::MouseEventKind::ScrollUp => {
+                    if gs.selected > 0 {
+                        gs.selected -= 1;
                     }
-                    crossterm::event::MouseEventKind::ScrollDown => {
-                        if gs.selected + 1 < gs.total() { gs.selected += 1; }
-                        gs.ensure_visible();
-                        gs.render(&mut stdout)?;
-                    }
-                    _ => {}
+                    gs.ensure_visible();
+                    gs.render(&mut stdout)?;
                 }
-            }
+                crossterm::event::MouseEventKind::ScrollDown => {
+                    if gs.selected + 1 < gs.total() {
+                        gs.selected += 1;
+                    }
+                    gs.ensure_visible();
+                    gs.render(&mut stdout)?;
+                }
+                _ => {}
+            },
             _ => {}
         }
     };

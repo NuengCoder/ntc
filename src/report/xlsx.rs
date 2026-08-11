@@ -29,7 +29,9 @@ fn collect_all_files(dir_path: &Path, max_depth: usize) -> Vec<FileInfo> {
         .max_depth(max_depth)
         .into_iter()
         .filter_entry(|e| {
-            if e.depth() == 0 { return true; }
+            if e.depth() == 0 {
+                return true;
+            }
             if e.file_type().is_dir() {
                 let name = e.file_name().to_string_lossy().to_lowercase();
                 return !ignored_dirs.contains(&name);
@@ -45,7 +47,10 @@ fn collect_all_files(dir_path: &Path, max_depth: usize) -> Vec<FileInfo> {
 
     let mut files: Vec<FileInfo> = Vec::new();
     for p in &raw {
-        let ext = p.extension().map(|e| e.to_string_lossy().to_lowercase()).unwrap_or_default();
+        let ext = p
+            .extension()
+            .map(|e| e.to_string_lossy().to_lowercase())
+            .unwrap_or_default();
         let size = fs::metadata(p).map(|m| m.len()).unwrap_or(0);
         let modified = fs::metadata(p)
             .and_then(|m| m.modified())
@@ -95,8 +100,14 @@ fn build_module_map(files: &[FileInfo], root: &Path) -> HashMap<String, PathBuf>
 
     for fi in files {
         let rel = relative_path(&fi.path, root);
-        let stem = rel.file_stem().map(|s| s.to_string_lossy()).unwrap_or_default();
-        let parent = rel.parent().map(|p| p.to_string_lossy().replace('\\', "/")).unwrap_or_default();
+        let stem = rel
+            .file_stem()
+            .map(|s| s.to_string_lossy())
+            .unwrap_or_default();
+        let parent = rel
+            .parent()
+            .map(|p| p.to_string_lossy().replace('\\', "/"))
+            .unwrap_or_default();
 
         // Primary module path: e.g. "src/config", "src/report/txt"
         let mod_path = if parent.is_empty() || parent == "." || parent == "\\" {
@@ -104,22 +115,28 @@ fn build_module_map(files: &[FileInfo], root: &Path) -> HashMap<String, PathBuf>
         } else {
             format!("{}/{}", parent, stem)
         };
-        map.entry(mod_path.clone()).or_insert_with(|| fi.path.clone());
+        map.entry(mod_path.clone())
+            .or_insert_with(|| fi.path.clone());
 
         // For mod.rs / index.js style files, register the parent directory as well
         if (stem == "mod" || stem == "index")
-            && !parent.is_empty() && parent != "." && parent != "\\" {
-                map.entry(parent.clone()).or_insert_with(|| fi.path.clone());
-            }
+            && !parent.is_empty()
+            && parent != "."
+            && parent != "\\"
+        {
+            map.entry(parent.clone()).or_insert_with(|| fi.path.clone());
+        }
 
         // Also register aliases without common source root prefixes
         for root_dir in &source_roots {
             let prefix = format!("{}/", root_dir);
             if let Some(suffix) = mod_path.strip_prefix(&prefix) {
-                map.entry(suffix.to_string()).or_insert_with(|| fi.path.clone());
+                map.entry(suffix.to_string())
+                    .or_insert_with(|| fi.path.clone());
                 // Also register parent-only alias for mod.rs under source root
                 if (stem == "mod" || stem == "index") && !suffix.contains('/') {
-                    map.entry(suffix.to_string()).or_insert_with(|| fi.path.clone());
+                    map.entry(suffix.to_string())
+                        .or_insert_with(|| fi.path.clone());
                 }
             }
         }
@@ -146,13 +163,17 @@ fn resolve_import(import: &str, module_map: &HashMap<String, PathBuf>) -> Option
         // If we stripped at least one "../", try the remaining path
         if parent_count > 0 && !remaining.is_empty() {
             // Try direct lookup first, then fall back to original import
-            if module_map.contains_key(remaining) || module_map.keys().any(|k| k.ends_with(remaining)) {
+            if module_map.contains_key(remaining)
+                || module_map.keys().any(|k| k.ends_with(remaining))
+            {
                 // Return as-is, the prefix matching logic below will handle it
-                return module_map.get(remaining).cloned()
-                    .or_else(|| module_map.keys()
+                return module_map.get(remaining).cloned().or_else(|| {
+                    module_map
+                        .keys()
                         .find(|k| k.ends_with(remaining))
                         .and_then(|k| module_map.get(k))
-                        .cloned());
+                        .cloned()
+                });
             }
         }
         import
@@ -175,8 +196,10 @@ fn resolve_import(import: &str, module_map: &HashMap<String, PathBuf>) -> Option
     }
 
     // 2. Try with common extensions appended
-    let exts = ["rs", "py", "ts", "tsx", "js", "jsx", "c", "h", "cpp", "hpp",
-                "dart", "kt", "kts", "swift", "cs", "go", "zig", "php", "java"];
+    let exts = [
+        "rs", "py", "ts", "tsx", "js", "jsx", "c", "h", "cpp", "hpp", "dart", "kt", "kts", "swift",
+        "cs", "go", "zig", "php", "java",
+    ];
     for ext in &exts {
         let with_ext = format!("{}.{}", import_no_ext, ext);
         if let Some(p) = module_map.get(&with_ext) {
@@ -243,9 +266,13 @@ fn scan_dependencies(files: &mut [FileInfo], root: &Path) {
 
     for (i, refs) in &import_map {
         for &j in refs {
-            let imp_path = relative_path(&files[j].path, root).to_string_lossy().to_string();
+            let imp_path = relative_path(&files[j].path, root)
+                .to_string_lossy()
+                .to_string();
             files[*i].imports.push(imp_path.clone());
-            let src_path = relative_path(&files[*i].path, root).to_string_lossy().to_string();
+            let src_path = relative_path(&files[*i].path, root)
+                .to_string_lossy()
+                .to_string();
             files[j].imported_by.push(src_path);
         }
     }
@@ -295,7 +322,12 @@ fn scan_rust(content: &str) -> Vec<String> {
 
 fn process_rust_import(import: &str, out: &mut Vec<String>) {
     if import.starts_with("crate::") {
-        out.push(import.strip_prefix("crate::").unwrap_or(import).replace("::", "/"));
+        out.push(
+            import
+                .strip_prefix("crate::")
+                .unwrap_or(import)
+                .replace("::", "/"),
+        );
     } else if import.starts_with("super::") {
         let relative = import.strip_prefix("super::").unwrap_or(import);
         out.push(relative.replace("::", "/"));
@@ -412,8 +444,10 @@ fn scan_swift(content: &str) -> Vec<String> {
         let t = line.trim();
         if let Some(rest) = t.strip_prefix("import ") {
             let module = rest.trim().to_string();
-            if !module.starts_with("Foundation") && !module.starts_with("UIKit")
-                && !module.starts_with("Swift") && !module.starts_with("Dispatch")
+            if !module.starts_with("Foundation")
+                && !module.starts_with("UIKit")
+                && !module.starts_with("Swift")
+                && !module.starts_with("Dispatch")
             {
                 out.push(module);
             }
@@ -428,7 +462,8 @@ fn scan_csharp(content: &str) -> Vec<String> {
         let t = line.trim();
         if let Some(rest) = t.strip_prefix("using ") {
             let path = rest.trim().trim_end_matches(&[';', ' '][..]);
-            if !path.contains('*') && !path.starts_with("System") && !path.starts_with("Microsoft") {
+            if !path.contains('*') && !path.starts_with("System") && !path.starts_with("Microsoft")
+            {
                 out.push(path.replace('.', "/"));
             }
         }
@@ -441,9 +476,15 @@ fn scan_go(content: &str) -> Vec<String> {
     let mut in_block = false;
     for line in content.lines() {
         let t = line.trim();
-        if t.starts_with("import (") { in_block = true; continue; }
+        if t.starts_with("import (") {
+            in_block = true;
+            continue;
+        }
         if in_block {
-            if t.starts_with(')') { in_block = false; continue; }
+            if t.starts_with(')') {
+                in_block = false;
+                continue;
+            }
             let path = t.trim().trim_matches(&['"', ' '][..]);
             if path.starts_with('.') || path.contains('/') {
                 out.push(path.rsplit('/').next().unwrap_or(path).to_string());
@@ -482,7 +523,9 @@ fn scan_php(content: &str) -> Vec<String> {
         let t = line.trim();
         for kw in &["require ", "require_once ", "include ", "include_once "] {
             if let Some(rest) = t.strip_prefix(kw) {
-                let path = rest.trim().trim_matches(&['"', '\'', '(', ')', ';', ' '][..]);
+                let path = rest
+                    .trim()
+                    .trim_matches(&['"', '\'', '(', ')', ';', ' '][..]);
                 out.push(path.to_string());
             }
         }

@@ -3,9 +3,10 @@ use std::fs;
 use std::path::Path;
 
 use super::super::download::{download_with_progress, extract_archive};
-use super::super::types::PackageSource;
 use super::super::manager::{copy_recursive, load_manifest, platform_key, save_manifest};
+use super::super::types::PackageSource;
 use crate::output::{print_info, print_success};
+use crate::t;
 
 pub(crate) fn install_kotlin(
     name: &str,
@@ -31,7 +32,7 @@ pub(crate) fn install_kotlin(
     print_info(&format!("Downloading {name} {version}..."));
     download_with_progress(url, &archive_path)?;
 
-    print_info("Extracting...");
+    print_info(&t!("ntpkg.extracting"));
     extract_archive(&archive_path, &tmp_dir, source.archive_type)?;
 
     let kotlin_bin = find_kotlin_binary(&tmp_dir)
@@ -45,8 +46,11 @@ pub(crate) fn install_kotlin(
     copy_recursive(kotlin_root, vdir)?;
 
     let bin_path = vdir.join("bin");
-    fs::write(vdir.join(".real_path"), bin_path.to_string_lossy().as_bytes())
-        .context("Failed to write .real_path")?;
+    fs::write(
+        vdir.join(".real_path"),
+        bin_path.to_string_lossy().as_bytes(),
+    )
+    .context("Failed to write .real_path")?;
 
     let _ = fs::remove_dir_all(&tmp_dir);
 
@@ -61,7 +65,11 @@ pub(crate) fn install_kotlin(
 }
 
 fn find_kotlin_binary(dir: &Path) -> Option<std::path::PathBuf> {
-    let target = if cfg!(windows) { "kotlin.bat" } else { "kotlin" };
+    let target = if cfg!(windows) {
+        "kotlin.bat"
+    } else {
+        "kotlin"
+    };
     find_file_recursive(dir, target)
 }
 
@@ -73,10 +81,7 @@ fn find_file_recursive(dir: &Path, name: &str) -> Option<std::path::PathBuf> {
                 if let Some(found) = find_file_recursive(&path, name) {
                     return Some(found);
                 }
-            } else if path
-                .file_name()
-                .and_then(|n| n.to_str()) == Some(name)
-            {
+            } else if path.file_name().and_then(|n| n.to_str()) == Some(name) {
                 return Some(path);
             }
         }

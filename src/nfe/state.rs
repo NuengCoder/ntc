@@ -61,9 +61,7 @@ impl FileEntry {
     }
 
     pub fn extension(&self) -> &str {
-        self.path.extension()
-            .and_then(|e| e.to_str())
-            .unwrap_or("")
+        self.path.extension().and_then(|e| e.to_str()).unwrap_or("")
     }
 }
 
@@ -104,7 +102,13 @@ pub struct NfeState {
 impl NfeState {
     pub fn new(path: Option<&Path>) -> Self {
         let dir = path
-            .and_then(|p| if p.exists() && p.is_dir() { Some(p.to_path_buf()) } else { None })
+            .and_then(|p| {
+                if p.exists() && p.is_dir() {
+                    Some(p.to_path_buf())
+                } else {
+                    None
+                }
+            })
             .unwrap_or_else(|| std::env::current_dir().unwrap_or_else(|_| PathBuf::from(".")));
         let mut s = Self {
             current_dir: dir,
@@ -138,23 +142,24 @@ impl NfeState {
     }
 
     pub fn reload(&mut self) {
-        let (mut dirs, mut files): (Vec<FileEntry>, Vec<FileEntry>) = match std::fs::read_dir(&self.current_dir) {
-            Ok(entries) => entries
-                .filter_map(|e| e.ok())
-                .map(|e| e.path())
-                .filter(|p| {
-                    if self.show_hidden {
-                        true
-                    } else {
-                        !p.file_name()
-                            .map(|n| n.to_string_lossy().starts_with('.'))
-                            .unwrap_or(false)
-                    }
-                })
-                .filter_map(|p| FileEntry::from_path(&p))
-                .partition(|e| e.is_dir),
-            Err(_) => (Vec::new(), Vec::new()),
-        };
+        let (mut dirs, mut files): (Vec<FileEntry>, Vec<FileEntry>) =
+            match std::fs::read_dir(&self.current_dir) {
+                Ok(entries) => entries
+                    .filter_map(|e| e.ok())
+                    .map(|e| e.path())
+                    .filter(|p| {
+                        if self.show_hidden {
+                            true
+                        } else {
+                            !p.file_name()
+                                .map(|n| n.to_string_lossy().starts_with('.'))
+                                .unwrap_or(false)
+                        }
+                    })
+                    .filter_map(|p| FileEntry::from_path(&p))
+                    .partition(|e| e.is_dir),
+                Err(_) => (Vec::new(), Vec::new()),
+            };
 
         let sort_fn = |a: &FileEntry, b: &FileEntry, mode: SortMode, desc: bool| -> Ordering {
             let cmp = match mode {
@@ -163,7 +168,11 @@ impl NfeState {
                 SortMode::Date => a.modified.cmp(&b.modified),
                 SortMode::Type => a.extension().cmp(&b.extension()),
             };
-            if desc { cmp.reverse() } else { cmp }
+            if desc {
+                cmp.reverse()
+            } else {
+                cmp
+            }
         };
 
         let mode = self.sort_mode;
@@ -219,7 +228,10 @@ impl NfeState {
 
     pub fn go_to_parent(&mut self) {
         if let Some(parent) = self.current_dir.parent() {
-            let prev_name = self.current_dir.file_name().map(|n| n.to_string_lossy().to_string());
+            let prev_name = self
+                .current_dir
+                .file_name()
+                .map(|n| n.to_string_lossy().to_string());
             self.current_dir = parent.to_path_buf();
             self.reload();
             if let Some(name) = prev_name {
@@ -273,7 +285,9 @@ impl NfeState {
 
     pub fn list_width(&self) -> usize {
         let num_w = self.line_number_width();
-        self.term_w.saturating_sub(self.preview_width()).saturating_sub(num_w + 2)
+        self.term_w
+            .saturating_sub(self.preview_width())
+            .saturating_sub(num_w + 2)
     }
 
     pub fn line_number_width(&self) -> usize {
@@ -338,7 +352,9 @@ impl NfeState {
             }
         } else if let Ok(n) = input.parse::<usize>() {
             if n > 0 {
-                let idx = n.saturating_sub(1).min(self.entries.len().saturating_sub(1));
+                let idx = n
+                    .saturating_sub(1)
+                    .min(self.entries.len().saturating_sub(1));
                 self.selected = idx;
                 self.scroll_to_selected();
             }
@@ -381,7 +397,10 @@ impl NfeState {
                         }
                     }
                 }
-                let name = path.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default();
+                let name = path
+                    .file_name()
+                    .map(|n| n.to_string_lossy().to_string())
+                    .unwrap_or_default();
                 if name.to_lowercase().contains(&query) {
                     if let Some(fe) = FileEntry::from_path(&path) {
                         results.push(fe);
@@ -397,7 +416,13 @@ impl NfeState {
         self.find_results = results;
     }
 
-    fn find_recursive(dir: &Path, query: &str, show_hidden: bool, results: &mut Vec<FileEntry>, depth: usize) {
+    fn find_recursive(
+        dir: &Path,
+        query: &str,
+        show_hidden: bool,
+        results: &mut Vec<FileEntry>,
+        depth: usize,
+    ) {
         if depth > 20 {
             return;
         }
@@ -411,7 +436,10 @@ impl NfeState {
                         }
                     }
                 }
-                let name = path.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default();
+                let name = path
+                    .file_name()
+                    .map(|n| n.to_string_lossy().to_string())
+                    .unwrap_or_default();
                 if name.to_lowercase().contains(query) && results.len() < 200 {
                     if let Some(fe) = FileEntry::from_path(&path) {
                         results.push(fe);

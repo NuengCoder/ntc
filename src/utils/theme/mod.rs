@@ -39,9 +39,22 @@ pub enum ThemeColor {
 }
 
 const COLOR_NAMES: &[&str] = &[
-    "black", "red", "green", "yellow", "blue", "magenta", "cyan", "white",
-    "bright_black", "bright_red", "bright_green", "bright_yellow",
-    "bright_blue", "bright_magenta", "bright_cyan", "bright_white",
+    "black",
+    "red",
+    "green",
+    "yellow",
+    "blue",
+    "magenta",
+    "cyan",
+    "white",
+    "bright_black",
+    "bright_red",
+    "bright_green",
+    "bright_yellow",
+    "bright_blue",
+    "bright_magenta",
+    "bright_cyan",
+    "bright_white",
 ];
 
 impl Serialize for ThemeColor {
@@ -131,7 +144,9 @@ impl<'de> Deserialize<'de> for ThemeColor {
                 } else if let Some(code) = code {
                     Ok(ThemeColor::Ansi { code })
                 } else {
-                    Err(de::Error::custom("expected r, g, b for RGB or code for ANSI"))
+                    Err(de::Error::custom(
+                        "expected r, g, b for RGB or code for ANSI",
+                    ))
                 }
             }
         }
@@ -161,7 +176,11 @@ impl ThemeColor {
             ThemeColor::BrightMagenta => colored::Color::BrightMagenta,
             ThemeColor::BrightCyan => colored::Color::BrightCyan,
             ThemeColor::BrightWhite => colored::Color::BrightWhite,
-            ThemeColor::Rgb { r, g, b } => colored::Color::TrueColor { r: *r, g: *g, b: *b },
+            ThemeColor::Rgb { r, g, b } => colored::Color::TrueColor {
+                r: *r,
+                g: *g,
+                b: *b,
+            },
             // colored 2.x has no ANSI 256-colour variant — fall back to White.
             // The editor (crossterm) path handles ANSI codes correctly via Color::AnsiValue.
             ThemeColor::Ansi { code: _ } => colored::Color::White,
@@ -212,7 +231,11 @@ impl ThemeColor {
             ThemeColor::BrightMagenta => crossterm::style::Color::DarkMagenta,
             ThemeColor::BrightCyan => crossterm::style::Color::DarkCyan,
             ThemeColor::BrightWhite => crossterm::style::Color::Grey,
-            ThemeColor::Rgb { r, g, b } => crossterm::style::Color::Rgb { r: *r, g: *g, b: *b },
+            ThemeColor::Rgb { r, g, b } => crossterm::style::Color::Rgb {
+                r: *r,
+                g: *g,
+                b: *b,
+            },
             ThemeColor::Ansi { code } => crossterm::style::Color::AnsiValue(*code),
         }
     }
@@ -245,21 +268,81 @@ pub struct SyntaxTheme {
 impl Default for SyntaxTheme {
     fn default() -> Self {
         Self {
-            keyword: ThemeColor::Rgb { r: 200, g: 160, b: 255 },
-            string: ThemeColor::Rgb { r: 103, g: 228, b: 128 },
-            comment: ThemeColor::Rgb { r: 108, g: 108, b: 128 },
-            number: ThemeColor::Rgb { r: 255, g: 202, b: 133 },
-            r#type: ThemeColor::Rgb { r: 120, g: 220, b: 232 },
-            builtin: ThemeColor::Rgb { r: 255, g: 140, b: 154 },
-            function: ThemeColor::Rgb { r: 130, g: 226, b: 255 },
-            operator: ThemeColor::Rgb { r: 200, g: 200, b: 208 },
-            punctuation: ThemeColor::Rgb { r: 132, g: 132, b: 154 },
-            attribute: ThemeColor::Rgb { r: 162, g: 119, b: 255 },
-            macro_token: ThemeColor::Rgb { r: 176, g: 131, b: 240 },
-            regex: ThemeColor::Rgb { r: 252, g: 169, b: 110 },
-            tag: ThemeColor::Rgb { r: 80, g: 228, b: 200 },
-            constant: ThemeColor::Rgb { r: 229, g: 192, b: 123 },
-            normal: ThemeColor::Rgb { r: 200, g: 200, b: 208 },
+            keyword: ThemeColor::Rgb {
+                r: 200,
+                g: 160,
+                b: 255,
+            },
+            string: ThemeColor::Rgb {
+                r: 103,
+                g: 228,
+                b: 128,
+            },
+            comment: ThemeColor::Rgb {
+                r: 108,
+                g: 108,
+                b: 128,
+            },
+            number: ThemeColor::Rgb {
+                r: 255,
+                g: 202,
+                b: 133,
+            },
+            r#type: ThemeColor::Rgb {
+                r: 120,
+                g: 220,
+                b: 232,
+            },
+            builtin: ThemeColor::Rgb {
+                r: 255,
+                g: 140,
+                b: 154,
+            },
+            function: ThemeColor::Rgb {
+                r: 130,
+                g: 226,
+                b: 255,
+            },
+            operator: ThemeColor::Rgb {
+                r: 200,
+                g: 200,
+                b: 208,
+            },
+            punctuation: ThemeColor::Rgb {
+                r: 132,
+                g: 132,
+                b: 154,
+            },
+            attribute: ThemeColor::Rgb {
+                r: 162,
+                g: 119,
+                b: 255,
+            },
+            macro_token: ThemeColor::Rgb {
+                r: 176,
+                g: 131,
+                b: 240,
+            },
+            regex: ThemeColor::Rgb {
+                r: 252,
+                g: 169,
+                b: 110,
+            },
+            tag: ThemeColor::Rgb {
+                r: 80,
+                g: 228,
+                b: 200,
+            },
+            constant: ThemeColor::Rgb {
+                r: 229,
+                g: 192,
+                b: 123,
+            },
+            normal: ThemeColor::Rgb {
+                r: 200,
+                g: 200,
+                b: 208,
+            },
         }
     }
 }
@@ -361,33 +444,121 @@ pub struct EditorTheme {
 impl Default for EditorTheme {
     fn default() -> Self {
         Self {
-            editor_bg: ThemeColor::Rgb { r: 13, g: 13, b: 21 },
-            gutter_bg: ThemeColor::Rgb { r: 13, g: 13, b: 21 },
-            status_bg: ThemeColor::Rgb { r: 162, g: 119, b: 255 },
-            hint_bg: ThemeColor::Rgb { r: 21, g: 21, b: 29 },
-            sidebar_bg: ThemeColor::Rgb { r: 13, g: 13, b: 21 },
-            sidebar_selected_bg: ThemeColor::Rgb { r: 44, g: 44, b: 58 },
-            run_panel_bg: ThemeColor::Rgb { r: 22, g: 22, b: 30 },
-            gutter_text: ThemeColor::Rgb { r: 108, g: 108, b: 128 },
+            editor_bg: ThemeColor::Rgb {
+                r: 13,
+                g: 13,
+                b: 21,
+            },
+            gutter_bg: ThemeColor::Rgb {
+                r: 13,
+                g: 13,
+                b: 21,
+            },
+            status_bg: ThemeColor::Rgb {
+                r: 162,
+                g: 119,
+                b: 255,
+            },
+            hint_bg: ThemeColor::Rgb {
+                r: 21,
+                g: 21,
+                b: 29,
+            },
+            sidebar_bg: ThemeColor::Rgb {
+                r: 13,
+                g: 13,
+                b: 21,
+            },
+            sidebar_selected_bg: ThemeColor::Rgb {
+                r: 44,
+                g: 44,
+                b: 58,
+            },
+            run_panel_bg: ThemeColor::Rgb {
+                r: 22,
+                g: 22,
+                b: 30,
+            },
+            gutter_text: ThemeColor::Rgb {
+                r: 108,
+                g: 108,
+                b: 128,
+            },
             status_text: ThemeColor::White,
             status_modified: ThemeColor::Yellow,
-            hint_text: ThemeColor::Rgb { r: 130, g: 226, b: 255 },
+            hint_text: ThemeColor::Rgb {
+                r: 130,
+                g: 226,
+                b: 255,
+            },
             cursor_bg: ThemeColor::White,
             cursor_text: ThemeColor::Black,
-            extra_cursor_bg: ThemeColor::Rgb { r: 255, g: 140, b: 154 },
-            selection_bg: ThemeColor::Rgb { r: 54, g: 51, b: 84 },
-            search_match_bg: ThemeColor::Rgb { r: 44, g: 44, b: 58 },
-            search_current_bg: ThemeColor::Rgb { r: 162, g: 119, b: 255 },
-            border: ThemeColor::Rgb { r: 61, g: 61, b: 77 },
-            scrollbar: ThemeColor::Rgb { r: 61, g: 61, b: 77 },
-            scrollbar_thumb: ThemeColor::Rgb { r: 162, g: 119, b: 255 },
-            sidebar_dir: ThemeColor::Rgb { r: 120, g: 220, b: 232 },
-            sidebar_file: ThemeColor::Rgb { r: 200, g: 200, b: 208 },
-            sidebar_current: ThemeColor::Rgb { r: 255, g: 202, b: 133 },
+            extra_cursor_bg: ThemeColor::Rgb {
+                r: 255,
+                g: 140,
+                b: 154,
+            },
+            selection_bg: ThemeColor::Rgb {
+                r: 54,
+                g: 51,
+                b: 84,
+            },
+            search_match_bg: ThemeColor::Rgb {
+                r: 44,
+                g: 44,
+                b: 58,
+            },
+            search_current_bg: ThemeColor::Rgb {
+                r: 162,
+                g: 119,
+                b: 255,
+            },
+            border: ThemeColor::Rgb {
+                r: 61,
+                g: 61,
+                b: 77,
+            },
+            scrollbar: ThemeColor::Rgb {
+                r: 61,
+                g: 61,
+                b: 77,
+            },
+            scrollbar_thumb: ThemeColor::Rgb {
+                r: 162,
+                g: 119,
+                b: 255,
+            },
+            sidebar_dir: ThemeColor::Rgb {
+                r: 120,
+                g: 220,
+                b: 232,
+            },
+            sidebar_file: ThemeColor::Rgb {
+                r: 200,
+                g: 200,
+                b: 208,
+            },
+            sidebar_current: ThemeColor::Rgb {
+                r: 255,
+                g: 202,
+                b: 133,
+            },
             sidebar_selected: ThemeColor::White,
-            run_header_fg: ThemeColor::Rgb { r: 70, g: 130, b: 180 },
-            run_header_unfocused_fg: ThemeColor::Rgb { r: 45, g: 85, b: 120 },
-            run_output_fg: ThemeColor::Rgb { r: 180, g: 200, b: 210 },
+            run_header_fg: ThemeColor::Rgb {
+                r: 70,
+                g: 130,
+                b: 180,
+            },
+            run_header_unfocused_fg: ThemeColor::Rgb {
+                r: 45,
+                g: 85,
+                b: 120,
+            },
+            run_output_fg: ThemeColor::Rgb {
+                r: 180,
+                g: 200,
+                b: 210,
+            },
         }
     }
 }
@@ -434,21 +605,81 @@ impl Theme {
             author: Some("NuengCoder".to_string()),
             description: Some("Light theme for bright environments".to_string()),
             syntax: SyntaxTheme {
-                keyword: ThemeColor::Rgb { r: 120, g: 60, b: 180 },
-                string: ThemeColor::Rgb { r: 30, g: 140, b: 50 },
-                comment: ThemeColor::Rgb { r: 120, g: 120, b: 120 },
-                number: ThemeColor::Rgb { r: 200, g: 120, b: 40 },
-                r#type: ThemeColor::Rgb { r: 40, g: 140, b: 160 },
-                builtin: ThemeColor::Rgb { r: 180, g: 60, b: 80 },
-                function: ThemeColor::Rgb { r: 50, g: 140, b: 180 },
-                operator: ThemeColor::Rgb { r: 80, g: 80, b: 80 },
-                punctuation: ThemeColor::Rgb { r: 100, g: 100, b: 100 },
-                attribute: ThemeColor::Rgb { r: 130, g: 80, b: 200 },
-                macro_token: ThemeColor::Rgb { r: 150, g: 100, b: 210 },
-                regex: ThemeColor::Rgb { r: 200, g: 120, b: 60 },
-                tag: ThemeColor::Rgb { r: 40, g: 160, b: 140 },
-                constant: ThemeColor::Rgb { r: 180, g: 130, b: 60 },
-                normal: ThemeColor::Rgb { r: 30, g: 30, b: 30 },
+                keyword: ThemeColor::Rgb {
+                    r: 120,
+                    g: 60,
+                    b: 180,
+                },
+                string: ThemeColor::Rgb {
+                    r: 30,
+                    g: 140,
+                    b: 50,
+                },
+                comment: ThemeColor::Rgb {
+                    r: 120,
+                    g: 120,
+                    b: 120,
+                },
+                number: ThemeColor::Rgb {
+                    r: 200,
+                    g: 120,
+                    b: 40,
+                },
+                r#type: ThemeColor::Rgb {
+                    r: 40,
+                    g: 140,
+                    b: 160,
+                },
+                builtin: ThemeColor::Rgb {
+                    r: 180,
+                    g: 60,
+                    b: 80,
+                },
+                function: ThemeColor::Rgb {
+                    r: 50,
+                    g: 140,
+                    b: 180,
+                },
+                operator: ThemeColor::Rgb {
+                    r: 80,
+                    g: 80,
+                    b: 80,
+                },
+                punctuation: ThemeColor::Rgb {
+                    r: 100,
+                    g: 100,
+                    b: 100,
+                },
+                attribute: ThemeColor::Rgb {
+                    r: 130,
+                    g: 80,
+                    b: 200,
+                },
+                macro_token: ThemeColor::Rgb {
+                    r: 150,
+                    g: 100,
+                    b: 210,
+                },
+                regex: ThemeColor::Rgb {
+                    r: 200,
+                    g: 120,
+                    b: 60,
+                },
+                tag: ThemeColor::Rgb {
+                    r: 40,
+                    g: 160,
+                    b: 140,
+                },
+                constant: ThemeColor::Rgb {
+                    r: 180,
+                    g: 130,
+                    b: 60,
+                },
+                normal: ThemeColor::Rgb {
+                    r: 30,
+                    g: 30,
+                    b: 30,
+                },
             },
             shell: ShellTheme {
                 prompt_bracket: ThemeColor::BrightBlue,
@@ -474,37 +705,124 @@ impl Theme {
                 alias_command: ThemeColor::BrightBlack,
             },
             editor: EditorTheme {
-                editor_bg: ThemeColor::Rgb { r: 245, g: 245, b: 245 },
-                gutter_bg: ThemeColor::Rgb { r: 240, g: 240, b: 240 },
-                status_bg: ThemeColor::Rgb { r: 100, g: 80, b: 200 },
-                hint_bg: ThemeColor::Rgb { r: 235, g: 235, b: 235 },
-                sidebar_bg: ThemeColor::Rgb { r: 240, g: 240, b: 240 },
-                sidebar_selected_bg: ThemeColor::Rgb { r: 210, g: 210, b: 220 },
-                run_panel_bg: ThemeColor::Rgb { r: 235, g: 235, b: 235 },
-                gutter_text: ThemeColor::Rgb { r: 120, g: 120, b: 120 },
+                editor_bg: ThemeColor::Rgb {
+                    r: 245,
+                    g: 245,
+                    b: 245,
+                },
+                gutter_bg: ThemeColor::Rgb {
+                    r: 240,
+                    g: 240,
+                    b: 240,
+                },
+                status_bg: ThemeColor::Rgb {
+                    r: 100,
+                    g: 80,
+                    b: 200,
+                },
+                hint_bg: ThemeColor::Rgb {
+                    r: 235,
+                    g: 235,
+                    b: 235,
+                },
+                sidebar_bg: ThemeColor::Rgb {
+                    r: 240,
+                    g: 240,
+                    b: 240,
+                },
+                sidebar_selected_bg: ThemeColor::Rgb {
+                    r: 210,
+                    g: 210,
+                    b: 220,
+                },
+                run_panel_bg: ThemeColor::Rgb {
+                    r: 235,
+                    g: 235,
+                    b: 235,
+                },
+                gutter_text: ThemeColor::Rgb {
+                    r: 120,
+                    g: 120,
+                    b: 120,
+                },
                 status_text: ThemeColor::White,
                 status_modified: ThemeColor::Yellow,
-                hint_text: ThemeColor::Rgb { r: 80, g: 140, b: 180 },
+                hint_text: ThemeColor::Rgb {
+                    r: 80,
+                    g: 140,
+                    b: 180,
+                },
                 cursor_bg: ThemeColor::Black,
                 cursor_text: ThemeColor::White,
-                extra_cursor_bg: ThemeColor::Rgb { r: 220, g: 100, b: 120 },
-                selection_bg: ThemeColor::Rgb { r: 200, g: 190, b: 220 },
-                search_match_bg: ThemeColor::Rgb { r: 210, g: 210, b: 220 },
-                search_current_bg: ThemeColor::Rgb { r: 160, g: 120, b: 220 },
-                border: ThemeColor::Rgb { r: 180, g: 180, b: 200 },
-                scrollbar: ThemeColor::Rgb { r: 180, g: 180, b: 200 },
-                scrollbar_thumb: ThemeColor::Rgb { r: 140, g: 100, b: 200 },
-                sidebar_dir: ThemeColor::Rgb { r: 60, g: 140, b: 160 },
-                sidebar_file: ThemeColor::Rgb { r: 60, g: 60, b: 60 },
-                sidebar_current: ThemeColor::Rgb { r: 200, g: 120, b: 40 },
+                extra_cursor_bg: ThemeColor::Rgb {
+                    r: 220,
+                    g: 100,
+                    b: 120,
+                },
+                selection_bg: ThemeColor::Rgb {
+                    r: 200,
+                    g: 190,
+                    b: 220,
+                },
+                search_match_bg: ThemeColor::Rgb {
+                    r: 210,
+                    g: 210,
+                    b: 220,
+                },
+                search_current_bg: ThemeColor::Rgb {
+                    r: 160,
+                    g: 120,
+                    b: 220,
+                },
+                border: ThemeColor::Rgb {
+                    r: 180,
+                    g: 180,
+                    b: 200,
+                },
+                scrollbar: ThemeColor::Rgb {
+                    r: 180,
+                    g: 180,
+                    b: 200,
+                },
+                scrollbar_thumb: ThemeColor::Rgb {
+                    r: 140,
+                    g: 100,
+                    b: 200,
+                },
+                sidebar_dir: ThemeColor::Rgb {
+                    r: 60,
+                    g: 140,
+                    b: 160,
+                },
+                sidebar_file: ThemeColor::Rgb {
+                    r: 60,
+                    g: 60,
+                    b: 60,
+                },
+                sidebar_current: ThemeColor::Rgb {
+                    r: 200,
+                    g: 120,
+                    b: 40,
+                },
                 sidebar_selected: ThemeColor::Black,
-                run_header_fg: ThemeColor::Rgb { r: 60, g: 100, b: 140 },
-                run_header_unfocused_fg: ThemeColor::Rgb { r: 35, g: 65, b: 95 },
-                run_output_fg: ThemeColor::Rgb { r: 40, g: 50, b: 60 },
+                run_header_fg: ThemeColor::Rgb {
+                    r: 60,
+                    g: 100,
+                    b: 140,
+                },
+                run_header_unfocused_fg: ThemeColor::Rgb {
+                    r: 35,
+                    g: 65,
+                    b: 95,
+                },
+                run_output_fg: ThemeColor::Rgb {
+                    r: 40,
+                    g: 50,
+                    b: 60,
+                },
             },
         }
     }
-    
 }
 
 // ============================================================================
@@ -550,7 +868,7 @@ pub use manager::ThemeManager;
 #[cfg(test)]
 mod tests {
     use super::*;
-    
+
     #[test]
     fn test_theme_switching() {
         assert!(ThemeManager::set_theme("default"));
@@ -558,14 +876,14 @@ mod tests {
         assert!(ThemeManager::set_theme("light"));
         assert_eq!(ThemeManager::current().name, "light");
     }
-    
+
     #[test]
     fn test_list_themes() {
         let themes = ThemeManager::list_themes();
         assert!(themes.contains(&"default".to_string()));
         assert!(themes.contains(&"light".to_string()));
     }
-    
+
     #[test]
     fn test_color_conversion() {
         let color = ThemeColor::Rgb { r: 255, g: 0, b: 0 };
@@ -613,11 +931,39 @@ selection_bg = { r = 54, g = 51, b = 84 }
         assert_eq!(theme.syntax.keyword, ThemeColor::Magenta);
         assert_eq!(theme.syntax.comment, ThemeColor::BrightBlack);
         assert_eq!(theme.syntax.function, ThemeColor::BrightBlue);
-        assert_eq!(theme.editor.editor_bg, ThemeColor::Rgb { r: 30, g: 13, b: 60 });
-        assert_eq!(theme.editor.gutter_bg, ThemeColor::Rgb { r: 13, g: 13, b: 21 });
+        assert_eq!(
+            theme.editor.editor_bg,
+            ThemeColor::Rgb {
+                r: 30,
+                g: 13,
+                b: 60
+            }
+        );
+        assert_eq!(
+            theme.editor.gutter_bg,
+            ThemeColor::Rgb {
+                r: 13,
+                g: 13,
+                b: 21
+            }
+        );
         assert_eq!(theme.editor.status_text, ThemeColor::White);
-        assert_eq!(theme.editor.hint_text, ThemeColor::Rgb { r: 130, g: 226, b: 255 });
-        assert_eq!(theme.editor.selection_bg, ThemeColor::Rgb { r: 54, g: 51, b: 84 });
+        assert_eq!(
+            theme.editor.hint_text,
+            ThemeColor::Rgb {
+                r: 130,
+                g: 226,
+                b: 255
+            }
+        );
+        assert_eq!(
+            theme.editor.selection_bg,
+            ThemeColor::Rgb {
+                r: 54,
+                g: 51,
+                b: 84
+            }
+        );
 
         // Roundtrip: serialize then deserialize again
         let serialized = toml::to_string_pretty(&theme).unwrap();

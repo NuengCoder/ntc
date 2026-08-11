@@ -24,9 +24,7 @@ pub fn copy_to_clipboard_termux(content: &str) -> Result<bool> {
     }
 
     // Try termux-clipboard-set first
-    let status = Command::new("termux-clipboard-set")
-        .arg(content)
-        .status();
+    let status = Command::new("termux-clipboard-set").arg(content).status();
 
     if let Ok(status) = status {
         if status.success() {
@@ -60,10 +58,10 @@ pub fn copy_to_clipboard_termux(content: &str) -> Result<bool> {
 #[cfg(not(target_os = "android"))]
 pub fn copy_to_clipboard(content: &str, format: &str) -> Result<()> {
     crate::shell::commands::clipboard::push_clip(content);
-    let mut clipboard = Clipboard::new()
-        .with_context(|| "Failed to access clipboard")?;
+    let mut clipboard = Clipboard::new().with_context(|| "Failed to access clipboard")?;
 
-    clipboard.set_text(content.to_string())
+    clipboard
+        .set_text(content.to_string())
         .with_context(|| format!("Failed to copy {} report to clipboard", format))?;
 
     Ok(())
@@ -73,12 +71,16 @@ pub fn copy_to_clipboard(content: &str, format: &str) -> Result<()> {
 pub fn copy_to_clipboard(content: &str, format: &str) -> Result<()> {
     // Try Termux clipboard first
     if copy_to_clipboard_termux(content)? {
-        super::theme::print_success(&format!("{} report copied to clipboard via Termux!", format));
+        super::theme::print_success(&format!(
+            "{} report copied to clipboard via Termux!",
+            format
+        ));
         return Ok(());
     }
 
     // Fallback: save to temp file and show path
-    let temp_file = std::env::temp_dir().join(format!("ntc_{}_{}.{}",
+    let temp_file = std::env::temp_dir().join(format!(
+        "ntc_{}_{}.{}",
         format.to_lowercase(),
         chrono::Local::now().format("%Y%m%d_%H%M%S"),
         format.to_lowercase()
@@ -91,7 +93,10 @@ pub fn copy_to_clipboard(content: &str, format: &str) -> Result<()> {
             format,
             temp_file.display()
         ));
-        super::theme::print_info(&format!("You can view it with: cat {}", temp_file.display()));
+        super::theme::print_info(&format!(
+            "You can view it with: cat {}",
+            temp_file.display()
+        ));
     } else {
         super::theme::print_warning(&format!(
             "Clipboard not supported on Android. {} report content shown above.",

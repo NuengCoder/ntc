@@ -1,4 +1,5 @@
 use crate::ranfile::types::{RanTarget, Ranfile};
+use crate::t;
 use anyhow::{Context, Result};
 use colored::Colorize;
 use std::collections::HashSet;
@@ -109,7 +110,10 @@ pub(crate) fn parse(path: &Path) -> Result<Ranfile> {
             if !ranfile.targets.contains_key(dep) {
                 anyhow::bail!(
                     "Target '{}' depends on '{}' but '{}' is not defined in {}",
-                    name, dep, dep, RANFILE_NAME
+                    name,
+                    dep,
+                    dep,
+                    RANFILE_NAME
                 );
             }
         }
@@ -203,15 +207,19 @@ pub(crate) fn list_targets(ranfile: &Ranfile) {
     let mut names: Vec<&String> = ranfile.targets.keys().collect();
     names.sort();
 
-    println!("{}", "Available targets:".cyan().bold());
+    println!("{}", t!("ranfile.available_title").cyan().bold());
     println!();
     for name in names {
         let target = &ranfile.targets[name];
-        let has_cmd = if target.cmd.is_empty() { "" } else { " (has command)" };
+        let has_cmd = if target.cmd.is_empty() {
+            String::new()
+        } else {
+            t!("ranfile.has_command")
+        };
         let dep_str = if target.deps.is_empty() {
             String::new()
         } else {
-            format!(" ─▶ depends on: {}", target.deps.join(", "))
+            format!("{}{}", t!("ranfile.depends_on"), target.deps.join(", "))
         };
         println!("  {}{}{}", name.green(), dep_str.yellow(), has_cmd.dimmed());
     }

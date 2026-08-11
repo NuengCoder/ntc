@@ -8,13 +8,14 @@ use std::process::Command;
 use super::super::download::download_with_progress;
 #[cfg(not(windows))]
 use super::super::download::extract_archive;
-use super::super::manager::{load_manifest, platform_key, save_manifest};
-use super::super::types::PackageSource;
 #[cfg(not(windows))]
 use super::super::manager::find_system_binary;
+use super::super::manager::{load_manifest, platform_key, save_manifest};
 #[cfg(not(windows))]
 use super::super::types::ArchiveType;
+use super::super::types::PackageSource;
 use crate::output::{print_info, print_success};
+use crate::t;
 
 pub(crate) fn install_ruby(
     name: &str,
@@ -57,18 +58,22 @@ fn install_ruby_windows(
 
     print_success(&format!("Downloaded to {}", installer_path.display()));
 
-    if crate::utils::interactive::prompt_yes_no(
-        &format!("Start {name} {version} installer"),
-        true,
-    )? {
-        print_info("Launching installer. Complete the setup, then close the installer window...");
+    if crate::utils::interactive::prompt_yes_no(&format!("Start {name} {version} installer"), true)?
+    {
+        print_info(&t!("ntpkg.launch_installer"));
         super::launch_installer_and_wait(&installer_path, name, version)?;
 
         let real_dir = find_ruby_install_dir(version)?;
-        print_success(&format!("Detected {name} installed at {}", real_dir.display()));
+        print_success(&format!(
+            "Detected {name} installed at {}",
+            real_dir.display()
+        ));
 
-        fs::write(vdir.join(".real_path"), real_dir.to_string_lossy().as_bytes())
-            .context("Failed to write .real_path")?;
+        fs::write(
+            vdir.join(".real_path"),
+            real_dir.to_string_lossy().as_bytes(),
+        )
+        .context("Failed to write .real_path")?;
     }
 
     let mut manifest = load_manifest()?;
@@ -140,17 +145,18 @@ fn find_ruby_install_dir(version: &str) -> Result<PathBuf> {
 }
 
 #[cfg(not(windows))]
-fn install_ruby_unix(
-    name: &str,
-    version: &str,
-    source: &PackageSource,
-    vdir: &Path,
-) -> Result<()> {
+fn install_ruby_unix(name: &str, version: &str, source: &PackageSource, vdir: &Path) -> Result<()> {
     if let Some(sys_path) = detect_system_ruby(version)? {
         fs::create_dir_all(vdir)?;
-        fs::write(vdir.join(".real_path"), sys_path.to_string_lossy().as_bytes())
-            .context("Failed to write .real_path")?;
-        print_success(&format!("Using system {name} {version} at {}", sys_path.display()));
+        fs::write(
+            vdir.join(".real_path"),
+            sys_path.to_string_lossy().as_bytes(),
+        )
+        .context("Failed to write .real_path")?;
+        print_success(&format!(
+            "Using system {name} {version} at {}",
+            sys_path.display()
+        ));
 
         let mut manifest = load_manifest()?;
         manifest.add_version(name, version);
@@ -230,14 +236,14 @@ fn build_ruby_from_source(
     }
     fs::create_dir_all(&build_dir)?;
 
-    print_info("Extracting source tarball...");
+    print_info(&t!("ntpkg.extracting_source"));
     extract_archive(tarball, &build_dir, ArchiveType::TarGz)?;
 
     let source_dir = find_source_dir(&build_dir, version)?;
 
     check_build_deps()?;
 
-    print_info("Configuring (./configure)...");
+    print_info(&t!("ntpkg.configuring"));
     let status = Command::new("./configure")
         .arg(format!("--prefix={}", prefix_dir.display()))
         .arg("--disable-install-doc")
@@ -261,7 +267,7 @@ fn build_ruby_from_source(
         bail!("make failed (exit code {:?})", status.code());
     }
 
-    print_info("Installing (make install)...");
+    print_info(&t!("ntpkg.installing"));
     let status = Command::new("make")
         .arg("install")
         .current_dir(&source_dir)
@@ -309,7 +315,8 @@ fn check_build_deps() -> Result<()> {
         if find_system_binary(tool).is_none() {
             let hint = if find_system_binary("pacman").is_some() {
                 "sudo pacman -S base-devel"
-            } else if find_system_binary("apt-get").is_some() || find_system_binary("apt").is_some() {
+            } else if find_system_binary("apt-get").is_some() || find_system_binary("apt").is_some()
+            {
                 "sudo apt install build-essential libssl-dev libyaml-dev zlib1g-dev"
             } else if find_system_binary("dnf").is_some() {
                 "sudo dnf groupinstall 'Development Tools'"
@@ -321,9 +328,7 @@ fn check_build_deps() -> Result<()> {
                 "install gcc, make and related build tools"
             };
 
-            bail!(
-                "Build tool '{tool}' not found.\n  Install build dependencies:\n    {hint}"
-            );
+            bail!("Build tool '{tool}' not found.\n  Install build dependencies:\n    {hint}");
         }
     }
     Ok(())

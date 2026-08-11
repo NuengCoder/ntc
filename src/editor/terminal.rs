@@ -4,6 +4,7 @@ use std::sync::mpsc;
 use std::thread;
 use std::time::Instant;
 
+use crate::t;
 use anyhow::Result;
 
 pub(crate) enum TermMessage {
@@ -89,10 +90,9 @@ impl vte::Perform for VtePerformer {
                     self.cursor_y = self.height - 1;
                 }
             }
-            b'\x08'
-                if self.cursor_x > 0 => {
-                    self.cursor_x -= 1;
-                }
+            b'\x08' if self.cursor_x > 0 => {
+                self.cursor_x -= 1;
+            }
             b'\t' => {
                 self.cursor_x = (self.cursor_x + 8) & !7;
                 if self.cursor_x >= self.width {
@@ -205,45 +205,67 @@ impl vte::Perform for VtePerformer {
                         30..=37 => {
                             let idx = (pv[i] - 30) as usize;
                             let colors = [
-                                (0, 0, 0), (170, 0, 0), (0, 170, 0), (170, 85, 0),
-                                (0, 0, 170), (170, 0, 170), (0, 170, 170), (170, 170, 170),
+                                (0, 0, 0),
+                                (170, 0, 0),
+                                (0, 170, 0),
+                                (170, 85, 0),
+                                (0, 0, 170),
+                                (170, 0, 170),
+                                (0, 170, 170),
+                                (170, 170, 170),
                             ];
                             self.current_fg = colors[idx];
                         }
                         40..=47 => {
                             let idx = (pv[i] - 40) as usize;
                             let colors = [
-                                (0, 0, 0), (170, 0, 0), (0, 170, 0), (170, 85, 0),
-                                (0, 0, 170), (170, 0, 170), (0, 170, 170), (170, 170, 170),
+                                (0, 0, 0),
+                                (170, 0, 0),
+                                (0, 170, 0),
+                                (170, 85, 0),
+                                (0, 0, 170),
+                                (170, 0, 170),
+                                (0, 170, 170),
+                                (170, 170, 170),
                             ];
                             self.current_bg = colors[idx];
                         }
                         90..=97 => {
                             let idx = (pv[i] - 90) as usize;
                             let colors = [
-                                (85, 85, 85), (255, 85, 85), (85, 255, 85), (255, 255, 85),
-                                (85, 85, 255), (255, 85, 255), (85, 255, 255), (255, 255, 255),
+                                (85, 85, 85),
+                                (255, 85, 85),
+                                (85, 255, 85),
+                                (255, 255, 85),
+                                (85, 85, 255),
+                                (255, 85, 255),
+                                (85, 255, 255),
+                                (255, 255, 255),
                             ];
                             self.current_fg = colors[idx];
                         }
                         100..=107 => {
                             let idx = (pv[i] - 100) as usize;
                             let colors = [
-                                (85, 85, 85), (255, 85, 85), (85, 255, 85), (255, 255, 85),
-                                (85, 85, 255), (255, 85, 255), (85, 255, 255), (255, 255, 255),
+                                (85, 85, 85),
+                                (255, 85, 85),
+                                (85, 255, 85),
+                                (255, 255, 85),
+                                (85, 85, 255),
+                                (255, 85, 255),
+                                (85, 255, 255),
+                                (255, 255, 255),
                             ];
                             self.current_bg = colors[idx];
                         }
-                        38
-                            if i + 2 < pv.len() && pv[i + 1] == 5 => {
-                                self.current_fg = ansi256_to_rgb(pv[i + 2] as u8);
-                                i += 2;
-                            }
-                        48
-                            if i + 2 < pv.len() && pv[i + 1] == 5 => {
-                                self.current_bg = ansi256_to_rgb(pv[i + 2] as u8);
-                                i += 2;
-                            }
+                        38 if i + 2 < pv.len() && pv[i + 1] == 5 => {
+                            self.current_fg = ansi256_to_rgb(pv[i + 2] as u8);
+                            i += 2;
+                        }
+                        48 if i + 2 < pv.len() && pv[i + 1] == 5 => {
+                            self.current_bg = ansi256_to_rgb(pv[i + 2] as u8);
+                            i += 2;
+                        }
                         _ => {}
                     }
                     i += 1;
@@ -254,7 +276,8 @@ impl vte::Perform for VtePerformer {
     }
 
     fn osc_dispatch(&mut self, _params: &[&[u8]], _bell_terminated: bool) {}
-    fn hook(&mut self, _params: &vte::Params, _intermediates: &[u8], _ignore: bool, _action: char) {}
+    fn hook(&mut self, _params: &vte::Params, _intermediates: &[u8], _ignore: bool, _action: char) {
+    }
     fn put(&mut self, _byte: u8) {}
     fn unhook(&mut self) {}
 }
@@ -282,10 +305,22 @@ impl VtePerformer {
 fn ansi256_to_rgb(idx: u8) -> (u8, u8, u8) {
     if idx < 16 {
         let colors = [
-            (0, 0, 0), (128, 0, 0), (0, 128, 0), (128, 128, 0),
-            (0, 0, 128), (128, 0, 128), (0, 128, 128), (192, 192, 192),
-            (128, 128, 128), (255, 0, 0), (0, 255, 0), (255, 255, 0),
-            (0, 0, 255), (255, 0, 255), (0, 255, 255), (255, 255, 255),
+            (0, 0, 0),
+            (128, 0, 0),
+            (0, 128, 0),
+            (128, 128, 0),
+            (0, 0, 128),
+            (128, 0, 128),
+            (0, 128, 128),
+            (192, 192, 192),
+            (128, 128, 128),
+            (255, 0, 0),
+            (0, 255, 0),
+            (255, 255, 0),
+            (0, 0, 255),
+            (255, 0, 255),
+            (0, 255, 255),
+            (255, 255, 255),
         ];
         colors[idx as usize]
     } else if idx < 232 {
@@ -348,7 +383,8 @@ impl TerminalState {
             ..Default::default()
         };
 
-        let title_cwd = cwd.file_name()
+        let title_cwd = cwd
+            .file_name()
             .map(|n| n.to_string_lossy().to_string())
             .unwrap_or_else(|| cwd.display().to_string());
 
@@ -364,7 +400,14 @@ impl TerminalState {
             pty: Some(pair.master),
             exited: false,
             exit_code: None,
-            title: format!("Terminal — {} — {}", shell, title_cwd),
+            title: format!(
+                "{} {} {} {} {}",
+                t!("editor.term_title"),
+                "\u{2014}",
+                shell,
+                "\u{2014}",
+                title_cwd
+            ),
             scrollback: Vec::new(),
             follow_mode: true,
             dirty: true,
@@ -413,7 +456,9 @@ impl TerminalState {
         for line in &mut self.performer.lines {
             line.resize(width as usize, TermCell::default());
         }
-        self.performer.lines.resize(height as usize, vec![TermCell::default(); width as usize]);
+        self.performer
+            .lines
+            .resize(height as usize, vec![TermCell::default(); width as usize]);
         self.lines = self.performer.lines.clone();
         self.dirty = true;
 
@@ -498,7 +543,12 @@ impl TerminalState {
         let mut result = String::new();
         if sy == ey {
             let line = self.get_line(sy);
-            let s: String = line.iter().skip(sx).take(ex.saturating_sub(sx)).map(|c| c.ch).collect();
+            let s: String = line
+                .iter()
+                .skip(sx)
+                .take(ex.saturating_sub(sx))
+                .map(|c| c.ch)
+                .collect();
             result.push_str(&s);
         } else {
             // First line

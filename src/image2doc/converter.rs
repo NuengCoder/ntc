@@ -11,7 +11,7 @@ pub struct ImageData {
     pub format: String,
     pub file_size: u64,
     pub modified: String,
-    pub pixels: Vec<u8>,  // RGBA pixels
+    pub pixels: Vec<u8>, // RGBA pixels
 }
 
 /// Load image and detect its format from the decoder
@@ -34,11 +34,11 @@ pub fn resize_image(img: DynamicImage, max_width: usize) -> DynamicImage {
         return img;
     }
     let max_width = max_width as u32;
-    
+
     if width <= max_width {
         return img;
     }
-    
+
     let new_width = max_width;
     let new_height = (height as f64 * (max_width as f64 / width as f64)) as u32;
     img.resize(new_width, new_height, image::imageops::FilterType::Lanczos3)
@@ -48,17 +48,18 @@ pub fn resize_image(img: DynamicImage, max_width: usize) -> DynamicImage {
 pub fn extract_metadata(path: &Path, img: &DynamicImage, format: ImageFormat) -> Result<Metadata> {
     let metadata = std::fs::metadata(path)?;
     let (width, height) = img.dimensions();
-    
+
     let format_str = format.to_mime_type().to_string();
-    
-    let modified = metadata.modified()
+
+    let modified = metadata
+        .modified()
         .ok()
         .map(|t| {
             let dt: chrono::DateTime<chrono::Local> = t.into();
             dt.format("%Y-%m-%d %H:%M:%S").to_string()
         })
         .unwrap_or_else(|| "Unknown".to_string());
-    
+
     Ok(Metadata {
         path: path.to_string_lossy().to_string(),
         format: format_str,
@@ -66,7 +67,11 @@ pub fn extract_metadata(path: &Path, img: &DynamicImage, format: ImageFormat) ->
         height,
         file_size: metadata.len(),
         modified,
-        aspect_ratio: if height == 0 { 1.0 } else { width as f64 / height as f64 },
+        aspect_ratio: if height == 0 {
+            1.0
+        } else {
+            width as f64 / height as f64
+        },
     })
 }
 

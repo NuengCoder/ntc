@@ -54,5 +54,6 @@ For full help, press Ctrl + H
 
 ──────────────────────────────────────────────────────────────────
 Insert: Ctrl+O    |    Visual: Ctrl+W    |    Jump: Ctrl+G    |    Help: Ctrl+H
-"#.to_string()
+"#
+    .to_string()
 }

@@ -2,11 +2,11 @@ use anyhow::Result;
 use std::fs;
 use std::path::{Path, PathBuf};
 
+use super::super::download::download_with_progress;
 #[cfg(target_os = "macos")]
 use super::super::download::{extract_archive, find_binary};
-use super::super::download::download_with_progress;
-use super::super::types::PackageSource;
 use super::super::manager::{load_manifest, platform_key, save_manifest};
+use super::super::types::PackageSource;
 use crate::output::{print_info, print_success};
 
 pub(crate) fn install_cloudflared(
@@ -52,6 +52,7 @@ pub(crate) fn install_cloudflared(
 
     #[cfg(target_os = "macos")]
     {
+        use crate::t;
         let tmp_dir = std::env::temp_dir().join("ntc-install-cloudflared");
         if tmp_dir.exists() {
             let _ = fs::remove_dir_all(&tmp_dir);
@@ -62,8 +63,12 @@ pub(crate) fn install_cloudflared(
         print_info(&format!("Downloading cloudflared {}...", version));
         download_with_progress(url, &archive_path)?;
 
-        print_info("Extracting...");
-        extract_archive(&archive_path, &tmp_dir, super::super::types::ArchiveType::TarGz)?;
+        print_info(&t!("ntpkg.extracting"));
+        extract_archive(
+            &archive_path,
+            &tmp_dir,
+            super::super::types::ArchiveType::TarGz,
+        )?;
 
         let cf_bin = find_binary(&tmp_dir, "cloudflared")
             .ok_or_else(|| anyhow::anyhow!("Could not find cloudflared binary in archive"))?;
@@ -78,7 +83,10 @@ pub(crate) fn install_cloudflared(
     }
 
     fs::create_dir_all(vdir)?;
-    fs::write(vdir.join(".real_path"), bin_dir.to_string_lossy().as_bytes())?;
+    fs::write(
+        vdir.join(".real_path"),
+        bin_dir.to_string_lossy().as_bytes(),
+    )?;
 
     let mut manifest = load_manifest()?;
     manifest.add_version(name, version);

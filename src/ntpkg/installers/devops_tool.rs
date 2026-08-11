@@ -7,6 +7,7 @@ use super::super::manager::{load_manifest, platform_key, save_manifest};
 use super::super::sources;
 use super::super::types::{ArchiveType, PackageSource};
 use crate::output::{print_info, print_success};
+use crate::t;
 
 const BUNDLED_TOOLS: &[&str] = &[
     "act",
@@ -36,8 +37,11 @@ pub(crate) fn install_devops_tool(
         }
     }
 
-    fs::write(vdir.join(".real_path"), combined_bin.to_string_lossy().as_bytes())
-        .context("Failed to write .real_path")?;
+    fs::write(
+        vdir.join(".real_path"),
+        combined_bin.to_string_lossy().as_bytes(),
+    )
+    .context("Failed to write .real_path")?;
 
     print_success(&format!("{name} {version} installed at {}", vdir.display()));
 
@@ -60,10 +64,9 @@ fn install_single_tool(tool_name: &str, combined_bin: &Path, _vdir: &Path) -> Re
         .ok_or_else(|| anyhow::anyhow!("No source for '{tool_name}'"))?;
 
     let platform_key = platform_key();
-    let url = source
-        .urls
-        .get(&platform_key)
-        .ok_or_else(|| anyhow::anyhow!("No download URL for '{tool_name}' on platform '{platform_key}'"))?;
+    let url = source.urls.get(&platform_key).ok_or_else(|| {
+        anyhow::anyhow!("No download URL for '{tool_name}' on platform '{platform_key}'")
+    })?;
 
     let tmp_dir = std::env::temp_dir().join(format!("ntc-bundle-{tool_name}"));
     if tmp_dir.exists() {
@@ -77,8 +80,12 @@ fn install_single_tool(tool_name: &str, combined_bin: &Path, _vdir: &Path) -> Re
     download_with_progress(url, &download_path)?;
 
     if is_archive_url(url) {
-        let archive_type = if url.ends_with(".zip") { ArchiveType::Zip } else { ArchiveType::TarGz };
-        print_info("  Extracting...");
+        let archive_type = if url.ends_with(".zip") {
+            ArchiveType::Zip
+        } else {
+            ArchiveType::TarGz
+        };
+        print_info(&t!("ntpkg.extracting_indent"));
         extract_archive(&download_path, &tmp_dir, archive_type)?;
 
         let binary_name = if cfg!(windows) {
@@ -124,5 +131,8 @@ fn install_single_tool(tool_name: &str, combined_bin: &Path, _vdir: &Path) -> Re
 }
 
 fn is_archive_url(url: &str) -> bool {
-    url.ends_with(".tar.gz") || url.ends_with(".tgz") || url.ends_with(".tar.xz") || url.ends_with(".zip")
+    url.ends_with(".tar.gz")
+        || url.ends_with(".tgz")
+        || url.ends_with(".tar.xz")
+        || url.ends_with(".zip")
 }

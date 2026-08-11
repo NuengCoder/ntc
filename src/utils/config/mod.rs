@@ -3,7 +3,7 @@
 //! ignore/care filtering, run aliases, and the global singleton pattern.
 
 use serde::{Deserialize, Serialize};
-use std::collections::{HashSet, HashMap};
+use std::collections::{HashMap, HashSet};
 use std::fs;
 use std::path::PathBuf;
 use std::sync::RwLock;
@@ -18,6 +18,7 @@ pub struct QscHotkey {
 }
 
 pub(crate) mod globals;
+pub mod lang;
 
 /// Global configuration (persisted to disk)
 #[derive(Debug, Serialize, Deserialize)]
@@ -79,6 +80,25 @@ pub struct Config {
     /// QSC (Quick Short Command) global hotkey, if configured
     #[serde(default)]
     pub qsc: Option<QscHotkey>,
+
+    /// Interface language (english, thai, chinese)
+    #[serde(default = "default_language")]
+    pub language: String,
+    /// Whether the selected language is fully active
+    #[serde(default = "default_language_active")]
+    pub language_active: bool,
+
+    /// Use ASCII-only icons (✓→+ etc) for pipe-safe/legacy terminal output
+    #[serde(default)]
+    pub ascii_fallback: bool,
+
+    /// OpenWeather API key used by the `tmprt weather` command
+    #[serde(default)]
+    pub openweather_api_key: Option<String>,
+
+    /// Default city used by the `tmprt weather` command when none is given
+    #[serde(default)]
+    pub openweather_default_city: Option<String>,
 }
 
 // Single source of truth for alias name validation.
@@ -86,20 +106,72 @@ pub struct Config {
 // all shell commands that users should not be able to override.
 pub fn validate_alias_name(name: &str) -> bool {
     let reserved_commands = [
-        "cd", "godrive", "god", "go", "back", "b", "view", "ls", "report", "txtc", "txtf", "txt",
-        "config", "clear", "version", "where",
-        "gos", "gosc", "ral", "run", "r", "showcg", "help", "exit", "quit", "backup",
-        "ignore", "care", "igcared",
-        "size", "tp", "opencg", "resetcg", "restorecg", "setc", "local",
-        "ne", "ntceditor", "igcare",
-        "esc", "gs", "fs", "ds", "fgo", "fsc", "locate",
-        "rnmf", "rnmd",
-        "dino", "math", "init", "deinit", "diff", "bkup",
+        "cd",
+        "godrive",
+        "god",
+        "go",
+        "back",
+        "b",
+        "view",
+        "ls",
+        "report",
+        "txtc",
+        "txtf",
+        "txt",
+        "config",
+        "clear",
+        "version",
+        "where",
+        "gos",
+        "gosc",
+        "ral",
+        "run",
+        "r",
+        "showcg",
+        "help",
+        "exit",
+        "quit",
+        "backup",
+        "ignore",
+        "care",
+        "igcared",
+        "size",
+        "tp",
+        "opencg",
+        "resetcg",
+        "restorecg",
+        "setc",
+        "local",
+        "ne",
+        "ntceditor",
+        "igcare",
+        "esc",
+        "gs",
+        "fs",
+        "ds",
+        "fgo",
+        "fsc",
+        "locate",
+        "rnmf",
+        "rnmd",
+        "dino",
+        "math",
+        "init",
+        "deinit",
+        "diff",
+        "bkup",
         "tl",
-        "image", "img", "python_activate", "python_deactivate", "python_showenv",
-        "smtp", "clip", "qsc",
+        "image",
+        "img",
+        "python_activate",
+        "python_deactivate",
+        "python_showenv",
+        "smtp",
+        "clip",
+        "qsc",
+        "tmprt",
     ];
-    
+
     if name.trim().is_empty() || name.contains(' ') {
         return false;
     }
@@ -107,22 +179,43 @@ pub fn validate_alias_name(name: &str) -> bool {
     if name.contains('@') || name.contains('#') {
         return false;
     }
-    
+
     if reserved_commands.contains(&name) {
         return false;
     }
-    
+
     true
 }
 
 fn default_output_path() -> PathBuf {
     dirs::desktop_dir().unwrap_or_else(|| PathBuf::from("."))
 }
-fn default_max_depth() -> usize { 2 }
-fn default_num_threads() -> usize { 4 }
-fn default_history_enabled() -> bool { false }
-fn default_color_enabled() -> bool { false }
-fn default_autosuggest_enabled() -> bool { true }
+fn default_max_depth() -> usize {
+    2
+}
+fn default_num_threads() -> usize {
+    4
+}
+fn default_history_enabled() -> bool {
+    false
+}
+fn default_color_enabled() -> bool {
+    false
+}
+fn default_autosuggest_enabled() -> bool {
+    true
+}
+
+pub const VALID_LANGUAGES: &[&str] = &["english", "thai", "lao", "chinese"];
+
+fn default_language() -> String {
+    "english".to_string()
+}
+
+fn default_language_active() -> bool {
+    true
+}
+
 fn default_ignored_dirs() -> HashSet<String> {
     let mut s = HashSet::new();
     s.insert("target".to_string());
@@ -157,6 +250,11 @@ impl Config {
             math_functions: HashMap::new(),
             watch_trigger_alias: None,
             qsc: None,
+            language: default_language(),
+            language_active: default_language_active(),
+            ascii_fallback: false,
+            openweather_api_key: None,
+            openweather_default_city: None,
         }
     }
 
@@ -164,10 +262,10 @@ impl Config {
     fn config_path() -> Option<PathBuf> {
         dirs::config_dir().map(|d| d.join("ntc").join("config.toml"))
     }
-    
+
     /// Load config from disk, then merge .ntconfig if present in current dir
     pub fn load() -> Self {
-        let cfg = if let Some(path) = Self::config_path() {
+        let mut cfg = if let Some(path) = Self::config_path() {
             if path.exists() {
                 match fs::read_to_string(&path) {
                     Ok(content) => {
@@ -180,7 +278,11 @@ impl Config {
                         }
                     }
                     Err(e) => {
-                        eprintln!("Warning: could not read config file '{}': {}. Using defaults.", path.display(), e);
+                        eprintln!(
+                            "Warning: could not read config file '{}': {}. Using defaults.",
+                            path.display(),
+                            e
+                        );
                         Self::new()
                     }
                 }
@@ -191,8 +293,22 @@ impl Config {
             Self::new()
         };
 
-        // Apply color override at startup
-        colored::control::set_override(cfg.color_enabled);
+        // Auto-detect terminal capabilities
+        let caps = crate::utils::terminal::detect();
+
+        // Auto-disable ANSI colors on Win7/8 (legacy conhost.exe renders codes as garbage)
+        let effective_color = cfg.color_enabled && caps.color;
+        colored::control::set_override(effective_color);
+
+        // Auto-enable ASCII fallback when piped or legacy terminal
+        if !caps.is_terminal || !caps.color {
+            cfg.ascii_fallback = true;
+        }
+        crate::utils::terminal::set_ascii_mode(cfg.ascii_fallback);
+
+        // Load the language pack directly (no GLOBAL_CONFIG access — avoids deadlock
+        // during LazyLock init of the global singleton)
+        crate::utils::config::lang::set_map(crate::utils::config::lang::load(&cfg.language));
 
         // Local ntconfig.toml is NOT merged into global Config.
         // Local settings are read separately when needed (see `get_local_config()`
@@ -370,14 +486,22 @@ impl Config {
         if let Some(path) = Self::config_path() {
             if let Some(parent) = path.parent() {
                 if let Err(e) = fs::create_dir_all(parent) {
-                    eprintln!("Warning: failed to create config directory '{}': {}", parent.display(), e);
+                    eprintln!(
+                        "Warning: failed to create config directory '{}': {}",
+                        parent.display(),
+                        e
+                    );
                     return;
                 }
             }
             match toml::to_string_pretty(self) {
                 Ok(toml) => {
                     if let Err(e) = fs::write(&path, toml) {
-                        eprintln!("Warning: failed to write config to '{}': {}", path.display(), e);
+                        eprintln!(
+                            "Warning: failed to write config to '{}': {}",
+                            path.display(),
+                            e
+                        );
                     }
                 }
                 Err(e) => {
@@ -395,9 +519,11 @@ impl Config {
         if let Some(ref custom) = self.history_path {
             Some(custom.clone())
         } else {
-            Some(std::env::current_dir()
-                .unwrap_or_else(|_| PathBuf::from("."))
-                .join("ntc_history.txt"))
+            Some(
+                std::env::current_dir()
+                    .unwrap_or_else(|_| PathBuf::from("."))
+                    .join("ntc_history.txt"),
+            )
         }
     }
 
@@ -474,10 +600,14 @@ mod tests {
     #[test]
     fn test_validate_alias_name_rejects_reserved() {
         for cmd in [
-            "go", "cd", "help", "exit", "quit", "run", "r", "ral",
-            "dino", "math", "setc", "diff", "bkup", "view", "txt",
+            "go", "cd", "help", "exit", "quit", "run", "r", "ral", "dino", "math", "setc", "diff",
+            "bkup", "view", "txt",
         ] {
-            assert!(!validate_alias_name(cmd), "reserved '{}' should be rejected", cmd);
+            assert!(
+                !validate_alias_name(cmd),
+                "reserved '{}' should be rejected",
+                cmd
+            );
         }
     }
 
@@ -496,8 +626,14 @@ mod tests {
 
     #[test]
     fn test_validate_alias_name_accepts_uppercase() {
-        assert!(validate_alias_name("GO"), "uppercase 'GO' is not in reserved list");
-        assert!(validate_alias_name("DINO"), "uppercase 'DINO' is not in reserved list");
+        assert!(
+            validate_alias_name("GO"),
+            "uppercase 'GO' is not in reserved list"
+        );
+        assert!(
+            validate_alias_name("DINO"),
+            "uppercase 'DINO' is not in reserved list"
+        );
     }
 
     #[test]
@@ -536,5 +672,3 @@ mod tests {
         assert_eq!(Config::parse_num_threads("abc"), None);
     }
 }
-
-

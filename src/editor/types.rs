@@ -2,8 +2,8 @@ use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::time::Instant;
 
-use std::sync::atomic::AtomicUsize;
 use anyhow::{Context, Result};
+use std::sync::atomic::AtomicUsize;
 
 use crate::editor::editor_config::EditorConfig;
 use crate::session::EditorSession;
@@ -224,7 +224,7 @@ impl Sidebar {
     /// Start watching the root directory for changes (Windows only).
     #[cfg(windows)]
     fn start_watcher(&mut self) {
-        use notify::{Watcher, RecursiveMode};
+        use notify::{RecursiveMode, Watcher};
         use std::sync::mpsc;
 
         let (tx, rx) = mpsc::channel();
@@ -234,7 +234,8 @@ impl Sidebar {
             if let Ok(_event) = res {
                 let _ = tx.send(());
             }
-        }).ok();
+        })
+        .ok();
 
         if let Some(ref mut w) = watcher {
             let _ = w.watch(&path, RecursiveMode::NonRecursive);
@@ -271,7 +272,8 @@ impl Sidebar {
     pub(crate) fn rebuild_tree(&mut self) {
         self.root = std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from("."));
         // Save expanded directory paths before clearing
-        let expanded: std::collections::HashSet<std::path::PathBuf> = self.nodes
+        let expanded: std::collections::HashSet<std::path::PathBuf> = self
+            .nodes
             .iter()
             .filter(|n| n.is_dir && n.expanded)
             .map(|n| n.path.clone())
@@ -287,11 +289,21 @@ impl Sidebar {
                 depth: 0,
             });
         }
-        Self::add_children(&mut self.nodes, &self.root, 0, false, &mut self.dir_cache, self.cache_ttl_secs);
+        Self::add_children(
+            &mut self.nodes,
+            &self.root,
+            0,
+            false,
+            &mut self.dir_cache,
+            self.cache_ttl_secs,
+        );
         // Restore expanded state — properly populate children of expanded dirs
         let mut i = 0;
         while i < self.nodes.len() {
-            if self.nodes[i].is_dir && !self.nodes[i].expanded && expanded.contains(&self.nodes[i].path) {
+            if self.nodes[i].is_dir
+                && !self.nodes[i].expanded
+                && expanded.contains(&self.nodes[i].path)
+            {
                 let mut children = Vec::new();
                 Self::add_children(
                     &mut children,
@@ -321,7 +333,6 @@ impl Sidebar {
         }
         None
     }
-
 
     fn read_children(dir: &std::path::Path, depth: usize) -> (Vec<FileNode>, Vec<FileNode>) {
         let entries = match std::fs::read_dir(dir) {
@@ -382,7 +393,10 @@ impl Sidebar {
             cached
         } else {
             let (dirs, files) = Self::read_children(dir, depth);
-            cache.insert(dir.to_path_buf(), (Instant::now(), dirs.clone(), files.clone()));
+            cache.insert(
+                dir.to_path_buf(),
+                (Instant::now(), dirs.clone(), files.clone()),
+            );
             (dirs, files)
         };
         if expanded {
@@ -406,7 +420,14 @@ impl Sidebar {
         self.nodes[idx].expanded = true;
         let node = self.nodes[idx].clone();
         let mut children = Vec::new();
-        Self::add_children(&mut children, &node.path, node.depth + 1, true, &mut self.dir_cache, self.cache_ttl_secs);
+        Self::add_children(
+            &mut children,
+            &node.path,
+            node.depth + 1,
+            true,
+            &mut self.dir_cache,
+            self.cache_ttl_secs,
+        );
         let insert_at = idx + 1;
         self.nodes.splice(insert_at..insert_at, children);
     }
@@ -518,7 +539,12 @@ impl GsResultList {
         self.current = None;
     }
 
-    pub(crate) fn push_back(&mut self, display: String, path: std::path::PathBuf, line_number: usize) {
+    pub(crate) fn push_back(
+        &mut self,
+        display: String,
+        path: std::path::PathBuf,
+        line_number: usize,
+    ) {
         let idx = self.nodes.len();
         let prev = self.tail;
         self.nodes.push(GsResultNode {
@@ -737,7 +763,7 @@ pub(crate) struct HexViewer {
     pub(crate) modified: bool,
     pub(crate) undo_stack: Vec<Vec<(usize, u8)>>,
     pub(crate) redo_stack: Vec<Vec<(usize, u8)>>,
-    pub(crate) nibble: bool, // false=high nibble, true=low nibble
+    pub(crate) nibble: bool,     // false=high nibble, true=low nibble
     pub(crate) pending_byte: u8, // accumulated high nibble value
 }
 
@@ -756,7 +782,8 @@ impl Editor {
         };
         let (tw, th) = crate::editor::helpers::term_size();
         let editor_cfg = EditorConfig::load();
-        let mut syntax = crate::syntax::SyntaxHighlighter::new(path.extension().and_then(|e| e.to_str()));
+        let mut syntax =
+            crate::syntax::SyntaxHighlighter::new(path.extension().and_then(|e| e.to_str()));
         syntax.resize_cache(lines.len());
         // Pre-tokenize entire file if small enough for instant scrolling
         if editor_cfg.syntax_enabled && lines.len() <= 5000 {
@@ -848,7 +875,7 @@ impl Editor {
     /// Start watching the current file for external changes (Windows only).
     #[cfg(windows)]
     pub(crate) fn start_file_watcher(&mut self) {
-        use notify::{Watcher, RecursiveMode};
+        use notify::{RecursiveMode, Watcher};
         use std::sync::mpsc;
 
         let (tx, rx) = mpsc::channel();
@@ -860,7 +887,8 @@ impl Editor {
                     let _ = tx.send(());
                 }
             }
-        }).ok();
+        })
+        .ok();
 
         if let Some(ref mut w) = watcher {
             let _ = w.watch(&path, RecursiveMode::NonRecursive);
@@ -926,15 +954,19 @@ impl Editor {
         self.sidebar.open = session.sidebar_open;
         if !session.buffer_stack.is_empty() {
             self.buffer_stack = session.buffer_stack.clone();
-            self.buffer_idx = session.buffer_idx.min(self.buffer_stack.len().saturating_sub(1));
+            self.buffer_idx = session
+                .buffer_idx
+                .min(self.buffer_stack.len().saturating_sub(1));
         }
     }
 
     /// Capture the full state of all tabs for session persistence.
     pub(crate) fn capture_full_session(&mut self) -> SessionSnapshot {
         self.save_active_tab();
-        let tabs: Vec<TabSnapshot> = self.tabs.iter().map(|tab| {
-            TabSnapshot {
+        let tabs: Vec<TabSnapshot> = self
+            .tabs
+            .iter()
+            .map(|tab| TabSnapshot {
                 path: tab.path.clone(),
                 cursor_y: tab.cursor.y,
                 cursor_byte: tab.cursor.byte,
@@ -943,8 +975,8 @@ impl Editor {
                 modified: tab.modified,
                 undo_stack: tab.undo_stack.clone(),
                 redo_stack: tab.redo_stack.clone(),
-            }
-        }).collect();
+            })
+            .collect();
         SessionSnapshot {
             tabs,
             active_tab: self.active_tab,
@@ -961,7 +993,8 @@ impl Editor {
             if idx < self.tabs.len() {
                 let max_y = self.tabs[idx].lines.len().saturating_sub(1);
                 self.tabs[idx].cursor.y = tab_snap.cursor_y.min(max_y);
-                self.tabs[idx].cursor.byte = tab_snap.cursor_byte.min(self.tabs[idx].lines[max_y].len());
+                self.tabs[idx].cursor.byte =
+                    tab_snap.cursor_byte.min(self.tabs[idx].lines[max_y].len());
                 self.tabs[idx].sv.offset = tab_snap.scroll.min(max_y);
                 self.tabs[idx].sv.x = tab_snap.scroll_x;
                 self.tabs[idx].modified = tab_snap.modified;
@@ -1020,13 +1053,14 @@ impl Editor {
                 let formatted = if func.params.is_empty() {
                     format!("{} {}", func.return_type, func.name)
                 } else {
-                    let lines: Vec<String> = func.params
+                    let lines: Vec<String> = func
+                        .params
                         .split(',')
                         .map(|p| {
                             let p = p.trim();
                             let t: Vec<&str> = p.split_whitespace().collect();
                             if t.len() >= 2 {
-                                format!("  {}: {}", t[t.len()-1], t[..t.len()-1].join(" "))
+                                format!("  {}: {}", t[t.len() - 1], t[..t.len() - 1].join(" "))
                             } else {
                                 format!("  {}", p)
                             }

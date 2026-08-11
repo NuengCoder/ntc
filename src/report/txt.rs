@@ -1,6 +1,6 @@
 // src/report/txt.rs
 use crate::config::Config;
-use crate::explorer::{generate_tree, format_tree, TreeNode};
+use crate::explorer::{format_tree, generate_tree, TreeNode};
 use crate::output::{cat_file_with_line_numbers, format_separator, write_file};
 use anyhow::Result;
 use std::path::{Path, PathBuf};
@@ -10,10 +10,10 @@ pub fn generate_txt_report(dir_path: &Path, output_path: &Path) -> Result<()> {
     let show_lines = Config::global_get_show_line_numbers();
     let max_depth = Config::global_get_max_depth();
     let tree = generate_tree(dir_path.to_string_lossy().as_ref(), None, true, None);
-    
+
     let content = build_txt_content(&dir_name, &tree, dir_path, show_lines, max_depth)?;
     write_file(output_path, &content)?;
-    
+
     Ok(())
 }
 
@@ -58,10 +58,7 @@ fn build_txt_content(
     // Supported files section
     for file_path in &supported_files {
         content.push_str(&format_separator(
-            &file_path
-                .file_name()
-                .unwrap_or_default()
-                .to_string_lossy(),
+            &file_path.file_name().unwrap_or_default().to_string_lossy(),
         ));
         content.push('\n');
 

@@ -1,8 +1,10 @@
 use anyhow::Result;
-use crossterm::event::{Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers, MouseButton, MouseEventKind};
+use crossterm::event::{
+    Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers, MouseButton, MouseEventKind,
+};
 
-use crate::editor::{Editor, Mode};
 use crate::editor::types::GsResultList;
+use crate::editor::{Editor, Mode};
 use crate::filetype::FormatConfig;
 
 impl Editor {
@@ -38,91 +40,91 @@ impl Editor {
                         self.mode = Mode::Normal;
                     }
                     _ => match code {
-                KeyCode::Esc => {
-                    if self.is_gs_mode() {
-                        self.gs_state.results.clear();
-                        self.gs_state.query.clear();
-                        self.gs_state.loading = false;
-                        self.gs_state.loading_pattern.clear();
-                    }
-                    self.mode = Mode::Normal;
-                    self.ff_query.clear();
-                    self.ff_results.clear();
-                    self.mark_all_dirty();
-                }
-                KeyCode::Enter => {
-                    if self.is_gs_mode() {
-                        if let Some(path) = self.gs_state.results.current_path() {
-                            let path = path.to_path_buf();
-                            let line = self.gs_state.results.current_line().unwrap_or(0);
-                            self.open_file(&path);
-                            if line > 0 {
-                                self.cursor.y = line.saturating_sub(1);
-                                self.cursor.byte = 0;
-                                self.scroll_visible();
+                        KeyCode::Esc => {
+                            if self.is_gs_mode() {
+                                self.gs_state.results.clear();
+                                self.gs_state.query.clear();
+                                self.gs_state.loading = false;
+                                self.gs_state.loading_pattern.clear();
                             }
+                            self.mode = Mode::Normal;
+                            self.ff_query.clear();
+                            self.ff_results.clear();
+                            self.mark_all_dirty();
                         }
-                        self.gs_state.results.clear();
-                        self.gs_state.query.clear();
-                    } else {
-                        if !self.ff_results.is_empty() {
-                            let path = self.ff_results[self.ff_idx].1.clone();
-                            let line = self.ff_results[self.ff_idx].3;
-                            self.open_file(&path);
-                            if line > 0 {
-                                self.cursor.y = line.saturating_sub(1);
-                                self.cursor.byte = 0;
-                                self.scroll_visible();
+                        KeyCode::Enter => {
+                            if self.is_gs_mode() {
+                                if let Some(path) = self.gs_state.results.current_path() {
+                                    let path = path.to_path_buf();
+                                    let line = self.gs_state.results.current_line().unwrap_or(0);
+                                    self.open_file(&path);
+                                    if line > 0 {
+                                        self.cursor.y = line.saturating_sub(1);
+                                        self.cursor.byte = 0;
+                                        self.scroll_visible();
+                                    }
+                                }
+                                self.gs_state.results.clear();
+                                self.gs_state.query.clear();
+                            } else {
+                                if !self.ff_results.is_empty() {
+                                    let path = self.ff_results[self.ff_idx].1.clone();
+                                    let line = self.ff_results[self.ff_idx].3;
+                                    self.open_file(&path);
+                                    if line > 0 {
+                                        self.cursor.y = line.saturating_sub(1);
+                                        self.cursor.byte = 0;
+                                        self.scroll_visible();
+                                    }
+                                }
+                                self.ff_results.clear();
                             }
+                            self.ff_query.clear();
+                            self.mode = Mode::Normal;
+                            self.mark_all_dirty();
                         }
-                        self.ff_results.clear();
-                    }
-                    self.ff_query.clear();
-                    self.mode = Mode::Normal;
-                    self.mark_all_dirty();
-                }
-                KeyCode::Up => {
-                    if self.is_gs_mode() {
-                        self.gs_state.results.move_prev();
-                    } else if self.ff_idx > 0 {
-                        self.ff_idx -= 1;
-                    } else {
-                        self.ff_idx = self.ff_results.len().saturating_sub(1);
-                    }
-                    self.mark_all_dirty();
-                }
-                KeyCode::Down => {
-                    if self.is_gs_mode() {
-                        self.gs_state.results.move_next();
-                    } else if self.ff_idx + 1 < self.ff_results.len() {
-                        self.ff_idx += 1;
-                    } else {
-                        self.ff_idx = 0;
-                    }
-                    self.mark_all_dirty();
-                }
-                KeyCode::Backspace => {
-                    self.ff_query.pop();
-                    if self.is_gs_mode() {
-                        self.rebuild_gs_results();
-                    } else {
-                        self.rebuild_ff_results();
-                    }
-                    self.mark_all_dirty();
-                }
-                KeyCode::Char(c) => {
-                    self.ff_query.push(c);
-                    if self.is_gs_mode() {
-                        self.rebuild_gs_results();
-                    } else {
-                        self.rebuild_ff_results();
-                    }
-                    self.mark_all_dirty();
-                }
-                _ => {}
+                        KeyCode::Up => {
+                            if self.is_gs_mode() {
+                                self.gs_state.results.move_prev();
+                            } else if self.ff_idx > 0 {
+                                self.ff_idx -= 1;
+                            } else {
+                                self.ff_idx = self.ff_results.len().saturating_sub(1);
+                            }
+                            self.mark_all_dirty();
+                        }
+                        KeyCode::Down => {
+                            if self.is_gs_mode() {
+                                self.gs_state.results.move_next();
+                            } else if self.ff_idx + 1 < self.ff_results.len() {
+                                self.ff_idx += 1;
+                            } else {
+                                self.ff_idx = 0;
+                            }
+                            self.mark_all_dirty();
+                        }
+                        KeyCode::Backspace => {
+                            self.ff_query.pop();
+                            if self.is_gs_mode() {
+                                self.rebuild_gs_results();
+                            } else {
+                                self.rebuild_ff_results();
+                            }
+                            self.mark_all_dirty();
+                        }
+                        KeyCode::Char(c) => {
+                            self.ff_query.push(c);
+                            if self.is_gs_mode() {
+                                self.rebuild_gs_results();
+                            } else {
+                                self.rebuild_ff_results();
+                            }
+                            self.mark_all_dirty();
+                        }
+                        _ => {}
                     },
                 }
-            },
+            }
             Event::Resize(w, h) => {
                 self.term_w = w as usize;
                 self.term_h = h as usize;
@@ -155,9 +157,13 @@ impl Editor {
                                 if click_idx < total {
                                     let steps = click_idx.abs_diff(cur);
                                     if click_idx > cur {
-                                        for _ in 0..steps { self.gs_state.results.move_next(); }
+                                        for _ in 0..steps {
+                                            self.gs_state.results.move_next();
+                                        }
                                     } else {
-                                        for _ in 0..steps { self.gs_state.results.move_prev(); }
+                                        for _ in 0..steps {
+                                            self.gs_state.results.move_prev();
+                                        }
                                     }
                                     self.mark_all_dirty();
                                 }
@@ -198,16 +204,14 @@ impl Editor {
                                 }
                             }
                         }
-                        MouseEventKind::ScrollUp
-                            if self.ff_idx > 0 => {
-                                self.ff_idx -= 1;
-                                self.mark_all_dirty();
-                            }
-                        MouseEventKind::ScrollDown
-                            if self.ff_idx + 1 < self.ff_results.len() => {
-                                self.ff_idx += 1;
-                                self.mark_all_dirty();
-                            }
+                        MouseEventKind::ScrollUp if self.ff_idx > 0 => {
+                            self.ff_idx -= 1;
+                            self.mark_all_dirty();
+                        }
+                        MouseEventKind::ScrollDown if self.ff_idx + 1 < self.ff_results.len() => {
+                            self.ff_idx += 1;
+                            self.mark_all_dirty();
+                        }
                         _ => {}
                     }
                 }
@@ -237,7 +241,10 @@ impl Editor {
         for m in &matches {
             let display = format!(
                 "{}:{}: {}",
-                m.file_path.file_name().map(|n| n.to_string_lossy()).unwrap_or_default(),
+                m.file_path
+                    .file_name()
+                    .map(|n| n.to_string_lossy())
+                    .unwrap_or_default(),
                 m.line_number,
                 m.line.trim()
             );
@@ -255,16 +262,16 @@ impl Editor {
             return;
         }
         let root = std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from("."));
-        let cache_fresh = self.file_index
+        let cache_fresh = self
+            .file_index
             .as_ref()
             .map(|(ts, _)| ts.elapsed().as_secs() < 10)
             .unwrap_or(false);
         if !cache_fresh {
             let ignored_dirs = crate::config::Config::get_ignored_dirs_combined();
             let fmt_cfg = FormatConfig::from_both();
-            let files: Vec<(String, std::path::PathBuf)> = crate::search::walk_files(
-                &root, 10, &ignored_dirs, &fmt_cfg,
-            ).collect();
+            let files: Vec<(String, std::path::PathBuf)> =
+                crate::search::walk_files(&root, 10, &ignored_dirs, &fmt_cfg).collect();
             self.file_index = Some((std::time::Instant::now(), files));
         }
 

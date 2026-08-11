@@ -1,15 +1,17 @@
-use image::{DynamicImage, GenericImageView};
 use anyhow::Result;
+use image::{DynamicImage, GenericImageView};
 
 /// Clean ASCII character set from dark to bright
-const ASCII_CHARS: &[char] = &[
-    ' ', '.', ':', '-', '=', '+', '*', '#', '%', '@',
-];
+const ASCII_CHARS: &[char] = &[' ', '.', ':', '-', '=', '+', '*', '#', '%', '@'];
 
 /// Convert image to clean ASCII art.
 /// No dithering — just clean character mapping for readability.
 /// max_lines: if Some, stop after that many lines.
-pub fn image_to_ascii(img: &DynamicImage, max_width: usize, max_lines: Option<usize>) -> Result<String> {
+pub fn image_to_ascii(
+    img: &DynamicImage,
+    max_width: usize,
+    max_lines: Option<usize>,
+) -> Result<String> {
     let (width, height) = img.dimensions();
     let target_width = max_width.min(width as usize);
     let target_height = (target_width as f32 / (width as f32 / height as f32)) as usize;
@@ -23,7 +25,8 @@ pub fn image_to_ascii(img: &DynamicImage, max_width: usize, max_lines: Option<us
             let src_x = (tx as f32 * width as f32 / target_width as f32) as u32;
             let pixel = img.get_pixel(src_x, src_y);
 
-            let brightness = 0.299 * pixel[0] as f32 + 0.587 * pixel[1] as f32 + 0.114 * pixel[2] as f32;
+            let brightness =
+                0.299 * pixel[0] as f32 + 0.587 * pixel[1] as f32 + 0.114 * pixel[2] as f32;
             let char_idx = ((brightness / 255.0) * (ASCII_CHARS.len() - 1) as f32) as usize;
             let char_idx = char_idx.min(ASCII_CHARS.len() - 1);
             ascii.push(ASCII_CHARS[char_idx]);

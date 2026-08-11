@@ -2,7 +2,7 @@
 //! Registers a platform-specific global hotkey. When pressed, spawns a new
 //! terminal running `ntc`. Runs as a background process (`ntc qsc daemon`).
 
-#[cfg(any(windows, target_os = "linux", target_os = "macos"))]
+#[cfg(any(windows, target_os = "linux"))]
 use crate::config::QscHotkey;
 use std::path::PathBuf;
 
@@ -250,8 +250,14 @@ fn open_ntc_terminal() {
                 continue;
             }
             let result = match term.as_str() {
-                "gnome-terminal" => std::process::Command::new(term).arg("--").arg("ntc").spawn(),
-                _ => std::process::Command::new(term).arg("-e").arg("ntc").spawn(),
+                "gnome-terminal" => std::process::Command::new(term)
+                    .arg("--")
+                    .arg("ntc")
+                    .spawn(),
+                _ => std::process::Command::new(term)
+                    .arg("-e")
+                    .arg("ntc")
+                    .spawn(),
             };
             if result.is_ok() {
                 return;
@@ -298,7 +304,13 @@ mod platform {
     extern "system" {
         fn RegisterHotKey(h_wnd: isize, id: i32, fs_modifiers: Uint, vk: Uint) -> Bool;
         fn UnregisterHotKey(h_wnd: isize, id: i32) -> Bool;
-        fn PeekMessageW(msg: *mut Msg, h_wnd: isize, w_msg_filter_min: Uint, w_msg_filter_max: Uint, w_remove_msg: Uint) -> Bool;
+        fn PeekMessageW(
+            msg: *mut Msg,
+            h_wnd: isize,
+            w_msg_filter_min: Uint,
+            w_msg_filter_max: Uint,
+            w_remove_msg: Uint,
+        ) -> Bool;
         fn TranslateMessage(msg: *const Msg) -> Bool;
         fn DispatchMessageW(msg: *const Msg) -> isize;
     }
@@ -312,19 +324,33 @@ mod platform {
             return None;
         }
         match key {
-            "F1" => Some(0x70), "F2" => Some(0x71), "F3" => Some(0x72),
-            "F4" => Some(0x73), "F5" => Some(0x74), "F6" => Some(0x75),
-            "F7" => Some(0x76), "F8" => Some(0x77), "F9" => Some(0x78),
-            "F10" => Some(0x79), "F11" => Some(0x7A), "F12" => Some(0x7B),
+            "F1" => Some(0x70),
+            "F2" => Some(0x71),
+            "F3" => Some(0x72),
+            "F4" => Some(0x73),
+            "F5" => Some(0x74),
+            "F6" => Some(0x75),
+            "F7" => Some(0x76),
+            "F8" => Some(0x77),
+            "F9" => Some(0x78),
+            "F10" => Some(0x79),
+            "F11" => Some(0x7A),
+            "F12" => Some(0x7B),
             _ => None,
         }
     }
 
     fn modifiers_mask(hk: &QscHotkey) -> Uint {
         let mut m = MOD_NOREPEAT;
-        if hk.ctrl  { m |= MOD_CONTROL; }
-        if hk.shift { m |= MOD_SHIFT; }
-        if hk.alt   { m |= MOD_ALT; }
+        if hk.ctrl {
+            m |= MOD_CONTROL;
+        }
+        if hk.shift {
+            m |= MOD_SHIFT;
+        }
+        if hk.alt {
+            m |= MOD_ALT;
+        }
         m
     }
 
@@ -339,7 +365,9 @@ mod platform {
 
     pub(crate) fn run_daemon_loop() -> ! {
         // Detach from the console so no window stays visible at boot
-        unsafe { FreeConsole(); }
+        unsafe {
+            FreeConsole();
+        }
 
         // Reload config to get latest QSC setting
         crate::config::Config::reload_global();
@@ -358,7 +386,9 @@ mod platform {
                 if new_hk != hk {
                     // Unregister old, register new
                     if registered {
-                        unsafe { UnregisterHotKey(0, 1); }
+                        unsafe {
+                            UnregisterHotKey(0, 1);
+                        }
                         registered = false;
                     }
                     hk = new_hk;
@@ -394,7 +424,9 @@ mod platform {
             if !pid_path().exists() {
                 // Clean up and exit
                 if registered {
-                    unsafe { UnregisterHotKey(0, 1); }
+                    unsafe {
+                        UnregisterHotKey(0, 1);
+                    }
                 }
                 std::process::exit(0);
             }
@@ -420,19 +452,33 @@ mod platform {
         }
         // F1-F12 mapping
         match key {
-            "F1" => Some(0xFFBE), "F2" => Some(0xFFBF), "F3" => Some(0xFFC0),
-            "F4" => Some(0xFFC1), "F5" => Some(0xFFC2), "F6" => Some(0xFFC3),
-            "F7" => Some(0xFFC4), "F8" => Some(0xFFC5), "F9" => Some(0xFFC6),
-            "F10" => Some(0xFFC7), "F11" => Some(0xFFC8), "F12" => Some(0xFFC9),
+            "F1" => Some(0xFFBE),
+            "F2" => Some(0xFFBF),
+            "F3" => Some(0xFFC0),
+            "F4" => Some(0xFFC1),
+            "F5" => Some(0xFFC2),
+            "F6" => Some(0xFFC3),
+            "F7" => Some(0xFFC4),
+            "F8" => Some(0xFFC5),
+            "F9" => Some(0xFFC6),
+            "F10" => Some(0xFFC7),
+            "F11" => Some(0xFFC8),
+            "F12" => Some(0xFFC9),
             _ => None,
         }
     }
 
     fn x11_mod_mask(hk: &QscHotkey) -> ModMask {
         let mut m = ModMask::default();
-        if hk.ctrl  { m |= ModMask::CONTROL; }
-        if hk.shift { m |= ModMask::SHIFT; }
-        if hk.alt   { m |= ModMask::M1; }
+        if hk.ctrl {
+            m |= ModMask::CONTROL;
+        }
+        if hk.shift {
+            m |= ModMask::SHIFT;
+        }
+        if hk.alt {
+            m |= ModMask::M1;
+        }
         m
     }
 
@@ -444,7 +490,10 @@ mod platform {
         std::fs::metadata(&p).ok().and_then(|m| m.modified().ok())
     }
 
-    fn keysym_to_keycode(conn: &(impl x11rb::protocol::xproto::ConnectionExt + x11rb::connection::Connection), keysym: u32) -> Option<u8> {
+    fn keysym_to_keycode(
+        conn: &(impl x11rb::protocol::xproto::ConnectionExt + x11rb::connection::Connection),
+        keysym: u32,
+    ) -> Option<u8> {
         let setup = conn.setup();
         let min = setup.min_keycode;
         let max = setup.max_keycode;
@@ -504,7 +553,14 @@ mod platform {
                         let kc = keysym_to_keycode(&conn, ks);
                         if let Some(kc) = kc {
                             let mods = x11_mod_mask(hotkey);
-                            let _ = conn.grab_key(false, root, mods, kc, GrabMode::ASYNC, GrabMode::ASYNC);
+                            let _ = conn.grab_key(
+                                false,
+                                root,
+                                mods,
+                                kc,
+                                GrabMode::ASYNC,
+                                GrabMode::ASYNC,
+                            );
                             conn.flush().ok();
                             current_grab = Some((kc, mods));
                             registered = true;
@@ -536,19 +592,19 @@ mod platform {
 
 #[cfg(target_os = "macos")]
 mod platform {
-    use super::*;
-
+    use crate::t;
     pub(crate) fn run_daemon_loop() -> ! {
-        eprintln!("QSC: macOS global hotkey support not yet implemented.");
-        eprintln!("QSC: Run 'qsc listen' once support is added.");
+        eprintln!("{}", t!("qsc.macos_not_implemented"));
+        eprintln!("{}", t!("qsc.macos_listen_hint"));
         std::process::exit(1);
     }
 }
 
 #[cfg(not(any(windows, target_os = "linux", target_os = "macos")))]
 mod platform {
+    use crate::t;
     pub(crate) fn run_daemon_loop() -> ! {
-        eprintln!("QSC: unsupported platform");
+        eprintln!("{}", t!("qsc.unsupported_platform"));
         std::process::exit(1);
     }
 }

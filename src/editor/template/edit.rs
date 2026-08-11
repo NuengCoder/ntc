@@ -4,16 +4,20 @@ use anyhow::Result;
 
 use crate::editor::Editor;
 use crate::session::EditorSession;
+use crate::t;
 
 pub fn edit_file(path: &Path) -> Result<bool> {
     edit_file_with_session(path, None).map(|(r, _)| r)
 }
 
-pub fn edit_file_with_session(path: &Path, restored: Option<EditorSession>) -> Result<(bool, Option<EditorSession>)> {
+pub fn edit_file_with_session(
+    path: &Path,
+    restored: Option<EditorSession>,
+) -> Result<(bool, Option<EditorSession>)> {
     if let Some(data) = crate::editor::recovery::RecoveryData::check_recovery(path) {
-        eprintln!("\nCrash recovery file found for: {}", path.display());
-        eprintln!("Last saved: {}", data.timestamp);
-        eprint!("Recover unsaved changes? [Y/N]: ");
+        eprintln!("\n{} {}", t!("editor.tmpl_recovery_found"), path.display());
+        eprintln!("{} {}", t!("editor.tmpl_last_saved"), data.timestamp);
+        eprint!("{}", t!("editor.tmpl_recover_prompt"));
         use std::io::Write;
         let _ = std::io::stdout().flush();
         let mut input = String::new();
@@ -59,16 +63,19 @@ pub fn edit_file_with_session(path: &Path, restored: Option<EditorSession>) -> R
     };
     if has_session_snapshot {
         let snapshot = crate::session::SessionState::read_global()
-            .session_snapshot.clone().unwrap();
+            .session_snapshot
+            .clone()
+            .unwrap();
         let max_age_hours = editor.editor_cfg.session_max_age_hours;
-        let is_recent = chrono::NaiveDateTime::parse_from_str(&snapshot.timestamp, "%Y-%m-%d %H:%M:%S")
-            .ok()
-            .map(|dt| {
-                let now = chrono::Local::now().naive_local();
-                let age = now.signed_duration_since(dt).num_hours();
-                age < max_age_hours as i64
-            })
-            .unwrap_or(false);
+        let is_recent =
+            chrono::NaiveDateTime::parse_from_str(&snapshot.timestamp, "%Y-%m-%d %H:%M:%S")
+                .ok()
+                .map(|dt| {
+                    let now = chrono::Local::now().naive_local();
+                    let age = now.signed_duration_since(dt).num_hours();
+                    age < max_age_hours as i64
+                })
+                .unwrap_or(false);
         if is_recent && !snapshot.tabs.is_empty() {
             let mut first_path = None;
             for tab_snap in &snapshot.tabs {

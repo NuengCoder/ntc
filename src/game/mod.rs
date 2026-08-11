@@ -1,15 +1,16 @@
+use crate::t;
 use anyhow::{bail, Result};
 use crossterm::{
-    cursor::{Hide, Show, MoveTo},
+    cursor::{Hide, MoveTo, Show},
     event::{self, Event, KeyCode, KeyEventKind},
     execute,
-    terminal::{self, EnterAlternateScreen, LeaveAlternateScreen},
     style::Print,
+    terminal::{self, EnterAlternateScreen, LeaveAlternateScreen},
 };
 use serde::{Deserialize, Serialize};
-use std::time::{Duration, Instant};
 use std::io::{stdout, Write};
 use std::path::PathBuf;
+use std::time::{Duration, Instant};
 
 const W: usize = 60;
 const H: usize = 20;
@@ -61,7 +62,11 @@ struct Dino {
 
 impl Dino {
     fn new() -> Self {
-        Self { y: 0.0, vy: 0.0, jumping: false }
+        Self {
+            y: 0.0,
+            vy: 0.0,
+            jumping: false,
+        }
     }
 
     fn jump(&mut self) {
@@ -139,14 +144,22 @@ impl Bird {
     }
 }
 
-fn frame_buffer(score: u64, high_score: u64, speed: f64, sy: usize, spikes: &[Spike], birds: &[Bird], over: bool) -> String {
+fn frame_buffer(
+    score: u64,
+    high_score: u64,
+    speed: f64,
+    sy: usize,
+    spikes: &[Spike],
+    birds: &[Bird],
+    over: bool,
+) -> String {
     let mut buf = String::with_capacity(W * H * 4);
 
     let spd = speed / 2.0;
-    let top = format!(
-        " DINO RUNNER   SCORE:{:04}   HI:{:04}   SPD:{:.1}x ",
-        score, high_score, spd
-    );
+    let score_str = format!("{:04}", score);
+    let hi_str = format!("{:04}", high_score);
+    let spd_str = format!("{:.1}", spd);
+    let top = t!("game.dino_header", score_str, hi_str, spd_str);
     buf.push_str(&format!("┌{}┐\n", "─".repeat(W)));
     buf.push_str(&format!("│{:w$}│\n", top, w = W));
     buf.push_str(&format!("├{}┤\n", "─".repeat(W)));
@@ -181,13 +194,32 @@ fn frame_buffer(score: u64, high_score: u64, speed: f64, sy: usize, spikes: &[Sp
             if (DINO_X..DINO_X + 4).contains(&col) && !over {
                 let drow = sy;
                 if row == drow.saturating_sub(3) {
-                    ch = if col == DINO_X + 1 || col == DINO_X + 2 { '▀' } else { ' ' };
+                    ch = if col == DINO_X + 1 || col == DINO_X + 2 {
+                        '▀'
+                    } else {
+                        ' '
+                    };
                 } else if row == drow.saturating_sub(2) {
-                    ch = match col - DINO_X { 0 => '█', 1 => '█', 2 => '█', _ => ' ' };
+                    ch = match col - DINO_X {
+                        0 => '█',
+                        1 => '█',
+                        2 => '█',
+                        _ => ' ',
+                    };
                 } else if row == drow.saturating_sub(1) {
-                    ch = match col - DINO_X { 0 => '╱', 1 => '█', 2 => '█', 3 => '╲', _ => ' ' };
+                    ch = match col - DINO_X {
+                        0 => '╱',
+                        1 => '█',
+                        2 => '█',
+                        3 => '╲',
+                        _ => ' ',
+                    };
                 } else if row == drow {
-                    ch = if col == DINO_X + 1 || col == DINO_X + 2 { '▄' } else { ' ' };
+                    ch = if col == DINO_X + 1 || col == DINO_X + 2 {
+                        '▄'
+                    } else {
+                        ' '
+                    };
                 }
             }
 
@@ -199,11 +231,13 @@ fn frame_buffer(score: u64, high_score: u64, speed: f64, sy: usize, spikes: &[Sp
                     2 => col % 4 == 2 || col % 4 == 3,
                     _ => col % 4 == 0 || col % 4 == 3,
                 };
-                if is_ground && ch == ' ' { ch = '▄'; }
+                if is_ground && ch == ' ' {
+                    ch = '▄';
+                }
             }
 
             if over && (GROUND / 2 - 1..=GROUND / 2 + 1).contains(&row) {
-                let msg = " GAME OVER ";
+                let msg = &t!("game.over_msg");
                 let start = W / 2 - 5;
                 if col >= start && col < start + msg.len() {
                     let idx = col - start;
@@ -219,9 +253,9 @@ fn frame_buffer(score: u64, high_score: u64, speed: f64, sy: usize, spikes: &[Sp
     buf.push_str(&format!("└{}┘\n", "─".repeat(W)));
 
     if over {
-        buf.push_str(&format!("{:^w$}\n", "SPACE / ENTER = restart    ESC = quit", w = W + 2));
+        buf.push_str(&format!("{:^w$}\n", t!("game.restart_hint"), w = W + 2));
     } else {
-        buf.push_str(&format!("{:^w$}\n", "SPACE / UP = jump    ESC = quit", w = W + 2));
+        buf.push_str(&format!("{:^w$}\n", t!("game.jump_hint"), w = W + 2));
     }
 
     buf
@@ -266,9 +300,16 @@ fn _run() -> Result<()> {
                 spawn_timer = 0.0;
 
                 let spawn_bird = score > 30 && (score / 50).is_multiple_of(2);
-                let too_close = if !spikes.is_empty() { W - spikes.last().unwrap().x <= 18 } else { false };
+                let too_close = if !spikes.is_empty() {
+                    W - spikes.last().unwrap().x <= 18
+                } else {
+                    false
+                };
 
-                if spawn_bird && !too_close && (birds.is_empty() || W - birds.last().unwrap().x > 25) {
+                if spawn_bird
+                    && !too_close
+                    && (birds.is_empty() || W - birds.last().unwrap().x > 25)
+                {
                     birds.push(Bird::new(W));
                 } else if !too_close {
                     spikes.push(Spike::new(W));
@@ -307,11 +348,10 @@ fn _run() -> Result<()> {
                     }
                 }
             }
-            if over
-                && score > high_score {
-                    high_score = score;
-                    DinoConfig { high_score }.save();
-                }
+            if over && score > high_score {
+                high_score = score;
+                DinoConfig { high_score }.save();
+            }
         }
 
         let sy = dino.sy();
@@ -346,10 +386,9 @@ fn _run() -> Result<()> {
                                 dino.jump();
                             }
                         }
-                        KeyCode::Up
-                            if !over => {
-                                dino.jump();
-                            }
+                        KeyCode::Up if !over => {
+                            dino.jump();
+                        }
                         _ => {}
                     }
                 }
@@ -359,20 +398,19 @@ fn _run() -> Result<()> {
 
     terminal::disable_raw_mode()?;
     execute!(stdout(), LeaveAlternateScreen, Show)?;
-    println!("Score: {}  |  High Score: {}  |  Saved: dino.toml", score, high_score);
+    println!("{}", t!("game.final_score", score, high_score));
     Ok(())
 }
 
 pub fn run() -> Result<()> {
-    let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| -> Result<()> {
-        _run()
-    }));
+    let result =
+        std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| -> Result<()> { _run() }));
     match result {
         Ok(r) => r,
         Err(_) => {
             let _ = terminal::disable_raw_mode();
             let _ = execute!(stdout(), LeaveAlternateScreen, Show);
-            bail!("Game crashed — terminal state restored");
+            bail!(t!("game.crashed"));
         }
     }
 }

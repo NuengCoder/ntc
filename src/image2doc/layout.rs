@@ -2,10 +2,10 @@
 // Real UI layout detection using edge gradients, connected-component analysis,
 // and heuristic pattern matching for UI elements
 
-use image::{DynamicImage, GenericImageView, GrayImage, Luma};
 use anyhow::Result;
+use image::{DynamicImage, GenericImageView, GrayImage, Luma};
 
-use crate::image2doc::analyzer::{LayoutElement, ElementType};
+use crate::image2doc::analyzer::{ElementType, LayoutElement};
 
 /// Detect layout elements in an image using edge analysis and region grouping
 pub fn detect_layout(img: &DynamicImage) -> Result<Vec<LayoutElement>> {
@@ -59,8 +59,8 @@ struct Region {
     y: u32,
     width: u32,
     height: u32,
-    edge_density: f32,  // Average edge strength within region
-    pixel_count: u32,   // Number of non-background pixels
+    edge_density: f32, // Average edge strength within region
+    pixel_count: u32,  // Number of non-background pixels
 }
 
 /// Find connected regions of high edge activity
@@ -256,9 +256,10 @@ fn classify_regions(
 
         if confidence > 0.2 {
             let font_size = match element_type {
-                ElementType::Heading | ElementType::Paragraph | ElementType::TextField | ElementType::Button => {
-                    estimate_font_size(region, img)
-                }
+                ElementType::Heading
+                | ElementType::Paragraph
+                | ElementType::TextField
+                | ElementType::Button => estimate_font_size(region, img),
                 _ => None,
             };
 
@@ -275,7 +276,12 @@ fn classify_regions(
     elements
 }
 
-fn classify_single_region(region: &Region, img_w: u32, img_h: u32, img: &DynamicImage) -> ElementType {
+fn classify_single_region(
+    region: &Region,
+    img_w: u32,
+    img_h: u32,
+    img: &DynamicImage,
+) -> ElementType {
     let rw = region.width as f32;
     let rh = region.height as f32;
     let aspect = rw / rh;
@@ -285,7 +291,8 @@ fn classify_single_region(region: &Region, img_w: u32, img_h: u32, img: &Dynamic
     let is_square = aspect > 0.7 && aspect < 1.4;
     let is_top = region.y < img_h / 4;
     let is_bottom = region.y + region.height > img_h * 3 / 4;
-    let is_center_x = region.x + region.width / 2 > img_w / 3 && region.x + region.width / 2 < img_w * 2 / 3;
+    let is_center_x =
+        region.x + region.width / 2 > img_w / 3 && region.x + region.width / 2 < img_w * 2 / 3;
     let rel_h = rh / img_h as f32; // relative height as fraction of image
 
     // Check color properties
@@ -344,42 +351,66 @@ fn compute_confidence(element_type: &ElementType, region: &Region, img_w: u32, i
     match element_type {
         ElementType::Button => {
             let mut c: f32 = 0.5;
-            if region.edge_density > 0.3 { c += 0.2; }
-            if rel_pixels > 0.001 { c += 0.15; }
+            if region.edge_density > 0.3 {
+                c += 0.2;
+            }
+            if rel_pixels > 0.001 {
+                c += 0.15;
+            }
             c.min(0.95_f32)
         }
         ElementType::Heading => {
             let mut c: f32 = 0.5;
-            if rel_y < 0.05 { c += 0.2; }
-            if region.edge_density > 0.2 { c += 0.15; }
+            if rel_y < 0.05 {
+                c += 0.2;
+            }
+            if region.edge_density > 0.2 {
+                c += 0.15;
+            }
             c.min(0.95_f32)
         }
         ElementType::TextField => {
             let mut c: f32 = 0.4;
-            if rel_w > 0.1 { c += 0.2; }
-            if region.edge_density > 0.25 { c += 0.15; }
+            if rel_w > 0.1 {
+                c += 0.2;
+            }
+            if region.edge_density > 0.25 {
+                c += 0.15;
+            }
             c.min(0.9_f32)
         }
         ElementType::Paragraph => {
             let mut c: f32 = 0.4;
-            if region.edge_density > 0.3 { c += 0.2; }
-            if rel_pixels > 0.002 { c += 0.15; }
+            if region.edge_density > 0.3 {
+                c += 0.2;
+            }
+            if rel_pixels > 0.002 {
+                c += 0.15;
+            }
             c.min(0.85_f32)
         }
         ElementType::Image => {
             let mut c: f32 = 0.5;
-            if region.edge_density > 0.4 { c += 0.2; }
+            if region.edge_density > 0.4 {
+                c += 0.2;
+            }
             c.min(0.9_f32)
         }
         ElementType::Logo => {
             let mut c: f32 = 0.4;
-            if region.edge_density < 0.3 { c += 0.2; }
-            if rel_w < 0.15 && rel_h < 0.15 { c += 0.15; }
+            if region.edge_density < 0.3 {
+                c += 0.2;
+            }
+            if rel_w < 0.15 && rel_h < 0.15 {
+                c += 0.15;
+            }
             c.min(0.85_f32)
         }
         ElementType::Separator => {
             let mut c: f32 = 0.6;
-            if rel_h < 0.005 { c += 0.2; }
+            if rel_h < 0.005 {
+                c += 0.2;
+            }
             c.min(0.95_f32)
         }
     }

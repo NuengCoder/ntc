@@ -6,6 +6,7 @@ use super::super::download::{download_with_progress, extract_archive, find_binar
 use super::super::manager::{copy_recursive, load_manifest, platform_key, save_manifest};
 use super::super::types::PackageSource;
 use crate::output::{print_info, print_success};
+use crate::t;
 
 pub(crate) fn install_sqlite(
     name: &str,
@@ -35,7 +36,7 @@ pub(crate) fn install_sqlite(
     print_info(&format!("Downloading {name} {version}..."));
     download_with_progress(url, &archive_path)?;
 
-    print_info("Extracting...");
+    print_info(&t!("ntpkg.extracting"));
     extract_archive(&archive_path, &tmp_dir, source.archive_type)?;
 
     let sqlite3_bin = find_binary(&tmp_dir, "sqlite3")
@@ -47,7 +48,10 @@ pub(crate) fn install_sqlite(
     fs::create_dir_all(vdir)?;
     copy_recursive(sqlite3_dir, &vdir.join("bin"))?;
 
-    fs::write(vdir.join(".real_path"), vdir.join("bin").to_string_lossy().as_bytes())?;
+    fs::write(
+        vdir.join(".real_path"),
+        vdir.join("bin").to_string_lossy().as_bytes(),
+    )?;
 
     let _ = fs::remove_dir_all(&tmp_dir);
 
@@ -60,5 +64,3 @@ pub(crate) fn install_sqlite(
 
     Ok(())
 }
-
-

@@ -50,16 +50,36 @@ pub struct EditorConfig {
     pub session_max_age_hours: u64,
 }
 
-fn default_tab_size() -> usize { 4 }
-fn default_cursor_blink_rate() -> u64 { 500 }
-fn default_undo_depth() -> usize { 200 }
-fn default_max_buffers() -> usize { 16 }
-fn default_max_tabs() -> usize { 32 }
-fn default_max_run_lines() -> usize { 100_000 }
-fn default_pre_tokenize_lines() -> usize { 150 }
-fn default_poll_rate_ms() -> u64 { 8 }
-fn default_session_auto_save_secs() -> u64 { 30 }
-fn default_session_max_age_hours() -> u64 { 24 }
+fn default_tab_size() -> usize {
+    4
+}
+fn default_cursor_blink_rate() -> u64 {
+    500
+}
+fn default_undo_depth() -> usize {
+    200
+}
+fn default_max_buffers() -> usize {
+    16
+}
+fn default_max_tabs() -> usize {
+    32
+}
+fn default_max_run_lines() -> usize {
+    100_000
+}
+fn default_pre_tokenize_lines() -> usize {
+    150
+}
+fn default_poll_rate_ms() -> u64 {
+    8
+}
+fn default_session_auto_save_secs() -> u64 {
+    30
+}
+fn default_session_max_age_hours() -> u64 {
+    24
+}
 
 fn default_true() -> bool {
     true

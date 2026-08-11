@@ -19,7 +19,8 @@ if (-not (Get-Command cargo -ErrorAction SilentlyContinue)) {
     exit 1
 }
 
-# Build release binary
+# Build release binary (statically link CRT to avoid vcruntime140.dll dependency)
+$env:RUSTFLAGS = "-Ctarget-feature=+crt-static"
 cargo build --release
 
 if ($LASTEXITCODE -ne 0) {

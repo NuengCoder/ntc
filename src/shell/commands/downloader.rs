@@ -9,6 +9,7 @@ use std::time::{Duration, Instant};
 
 use crate::navigator::Navigator;
 use crate::output::{print_error, print_info, print_success, print_warning};
+use crate::t;
 use std::net::ToSocketAddrs;
 
 #[derive(Serialize, Deserialize)]
@@ -67,7 +68,12 @@ pub fn cmd_dl(args: &str, _nav: &mut Navigator) -> Result<bool> {
         match tokens[i].as_str() {
             "-o" | "--output" => {
                 i += 1;
-                output = Some(tokens.get(i).ok_or_else(|| anyhow::anyhow!("Missing filename after -o"))?.clone());
+                output = Some(
+                    tokens
+                        .get(i)
+                        .ok_or_else(|| anyhow::anyhow!("{}", t!("dl.missing_o")))?
+                        .clone(),
+                );
             }
             "--progress" => progress = true,
             "--resume" => resume = true,
@@ -75,8 +81,12 @@ pub fn cmd_dl(args: &str, _nav: &mut Navigator) -> Result<bool> {
             "--cancel" | "--cancle" => {
                 i += 1;
                 cancel = true;
-                url = tokens.get(i).ok_or_else(|| anyhow::anyhow!("Missing URL/name after --cancel"))?.clone();
+                url = tokens
+                    .get(i)
+                    .ok_or_else(|| anyhow::anyhow!("{}", t!("dl.missing_cancel")))?
+                    .clone();
             }
+            "--" => break,
             _ => {
                 if url.is_empty() {
                     url = tokens[i].clone();
@@ -93,16 +103,16 @@ pub fn cmd_dl(args: &str, _nav: &mut Navigator) -> Result<bool> {
         return cmd_dl_cancel(&url);
     }
     if url.is_empty() {
-        anyhow::bail!("URL is required. Usage: dl <url>");
+        anyhow::bail!("{}", t!("dl.url_required"));
     }
 
     do_download(&url, output.as_deref(), progress, resume)
 }
 
 fn do_download(url: &str, output: Option<&str>, show_progress: bool, resume: bool) -> Result<bool> {
-    let filename = output.map(|s| s.to_string()).unwrap_or_else(|| {
-        url.rsplit('/').next().unwrap_or("download").to_string()
-    });
+    let filename = output
+        .map(|s| s.to_string())
+        .unwrap_or_else(|| url.rsplit('/').next().unwrap_or("download").to_string());
     let path = PathBuf::from(&filename);
     let part_path = path.with_extension("part");
 
@@ -129,15 +139,15 @@ fn do_download(url: &str, output: Option<&str>, show_progress: bool, resume: boo
         req = req.header("Range", &format!("bytes={}-", existing_size));
     }
 
-    let response = req.call().with_context(|| format!("Failed to download {}", url))?;
+    let response = req.call().with_context(|| t!("dl.failed_download", url))?;
     let status = response.status();
 
     if status == 404 {
-        print_error(&format!("URL not found (404): {}", url));
+        print_error(&t!("dl.not_found_404", url));
         return Ok(false);
     }
     if !status.is_success() && status != 206 {
-        anyhow::bail!("HTTP {}: {}", status.as_u16(), url);
+        anyhow::bail!("{}", t!("dl.http_error", status.as_u16(), url));
     }
 
     let total = response
@@ -145,17 +155,20 @@ fn do_download(url: &str, output: Option<&str>, show_progress: bool, resume: boo
         .get("content-length")
         .and_then(|v| v.to_str().ok())
         .and_then(|v| v.parse::<u64>().ok())
-        .unwrap_or(0) + existing_size;
+        .unwrap_or(0)
+        + existing_size;
 
     let download_path = if resume { &part_path } else { &path };
 
     let mut file = fs::File::create(download_path)
-        .with_context(|| format!("Failed to create {}", download_path.display()))?;
+        .with_context(|| t!("dl.failed_create", download_path.display()))?;
 
     if existing_size > 0 && status == 206 {
         // Append mode for resume
-        file = fs::OpenOptions::new().append(true).open(download_path)
-            .with_context(|| format!("Failed to open {} for append", download_path.display()))?;
+        file = fs::OpenOptions::new()
+            .append(true)
+            .open(download_path)
+            .with_context(|| t!("dl.failed_append", download_path.display()))?;
     }
 
     let pb = if show_progress {
@@ -166,7 +179,7 @@ fn do_download(url: &str, output: Option<&str>, show_progress: bool, resume: boo
                 .unwrap_or_else(|_| ProgressStyle::default_bar())
                 .progress_chars("##-"),
         );
-        bar.set_message(format!("Downloading {}", &filename));
+        bar.set_message(t!("dl.downloading", &filename));
         if existing_size > 0 {
             bar.set_position(existing_size);
         }
@@ -182,9 +195,12 @@ fn do_download(url: &str, output: Option<&str>, show_progress: bool, resume: boo
     let mut reader = body.as_reader();
 
     loop {
-        let n = reader.read(&mut chunk)
+        let n = reader
+            .read(&mut chunk)
             .context("Failed to read download stream")?;
-        if n == 0 { break; }
+        if n == 0 {
+            break;
+        }
         file.write_all(&chunk[..n])
             .context("Failed to write downloaded data")?;
         downloaded += n as u64;
@@ -199,13 +215,16 @@ fn do_download(url: &str, output: Option<&str>, show_progress: bool, resume: boo
 
     if resume && status == 206 {
         // Rename .part to final name on successful resume
-        fs::rename(&part_path, &path)
-            .context("Failed to finalize resumed download")?;
+        fs::rename(&part_path, &path).context("Failed to finalize resumed download")?;
     }
 
     let elapsed = start.elapsed();
     let ms = elapsed.as_millis();
-    let speed = if ms > 0 { downloaded as f64 / ms as f64 * 1000.0 } else { 0.0 };
+    let speed = if ms > 0 {
+        downloaded as f64 / ms as f64 * 1000.0
+    } else {
+        0.0
+    };
     let speed_str = if speed >= 1_000_000.0 {
         format!("{:.1} MB/s", speed / 1_000_000.0)
     } else if speed >= 1000.0 {
@@ -220,7 +239,13 @@ fn do_download(url: &str, output: Option<&str>, show_progress: bool, resume: boo
         format!("{:.1}s", ms as f64 / 1000.0)
     };
 
-    print_success(&format!("Downloaded {} ({} in {}, {})", filename, format_size(downloaded), time_str, speed_str));
+    print_success(&t!(
+        "dl.completed",
+        filename,
+        format_size(downloaded),
+        time_str,
+        speed_str
+    ));
 
     // Save record
     let mut records = load_records();
@@ -239,20 +264,27 @@ fn do_download(url: &str, output: Option<&str>, show_progress: bool, resume: boo
 fn cmd_dl_stop() -> Result<bool> {
     let records = load_records();
     if records.is_empty() {
-        print_info("No downloads recorded yet.");
+        print_info(&t!("dl.no_records"));
         return Ok(false);
     }
-    println!("{}", "Download History:".bold());
+    println!("{}", t!("dl.history_title").bold());
     println!();
     for (i, r) in records.iter().enumerate() {
         let status_color = match r.status.as_str() {
             "completed" => "OK".green(),
             _ => r.status.yellow(),
         };
-        println!(" {}. {}  {}  {}  {}", i + 1, status_color, format_size(r.size), r.time, r.file.dimmed());
+        println!(
+            " {}. {}  {}  {}  {}",
+            i + 1,
+            status_color,
+            format_size(r.size),
+            r.time,
+            r.file.dimmed()
+        );
     }
     println!();
-    print_info("Use 'dl --cancel <number|url>' to remove a record.");
+    print_info(&t!("dl.cancel_hint"));
     Ok(false)
 }
 
@@ -264,15 +296,17 @@ fn cmd_dl_cancel(target: &str) -> Result<bool> {
         if i < records.len() {
             Some(records.remove(i))
         } else {
-            print_error("Invalid index");
+            print_error(&t!("dl.invalid_index"));
             return Ok(false);
         }
     } else {
-        let pos = records.iter().position(|r| r.url == target || r.file == target);
+        let pos = records
+            .iter()
+            .position(|r| r.url == target || r.file == target);
         if let Some(i) = pos {
             Some(records.remove(i))
         } else {
-            print_error(&format!("No download record found for: {}", target));
+            print_error(&t!("dl.not_found", target));
             return Ok(false);
         }
     };
@@ -285,10 +319,10 @@ fn cmd_dl_cancel(target: &str) -> Result<bool> {
             let _ = fs::remove_file(&part);
         }
         if path.exists() {
-            print_warning(&format!("File '{}' still exists. Remove manually if desired.", rec.file));
+            print_warning(&t!("dl.file_still_exists", rec.file));
         }
         save_records(&records);
-        print_success(&format!("Removed download record: {}", rec.file));
+        print_success(&t!("dl.removed_record", rec.file));
     }
 
     Ok(false)
@@ -314,18 +348,26 @@ pub fn cmd_up(args: &str, _nav: &mut Navigator) -> Result<bool> {
         match tokens[i].as_str() {
             "-H" | "--header" => {
                 i += 1;
-                let h = tokens.get(i).ok_or_else(|| anyhow::anyhow!("Missing header value after -H"))?;
+                let h = tokens
+                    .get(i)
+                    .ok_or_else(|| anyhow::anyhow!("{}", t!("dl.missing_header")))?;
                 if let Some((k, v)) = h.split_once(':') {
                     headers.push((k.trim().to_string(), v.trim().to_string()));
                 } else {
-                    anyhow::bail!("Invalid header format, expected \"Key: Value\", got: {}", h);
+                    anyhow::bail!("{}", t!("dl.invalid_header", h));
                 }
             }
             "-d" | "--data" => {
                 i += 1;
-                data = Some(tokens.get(i).ok_or_else(|| anyhow::anyhow!("Missing data after -d"))?.clone());
+                data = Some(
+                    tokens
+                        .get(i)
+                        .ok_or_else(|| anyhow::anyhow!("{}", t!("dl.missing_data")))?
+                        .clone(),
+                );
             }
             "--post" => method = "POST",
+            "--" => break,
             _ => {
                 if file_path.is_none() {
                     file_path = Some(tokens[i].clone());
@@ -338,22 +380,32 @@ pub fn cmd_up(args: &str, _nav: &mut Navigator) -> Result<bool> {
     }
 
     if url.is_empty() {
-        anyhow::bail!("URL is required. Usage: up <file> <url>");
+        anyhow::bail!("{}", t!("dl.up_url_required"));
     }
 
-    do_upload(&url, file_path.as_deref(), data.as_deref(), &headers, method)
+    do_upload(
+        &url,
+        file_path.as_deref(),
+        data.as_deref(),
+        &headers,
+        method,
+    )
 }
 
-fn do_upload(url: &str, file_path: Option<&str>, data: Option<&str>, headers: &[(String, String)], method: &str) -> Result<bool> {
+fn do_upload(
+    url: &str,
+    file_path: Option<&str>,
+    data: Option<&str>,
+    headers: &[(String, String)],
+    method: &str,
+) -> Result<bool> {
     let agent = ureq::Agent::config_builder()
         .timeout_global(Some(Duration::from_secs(300)))
         .http_status_as_error(false)
         .build()
         .new_agent();
 
-    let mut req_builder = ureq::http::Request::builder()
-        .method(method)
-        .uri(url);
+    let mut req_builder = ureq::http::Request::builder().method(method).uri(url);
 
     for (k, v) in headers {
         req_builder = req_builder.header(k.as_str(), v.as_str());
@@ -362,13 +414,17 @@ fn do_upload(url: &str, file_path: Option<&str>, data: Option<&str>, headers: &[
     let start = Instant::now();
 
     let response = if let Some(path) = file_path {
-        let file_data = fs::read(path)
-            .with_context(|| format!("Failed to read {}", path))?;
+        let file_data = fs::read(path).with_context(|| t!("dl.failed_read", path))?;
         let total = file_data.len();
-        if !headers.iter().any(|(k, _)| k.eq_ignore_ascii_case("content-type")) {
+        if !headers
+            .iter()
+            .any(|(k, _)| k.eq_ignore_ascii_case("content-type"))
+        {
             req_builder = req_builder.header("Content-Type", guess_mime(path));
         }
-        let req = req_builder.body(file_data).map_err(|e| anyhow::anyhow!("Invalid request: {}", e))?;
+        let req = req_builder
+            .body(file_data)
+            .map_err(|e| anyhow::anyhow!("{}", t!("dl.invalid_request", e)))?;
         let pb = ProgressBar::new(total as u64);
         pb.set_style(
             ProgressStyle::default_bar()
@@ -376,19 +432,32 @@ fn do_upload(url: &str, file_path: Option<&str>, data: Option<&str>, headers: &[
                 .unwrap_or_else(|_| ProgressStyle::default_bar())
                 .progress_chars("##-"),
         );
-        pb.set_message(format!("Uploading {} ({})", path, format_size(total as u64)));
-        let resp = agent.run(req).with_context(|| format!("Upload to {} failed", url))?;
+        pb.set_message(t!("dl.uploading", path, format_size(total as u64)));
+        let resp = agent
+            .run(req)
+            .with_context(|| t!("dl.upload_failed", url))?;
         pb.finish_and_clear();
         resp
     } else if let Some(body) = data {
-        if !headers.iter().any(|(k, _)| k.eq_ignore_ascii_case("content-type")) {
+        if !headers
+            .iter()
+            .any(|(k, _)| k.eq_ignore_ascii_case("content-type"))
+        {
             req_builder = req_builder.header("Content-Type", "text/plain");
         }
-        let req = req_builder.body(body.to_string()).map_err(|e| anyhow::anyhow!("Invalid request: {}", e))?;
-        agent.run(req).with_context(|| format!("Request to {} failed", url))?
+        let req = req_builder
+            .body(body.to_string())
+            .map_err(|e| anyhow::anyhow!("{}", t!("dl.invalid_request", e)))?;
+        agent
+            .run(req)
+            .with_context(|| t!("dl.request_failed", url))?
     } else {
-        let req = req_builder.body(()).map_err(|e| anyhow::anyhow!("Invalid request: {}", e))?;
-        agent.run(req).with_context(|| format!("Request to {} failed", url))?
+        let req = req_builder
+            .body(())
+            .map_err(|e| anyhow::anyhow!("{}", t!("dl.invalid_request", e)))?;
+        agent
+            .run(req)
+            .with_context(|| t!("dl.request_failed", url))?
     };
 
     let elapsed = start.elapsed();
@@ -407,7 +476,11 @@ fn do_upload(url: &str, file_path: Option<&str>, data: Option<&str>, headers: &[
     }
 
     let ms = elapsed.as_millis();
-    let time_str = if ms < 1000 { format!("{}ms", ms) } else { format!("{:.1}s", ms as f64 / 1000.0) };
+    let time_str = if ms < 1000 {
+        format!("{}ms", ms)
+    } else {
+        format!("{:.1}s", ms as f64 / 1000.0)
+    };
     println!("{}", time_str.dimmed());
 
     let body = response.into_body().read_to_string().unwrap_or_default();
@@ -497,20 +570,20 @@ fn format_size(bytes: u64) -> String {
 // ── Help ──────────────────────────────────────────────────────────────────
 
 fn print_dl_help() {
-    println!("{}", "Download (dl)".bold());
+    println!("{}", t!("dl.help.title").bold());
     println!();
-    println!("{}", "Usage:".bold());
-    println!("  dl <url> [options]");
+    println!("{}", t!("dl.help.usage").bold());
+    println!("{}", t!("dl.help.usage_line"));
     println!();
-    println!("{}", "Options:".bold());
-    println!("  -o, --output <file>      Save as filename");
-    println!("  --progress                Show download progress bar");
-    println!("  --resume                  Resume partial download");
-    println!("  --stop                    Show download history");
-    println!("  --cancel <number|url>     Remove download record");
-    println!("  -h, --help                Show this help");
+    println!("{}", t!("dl.help.options").bold());
+    println!("{}", t!("dl.help.opt_o"));
+    println!("{}", t!("dl.help.opt_progress"));
+    println!("{}", t!("dl.help.opt_resume"));
+    println!("{}", t!("dl.help.opt_stop"));
+    println!("{}", t!("dl.help.opt_cancel"));
+    println!("{}", t!("dl.help.opt_help"));
     println!();
-    println!("{}", "Examples:".bold());
+    println!("{}", t!("dl.help.examples").bold());
     println!("  dl https://example.com/file.zip");
     println!("  dl https://example.com/file.zip --progress");
     println!("  dl https://example.com/file.zip -o myfile.zip");
@@ -520,23 +593,25 @@ fn print_dl_help() {
 }
 
 fn print_up_help() {
-    println!("{}", "Upload (up)".bold());
+    println!("{}", t!("up.help.title").bold());
     println!();
-    println!("{}", "Usage:".bold());
-    println!("  up <file> <url>           Upload file via PUT");
-    println!("  up <file> <url> --post    Upload via POST");
-    println!("  up -d \"data\" <url>      Upload inline text data");
+    println!("{}", t!("up.help.usage").bold());
+    println!("{}", t!("up.help.usage_line"));
+    println!("{}", t!("up.help.usage_post"));
+    println!("{}", t!("up.help.usage_data"));
     println!();
-    println!("{}", "Options:".bold());
-    println!("  -H, --header <\"Key: Value\">  Add request header (repeatable)");
-    println!("  -d, --data <body>             Upload inline data");
-    println!("  --post                        Use POST instead of PUT");
-    println!("  -h, --help                    Show this help");
+    println!("{}", t!("up.help.options").bold());
+    println!("{}", t!("up.help.opt_header"));
+    println!("{}", t!("up.help.opt_data"));
+    println!("{}", t!("up.help.opt_post"));
+    println!("{}", t!("up.help.opt_help"));
     println!();
-    println!("{}", "Examples:".bold());
+    println!("{}", t!("up.help.examples").bold());
     println!("  up myfile.txt https://example.com/upload");
     println!("  up data.json https://api.example.com/data --post");
-    println!("  up -d \"hello world\" https://echo.free.beeceptor.com -H \"Content-Type: text/plain\"");
+    println!(
+        "  up -d \"hello world\" https://echo.free.beeceptor.com -H \"Content-Type: text/plain\""
+    );
 }
 
 // ── Ping ──────────────────────────────────────────────────────────────────
@@ -556,9 +631,13 @@ pub fn cmd_ping(args: &str, _nav: &mut Navigator) -> Result<bool> {
         match tokens[i].as_str() {
             "-c" | "--count" => {
                 i += 1;
-                count = tokens.get(i).ok_or_else(|| anyhow::anyhow!("Missing count after -c"))?.parse()
-                    .map_err(|_| anyhow::anyhow!("Invalid count"))?;
+                count = tokens
+                    .get(i)
+                    .ok_or_else(|| anyhow::anyhow!("{}", t!("dl.ping_missing_count")))?
+                    .parse()
+                    .map_err(|_| anyhow::anyhow!("{}", t!("dl.ping_invalid_count")))?;
             }
+            "--" => break,
             _ => {
                 if host.is_empty() {
                     host = tokens[i].clone();
@@ -569,7 +648,7 @@ pub fn cmd_ping(args: &str, _nav: &mut Navigator) -> Result<bool> {
     }
 
     if host.is_empty() {
-        anyhow::bail!("Host is required. Usage: ping <host>");
+        anyhow::bail!("{}", t!("dl.ping_host_required"));
     }
 
     #[cfg(windows)]
@@ -588,12 +667,12 @@ pub fn cmd_ping(args: &str, _nav: &mut Navigator) -> Result<bool> {
         Ok(exit) => {
             if let Some(code) = exit.code() {
                 if code != 0 && code != 1 {
-                    print_warning(&format!("ping exited with code: {}", code));
+                    print_warning(&t!("dl.ping_exit_code", code));
                 }
             }
         }
         Err(e) => {
-            print_error(&format!("Failed to run ping: {}", e));
+            print_error(&t!("dl.ping_failed", e));
         }
     }
 
@@ -601,16 +680,16 @@ pub fn cmd_ping(args: &str, _nav: &mut Navigator) -> Result<bool> {
 }
 
 fn print_ping_help() {
-    println!("{}", "Ping".bold());
+    println!("{}", t!("ping.help.title").bold());
     println!();
-    println!("{}", "Usage:".bold());
-    println!("  ping <host> [options]");
+    println!("{}", t!("ping.help.usage").bold());
+    println!("{}", t!("ping.help.usage_line"));
     println!();
-    println!("{}", "Options:".bold());
-    println!("  -c, --count <n>       Number of pings (default 4)");
-    println!("  -h, --help            Show this help");
+    println!("{}", t!("ping.help.options").bold());
+    println!("{}", t!("ping.help.opt_count"));
+    println!("{}", t!("ping.help.opt_help"));
     println!();
-    println!("{}", "Examples:".bold());
+    println!("{}", t!("ping.help.examples").bold());
     println!("  ping example.com");
     println!("  ping 127.0.0.1 -c 10");
 }
@@ -632,8 +711,12 @@ pub fn cmd_dns(args: &str, _nav: &mut Navigator) -> Result<bool> {
         match tokens[i].as_str() {
             "-t" | "--type" => {
                 i += 1;
-                record = tokens.get(i).ok_or_else(|| anyhow::anyhow!("Missing record type after -t"))?.clone();
+                record = tokens
+                    .get(i)
+                    .ok_or_else(|| anyhow::anyhow!("{}", t!("dl.dns_missing_type")))?
+                    .clone();
             }
+            "--" => break,
             _ => {
                 if host.is_empty() {
                     host = tokens[i].clone();
@@ -644,7 +727,7 @@ pub fn cmd_dns(args: &str, _nav: &mut Navigator) -> Result<bool> {
     }
 
     if host.is_empty() {
-        anyhow::bail!("Host is required. Usage: dns <host>");
+        anyhow::bail!("{}", t!("dl.dns_host_required"));
     }
 
     match record.to_uppercase().as_str() {
@@ -662,8 +745,16 @@ pub fn cmd_dns(args: &str, _nav: &mut Navigator) -> Result<bool> {
 }
 
 fn resolve_a(host: &str, rtype: &str) -> Result<bool> {
-    let hint = if rtype.eq_ignore_ascii_case("AAAA") { " (IPv6)" } else { " (IPv4)" };
-    println!("{}{}", format_args!("{} {} records:", host.bold(), rtype.cyan()), hint.dimmed());
+    let hint = if rtype.eq_ignore_ascii_case("AAAA") {
+        " (IPv6)"
+    } else {
+        " (IPv4)"
+    };
+    println!(
+        "{}{}",
+        format_args!("{} {} records:", host.bold(), rtype.cyan()),
+        hint.dimmed()
+    );
 
     let addr = format!("{}:1", host);
     let addrs: Vec<std::net::SocketAddr> = match addr.to_socket_addrs() {
@@ -681,7 +772,7 @@ fn resolve_a(host: &str, rtype: &str) -> Result<bool> {
     };
 
     if found.is_empty() {
-        println!("  {}  No {} records found", "─".dimmed(), rtype);
+        println!("{}", t!("dl.dns_no_records", "─".dimmed(), rtype));
     } else {
         for addr in &found {
             println!("  {}  {}", "OK".green().bold(), addr.ip());
@@ -692,7 +783,10 @@ fn resolve_a(host: &str, rtype: &str) -> Result<bool> {
 }
 
 fn system_dns_lookup(host: &str, rtype: &str) -> Result<bool> {
-    println!("{}", format!("Looking up {} {} records via system tools...", host.bold(), rtype.cyan()).dimmed());
+    println!(
+        "{}",
+        t!("dl.dns_looking_up", host.bold(), rtype.cyan()).dimmed()
+    );
 
     #[cfg(windows)]
     let output = std::process::Command::new("nslookup")
@@ -715,11 +809,14 @@ fn system_dns_lookup(host: &str, rtype: &str) -> Result<bool> {
             } else {
                 print!("{}", stdout);
                 eprintln!("{}", stderr);
-                anyhow::bail!("DNS lookup failed (exit code: {:?})", out.status.code());
+                anyhow::bail!(
+                    "{}",
+                    t!("dl.dns_lookup_failed", format!("{:?}", out.status.code()))
+                );
             }
         }
         Err(e) => {
-            anyhow::bail!("Failed to run DNS tool: {}. Install dig or nslookup for {} record support.", e, rtype);
+            anyhow::bail!("{}", t!("dl.dns_tool_failed", e, rtype));
         }
     }
 
@@ -727,17 +824,17 @@ fn system_dns_lookup(host: &str, rtype: &str) -> Result<bool> {
 }
 
 fn print_dns_help() {
-    println!("{}", "DNS Lookup".bold());
+    println!("{}", t!("dns.help.title").bold());
     println!();
-    println!("{}", "Usage:".bold());
-    println!("  dns <host> [options]");
+    println!("{}", t!("dns.help.usage").bold());
+    println!("{}", t!("dns.help.usage_line"));
     println!();
-    println!("{}", "Options:".bold());
-    println!("  -t, --type <type>     Record type: A, AAAA, ALL, MX, NS, CNAME etc (default A)");
-    println!("                        MX/NS/CNAME/etc use system dig/nslookup");
-    println!("  -h, --help            Show this help");
+    println!("{}", t!("dns.help.options").bold());
+    println!("{}", t!("dns.help.opt_type"));
+    println!("{}", t!("dns.help.opt_type_sub"));
+    println!("{}", t!("dns.help.opt_help"));
     println!();
-    println!("{}", "Examples:".bold());
+    println!("{}", t!("dns.help.examples").bold());
     println!("  dns example.com");
     println!("  dns example.com -t AAAA");
     println!("  dns example.com -t ALL");
@@ -792,7 +889,10 @@ mod tests {
     #[test]
     fn test_tokenize_quoted() {
         let t = tokenize("-H \"Content-Type: application/json\" -d 'body data'");
-        assert_eq!(t, vec!["-H", "Content-Type: application/json", "-d", "body data"]);
+        assert_eq!(
+            t,
+            vec!["-H", "Content-Type: application/json", "-d", "body data"]
+        );
     }
 
     #[test]

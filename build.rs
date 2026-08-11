@@ -3,9 +3,7 @@ use std::path::Path;
 fn build_frontend() {
     let dist_dir = Path::new("ntc_web").join("dist");
     if !dist_dir.join("index.html").exists() {
-        panic!(
-            "ntc_web/dist/index.html not found. Run 'cd ntc_web && npm run build' first."
-        );
+        panic!("ntc_web/dist/index.html not found. Run 'cd ntc_web && npm run build' first.");
     }
     println!("cargo:rerun-if-changed=ntc_web/src");
     println!("cargo:rerun-if-changed=ntc_web/public");

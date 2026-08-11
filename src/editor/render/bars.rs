@@ -1,12 +1,19 @@
 use crossterm::cursor::MoveTo;
+use crossterm::queue;
 use crossterm::style::{Color, Print, ResetColor, SetBackgroundColor, SetForegroundColor};
 use crossterm::terminal::{Clear, ClearType};
-use crossterm::queue;
 
 use super::super::{byte_to_col, Editor, Focus, Mode};
+use crate::t;
 
 impl Editor {
-    pub(crate) fn render_tab_bar(&self, stdout: &mut std::io::Stdout, y: usize, x_offset: usize, width: usize) -> std::io::Result<()> {
+    pub(crate) fn render_tab_bar(
+        &self,
+        stdout: &mut std::io::Stdout,
+        y: usize,
+        x_offset: usize,
+        width: usize,
+    ) -> std::io::Result<()> {
         let theme = crate::utils::theme::ThemeManager::current();
         let use_color = self.editor_cfg.color_enabled;
         let active = self.active_tab;
@@ -40,33 +47,61 @@ impl Editor {
             let is_active = i == active;
 
             let (bg, fg) = if is_active {
-                let bg_c = if use_color { theme.editor.editor_bg.to_crossterm() } else { Color::Rgb { r: 18, g: 18, b: 28 } };
-                let fg_c = if use_color { theme.syntax.normal.to_crossterm() } else { Color::White };
+                let bg_c = if use_color {
+                    theme.editor.editor_bg.to_crossterm()
+                } else {
+                    Color::Rgb {
+                        r: 18,
+                        g: 18,
+                        b: 28,
+                    }
+                };
+                let fg_c = if use_color {
+                    theme.syntax.normal.to_crossterm()
+                } else {
+                    Color::White
+                };
                 (bg_c, fg_c)
             } else {
-                let bg_c = if use_color { theme.editor.sidebar_bg.to_crossterm() } else { Color::Rgb { r: 18, g: 18, b: 28 } };
-                let fg_c = if use_color { theme.editor.gutter_text.to_crossterm() } else { Color::DarkGrey };
+                let bg_c = if use_color {
+                    theme.editor.sidebar_bg.to_crossterm()
+                } else {
+                    Color::Rgb {
+                        r: 18,
+                        g: 18,
+                        b: 28,
+                    }
+                };
+                let fg_c = if use_color {
+                    theme.editor.gutter_text.to_crossterm()
+                } else {
+                    Color::DarkGrey
+                };
                 (bg_c, fg_c)
             };
 
-            let close_fg = if use_color { theme.editor.gutter_text.to_crossterm() } else { Color::DarkGrey };
+            let close_fg = if use_color {
+                theme.editor.gutter_text.to_crossterm()
+            } else {
+                Color::DarkGrey
+            };
 
             let remaining = cols.saturating_sub(x);
             if full_w > remaining {
                 let avail = remaining.saturating_sub(2);
-                    if avail > 3 {
-                        let truncated_name: String = name.chars().take(avail).collect();
-                        let short = format!(" {}… {} ", truncated_name, close_btn);
-                        queue!(
-                            stdout,
-                            MoveTo(x as u16, y as u16),
-                            SetBackgroundColor(bg),
-                            SetForegroundColor(fg),
-                            Print(&short),
-                            ResetColor,
-                        )?;
-                    }
-                    break;
+                if avail > 3 {
+                    let truncated_name: String = name.chars().take(avail).collect();
+                    let short = format!(" {}… {} ", truncated_name, close_btn);
+                    queue!(
+                        stdout,
+                        MoveTo(x as u16, y as u16),
+                        SetBackgroundColor(bg),
+                        SetForegroundColor(fg),
+                        Print(&short),
+                        ResetColor,
+                    )?;
+                }
+                break;
             }
 
             queue!(
@@ -108,7 +143,11 @@ impl Editor {
         Ok(())
     }
 
-    pub(crate) fn render_cwd_bar(&self, stdout: &mut std::io::Stdout, x_offset: usize) -> std::io::Result<()> {
+    pub(crate) fn render_cwd_bar(
+        &self,
+        stdout: &mut std::io::Stdout,
+        x_offset: usize,
+    ) -> std::io::Result<()> {
         let theme = crate::utils::theme::ThemeManager::current();
         let cy = self.term_h.saturating_sub(3);
         let cwd = std::env::current_dir()
@@ -136,28 +175,32 @@ impl Editor {
         Ok(())
     }
 
-    fn mode_label(&self) -> &'static str {
+    fn mode_label(&self) -> String {
         match self.focus {
-            Focus::Run => "[Run]",
-            Focus::Terminal => "[Term]",
+            Focus::Run => t!("editor.mode_run"),
+            Focus::Terminal => t!("editor.mode_terminal"),
             Focus::Editor => match self.mode {
-                Mode::Normal => "[Normal]",
-                Mode::Insert => "[Insert]",
-                Mode::InsertMulti => "[Insert *]",
-                Mode::Visual => "[Visual]",
-                Mode::Search => "[Search]",
-                Mode::Command => "[Command]",
-                Mode::Help => "[Help]",
-                Mode::FileFinder => "[Finder]",
-                Mode::Gosc => "[Gosc]",
-                Mode::Jump => "[Jump]",
-                Mode::Query => "[Query]",
-                Mode::Hex => "[HEX]",
+                Mode::Normal => t!("editor.mode_normal"),
+                Mode::Insert => t!("editor.mode_insert"),
+                Mode::InsertMulti => t!("editor.mode_insert_multi"),
+                Mode::Visual => t!("editor.mode_visual"),
+                Mode::Search => t!("editor.mode_search"),
+                Mode::Command => t!("editor.mode_command"),
+                Mode::Help => t!("editor.mode_help"),
+                Mode::FileFinder => t!("editor.mode_finder"),
+                Mode::Gosc => t!("editor.mode_gosc"),
+                Mode::Jump => t!("editor.mode_jump"),
+                Mode::Query => t!("editor.mode_query"),
+                Mode::Hex => t!("editor.mode_hex"),
             },
         }
     }
 
-    pub(crate) fn render_status_bar(&self, stdout: &mut std::io::Stdout, x_offset: usize) -> std::io::Result<()> {
+    pub(crate) fn render_status_bar(
+        &self,
+        stdout: &mut std::io::Stdout,
+        x_offset: usize,
+    ) -> std::io::Result<()> {
         let theme = crate::utils::theme::ThemeManager::current();
         let sy = self.term_h.saturating_sub(2);
         let avail_w = self.term_w.saturating_sub(x_offset);
@@ -165,24 +208,44 @@ impl Editor {
 
         let (status, right) = if self.mode == Mode::Hex {
             let hex = self.hex.as_ref().unwrap();
-            let tag = if hex.modified { " ●" } else { " ✓" };
-            let cursor_str = format!("Off 0x{:X}/0x{:X}", hex.cursor, hex.data.len().saturating_sub(1));
+            let tag = if hex.modified {
+                t!("editor.status_modified_tag")
+            } else {
+                t!("editor.status_saved_tag")
+            };
+            let cursor_str = format!(
+                "Off 0x{:X}/0x{:X}",
+                hex.cursor,
+                hex.data.len().saturating_sub(1)
+            );
             let status = format!(
                 " {} {}{}   {}  ",
                 label,
-                self.path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default(),
+                self.path
+                    .file_name()
+                    .map(|n| n.to_string_lossy().into_owned())
+                    .unwrap_or_default(),
                 tag,
                 cursor_str,
             );
-            let right = if hex.modified { "modified" } else { "saved" };
-            (status, right.to_string())
+            let right = if hex.modified {
+                t!("editor.status_modified")
+            } else {
+                t!("editor.status_saved")
+            };
+            (status, right)
         } else {
-            let tag = if self.modified { " ●" } else { " ✓" };
+            let tag = if self.modified {
+                t!("editor.status_modified_tag")
+            } else {
+                t!("editor.status_saved_tag")
+            };
             let sel_str = if let Some((ay, ab)) = self.cursor.selection_anchor {
                 if (ay, ab) == (self.cursor.y, self.cursor.byte) {
                     String::new()
                 } else {
-                    let ((sy2, sb), (ey, eb)) = super::super::sel_range(self.cursor.y, self.cursor.byte, ay, ab);
+                    let ((sy2, sb), (ey, eb)) =
+                        super::super::sel_range(self.cursor.y, self.cursor.byte, ay, ab);
                     if sy2 == ey {
                         let chars = self.lines[sy2][sb..eb.min(self.lines[sy2].len())]
                             .chars()
@@ -200,15 +263,22 @@ impl Editor {
             let status = format!(
                 " {} {}{}   Ln {}/{}  Col {}{}  ",
                 label,
-                self.path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default(),
+                self.path
+                    .file_name()
+                    .map(|n| n.to_string_lossy().into_owned())
+                    .unwrap_or_default(),
                 tag,
                 self.cursor.y + 1,
                 total,
                 col,
                 sel_str,
             );
-            let right = if self.modified { "modified" } else { "saved" };
-            (status, right.to_string())
+            let right = if self.modified {
+                t!("editor.status_modified")
+            } else {
+                t!("editor.status_saved")
+            };
+            (status, right)
         };
 
         let pad = avail_w.saturating_sub(status.len() + right.len() + 2);
@@ -218,7 +288,11 @@ impl Editor {
         let status_bg = if use_color {
             theme.editor.status_bg.to_crossterm()
         } else {
-            Color::Rgb { r: 33, g: 33, b: 44 }
+            Color::Rgb {
+                r: 33,
+                g: 33,
+                b: 44,
+            }
         };
         queue!(
             stdout,
@@ -232,7 +306,11 @@ impl Editor {
         Ok(())
     }
 
-    pub(crate) fn render_hint_bar(&self, stdout: &mut std::io::Stdout, x_offset: usize) -> std::io::Result<()> {
+    pub(crate) fn render_hint_bar(
+        &self,
+        stdout: &mut std::io::Stdout,
+        x_offset: usize,
+    ) -> std::io::Result<()> {
         let theme = crate::utils::theme::ThemeManager::current();
         let hy = self.term_h.saturating_sub(1);
         let msg_y = self.term_h.saturating_sub(3);
@@ -241,7 +319,7 @@ impl Editor {
         let (status_line, hint) = match self.focus {
             Focus::Run => {
                 let hint = if !self.run_cmd_buf.is_empty() {
-                    format!("{}  Enter=exec  Esc=cancel", self.run_cmd_buf)
+                    format!("{}  {}", self.run_cmd_buf, t!("editor.hint_run_entry"))
                 } else {
                     let visible = self.run_panel_height();
                     let total = self.run_lines.len();
@@ -249,11 +327,19 @@ impl Editor {
                     let bot = (self.sv.run + visible).min(total);
                     if total > 0 {
                         format!(
-                            " Run output — lines {}-{}/{}  :=cmd  ↑↓/j/k=scroll  Esc=close",
-                            top, bot, total
+                            " {} {}-{}/{}  {}",
+                            t!("editor.hint_run_output"),
+                            top,
+                            bot,
+                            total,
+                            t!("editor.hint_run_scroll")
                         )
                     } else {
-                        " Run output — (empty)  :=cmd  Esc=close".to_string()
+                        format!(
+                            " {}  {}",
+                            t!("editor.hint_run_empty"),
+                            t!("editor.hint_run_scroll")
+                        )
                     }
                 };
                 (String::new(), hint)
@@ -262,13 +348,30 @@ impl Editor {
                 if let Some(ref term) = self.terminal {
                     if term.exited {
                         let code = term.exit_code.map(|c| c.to_string()).unwrap_or_default();
-                        (String::new(), format!(" Terminal exited {}  Esc/q=close", code))
+                        (
+                            String::new(),
+                            format!(
+                                " {} {}  {}",
+                                t!("editor.hint_term_exited"),
+                                code,
+                                t!("editor.hint_term_close")
+                            ),
+                        )
                     } else {
                         let total = term.total_lines();
-                        (String::new(), format!(" Terminal — {} lines  PgUp/PgDn=scroll  Ctrl+Shift+C=copy  Ctrl+C=interrupt  Esc=close", total))
+                        (
+                            String::new(),
+                            format!(
+                                " {} {} {}  {}",
+                                t!("editor.hint_term_lines"),
+                                total,
+                                t!("editor.hint_term_actions"),
+                                t!("editor.hint_term_close")
+                            ),
+                        )
                     }
                 } else {
-                    (String::new(), " Terminal".to_string())
+                    (String::new(), format!(" {}", t!("editor.hint_terminal")))
                 }
             }
             Focus::Editor => match self.mode {
@@ -280,85 +383,119 @@ impl Editor {
                         0
                     };
                     let hint = format!(
-                        " Search: {}  [{}/{}]  Enter=next  Shift+Enter=prev  Esc=close",
-                        self.search.query, idx, count
+                        " {} {}  [{}/{}]  {}",
+                        t!("editor.hint_search"),
+                        self.search.query,
+                        idx,
+                        count,
+                        t!("editor.hint_search_actions")
                     );
                     (String::new(), hint)
                 }
                 Mode::Command => {
                     let hint = format!(
-                        ":{}  cd|back|gos|gs|mkdir|touch|ne|tp|tp-add  Enter=exec  Esc=cancel",
-                        self.cmd_buf
+                        ":{}  {}  {}",
+                        self.cmd_buf,
+                        t!("editor.hint_command_nav"),
+                        t!("editor.hint_command_actions")
                     );
                     (String::new(), hint)
                 }
-                Mode::Help => (String::new(), " Help — Esc/q=close  ↑↓=scroll".to_string()),
+                Mode::Help => (String::new(), format!(" {}", t!("editor.hint_help"))),
                 Mode::Visual => {
                     if let Some(ref msg) = self.status_msg {
-                        (format!(" ✦ {}  │", msg), " ^O=insert  ^C=copy  ^X=cut  ^H=help  Esc=exit".to_string())
+                        (format!(" ✦ {}  │", msg), t!("editor.hint_visual"))
                     } else {
-                        (String::new(), " Visual mode — arrows=select  ^O=insert  ^C=copy  ^X=cut  ^H=help  Esc=exit".to_string())
+                        (String::new(), t!("editor.hint_visual_no_msg"))
                     }
                 }
                 Mode::Insert => {
                     if let Some(ref msg) = self.status_msg {
-                        (format!(" ✦ {}  │", msg), " Esc=normal  ^W=visual  ^P=paste  ^H=help".to_string())
+                        (format!(" ✦ {}  │", msg), t!("editor.hint_insert_msg"))
                     } else {
-                        (String::new(), " Insert mode — Esc=normal  ^W=visual  ^P=paste  ^C=copy  ^F=find  ^Z=undo  ^R=redo  ^Y=yank  ^A=selAll  ^L=selLine  ^D=nextOcc  ^H=help".to_string())
+                        (String::new(), t!("editor.hint_insert"))
                     }
                 }
                 Mode::Normal => {
                     if let Some(ref msg) = self.status_msg {
-                        (format!(" ✦ {}  │", msg), " ^O=insert  ^W=visual  :command  ^H=help  ^Q=closeTab/quit".to_string())
+                        (format!(" ✦ {}  │", msg), t!("editor.hint_normal_msg"))
                     } else {
-                        (String::new(), " ^O=insert  ^W=visual  ^B=sidebar  ^P=files  :command  ^H=help  ^Q=closeTab/quit  ^PgDn/PgUp=tabs  ^N=files".to_string())
+                        (String::new(), t!("editor.hint_normal"))
                     }
                 }
                 Mode::InsertMulti => {
                     if let Some(ref msg) = self.status_msg {
-                        (format!(" ✦ {}  │", msg), " Esc=exit multi-cursor".to_string())
+                        (format!(" ✦ {}  │", msg), t!("editor.hint_insert_multi_msg"))
                     } else {
-                        (String::new(), " Insert* — Esc=exit multi-cursor  ^D=nextOcc".to_string())
+                        (String::new(), t!("editor.hint_insert_multi"))
                     }
                 }
                 Mode::Jump => {
-                    let hint = format!(" Go to line — {}  Enter=jump  Esc=cancel", self.jump_buf);
+                    let hint = format!(
+                        " {} {}  {}",
+                        t!("editor.hint_jump"),
+                        self.jump_buf,
+                        t!("editor.hint_jump_actions")
+                    );
                     (String::new(), hint)
                 }
                 Mode::FileFinder => {
                     let hint = if self.ff_query.starts_with("gs:") {
                         if self.gs_state.loading {
                             format!(
-                                " gs — searching... {} results so far  Esc=close",
-                                self.gs_state.results.len()
+                                " {} {} {}  {}",
+                                t!("editor.hint_gs_loading"),
+                                t!("editor.hint_results_so_far"),
+                                self.gs_state.results.len(),
+                                t!("editor.hint_gs_close")
                             )
                         } else {
                             format!(
-                                " gs — {} results  ↑↓=nav  Enter=open  Esc=close",
-                                self.gs_state.results.len()
+                                " {} {} {}  {}",
+                                t!("editor.hint_gs_done"),
+                                self.gs_state.results.len(),
+                                t!("editor.hint_results"),
+                                t!("editor.hint_gs_close")
                             )
                         }
                     } else {
                         format!(
-                            " Find — {} results  ↑↓=nav  Enter=open  Esc=close",
-                            self.ff_results.len()
+                            " {} {} {}  {}",
+                            t!("editor.hint_find"),
+                            self.ff_results.len(),
+                            t!("editor.hint_results"),
+                            t!("editor.hint_gs_close")
                         )
                     };
                     (String::new(), hint)
                 }
                 Mode::Gosc => {
                     let hint = format!(
-                        " gosc — {} dirs  type number+Enter=nav  0=exit  Esc=close",
-                        self.gosc_dirs.len()
+                        " {} {} {}  {}",
+                        t!("editor.hint_gosc"),
+                        self.gosc_dirs.len(),
+                        t!("editor.hint_gosc_nav"),
+                        t!("editor.hint_gosc_close")
                     );
                     (String::new(), hint)
                 }
                 Mode::Hex => {
                     let msg = if self.hex.as_ref().map(|h| h.modified).unwrap_or(false) {
                         let hex = self.hex.as_ref().unwrap();
-                        format!(" ✦ Hex offset 0x{:X}  modified  │ 0-9/a-f=edit  u=undo  ^R=redo  :=cmd  :w=save  Esc=exit", hex.cursor)
+                        format!(
+                            " ✦ Hex offset 0x{:X}  {}  │ {}  {}",
+                            hex.cursor,
+                            t!("editor.status_modified"),
+                            t!("editor.hint_hex_edit"),
+                            t!("editor.hint_hex_actions")
+                        )
                     } else if let Some(ref hex) = self.hex {
-                        format!(" Hex offset 0x{:X}  │ 0-9/a-f=edit  u=undo  ^R=redo  :=cmd  :w=save  Esc=exit", hex.cursor)
+                        format!(
+                            " Hex offset 0x{:X}  │ {}  {}",
+                            hex.cursor,
+                            t!("editor.hint_hex_edit"),
+                            t!("editor.hint_hex_actions")
+                        )
                     } else {
                         String::new()
                     };
@@ -366,9 +503,14 @@ impl Editor {
                 }
                 Mode::Query => {
                     let hint = if self.query_buf.is_empty() {
-                        " x:   /s /l /a  /s /l N to M  /p old to new  /add  /set  /qal  /undo  /redo  /upper  /lower  /help  ; chains  Enter=exec  Esc=exit".into()
+                        t!("editor.hint_query")
                     } else {
-                        format!(" x: {}  Enter=exec  Esc=exit", self.query_buf)
+                        format!(
+                            " {} {}  {}",
+                            t!("editor.hint_query_prefix"),
+                            self.query_buf,
+                            t!("editor.hint_query_actions")
+                        )
                     };
                     (String::new(), hint)
                 }

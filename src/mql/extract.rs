@@ -50,14 +50,32 @@ pub(crate) struct UserFunction {
 
 pub(crate) fn extract_user_functions(lines: &[String]) -> Vec<UserFunction> {
     let skip_keywords: [&str; 16] = [
-        "if", "while", "for", "switch", "return",
-        "case", "break", "continue", "default",
-        "catch", "throw", "try",
-        "sizeof", "delete", "new", "dynamic_cast",
+        "if",
+        "while",
+        "for",
+        "switch",
+        "return",
+        "case",
+        "break",
+        "continue",
+        "default",
+        "catch",
+        "throw",
+        "try",
+        "sizeof",
+        "delete",
+        "new",
+        "dynamic_cast",
     ];
     let skip_modifiers: [&str; 8] = [
-        "static", "virtual", "override", "const",
-        "extern", "private", "protected", "public",
+        "static",
+        "virtual",
+        "override",
+        "const",
+        "extern",
+        "private",
+        "protected",
+        "public",
     ];
     let mut funcs = Vec::new();
     for (li, line) in lines.iter().enumerate() {
@@ -139,13 +157,20 @@ pub(crate) fn extract_variables(lines: &[String]) -> Vec<VariableInfo> {
             continue;
         }
 
-        let code = if let Some(rest) = code.strip_prefix("input ") { rest }
-            else if let Some(rest) = code.strip_prefix("static ") { rest }
-            else if let Some(rest) = code.strip_prefix("const ") { rest }
-            else { code };
+        let code = if let Some(rest) = code.strip_prefix("input ") {
+            rest
+        } else if let Some(rest) = code.strip_prefix("static ") {
+            rest
+        } else if let Some(rest) = code.strip_prefix("const ") {
+            rest
+        } else {
+            code
+        };
 
         let code = code.trim();
-        if !code.ends_with(';') { continue; }
+        if !code.ends_with(';') {
+            continue;
+        }
 
         let first = match code.split_whitespace().next() {
             Some(f) => f,

@@ -1,7 +1,9 @@
 use crate::navigator::Navigator;
 use crate::output::{print_error, print_success, print_warning};
+use crate::t;
 use anyhow::{anyhow, Result};
 use colored::*;
+use std::io::Cursor;
 use std::path::Path;
 
 fn parse_out_flag(args: &str) -> (&str, Option<&str>) {
@@ -52,11 +54,7 @@ fn save_qr_image(pixels: &[Vec<bool>], path: &Path) -> Result<()> {
             };
             for sy in 0..scale {
                 for sx in 0..scale {
-                    img.put_pixel(
-                        (x * scale + sx) as u32,
-                        (y * scale + sy) as u32,
-                        color,
-                    );
+                    img.put_pixel((x * scale + sx) as u32, (y * scale + sy) as u32, color);
                 }
             }
         }
@@ -66,17 +64,38 @@ fn save_qr_image(pixels: &[Vec<bool>], path: &Path) -> Result<()> {
     Ok(())
 }
 
+#[cfg(feature = "image2doc")]
+fn encode_image_to_uri(mut img: image::DynamicImage) -> Result<String> {
+    loop {
+        let mut buf: Vec<u8> = Vec::new();
+        img.write_to(&mut Cursor::new(&mut buf), image::ImageFormat::Png)
+            .map_err(|e| anyhow!("{}", t!("cmd.qr.open_image_fail", e)))?;
+        let b64 = base64::Engine::encode(&base64::engine::general_purpose::STANDARD, &buf);
+        let uri = format!("data:image/png;base64,{}", b64);
+        if qrcode::QrCode::with_error_correction_level(uri.as_bytes(), qrcode::EcLevel::L).is_ok() {
+            return Ok(uri);
+        }
+        let (w, h) = image::GenericImageView::dimensions(&img);
+        if w <= 16 || h <= 16 {
+            return Err(anyhow!("{}", t!("cmd.qr.image_too_large")));
+        }
+        img = img.resize(w / 2, h / 2, image::imageops::FilterType::Triangle);
+    }
+}
+
 fn print_usage() {
-    println!("{}", "Usage:".cyan().bold());
-    println!("  qr <text>                        Encode and display QR code in terminal");
-    println!("  qr encode <text>                 Same as above");
-    println!("  qr encode <text> -o <file>       Save QR as PNG image");
-    println!("  qr decode <image_file>           Decode QR code from image");
+    println!("{}", t!("cmd.qr.usage_title").cyan().bold());
+    println!("  {}", t!("cmd.qr.help_encode"));
+    println!("  {}", t!("cmd.qr.help_same_as_above"));
+    println!("  {}", t!("cmd.qr.help_save_png"));
+    println!("  {}", t!("cmd.qr.help_encode_image"));
+    println!("  {}", t!("cmd.qr.help_decode"));
     println!();
-    println!("{}", "Examples:".green());
-    println!("  qr \"https://example.com\"");
-    println!("  qr encode \"hello world\" -o qr.png");
-    println!("  qr decode qr.png");
+    println!("{}", t!("cmd.qr.examples_title").green());
+    println!("  {}", t!("cmd.qr.example1"));
+    println!("  {}", t!("cmd.qr.example2"));
+    println!("  {}", t!("cmd.qr.example_image"));
+    println!("  {}", t!("cmd.qr.example3"));
 }
 
 pub fn cmd_qr(args: &str, _nav: &mut Navigator) -> Result<bool> {
@@ -104,19 +123,41 @@ pub fn cmd_qr(args: &str, _nav: &mut Navigator) -> Result<bool> {
 
 fn cmd_qr_encode(args: &str, cwd: &Path) -> Result<bool> {
     if args.is_empty() {
-        print_error("Usage: qr encode <text> [-o <file>]");
+        print_error(&t!("cmd.qr.encode_usage"));
         return Ok(false);
     }
 
     let (text, out_file) = parse_out_flag(args);
 
     if text.is_empty() {
-        print_error("No text to encode");
+        print_error(&t!("cmd.qr.no_text"));
         return Ok(false);
     }
 
+    #[cfg(feature = "image2doc")]
+    {
+        let candidate = cwd.join(text);
+        if candidate.is_file() {
+            if let Ok(img) = image::open(&candidate) {
+                if out_file.is_none() {
+                    print_error(&t!("cmd.qr.image_requires_out"));
+                    return Ok(false);
+                }
+                let uri = encode_image_to_uri(img)?;
+                let code =
+                    qrcode::QrCode::with_error_correction_level(uri.as_bytes(), qrcode::EcLevel::L)
+                        .map_err(|e| anyhow!("{}", t!("cmd.qr.gen_fail", e)))?;
+                let pixels = qr_to_pixels(&code);
+                let full = cwd.join(out_file.unwrap());
+                save_qr_image(&pixels, &full)?;
+                print_success(&t!("cmd.qr.saved", full.display()));
+                return Ok(false);
+            }
+        }
+    }
+
     let code = qrcode::QrCode::new(text.as_bytes())
-        .map_err(|e| anyhow!("Failed to generate QR code: {}", e))?;
+        .map_err(|e| anyhow!("{}", t!("cmd.qr.gen_fail", e)))?;
 
     match out_file {
         Some(path) => {
@@ -125,12 +166,12 @@ fn cmd_qr_encode(args: &str, cwd: &Path) -> Result<bool> {
                 let pixels = qr_to_pixels(&code);
                 let full = cwd.join(path);
                 save_qr_image(&pixels, &full)?;
-                print_success(&format!("QR code saved to: {}", full.display()));
+                print_success(&t!("cmd.qr.saved", full.display()));
             }
             #[cfg(not(feature = "image2doc"))]
             {
                 let _ = cwd;
-                print_error("Image saving requires feature 'image2doc' (enabled by default)");
+                print_error(&t!("cmd.qr.image_save_requires"));
             }
         }
         None => {
@@ -148,36 +189,40 @@ fn cmd_qr_encode(args: &str, cwd: &Path) -> Result<bool> {
 
 fn cmd_qr_decode(args: &str, cwd: &Path) -> Result<bool> {
     if args.is_empty() {
-        print_error("Usage: qr decode <image_file>");
+        print_error(&t!("cmd.qr.decode_usage"));
         return Ok(false);
     }
 
     let file_path = cwd.join(args.trim());
     if !file_path.exists() {
-        print_error(&format!("File not found: {}", args));
+        print_error(&t!("cmd.qr.file_not_found", args));
         return Ok(false);
     }
 
     #[cfg(feature = "image2doc")]
     {
-        let img = image::open(&file_path)
-            .map_err(|e| anyhow!("Failed to open image: {}", e))?;
+        let img =
+            image::open(&file_path).map_err(|e| anyhow!("{}", t!("cmd.qr.open_image_fail", e)))?;
         let luma = img.to_luma8();
         let mut prepared = rqrr::PreparedImage::prepare(luma);
         let grids = prepared.detect_grids();
 
         if grids.is_empty() {
-            print_warning("No QR code detected in the image.");
+            print_warning(&t!("cmd.qr.no_qr_detected"));
             return Ok(false);
         }
 
         for (i, grid) in grids.iter().enumerate() {
             if grids.len() > 1 {
-                println!("{} {}", "QR #".cyan().bold(), (i + 1).to_string().cyan().bold());
+                println!(
+                    "{} {}",
+                    t!("cmd.qr.qr_label").cyan().bold(),
+                    (i + 1).to_string().cyan().bold()
+                );
             }
             match grid.decode() {
                 Ok((_, content)) => println!("{}", content),
-                Err(e) => print_warning(&format!("Failed to decode QR #{}: {}", i + 1, e)),
+                Err(e) => print_warning(&t!("cmd.qr.decode_fail", (i + 1), e)),
             }
         }
     }
@@ -185,7 +230,7 @@ fn cmd_qr_decode(args: &str, cwd: &Path) -> Result<bool> {
     #[cfg(not(feature = "image2doc"))]
     {
         let _ = file_path;
-        print_error("QR decode requires feature 'image2doc' (enabled by default). Run with --features image2doc.");
+        print_error(&t!("cmd.qr.decode_requires"));
     }
 
     Ok(false)

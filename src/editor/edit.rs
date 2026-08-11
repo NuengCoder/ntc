@@ -1,7 +1,5 @@
-use super::{
-    prev_char_byte, is_ctrl_char, sel_range,
-    CursorPos, Editor,
-};
+use super::{is_ctrl_char, prev_char_byte, sel_range, CursorPos, Editor};
+use crate::t;
 
 impl Editor {
     /// Move all cursors by applying `f` to each. Clears selections first.
@@ -197,7 +195,10 @@ impl Editor {
 
         // Smart indent: copy leading whitespace from previous line
         let prev_line = &self.lines[self.cursor.y];
-        let indent_len = prev_line.bytes().take_while(|b| *b == b' ' || *b == b'\t').count();
+        let indent_len = prev_line
+            .bytes()
+            .take_while(|b| *b == b' ' || *b == b'\t')
+            .count();
         if indent_len > 0 {
             let indent: String = prev_line.chars().take(indent_len).collect();
             self.lines[self.cursor.y + 1].insert_str(0, &indent);
@@ -378,9 +379,10 @@ impl Editor {
         let q_len = q.len();
 
         // Inline helper: check if (y, byte) already has a cursor
-        let pos_has_cursor = |extra: &[CursorPos], py: usize, pb: usize, y: usize, byte: usize| -> bool {
-            (py == y && pb == byte) || extra.iter().any(|c| c.y == y && c.byte == byte)
-        };
+        let pos_has_cursor =
+            |extra: &[CursorPos], py: usize, pb: usize, y: usize, byte: usize| -> bool {
+                (py == y && pb == byte) || extra.iter().any(|c| c.y == y && c.byte == byte)
+            };
 
         // Find next occurrence at or after search point
         for li in search_y..self.lines.len() {
@@ -388,7 +390,13 @@ impl Editor {
             let start = if li == search_y { search_byte } else { 0 };
             if let Some(pos) = lower[start..].find(&q) {
                 let abs_pos = start + pos;
-                let already_exists = pos_has_cursor(&self.cursor.extra_cursors, self.cursor.y, self.cursor.byte, li, abs_pos + q_len);
+                let already_exists = pos_has_cursor(
+                    &self.cursor.extra_cursors,
+                    self.cursor.y,
+                    self.cursor.byte,
+                    li,
+                    abs_pos + q_len,
+                );
                 if !already_exists {
                     let old_primary = CursorPos {
                         y: self.cursor.y,
@@ -402,11 +410,12 @@ impl Editor {
                     self.cursor.last_added_cursor_idx = Some(self.cursor.extra_cursors.len() - 1);
                     self.mark_all_dirty();
                     self.status_msg = Some(format!(
-                        "Added cursor ({} total)",
+                        "{} ({})",
+                        t!("editor.edit_added_cursor"),
                         self.cursor.extra_cursors.len() + 1
                     ));
                 } else {
-                    self.status_msg = Some("Already selected".into());
+                    self.status_msg = Some(t!("editor.edit_already_selected"));
                 }
                 return;
             }
@@ -418,7 +427,13 @@ impl Editor {
             if let Some(pos) = lower[start..].find(&q) {
                 let abs_pos = start + pos;
                 if li < search_y || (li == search_y && abs_pos < search_byte) {
-                    let already_exists = pos_has_cursor(&self.cursor.extra_cursors, self.cursor.y, self.cursor.byte, li, abs_pos + q_len);
+                    let already_exists = pos_has_cursor(
+                        &self.cursor.extra_cursors,
+                        self.cursor.y,
+                        self.cursor.byte,
+                        li,
+                        abs_pos + q_len,
+                    );
                     if !already_exists {
                         let old_primary = CursorPos {
                             y: self.cursor.y,
@@ -429,20 +444,23 @@ impl Editor {
                         self.cursor.y = li;
                         self.cursor.byte = abs_pos + q_len;
                         self.cursor.selection_anchor = Some((li, abs_pos));
-                        self.cursor.last_added_cursor_idx = Some(self.cursor.extra_cursors.len() - 1);
+                        self.cursor.last_added_cursor_idx =
+                            Some(self.cursor.extra_cursors.len() - 1);
                         self.mark_all_dirty();
                         self.status_msg = Some(format!(
-                            "Added cursor ({} total) (wrap)",
-                            self.cursor.extra_cursors.len() + 1
+                            "{} ({}) ({})",
+                            t!("editor.edit_added_cursor"),
+                            self.cursor.extra_cursors.len() + 1,
+                            t!("editor.edit_wrap")
                         ));
                     } else {
-                        self.status_msg = Some("Already selected".into());
+                        self.status_msg = Some(t!("editor.edit_already_selected"));
                     }
                     return;
                 }
             }
         }
-        self.status_msg = Some("No more occurrences".into());
+        self.status_msg = Some(t!("editor.edit_no_more_occurrences"));
     }
 
     /// Move current line up (Alt+Up).

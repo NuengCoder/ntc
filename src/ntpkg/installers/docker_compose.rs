@@ -22,7 +22,11 @@ pub(crate) fn install_docker_compose(
     let bin_dir = vdir.join("bin");
     fs::create_dir_all(&bin_dir)?;
 
-    let binary_name = if cfg!(windows) { "docker-compose.exe" } else { "docker-compose" };
+    let binary_name = if cfg!(windows) {
+        "docker-compose.exe"
+    } else {
+        "docker-compose"
+    };
     let target = bin_dir.join(binary_name);
 
     print_info(&format!("Downloading {name} {version}..."));
@@ -34,9 +38,15 @@ pub(crate) fn install_docker_compose(
         fs::set_permissions(&target, fs::Permissions::from_mode(0o755))?;
     }
 
-    fs::write(vdir.join(".real_path"), bin_dir.to_string_lossy().as_bytes())?;
+    fs::write(
+        vdir.join(".real_path"),
+        bin_dir.to_string_lossy().as_bytes(),
+    )?;
 
-    print_success(&format!("{name} {version} installed at {}", target.display()));
+    print_success(&format!(
+        "{name} {version} installed at {}",
+        target.display()
+    ));
 
     let mut manifest = load_manifest()?;
     manifest.add_version(name, version);

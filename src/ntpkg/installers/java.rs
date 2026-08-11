@@ -3,9 +3,10 @@ use std::fs;
 use std::path::Path;
 
 use super::super::download::{download_with_progress, extract_archive, find_binary};
-use super::super::types::{ArchiveType, PackageSource};
 use super::super::manager::{copy_recursive, load_manifest, platform_key, save_manifest};
+use super::super::types::{ArchiveType, PackageSource};
 use crate::output::{print_info, print_success};
+use crate::t;
 
 pub(crate) fn install_java(
     name: &str,
@@ -36,7 +37,7 @@ pub(crate) fn install_java(
     print_info(&format!("Downloading {name} {version}..."));
     download_with_progress(url, &archive_path)?;
 
-    print_info("Extracting...");
+    print_info(&t!("ntpkg.extracting"));
     extract_archive(&archive_path, &tmp_dir, source.archive_type)?;
 
     let java_bin = find_binary(&tmp_dir, "java")
@@ -50,8 +51,11 @@ pub(crate) fn install_java(
     copy_recursive(jdk_root, vdir)?;
 
     let bin_path = vdir.join("bin");
-    fs::write(vdir.join(".real_path"), bin_path.to_string_lossy().as_bytes())
-        .context("Failed to write .real_path")?;
+    fs::write(
+        vdir.join(".real_path"),
+        bin_path.to_string_lossy().as_bytes(),
+    )
+    .context("Failed to write .real_path")?;
 
     let _ = fs::remove_dir_all(&tmp_dir);
 

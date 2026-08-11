@@ -2,16 +2,18 @@ use crate::config::Config;
 use crate::filetype::FormatConfig;
 use crate::navigator::Navigator;
 use crate::output::{print_error, print_info, print_success, print_warning};
+use crate::t;
 use crate::utils::interactive::{InteractiveMenu, MenuItem};
 use crate::watcher;
 
 use anyhow::Result;
 use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicU32, Ordering};
-use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
+use std::sync::{Arc, Mutex};
 
 // ── submodules ──────────────────────────────────────────────────────────
 mod alias_commands;
+mod autoup;
 mod backup;
 pub(crate) mod clipboard;
 mod config_commands;
@@ -21,26 +23,26 @@ mod fmt;
 mod gs_interactive;
 mod http_client;
 mod ignore;
-mod serve;
-mod smtp_client;
-mod sysmon;
 mod misc;
 mod mode;
 mod nav;
-mod theme;
-mod todo;
+mod pathman;
+mod qr;
+mod qsc;
 mod ran_commands;
 mod report;
+mod serve;
+mod smtp_client;
+mod sysmon;
+mod theme;
 mod tl;
-mod qr;
-mod pathman;
-mod qsc;
+mod tmprt;
+mod todo;
 
 pub(crate) mod upgrade;
 
 #[cfg(feature = "image2doc")]
 mod image;
-
 
 // ============================================================================
 // Command execution
@@ -128,7 +130,7 @@ pub(crate) fn execute_command(
         "image" | "img" => image::cmd_image(args, nav),
         #[cfg(not(feature = "image2doc"))]
         "image" | "img" => {
-            print_error("Image conversion not available (feature 'image2doc' disabled).");
+            print_error(&t!("cmd.image_disabled"));
             Ok(false)
         }
         "ntpkg" => crate::ntpkg::cmd_ntpkg(args, nav),
@@ -139,35 +141,40 @@ pub(crate) fn execute_command(
         "tl" => tl::cmd_tl(args, nav),
         "usrpath" => pathman::cmd_usrpath(args, nav),
         "syspath" => pathman::cmd_syspath(args, nav),
+        "autoup" => autoup::cmd_autoup(args, nav),
         "explorer" | "nfe" => {
-            let path = if args.is_empty() { None } else { Some(std::path::Path::new(args)) };
+            let path = if args.is_empty() {
+                None
+            } else {
+                Some(std::path::Path::new(args))
+            };
             crate::nfe::run_explorer(path)?;
             Ok(false)
         }
         "todo" | "td" => todo::cmd_todo(args, nav),
         "say" | "print" => misc::cmd_say(args, nav),
         "pathcp" => misc::cmd_pathcp(args, nav),
+        "tmprt" => tmprt::cmd_tmprt(args, nav),
         _ => misc::cmd_fallback(input, nav, watcher_handle),
     }
 }
 
 /// Execute a system command
 fn execute_system_command(cmd: &str, cwd: &Path) -> Result<bool> {
-
     print_info(&format!("Executing: {}", cmd));
     println!();
-    
+
     let status = run_system_command(cmd, cwd);
     println!();
-    
+
     match status {
         Ok(exit_status) => {
             if exit_status.success() {
-                print_success("Command completed successfully.");
+                print_success(&t!("cmd.completed"));
             } else {
                 match exit_status.code() {
                     Some(code) => print_error(&format!("Command exited with code: {}", code)),
-                    None => print_warning("Command terminated (Ctrl+C)"),
+                    None => print_warning(&t!("cmd.terminated")),
                 }
             }
             Ok(false)
@@ -181,10 +188,26 @@ fn execute_system_command(cmd: &str, cwd: &Path) -> Result<bool> {
 
 static CHILD_PID: AtomicU32 = AtomicU32::new(0);
 
+static SHUTDOWN_FLAGS: Mutex<Vec<Arc<AtomicBool>>> = Mutex::new(Vec::new());
+
+pub fn register_shutdown_flag(flag: Arc<AtomicBool>) {
+    if let Ok(mut v) = SHUTDOWN_FLAGS.lock() {
+        v.push(flag);
+    }
+}
+
+pub fn unregister_shutdown_flag(flag: &Arc<AtomicBool>) {
+    if let Ok(mut v) = SHUTDOWN_FLAGS.lock() {
+        v.retain(|f| !Arc::ptr_eq(f, flag));
+    }
+}
+
 pub fn init_ctrlc_handler() {
     use std::sync::atomic::AtomicBool;
     static INIT: AtomicBool = AtomicBool::new(false);
-    INIT.store(true, Ordering::SeqCst);
+    if INIT.swap(true, Ordering::SeqCst) {
+        return;
+    }
     let _ = ctrlc::set_handler(move || {
         let pid = CHILD_PID.load(Ordering::SeqCst);
         if pid > 0 {
@@ -203,6 +226,11 @@ pub fn init_ctrlc_handler() {
                     .status();
             }
         }
+        if let Ok(flags) = SHUTDOWN_FLAGS.lock() {
+            for f in flags.iter() {
+                f.store(true, Ordering::SeqCst);
+            }
+        }
     });
 }
 
@@ -218,13 +246,13 @@ fn run_system_command(args: &str, cwd: &Path) -> Result<std::process::ExitStatus
             .stdout(std::process::Stdio::inherit())
             .stderr(std::process::Stdio::inherit())
             .spawn()?;
-        
+
         CHILD_PID.store(child.id(), Ordering::SeqCst);
         let status = child.wait()?;
         CHILD_PID.store(0, Ordering::SeqCst);
         Ok(status)
     }
-    
+
     #[cfg(not(windows))]
     {
         let mut child = std::process::Command::new("sh")
@@ -234,7 +262,7 @@ fn run_system_command(args: &str, cwd: &Path) -> Result<std::process::ExitStatus
             .stdout(std::process::Stdio::inherit())
             .stderr(std::process::Stdio::inherit())
             .spawn()?;
-        
+
         CHILD_PID.store(child.id(), Ordering::SeqCst);
         let status = child.wait()?;
         CHILD_PID.store(0, Ordering::SeqCst);
@@ -283,7 +311,7 @@ fn parse_search_args(args: &str) -> (String, usize) {
 fn list_supported_files(nav: &Navigator) -> Result<Vec<(String, PathBuf)>> {
     let fmt_cfg = FormatConfig::from_both();
     let mut files = Vec::new();
-    
+
     if let Ok(entries) = std::fs::read_dir(nav.current_path()) {
         for entry in entries.flatten() {
             let path = entry.path();
@@ -296,12 +324,16 @@ fn list_supported_files(nav: &Navigator) -> Result<Vec<(String, PathBuf)>> {
             }
         }
     }
-    
+
     files.sort_by_cached_key(|a| a.0.to_lowercase());
     Ok(files)
 }
 
-fn show_file_selection_menu(_nav: &Navigator, files: Vec<(String, PathBuf)>, copy_mode: bool) -> Result<()> {
+fn show_file_selection_menu(
+    _nav: &Navigator,
+    files: Vec<(String, PathBuf)>,
+    copy_mode: bool,
+) -> Result<()> {
     let title = if copy_mode {
         "Select a file to COPY to clipboard"
     } else {

@@ -1,6 +1,7 @@
 use crossterm::event::{Event, KeyCode, KeyEventKind, KeyModifiers};
 
 use super::{Editor, HexViewer, Mode};
+use crate::t;
 
 const BYTES_PER_ROW: usize = 16;
 
@@ -10,7 +11,7 @@ impl Editor {
         let data = match std::fs::read(&path) {
             Ok(d) => d,
             Err(e) => {
-                self.status_msg = Some(format!("hex: cannot read file: {}", e));
+                self.status_msg = Some(format!("{} {}", t!("editor.hex_cannot_read"), e));
                 return;
             }
         };
@@ -27,7 +28,7 @@ impl Editor {
         });
         self.mode = Mode::Hex;
         self.mark_all_dirty();
-        self.status_msg = Some("Hex mode — 0-9/a-f edit bytes  u=undo  Ctrl+R=redo  :=command  Esc=exit".into());
+        self.status_msg = Some(t!("editor.hex_mode_hint"));
     }
 
     fn exit_hex_mode(&mut self) {
@@ -36,7 +37,11 @@ impl Editor {
         self.mark_all_dirty();
     }
 
-    pub(crate) fn handle_hex_event(&mut self, ev: Event, _stdout: &mut std::io::Stdout) -> std::io::Result<()> {
+    pub(crate) fn handle_hex_event(
+        &mut self,
+        ev: Event,
+        _stdout: &mut std::io::Stdout,
+    ) -> std::io::Result<()> {
         let hex = match self.hex.as_mut() {
             Some(h) => h,
             None => return Ok(()),
@@ -51,7 +56,7 @@ impl Editor {
                 match (ctrl, ke.code) {
                     (false, KeyCode::Esc) => {
                         if hex.modified {
-                            self.status_msg = Some("Unsaved hex changes. Use :w to save, :q! to discard.".into());
+                            self.status_msg = Some(t!("editor.hex_unsaved_warning"));
                         } else {
                             self.exit_hex_mode();
                         }
@@ -97,7 +102,8 @@ impl Editor {
                     }
                     (false, KeyCode::PageDown) => {
                         let rows = self.term_h.saturating_sub(4).max(1);
-                        let n = (rows * BYTES_PER_ROW).min(hex.data.len().saturating_sub(hex.cursor + 1));
+                        let n = (rows * BYTES_PER_ROW)
+                            .min(hex.data.len().saturating_sub(hex.cursor + 1));
                         hex.cursor += n;
                         hex.nibble = false;
                         hex.pending_byte = 0;
@@ -183,11 +189,13 @@ fn hex_ensure_visible(hex: &mut HexViewer, term_h: usize) {
 fn hex_undo(hex: &mut HexViewer) {
     if let Some(ops) = hex.undo_stack.pop() {
         hex.redo_stack.push(
-            ops.iter().map(|&(off, old)| {
-                let current = hex.data[off];
-                hex.data[off] = old;
-                (off, current)
-            }).collect()
+            ops.iter()
+                .map(|&(off, old)| {
+                    let current = hex.data[off];
+                    hex.data[off] = old;
+                    (off, current)
+                })
+                .collect(),
         );
         hex.modified = !hex.undo_stack.is_empty();
         hex.nibble = false;
@@ -198,11 +206,13 @@ fn hex_undo(hex: &mut HexViewer) {
 fn hex_redo(hex: &mut HexViewer) {
     if let Some(ops) = hex.redo_stack.pop() {
         hex.undo_stack.push(
-            ops.iter().map(|&(off, old)| {
-                let current = hex.data[off];
-                hex.data[off] = old;
-                (off, current)
-            }).collect()
+            ops.iter()
+                .map(|&(off, old)| {
+                    let current = hex.data[off];
+                    hex.data[off] = old;
+                    (off, current)
+                })
+                .collect(),
         );
         hex.modified = true;
         hex.nibble = false;

@@ -2,9 +2,9 @@ use crossterm::cursor::MoveTo;
 use crossterm::event::{self, Event, KeyCode, KeyEvent, KeyEventKind};
 use std::io::Write;
 
+use crossterm::queue;
 use crossterm::style::{Color, Print, ResetColor, SetBackgroundColor, SetForegroundColor};
 use crossterm::terminal::{self, Clear, ClearType};
-use crossterm::queue;
 
 /// Number of visual columns for the gutter (auto-expands in render).
 pub(crate) fn gutter_width(total_lines: usize) -> usize {

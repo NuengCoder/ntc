@@ -1,28 +1,27 @@
 // src/image2doc/analyzer.rs
 
+use crate::image2doc::classify::{classify_image, Classification};
+use crate::image2doc::color::ColorAnalysis;
+use crate::image2doc::layout;
 use anyhow::Result;
 use image::{DynamicImage, GenericImageView};
-use crate::image2doc::color::ColorAnalysis;
-use crate::image2doc::classify::{Classification, classify_image};
-use crate::image2doc::layout;
 
 #[derive(Debug, Clone)]
 pub struct ImageAnalysis {
     pub color_analysis: ColorAnalysis,
-    pub edge_density: f32,      // Percentage of edges detected
-    pub text_density: f32,      // Likelihood of text regions
-    pub symmetry: f32,          // Horizontal symmetry score
+    pub edge_density: f32, // Percentage of edges detected
+    pub text_density: f32, // Likelihood of text regions
+    pub symmetry: f32,     // Horizontal symmetry score
 }
 
 #[derive(Debug, Clone)]
 pub struct LayoutElement {
     pub element_type: ElementType,
-    pub bounds: (u32, u32, u32, u32),  // x, y, width, height
+    pub bounds: (u32, u32, u32, u32), // x, y, width, height
     pub confidence: f32,
-    pub text: Option<String>,          // OCR text associated with this element
-    pub font_size_pt: Option<u32>,     // Estimated font size in points
+    pub text: Option<String>,      // OCR text associated with this element
+    pub font_size_pt: Option<u32>, // Estimated font size in points
 }
-
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum ElementType {
@@ -84,14 +83,14 @@ pub fn compute_text_density(img: &DynamicImage) -> f32 {
     if w < 4 || h < 4 {
         return 0.0;
     }
-    
+
     let mut high_freq_rows = 0u32;
     let total_rows = h;
-    
+
     for y in 0..h {
         let mut transitions = 0u32;
         let mut last_brightness = 0i16;
-        
+
         for x in 0..w {
             let p = img.get_pixel(x, y);
             let brightness = (p[0] as i16 + p[1] as i16 + p[2] as i16) / 3;
@@ -100,20 +99,25 @@ pub fn compute_text_density(img: &DynamicImage) -> f32 {
             }
             last_brightness = brightness;
         }
-        
+
         if transitions > w / 4 {
             high_freq_rows += 1;
         }
     }
-    
+
     high_freq_rows as f32 / total_rows as f32
 }
 
 /// Analyze image for layout elements
-pub fn analyze_image(img: &DynamicImage, quantize: usize, edge_density: f32, text_density: f32) -> Result<ImageAnalysis> {
+pub fn analyze_image(
+    img: &DynamicImage,
+    quantize: usize,
+    edge_density: f32,
+    text_density: f32,
+) -> Result<ImageAnalysis> {
     let color_analysis = crate::image2doc::color::analyze_colors(img, quantize);
     let symmetry = calculate_symmetry(img);
-    
+
     Ok(ImageAnalysis {
         color_analysis,
         edge_density,

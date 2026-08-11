@@ -1,5 +1,13 @@
 use colored::*;
 
+fn icon(unicode: &'static str, ascii: &'static str) -> &'static str {
+    if crate::utils::terminal::is_ascii_mode() {
+        ascii
+    } else {
+        unicode
+    }
+}
+
 /// Print a colored separator line to stdout.
 pub fn print_separator(title: &str) {
     let width: usize = 71;
@@ -42,13 +50,13 @@ pub fn print_success(msg: &str) {
     {
         use colored::Colorize;
         let theme = crate::utils::theme::ThemeManager::current();
-        let icon = "✓".color(theme.shell.success.to_colored()).bold();
+        let icon = icon("✓", "+").color(theme.shell.success.to_colored()).bold();
         let text = msg.color(theme.shell.success.to_colored());
         println!("{} {}", icon, text);
     }
     #[cfg(target_os = "android")]
     {
-        println!("✓ {}", msg);
+        println!("{} {}", icon("✓", "+"), msg);
     }
 }
 
@@ -58,13 +66,13 @@ pub fn print_error(msg: &str) {
     {
         use colored::Colorize;
         let theme = crate::utils::theme::ThemeManager::current();
-        let icon = "✗".color(theme.shell.error.to_colored()).bold();
+        let icon = icon("✗", "x").color(theme.shell.error.to_colored()).bold();
         let text = msg.color(theme.shell.error.to_colored());
         eprintln!("{} {}", icon, text);
     }
     #[cfg(target_os = "android")]
     {
-        eprintln!("✗ {}", msg);
+        eprintln!("{} {}", icon("✗", "x"), msg);
     }
 }
 
@@ -74,13 +82,13 @@ pub fn print_info(msg: &str) {
     {
         use colored::Colorize;
         let theme = crate::utils::theme::ThemeManager::current();
-        let icon = "ℹ".color(theme.shell.info.to_colored());
+        let icon = icon("ℹ", "i").color(theme.shell.info.to_colored());
         let text = msg.color(theme.shell.info.to_colored());
         println!("{} {}", icon, text);
     }
     #[cfg(target_os = "android")]
     {
-        println!("ℹ {}", msg);
+        println!("{} {}", icon("ℹ", "i"), msg);
     }
 }
 
@@ -90,12 +98,12 @@ pub fn print_warning(msg: &str) {
     {
         use colored::Colorize;
         let theme = crate::utils::theme::ThemeManager::current();
-        let icon = "⚠".color(theme.shell.warning.to_colored());
+        let icon = icon("⚠", "!").color(theme.shell.warning.to_colored());
         let text = msg.color(theme.shell.warning.to_colored());
         println!("{} {}", icon, text);
     }
     #[cfg(target_os = "android")]
     {
-        println!("⚠ {}", msg);
+        println!("{} {}", icon("⚠", "!"), msg);
     }
 }

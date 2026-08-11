@@ -29,16 +29,32 @@ pub(super) struct Parser {
 impl Parser {
     pub(super) fn new(tokens: Vec<Token>) -> Self {
         let len = tokens.len();
-        Self { tokens, positions: vec![0; len], pos: 0 }
+        Self {
+            tokens,
+            positions: vec![0; len],
+            pos: 0,
+        }
     }
 
     pub(super) fn with_positions(tokens: Vec<Token>, positions: Vec<usize>) -> Self {
-        Self { tokens, positions, pos: 0 }
+        Self {
+            tokens,
+            positions,
+            pos: 0,
+        }
     }
 
-    pub(super) fn peek(&self) -> &Token { &self.tokens[self.pos] }
-    pub(super) fn advance(&mut self) -> Token { let t = self.tokens[self.pos].clone(); self.pos += 1; t }
-    pub(super) fn current_offset(&self) -> usize { self.positions.get(self.pos).copied().unwrap_or(0) }
+    pub(super) fn peek(&self) -> &Token {
+        &self.tokens[self.pos]
+    }
+    pub(super) fn advance(&mut self) -> Token {
+        let t = self.tokens[self.pos].clone();
+        self.pos += 1;
+        t
+    }
+    pub(super) fn current_offset(&self) -> usize {
+        self.positions.get(self.pos).copied().unwrap_or(0)
+    }
 
     fn expect(&mut self, tok: &Token) -> Result<()> {
         let actual = self.advance();
@@ -57,7 +73,11 @@ impl Parser {
             }
             Token::Ident(_) => {
                 let saved = self.pos;
-                let name = if let Token::Ident(s) = self.advance() { s } else { unreachable!() };
+                let name = if let Token::Ident(s) = self.advance() {
+                    s
+                } else {
+                    unreachable!()
+                };
                 if matches!(self.peek(), Token::Equal) {
                     self.advance();
                     let val = self.parse_expr()?;
@@ -74,7 +94,11 @@ impl Parser {
     pub(super) fn parse_expr(&mut self) -> Result<Expr> {
         let mut left = self.parse_term()?;
         while matches!(self.peek(), Token::Op('+') | Token::Op('-')) {
-            let op = if let Token::Op(c) = self.advance() { c } else { unreachable!() };
+            let op = if let Token::Op(c) = self.advance() {
+                c
+            } else {
+                unreachable!()
+            };
             let right = self.parse_term()?;
             left = Expr::Binary(Box::new(left), op, Box::new(right));
         }
@@ -84,7 +108,11 @@ impl Parser {
     fn parse_term(&mut self) -> Result<Expr> {
         let mut left = self.parse_unary()?;
         while matches!(self.peek(), Token::Op('*') | Token::Op('/')) {
-            let op = if let Token::Op(c) = self.advance() { c } else { unreachable!() };
+            let op = if let Token::Op(c) = self.advance() {
+                c
+            } else {
+                unreachable!()
+            };
             let right = self.parse_unary()?;
             left = Expr::Binary(Box::new(left), op, Box::new(right));
         }
@@ -93,9 +121,15 @@ impl Parser {
 
     fn parse_unary(&mut self) -> Result<Expr> {
         if matches!(self.peek(), Token::Op('-') | Token::Op('+')) {
-            let op = if let Token::Op(c) = self.advance() { c } else { unreachable!() };
+            let op = if let Token::Op(c) = self.advance() {
+                c
+            } else {
+                unreachable!()
+            };
             let expr = self.parse_power()?;
-            if op == '-' { return Ok(Expr::Unary(Box::new(expr))); }
+            if op == '-' {
+                return Ok(Expr::Unary(Box::new(expr)));
+            }
             return Ok(expr);
         }
         self.parse_power()
@@ -138,8 +172,14 @@ impl Parser {
                     _ => Ok(Expr::Ident(name)),
                 }
             }
-            Token::Num(val) => { self.advance(); Ok(Expr::Num(val)) }
-            Token::Str(s) => { self.advance(); Ok(Expr::Str(s)) }
+            Token::Num(val) => {
+                self.advance();
+                Ok(Expr::Num(val))
+            }
+            Token::Str(s) => {
+                self.advance();
+                Ok(Expr::Str(s))
+            }
             Token::LParen => {
                 self.advance();
                 let expr = self.parse_expr()?;

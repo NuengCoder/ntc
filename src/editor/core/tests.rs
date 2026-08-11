@@ -1,6 +1,6 @@
 #[cfg(test)]
 mod tests {
-    use crate::editor::{Editor, CursorPos};
+    use crate::editor::{CursorPos, Editor};
 
     fn test_editor(content: &[&str]) -> Editor {
         let dir = std::env::temp_dir().join("ntc_editor_test");

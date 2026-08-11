@@ -64,7 +64,10 @@ fn make_diagnostic(
 ) -> Value {
     let (line, col) = byte_to_lsp_position(text, byte_offset);
     // Estimate range: from the error position to end of line
-    let line_end = text[byte_offset..].find('\n').map(|i| byte_offset + i).unwrap_or(text.len());
+    let line_end = text[byte_offset..]
+        .find('\n')
+        .map(|i| byte_offset + i)
+        .unwrap_or(text.len());
     let (end_line, end_col) = byte_to_lsp_position(text, line_end);
 
     serde_json::json!({
@@ -104,7 +107,9 @@ fn builtin_hover(name: &str) -> Option<&'static str> {
         "sum" => Some("sum(a, b, c, ...) → sum of values"),
         "min" => Some("min(a, b, c, ...) → minimum value"),
         "max" => Some("max(a, b, c, ...) → maximum value"),
-        "avg" | "average" | "mean" => Some("avg(x, ...) / average(x, ...) / mean(x, ...) → arithmetic mean"),
+        "avg" | "average" | "mean" => {
+            Some("avg(x, ...) / average(x, ...) / mean(x, ...) → arithmetic mean")
+        }
         "rand" | "random" => Some("rand(min, max) → random integer in [min, max]"),
         "tobinary" => Some("toBinary(n) → binary string representation"),
         "tohex" => Some("toHex(n) → hex string representation"),
@@ -207,9 +212,15 @@ fn publish_diagnostics(
         let line_byte_offset = content
             .lines()
             .take(line_idx)
-            .map(|l| l.len() + {
-                let rest = &content[l.len()..];
-                if rest.starts_with("\r\n") { 2 } else { 1 }
+            .map(|l| {
+                l.len() + {
+                    let rest = &content[l.len()..];
+                    if rest.starts_with("\r\n") {
+                        2
+                    } else {
+                        1
+                    }
+                }
             })
             .sum::<usize>();
 
@@ -228,7 +239,11 @@ fn publish_diagnostics(
         }
     }
 
-    _logger.log(format_args!("publishing {} diagnostics for {}", diagnostics.len(), uri));
+    _logger.log(format_args!(
+        "publishing {} diagnostics for {}",
+        diagnostics.len(),
+        uri
+    ));
 
     let notif = serde_json::json!({
         "jsonrpc": "2.0",
@@ -299,9 +314,7 @@ fn path_to_uri(path: &Path) -> String {
     let abs = if path.is_absolute() {
         path.to_path_buf()
     } else {
-        std::env::current_dir()
-            .unwrap_or_default()
-            .join(path)
+        std::env::current_dir().unwrap_or_default().join(path)
     };
     let path_str = abs.to_string_lossy().replace('\\', "/");
     if path_str.starts_with('/') {
@@ -332,7 +345,12 @@ impl LspLogger {
         use std::io::Write;
         if let Some(ref f) = self.file {
             let mut f = f;
-            let _ = writeln!(f, "[{}] {}", chrono::offset::Local::now().format("%H:%M:%S%.3f"), msg);
+            let _ = writeln!(
+                f,
+                "[{}] {}",
+                chrono::offset::Local::now().format("%H:%M:%S%.3f"),
+                msg
+            );
             let _ = f.flush();
         }
     }
@@ -360,7 +378,10 @@ fn run_server_inner(log_path: Option<&Path>) -> Result<()> {
             }
         };
 
-        logger.log(format_args!("received: {}", serde_json::to_string(&msg).unwrap_or_default()));
+        logger.log(format_args!(
+            "received: {}",
+            serde_json::to_string(&msg).unwrap_or_default()
+        ));
 
         let method = msg["method"].as_str().unwrap_or("");
         let id = msg.get("id").cloned();
@@ -393,7 +414,10 @@ fn run_server_inner(log_path: Option<&Path>) -> Result<()> {
                         "result": caps
                     });
                     write_message(&mut writer, &resp)?;
-                    logger.log(format_args!("sent: {}", serde_json::to_string(&resp).unwrap_or_default()));
+                    logger.log(format_args!(
+                        "sent: {}",
+                        serde_json::to_string(&resp).unwrap_or_default()
+                    ));
                 }
             }
 
@@ -477,7 +501,9 @@ fn run_server_inner(log_path: Option<&Path>) -> Result<()> {
                     let mut items = Vec::new();
 
                     let params = msg.get("params");
-                    let uri = params.and_then(|p| p["textDocument"]["uri"].as_str()).unwrap_or("");
+                    let uri = params
+                        .and_then(|p| p["textDocument"]["uri"].as_str())
+                        .unwrap_or("");
                     let is_math = is_ntc_math_uri(uri);
                     let is_mql = is_mql_uri(uri);
 
@@ -593,7 +619,11 @@ fn run_server_inner(log_path: Option<&Path>) -> Result<()> {
                         }
                     });
                     write_message(&mut writer, &resp)?;
-                    logger.log(format_args!("completions: {} items for {}", items.len(), uri));
+                    logger.log(format_args!(
+                        "completions: {} items for {}",
+                        items.len(),
+                        uri
+                    ));
                 }
             }
 
@@ -604,9 +634,17 @@ fn run_server_inner(log_path: Option<&Path>) -> Result<()> {
             "textDocument/hover" => {
                 if let Some(req_id) = &id {
                     let params = msg.get("params");
-                    let uri = params.and_then(|p| p["textDocument"]["uri"].as_str()).unwrap_or("");
-                    let pos_line: usize = params.and_then(|p| p["position"]["line"].as_u64()).and_then(|v| v.try_into().ok()).unwrap_or(0);
-                    let pos_col: usize = params.and_then(|p| p["position"]["character"].as_u64()).and_then(|v| v.try_into().ok()).unwrap_or(0);
+                    let uri = params
+                        .and_then(|p| p["textDocument"]["uri"].as_str())
+                        .unwrap_or("");
+                    let pos_line: usize = params
+                        .and_then(|p| p["position"]["line"].as_u64())
+                        .and_then(|v| v.try_into().ok())
+                        .unwrap_or(0);
+                    let pos_col: usize = params
+                        .and_then(|p| p["position"]["character"].as_u64())
+                        .and_then(|v| v.try_into().ok())
+                        .unwrap_or(0);
 
                     let mut hover_contents: Option<String> = None;
 
@@ -648,65 +686,97 @@ fn run_server_inner(log_path: Option<&Path>) -> Result<()> {
                             let byte_offset = pos_to_byte_offset(text, pos_line, pos_col);
                             if let Some(word) = word_at_offset(text, byte_offset) {
                                 if let Some(doc) = mql::hover_info_detailed(word) {
-                                    hover_contents = Some(format!("**{}**  \n```\n{}\n```", word, doc));
+                                    hover_contents =
+                                        Some(format!("**{}**  \n```\n{}\n```", word, doc));
                                 } else if let Some(doc) = mql::hover_info(word) {
                                     hover_contents = Some(format!("**{}**  \n{}", word, doc));
-                                    } else {
-                                        let lines: Vec<String> = text.lines().map(String::from).collect();
-                                        let mut found = false;
-                                        for func in mql::extract_user_functions(&lines) {
-                                            if func.name == word {
-                                                let sig = if func.params.is_empty() {
-                                                    format!("{} {}", func.return_type, func.name)
+                                } else {
+                                    let lines: Vec<String> =
+                                        text.lines().map(String::from).collect();
+                                    let mut found = false;
+                                    for func in mql::extract_user_functions(&lines) {
+                                        if func.name == word {
+                                            let sig = if func.params.is_empty() {
+                                                format!("{} {}", func.return_type, func.name)
+                                            } else {
+                                                let lines: Vec<String> = func
+                                                    .params
+                                                    .split(',')
+                                                    .map(|p| {
+                                                        let p = p.trim();
+                                                        let t: Vec<&str> =
+                                                            p.split_whitespace().collect();
+                                                        if t.len() >= 2 {
+                                                            format!(
+                                                                "  {}: {}",
+                                                                t[t.len() - 1],
+                                                                t[..t.len() - 1].join(" ")
+                                                            )
+                                                        } else {
+                                                            format!("  {}", p)
+                                                        }
+                                                    })
+                                                    .collect();
+                                                format!(
+                                                    "{}{}\n{}\n{}",
+                                                    func.name,
+                                                    "(",
+                                                    lines.join("\n"),
+                                                    ")"
+                                                )
+                                            };
+                                            if let Some(box_content) =
+                                                mql::extract_comment_box(&lines, func.line)
+                                            {
+                                                hover_contents = Some(format!(
+                                                    "**{}**  \n{}\n\n```\n{}\n```",
+                                                    word, sig, box_content
+                                                ));
+                                            } else {
+                                                hover_contents =
+                                                    Some(format!("**{}**  \n{}", word, sig));
+                                            }
+                                            found = true;
+                                            break;
+                                        }
+                                    }
+                                    if !found {
+                                        for (name, line) in mql::extract_classes(&lines) {
+                                            if name == word {
+                                                if let Some(box_content) =
+                                                    mql::extract_comment_box(&lines, line)
+                                                {
+                                                    hover_contents = Some(format!(
+                                                        "**[class] {}**  \n```\n{}\n```",
+                                                        word, box_content
+                                                    ));
                                                 } else {
-                                                    let lines: Vec<String> = func.params
-                                                        .split(',')
-                                                        .map(|p| {
-                                                            let p = p.trim();
-                                                            let t: Vec<&str> = p.split_whitespace().collect();
-                                                            if t.len() >= 2 {
-                                                                format!("  {}: {}", t[t.len()-1], t[..t.len()-1].join(" "))
-                                                            } else {
-                                                                format!("  {}", p)
-                                                            }
-                                                        })
-                                                        .collect();
-                                                    format!("{}{}\n{}\n{}", func.name, "(", lines.join("\n"), ")")
-                                                };
-                                                if let Some(box_content) = mql::extract_comment_box(&lines, func.line) {
-                                                    hover_contents = Some(format!("**{}**  \n{}\n\n```\n{}\n```", word, sig, box_content));
-                                                } else {
-                                                    hover_contents = Some(format!("**{}**  \n{}", word, sig));
+                                                    hover_contents =
+                                                        Some(format!("**[class] {}**", word));
                                                 }
-                                                found = true;
                                                 break;
                                             }
                                         }
-                                        if !found {
-                                            for (name, line) in mql::extract_classes(&lines) {
-                                                if name == word {
-                                                    if let Some(box_content) = mql::extract_comment_box(&lines, line) {
-                                                        hover_contents = Some(format!("**[class] {}**  \n```\n{}\n```", word, box_content));
-                                                    } else {
-                                                        hover_contents = Some(format!("**[class] {}**", word));
-                                                    }
-                                                    break;
+                                    }
+                                    if hover_contents.is_none() {
+                                        for (name, line) in mql::extract_structs(&lines) {
+                                            if name == word {
+                                                if let Some(box_content) =
+                                                    mql::extract_comment_box(&lines, line)
+                                                {
+                                                    hover_contents = Some(format!(
+                                                        "**[struct] {}**  \n```\n{}\n```",
+                                                        word, box_content
+                                                    ));
+                                                } else {
+                                                    hover_contents =
+                                                        Some(format!("**[struct] {}**", word));
                                                 }
-                                            }
-                                        }
-                                        if hover_contents.is_none() {
-                                            for (name, line) in mql::extract_structs(&lines) {
-                                                if name == word {
-                                                    if let Some(box_content) = mql::extract_comment_box(&lines, line) {
-                                                        hover_contents = Some(format!("**[struct] {}**  \n```\n{}\n```", word, box_content));
-                                                    } else {
-                                                        hover_contents = Some(format!("**[struct] {}**", word));
-                                                    }
-                                                    break;
-                                                }
+                                                break;
                                             }
                                         }
                                     }
+                                }
                             }
                         }
                     }
@@ -728,16 +798,27 @@ fn run_server_inner(log_path: Option<&Path>) -> Result<()> {
                         "result": result
                     });
                     write_message(&mut writer, &resp)?;
-                    logger.log(format_args!("hover for {}:{}:{} -> {:?}", uri, pos_line, pos_col, hover_contents));
+                    logger.log(format_args!(
+                        "hover for {}:{}:{} -> {:?}",
+                        uri, pos_line, pos_col, hover_contents
+                    ));
                 }
             }
 
             "textDocument/definition" => {
                 if let Some(req_id) = &id {
                     let params = msg.get("params");
-                    let uri = params.and_then(|p| p["textDocument"]["uri"].as_str()).unwrap_or("");
-                    let pos_line: usize = params.and_then(|p| p["position"]["line"].as_u64()).and_then(|v| v.try_into().ok()).unwrap_or(0);
-                    let pos_col: usize = params.and_then(|p| p["position"]["character"].as_u64()).and_then(|v| v.try_into().ok()).unwrap_or(0);
+                    let uri = params
+                        .and_then(|p| p["textDocument"]["uri"].as_str())
+                        .unwrap_or("");
+                    let pos_line: usize = params
+                        .and_then(|p| p["position"]["line"].as_u64())
+                        .and_then(|v| v.try_into().ok())
+                        .unwrap_or(0);
+                    let pos_col: usize = params
+                        .and_then(|p| p["position"]["character"].as_u64())
+                        .and_then(|v| v.try_into().ok())
+                        .unwrap_or(0);
 
                     let mut locations = Vec::new();
 
@@ -749,7 +830,8 @@ fn run_server_inner(log_path: Option<&Path>) -> Result<()> {
 
                                 let cfg_guard = Config::read_global();
                                 if cfg_guard.math_functions.contains_key(&lower) {
-                                    let config_path = dirs::config_dir().map(|d| d.join("ntc").join("config.toml"));
+                                    let config_path = dirs::config_dir()
+                                        .map(|d| d.join("ntc").join("config.toml"));
                                     if let Some(path) = config_path {
                                         let file_uri = path_to_uri(&path);
                                         locations.push(serde_json::json!({
@@ -778,7 +860,13 @@ fn run_server_inner(log_path: Option<&Path>) -> Result<()> {
                         "result": result
                     });
                     write_message(&mut writer, &resp)?;
-                    logger.log(format_args!("definition for {}:{}:{} -> {} locations", uri, pos_line, pos_col, locations.len()));
+                    logger.log(format_args!(
+                        "definition for {}:{}:{} -> {} locations",
+                        uri,
+                        pos_line,
+                        pos_col,
+                        locations.len()
+                    ));
                 }
             }
 

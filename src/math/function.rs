@@ -1,6 +1,8 @@
 use anyhow::{bail, Result};
 use colored::Colorize;
 
+use crate::t;
+
 use super::builtins::RESERVED;
 
 // ============================================================================
@@ -18,14 +20,14 @@ pub(super) fn handle_fun(args: &str) -> Result<()> {
         "info" | "show" => fun_info(subargs),
         "ls" | "list" => fun_ls(),
         _ => {
-            println!("{}", "math fun commands:".cyan().bold());
+            println!("{}", t!("math.fun_commands_header").cyan().bold());
             println!("  math fun add <name>(<params>) = <body>    Define a function");
             println!("  math fun rm <name>                       Remove a function");
             println!("  math fun edit <name> = <body>            Update a function");
             println!("  math fun info <name>                     Show function details");
             println!("  math fun ls                              List all functions");
             println!();
-            println!("{}", "Examples:".green());
+            println!("{}", t!("math.examples_header").green());
             println!("  math fun add square(x) = x^2");
             println!("  math fun add add3(a,b,c) = a + b + c");
             println!("  math fun rm square");
@@ -44,15 +46,23 @@ fn fun_add(args: &str) -> Result<()> {
     let def = format!("{} => {}", params.join(","), body);
     crate::config::Config::global_add_math_fn(&name, &def);
     crate::config::Config::reload_global();
-    println!("  Defined: {}({}) = {}", name.green(), params.join(", ").cyan(), body.yellow());
+    println!(
+        "  Defined: {}({}) = {}",
+        name.green(),
+        params.join(", ").cyan(),
+        body.yellow()
+    );
     Ok(())
 }
 
 fn fun_rm(args: &str) -> Result<()> {
-    let name = args.split_whitespace().next().ok_or_else(|| anyhow::anyhow!("Usage: math fun rm <name>"))?;
+    let name = args
+        .split_whitespace()
+        .next()
+        .ok_or_else(|| anyhow::anyhow!("Usage: math fun rm <name>"))?;
     crate::config::Config::global_remove_math_fn(name);
     crate::config::Config::reload_global();
-    println!("  Removed: {}", name.green());
+    println!("{}", t!("math.fun_removed", name.green()));
     Ok(())
 }
 
@@ -68,19 +78,30 @@ fn fun_edit(args: &str) -> Result<()> {
 
     crate::config::Config::global_update_math_fn(&name, &def);
     crate::config::Config::reload_global();
-    println!("  Updated: {}({}) = {}", name.green(), params.join(", ").cyan(), body.yellow());
+    println!(
+        "  Updated: {}({}) = {}",
+        name.green(),
+        params.join(", ").cyan(),
+        body.yellow()
+    );
     Ok(())
 }
 
 fn fun_info(args: &str) -> Result<()> {
-    let name = args.split_whitespace().next().ok_or_else(|| anyhow::anyhow!("Usage: math fun info <name>"))?;
+    let name = args
+        .split_whitespace()
+        .next()
+        .ok_or_else(|| anyhow::anyhow!("Usage: math fun info <name>"))?;
     let lower = name.to_lowercase();
 
     let cfg = crate::config::Config::read_global();
     match cfg.math_functions.get(&lower) {
         Some(def) => {
             let (params, body) = if let Some(arrow) = def.find("=>") {
-                (def[..arrow].trim().to_string(), def[arrow + 2..].trim().to_string())
+                (
+                    def[..arrow].trim().to_string(),
+                    def[arrow + 2..].trim().to_string(),
+                )
             } else {
                 ("?".to_string(), def.clone())
             };
@@ -100,18 +121,22 @@ fn fun_ls() -> Result<()> {
     let fns = &cfg.math_functions;
 
     if fns.is_empty() {
-        println!("  No user-defined functions. Use 'math fun add <name>(<params>) = <body>'");
+        println!("{}", t!("math.fun_none"));
         return Ok(());
     }
 
-    println!("{}", "User-defined math functions:".cyan().bold());
+    println!("{}", t!("math.fun_list_header").cyan().bold());
     let mut sorted: Vec<(&String, &String)> = fns.iter().collect();
     sorted.sort_by(|a, b| a.0.cmp(b.0));
 
     for (name, def) in &sorted {
         let arrow = def.find("=>").unwrap_or(0);
         let params = def[..arrow].trim();
-        let body = if arrow + 2 <= def.len() { def[arrow + 2..].trim() } else { "" };
+        let body = if arrow + 2 <= def.len() {
+            def[arrow + 2..].trim()
+        } else {
+            ""
+        };
         println!("  {}({}) = {}", name.green(), params.cyan(), body.yellow());
     }
     Ok(())
@@ -120,7 +145,9 @@ fn fun_ls() -> Result<()> {
 fn parse_function_def(input: &str) -> Result<(String, Vec<String>, String)> {
     let input = input.trim();
 
-    let eq_pos = input.find('=').ok_or_else(|| anyhow::anyhow!("Missing '=' in function definition"))?;
+    let eq_pos = input
+        .find('=')
+        .ok_or_else(|| anyhow::anyhow!("Missing '=' in function definition"))?;
     let lhs = input[..eq_pos].trim();
     let body = input[eq_pos + 1..].trim();
 
@@ -151,7 +178,11 @@ fn parse_function_def(input: &str) -> Result<(String, Vec<String>, String)> {
     let params: Vec<String> = if params_str.is_empty() {
         Vec::new()
     } else {
-        params_str.split(',').map(|s| s.trim().to_string()).filter(|s| !s.is_empty()).collect()
+        params_str
+            .split(',')
+            .map(|s| s.trim().to_string())
+            .filter(|s| !s.is_empty())
+            .collect()
     };
 
     Ok((name.to_string(), params, body.to_string()))

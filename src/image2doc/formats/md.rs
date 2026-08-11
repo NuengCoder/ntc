@@ -1,8 +1,8 @@
 // src/image2doc/formats/md.rs
 
-use crate::image2doc::converter::Metadata;
 use crate::image2doc::analyzer::{ImageAnalysis, LayoutElement};
 use crate::image2doc::classify::Classification;
+use crate::image2doc::converter::Metadata;
 
 pub fn render(
     metadata: &Metadata,
@@ -13,37 +13,75 @@ pub fn render(
     classification: &Classification,
 ) -> String {
     let mut md = String::new();
-    
+
     // Header
     md.push_str(&format!("# Image Analysis: {}\n\n", metadata.path));
-    
+
     // Image classification
     md.push_str("## 🏷️ Image Classification\n\n");
-    md.push_str(&format!("- **Type:** {} (confidence: {:.0}%)\n", classification.image_type.label(), classification.confidence * 100.0));
-    md.push_str(&format!("- **Description:** {}\n\n", classification.image_type.description()));
-    
+    md.push_str(&format!(
+        "- **Type:** {} (confidence: {:.0}%)\n",
+        classification.image_type.label(),
+        classification.confidence * 100.0
+    ));
+    md.push_str(&format!(
+        "- **Description:** {}\n\n",
+        classification.image_type.description()
+    ));
+
     // Metadata table
     md.push_str("## 📋 Metadata\n\n");
     md.push_str("| Property | Value |\n");
     md.push_str("|----------|-------|\n");
     md.push_str(&format!("| Format | {} |\n", metadata.format));
-    md.push_str(&format!("| Dimensions | {} × {} px |\n", metadata.width, metadata.height));
-    md.push_str(&format!("| File size | {} |\n", crate::explorer::human_readable_size(metadata.file_size)));
-    md.push_str(&format!("| Aspect ratio | {:.2} |\n", metadata.aspect_ratio));
+    md.push_str(&format!(
+        "| Dimensions | {} × {} px |\n",
+        metadata.width, metadata.height
+    ));
+    md.push_str(&format!(
+        "| File size | {} |\n",
+        crate::explorer::human_readable_size(metadata.file_size)
+    ));
+    md.push_str(&format!(
+        "| Aspect ratio | {:.2} |\n",
+        metadata.aspect_ratio
+    ));
     md.push('\n');
-    
+
     // Color analysis
     md.push_str("## 🎨 Color Analysis\n\n");
-    md.push_str(&format!("- **Theme:** {}\n", if analysis.color_analysis.is_dark { "Dark" } else { "Light" }));
-    md.push_str(&format!("- **Brightness:** {:.1}%\n", analysis.color_analysis.brightness * 100.0));
-    md.push_str(&format!("- **Contrast ratio:** {:.2}:1\n", analysis.color_analysis.contrast));
-    md.push_str(&format!("- **Unique colors:** {}\n", analysis.color_analysis.color_count));
-    md.push_str(&format!("- **Gradient ratio:** {:.1}%\n", analysis.color_analysis.gradient_ratio * 100.0));
+    md.push_str(&format!(
+        "- **Theme:** {}\n",
+        if analysis.color_analysis.is_dark {
+            "Dark"
+        } else {
+            "Light"
+        }
+    ));
+    md.push_str(&format!(
+        "- **Brightness:** {:.1}%\n",
+        analysis.color_analysis.brightness * 100.0
+    ));
+    md.push_str(&format!(
+        "- **Contrast ratio:** {:.2}:1\n",
+        analysis.color_analysis.contrast
+    ));
+    md.push_str(&format!(
+        "- **Unique colors:** {}\n",
+        analysis.color_analysis.color_count
+    ));
+    md.push_str(&format!(
+        "- **Gradient ratio:** {:.1}%\n",
+        analysis.color_analysis.gradient_ratio * 100.0
+    ));
     md.push_str("\n**Dominant colors:**\n\n");
-    
+
     for (color, pct) in &analysis.color_analysis.dominant_colors {
         let name = crate::image2doc::color::color_name(color[0], color[1], color[2]);
-        md.push_str(&format!("- `#{:02x}{:02x}{:02x}` — **{}** — {:.1}%\n", color[0], color[1], color[2], name, pct));
+        md.push_str(&format!(
+            "- `#{:02x}{:02x}{:02x}` — **{}** — {:.1}%\n",
+            color[0], color[1], color[2], name, pct
+        ));
     }
     md.push('\n');
 
@@ -51,24 +89,36 @@ pub fn render(
     md.push_str("## 📊 Image Analysis\n\n");
     md.push_str("| Metric | Value |\n");
     md.push_str("|--------|-------|\n");
-    md.push_str(&format!("| Edge density | {:.1}% |\n", analysis.edge_density * 100.0));
-    md.push_str(&format!("| Text density | {:.1}% |\n", analysis.text_density * 100.0));
-    md.push_str(&format!("| Horizontal symmetry | {:.1}% |\n", analysis.symmetry * 100.0));
-    md.push_str(&format!("| Gradient ratio | {:.1}% |\n", analysis.color_analysis.gradient_ratio * 100.0));
+    md.push_str(&format!(
+        "| Edge density | {:.1}% |\n",
+        analysis.edge_density * 100.0
+    ));
+    md.push_str(&format!(
+        "| Text density | {:.1}% |\n",
+        analysis.text_density * 100.0
+    ));
+    md.push_str(&format!(
+        "| Horizontal symmetry | {:.1}% |\n",
+        analysis.symmetry * 100.0
+    ));
+    md.push_str(&format!(
+        "| Gradient ratio | {:.1}% |\n",
+        analysis.color_analysis.gradient_ratio * 100.0
+    ));
     md.push('\n');
-    
+
     // ASCII preview
     md.push_str("## 🖼️ ASCII Preview\n\n```\n");
     md.push_str(ascii_art);
     md.push_str("\n```\n\n");
-    
+
     // Extracted text
     if let Some(text) = extracted_text {
         md.push_str("## 📝 Extracted Text (OCR)\n\n```text\n");
         md.push_str(text);
         md.push_str("\n```\n\n");
     }
-    
+
     // Layout detection
     if !layout.is_empty() {
         md.push_str("## 📐 Detected Layout\n\n");
@@ -92,15 +142,30 @@ pub fn render(
             let size = format!("{}×{}", w, h);
             let conf = format!("{:.0}%", elem.confidence * 100.0);
             let text = elem.text.as_deref().unwrap_or("");
-            let font = elem.font_size_pt.map(|f| format!("{}pt", f)).unwrap_or_default();
-            md.push_str(&format!("| {} | **{}** | {} | {} | {} | {} | {} |\n", i + 1, type_str, pos, size, font, conf, text));
+            let font = elem
+                .font_size_pt
+                .map(|f| format!("{}pt", f))
+                .unwrap_or_default();
+            md.push_str(&format!(
+                "| {} | **{}** | {} | {} | {} | {} | {} |\n",
+                i + 1,
+                type_str,
+                pos,
+                size,
+                font,
+                conf,
+                text
+            ));
         }
         md.push('\n');
     }
-    
+
     // Footer
     md.push_str("---\n");
-    md.push_str(&format!("*Generated by ntc v{} - Image to Document Converter*\n", env!("CARGO_PKG_VERSION")));
-    
+    md.push_str(&format!(
+        "*Generated by ntc v{} - Image to Document Converter*\n",
+        env!("CARGO_PKG_VERSION")
+    ));
+
     md
 }

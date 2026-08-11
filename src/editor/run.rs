@@ -7,11 +7,12 @@ use crossterm::event::{
     self, DisableMouseCapture, EnableMouseCapture, Event, KeyCode, KeyEvent, KeyEventKind,
     KeyModifiers, MouseEvent,
 };
-use crossterm::terminal::{self, EnterAlternateScreen, LeaveAlternateScreen};
 use crossterm::execute;
+use crossterm::terminal::{self, EnterAlternateScreen, LeaveAlternateScreen};
 
 use super::{Editor, Focus, Mode};
 use crate::editor::types::RunMessage;
+use crate::t;
 
 /// Drop guard that restores the terminal to a usable state on any exit path
 /// (normal return, error, or panic).
@@ -26,7 +27,12 @@ impl TerminalGuard {
 impl Drop for TerminalGuard {
     fn drop(&mut self) {
         let _ = terminal::disable_raw_mode();
-        let _ = execute!(std::io::stdout(), DisableMouseCapture, Show, LeaveAlternateScreen);
+        let _ = execute!(
+            std::io::stdout(),
+            DisableMouseCapture,
+            Show,
+            LeaveAlternateScreen
+        );
     }
 }
 
@@ -55,7 +61,6 @@ impl Editor {
             };
             anyhow::anyhow!("Editor panicked: {}", msg)
         })?
-
     }
 
     pub(crate) fn main_loop(&mut self, stdout: &mut std::io::Stdout) -> Result<bool> {
@@ -80,9 +85,7 @@ impl Editor {
             }
             // ── Blink tick — runs even when no input arrives ──
             let blink_rate = self.editor_cfg.cursor_blink_rate_ms;
-            if blink_rate > 0
-                && self.last_blink.elapsed().as_millis() as u64 >= blink_rate
-            {
+            if blink_rate > 0 && self.last_blink.elapsed().as_millis() as u64 >= blink_rate {
                 self.cursor_visible = !self.cursor_visible;
                 self.last_blink = Instant::now();
                 self.mark_dirty(self.cursor.y);
@@ -103,7 +106,8 @@ impl Editor {
             }
             // ── Session auto-save ──
             if self.editor_cfg.session_auto_save_secs > 0
-                && self.last_session_save.elapsed().as_secs() >= self.editor_cfg.session_auto_save_secs
+                && self.last_session_save.elapsed().as_secs()
+                    >= self.editor_cfg.session_auto_save_secs
             {
                 let snapshot = self.capture_full_session();
                 let mut session = crate::session::SessionState::write_global();
@@ -140,13 +144,18 @@ impl Editor {
                                 let panel_h = self.run_panel_height();
                                 let total = term.total_lines();
                                 let cursor_abs_y = term.scrollback.len() + term.cursor_y;
-                                self.sv.run = (cursor_abs_y + 1).saturating_sub(panel_h).min(total.saturating_sub(panel_h));
+                                self.sv.run = (cursor_abs_y + 1)
+                                    .saturating_sub(panel_h)
+                                    .min(total.saturating_sub(panel_h));
                             }
                         }
                         // Horizontal follow — keep cursor in visible range
                         if let Some(ref term) = self.terminal {
                             let editor_cols = self.term_w.saturating_sub(self.editor_offset());
-                            term.ensure_cursor_visible_x(&mut self.sv.terminal_scroll_x, editor_cols.saturating_sub(1));
+                            term.ensure_cursor_visible_x(
+                                &mut self.sv.terminal_scroll_x,
+                                editor_cols.saturating_sub(1),
+                            );
                         }
                         self.mark_all_dirty();
                         self.render(stdout)?;
@@ -182,8 +191,7 @@ impl Editor {
             let is_mouse_scroll = matches!(
                 &ev,
                 Event::Mouse(MouseEvent {
-                    kind:
-                        crossterm::event::MouseEventKind::ScrollUp
+                    kind: crossterm::event::MouseEventKind::ScrollUp
                         | crossterm::event::MouseEventKind::ScrollDown
                         | crossterm::event::MouseEventKind::ScrollLeft
                         | crossterm::event::MouseEventKind::ScrollRight,
@@ -318,13 +326,18 @@ impl Editor {
                                 let panel_h = self.run_panel_height();
                                 let total = term.total_lines();
                                 let cursor_abs_y = term.scrollback.len() + term.cursor_y;
-                                self.sv.run = (cursor_abs_y + 1).saturating_sub(panel_h).min(total.saturating_sub(panel_h));
+                                self.sv.run = (cursor_abs_y + 1)
+                                    .saturating_sub(panel_h)
+                                    .min(total.saturating_sub(panel_h));
                             }
                         }
                         // Horizontal follow — keep cursor in visible range
                         if let Some(ref term) = self.terminal {
                             let editor_cols = self.term_w.saturating_sub(self.editor_offset());
-                            term.ensure_cursor_visible_x(&mut self.sv.terminal_scroll_x, editor_cols.saturating_sub(1));
+                            term.ensure_cursor_visible_x(
+                                &mut self.sv.terminal_scroll_x,
+                                editor_cols.saturating_sub(1),
+                            );
                         }
                         self.mark_all_dirty();
                         self.render(stdout)?;
@@ -347,9 +360,9 @@ impl Editor {
                         if let Some(mut child) = self.run_child.take() {
                             let exit_code = child.wait().ok().and_then(|s| s.code());
                             if let Some(code) = exit_code {
-                                self.push_run_line(format!("Process exited with code {}", code));
+                                self.push_run_line(t!("editor.run_exited", code));
                             } else {
-                                self.push_run_line("Process terminated".into());
+                                self.push_run_line(t!("editor.run_terminated"));
                             }
                             let panel_h = self.run_panel_height();
                             self.sv.run = self.run_lines.len().saturating_sub(panel_h);

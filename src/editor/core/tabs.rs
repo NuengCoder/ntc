@@ -3,23 +3,36 @@ use std::path::Path;
 use anyhow::Context;
 
 use crate::editor::{Editor, Mode, Tab};
+use crate::t;
 
 pub(crate) fn read_file_lines(path: &Path) -> anyhow::Result<Vec<String>> {
     let bytes = std::fs::read(path)
-        .with_context(|| format!("Cannot open {}", path.display()))?;
+        .with_context(|| format!("{} {}", t!("editor.tab_cannot_open"), path.display()))?;
     if bytes.is_empty() {
         return Ok(vec![]);
     }
     let content = if bytes.starts_with(b"\xef\xbb\xbf") {
-        encoding_rs::UTF_8.decode_without_bom_handling(&bytes[3..]).0.into_owned()
+        encoding_rs::UTF_8
+            .decode_without_bom_handling(&bytes[3..])
+            .0
+            .into_owned()
     } else if bytes.starts_with(b"\xff\xfe") {
-        encoding_rs::UTF_16LE.decode_without_bom_handling(&bytes[2..]).0.into_owned()
+        encoding_rs::UTF_16LE
+            .decode_without_bom_handling(&bytes[2..])
+            .0
+            .into_owned()
     } else if bytes.starts_with(b"\xfe\xff") {
-        encoding_rs::UTF_16BE.decode_without_bom_handling(&bytes[2..]).0.into_owned()
+        encoding_rs::UTF_16BE
+            .decode_without_bom_handling(&bytes[2..])
+            .0
+            .into_owned()
     } else {
         let (decoded, had_errors) = encoding_rs::UTF_8.decode_without_bom_handling(&bytes);
         if had_errors {
-            encoding_rs::WINDOWS_1252.decode_without_bom_handling(&bytes).0.into_owned()
+            encoding_rs::WINDOWS_1252
+                .decode_without_bom_handling(&bytes)
+                .0
+                .into_owned()
         } else {
             decoded.into_owned()
         }
@@ -51,7 +64,11 @@ impl Editor {
     }
 
     pub(crate) fn editor_offset(&self) -> usize {
-        if self.sidebar.open { self.sidebar.width + 1 } else { 0 }
+        if self.sidebar.open {
+            self.sidebar.width + 1
+        } else {
+            0
+        }
     }
 
     pub(crate) fn toggle_sidebar(&mut self) {
@@ -173,7 +190,12 @@ impl Editor {
             match read_file_lines(path) {
                 Ok(content) => content,
                 Err(e) => {
-                    self.status_msg = Some(format!("Error reading {}: {}", path.display(), e));
+                    self.status_msg = Some(format!(
+                        "{} {}: {}",
+                        t!("editor.tab_error_reading"),
+                        path.display(),
+                        e
+                    ));
                     return false;
                 }
             }
@@ -203,7 +225,7 @@ impl Editor {
             self.syntax.pre_tokenize_up_to(lines.len(), &lines);
         }
         self.mark_all_dirty();
-        self.status_msg = Some(format!("Opened {}", path.display()));
+        self.status_msg = Some(format!("{} {}", t!("editor.tab_opened"), path.display()));
         true
     }
 
@@ -232,7 +254,11 @@ impl Editor {
         }
 
         if self.tabs.len() >= self.editor_cfg.max_tabs {
-            self.status_msg = Some(format!("Max tabs ({}) reached", self.editor_cfg.max_tabs));
+            self.status_msg = Some(format!(
+                "{} ({})",
+                t!("editor.tab_max_reached"),
+                self.editor_cfg.max_tabs
+            ));
         } else {
             self.tabs.push(Tab::from_editor(self));
             self.active_tab = self.tabs.len() - 1;

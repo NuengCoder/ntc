@@ -2,13 +2,14 @@
 //! (`report` with subcommands: txt, json, md, html, pdf, docx, xlsx).
 //! Also provides `txtc` (copy file) and `txtf` (display file).
 
+use super::{list_supported_files, show_file_selection_menu};
 use crate::config::Config;
 use crate::filetype::is_supported_format;
 use crate::navigator::Navigator;
 use crate::output::{cat_file_with_syntax, print_error, print_success, print_warning};
 use crate::report::{generate_report, ReportFormat};
 use crate::shell::helpers::show_tree;
-use super::{list_supported_files, show_file_selection_menu};
+use crate::t;
 
 use colored::*;
 
@@ -16,7 +17,8 @@ use anyhow::Result;
 use std::path::Path;
 
 pub fn cmd_view(args: &str, nav: &mut Navigator) -> Result<bool> {
-    let mut show_sizes = false;
+    let mut show_filesize = false;
+    let mut show_dirsize = false;
     let mut depth_override: Option<usize> = None;
     let mut copy_to_clipboard = false;
     let mut care_sizes = false;
@@ -26,7 +28,12 @@ pub fn cmd_view(args: &str, nav: &mut Navigator) -> Result<bool> {
     let mut i = 0;
     while i < parts.len() {
         match parts[i] {
-            "-s" | "--size" => show_sizes = true,
+            "-s" | "--size" => {
+                show_filesize = true;
+                show_dirsize = true;
+            }
+            "-fs" | "--filesize" => show_filesize = true,
+            "-ds" | "--dirsize" => show_dirsize = true,
             "-c" | "--cp" => copy_to_clipboard = true,
             "--care" => care_sizes = true,
             "--time" | "-t" => show_time = true,
@@ -36,13 +43,14 @@ pub fn cmd_view(args: &str, nav: &mut Navigator) -> Result<bool> {
                         depth_override = Some(depth);
                         i += 1;
                     } else {
-                        print_error(&format!("Invalid depth: {}", parts[i + 1]));
+                        print_error(&t!("cmd.report.invalid_depth", parts[i + 1]));
                     }
                 }
             }
+            "--" => break,
             _ => {
-                print_error(&format!("Unknown view option: {}", parts[i]));
-                println!("Usage: view [-s|--size] [-c|--cp] [--care] [-t|--time] [-d|--depth <n>]");
+                print_error(&t!("cmd.report.unknown_option", parts[i]));
+                println!("{}", t!("cmd.report.view_usage"));
                 return Ok(false);
             }
         }
@@ -51,12 +59,22 @@ pub fn cmd_view(args: &str, nav: &mut Navigator) -> Result<bool> {
 
     let max_depth = depth_override.unwrap_or(Config::global_get_max_depth());
     let start = std::time::Instant::now();
-    show_tree(nav, Some(max_depth), true, true, show_sizes, copy_to_clipboard, care_sizes);
+    show_tree(
+        nav,
+        Some(max_depth),
+        true,
+        true,
+        show_filesize,
+        show_dirsize,
+        copy_to_clipboard,
+        care_sizes,
+    );
     if show_time {
         let elapsed = crate::explorer::format_duration(start.elapsed());
-        let w = elapsed.len() + 16;
+        let time_label = t!("cmd.report.time_label");
+        let w = time_label.len() + elapsed.len() + 8;
         println!("┌{}┐", "─".repeat(w));
-        println!("│ Time:  {:<w$} │", elapsed.cyan(), w = w - 9);
+        println!("│ {} {} ", time_label.cyan(), elapsed.cyan());
         println!("└{}┘", "─".repeat(w));
     }
     Ok(false)
@@ -76,25 +94,29 @@ pub fn cmd_report(args: &str, _nav: &mut Navigator) -> Result<bool> {
         "docx" => generate_report_dir_only(Path::new(subargs), ReportFormat::Docx, "DOCX")?,
         "xlsx" => generate_report_dir_only(Path::new(subargs), ReportFormat::Xlsx, "XLSX")?,
         _ => {
-            println!("{}", "report — Generate project reports".cyan().bold());
-            println!("  report txt [path]      Generate TXT report");
-            println!("  report json [path]     Generate JSON report");
-            println!("  report md [path]       Generate Markdown report");
-            println!("  report html [path]     Generate HTML report");
-            println!("  report pdf [path]      Generate PDF report");
-            println!("  report docx [path]     Generate DOCX report");
-            println!("  report xlsx [path]     Generate XLSX report");
+            println!("{}", t!("cmd.report.title").cyan().bold());
+            println!("  {}", t!("cmd.report.help_txt"));
+            println!("  {}", t!("cmd.report.help_json"));
+            println!("  {}", t!("cmd.report.help_md"));
+            println!("  {}", t!("cmd.report.help_html"));
+            println!("  {}", t!("cmd.report.help_pdf"));
+            println!("  {}", t!("cmd.report.help_docx"));
+            println!("  {}", t!("cmd.report.help_xlsx"));
             println!();
-            println!("{}", "Examples:".green());
-            println!("  report txt             Report on current directory");
-            println!("  report json ..         Report on parent directory");
+            println!("{}", t!("cmd.report.examples").green());
+            println!("  {}", t!("cmd.report.example_txt"));
+            println!("  {}", t!("cmd.report.example_json"));
         }
     }
     Ok(false)
 }
 
 fn generate_report_file(target: &Path, format: ReportFormat) -> Result<()> {
-    let target = if target.as_os_str().is_empty() { Path::new(".") } else { target };
+    let target = if target.as_os_str().is_empty() {
+        Path::new(".")
+    } else {
+        target
+    };
     if target.is_dir() {
         generate_report(target, format)?;
     } else if target.is_file() {
@@ -102,28 +124,36 @@ fn generate_report_file(target: &Path, format: ReportFormat) -> Result<()> {
             let show_lines = Config::global_get_show_line_numbers();
             cat_file_with_syntax(target, show_lines)?;
         } else {
-            print_warning(&format!("Skipped (not support format): {}", target.display()));
+            print_warning(&t!("cmd.report.skipped_unsupported", target.display()));
         }
     }
     Ok(())
 }
 
 fn generate_report_dir(target: &Path, format: ReportFormat, label: &str) -> Result<()> {
-    let target = if target.as_os_str().is_empty() { Path::new(".") } else { target };
+    let target = if target.as_os_str().is_empty() {
+        Path::new(".")
+    } else {
+        target
+    };
     if target.is_dir() {
         generate_report(target, format)?;
     } else {
-        print_error(&format!("{} report only works on directories", label));
+        print_error(&t!("cmd.report.dir_only", label));
     }
     Ok(())
 }
 
 fn generate_report_dir_only(target: &Path, format: ReportFormat, label: &str) -> Result<()> {
-    let target = if target.as_os_str().is_empty() { Path::new(".") } else { target };
+    let target = if target.as_os_str().is_empty() {
+        Path::new(".")
+    } else {
+        target
+    };
     if target.is_dir() {
         generate_report(target, format)?;
     } else {
-        print_error(&format!("{} report only works on directories", label));
+        print_error(&t!("cmd.report.dir_only", label));
     }
     Ok(())
 }
@@ -142,16 +172,21 @@ pub fn cmd_txtc(args: &str, nav: &mut Navigator) -> Result<bool> {
                 #[cfg(target_os = "android")]
                 {
                     use crate::output::print_info;
-                    print_info(&format!("Copying '{}' to clipboard...", target.display()));
+                    print_info(&t!("cmd.report.copying_clipboard", target.display()));
                     match crate::output::copy_to_clipboard(&content, "TXT") {
                         Ok(()) => {}
                         Err(e) => {
-                            print_error(&format!("Failed to copy: {}", e));
-                            let output_file = crate::output::build_output_path(&format!("copied_{}.txt",
-                                target.file_name().unwrap_or_default().to_string_lossy()));
+                            print_error(&t!("cmd.report.copy_failed", e));
+                            let output_file = crate::output::build_output_path(&format!(
+                                "copied_{}.txt",
+                                target.file_name().unwrap_or_default().to_string_lossy()
+                            ));
                             if let Ok(()) = crate::output::write_file(&output_file, &content) {
-                                print_success(&format!("File content saved to: {}", output_file.display()));
-                                print_info(&format!("You can open this in Neovim with: :edit {}", output_file.display()));
+                                print_success(&t!(
+                                    "cmd.report.content_saved",
+                                    output_file.display()
+                                ));
+                                print_info(&t!("cmd.report.neovim_hint", output_file.display()));
                             }
                         }
                     }
@@ -160,13 +195,13 @@ pub fn cmd_txtc(args: &str, nav: &mut Navigator) -> Result<bool> {
                 #[cfg(not(target_os = "android"))]
                 {
                     crate::output::copy_to_clipboard(&content, "TXT")?;
-                    print_success(&format!("File '{}' copied to clipboard!", target.display()));
+                    print_success(&t!("cmd.report.copied_clipboard", target.display()));
                 }
             } else {
-                print_warning(&format!("Skipped (not support format): {}", args));
+                print_warning(&t!("cmd.report.skipped_unsupported", args));
             }
         } else {
-            print_error(&format!("File not found: {}", args));
+            print_error(&t!("cmd.report.file_not_found", args));
         }
     }
     Ok(false)
@@ -183,10 +218,10 @@ pub fn cmd_txtf(args: &str, nav: &mut Navigator) -> Result<bool> {
                 let show_lines = Config::global_get_show_line_numbers();
                 cat_file_with_syntax(target, show_lines)?;
             } else {
-                print_warning(&format!("Skipped (not support format): {}", args));
+                print_warning(&t!("cmd.report.skipped_unsupported", args));
             }
         } else {
-            print_error(&format!("File not found: {}", args));
+            print_error(&t!("cmd.report.file_not_found", args));
         }
     }
     Ok(false)

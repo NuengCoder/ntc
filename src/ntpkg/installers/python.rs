@@ -8,11 +8,12 @@ use std::process::Command;
 use super::super::download::download_with_progress;
 #[cfg(not(any(windows, target_os = "macos")))]
 use super::super::download::extract_archive;
-use super::super::types::{ArchiveType, PackageSource};
 #[cfg(not(windows))]
 use super::super::manager::find_system_binary;
 use super::super::manager::{load_manifest, platform_key, save_manifest};
+use super::super::types::{ArchiveType, PackageSource};
 use crate::output::{print_info, print_success};
+use crate::t;
 use crate::utils::interactive::prompt_yes_no;
 
 /// Check if a matching Python version is already installed on the system.
@@ -54,21 +55,26 @@ pub(crate) fn detect_system_python(version: &str) -> Result<Option<PathBuf>> {
 /// Download, extract, configure, make, and install Python into `prefix_dir`.
 /// Only used on Linux / Termux (not Windows, not macOS).
 #[cfg(not(any(windows, target_os = "macos")))]
-fn build_python_from_source(tarball: &Path, prefix_dir: &Path, name: &str, version: &str) -> Result<()> {
+fn build_python_from_source(
+    tarball: &Path,
+    prefix_dir: &Path,
+    name: &str,
+    version: &str,
+) -> Result<()> {
     let build_dir = std::env::temp_dir().join(format!("ntc-build-python-{version}"));
     if build_dir.exists() {
         let _ = fs::remove_dir_all(&build_dir);
     }
     fs::create_dir_all(&build_dir)?;
 
-    print_info("Extracting source tarball...");
+    print_info(&t!("ntpkg.extracting_source"));
     extract_archive(tarball, &build_dir, ArchiveType::TarGz)?;
 
     let source_dir = find_source_dir(&build_dir, version)?;
 
     check_build_deps()?;
 
-    print_info("Configuring (./configure)...");
+    print_info(&t!("ntpkg.configuring"));
     let status = Command::new("./configure")
         .arg(format!("--prefix={}", prefix_dir.display()))
         .current_dir(&source_dir)
@@ -76,7 +82,11 @@ fn build_python_from_source(tarball: &Path, prefix_dir: &Path, name: &str, versi
         .context("Failed to run ./configure")?;
 
     if !status.success() {
-        bail!("{} ./configure failed (exit code {:?})", name, status.code());
+        bail!(
+            "{} ./configure failed (exit code {:?})",
+            name,
+            status.code()
+        );
     }
 
     let jobs = parallel_jobs();
@@ -91,7 +101,7 @@ fn build_python_from_source(tarball: &Path, prefix_dir: &Path, name: &str, versi
         bail!("make failed (exit code {:?})", status.code());
     }
 
-    print_info("Installing (make install)...");
+    print_info(&t!("ntpkg.installing"));
     let status = Command::new("make")
         .arg("install")
         .current_dir(&source_dir)
@@ -139,7 +149,8 @@ fn check_build_deps() -> Result<()> {
         if find_system_binary(tool).is_none() {
             let hint = if find_system_binary("pacman").is_some() {
                 "sudo pacman -S base-devel"
-            } else if find_system_binary("apt-get").is_some() || find_system_binary("apt").is_some() {
+            } else if find_system_binary("apt-get").is_some() || find_system_binary("apt").is_some()
+            {
                 "sudo apt install build-essential libssl-dev zlib1g-dev"
             } else if find_system_binary("dnf").is_some() {
                 "sudo dnf groupinstall 'Development Tools'"
@@ -149,9 +160,7 @@ fn check_build_deps() -> Result<()> {
                 "install gcc, make and related build tools"
             };
 
-            bail!(
-                "Build tool '{tool}' not found.\n  Install build dependencies:\n    {hint}"
-            );
+            bail!("Build tool '{tool}' not found.\n  Install build dependencies:\n    {hint}");
         }
     }
     Ok(())
@@ -236,14 +245,20 @@ pub(crate) fn download_and_launch_installer(
     print_success(&format!("Downloaded to {}", installer_path.display()));
 
     if prompt_yes_no(&format!("Start {name} {version} installer"), true)? {
-        print_info("Launching installer. Complete the setup, then close the installer window...");
+        print_info(&t!("ntpkg.launch_installer"));
         super::launch_installer_and_wait(&installer_path, name, version)?;
 
         let real_dir = find_python_install_dir()?;
-        print_success(&format!("Detected {name} installed at {}", real_dir.display()));
+        print_success(&format!(
+            "Detected {name} installed at {}",
+            real_dir.display()
+        ));
 
-        fs::write(vdir.join(".real_path"), real_dir.to_string_lossy().as_bytes())
-            .context("Failed to write .real_path")?;
+        fs::write(
+            vdir.join(".real_path"),
+            real_dir.to_string_lossy().as_bytes(),
+        )
+        .context("Failed to write .real_path")?;
     }
 
     let mut manifest = load_manifest()?;

@@ -1,4 +1,5 @@
 use crate::editor::Editor;
+use crate::t;
 
 impl Editor {
     pub(crate) fn push_to_system_clipboard(text: &str) {
@@ -46,13 +47,13 @@ impl Editor {
             let text = self.current().to_string() + "\n";
             Self::push_to_system_clipboard(&text);
             self.clipboard = text;
-            self.status_msg = Some("Copied line".into());
+            self.status_msg = Some(t!("editor.clip_copied_line"));
             return;
         }
         let text = self.selected_text();
         Self::push_to_system_clipboard(&text);
         self.clipboard = text.clone();
-        self.status_msg = Some(format!("Copied {} chars", text.len()));
+        self.status_msg = Some(t!("editor.clip_copied_chars", text.len()));
     }
 
     pub(crate) fn cut_selection(&mut self) {
@@ -72,7 +73,7 @@ impl Editor {
             self.dirty_end = self.dirty_end.max(self.lines.len());
             self.cursor.byte = self.cursor.byte.min(self.current().len());
             self.modified = true;
-            self.status_msg = Some("Cut line".into());
+            self.status_msg = Some(t!("editor.clip_cut_line"));
             return;
         }
         self.snapshot();
@@ -80,7 +81,7 @@ impl Editor {
         Self::push_to_system_clipboard(&text);
         self.clipboard = text.clone();
         self.delete_selection();
-        self.status_msg = Some(format!("Cut {} chars", text.len()));
+        self.status_msg = Some(t!("editor.clip_cut_chars", text.len()));
     }
 
     pub(crate) fn paste_fast(&mut self, text: &str) {
@@ -135,7 +136,7 @@ impl Editor {
         let text = Self::pull_from_system_clipboard().unwrap_or_else(|| self.clipboard.clone());
 
         if text.is_empty() {
-            self.status_msg = Some("Clipboard is empty".into());
+            self.status_msg = Some(t!("editor.clip_empty"));
             return;
         }
         self.snapshot();
@@ -150,6 +151,6 @@ impl Editor {
         let text = self.current().to_string() + "\n";
         Self::push_to_system_clipboard(&text);
         self.clipboard = text;
-        self.status_msg = Some("Line yanked".into());
+        self.status_msg = Some(t!("editor.clip_yanked"));
     }
 }

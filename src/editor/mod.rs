@@ -1,41 +1,39 @@
 // ── submodules ──────────────────────────────────────────────────────────────
 
-mod types;
-mod unicode;
-mod helpers;
+mod commands;
+mod completion;
 mod core;
-mod hex;
 mod edit;
+mod editor_config;
+mod helpers;
+mod hex;
 mod modes;
-mod render;
 mod mouse;
+mod recovery;
+mod render;
 mod run;
 mod template;
-mod editor_config;
-mod completion;
-mod recovery;
-mod commands;
 pub(crate) mod terminal;
+mod types;
+mod unicode;
 
 // ── re-exports for sibling modules ──────────────────────────────────────────
 
-pub(crate) use types::{
-    Editor, Focus, Mode, Snapshot, CursorPos, Tab, HexViewer, GOTO_LINE,
-    MIN_SIDEBAR_WIDTH,
-};
 pub(crate) use completion::CompletionItem;
+pub(crate) use types::{
+    CursorPos, Editor, Focus, HexViewer, Mode, Snapshot, Tab, GOTO_LINE, MIN_SIDEBAR_WIDTH,
+};
 
 pub(crate) use unicode::{
-    char_col_width, byte_to_col, col_to_byte,
-    prev_char_byte, next_char_byte,
-    next_word_byte, prev_word_byte,
-    is_ctrl_char, auto_pair,
+    auto_pair, byte_to_col, char_col_width, col_to_byte, is_ctrl_char, next_char_byte,
+    next_word_byte, prev_char_byte, prev_word_byte,
 };
 
-pub(crate) use helpers::{
-    gutter_width, set_status_bar, prompt_yes_no, sel_range,
-};
+pub(crate) use helpers::{gutter_width, prompt_yes_no, sel_range, set_status_bar};
 
 // ── public API ──────────────────────────────────────────────────────────────
 
-pub use template::{edit_file, edit_file_with_session, init_file, generate_template, generate_super_template, init_super_file, generate_welcome_content, init_hyper_project};
+pub use template::{
+    edit_file, edit_file_with_session, generate_super_template, generate_template,
+    generate_welcome_content, init_file, init_hyper_project, init_super_file,
+};

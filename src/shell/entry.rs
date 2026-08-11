@@ -1,11 +1,12 @@
-use crate::navigator::{Navigator};
+use crate::config::Config as NtcConfig;
+use crate::navigator::Navigator;
 use crate::output::{print_error, print_info, print_warning};
 use crate::session::SessionState;
-use crate::watcher;
 use crate::shell::alias::expand_command_line;
 use crate::shell::commands::execute_command;
 use crate::shell::helpers::show_tree;
-use crate::config::Config as NtcConfig;
+use crate::t;
+use crate::watcher;
 
 use anyhow::Result;
 use colored::*;
@@ -13,9 +14,9 @@ use rustyline::completion::{Completer, Pair};
 use rustyline::error::ReadlineError;
 use rustyline::highlight::Highlighter;
 use rustyline::hint::Hinter;
-use rustyline::validate::Validator;
 use rustyline::history::FileHistory;
-use rustyline::{Context, Editor, Config as RlConfig};
+use rustyline::validate::Validator;
+use rustyline::{Config as RlConfig, Context, Editor};
 use std::sync::Arc;
 
 /// Combined rustyline helper wrapping our custom hinter.
@@ -92,7 +93,11 @@ pub fn run_classic_shell(mut nav: Navigator) -> Result<()> {
         }
         std::env::set_var("PATH", &new_path);
         let count = pkg_dirs.len();
-        print_info(&format!("ntpkg: {} runtime{} active in PATH", count, if count == 1 { "" } else { "s" }));
+        print_info(&t!(
+            "entry.ntpkg_active",
+            count,
+            if count == 1 { "" } else { "s" }
+        ));
     }
 
     let mut rl = Editor::<NtcHelper, FileHistory>::with_config(RlConfig::default())
@@ -109,33 +114,38 @@ pub fn run_classic_shell(mut nav: Navigator) -> Result<()> {
             Ok(w) => {
                 let wh = Arc::new(w);
                 watcher_handle = Some(wh);
-                print_info("File watcher started (recursive)");
+                print_info(&t!("entry.watcher_started"));
             }
-            Err(e) => print_warning(&format!("Watcher failed: {}", e)),
+            Err(e) => print_warning(&t!("entry.watcher_failed", e)),
         }
     }
 
     println!();
     println!("╔══════════════════════════════════════════════════════════════════╗");
-    println!("║{}║", format!("        Welcome to ntc {} - Navigate, Toolkit, Center          ", env!("CARGO_PKG_VERSION")).cyan().bold());
+    println!(
+        "{:^66}",
+        t!("entry.welcome_fmt", env!("CARGO_PKG_VERSION"))
+            .cyan()
+            .bold()
+    );
     println!("╚══════════════════════════════════════════════════════════════════╝");
     println!();
-    println!("{}", "Type 'help' for available commands, 'exit' to quit.".dimmed());
-    show_tree(&nav, Some(1), false, false, false, false, false);
+    println!("{}", t!("entry.startup_hint").dimmed());
+    show_tree(&nav, Some(1), false, false, false, false, false, false);
 
     loop {
         // Check if theme changed
         if crate::utils::theme::ThemeManager::take_theme_changed() {
             // Clear screen and redraw tree with new colors
             crate::navigator::clear_screen();
-            show_tree(&nav, Some(1), false, false, false, false, false);
+            show_tree(&nav, Some(1), false, false, false, false, false, false);
         }
         if let Some(ref wh) = watcher_handle {
             if let Some(summary) = wh.poll() {
                 if !summary.is_empty() {
                     summary.print_change_box();
                 }
-                show_tree(&nav, Some(1), false, false, false, false, false);
+                show_tree(&nav, Some(1), false, false, false, false, false, false);
                 if !summary.is_empty() {
                     summary.print_refresh_box();
                 }
@@ -144,20 +154,20 @@ pub fn run_classic_shell(mut nav: Navigator) -> Result<()> {
                     let expanded = expand_command_line(alias);
                     for cmd in expanded {
                         match execute_command(&cmd, &mut nav, &watcher_handle) {
-                            Ok(_)  => {}
+                            Ok(_) => {}
                             Err(e) => print_error(&format!("watch trigger: {}", e)),
                         }
                     }
                 }
             }
         }
-        
+
         let display_path = nav.display_path();
         let watcher_suffix = if watcher_handle.is_some() { " ~" } else { "" };
-        
+
         // NOTE: Prompt must stay plain text — colored prompts with ANSI codes
         // break rustyline's cursor positioning and line editing.
-        let venv_prefix = nav.get_colored_venv_prefix();  // Use colored version
+        let venv_prefix = nav.get_colored_venv_prefix(); // Use colored version
 
         // Build the prompt
         let prompt = if venv_prefix.is_empty() {
@@ -165,7 +175,7 @@ pub fn run_classic_shell(mut nav: Navigator) -> Result<()> {
         } else {
             format!("{}ntc [{}{}]> ", venv_prefix, display_path, watcher_suffix)
         };
-        
+
         let line = match rl.readline(&prompt) {
             Ok(line) => {
                 rl.add_history_entry(&line).ok();
@@ -176,20 +186,23 @@ pub fn run_classic_shell(mut nav: Navigator) -> Result<()> {
                 continue;
             }
             Err(ReadlineError::Eof) => {
-                println!("{}", "Goodbye!".green());
+                println!("{}", t!("entry.goodbye").green());
                 break;
             }
             Err(_) => break,
         };
-        
-        let line = line.trim().trim_start_matches('\u{feff}').trim_end_matches('\u{feff}');
+
+        let line = line
+            .trim()
+            .trim_start_matches('\u{feff}')
+            .trim_end_matches('\u{feff}');
         if line.is_empty() {
             continue;
         }
-        
+
         // Expand all aliases in the entire line
         let expanded_commands = expand_command_line(line);
-        
+
         // Execute each expanded command in sequence
         let mut should_exit = false;
         for cmd in expanded_commands {
@@ -210,7 +223,7 @@ pub fn run_classic_shell(mut nav: Navigator) -> Result<()> {
                 }
             }
         }
-        
+
         // After commands, check for any watcher-triggered changes that arrived during execution
         if !should_exit {
             if let Some(ref wh) = watcher_handle {
@@ -218,7 +231,7 @@ pub fn run_classic_shell(mut nav: Navigator) -> Result<()> {
                     if !summary.is_empty() {
                         summary.print_change_box();
                     }
-                    show_tree(&nav, Some(1), false, false, false, false, false);
+                    show_tree(&nav, Some(1), false, false, false, false, false, false);
                     if !summary.is_empty() {
                         summary.print_refresh_box();
                     }
@@ -227,33 +240,32 @@ pub fn run_classic_shell(mut nav: Navigator) -> Result<()> {
                         let expanded = expand_command_line(alias);
                         for cmd in expanded {
                             match execute_command(&cmd, &mut nav, &watcher_handle) {
-                                Ok(_)  => {}
-                                Err(e) => print_error(&format!("watch trigger: {}", e)),
+                                Ok(_) => {}
+                                Err(e) => print_error(&t!("entry.watch_trigger", e)),
                             }
                         }
                     }
                 }
             }
-
         }
-        
+
         if should_exit {
             SessionState::write_global().last_directory = Some(nav.current_path().to_path_buf());
             SessionState::save_global();
-            println!("{}", "Goodbye!".green());
+            println!("{}", t!("entry.goodbye").green());
             break;
         }
     }
-    
+
     // Also save on EOF
     SessionState::write_global().last_directory = Some(nav.current_path().to_path_buf());
     SessionState::save_global();
-    
+
     if NtcConfig::global_get_history_enabled() {
         if let Some(history_path) = NtcConfig::read_global().resolve_history_path() {
             let _ = rl.save_history(&history_path);
         }
     }
-    
+
     Ok(())
 }

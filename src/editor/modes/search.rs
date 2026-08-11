@@ -2,6 +2,7 @@ use anyhow::Result;
 use crossterm::event::{Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 
 use crate::editor::{Editor, Mode};
+use crate::t;
 
 impl Editor {
     pub(crate) fn handle_search_event(&mut self, ev: Event) -> Result<()> {
@@ -34,8 +35,8 @@ impl Editor {
                     _ => match code {
                         KeyCode::Esc => {
                             self.mode = Mode::Normal;
-                            self.status_msg = Some(format!(
-                                "Search: {} ({} matches)",
+                            self.status_msg = Some(t!(
+                                "editor.mode_search_count",
                                 self.search.query,
                                 self.search.matches.len()
                             ));
@@ -54,7 +55,8 @@ impl Editor {
                             self.rebuild_search_matches();
                             if !self.search.matches.is_empty() {
                                 self.search.match_idx = self
-                                    .search.match_idx
+                                    .search
+                                    .match_idx
                                     .min(self.search.matches.len().saturating_sub(1));
                                 self.jump_to_match(self.search.match_idx);
                             }
@@ -65,7 +67,8 @@ impl Editor {
                             if !self.search.matches.is_empty() {
                                 let pos = (self.cursor.y, self.cursor.byte);
                                 let idx = self
-                                    .search.matches
+                                    .search
+                                    .matches
                                     .iter()
                                     .position(|&(ly, sb, _)| (ly, sb) >= pos)
                                     .unwrap_or(0);

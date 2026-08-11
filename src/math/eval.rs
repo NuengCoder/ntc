@@ -55,14 +55,22 @@ pub(super) fn eval(expr: &Expr, vars: &mut HashMap<String, f64>) -> Result<EvalR
         Expr::Binary(left, op, right) => {
             let l = eval(left, vars)?;
             let r = eval(right, vars)?;
-            let lv = match l { EvalResult::Num(n) => n, _ => bail!("Binary op requires numbers") };
-            let rv = match r { EvalResult::Num(n) => n, _ => bail!("Binary op requires numbers") };
+            let lv = match l {
+                EvalResult::Num(n) => n,
+                _ => bail!("Binary op requires numbers"),
+            };
+            let rv = match r {
+                EvalResult::Num(n) => n,
+                _ => bail!("Binary op requires numbers"),
+            };
             let result = match op {
                 '+' => lv + rv,
                 '-' => lv - rv,
                 '*' => lv * rv,
                 '/' => {
-                    if rv == 0.0 { bail!("Division by zero"); }
+                    if rv == 0.0 {
+                        bail!("Division by zero");
+                    }
                     lv / rv
                 }
                 '^' => lv.powf(rv),
@@ -78,7 +86,8 @@ pub(super) fn eval(expr: &Expr, vars: &mut HashMap<String, f64>) -> Result<EvalR
             }
         }
         Expr::Call(name, args) => {
-            let evaluated_args: Vec<EvalResult> = args.iter().map(|a| eval(a, vars)).collect::<Result<_>>()?;
+            let evaluated_args: Vec<EvalResult> =
+                args.iter().map(|a| eval(a, vars)).collect::<Result<_>>()?;
             eval_function(name, &evaluated_args, vars)
         }
         Expr::Assign(name, expr) => {

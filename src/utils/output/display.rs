@@ -5,26 +5,39 @@ use colored::*;
 use std::fs;
 use std::io::Write;
 use std::path::{Path, PathBuf};
+use crate::t;
 
 /// Read a file into a Rust String, detecting UTF-8 BOM, UTF-16LE BOM,
 /// and UTF-16BE BOM. Without a BOM, tries UTF-8 first; on encoding
 /// errors, falls back to Windows-1252.
 fn read_file_as_string(path: &Path) -> Result<String> {
-    let bytes = std::fs::read(path)
-        .with_context(|| format!("Failed to read file '{}'", path.display()))?;
+    let bytes =
+        std::fs::read(path).with_context(|| t!("output.read_file_failed", path.display()))?;
     if bytes.is_empty() {
         return Ok(String::new());
     }
     let content = if bytes.starts_with(b"\xef\xbb\xbf") {
-        encoding_rs::UTF_8.decode_without_bom_handling(&bytes[3..]).0.into_owned()
+        encoding_rs::UTF_8
+            .decode_without_bom_handling(&bytes[3..])
+            .0
+            .into_owned()
     } else if bytes.starts_with(b"\xff\xfe") {
-        encoding_rs::UTF_16LE.decode_without_bom_handling(&bytes[2..]).0.into_owned()
+        encoding_rs::UTF_16LE
+            .decode_without_bom_handling(&bytes[2..])
+            .0
+            .into_owned()
     } else if bytes.starts_with(b"\xfe\xff") {
-        encoding_rs::UTF_16BE.decode_without_bom_handling(&bytes[2..]).0.into_owned()
+        encoding_rs::UTF_16BE
+            .decode_without_bom_handling(&bytes[2..])
+            .0
+            .into_owned()
     } else {
         let (decoded, had_errors) = encoding_rs::UTF_8.decode_without_bom_handling(&bytes);
         if had_errors {
-            encoding_rs::WINDOWS_1252.decode_without_bom_handling(&bytes).0.into_owned()
+            encoding_rs::WINDOWS_1252
+                .decode_without_bom_handling(&bytes)
+                .0
+                .into_owned()
         } else {
             decoded.into_owned()
         }
@@ -36,24 +49,14 @@ fn read_file_as_string(path: &Path) -> Result<String> {
 pub fn cat_file(file_path: &Path, show_lines: bool) -> Result<()> {
     let content = read_file_as_string(file_path)?;
 
-    // Print filename header in cyan
     println!(
-        "{}:",
-        file_path
-            .file_name()
-            .unwrap_or_default()
-            .to_string_lossy()
-            .cyan()
-            .bold()
+        "{}",
+        t!("output.filename_header", file_path.file_name().unwrap_or_default().to_string_lossy()).cyan().bold()
     );
 
     if show_lines {
         for (i, line) in content.lines().enumerate() {
-            println!(
-                "{} {}",
-                format!("LINE {}>>", i + 1).yellow().bold(),
-                line
-            );
+            println!("{} {}", t!("output.line_prefix", i + 1).yellow().bold(), line);
         }
     } else {
         println!("{}", content);
@@ -122,12 +125,9 @@ pub fn cat_file_with_syntax(file_path: &Path, show_lines: bool) -> Result<()> {
     let reset = "\x1b[0m";
 
     print!(
-        "{}{}:{}",
+        "{}{}{}",
         header_color,
-        file_path
-            .file_name()
-            .unwrap_or_default()
-            .to_string_lossy(),
+        t!("output.filename_header", file_path.file_name().unwrap_or_default().to_string_lossy()),
         reset
     );
     println!();
@@ -145,7 +145,12 @@ pub fn cat_file_with_syntax(file_path: &Path, show_lines: bool) -> Result<()> {
         let tokens = syntax.tokenize_line(i, line);
 
         if show_lines {
-            print!("{color}LINE {num}>> {reset}{color}", color = line_num_color, num = i + 1, reset = reset);
+            print!(
+                "{}{} {}",
+                line_num_color,
+                t!("output.line_prefix", i + 1),
+                reset,
+            );
             // Stay in the yellow-bold prefix style for the gap.
         }
 
@@ -197,7 +202,7 @@ pub fn cat_file_with_line_numbers(file_path: &Path, show_lines: bool) -> Result<
     let filename = file_path.file_name().unwrap_or_default().to_string_lossy();
 
     let mut output = String::new();
-    output.push_str(&format!("{}:\n", filename));
+    output.push_str(&format!("{}\n", t!("output.filename_header", filename)));
 
     if show_lines {
         for (i, line) in content.lines().enumerate() {
@@ -217,14 +222,14 @@ pub fn cat_file_with_line_numbers(file_path: &Path, show_lines: bool) -> Result<
 pub fn write_file(file_path: &Path, content: &str) -> Result<()> {
     if let Some(parent) = file_path.parent() {
         fs::create_dir_all(parent)
-            .with_context(|| format!("Failed to create directory: {}", parent.display()))?;
+            .with_context(|| t!("output.mkdir_failed", parent.display()))?;
     }
 
     let mut file = fs::File::create(file_path)
-        .with_context(|| format!("Failed to create file: {}", file_path.display()))?;
+        .with_context(|| t!("output.mkfile_failed", file_path.display()))?;
 
     file.write_all(content.as_bytes())
-        .with_context(|| format!("Failed to write to file: {}", file_path.display()))?;
+        .with_context(|| t!("output.write_failed", file_path.display()))?;
 
     Ok(())
 }

@@ -38,7 +38,11 @@ pub(crate) fn tokenize_with_pos(input: &str) -> Result<(Vec<Token>, Vec<usize>)>
     while i < chars.len() {
         let ch = chars[i];
 
-        if ch == '\u{feff}' { i += 1; byte_offset += 3; continue; }
+        if ch == '\u{feff}' {
+            i += 1;
+            byte_offset += 3;
+            continue;
+        }
 
         if ch.is_whitespace() {
             byte_offset += ch.len_utf8();
@@ -83,7 +87,10 @@ pub(crate) fn tokenize_with_pos(input: &str) -> Result<(Vec<Token>, Vec<usize>)>
                         Some('r') => escaped.push('\r'),
                         Some('\\') => escaped.push('\\'),
                         Some('"') => escaped.push('"'),
-                        Some(c) => { escaped.push('\\'); escaped.push(c); }
+                        Some(c) => {
+                            escaped.push('\\');
+                            escaped.push(c);
+                        }
                         None => escaped.push('\\'),
                     }
                 } else {
@@ -108,12 +115,38 @@ pub(crate) fn tokenize_with_pos(input: &str) -> Result<(Vec<Token>, Vec<usize>)>
             continue;
         }
 
-        if ch == '(' { tokens.push(Token::LParen); positions.push(byte_offset); byte_offset += ch.len_utf8(); i += 1; continue; }
-        if ch == ')' { tokens.push(Token::RParen); positions.push(byte_offset); byte_offset += ch.len_utf8(); i += 1; continue; }
-        if ch == ',' { tokens.push(Token::Comma); positions.push(byte_offset); byte_offset += ch.len_utf8(); i += 1; continue; }
-        if ch == '=' { tokens.push(Token::Equal); positions.push(byte_offset); byte_offset += ch.len_utf8(); i += 1; continue; }
+        if ch == '(' {
+            tokens.push(Token::LParen);
+            positions.push(byte_offset);
+            byte_offset += ch.len_utf8();
+            i += 1;
+            continue;
+        }
+        if ch == ')' {
+            tokens.push(Token::RParen);
+            positions.push(byte_offset);
+            byte_offset += ch.len_utf8();
+            i += 1;
+            continue;
+        }
+        if ch == ',' {
+            tokens.push(Token::Comma);
+            positions.push(byte_offset);
+            byte_offset += ch.len_utf8();
+            i += 1;
+            continue;
+        }
+        if ch == '=' {
+            tokens.push(Token::Equal);
+            positions.push(byte_offset);
+            byte_offset += ch.len_utf8();
+            i += 1;
+            continue;
+        }
 
-        if ch.is_ascii_digit() || (ch == '.' && i + 1 < chars.len() && chars[i + 1].is_ascii_digit()) {
+        if ch.is_ascii_digit()
+            || (ch == '.' && i + 1 < chars.len() && chars[i + 1].is_ascii_digit())
+        {
             let num_offset = byte_offset;
             if ch == '0' && i + 1 < chars.len() {
                 let next = chars[i + 1];
@@ -121,7 +154,10 @@ pub(crate) fn tokenize_with_pos(input: &str) -> Result<(Vec<Token>, Vec<usize>)>
                     byte_offset += ch.len_utf8() + chars[i + 1].len_utf8();
                     i += 2;
                     let start = i;
-                    while i < chars.len() && chars[i].is_ascii_hexdigit() { byte_offset += chars[i].len_utf8(); i += 1; }
+                    while i < chars.len() && chars[i].is_ascii_hexdigit() {
+                        byte_offset += chars[i].len_utf8();
+                        i += 1;
+                    }
                     let s: String = chars[start..i].iter().collect();
                     let val = i64::from_str_radix(&s, 16)
                         .map_err(|_| anyhow::anyhow!("Invalid hex number: 0x{}", s))?;
@@ -132,7 +168,10 @@ pub(crate) fn tokenize_with_pos(input: &str) -> Result<(Vec<Token>, Vec<usize>)>
                     byte_offset += ch.len_utf8() + chars[i + 1].len_utf8();
                     i += 2;
                     let start = i;
-                    while i < chars.len() && (chars[i] == '0' || chars[i] == '1') { byte_offset += chars[i].len_utf8(); i += 1; }
+                    while i < chars.len() && (chars[i] == '0' || chars[i] == '1') {
+                        byte_offset += chars[i].len_utf8();
+                        i += 1;
+                    }
                     let s: String = chars[start..i].iter().collect();
                     let val = i64::from_str_radix(&s, 2)
                         .map_err(|_| anyhow::anyhow!("Invalid binary number: 0b{}", s))?;
@@ -143,7 +182,10 @@ pub(crate) fn tokenize_with_pos(input: &str) -> Result<(Vec<Token>, Vec<usize>)>
                     byte_offset += ch.len_utf8() + chars[i + 1].len_utf8();
                     i += 2;
                     let start = i;
-                    while i < chars.len() && chars[i] >= '0' && chars[i] <= '7' { byte_offset += chars[i].len_utf8(); i += 1; }
+                    while i < chars.len() && chars[i] >= '0' && chars[i] <= '7' {
+                        byte_offset += chars[i].len_utf8();
+                        i += 1;
+                    }
                     let s: String = chars[start..i].iter().collect();
                     let val = i64::from_str_radix(&s, 8)
                         .map_err(|_| anyhow::anyhow!("Invalid octal number: 0o{}", s))?;
@@ -153,14 +195,21 @@ pub(crate) fn tokenize_with_pos(input: &str) -> Result<(Vec<Token>, Vec<usize>)>
                 }
             }
             let start = i;
-            if ch == '.' { byte_offset += ch.len_utf8(); i += 1; }
+            if ch == '.' {
+                byte_offset += ch.len_utf8();
+                i += 1;
+            }
             while i < chars.len() && (chars[i].is_ascii_digit() || chars[i] == '.') {
-                if chars[i] == '.' && i + 1 < chars.len() && chars[i + 1] == '.' { break; }
+                if chars[i] == '.' && i + 1 < chars.len() && chars[i + 1] == '.' {
+                    break;
+                }
                 byte_offset += chars[i].len_utf8();
                 i += 1;
             }
             let s: String = chars[start..i].iter().collect();
-            let val: f64 = s.parse().map_err(|_| anyhow::anyhow!("Invalid number: {}", s))?;
+            let val: f64 = s
+                .parse()
+                .map_err(|_| anyhow::anyhow!("Invalid number: {}", s))?;
             tokens.push(Token::Num(val));
             positions.push(num_offset);
             continue;
@@ -169,7 +218,10 @@ pub(crate) fn tokenize_with_pos(input: &str) -> Result<(Vec<Token>, Vec<usize>)>
         if ch.is_alphabetic() || ch == '_' {
             let ident_offset = byte_offset;
             let start = i;
-            while i < chars.len() && (chars[i].is_alphanumeric() || chars[i] == '_') { byte_offset += chars[i].len_utf8(); i += 1; }
+            while i < chars.len() && (chars[i].is_alphanumeric() || chars[i] == '_') {
+                byte_offset += chars[i].len_utf8();
+                i += 1;
+            }
             let s: String = chars[start..i].iter().collect();
             positions.push(ident_offset);
             match s.as_str() {
@@ -179,7 +231,11 @@ pub(crate) fn tokenize_with_pos(input: &str) -> Result<(Vec<Token>, Vec<usize>)>
             continue;
         }
 
-        return Err(anyhow::anyhow!("Unexpected character '{}' at byte {}", ch, byte_offset));
+        return Err(anyhow::anyhow!(
+            "Unexpected character '{}' at byte {}",
+            ch,
+            byte_offset
+        ));
     }
 
     tokens.push(Token::Eof);

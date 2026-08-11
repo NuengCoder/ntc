@@ -1,10 +1,15 @@
 use crossterm::event::{MouseButton, MouseEvent, MouseEventKind};
 
 use super::{byte_to_col, col_to_byte, gutter_width, Editor, Focus, MIN_SIDEBAR_WIDTH};
+use crate::t;
 
 impl Editor {
     fn screen_to_pos(&self, col: u16, row: u16) -> Option<(usize, usize)> {
-        let r = if row >= 1 { (row - 1) as usize } else { return None; };
+        let r = if row >= 1 {
+            (row - 1) as usize
+        } else {
+            return None;
+        };
         let c = col as usize;
         let eo = self.editor_offset();
         let rows = self.term_h.saturating_sub(4);
@@ -31,7 +36,11 @@ impl Editor {
 
     fn scroll_from_vclick(&self, row: u16) -> usize {
         let rows = self.term_h.saturating_sub(4);
-        let r = if row >= 1 { (row - 1) as usize } else { return self.sv.offset; };
+        let r = if row >= 1 {
+            (row - 1) as usize
+        } else {
+            return self.sv.offset;
+        };
         let total = self.lines.len();
         if total <= rows || r >= rows {
             return self.sv.offset;
@@ -78,7 +87,9 @@ impl Editor {
                 let split = self.run_split_row();
                 if (m.row as usize) < split {
                     self.focus = Focus::Editor;
-                } else if (m.row as usize) > split && (self.run_panel_open || self.terminal.is_some()) {
+                } else if (m.row as usize) > split
+                    && (self.run_panel_open || self.terminal.is_some())
+                {
                     if self.run_panel_open {
                         self.focus = Focus::Run;
                     } else {
@@ -96,7 +107,7 @@ impl Editor {
                         }
                         self.switch_tab(0);
                         self.mark_all_dirty();
-                        self.status_msg = Some("Closed all tabs".into());
+                        self.status_msg = Some(t!("editor.mouse_closed_all"));
                         return;
                     }
                     let mut x = eo;
@@ -106,12 +117,12 @@ impl Editor {
                             break;
                         }
                         let name = if self.is_scratch_path(&tab.path) {
-                            "[scratch]".to_string()
+                            t!("editor.scratch_label")
                         } else {
                             tab.path
                                 .file_name()
                                 .map(|n| n.to_string_lossy().into_owned())
-                                .unwrap_or_else(|| "untitled".to_string())
+                                .unwrap_or_else(|| t!("editor.untitled_label"))
                         };
                         let mark = if tab.modified { " ●" } else { "" };
                         let label = format!(" {} {} ", name, mark);
@@ -145,7 +156,10 @@ impl Editor {
                 }
 
                 // Vertical scroll bar click
-                if col == sb_col && (m.row as usize) < 1 + content_rows && (m.row as usize) >= tab_bar_h {
+                if col == sb_col
+                    && (m.row as usize) < 1 + content_rows
+                    && (m.row as usize) >= tab_bar_h
+                {
                     self.sv.dragging_vscroll = true;
                     let target = self.scroll_from_vclick(m.row);
                     self.sv.offset = target.min(self.lines.len().saturating_sub(1));
@@ -168,7 +182,10 @@ impl Editor {
                 }
 
                 // Sidebar vertical scroll bar click
-                if self.sidebar.open && col == self.sidebar.width - 1 && (m.row as usize) < self.term_h {
+                if self.sidebar.open
+                    && col == self.sidebar.width - 1
+                    && (m.row as usize) < self.term_h
+                {
                     let r = m.row as usize;
                     let total = self.sidebar.nodes.len();
                     if total > 0 {
@@ -180,13 +197,17 @@ impl Editor {
                 }
 
                 // Sidebar border drag — click on the separator column
-                if self.sidebar.open && col == self.sidebar.width && (m.row as usize) < self.term_h {
+                if self.sidebar.open && col == self.sidebar.width && (m.row as usize) < self.term_h
+                {
                     self.sidebar.dragging_border = true;
                     return;
                 }
 
                 // Run/terminal panel border drag — click on the separator row
-                if (self.run_panel_open || self.terminal.is_some()) && (m.row as usize) == split && col >= eo {
+                if (self.run_panel_open || self.terminal.is_some())
+                    && (m.row as usize) == split
+                    && col >= eo
+                {
                     self.dragging_run_border = true;
                     return;
                 }
@@ -211,7 +232,11 @@ impl Editor {
                 if self.sv.dragging_vscroll {
                     let content_rows = self.term_h.saturating_sub(4);
                     let tab_bar_h = 1;
-                    let r = if (m.row as usize) >= tab_bar_h { (m.row as usize) - tab_bar_h } else { return; };
+                    let r = if (m.row as usize) >= tab_bar_h {
+                        (m.row as usize) - tab_bar_h
+                    } else {
+                        return;
+                    };
                     if r < content_rows {
                         let total = self.lines.len();
                         let max_scroll = total.saturating_sub(1);
@@ -262,7 +287,8 @@ impl Editor {
             MouseEventKind::Down(MouseButton::Middle) => {
                 let col = m.column as usize;
                 // Sidebar vertical scroll bar middle-click → jump
-                if self.sidebar.open && col == self.sidebar.width - 1
+                if self.sidebar.open
+                    && col == self.sidebar.width - 1
                     && (m.row as usize) < self.term_h
                 {
                     let r = m.row as usize;
@@ -303,7 +329,8 @@ impl Editor {
                 if self.sidebar.open && col < eo {
                     let total = self.sidebar.nodes.len();
                     if self.sidebar.scroll + 1 < total {
-                        self.sidebar.scroll = (self.sidebar.scroll + 3).min(total.saturating_sub(1));
+                        self.sidebar.scroll =
+                            (self.sidebar.scroll + 3).min(total.saturating_sub(1));
                         self.mark_all_dirty();
                     }
                 } else if m.modifiers.contains(crossterm::event::KeyModifiers::ALT) {
@@ -311,7 +338,8 @@ impl Editor {
                     self.sv.x = (self.sv.x + 3).min(max);
                 } else {
                     if self.sv.offset + 1 < self.lines.len() {
-                        self.sv.offset = (self.sv.offset + 3).min(self.lines.len().saturating_sub(1));
+                        self.sv.offset =
+                            (self.sv.offset + 3).min(self.lines.len().saturating_sub(1));
                         self.mark_all_dirty();
                     }
                 }

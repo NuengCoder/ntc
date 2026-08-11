@@ -1,7 +1,8 @@
-use anyhow::Result;
 use super::{Editor, Mode};
 use crate::navigator::Navigator;
+use crate::t;
 use crate::teleport::TeleportManager;
+use anyhow::Result;
 
 impl Editor {
     pub(super) fn list_subdirs(&self) -> Vec<String> {
@@ -30,7 +31,7 @@ impl Editor {
                     match nav.current_path().parent() {
                         Some(p) => p.to_path_buf(),
                         None => {
-                            self.status_msg = Some("Already at root".into());
+                            self.status_msg = Some(t!("editor.cmd_already_at_root").into());
                             return;
                         }
                     }
@@ -43,17 +44,21 @@ impl Editor {
                         self.mark_all_dirty();
                     }
                     Err(e) => {
-                        self.status_msg = Some(format!("cd: {}", e));
+                        self.status_msg = Some(format!("{} {}", t!("editor.cmd_cd_prefix"), e));
                     }
                 }
             }
             Err(_) => {
-                self.status_msg = Some("Cannot get current directory".into());
+                self.status_msg = Some(t!("editor.cmd_no_cwd").into());
             }
         }
     }
 
-    pub(super) fn execute_command(&mut self, cmd: &str, stdout: &mut std::io::Stdout) -> Result<bool> {
+    pub(super) fn execute_command(
+        &mut self,
+        cmd: &str,
+        stdout: &mut std::io::Stdout,
+    ) -> Result<bool> {
         let cmd = cmd.trim();
         if cmd.is_empty() {
             return Ok(false);
@@ -64,7 +69,7 @@ impl Editor {
                 let target = n.saturating_sub(1).min(self.lines.len().saturating_sub(1));
                 self.cursor.y = target;
                 self.cursor.byte = 0;
-                self.status_msg = Some(format!("Jumped to line {}", n));
+                self.status_msg = Some(format!("{} {}", t!("editor.cmd_jumped_to_line"), n));
                 return Ok(false);
             }
         }
@@ -74,7 +79,7 @@ impl Editor {
                 let target = n.saturating_sub(1).min(self.lines.len().saturating_sub(1));
                 self.cursor.y = target;
                 self.cursor.byte = 0;
-                self.status_msg = Some(format!("Jumped to line {}", n));
+                self.status_msg = Some(format!("{} {}", t!("editor.cmd_jumped_to_line"), n));
                 return Ok(false);
             }
         }
@@ -83,7 +88,7 @@ impl Editor {
                 let target = n.saturating_sub(1).min(self.lines.len().saturating_sub(1));
                 self.cursor.y = target;
                 self.cursor.byte = 0;
-                self.status_msg = Some(format!("Jumped to line {}", n));
+                self.status_msg = Some(format!("{} {}", t!("editor.cmd_jumped_to_line"), n));
                 return Ok(false);
             }
         }
@@ -95,7 +100,8 @@ impl Editor {
 
         if let Some(rest) = cmd.strip_prefix("goto ") {
             let rest = rest.trim();
-            let addr = if let Some(h) = rest.strip_prefix("0x").or_else(|| rest.strip_prefix("0X")) {
+            let addr = if let Some(h) = rest.strip_prefix("0x").or_else(|| rest.strip_prefix("0X"))
+            {
                 usize::from_str_radix(h, 16).ok()
             } else {
                 rest.parse::<usize>().ok()
@@ -108,7 +114,11 @@ impl Editor {
                     hex.offset = (target / 16) * 16;
                     hex.nibble = false;
                     hex.pending_byte = 0;
-                    self.status_msg = Some(format!("Jumped to offset 0x{:X}", target));
+                    self.status_msg = Some(format!(
+                        "{} 0x{:X}",
+                        t!("editor.cmd_jumped_to_offset"),
+                        target
+                    ));
                     self.mode = Mode::Hex;
                 }
                 Some(a) => {
@@ -116,10 +126,10 @@ impl Editor {
                     let target = a.saturating_sub(1).min(self.lines.len().saturating_sub(1));
                     self.cursor.y = target;
                     self.cursor.byte = 0;
-                    self.status_msg = Some(format!("Jumped to line {}", a));
+                    self.status_msg = Some(format!("{} {}", t!("editor.cmd_jumped_to_line"), a));
                 }
                 None => {
-                    self.status_msg = Some("goto: usage goto <addr> or goto 0x<hex>".into());
+                    self.status_msg = Some(t!("editor.cmd_goto_usage").into());
                 }
             }
             return Ok(false);
@@ -129,7 +139,7 @@ impl Editor {
             if self.hex.is_some() {
                 self.hex = None;
                 self.mode = Mode::Normal;
-                self.status_msg = Some("Exited hex mode (changes discarded)".into());
+                self.status_msg = Some(t!("editor.cmd_exited_hex").into());
                 return Ok(false);
             }
             return self.exit_flow(stdout);
@@ -143,7 +153,7 @@ impl Editor {
         if cmd == "wq" {
             self.mode = Mode::Normal;
             if let Err(e) = self.save() {
-                self.status_msg = Some(format!("Save failed: {}", e));
+                self.status_msg = Some(format!("{} {}", t!("editor.cmd_save_failed"), e));
                 return Ok(false);
             }
             return self.exit_flow(stdout);
@@ -156,19 +166,20 @@ impl Editor {
                         if let Some(ref mut h) = self.hex {
                             h.modified = false;
                         }
-                        self.status_msg = Some("Hex saved".into());
+                        self.status_msg = Some(t!("editor.cmd_hex_saved").into());
                     }
                     Err(e) => {
-                        self.status_msg = Some(format!("Hex save failed: {}", e));
+                        self.status_msg =
+                            Some(format!("{} {}", t!("editor.cmd_hex_save_failed"), e));
                     }
                 }
             } else {
                 match self.save() {
                     Ok(()) => {
-                        self.status_msg = Some("Saved ".into());
+                        self.status_msg = Some(t!("editor.cmd_saved").into());
                     }
                     Err(e) => {
-                        self.status_msg = Some(format!("Save failed: {}", e));
+                        self.status_msg = Some(format!("{} {}", t!("editor.cmd_save_failed"), e));
                     }
                 }
             }
@@ -178,13 +189,13 @@ impl Editor {
         if cmd == "auto on" {
             self.editor_cfg.auto_save = true;
             self.editor_cfg.save();
-            self.status_msg = Some("Auto-save on exit: ON".into());
+            self.status_msg = Some(t!("editor.cmd_auto_on").into());
             return Ok(false);
         }
         if cmd == "auto off" {
             self.editor_cfg.auto_save = false;
             self.editor_cfg.save();
-            self.status_msg = Some("Auto-save on exit: OFF".into());
+            self.status_msg = Some(t!("editor.cmd_auto_off").into());
             return Ok(false);
         }
 
@@ -193,14 +204,14 @@ impl Editor {
             self.editor_cfg.save();
             self.syntax.invalidate_all();
             self.mark_all_dirty();
-            self.status_msg = Some("Syntax highlighting: ON".into());
+            self.status_msg = Some(t!("editor.cmd_syntax_on").into());
             return Ok(false);
         }
         if cmd == "syntax off" {
             self.editor_cfg.syntax_enabled = false;
             self.editor_cfg.save();
             self.mark_all_dirty();
-            self.status_msg = Some("Syntax highlighting: OFF".into());
+            self.status_msg = Some(t!("editor.cmd_syntax_off").into());
             return Ok(false);
         }
 
@@ -208,14 +219,14 @@ impl Editor {
             self.editor_cfg.color_enabled = true;
             self.editor_cfg.save();
             self.mark_all_dirty();
-            self.status_msg = Some("Color: ON".into());
+            self.status_msg = Some(t!("editor.cmd_color_on").into());
             return Ok(false);
         }
         if cmd == "color off" {
             self.editor_cfg.color_enabled = false;
             self.editor_cfg.save();
             self.mark_all_dirty();
-            self.status_msg = Some("Color: OFF".into());
+            self.status_msg = Some(t!("editor.cmd_color_off").into());
             return Ok(false);
         }
 
@@ -234,7 +245,8 @@ impl Editor {
             } else {
                 1usize
             };
-            let mut target = std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from("."));
+            let mut target =
+                std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from("."));
             let mut ok = true;
             for _ in 0..count {
                 match target.parent() {
@@ -248,7 +260,7 @@ impl Editor {
             if ok {
                 self.cd_to(&target);
             } else {
-                self.status_msg = Some("Already at root".into());
+                self.status_msg = Some(t!("editor.cmd_already_at_root").into());
             }
             return Ok(false);
         }
@@ -256,7 +268,7 @@ impl Editor {
         if cmd == "gosc" || cmd == "gos" {
             let dirs = self.list_subdirs();
             if dirs.is_empty() {
-                self.status_msg = Some("No subdirectories".into());
+                self.status_msg = Some(t!("editor.cmd_no_subdirs").into());
             } else {
                 self.gosc_dirs = dirs;
                 self.gosc_buf.clear();
@@ -269,14 +281,14 @@ impl Editor {
             let n: usize = match n_str.trim().parse() {
                 Ok(n) if n > 0 => n,
                 _ => {
-                    self.status_msg = Some("gos: usage gos <N>".into());
+                    self.status_msg = Some(t!("editor.cmd_gos_usage").into());
                     return Ok(false);
                 }
             };
             let dirs = self.list_subdirs();
             let cwd = std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from("."));
             if n > dirs.len() {
-                self.status_msg = Some(format!("gos: only {} subdirectories", dirs.len()));
+                self.status_msg = Some(format!("{} {}", t!("editor.cmd_gos_only"), dirs.len()));
             } else {
                 let target = cwd.join(&dirs[n - 1]);
                 self.cd_to(&target);
@@ -302,13 +314,17 @@ impl Editor {
                 self.gs_state.results.clear();
                 self.mode = Mode::FileFinder;
                 self.mark_all_dirty();
-                let root = std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from("."));
+                let root =
+                    std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from("."));
                 let matches = crate::utils::search::search_content(&root, pattern, 10);
                 let mut list = crate::editor::types::GsResultList::new();
                 for m in &matches {
                     let display = format!(
                         "{}:{}: {}",
-                        m.file_path.file_name().map(|n| n.to_string_lossy()).unwrap_or_default(),
+                        m.file_path
+                            .file_name()
+                            .map(|n| n.to_string_lossy())
+                            .unwrap_or_default(),
                         m.line_number,
                         m.line.trim()
                     );
@@ -325,21 +341,24 @@ impl Editor {
         if let Some(dir) = cmd.strip_prefix("mkdir ") {
             let dir = dir.trim();
             if dir.is_empty() {
-                self.status_msg = Some("mkdir: missing operand".into());
+                self.status_msg = Some(t!("editor.cmd_mkdir_missing").into());
             } else if let Err(e) = std::fs::create_dir_all(std::path::Path::new(dir)) {
-                self.status_msg = Some(format!("mkdir: {}", e));
+                self.status_msg = Some(format!("{} {}", t!("editor.cmd_mkdir_failed"), e));
             } else {
                 self.sidebar.rebuild_tree();
                 self.mark_all_dirty();
-                self.status_msg = Some(format!("Created directory: {}", dir));
+                self.status_msg = Some(format!("{} {}", t!("editor.cmd_created_dir"), dir));
             }
             return Ok(false);
         }
 
-        if let Some(file) = cmd.strip_prefix("touch ").or_else(|| cmd.strip_prefix("new ")) {
+        if let Some(file) = cmd
+            .strip_prefix("touch ")
+            .or_else(|| cmd.strip_prefix("new "))
+        {
             let file = file.trim();
             if file.is_empty() {
-                self.status_msg = Some("touch: missing operand".into());
+                self.status_msg = Some(t!("editor.cmd_touch_missing").into());
             } else {
                 let path = std::path::Path::new(file);
                 if !path.exists() {
@@ -354,7 +373,8 @@ impl Editor {
                             self.mark_all_dirty();
                         }
                         Err(e) => {
-                            self.status_msg = Some(format!("touch: {}", e));
+                            self.status_msg =
+                                Some(format!("{} {}", t!("editor.cmd_touch_failed"), e));
                             return Ok(false);
                         }
                     }
@@ -367,7 +387,7 @@ impl Editor {
         if let Some(file) = cmd.strip_prefix("mkf ") {
             let file = file.trim();
             if file.is_empty() {
-                self.status_msg = Some("mkf: missing operand".into());
+                self.status_msg = Some(t!("editor.cmd_mkf_missing").into());
             } else {
                 let path = std::path::Path::new(file);
                 if !path.exists() {
@@ -382,7 +402,8 @@ impl Editor {
                             self.mark_all_dirty();
                         }
                         Err(e) => {
-                            self.status_msg = Some(format!("mkf: {}", e));
+                            self.status_msg =
+                                Some(format!("{} {}", t!("editor.cmd_mkf_failed"), e));
                             return Ok(false);
                         }
                     }
@@ -395,13 +416,13 @@ impl Editor {
         if let Some(dir) = cmd.strip_prefix("mkd ") {
             let dir = dir.trim();
             if dir.is_empty() {
-                self.status_msg = Some("mkd: missing operand".into());
+                self.status_msg = Some(t!("editor.cmd_mkd_missing").into());
             } else if let Err(e) = std::fs::create_dir_all(std::path::Path::new(dir)) {
-                self.status_msg = Some(format!("mkd: {}", e));
+                self.status_msg = Some(format!("{} {}", t!("editor.cmd_mkd_failed"), e));
             } else {
                 self.sidebar.rebuild_tree();
                 self.mark_all_dirty();
-                self.status_msg = Some(format!("Created directory: {}", dir));
+                self.status_msg = Some(format!("{} {}", t!("editor.cmd_created_dir"), dir));
             }
             return Ok(false);
         }
@@ -409,19 +430,29 @@ impl Editor {
         if let Some(target) = cmd.strip_prefix("rmd ") {
             let target = target.trim();
             if target.is_empty() {
-                self.status_msg = Some("rmd: missing operand".into());
+                self.status_msg = Some(t!("editor.cmd_rmd_missing").into());
             } else {
                 let path = std::path::Path::new(target);
                 if !path.exists() {
-                    self.status_msg = Some(format!("rmd: '{}' does not exist", target));
+                    self.status_msg = Some(format!(
+                        "{} '{}' {}",
+                        t!("editor.cmd_rmd"),
+                        target,
+                        t!("editor.cmd_not_exist")
+                    ));
                 } else if !path.is_dir() {
-                    self.status_msg = Some(format!("rmd: '{}' is not a directory", target));
+                    self.status_msg = Some(format!(
+                        "{} '{}' {}",
+                        t!("editor.cmd_rmd"),
+                        target,
+                        t!("editor.cmd_not_dir")
+                    ));
                 } else if let Err(e) = std::fs::remove_dir_all(path) {
-                    self.status_msg = Some(format!("rmd: {}", e));
+                    self.status_msg = Some(format!("{} {}", t!("editor.cmd_rmd"), e));
                 } else {
                     self.sidebar.rebuild_tree();
                     self.mark_all_dirty();
-                    self.status_msg = Some(format!("Removed directory: {}", target));
+                    self.status_msg = Some(format!("{} {}", t!("editor.cmd_removed_dir"), target));
                 }
             }
             return Ok(false);
@@ -430,11 +461,16 @@ impl Editor {
         if let Some(target) = cmd.strip_prefix("rmf ") {
             let target = target.trim();
             if target.is_empty() {
-                self.status_msg = Some("rmf: missing operand".into());
+                self.status_msg = Some(t!("editor.cmd_rmf_missing").into());
             } else {
                 let path = std::path::Path::new(target);
                 if !path.exists() {
-                    self.status_msg = Some(format!("rmf: '{}' does not exist", target));
+                    self.status_msg = Some(format!(
+                        "{} '{}' {}",
+                        t!("editor.cmd_rmf"),
+                        target,
+                        t!("editor.cmd_not_exist")
+                    ));
                 } else {
                     let result = if path.is_dir() {
                         std::fs::remove_dir_all(path)
@@ -445,10 +481,12 @@ impl Editor {
                         Ok(()) => {
                             self.sidebar.rebuild_tree();
                             self.mark_all_dirty();
-                            self.status_msg = Some(format!("Removed: {}", target));
+                            self.status_msg =
+                                Some(format!("{} {}", t!("editor.cmd_removed"), target));
                         }
                         Err(e) => {
-                            self.status_msg = Some(format!("rmf: {}", e));
+                            self.status_msg =
+                                Some(format!("{} {}", t!("editor.cmd_rmf_failed"), e));
                         }
                     }
                 }
@@ -478,7 +516,7 @@ impl Editor {
         if let Some(cmd_line) = cmd.strip_prefix("run ") {
             let cmd_line = cmd_line.trim();
             if cmd_line.is_empty() {
-                self.status_msg = Some("run: missing command".into());
+                self.status_msg = Some(t!("editor.cmd_run_missing").into());
             } else {
                 self.start_run(cmd_line);
             }
@@ -490,38 +528,42 @@ impl Editor {
             if name.is_empty() {
                 let tp_list = TeleportManager::get_all();
                 if tp_list.is_empty() {
-                    self.status_msg = Some("No teleport savepoints".into());
+                    self.status_msg = Some(t!("editor.cmd_no_tp").into());
                 } else {
-                    let mut msg = String::from("Teleports:");
+                    let mut msg = t!("editor.cmd_tp_list");
                     let mut sorted: Vec<_> = tp_list.into_iter().collect();
                     sorted.sort_by(|a, b| a.0.cmp(&b.0));
                     for (n, p) in &sorted {
-                        msg.push_str(&format!(" {}->{}", n, p.display()));
+                        msg.push_str(&format!(" {} -> {}", n, p.display()));
                     }
                     self.status_msg = Some(msg);
                 }
             } else {
                 match Navigator::new() {
-                    Ok(mut nav) => {
-                        match TeleportManager::get_path(name) {
-                            Some(path) => match nav.go_to(&path) {
-                                Ok(()) => {
-                                    self.sidebar.rebuild_tree();
-                                    self.mark_all_dirty();
-                                    self.status_msg =
-                                        Some(format!("Teleported to '{}' -> {}", name, nav.display_path()));
-                                }
-                                Err(e) => {
-                                    self.status_msg = Some(format!("tp: {}", e));
-                                }
-                            },
-                            None => {
-                                self.status_msg = Some(format!("Savepoint not found: '{}'", name));
+                    Ok(mut nav) => match TeleportManager::get_path(name) {
+                        Some(path) => match nav.go_to(&path) {
+                            Ok(()) => {
+                                self.sidebar.rebuild_tree();
+                                self.mark_all_dirty();
+                                self.status_msg = Some(format!(
+                                    "{} '{}' -> {}",
+                                    t!("editor.cmd_tp_jumped"),
+                                    name,
+                                    nav.display_path()
+                                ));
                             }
+                            Err(e) => {
+                                self.status_msg =
+                                    Some(format!("{} {}", t!("editor.cmd_tp_error"), e));
+                            }
+                        },
+                        None => {
+                            self.status_msg =
+                                Some(format!("{} '{}'", t!("editor.cmd_tp_not_found"), name));
                         }
-                    }
+                    },
                     Err(_) => {
-                        self.status_msg = Some("Cannot get current directory".into());
+                        self.status_msg = Some(t!("editor.cmd_no_cwd").into());
                     }
                 }
             }
@@ -532,18 +574,27 @@ impl Editor {
             let name = name.trim();
             if name.is_empty() {
                 let current = crate::utils::theme::ThemeManager::current();
-                self.status_msg = Some(format!("Current theme: {}", current.name));
+                self.status_msg = Some(format!(
+                    "{} {}",
+                    t!("editor.cmd_current_theme"),
+                    current.name
+                ));
             } else if crate::utils::theme::ThemeManager::set_theme(name) {
                 self.mark_all_dirty();
-                self.status_msg = Some(format!("Switched to theme '{}'", name));
+                self.status_msg = Some(format!("{} '{}'", t!("editor.cmd_theme_switched"), name));
             } else {
-                self.status_msg = Some(format!("Theme '{}' not found. Use 'theme list' to see available themes.", name));
+                self.status_msg = Some(format!(
+                    "{} '{}'. {}",
+                    t!("editor.cmd_theme_not_found"),
+                    name,
+                    t!("editor.cmd_theme_list_hint")
+                ));
             }
             return Ok(false);
         }
         if cmd == "theme list" || cmd == "theme ls" {
             let themes = crate::utils::theme::ThemeManager::list_themes();
-            let mut msg = String::from("Themes:");
+            let mut msg = t!("editor.cmd_themes");
             for t in &themes {
                 msg.push_str(&format!(" {}", t));
             }
@@ -554,21 +605,21 @@ impl Editor {
         if let Some(name) = cmd.strip_prefix("tp-add ") {
             let name = name.trim();
             if name.is_empty() {
-                self.status_msg = Some("tp-add: missing name".into());
+                self.status_msg = Some(t!("editor.cmd_tp_add_missing").into());
             } else {
                 match Navigator::new() {
-                    Ok(nav) => {
-                        match TeleportManager::add_current(&nav, name) {
-                            Ok(()) => {
-                                self.status_msg = Some(format!("Savepoint '{}' created", name));
-                            }
-                            Err(e) => {
-                                self.status_msg = Some(format!("tp-add: {}", e));
-                            }
+                    Ok(nav) => match TeleportManager::add_current(&nav, name) {
+                        Ok(()) => {
+                            self.status_msg =
+                                Some(format!("{} '{}'", t!("editor.cmd_tp_added"), name));
                         }
-                    }
+                        Err(e) => {
+                            self.status_msg =
+                                Some(format!("{} {}", t!("editor.cmd_tp_add_error"), e));
+                        }
+                    },
                     Err(_) => {
-                        self.status_msg = Some("Cannot get current directory".into());
+                        self.status_msg = Some(t!("editor.cmd_no_cwd").into());
                     }
                 }
             }
@@ -583,8 +634,7 @@ impl Editor {
         if cmd == "V" || cmd == "v" {
             self.mode = Mode::Visual;
             self.clear_selection();
-            self.status_msg =
-                Some("Visual mode  arrow keys to select, Esc to exit".into());
+            self.status_msg = Some(t!("editor.cmd_visual_hint").into());
             return Ok(false);
         }
         if cmd == "H" || cmd == "h" {
@@ -613,7 +663,7 @@ impl Editor {
             return Ok(false);
         }
 
-        self.status_msg = Some(format!("Unknown command: {}", cmd));
+        self.status_msg = Some(format!("{} {}", t!("editor.cmd_unknown"), cmd));
         Ok(false)
     }
 }

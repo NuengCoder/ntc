@@ -5,29 +5,95 @@ use walkdir::DirEntry;
 
 /// Text file extensions that we can safely display
 const TEXT_EXTENSIONS: &[&str] = &[
-    "txt", "md", "rs", "py", "js", "ts", "html", "css", "xml", "yaml", "yml",
-    "toml", "cfg", "conf", "c", "cpp", "h", "hpp", "java", "go", "rb", "php",
-    "sh", "bat", "sql", "r", "swift", "kt", "scala", "lua", "perl",
-    "csv", "gitignore", "dockerfile", "makefile", "readme", "license",
-    "jsx", "jsp", "tsx", "dart", "cs", "kts", "mq4", "mq5", "mqh" , "c3",
-    "nim" , "jai" , "zig" , "m" , "iss" , "ntc.ral" , "ntc.igcare","ntc.math","ntc_theme",
-    "vert","frag","vs","fs","gs","vsh","fsh","gsh","csh",
-    "glsl","geom","comp","tesc","tese",
-    "rgen","rint","rahit","rchit","rmiss","rcall",
-    "mesh","task","hlsl","spvasm",
+    "txt",
+    "md",
+    "rs",
+    "py",
+    "js",
+    "ts",
+    "html",
+    "css",
+    "xml",
+    "yaml",
+    "yml",
+    "toml",
+    "cfg",
+    "conf",
+    "c",
+    "cpp",
+    "h",
+    "hpp",
+    "java",
+    "go",
+    "rb",
+    "php",
+    "sh",
+    "bat",
+    "sql",
+    "r",
+    "swift",
+    "kt",
+    "scala",
+    "lua",
+    "perl",
+    "csv",
+    "gitignore",
+    "dockerfile",
+    "makefile",
+    "readme",
+    "license",
+    "jsx",
+    "jsp",
+    "tsx",
+    "dart",
+    "cs",
+    "kts",
+    "mq4",
+    "mq5",
+    "mqh",
+    "c3",
+    "nim",
+    "jai",
+    "zig",
+    "m",
+    "iss",
+    "ntc.ral",
+    "ntc.igcare",
+    "ntc.math",
+    "ntc_theme",
+    "vert",
+    "frag",
+    "vs",
+    "fs",
+    "gs",
+    "vsh",
+    "fsh",
+    "gsh",
+    "csh",
+    "glsl",
+    "geom",
+    "comp",
+    "tesc",
+    "tese",
+    "rgen",
+    "rint",
+    "rahit",
+    "rchit",
+    "rmiss",
+    "rcall",
+    "mesh",
+    "task",
+    "hlsl",
+    "spvasm",
 ];
 
 /// Known file extensions that are unsupported but should appear in tree
 const KNOWN_UNSUPPORTED_EXTENSIONS: &[&str] = &[
-    "png", "jpg", "jpeg", "gif", "bmp", "ico", "svg", "webp",
-    "mp3", "wav", "ogg", "flac", "aac", "wma", "m4a",
-    "mp4", "avi", "mkv", "mov", "wmv", "flv", "webm",
-    "doc", "docx", "pdf", "xls", "xlsx", "ppt", "pptx",
-    "zip", "rar", "7z", "tar", "gz","exe" , "dll" , "so" , 
-    "bin" , "iso" , "dmg" , "vmdk" , "qcow2", "apk" , "ipa" , 
-    "jar" , "war" , "ear" , "msi" , "deb" , "rpm", "qcow2" ,
-    "vhd" , "vhdx" , "img" , "ex4" ,"ex5",
-    "spv" , "spirv"
+    "png", "jpg", "jpeg", "gif", "bmp", "ico", "svg", "webp", "mp3", "wav", "ogg", "flac", "aac",
+    "wma", "m4a", "mp4", "avi", "mkv", "mov", "wmv", "flv", "webm", "doc", "docx", "pdf", "xls",
+    "xlsx", "ppt", "pptx", "zip", "rar", "7z", "tar", "gz", "exe", "dll", "so", "bin", "iso",
+    "dmg", "vmdk", "qcow2", "apk", "ipa", "jar", "war", "ear", "msi", "deb", "rpm", "qcow2", "vhd",
+    "vhdx", "img", "ex4", "ex5", "spv", "spirv",
 ];
 
 /// A snapshot of the config sets needed for format-checking.
@@ -69,10 +135,7 @@ impl FormatConfig {
 /// `FormatConfig`. Use this inside directory walks so the config is only
 /// read from the global lock once per walk, not once per file.
 pub fn is_supported_format_with_config(path: &Path, cfg: &FormatConfig) -> bool {
-    let filename = path
-        .file_name()
-        .and_then(|n| n.to_str())
-        .unwrap_or("");
+    let filename = path.file_name().and_then(|n| n.to_str()).unwrap_or("");
 
     // 0. Specific ignored files — never supported.
     if cfg.ignored_files.contains(filename) {
@@ -151,9 +214,7 @@ pub fn is_known_unsupported_format(path: &Path) -> bool {
 /// `ignored_dirs` is a set of lowercase directory names to exclude.
 /// The closure returns `true` to include the entry, `false` to exclude it.
 /// The root entry (depth 0) is always included.
-pub fn make_ignored_dir_filter(
-    ignored_dirs: &HashSet<String>,
-) -> impl Fn(&DirEntry) -> bool + '_ {
+pub fn make_ignored_dir_filter(ignored_dirs: &HashSet<String>) -> impl Fn(&DirEntry) -> bool + '_ {
     move |e: &DirEntry| {
         if e.depth() == 0 {
             return true;

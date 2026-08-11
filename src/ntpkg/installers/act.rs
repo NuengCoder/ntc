@@ -6,6 +6,7 @@ use super::super::download::{download_with_progress, extract_archive, find_binar
 use super::super::manager::{load_manifest, platform_key, save_manifest};
 use super::super::types::{bin_dir, ArchiveType, PackageSource};
 use crate::output::{print_info, print_success};
+use crate::t;
 
 pub(crate) fn install_act(
     name: &str,
@@ -31,9 +32,13 @@ pub(crate) fn install_act(
     print_info(&format!("Downloading {name} {version}..."));
     download_with_progress(url, &archive_path)?;
 
-    let archive_type = if url.ends_with(".zip") { ArchiveType::Zip } else { ArchiveType::TarGz };
+    let archive_type = if url.ends_with(".zip") {
+        ArchiveType::Zip
+    } else {
+        ArchiveType::TarGz
+    };
 
-    print_info("Extracting...");
+    print_info(&t!("ntpkg.extracting"));
     extract_archive(&archive_path, &tmp_dir, archive_type)?;
 
     let act_bin = find_binary(&tmp_dir, "act")
@@ -52,8 +57,11 @@ pub(crate) fn install_act(
         fs::set_permissions(&dest, fs::Permissions::from_mode(0o755))?;
     }
 
-    fs::write(vdir.join(".real_path"), target_dir.to_string_lossy().as_bytes())
-        .context("Failed to write .real_path")?;
+    fs::write(
+        vdir.join(".real_path"),
+        target_dir.to_string_lossy().as_bytes(),
+    )
+    .context("Failed to write .real_path")?;
 
     let _ = fs::remove_dir_all(&tmp_dir);
 

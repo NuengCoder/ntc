@@ -1,9 +1,15 @@
+use crate::editor::{next_char_byte, prev_char_byte, Editor, Mode};
 use anyhow::Result;
 use crossterm::event::{Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
-use crate::editor::{prev_char_byte, next_char_byte, Editor, Mode};
+
+use crate::t;
 
 impl Editor {
-    pub(crate) fn handle_visual_event(&mut self, ev: Event, stdout: &mut std::io::Stdout) -> Result<()> {
+    pub(crate) fn handle_visual_event(
+        &mut self,
+        ev: Event,
+        stdout: &mut std::io::Stdout,
+    ) -> Result<()> {
         match ev {
             Event::Key(KeyEvent {
                 code,
@@ -86,7 +92,9 @@ impl Editor {
                                     self.cursor.byte = self.lines[prev].len();
                                     break;
                                 }
-                                if prev == 0 { break; }
+                                if prev == 0 {
+                                    break;
+                                }
                                 prev -= 1;
                             }
                         }
@@ -146,9 +154,8 @@ impl Editor {
                         self.cut_selection();
                         self.mode = Mode::Normal;
                     }
-                    (true, KeyCode::Char('='))
-                    | (true, KeyCode::Char('-')) => {
-                        self.status_msg = Some("Zoom: Ctrl++ / Ctrl+- in terminal emulator".into());
+                    (true, KeyCode::Char('=')) | (true, KeyCode::Char('-')) => {
+                        self.status_msg = Some(t!("editor.mode_zoom_hint"));
                     }
                     _ => {}
                 }

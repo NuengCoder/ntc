@@ -1,5 +1,6 @@
 use crate::navigator::clear_screen;
 use crate::output::print_info;
+use crate::t;
 use colored::*;
 use std::io::{self, Write};
 
@@ -9,23 +10,44 @@ const BOX_WIDTH: usize = 68;
 
 fn header_style() -> colored::Color {
     #[cfg(not(target_os = "android"))]
-    { crate::utils::theme::ThemeManager::current().shell.help_header.to_colored() }
+    {
+        crate::utils::theme::ThemeManager::current()
+            .shell
+            .help_header
+            .to_colored()
+    }
     #[cfg(target_os = "android")]
-    { colored::Color::White }
+    {
+        colored::Color::White
+    }
 }
 
 fn success_style() -> colored::Color {
     #[cfg(not(target_os = "android"))]
-    { crate::utils::theme::ThemeManager::current().shell.success.to_colored() }
+    {
+        crate::utils::theme::ThemeManager::current()
+            .shell
+            .success
+            .to_colored()
+    }
     #[cfg(target_os = "android")]
-    { colored::Color::White }
+    {
+        colored::Color::White
+    }
 }
 
 fn info_style() -> colored::Color {
     #[cfg(not(target_os = "android"))]
-    { crate::utils::theme::ThemeManager::current().shell.info.to_colored() }
+    {
+        crate::utils::theme::ThemeManager::current()
+            .shell
+            .info
+            .to_colored()
+    }
     #[cfg(target_os = "android")]
-    { colored::Color::White }
+    {
+        colored::Color::White
+    }
 }
 
 pub fn clear() {
@@ -39,11 +61,10 @@ pub fn header(current: usize, total: usize) {
 
     println!(
         "{}",
-        "╔══════════════════════════════════════════════════════════════════╗"
-            .color(header_c)
+        "╔══════════════════════════════════════════════════════════════════╗".color(header_c)
     );
 
-    let title = format!(" NTC Tutorial — Step {}/{} ", current, total);
+    let title = t!("tutorial.step_title", current, total);
     let title_pad = BOX_WIDTH.saturating_sub(title.len());
     let left = title_pad / 2;
     let right = title_pad - left;
@@ -57,17 +78,11 @@ pub fn header(current: usize, total: usize) {
     let prog_pad = BOX_WIDTH.saturating_sub(progress.len());
     let pleft = prog_pad / 2;
     let pright = prog_pad - pleft;
-    println!(
-        "║{}{}{}║",
-        " ".repeat(pleft),
-        progress,
-        " ".repeat(pright)
-    );
+    println!("║{}{}{}║", " ".repeat(pleft), progress, " ".repeat(pright));
 
     println!(
         "{}",
-        "╚══════════════════════════════════════════════════════════════════╝"
-            .color(header_c)
+        "╚══════════════════════════════════════════════════════════════════╝".color(header_c)
     );
     println!();
 }
@@ -115,7 +130,7 @@ pub fn step(step: &TutorialStep) {
         println!();
         println!(
             "{} {}",
-            "💡 Tip:".yellow().bold(),
+            t!("tutorial.tip_label").yellow().bold(),
             try_it.dimmed()
         );
     }
@@ -123,15 +138,16 @@ pub fn step(step: &TutorialStep) {
 
 pub fn demo_header() {
     println!();
-    print_info("Demonstrating:");
+    print_info(&t!("tutorial.demonstrating"));
 }
 
 pub fn prompt() -> PromptAction {
     println!();
-    print!("{}", "Press Enter to continue | ".dimmed());
-    print!("{}", "skip".yellow());
+    print!("{}", t!("tutorial.prompt_continue").dimmed());
     print!("{}", " | ".dimmed());
-    print!("{}", "exit".red());
+    print!("{}", t!("tutorial.prompt_skip_label").yellow());
+    print!("{}", " | ".dimmed());
+    print!("{}", t!("tutorial.prompt_exit_label").red());
     print!("{}", ": ".dimmed());
     io::stdout().flush().ok();
 
@@ -160,10 +176,9 @@ pub fn completion() {
 
     println!(
         "{}",
-        "╔══════════════════════════════════════════════════════════════════╗"
-            .color(header_c)
+        "╔══════════════════════════════════════════════════════════════════╗".color(header_c)
     );
-    let msg = "  Tutorial Complete!  ";
+    let msg = t!("tutorial.complete_title");
     let msg_pad = BOX_WIDTH.saturating_sub(msg.len());
     let mleft = msg_pad / 2;
     let mright = msg_pad - mleft;
@@ -175,12 +190,11 @@ pub fn completion() {
     );
     println!(
         "{}",
-        "╚══════════════════════════════════════════════════════════════════╝"
-            .color(header_c)
+        "╚══════════════════════════════════════════════════════════════════╝".color(header_c)
     );
     println!();
 
-    println!("You now know the essentials of NTC:");
+    println!("{}", t!("tutorial.complete_msg"));
     println!();
     let highlights = [
         ("Navigation", "cd, back, gosc, where"),
@@ -204,10 +218,10 @@ pub fn completion() {
         );
     }
     println!();
-    println!("{}", "Type 'help' for the full command reference.".dimmed());
-    println!("{}", "Type 'exit' to quit NTC.".dimmed());
+    println!("{}", t!("tutorial.help_hint").dimmed());
+    println!("{}", t!("tutorial.exit_hint").dimmed());
     println!();
-    pause("Press Enter to return to the shell");
+    pause(&t!("tutorial.return_hint"));
 }
 
 fn pause(msg: &str) {

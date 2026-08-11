@@ -1,6 +1,6 @@
 [package]
 name = "ntc"
-version = "2.4.0"
+version = "2.4.2"
 edition = "2021"
 description = "Navigate, Toolkit, Center - A Combine of Navigation , Project Toolkit Center hub"
 authors = ["NuengCoder"]
@@ -15,9 +15,9 @@ name = "ntc"
 path = "src/lib.rs"
 
 [features]
-default = ["image2doc"]
+default = ["image2doc", "ocr"]
 image2doc = ["dep:image"]
-ocr = ["dep:tesseract", "dep:leptess"]
+ocr = []
 
 [dependencies]
 clap = { version = "4.5", features = ["derive"] }
@@ -58,8 +58,6 @@ zip = "2"
 tar = "0.4"
 flate2 = "1"
 xz2 = "0.1"
-tesseract = { version = "0.13", optional = true }
-leptess = { version = "0.13", optional = true }
 
 [target.'cfg(windows)'.dependencies.windows-sys]
 version = "0.59"

@@ -1,7 +1,8 @@
 use anyhow::Result;
 use crossterm::style::Color;
 
-use crate::editor::{set_status_bar, prompt_yes_no, Editor, Mode};
+use crate::editor::{prompt_yes_no, set_status_bar, Editor, Mode};
+use crate::t;
 
 impl Editor {
     pub(crate) fn save(&mut self) -> Result<()> {
@@ -26,7 +27,9 @@ impl Editor {
             return;
         }
         self.save_active_tab();
-        let modified_tabs: Vec<_> = self.tabs.iter()
+        let modified_tabs: Vec<_> = self
+            .tabs
+            .iter()
             .filter(|t| t.modified && !self.is_scratch_path(&t.path))
             .map(|t| (t.path.clone(), t.lines.clone()))
             .collect();
@@ -50,7 +53,7 @@ impl Editor {
     pub(crate) fn save_if_auto(&mut self) {
         if self.editor_cfg.auto_save && self.modified && !self.is_scratch_path(&self.path) {
             if let Err(e) = self.save() {
-                self.status_msg = Some(format!("Auto-save error: {}", e));
+                self.status_msg = Some(format!("{} {}", t!("editor.save_auto_error"), e));
             }
         }
     }
@@ -76,7 +79,7 @@ impl Editor {
                     g: 100,
                     b: 20,
                 },
-                "Save file [Y|N]?",
+                &t!("editor.save_prompt"),
             )? {
                 Some(true) => {
                     if let Err(e) = self.save() {
@@ -84,7 +87,12 @@ impl Editor {
                             set_status_bar(stdout, Color::Red, Color::White, &format!(" {}", e));
                         continue;
                     }
-                    let _ = set_status_bar(stdout, Color::Green, Color::White, " Saved \u{2713}");
+                    let _ = set_status_bar(
+                        stdout,
+                        Color::Green,
+                        Color::White,
+                        &t!("editor.saved_full"),
+                    );
                     self.clear_recovery_snapshot();
                     return Ok(true);
                 }

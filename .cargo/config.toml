@@ -2,3 +2,16 @@
 lto = true
 codegen-units = 1
 strip = true
+
+[target.x86_64-pc-windows-msvc]
+rustflags = ["-Ctarget-feature=+crt-static"]
+
+[target.aarch64-pc-windows-msvc]
+linker = "rust-lld"
+rustflags = [
+  "-Clinker-flavor=lld-link",
+  "-Clink-arg=/LIBPATH:C:\\Users\\Trivico\\Desktop\\NTCLI\\ntc\\packaging\\arm64-libs",
+  "-Clink-arg=/LIBPATH:D:\\VS\\VC\\Tools\\MSVC\\14.44.35207\\lib\\arm64",
+  "-Clink-arg=/LIBPATH:C:\\Program Files (x86)\\Windows Kits\\10\\lib\\10.0.26100.0\\ucrt\\arm64",
+  "-Clink-arg=/LIBPATH:C:\\Program Files (x86)\\Windows Kits\\10\\lib\\10.0.26100.0\\um\\arm64",
+]

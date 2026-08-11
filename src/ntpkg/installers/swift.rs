@@ -4,9 +4,10 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 
 use super::super::download::{download_with_progress, extract_archive, find_binary};
-use super::super::types::{ArchiveType, PackageSource};
 use super::super::manager::{copy_recursive, load_manifest, platform_key, save_manifest};
+use super::super::types::{ArchiveType, PackageSource};
 use crate::output::{print_error, print_info, print_success};
+use crate::t;
 
 pub(crate) fn install_swift(
     name: &str,
@@ -52,7 +53,7 @@ fn install_swift_linux(
     print_info(&format!("Downloading {name} {version}..."));
     download_with_progress(url, &archive_path)?;
 
-    print_info("Extracting...");
+    print_info(&t!("ntpkg.extracting"));
     extract_archive(&archive_path, tmp_dir, ArchiveType::TarGz)?;
 
     let swift_bin = find_binary(tmp_dir, "swift")
@@ -69,8 +70,11 @@ fn install_swift_linux(
     copy_recursive(usr_dir, &target)?;
 
     let bin_path = vdir.join("usr").join("bin");
-    fs::write(vdir.join(".real_path"), bin_path.to_string_lossy().as_bytes())
-        .context("Failed to write .real_path")?;
+    fs::write(
+        vdir.join(".real_path"),
+        bin_path.to_string_lossy().as_bytes(),
+    )
+    .context("Failed to write .real_path")?;
 
     let _ = fs::remove_dir_all(tmp_dir);
 
@@ -98,7 +102,7 @@ fn install_swift_macos(
     print_info(&format!("Downloading {name} {version}..."));
     download_with_progress(url, &installer_path)?;
 
-    print_info("Launching Swift installer. Complete the setup, then close the installer window...");
+    print_info(&t!("ntpkg.launch_installer"));
     let status = Command::new("sudo")
         .args(["installer", "-pkg"])
         .arg(&installer_path)
@@ -107,19 +111,28 @@ fn install_swift_macos(
         .context("Failed to launch Swift installer")?;
 
     if !status.success() {
-        print_error(&format!("Swift installer exited with code {:?}", status.code()));
+        print_error(&format!(
+            "Swift installer exited with code {:?}",
+            status.code()
+        ));
         bail!("Swift .pkg installation failed");
     }
 
     let toolchain_bin = find_macos_toolchain(version)?;
 
     fs::create_dir_all(vdir)?;
-    fs::write(vdir.join(".real_path"), toolchain_bin.to_string_lossy().as_bytes())
-        .context("Failed to write .real_path")?;
+    fs::write(
+        vdir.join(".real_path"),
+        toolchain_bin.to_string_lossy().as_bytes(),
+    )
+    .context("Failed to write .real_path")?;
 
     let _ = fs::remove_dir_all(tmp_dir);
 
-    print_success(&format!("{name} {version} installed at {}", toolchain_bin.display()));
+    print_success(&format!(
+        "{name} {version} installed at {}",
+        toolchain_bin.display()
+    ));
 
     let mut manifest = load_manifest()?;
     manifest.add_version(name, version);
@@ -135,7 +148,10 @@ fn find_macos_toolchain(version: &str) -> Result<PathBuf> {
         bail!("Swift toolchains directory not found at /Library/Developer/Toolchains");
     }
 
-    let expected = toolchains_dir.join(format!("swift-{version}.xctoolchain")).join("usr").join("bin");
+    let expected = toolchains_dir
+        .join(format!("swift-{version}.xctoolchain"))
+        .join("usr")
+        .join("bin");
     if expected.exists() {
         return Ok(expected);
     }
@@ -177,7 +193,7 @@ fn install_swift_windows(
     print_info(&format!("Downloading {name} {version}..."));
     download_with_progress(url, &installer_path)?;
 
-    print_info("Launching Swift installer. Complete the setup, then close the installer window...");
+    print_info(&t!("ntpkg.launch_installer"));
     let script = format!(
         "Start-Process -FilePath '{}' -Wait -Verb RunAs",
         installer_path.to_string_lossy().replace('\'', "''")
@@ -196,12 +212,18 @@ fn install_swift_windows(
     let swift_bin = find_windows_swift()?;
 
     fs::create_dir_all(vdir)?;
-    fs::write(vdir.join(".real_path"), swift_bin.to_string_lossy().as_bytes())
-        .context("Failed to write .real_path")?;
+    fs::write(
+        vdir.join(".real_path"),
+        swift_bin.to_string_lossy().as_bytes(),
+    )
+    .context("Failed to write .real_path")?;
 
     let _ = fs::remove_dir_all(tmp_dir);
 
-    print_success(&format!("{name} {version} installed at {}", swift_bin.display()));
+    print_success(&format!(
+        "{name} {version} installed at {}",
+        swift_bin.display()
+    ));
 
     let mut manifest = load_manifest()?;
     manifest.add_version(name, version);

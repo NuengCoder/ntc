@@ -6,6 +6,7 @@ use anyhow::{Context, Result};
 
 use super::manager;
 use super::types::{ArchiveType, PackageSource};
+use crate::t;
 
 /// In-memory cache: runtime name -> sorted list of available versions
 static VERSION_CACHE: Mutex<Option<HashMap<String, Vec<String>>>> = Mutex::new(None);
@@ -14,7 +15,8 @@ static VERSION_CACHE: Mutex<Option<HashMap<String, Vec<String>>>> = Mutex::new(N
 static GIT_TAG_CACHE: Mutex<Option<HashMap<String, String>>> = Mutex::new(None);
 
 /// Caches Java release data keyed by feature version (e.g., "21" -> release JSON array)
-static JAVA_RELEASE_CACHE: Mutex<Option<HashMap<String, Vec<serde_json::Value>>>> = Mutex::new(None);
+static JAVA_RELEASE_CACHE: Mutex<Option<HashMap<String, Vec<serde_json::Value>>>> =
+    Mutex::new(None);
 
 /// Return cached versions only (no HTTP fetch). Used by the hinter on every keystroke.
 pub fn peek_cached_versions(name: &str) -> Vec<String> {
@@ -49,44 +51,52 @@ fn fetch_available_versions(name: &str) -> Result<Vec<String>> {
     }
 
     let versions = match name {
-        "python"    => fetch_python_versions()?,
-        "node"      => fetch_node_versions()?,
+        "python" => fetch_python_versions()?,
+        "node" => fetch_node_versions()?,
         "cloudflare" => vec!["latest".to_string()],
-        "git"       => fetch_git_versions()?,
-        "gh"        => fetch_gh_versions()?,
-        "java"      => fetch_java_versions()?,
-        "kotlin"    => fetch_kotlin_versions()?,
-        "swift"     => fetch_swift_versions()?,
-        "php"       => fetch_php_versions()?,
-        "zig"       => fetch_zig_versions()?,
-        "go"        => fetch_go_versions()?,
-        "rust"      => fetch_rust_versions()?,
-        "msys2"     => fetch_msys2_versions()?,
-        "ruby"      => fetch_ruby_versions()?,
-        "lua"       => fetch_lua_versions()?,
-        "nim"       => fetch_nim_versions()?,
-        "dotnet"    => fetch_dotnet_versions()?,
-        "flutter"   => fetch_flutter_versions()?,
-        "kubectl"   => fetch_kubectl_versions()?,
-        "helm"      => fetch_helm_versions()?,
-        "kind"      => fetch_kind_versions()?,
+        "git" => fetch_git_versions()?,
+        "gh" => fetch_gh_versions()?,
+        "java" => fetch_java_versions()?,
+        "kotlin" => fetch_kotlin_versions()?,
+        "swift" => fetch_swift_versions()?,
+        "php" => fetch_php_versions()?,
+        "zig" => fetch_zig_versions()?,
+        "go" => fetch_go_versions()?,
+        "rust" => fetch_rust_versions()?,
+        "msys2" => fetch_msys2_versions()?,
+        "ruby" => fetch_ruby_versions()?,
+        "lua" => fetch_lua_versions()?,
+        "nim" => fetch_nim_versions()?,
+        "dotnet" => fetch_dotnet_versions()?,
+        "flutter" => fetch_flutter_versions()?,
+        "kubectl" => fetch_kubectl_versions()?,
+        "helm" => fetch_helm_versions()?,
+        "kind" => fetch_kind_versions()?,
         "kustomize" => fetch_kustomize_versions()?,
-        "docker"    => fetch_docker_versions()?,
+        "docker" => fetch_docker_versions()?,
         "docker-compose" => fetch_docker_compose_versions()?,
-        "act"           => fetch_act_versions()?,
-        "devops-tool"   => vec!["latest".to_string()],
-        "scala"         => fetch_scala_versions()?,
-        "opencode"      => vec!["latest".to_string()],
-        "mimocode"      => vec!["latest".to_string()],
-        "kilocode"      => vec!["latest".to_string()],
-        "omniroute"     => vec!["latest".to_string()],
-        "sqlite"        => fetch_sqlite_versions()?,
-        "sqlitestudio"  => fetch_sqlitestudio_versions()?,
+        "act" => fetch_act_versions()?,
+        "devops-tool" => vec!["latest".to_string()],
+        "scala" => fetch_scala_versions()?,
+        "opencode" => vec!["latest".to_string()],
+        "mimocode" => vec!["latest".to_string()],
+        "kilocode" => vec!["latest".to_string()],
+        "omniroute" => vec!["latest".to_string()],
+        "vscode" => vec!["latest".to_string()],
+        "sqlite" => fetch_sqlite_versions()?,
+        "sqlitestudio" => fetch_sqlitestudio_versions()?,
+        "ffmpeg" => vec!["latest".to_string()],
+        "imagemagick" => vec!["latest".to_string()],
+        "tesseract" => vec!["latest".to_string()],
+        "freebuff" => vec!["latest".to_string()],
+        "nginx" => fetch_nginx_versions()?,
         _ => vec![],
     };
 
     if let Ok(mut cache) = VERSION_CACHE.lock() {
-        cache.get_or_insert_with(HashMap::new).insert(name.to_string(), versions.clone());
+        cache
+            .get_or_insert_with(HashMap::new)
+            .insert(name.to_string(), versions.clone());
     }
 
     Ok(versions)
@@ -95,42 +105,46 @@ fn fetch_available_versions(name: &str) -> Result<Vec<String>> {
 /// Return available sources for a given language + version.
 pub fn get_source(name: &str, version: &str) -> Option<PackageSource> {
     match name {
-        "python"    => python_source(version),
-        "node"      => node_source(version),
+        "python" => python_source(version),
+        "node" => node_source(version),
         "cloudflare" => cloudflare_source(version),
-        "git"       => git_source(version),
-        "gh"        => gh_source(version),
-        "java"      => java_source(version),
-        "kotlin"    => kotlin_source(version),
-        "swift"     => swift_source(version),
-        "php"       => php_source(version),
-        "zig"       => zig_source(version),
-        "go"        => go_source(version),
-        "rust"      => rust_source(version),
-        "msys2"     => msys2_source(version),
-        "ruby"      => ruby_source(version),
-        "lua"       => lua_source(version),
-        "nim"       => nim_source(version),
-        "dotnet"    => dotnet_source(version),
-        "flutter"   => flutter_source(version),
-        "kubectl"   => kubectl_source(version),
-        "helm"      => helm_source(version),
-        "kind"      => kind_source(version),
+        "git" => git_source(version),
+        "gh" => gh_source(version),
+        "java" => java_source(version),
+        "kotlin" => kotlin_source(version),
+        "swift" => swift_source(version),
+        "php" => php_source(version),
+        "zig" => zig_source(version),
+        "go" => go_source(version),
+        "rust" => rust_source(version),
+        "msys2" => msys2_source(version),
+        "ruby" => ruby_source(version),
+        "lua" => lua_source(version),
+        "nim" => nim_source(version),
+        "dotnet" => dotnet_source(version),
+        "flutter" => flutter_source(version),
+        "kubectl" => kubectl_source(version),
+        "helm" => helm_source(version),
+        "kind" => kind_source(version),
         "kustomize" => kustomize_source(version),
-        "docker"    => docker_source(version),
+        "docker" => docker_source(version),
         "docker-compose" => docker_compose_source(version),
-        "act"           => act_source(version),
-        "devops-tool"   => Some(PackageSource {
+        "act" => act_source(version),
+        "devops-tool" => Some(PackageSource {
             name: "devops-tool".to_string(),
             version: version.to_string(),
             urls: HashMap::new(),
             sha256: HashMap::new(),
             archive_type: ArchiveType::Zip,
         }),
-        "scala"         => scala_source(version),
+        "scala" => scala_source(version),
         "sqlite" => sqlite_source(version),
         "sqlitestudio" => sqlitestudio_source(version),
-        "opencode" | "mimocode" | "kilocode" | "omniroute" => Some(PackageSource {
+        "ffmpeg" => ffmpeg_source(version),
+        "imagemagick" => imagemagick_source(version),
+        "tesseract" => tesseract_source(version),
+        "nginx" => nginx_source(version),
+        "opencode" | "mimocode" | "kilocode" | "omniroute" | "vscode" | "freebuff" => Some(PackageSource {
             name: name.to_string(),
             version: version.to_string(),
             urls: HashMap::new(),
@@ -143,45 +157,91 @@ pub fn get_source(name: &str, version: &str) -> Option<PackageSource> {
 
 /// List all supported languages.
 pub fn list_supported_languages() -> Vec<&'static str> {
-    vec!["python", "node", "cloudflare", "git", "gh", "java", "kotlin", "swift", "php", "zig", "go", "rust", "msys2", "ruby", "lua", "nim", "dotnet", "flutter", "kubectl", "helm", "kind", "kustomize", "docker", "docker-compose", "act", "devops-tool", "scala", "opencode", "mimocode", "kilocode", "omniroute", "sqlite", "sqlitestudio"]
+    vec![
+        "python",
+        "node",
+        "cloudflare",
+        "git",
+        "gh",
+        "java",
+        "kotlin",
+        "swift",
+        "php",
+        "zig",
+        "go",
+        "rust",
+        "msys2",
+        "ruby",
+        "lua",
+        "nim",
+        "dotnet",
+        "flutter",
+        "kubectl",
+        "helm",
+        "kind",
+        "kustomize",
+        "docker",
+        "docker-compose",
+        "act",
+        "devops-tool",
+        "scala",
+        "opencode",
+        "mimocode",
+        "kilocode",
+        "freebuff",
+        "omniroute",
+        "vscode",
+        "sqlite",
+        "sqlitestudio",
+        "ffmpeg",
+        "imagemagick",
+        "tesseract",
+        "nginx",
+    ]
 }
 
 /// List all supported packages with short descriptions.
-pub fn list_packages_with_descriptions() -> Vec<(&'static str, &'static str)> {
+pub fn list_packages_with_descriptions() -> Vec<(&'static str, String)> {
     vec![
-        ("python",         "CPython runtime"),
-        ("node",           "Node.js JavaScript runtime"),
-        ("cloudflare",     "cloudflared tunnel client"),
-        ("git",            "Git version control (MinGit on Windows)"),
-        ("gh",             "GitHub CLI"),
-        ("java",           "JDK (Adoptium Temurin)"),
-        ("kotlin",         "Kotlin compiler"),
-        ("swift",          "Swift programming language"),
-        ("php",            "PHP scripting language"),
-        ("zig",            "Zig programming language"),
-        ("go",             "Go programming language SDK"),
-        ("rust",           "Rust toolchain (rustc + cargo)"),
-        ("msys2",          "MSYS2 (Windows GCC toolchain)"),
-        ("ruby",           "Ruby programming language"),
-        ("lua",            "Lua scripting language"),
-        ("nim",            "Nim programming language"),
-        ("dotnet",         ".NET SDK"),
-        ("flutter",        "Flutter UI toolkit"),
-        ("kubectl",        "Kubernetes CLI"),
-        ("helm",           "Kubernetes package manager"),
-        ("kind",           "Kubernetes-in-Docker"),
-        ("kustomize",      "Kustomize Kubernetes config"),
-        ("docker",         "Docker CLI"),
-        ("docker-compose", "Docker Compose"),
-        ("act",            "GitHub Actions runner"),
-        ("devops-tool",    "Bundle: act, kubectl, helm, kind, kustomize, docker, docker-compose, gh"),
-        ("scala",          "Scala programming language"),
-        ("opencode",       "AI coding assistant (npm)"),
-        ("mimocode",       "AI coding assistant (npm)"),
-        ("kilocode",       "AI coding assistant (npm)"),
-        ("omniroute",      "Router for AI providers (npm)"),
-        ("sqlite",         "SQLite database engine"),
-        ("sqlitestudio",   "SQLiteStudio database manager"),
+        ("python", t!("ntpkg.src_python")),
+        ("node", t!("ntpkg.src_node")),
+        ("cloudflare", t!("ntpkg.src_cloudflare")),
+        ("git", t!("ntpkg.src_git")),
+        ("gh", t!("ntpkg.src_gh")),
+        ("java", t!("ntpkg.src_java")),
+        ("kotlin", t!("ntpkg.src_kotlin")),
+        ("swift", t!("ntpkg.src_swift")),
+        ("php", t!("ntpkg.src_php")),
+        ("zig", t!("ntpkg.src_zig")),
+        ("go", t!("ntpkg.src_go")),
+        ("rust", t!("ntpkg.src_rust")),
+        ("msys2", t!("ntpkg.src_msys2")),
+        ("ruby", t!("ntpkg.src_ruby")),
+        ("lua", t!("ntpkg.src_lua")),
+        ("nim", t!("ntpkg.src_nim")),
+        ("dotnet", t!("ntpkg.src_dotnet")),
+        ("flutter", t!("ntpkg.src_flutter")),
+        ("kubectl", t!("ntpkg.src_kubectl")),
+        ("helm", t!("ntpkg.src_helm")),
+        ("kind", t!("ntpkg.src_kind")),
+        ("kustomize", t!("ntpkg.src_kustomize")),
+        ("docker", t!("ntpkg.src_docker")),
+        ("docker-compose", t!("ntpkg.src_docker_compose")),
+        ("act", t!("ntpkg.src_act")),
+        ("devops-tool", t!("ntpkg.src_devops_tool")),
+        ("scala", t!("ntpkg.src_scala")),
+        ("opencode", t!("ntpkg.src_opencode")),
+        ("mimocode", t!("ntpkg.src_mimocode")),
+        ("kilocode", t!("ntpkg.src_kilocode")),
+        ("freebuff", t!("ntpkg.src_freebuff")),
+        ("omniroute", t!("ntpkg.src_omniroute")),
+        ("vscode", t!("ntpkg.src_vscode")),
+        ("sqlite", t!("ntpkg.src_sqlite")),
+        ("sqlitestudio", t!("ntpkg.src_sqlitestudio")),
+        ("ffmpeg", t!("ntpkg.src_ffmpeg")),
+        ("imagemagick", t!("ntpkg.src_imagemagick")),
+        ("tesseract", t!("ntpkg.src_tesseract")),
+        ("nginx", t!("ntpkg.src_nginx")),
     ]
 }
 
@@ -244,6 +304,88 @@ fn is_valid_version(s: &str) -> bool {
     true
 }
 
+// ── nginx ────────────────────────────────────────────────────────────
+
+fn fetch_nginx_versions() -> Result<Vec<String>> {
+    let url = "https://nginx.org/download/";
+    let response = ureq::get(url)
+        .call()
+        .context("Failed to fetch nginx version list from nginx.org")?;
+
+    let mut body = response.into_body();
+    let mut html = String::new();
+    body.as_reader()
+        .read_to_string(&mut html)
+        .context("Failed to read nginx.org download page")?;
+
+    let mut versions: Vec<String> = Vec::new();
+    let mut search_start = 0;
+
+    // Windows binaries ship as `nginx-{version}.zip`.
+    while let Some(href_start) = html[search_start..].find("nginx-") {
+        let start = search_start + href_start + 6;
+        if let Some(zip_end_rel) = html[start..].find(".zip") {
+            let version_str = &html[start..start + zip_end_rel];
+            if is_valid_version(version_str) && !versions.iter().any(|v| v == version_str) {
+                versions.push(version_str.to_string());
+            }
+            search_start = start + zip_end_rel + 4;
+        } else {
+            break;
+        }
+    }
+
+    versions.sort_by(|a, b| {
+        let a_parts: Vec<u32> = a.split('.').filter_map(|p| p.parse().ok()).collect();
+        let b_parts: Vec<u32> = b.split('.').filter_map(|p| p.parse().ok()).collect();
+        b_parts.cmp(&a_parts)
+    });
+
+    Ok(versions)
+}
+
+fn nginx_source(version: &str) -> Option<PackageSource> {
+    let base = format!("https://nginx.org/download/nginx-{version}");
+
+    let mut urls = HashMap::new();
+    // Windows: official prebuilt zip. ARM64 Windows runs the x64 build under emulation.
+    urls.insert(
+        "windows-x86_64".to_string(),
+        format!("{base}.zip"),
+    );
+    urls.insert(
+        "windows-aarch64".to_string(),
+        format!("{base}.zip"),
+    );
+    // Linux/macOS: official source tarball (built by ntpkg when requested).
+    urls.insert("linux-x86_64".to_string(), format!("{base}.tar.gz"));
+    urls.insert("linux-aarch64".to_string(), format!("{base}.tar.gz"));
+    urls.insert("macos-x86_64".to_string(), format!("{base}.tar.gz"));
+    urls.insert("macos-aarch64".to_string(), format!("{base}.tar.gz"));
+
+    let archive_type = platform_nginx_archive();
+
+    Some(PackageSource {
+        name: "nginx".to_string(),
+        version: version.to_string(),
+        urls,
+        sha256: HashMap::new(),
+        archive_type,
+    })
+}
+
+fn platform_nginx_archive() -> ArchiveType {
+    #[cfg(target_os = "windows")]
+    {
+        ArchiveType::Zip
+    }
+
+    #[cfg(not(target_os = "windows"))]
+    {
+        ArchiveType::TarGz
+    }
+}
+
 fn python_source(version: &str) -> Option<PackageSource> {
     let base = format!("https://www.python.org/ftp/python/{version}/");
 
@@ -282,7 +424,12 @@ fn platform_python_archive(version: &str) -> Option<(&'static str, String, Archi
         Some(("macos-universal", f, ArchiveType::Pkg))
     }
 
-    #[cfg(not(any(target_os = "windows", target_os = "linux", target_os = "android", target_os = "macos")))]
+    #[cfg(not(any(
+        target_os = "windows",
+        target_os = "linux",
+        target_os = "android",
+        target_os = "macos"
+    )))]
     {
         None
     }
@@ -303,8 +450,8 @@ fn fetch_node_versions() -> Result<Vec<String>> {
         .read_to_string(&mut raw)
         .context("Failed to read Node.js version response")?;
 
-    let entries: Vec<serde_json::Value> = serde_json::from_str(&raw)
-        .context("Failed to parse Node.js version JSON")?;
+    let entries: Vec<serde_json::Value> =
+        serde_json::from_str(&raw).context("Failed to parse Node.js version JSON")?;
 
     let mut versions: Vec<String> = Vec::new();
     for entry in entries {
@@ -364,28 +511,59 @@ fn cloudflare_source(version: &str) -> Option<PackageSource> {
 fn platform_cloudflare_archive() -> Option<(&'static str, String, ArchiveType)> {
     #[cfg(all(target_os = "windows", target_arch = "x86_64"))]
     {
-        Some(("windows-x86_64", "cloudflared-windows-amd64.exe".to_string(), ArchiveType::Zip))
+        Some((
+            "windows-x86_64",
+            "cloudflared-windows-amd64.exe".to_string(),
+            ArchiveType::Zip,
+        ))
     }
 
-    #[cfg(all(target_os = "linux", target_arch = "x86_64"))]
+    #[cfg(all(
+        any(target_os = "linux", target_os = "android"),
+        target_arch = "x86_64"
+    ))]
     {
-        Some(("linux-x86_64", "cloudflared-linux-amd64".to_string(), ArchiveType::TarGz))
+        Some((
+            "linux-x86_64",
+            "cloudflared-linux-amd64".to_string(),
+            ArchiveType::TarGz,
+        ))
     }
 
-    #[cfg(all(target_os = "linux", target_arch = "aarch64"))]
+    #[cfg(all(
+        any(target_os = "linux", target_os = "android"),
+        target_arch = "aarch64"
+    ))]
     {
-        Some(("linux-aarch64", "cloudflared-linux-arm64".to_string(), ArchiveType::TarGz))
+        Some((
+            "linux-aarch64",
+            "cloudflared-linux-arm64".to_string(),
+            ArchiveType::TarGz,
+        ))
     }
 
-    #[cfg(all(target_os = "macos", any(target_arch = "x86_64", target_arch = "aarch64")))]
+    #[cfg(all(
+        target_os = "macos",
+        any(target_arch = "x86_64", target_arch = "aarch64")
+    ))]
     {
-        Some(("macos-universal", "cloudflared-darwin-amd64.tgz".to_string(), ArchiveType::TarGz))
+        Some((
+            "macos-universal",
+            "cloudflared-darwin-amd64.tgz".to_string(),
+            ArchiveType::TarGz,
+        ))
     }
 
     #[cfg(not(any(
         all(target_os = "windows", target_arch = "x86_64"),
-        all(target_os = "linux", any(target_arch = "x86_64", target_arch = "aarch64")),
-        all(target_os = "macos", any(target_arch = "x86_64", target_arch = "aarch64")),
+        all(
+            any(target_os = "linux", target_os = "android"),
+            any(target_arch = "x86_64", target_arch = "aarch64")
+        ),
+        all(
+            target_os = "macos",
+            any(target_arch = "x86_64", target_arch = "aarch64")
+        ),
     )))]
     {
         None
@@ -407,8 +585,8 @@ fn fetch_git_versions() -> Result<Vec<String>> {
         .read_to_string(&mut raw)
         .context("Failed to read GitHub response body")?;
 
-    let releases: Vec<serde_json::Value> = serde_json::from_str(&raw)
-        .context("Failed to parse GitHub releases JSON")?;
+    let releases: Vec<serde_json::Value> =
+        serde_json::from_str(&raw).context("Failed to parse GitHub releases JSON")?;
 
     let mut versions: Vec<String> = Vec::new();
     let mut tag_map: HashMap<String, String> = HashMap::new();
@@ -500,8 +678,8 @@ fn fetch_gh_versions() -> Result<Vec<String>> {
         .read_to_string(&mut raw)
         .context("Failed to read GitHub response body")?;
 
-    let releases: Vec<serde_json::Value> = serde_json::from_str(&raw)
-        .context("Failed to parse GitHub releases JSON")?;
+    let releases: Vec<serde_json::Value> =
+        serde_json::from_str(&raw).context("Failed to parse GitHub releases JSON")?;
 
     let mut versions: Vec<String> = Vec::new();
     for release in releases {
@@ -574,12 +752,30 @@ fn node_source(version: &str) -> Option<PackageSource> {
 
     let mut urls = HashMap::new();
     urls.insert(entry.0.to_string(), url);
-    urls.insert("linux-x86_64".to_string(), format!("{}node-v{version}-linux-x64.tar.gz", base));
-    urls.insert("linux-aarch64".to_string(), format!("{}node-v{version}-linux-arm64.tar.gz", base));
-    urls.insert("macos-x86_64".to_string(), format!("{}node-v{version}-darwin-x64.tar.gz", base));
-    urls.insert("macos-aarch64".to_string(), format!("{}node-v{version}-darwin-arm64.tar.gz", base));
-    urls.insert("windows-x86_64".to_string(), format!("{}node-v{version}-win-x64.zip", base));
-    urls.insert("windows-aarch64".to_string(), format!("{}node-v{version}-win-arm64.zip", base));
+    urls.insert(
+        "linux-x86_64".to_string(),
+        format!("{}node-v{version}-linux-x64.tar.gz", base),
+    );
+    urls.insert(
+        "linux-aarch64".to_string(),
+        format!("{}node-v{version}-linux-arm64.tar.gz", base),
+    );
+    urls.insert(
+        "macos-x86_64".to_string(),
+        format!("{}node-v{version}-darwin-x64.tar.gz", base),
+    );
+    urls.insert(
+        "macos-aarch64".to_string(),
+        format!("{}node-v{version}-darwin-arm64.tar.gz", base),
+    );
+    urls.insert(
+        "windows-x86_64".to_string(),
+        format!("{}node-v{version}-win-x64.zip", base),
+    );
+    urls.insert(
+        "windows-aarch64".to_string(),
+        format!("{}node-v{version}-win-arm64.zip", base),
+    );
 
     Some(PackageSource {
         name: "node".to_string(),
@@ -591,13 +787,19 @@ fn node_source(version: &str) -> Option<PackageSource> {
 }
 
 fn platform_node_archive(version: &str) -> Option<(&'static str, String, ArchiveType)> {
-    #[cfg(all(any(target_os = "linux", target_os = "android"), target_arch = "x86_64"))]
+    #[cfg(all(
+        any(target_os = "linux", target_os = "android"),
+        target_arch = "x86_64"
+    ))]
     {
         let f = format!("node-v{version}-linux-x64.tar.gz");
         Some(("linux-x86_64", f, ArchiveType::TarGz))
     }
 
-    #[cfg(all(any(target_os = "linux", target_os = "android"), target_arch = "aarch64"))]
+    #[cfg(all(
+        any(target_os = "linux", target_os = "android"),
+        target_arch = "aarch64"
+    ))]
     {
         let f = format!("node-v{version}-linux-arm64.tar.gz");
         Some(("linux-aarch64", f, ArchiveType::TarGz))
@@ -628,9 +830,18 @@ fn platform_node_archive(version: &str) -> Option<(&'static str, String, Archive
     }
 
     #[cfg(not(any(
-        all(any(target_os = "linux", target_os = "android"), any(target_arch = "x86_64", target_arch = "aarch64")),
-        all(target_os = "macos", any(target_arch = "x86_64", target_arch = "aarch64")),
-        all(target_os = "windows", any(target_arch = "x86_64", target_arch = "aarch64")),
+        all(
+            any(target_os = "linux", target_os = "android"),
+            any(target_arch = "x86_64", target_arch = "aarch64")
+        ),
+        all(
+            target_os = "macos",
+            any(target_arch = "x86_64", target_arch = "aarch64")
+        ),
+        all(
+            target_os = "windows",
+            any(target_arch = "x86_64", target_arch = "aarch64")
+        ),
     )))]
     {
         None
@@ -652,14 +863,9 @@ fn fetch_java_versions() -> Result<Vec<String>> {
 
 /// Fetch available minor releases for a Java feature version.
 pub(crate) fn list_java_minor_versions(feature: &str) -> Vec<String> {
-    let url = format!(
-        "https://api.adoptium.net/v3/assets/feature_releases/{feature}/ga"
-    );
+    let url = format!("https://api.adoptium.net/v3/assets/feature_releases/{feature}/ga");
 
-    let response = match ureq::get(&url)
-        .header("User-Agent", "ntc")
-        .call()
-    {
+    let response = match ureq::get(&url).header("User-Agent", "ntc").call() {
         Ok(r) => r,
         Err(e) => {
             eprintln!("ntpkg: failed to fetch Java {feature} versions: {e}");
@@ -691,7 +897,9 @@ pub(crate) fn list_java_minor_versions(feature: &str) -> Vec<String> {
     }
 
     if let Ok(mut cache) = JAVA_RELEASE_CACHE.lock() {
-        cache.get_or_insert_with(HashMap::new).insert(feature.to_string(), releases);
+        cache
+            .get_or_insert_with(HashMap::new)
+            .insert(feature.to_string(), releases);
     }
 
     versions
@@ -703,7 +911,10 @@ fn java_source(version: &str) -> Option<PackageSource> {
     // Try cache first
     let found_release = if let Ok(cache) = JAVA_RELEASE_CACHE.lock() {
         if let Some(ref map) = *cache {
-            map.values().flatten().find(|r| r["release_name"].as_str() == Some(version)).cloned()
+            map.values()
+                .flatten()
+                .find(|r| r["release_name"].as_str() == Some(version))
+                .cloned()
         } else {
             None
         }
@@ -716,23 +927,22 @@ fn java_source(version: &str) -> Option<PackageSource> {
         None => {
             // Cache miss: extract feature version and fetch feature releases
             let feature = java_feature_from_version(version)?;
-            let url = format!(
-                "https://api.adoptium.net/v3/assets/feature_releases/{feature}/ga"
-            );
-            let response = ureq::get(&url)
-                .header("User-Agent", "ntc")
-                .call()
-                .ok()?;
+            let url = format!("https://api.adoptium.net/v3/assets/feature_releases/{feature}/ga");
+            let response = ureq::get(&url).header("User-Agent", "ntc").call().ok()?;
             let mut body = response.into_body();
             let mut raw = String::new();
             body.as_reader().read_to_string(&mut raw).ok()?;
             let releases: Vec<serde_json::Value> = serde_json::from_str(&raw).ok()?;
 
             if let Ok(mut cache) = JAVA_RELEASE_CACHE.lock() {
-                cache.get_or_insert_with(HashMap::new).insert(feature.to_string(), releases.clone());
+                cache
+                    .get_or_insert_with(HashMap::new)
+                    .insert(feature.to_string(), releases.clone());
             }
 
-            releases.into_iter().find(|r| r["release_name"].as_str() == Some(version))?
+            releases
+                .into_iter()
+                .find(|r| r["release_name"].as_str() == Some(version))?
         }
     };
 
@@ -770,7 +980,9 @@ fn java_source(version: &str) -> Option<PackageSource> {
 /// Extract feature version from a release name.
 /// "jdk-21.0.11+10" -> "21", "jdk8u432-b06" -> "8"
 fn java_feature_from_version(version: &str) -> Option<String> {
-    let stripped = version.strip_prefix("jdk-").or_else(|| version.strip_prefix("jdk"))?;
+    let stripped = version
+        .strip_prefix("jdk-")
+        .or_else(|| version.strip_prefix("jdk"))?;
     if let Some(dot) = stripped.find('.') {
         Some(stripped[..dot].to_string())
     } else if let Some(u) = stripped.find('u') {
@@ -798,8 +1010,8 @@ fn fetch_kotlin_versions() -> Result<Vec<String>> {
         .read_to_string(&mut raw)
         .context("Failed to read GitHub response body")?;
 
-    let releases: Vec<serde_json::Value> = serde_json::from_str(&raw)
-        .context("Failed to parse GitHub releases JSON")?;
+    let releases: Vec<serde_json::Value> =
+        serde_json::from_str(&raw).context("Failed to parse GitHub releases JSON")?;
 
     let mut versions: Vec<String> = Vec::new();
     for release in releases {
@@ -866,8 +1078,8 @@ fn fetch_swift_versions() -> Result<Vec<String>> {
         .read_to_string(&mut raw)
         .context("Failed to read GitHub response body")?;
 
-    let releases: Vec<serde_json::Value> = serde_json::from_str(&raw)
-        .context("Failed to parse GitHub releases JSON")?;
+    let releases: Vec<serde_json::Value> =
+        serde_json::from_str(&raw).context("Failed to parse GitHub releases JSON")?;
 
     let mut versions: Vec<String> = Vec::new();
     for release in releases {
@@ -932,15 +1144,11 @@ fn swift_source(version: &str) -> Option<PackageSource> {
     // ── macOS ──
     urls.insert(
         "macos-x86_64".to_string(),
-        format!(
-            "https://download.swift.org/{branch}/xcode/{release_dir}/{release_dir}-osx.pkg"
-        ),
+        format!("https://download.swift.org/{branch}/xcode/{release_dir}/{release_dir}-osx.pkg"),
     );
     urls.insert(
         "macos-aarch64".to_string(),
-        format!(
-            "https://download.swift.org/{branch}/xcode/{release_dir}/{release_dir}-osx.pkg"
-        ),
+        format!("https://download.swift.org/{branch}/xcode/{release_dir}/{release_dir}-osx.pkg"),
     );
 
     // ── Windows ──
@@ -981,8 +1189,8 @@ fn fetch_php_versions() -> Result<Vec<String>> {
         .read_to_string(&mut raw)
         .context("Failed to read GitHub response body")?;
 
-    let releases: Vec<serde_json::Value> = serde_json::from_str(&raw)
-        .context("Failed to parse GitHub releases JSON")?;
+    let releases: Vec<serde_json::Value> =
+        serde_json::from_str(&raw).context("Failed to parse GitHub releases JSON")?;
 
     let mut versions: Vec<String> = Vec::new();
     for release in releases {
@@ -1017,12 +1225,14 @@ fn php_source(version: &str) -> Option<PackageSource> {
     let mut urls = HashMap::new();
 
     // ── Windows: prebuilt zip ──
-    let vs = if php_uses_vs17(version) { "vs17" } else { "vs16" };
+    let vs = if php_uses_vs17(version) {
+        "vs17"
+    } else {
+        "vs16"
+    };
     urls.insert(
         "windows-x86_64".to_string(),
-        format!(
-            "https://downloads.php.net/~windows/releases/php-{version}-nts-Win32-{vs}-x64.zip"
-        ),
+        format!("https://downloads.php.net/~windows/releases/php-{version}-nts-Win32-{vs}-x64.zip"),
     );
 
     // ── Linux / macOS: source tarball ──
@@ -1066,8 +1276,8 @@ fn fetch_zig_versions() -> Result<Vec<String>> {
         .read_to_string(&mut raw)
         .context("Failed to read GitHub response body")?;
 
-    let releases: Vec<serde_json::Value> = serde_json::from_str(&raw)
-        .context("Failed to parse GitHub releases JSON")?;
+    let releases: Vec<serde_json::Value> =
+        serde_json::from_str(&raw).context("Failed to parse GitHub releases JSON")?;
 
     let mut versions: Vec<String> = Vec::new();
     for release in releases {
@@ -1162,8 +1372,8 @@ fn fetch_go_versions() -> Result<Vec<String>> {
         .read_to_string(&mut raw)
         .context("Failed to read go.dev response body")?;
 
-    let releases: Vec<serde_json::Value> = serde_json::from_str(&raw)
-        .context("Failed to parse go.dev JSON")?;
+    let releases: Vec<serde_json::Value> =
+        serde_json::from_str(&raw).context("Failed to parse go.dev JSON")?;
 
     let mut versions: Vec<String> = Vec::new();
     for release in releases {
@@ -1190,12 +1400,30 @@ fn go_source(version: &str) -> Option<PackageSource> {
     let base = format!("https://go.dev/dl/go{version}");
 
     let mut urls = HashMap::new();
-    urls.insert("linux-x86_64".to_string(), format!("{base}.linux-amd64.tar.gz"));
-    urls.insert("linux-aarch64".to_string(), format!("{base}.linux-arm64.tar.gz"));
-    urls.insert("macos-x86_64".to_string(), format!("{base}.darwin-amd64.tar.gz"));
-    urls.insert("macos-aarch64".to_string(), format!("{base}.darwin-arm64.tar.gz"));
-    urls.insert("windows-x86_64".to_string(), format!("{base}.windows-amd64.zip"));
-    urls.insert("windows-aarch64".to_string(), format!("{base}.windows-arm64.zip"));
+    urls.insert(
+        "linux-x86_64".to_string(),
+        format!("{base}.linux-amd64.tar.gz"),
+    );
+    urls.insert(
+        "linux-aarch64".to_string(),
+        format!("{base}.linux-arm64.tar.gz"),
+    );
+    urls.insert(
+        "macos-x86_64".to_string(),
+        format!("{base}.darwin-amd64.tar.gz"),
+    );
+    urls.insert(
+        "macos-aarch64".to_string(),
+        format!("{base}.darwin-arm64.tar.gz"),
+    );
+    urls.insert(
+        "windows-x86_64".to_string(),
+        format!("{base}.windows-amd64.zip"),
+    );
+    urls.insert(
+        "windows-aarch64".to_string(),
+        format!("{base}.windows-arm64.zip"),
+    );
 
     let archive_type = platform_go_archive();
 
@@ -1210,13 +1438,19 @@ fn go_source(version: &str) -> Option<PackageSource> {
 
 fn platform_go_archive() -> ArchiveType {
     #[cfg(any(target_os = "linux", target_os = "macos"))]
-    { ArchiveType::TarGz }
+    {
+        ArchiveType::TarGz
+    }
 
     #[cfg(target_os = "windows")]
-    { ArchiveType::Zip }
+    {
+        ArchiveType::Zip
+    }
 
     #[cfg(not(any(target_os = "linux", target_os = "macos", target_os = "windows")))]
-    { ArchiveType::TarGz }
+    {
+        ArchiveType::TarGz
+    }
 }
 
 // ── Rust ─────────────────────────────────────────────────────────
@@ -1234,8 +1468,8 @@ fn fetch_rust_versions() -> Result<Vec<String>> {
         .read_to_string(&mut raw)
         .context("Failed to read GitHub response body")?;
 
-    let tags: Vec<serde_json::Value> = serde_json::from_str(&raw)
-        .context("Failed to parse GitHub tags JSON")?;
+    let tags: Vec<serde_json::Value> =
+        serde_json::from_str(&raw).context("Failed to parse GitHub tags JSON")?;
 
     let mut versions: Vec<String> = Vec::new();
     for tag in tags {
@@ -1317,8 +1551,8 @@ fn fetch_msys2_versions() -> Result<Vec<String>> {
         .read_to_string(&mut raw)
         .context("Failed to read GitHub response")?;
 
-    let releases: Vec<serde_json::Value> = serde_json::from_str(&raw)
-        .context("Failed to parse MSYS2 releases JSON")?;
+    let releases: Vec<serde_json::Value> =
+        serde_json::from_str(&raw).context("Failed to parse MSYS2 releases JSON")?;
 
     let mut versions: Vec<String> = Vec::new();
     for release in releases {
@@ -1339,10 +1573,7 @@ fn msys2_source(version: &str) -> Option<PackageSource> {
     // For "latest", fetch the actual tag from the latest release
     let tag = if version == "latest" {
         let url = "https://api.github.com/repos/msys2/msys2-installer/releases/latest";
-        let resp = ureq::get(url)
-            .header("User-Agent", "ntc")
-            .call()
-            .ok()?;
+        let resp = ureq::get(url).header("User-Agent", "ntc").call().ok()?;
         let mut body = resp.into_body();
         let mut raw = String::new();
         body.as_reader().read_to_string(&mut raw).ok()?;
@@ -1407,9 +1638,7 @@ fn fetch_ruby_versions() -> Result<Vec<String>> {
 
 fn ruby_source(version: &str) -> Option<PackageSource> {
     let short = ruby_short_version(version);
-    let url = format!(
-        "https://cache.ruby-lang.org/pub/ruby/{short}/ruby-{version}.tar.gz"
-    );
+    let url = format!("https://cache.ruby-lang.org/pub/ruby/{short}/ruby-{version}.tar.gz");
 
     let mut urls = HashMap::new();
     urls.insert("linux-x86_64".to_string(), url.clone());
@@ -1520,8 +1749,8 @@ fn fetch_nim_versions() -> Result<Vec<String>> {
         .read_to_string(&mut raw)
         .context("Failed to read GitHub response body")?;
 
-    let tags: Vec<serde_json::Value> = serde_json::from_str(&raw)
-        .context("Failed to parse GitHub tags JSON")?;
+    let tags: Vec<serde_json::Value> =
+        serde_json::from_str(&raw).context("Failed to parse GitHub tags JSON")?;
 
     let mut versions: Vec<String> = Vec::new();
     for tag_entry in tags {
@@ -1556,10 +1785,22 @@ fn nim_source(version: &str) -> Option<PackageSource> {
     let base = format!("https://nim-lang.org/download/nim-{version}");
 
     let mut urls = HashMap::new();
-    urls.insert("linux-x86_64".to_string(), format!("{base}-linux_x64.tar.xz"));
-    urls.insert("linux-aarch64".to_string(), format!("{base}-linux_arm64.tar.xz"));
-    urls.insert("macos-x86_64".to_string(), format!("{base}-macosx_x64.tar.xz"));
-    urls.insert("macos-aarch64".to_string(), format!("{base}-macosx_arm64.tar.xz"));
+    urls.insert(
+        "linux-x86_64".to_string(),
+        format!("{base}-linux_x64.tar.xz"),
+    );
+    urls.insert(
+        "linux-aarch64".to_string(),
+        format!("{base}-linux_arm64.tar.xz"),
+    );
+    urls.insert(
+        "macos-x86_64".to_string(),
+        format!("{base}-macosx_x64.tar.xz"),
+    );
+    urls.insert(
+        "macos-aarch64".to_string(),
+        format!("{base}-macosx_arm64.tar.xz"),
+    );
     urls.insert("windows-x86_64".to_string(), format!("{base}_x64.zip"));
 
     let archive_type = platform_nim_archive();
@@ -1575,13 +1816,19 @@ fn nim_source(version: &str) -> Option<PackageSource> {
 
 fn platform_nim_archive() -> ArchiveType {
     #[cfg(any(target_os = "linux", target_os = "macos"))]
-    { ArchiveType::TarXz }
+    {
+        ArchiveType::TarXz
+    }
 
     #[cfg(target_os = "windows")]
-    { ArchiveType::Zip }
+    {
+        ArchiveType::Zip
+    }
 
     #[cfg(not(any(target_os = "linux", target_os = "macos", target_os = "windows")))]
-    { ArchiveType::TarXz }
+    {
+        ArchiveType::TarXz
+    }
 }
 
 // ── .NET SDK ─────────────────────────────────────────────────────────
@@ -1599,8 +1846,8 @@ fn fetch_dotnet_versions() -> Result<Vec<String>> {
         .read_to_string(&mut raw)
         .context("Failed to read GitHub response body")?;
 
-    let releases: Vec<serde_json::Value> = serde_json::from_str(&raw)
-        .context("Failed to parse GitHub releases JSON")?;
+    let releases: Vec<serde_json::Value> =
+        serde_json::from_str(&raw).context("Failed to parse GitHub releases JSON")?;
 
     let mut versions: Vec<String> = Vec::new();
     for release in releases {
@@ -1632,15 +1879,28 @@ fn is_dotnet_valid_version(s: &str) -> bool {
 }
 
 fn dotnet_source(version: &str) -> Option<PackageSource> {
-    let base = format!("https://builds.dotnet.microsoft.com/dotnet/Sdk/{version}/dotnet-sdk-{version}");
+    let base =
+        format!("https://builds.dotnet.microsoft.com/dotnet/Sdk/{version}/dotnet-sdk-{version}");
 
     let mut urls = HashMap::new();
-    urls.insert("linux-x86_64".to_string(), format!("{base}-linux-x64.tar.gz"));
-    urls.insert("linux-aarch64".to_string(), format!("{base}-linux-arm64.tar.gz"));
+    urls.insert(
+        "linux-x86_64".to_string(),
+        format!("{base}-linux-x64.tar.gz"),
+    );
+    urls.insert(
+        "linux-aarch64".to_string(),
+        format!("{base}-linux-arm64.tar.gz"),
+    );
     urls.insert("macos-x86_64".to_string(), format!("{base}-osx-x64.tar.gz"));
-    urls.insert("macos-aarch64".to_string(), format!("{base}-osx-arm64.tar.gz"));
+    urls.insert(
+        "macos-aarch64".to_string(),
+        format!("{base}-osx-arm64.tar.gz"),
+    );
     urls.insert("windows-x86_64".to_string(), format!("{base}-win-x64.zip"));
-    urls.insert("windows-aarch64".to_string(), format!("{base}-win-arm64.zip"));
+    urls.insert(
+        "windows-aarch64".to_string(),
+        format!("{base}-win-arm64.zip"),
+    );
 
     let archive_type = platform_dotnet_archive();
 
@@ -1655,13 +1915,19 @@ fn dotnet_source(version: &str) -> Option<PackageSource> {
 
 fn platform_dotnet_archive() -> ArchiveType {
     #[cfg(any(target_os = "linux", target_os = "macos"))]
-    { ArchiveType::TarGz }
+    {
+        ArchiveType::TarGz
+    }
 
     #[cfg(target_os = "windows")]
-    { ArchiveType::Zip }
+    {
+        ArchiveType::Zip
+    }
 
     #[cfg(not(any(target_os = "linux", target_os = "macos", target_os = "windows")))]
-    { ArchiveType::TarGz }
+    {
+        ArchiveType::TarGz
+    }
 }
 
 // ── Flutter ──────────────────────────────────────────────────────────
@@ -1678,8 +1944,8 @@ fn fetch_flutter_versions() -> Result<Vec<String>> {
         .read_to_string(&mut raw)
         .context("Failed to read Flutter releases JSON")?;
 
-    let releases: serde_json::Value = serde_json::from_str(&raw)
-        .context("Failed to parse Flutter releases JSON")?;
+    let releases: serde_json::Value =
+        serde_json::from_str(&raw).context("Failed to parse Flutter releases JSON")?;
 
     let mut versions: Vec<String> = Vec::new();
     if let Some(arr) = releases["releases"].as_array() {
@@ -1739,37 +2005,67 @@ fn flutter_source(version: &str) -> Option<PackageSource> {
 
 fn platform_flutter_archive() -> ArchiveType {
     #[cfg(any(target_os = "linux"))]
-    { ArchiveType::TarXz }
+    {
+        ArchiveType::TarXz
+    }
 
     #[cfg(any(target_os = "macos", target_os = "windows"))]
-    { ArchiveType::Zip }
+    {
+        ArchiveType::Zip
+    }
 
     #[cfg(not(any(target_os = "linux", target_os = "macos", target_os = "windows")))]
-    { ArchiveType::Zip }
+    {
+        ArchiveType::Zip
+    }
 }
 
 fn adoptium_platform() -> Option<(&'static str, &'static str)> {
     #[cfg(all(target_os = "windows", target_arch = "x86_64"))]
-    { Some(("windows", "x64")) }
+    {
+        Some(("windows", "x64"))
+    }
 
-    #[cfg(all(target_os = "linux", target_arch = "x86_64"))]
-    { Some(("linux", "x64")) }
+    #[cfg(all(
+        any(target_os = "linux", target_os = "android"),
+        target_arch = "x86_64"
+    ))]
+    {
+        Some(("linux", "x64"))
+    }
 
-    #[cfg(all(target_os = "linux", target_arch = "aarch64"))]
-    { Some(("linux", "aarch64")) }
+    #[cfg(all(
+        any(target_os = "linux", target_os = "android"),
+        target_arch = "aarch64"
+    ))]
+    {
+        Some(("linux", "aarch64"))
+    }
 
     #[cfg(all(target_os = "macos", target_arch = "x86_64"))]
-    { Some(("mac", "x64")) }
+    {
+        Some(("mac", "x64"))
+    }
 
     #[cfg(all(target_os = "macos", target_arch = "aarch64"))]
-    { Some(("mac", "aarch64")) }
+    {
+        Some(("mac", "aarch64"))
+    }
 
     #[cfg(not(any(
         all(target_os = "windows", target_arch = "x86_64"),
-        all(target_os = "linux", any(target_arch = "x86_64", target_arch = "aarch64")),
-        all(target_os = "macos", any(target_arch = "x86_64", target_arch = "aarch64")),
+        all(
+            any(target_os = "linux", target_os = "android"),
+            any(target_arch = "x86_64", target_arch = "aarch64")
+        ),
+        all(
+            target_os = "macos",
+            any(target_arch = "x86_64", target_arch = "aarch64")
+        ),
     )))]
-    { None }
+    {
+        None
+    }
 }
 
 // ── kubectl ─────────────────────────────────────────────────────────────
@@ -1787,8 +2083,8 @@ fn fetch_kubectl_versions() -> Result<Vec<String>> {
         .read_to_string(&mut raw)
         .context("Failed to read GitHub response body")?;
 
-    let releases: Vec<serde_json::Value> = serde_json::from_str(&raw)
-        .context("Failed to parse GitHub releases JSON")?;
+    let releases: Vec<serde_json::Value> =
+        serde_json::from_str(&raw).context("Failed to parse GitHub releases JSON")?;
 
     let mut versions: Vec<String> = Vec::new();
     for release in releases {
@@ -1870,8 +2166,8 @@ fn fetch_helm_versions() -> Result<Vec<String>> {
         .read_to_string(&mut raw)
         .context("Failed to read GitHub response body")?;
 
-    let releases: Vec<serde_json::Value> = serde_json::from_str(&raw)
-        .context("Failed to parse GitHub releases JSON")?;
+    let releases: Vec<serde_json::Value> =
+        serde_json::from_str(&raw).context("Failed to parse GitHub releases JSON")?;
 
     let mut versions: Vec<String> = Vec::new();
     for release in releases {
@@ -1951,8 +2247,8 @@ fn fetch_kind_versions() -> Result<Vec<String>> {
         .read_to_string(&mut raw)
         .context("Failed to read GitHub response body")?;
 
-    let releases: Vec<serde_json::Value> = serde_json::from_str(&raw)
-        .context("Failed to parse GitHub releases JSON")?;
+    let releases: Vec<serde_json::Value> =
+        serde_json::from_str(&raw).context("Failed to parse GitHub releases JSON")?;
 
     let mut versions: Vec<String> = Vec::new();
     for release in releases {
@@ -2032,8 +2328,8 @@ fn fetch_kustomize_versions() -> Result<Vec<String>> {
         .read_to_string(&mut raw)
         .context("Failed to read GitHub response body")?;
 
-    let releases: Vec<serde_json::Value> = serde_json::from_str(&raw)
-        .context("Failed to parse GitHub releases JSON")?;
+    let releases: Vec<serde_json::Value> =
+        serde_json::from_str(&raw).context("Failed to parse GitHub releases JSON")?;
 
     let mut versions: Vec<String> = Vec::new();
     for release in releases {
@@ -2066,7 +2362,9 @@ fn is_kustomize_valid_version(s: &str) -> bool {
 }
 
 fn kustomize_source(version: &str) -> Option<PackageSource> {
-    let base = format!("https://github.com/kubernetes-sigs/kustomize/releases/download/kustomize/v{version}");
+    let base = format!(
+        "https://github.com/kubernetes-sigs/kustomize/releases/download/kustomize/v{version}"
+    );
 
     let mut urls = HashMap::new();
     urls.insert(
@@ -2204,8 +2502,8 @@ fn fetch_docker_compose_versions() -> Result<Vec<String>> {
         .read_to_string(&mut raw)
         .context("Failed to read GitHub response body")?;
 
-    let releases: Vec<serde_json::Value> = serde_json::from_str(&raw)
-        .context("Failed to parse GitHub releases JSON")?;
+    let releases: Vec<serde_json::Value> =
+        serde_json::from_str(&raw).context("Failed to parse GitHub releases JSON")?;
 
     let mut versions: Vec<String> = Vec::new();
     for release in releases {
@@ -2285,8 +2583,8 @@ fn fetch_act_versions() -> Result<Vec<String>> {
         .read_to_string(&mut raw)
         .context("Failed to read GitHub response body")?;
 
-    let releases: Vec<serde_json::Value> = serde_json::from_str(&raw)
-        .context("Failed to parse GitHub releases JSON")?;
+    let releases: Vec<serde_json::Value> =
+        serde_json::from_str(&raw).context("Failed to parse GitHub releases JSON")?;
 
     let mut versions: Vec<String> = Vec::new();
     for release in releases {
@@ -2379,11 +2677,13 @@ fn fetch_scala_versions() -> Result<Vec<String>> {
     }
 
     versions.sort_by(|a, b| {
-        let a_parts: Vec<u32> = a.split(|c: char| !c.is_ascii_digit())
+        let a_parts: Vec<u32> = a
+            .split(|c: char| !c.is_ascii_digit())
             .filter(|s| !s.is_empty())
             .filter_map(|s| s.parse().ok())
             .collect();
-        let b_parts: Vec<u32> = b.split(|c: char| !c.is_ascii_digit())
+        let b_parts: Vec<u32> = b
+            .split(|c: char| !c.is_ascii_digit())
             .filter(|s| !s.is_empty())
             .filter_map(|s| s.parse().ok())
             .collect();
@@ -2465,10 +2765,7 @@ fn scala_source(version: &str) -> Option<PackageSource> {
 // ── SQLite ──────────────────────────────────────────────────────────────
 
 fn version_to_sqlite_code(version: &str) -> Option<u32> {
-    let parts: Vec<u32> = version
-        .split('.')
-        .filter_map(|s| s.parse().ok())
-        .collect();
+    let parts: Vec<u32> = version.split('.').filter_map(|s| s.parse().ok()).collect();
     if parts.len() < 3 {
         return None;
     }
@@ -2562,16 +2859,11 @@ fn sqlite_source(version: &str) -> Option<PackageSource> {
 
 fn find_sqlite_year_for_code(code: u32) -> Option<u32> {
     let url = "https://www.sqlite.org/download.html";
-    let response = ureq::get(url)
-        .header("User-Agent", "ntc")
-        .call()
-        .ok()?;
+    let response = ureq::get(url).header("User-Agent", "ntc").call().ok()?;
 
     let mut body = response.into_body();
     let mut html = String::new();
-    body.as_reader()
-        .read_to_string(&mut html)
-        .ok()?;
+    body.as_reader().read_to_string(&mut html).ok()?;
 
     // CSV lines: PRODUCT,version,year/sqlite-tools-{platform}-{code}.zip,...
     let target = format!("-{code}.zip");
@@ -2642,14 +2934,8 @@ fn sqlitestudio_source(version: &str) -> Option<PackageSource> {
         );
         // No linux-arm64 binary provided upstream
     } else if cfg!(target_os = "macos") {
-        urls.insert(
-            "macos-x86_64".to_string(),
-            format!("{base}-macos-x64.dmg"),
-        );
-        urls.insert(
-            "macos-aarch64".to_string(),
-            format!("{base}-macos-x64.dmg"),
-        );
+        urls.insert("macos-x86_64".to_string(), format!("{base}-macos-x64.dmg"));
+        urls.insert("macos-aarch64".to_string(), format!("{base}-macos-x64.dmg"));
     }
 
     Some(PackageSource {
@@ -2659,6 +2945,143 @@ fn sqlitestudio_source(version: &str) -> Option<PackageSource> {
         sha256: std::collections::HashMap::new(),
         archive_type: ArchiveType::Zip,
     })
+}
+
+// ── FFmpeg ────────────────────────────────────────────────────────────
+
+fn ffmpeg_source(_version: &str) -> Option<PackageSource> {
+    let mut urls = HashMap::new();
+    urls.insert(
+        "windows-x86_64".to_string(),
+        "https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-master-latest-win64-gpl.zip"
+            .to_string(),
+    );
+    urls.insert(
+        "linux-x86_64".to_string(),
+        "https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-master-latest-linux64-gpl.tar.xz"
+            .to_string(),
+    );
+    urls.insert(
+        "linux-aarch64".to_string(),
+        "https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-master-latest-linuxarm64-gpl.tar.xz"
+            .to_string(),
+    );
+    urls.insert(
+        "macos-x86_64".to_string(),
+        "https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-master-latest-macos64-gpl.tar.xz"
+            .to_string(),
+    );
+    urls.insert(
+        "macos-aarch64".to_string(),
+        "https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-master-latest-macosarm64-gpl.tar.xz"
+            .to_string(),
+    );
+
+    let archive_type = platform_ffmpeg_archive();
+
+    Some(PackageSource {
+        name: "ffmpeg".to_string(),
+        version: "latest".to_string(),
+        urls,
+        sha256: HashMap::new(),
+        archive_type,
+    })
+}
+
+fn platform_ffmpeg_archive() -> ArchiveType {
+    #[cfg(target_os = "windows")]
+    {
+        ArchiveType::Zip
+    }
+
+    #[cfg(any(target_os = "linux", target_os = "macos"))]
+    {
+        ArchiveType::TarXz
+    }
+
+    #[cfg(not(any(target_os = "windows", target_os = "linux", target_os = "macos")))]
+    {
+        ArchiveType::TarXz
+    }
+}
+
+// ── ImageMagick ───────────────────────────────────────────────────────
+
+fn imagemagick_source(version: &str) -> Option<PackageSource> {
+    let resolved_ver = if version == "latest" {
+        fetch_latest_imagemagick_version()?
+    } else {
+        version.to_string()
+    };
+
+    let mut urls = HashMap::new();
+    // Windows: .exe installer
+    urls.insert(
+        "windows-x86_64".to_string(),
+        format!(
+            "https://github.com/ImageMagick/ImageMagick/releases/download/{resolved_ver}/ImageMagick-{resolved_ver}-Q16-HDRI-x64-dll.exe"
+        ),
+    );
+    // Linux: AppImage (gcc build)
+    urls.insert(
+        "linux-x86_64".to_string(),
+        format!(
+            "https://github.com/ImageMagick/ImageMagick/releases/download/{resolved_ver}/ImageMagick-{resolved_ver}-gcc-x86_64.AppImage"
+        ),
+    );
+    // macOS: not directly supported; site recommends Homebrew
+
+    let archive_type = platform_imagemagick_archive();
+
+    Some(PackageSource {
+        name: "imagemagick".to_string(),
+        version: resolved_ver,
+        urls,
+        sha256: HashMap::new(),
+        archive_type,
+    })
+}
+
+fn fetch_latest_imagemagick_version() -> Option<String> {
+    let url = "https://api.github.com/repos/ImageMagick/ImageMagick/releases?per_page=10";
+    let response = ureq::get(url).header("User-Agent", "ntc").call().ok()?;
+    let mut body = response.into_body();
+    let mut raw = String::new();
+    body.as_reader().read_to_string(&mut raw).ok()?;
+
+    let releases: Vec<serde_json::Value> = serde_json::from_str(&raw).ok()?;
+
+    for release in &releases {
+        if let Some(tag) = release["tag_name"].as_str() {
+            if tag.starts_with("7.") || tag.starts_with("6.") {
+                return Some(tag.to_string());
+            }
+        }
+    }
+
+    None
+}
+
+fn platform_imagemagick_archive() -> ArchiveType {
+    #[cfg(target_os = "windows")]
+    {
+        ArchiveType::Pkg
+    }
+
+    #[cfg(target_os = "linux")]
+    {
+        ArchiveType::Pkg
+    }
+
+    #[cfg(target_os = "macos")]
+    {
+        ArchiveType::Pkg
+    }
+
+    #[cfg(not(any(target_os = "windows", target_os = "linux", target_os = "macos")))]
+    {
+        ArchiveType::Pkg
+    }
 }
 
 fn current_year() -> u32 {
@@ -2682,8 +3105,8 @@ fn fetch_github_releases(owner: &str, repo: &str) -> Result<Vec<String>> {
         .read_to_string(&mut raw)
         .context("Failed to read GitHub response body")?;
 
-    let releases: Vec<serde_json::Value> = serde_json::from_str(&raw)
-        .context("Failed to parse GitHub releases JSON")?;
+    let releases: Vec<serde_json::Value> =
+        serde_json::from_str(&raw).context("Failed to parse GitHub releases JSON")?;
 
     let mut versions: Vec<String> = Vec::new();
     for release in releases {
@@ -2695,4 +3118,60 @@ fn fetch_github_releases(owner: &str, repo: &str) -> Result<Vec<String>> {
     }
 
     Ok(versions)
+}
+
+// ── Tesseract ─────────────────────────────────────────────────────────
+
+fn tesseract_source(_version: &str) -> Option<PackageSource> {
+    let resolved_ver = fetch_latest_tesseract_version();
+
+    let mut urls = HashMap::new();
+    // Windows: UB-Mannheim NSIS installer (silent-installable).
+    urls.insert(
+        "windows-x86_64".to_string(),
+        format!(
+            "https://github.com/UB-Mannheim/tesseract/releases/download/v{resolved_ver}/tesseract-ocr-w64-setup-{resolved_ver}.exe"
+        ),
+    );
+    // Linux/macOS: no bundled download; the installer prints apt/brew hints.
+
+    Some(PackageSource {
+        name: "tesseract".to_string(),
+        version: resolved_ver,
+        urls,
+        sha256: HashMap::new(),
+        archive_type: ArchiveType::Pkg,
+    })
+}
+
+/// Resolve the latest UB-Mannheim tesseract release tag, falling back to a
+/// known-good pinned version if the GitHub API is unreachable.
+fn fetch_latest_tesseract_version() -> String {
+    const FALLBACK: &str = "5.4.0.20240606";
+
+    let url = "https://api.github.com/repos/UB-Mannheim/tesseract/releases/latest";
+    let response = match ureq::get(url).header("User-Agent", "ntc").call() {
+        Ok(r) => r,
+        Err(_) => return FALLBACK.to_string(),
+    };
+    let mut body = response.into_body();
+    let mut raw = String::new();
+    if body.as_reader().read_to_string(&mut raw).is_err() {
+        return FALLBACK.to_string();
+    }
+
+    let release: serde_json::Value = match serde_json::from_str(&raw) {
+        Ok(v) => v,
+        Err(_) => return FALLBACK.to_string(),
+    };
+    let tag = match release["tag_name"].as_str() {
+        Some(t) => t,
+        None => return FALLBACK.to_string(),
+    };
+    let stripped = tag.strip_prefix('v').unwrap_or(tag);
+    if stripped.is_empty() {
+        FALLBACK.to_string()
+    } else {
+        stripped.to_string()
+    }
 }

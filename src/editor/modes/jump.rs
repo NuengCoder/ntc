@@ -2,6 +2,7 @@ use anyhow::Result;
 use crossterm::event::{Event, KeyCode, KeyEvent, KeyEventKind};
 
 use crate::editor::{Editor, Mode};
+use crate::t;
 
 impl Editor {
     pub(crate) fn handle_jump_event(&mut self, ev: Event) -> Result<()> {
@@ -9,7 +10,8 @@ impl Editor {
             code,
             kind: KeyEventKind::Press,
             ..
-        }) = ev {
+        }) = ev
+        {
             match code {
                 KeyCode::Esc => {
                     self.mode = std::mem::replace(&mut self.prev_mode, Mode::Normal);
@@ -24,7 +26,8 @@ impl Editor {
                             self.scroll_visible();
                             self.mark_all_dirty();
                         } else {
-                            self.status_msg = Some(format!("Line {} out of range (1-{})", n, self.lines.len()));
+                            self.status_msg =
+                                Some(t!("editor.mode_jump_range", n, self.lines.len()));
                         }
                     }
                     let prev = std::mem::replace(&mut self.prev_mode, Mode::Normal);

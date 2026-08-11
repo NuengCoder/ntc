@@ -6,18 +6,18 @@
 pub mod cli;
 pub mod editor;
 pub mod game;
+pub mod image2doc;
 pub mod lsp;
 pub mod math;
 pub mod mql;
 pub mod nfe;
+pub mod ntpkg;
 pub mod ranfile;
 pub mod report;
 pub mod shell;
 pub mod syntax;
 pub mod tutorial;
 pub mod utils;
-pub mod image2doc;
-pub mod ntpkg;
 
 // Re-export utils modules so existing paths like `crate::config::Config` still work
 // (consumed internally via `use crate::...` and externally via `use ntc::...`).
@@ -33,12 +33,12 @@ pub use utils::fuzzy;
 pub use utils::navigator;
 pub use utils::output;
 pub use utils::search;
+pub use utils::session;
 pub use utils::teleport;
 pub use utils::watcher;
-pub use utils::session;
 
 // Re-export key types for convenience
 pub use config::Config;
 pub use navigator::Navigator;
-pub use teleport::TeleportManager;
 pub use shell::run_shell_with_nav;
+pub use teleport::TeleportManager;

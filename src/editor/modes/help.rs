@@ -57,18 +57,16 @@ impl Editor {
                         _ => {}
                     },
                 }
-            },
-            Event::Mouse(m) => {
-                match m.kind {
-                    crossterm::event::MouseEventKind::ScrollUp => {
-                        self.sv.help = self.sv.help.saturating_sub(3);
-                    }
-                    crossterm::event::MouseEventKind::ScrollDown => {
-                        self.sv.help += 3;
-                    }
-                    _ => {}
-                }
             }
+            Event::Mouse(m) => match m.kind {
+                crossterm::event::MouseEventKind::ScrollUp => {
+                    self.sv.help = self.sv.help.saturating_sub(3);
+                }
+                crossterm::event::MouseEventKind::ScrollDown => {
+                    self.sv.help += 3;
+                }
+                _ => {}
+            },
             Event::Resize(w, h) => {
                 self.term_w = w as usize;
                 self.term_h = h as usize;

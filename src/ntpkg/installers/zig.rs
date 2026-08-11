@@ -6,6 +6,7 @@ use super::super::download::{download_with_progress, extract_archive};
 use super::super::manager::{copy_recursive, load_manifest, platform_key, save_manifest};
 use super::super::types::{ArchiveType, PackageSource};
 use crate::output::{print_info, print_success};
+use crate::t;
 
 pub(crate) fn install_zig(
     name: &str,
@@ -36,7 +37,7 @@ pub(crate) fn install_zig(
     print_info(&format!("Downloading {name} {version}..."));
     download_with_progress(url, &archive_path)?;
 
-    print_info("Extracting...");
+    print_info(&t!("ntpkg.extracting"));
     extract_archive(&archive_path, &tmp_dir, archive_type)?;
 
     let zig_bin = find_zig_binary(&tmp_dir)
@@ -76,10 +77,7 @@ fn find_file_recursive(dir: &Path, name: &str) -> Option<std::path::PathBuf> {
                 if let Some(found) = find_file_recursive(&path, name) {
                     return Some(found);
                 }
-            } else if path
-                .file_name()
-                .and_then(|n| n.to_str()) == Some(name)
-            {
+            } else if path.file_name().and_then(|n| n.to_str()) == Some(name) {
                 return Some(path);
             }
         }

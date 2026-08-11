@@ -1,6 +1,7 @@
+use super::Editor;
 use crate::config::Config;
 use crate::syntax::SyntaxLanguage;
-use super::Editor;
+use crate::t;
 
 #[derive(Clone, Debug)]
 pub(crate) struct CompletionItem {
@@ -157,40 +158,40 @@ pub(crate) fn completions_for(
                         continue;
                     }
                     let detail = match name {
-                        "sin" => "sine (radians)",
-                        "cos" => "cosine (radians)",
-                        "tan" => "tangent (radians)",
-                        "cot" => "cotangent (radians)",
-                        "sec" => "secant (radians)",
-                        "csc" => "cosecant (radians)",
-                        "asin" | "arcsin" => "inverse sine",
-                        "acos" | "arccos" => "inverse cosine",
-                        "atan" | "arctan" => "inverse tangent",
-                        "acot" | "arccot" => "inverse cotangent",
-                        "asec" | "arcsec" => "inverse secant",
-                        "acsc" | "arccsc" => "inverse cosecant",
-                        "sqrt" => "square root",
-                        "pow" => "power (x, y)",
-                        "abs" => "absolute value",
-                        "floor" => "round down",
-                        "ceil" | "ceiling" => "round up",
-                        "round" => "nearest integer",
-                        "ln" | "log" => "natural log",
-                        "log2" => "base-2 log",
-                        "log10" => "base-10 log",
-                        "sum" => "sum of values",
-                        "min" => "minimum value",
-                        "max" => "maximum value",
-                        "avg" | "average" | "mean" => "arithmetic mean",
-                        "rand" | "random" => "random integer in [min, max]",
-                        "tobinary" => "to binary string",
-                        "tohex" => "to hex string",
-                        "to8" | "tooctal" => "to octal string",
-                        "todecimal" => "to decimal number",
-                        "tohb" | "tohumanbytes" | "tohumanreadable" => "human-readable bytes",
-                        _ => "",
+                        "sin" => t!("editor.compl_math_sin"),
+                        "cos" => t!("editor.compl_math_cos"),
+                        "tan" => t!("editor.compl_math_tan"),
+                        "cot" => t!("editor.compl_math_cot"),
+                        "sec" => t!("editor.compl_math_sec"),
+                        "csc" => t!("editor.compl_math_csc"),
+                        "asin" | "arcsin" => t!("editor.compl_math_asin"),
+                        "acos" | "arccos" => t!("editor.compl_math_acos"),
+                        "atan" | "arctan" => t!("editor.compl_math_atan"),
+                        "acot" | "arccot" => t!("editor.compl_math_acot"),
+                        "asec" | "arcsec" => t!("editor.compl_math_asec"),
+                        "acsc" | "arccsc" => t!("editor.compl_math_acsc"),
+                        "sqrt" => t!("editor.compl_math_sqrt"),
+                        "pow" => t!("editor.compl_math_pow"),
+                        "abs" => t!("editor.compl_math_abs"),
+                        "floor" => t!("editor.compl_math_floor"),
+                        "ceil" | "ceiling" => t!("editor.compl_math_ceil"),
+                        "round" => t!("editor.compl_math_round"),
+                        "ln" | "log" => t!("editor.compl_math_ln"),
+                        "log2" => t!("editor.compl_math_log2"),
+                        "log10" => t!("editor.compl_math_log10"),
+                        "sum" => t!("editor.compl_math_sum"),
+                        "min" => t!("editor.compl_math_min"),
+                        "max" => t!("editor.compl_math_max"),
+                        "avg" | "average" | "mean" => t!("editor.compl_math_avg"),
+                        "rand" | "random" => t!("editor.compl_math_rand"),
+                        "tobinary" => t!("editor.compl_math_tobinary"),
+                        "tohex" => t!("editor.compl_math_tohex"),
+                        "to8" | "tooctal" => t!("editor.compl_math_tooctal"),
+                        "todecimal" => t!("editor.compl_math_todecimal"),
+                        "tohb" | "tohumanbytes" | "tohumanreadable" => t!("editor.compl_math_tohb"),
+                        _ => "".to_string(),
                     };
-                    push(&mut scored, prefix, name, detail, name, 1);
+                    push(&mut scored, prefix, name, &detail, name, 1);
                 }
                 for name in crate::math::constant_names() {
                     let val = match name {
@@ -203,10 +204,24 @@ pub(crate) fn completions_for(
                     push(&mut scored, prefix, name, &format!("= {}", val), name, 3);
                 }
                 for kw in &["return"] {
-                    push(&mut scored, prefix, kw, "return a value", kw, 5);
+                    push(
+                        &mut scored,
+                        prefix,
+                        kw,
+                        &t!("editor.compl_return_value"),
+                        kw,
+                        5,
+                    );
                 }
                 if "print".starts_with(&lower) {
-                    push(&mut scored, prefix, "print", "print value(s)", "print()", 1);
+                    push(
+                        &mut scored,
+                        prefix,
+                        "print",
+                        &t!("editor.compl_print_values"),
+                        "print()",
+                        1,
+                    );
                 }
                 let cfg = Config::global();
                 if let Ok(cfg_guard) = cfg.read() {
@@ -260,13 +275,27 @@ pub(crate) fn completions_for(
                     push(&mut scored, prefix, name, "[Fun]", name, 1);
                 }
                 for name in crate::mql::type_names() {
-                    push(&mut scored, prefix, name, "[built-in]", name, 2);
+                    push(
+                        &mut scored,
+                        prefix,
+                        name,
+                        &t!("editor.compl_builtin"),
+                        name,
+                        2,
+                    );
                 }
                 for name in crate::mql::constant_names() {
                     push(&mut scored, prefix, name, "[constant]", name, 3);
                 }
                 for name in crate::mql::keyword_names() {
-                    push(&mut scored, prefix, name, "[other]", name, 5);
+                    push(
+                        &mut scored,
+                        prefix,
+                        name,
+                        &t!("editor.compl_other"),
+                        name,
+                        5,
+                    );
                 }
             }
 
@@ -356,7 +385,15 @@ impl Editor {
             let classes = extract_classes(&self.lines, lang);
             let structs = extract_structs(&self.lines, lang);
             let user_funcs = extract_user_functions(&self.lines, lang);
-            let items = completions_for(lang, &word, &vars, &includes, &classes, &structs, &user_funcs);
+            let items = completions_for(
+                lang,
+                &word,
+                &vars,
+                &includes,
+                &classes,
+                &structs,
+                &user_funcs,
+            );
             if !items.is_empty() {
                 self.completion_items = items;
                 self.completion_idx = 0;

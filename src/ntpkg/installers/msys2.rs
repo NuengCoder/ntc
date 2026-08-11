@@ -3,12 +3,6 @@ use std::fs;
 use std::path::Path;
 
 #[cfg(windows)]
-use anyhow::{bail, Context};
-#[cfg(windows)]
-use std::path::PathBuf;
-#[cfg(windows)]
-use std::process::Command;
-#[cfg(windows)]
 use super::super::download::download_with_progress;
 #[cfg(windows)]
 use super::super::manager::platform_key;
@@ -17,8 +11,15 @@ use super::super::types::PackageSource;
 use crate::output::print_info;
 #[cfg(windows)]
 use crate::output::print_success;
+use crate::t;
 #[cfg(windows)]
 use crate::utils::interactive::prompt_yes_no;
+#[cfg(windows)]
+use anyhow::{bail, Context};
+#[cfg(windows)]
+use std::path::PathBuf;
+#[cfg(windows)]
+use std::process::Command;
 
 pub(crate) fn install_msys2(
     name: &str,
@@ -41,12 +42,12 @@ pub(crate) fn install_msys2(
         fs::create_dir_all(&tmp_dir)?;
 
         let installer_path = tmp_dir.join("msys2-installer.exe");
-        print_info(&format!("Downloading {name} {version}..."));
+        print_info(&t!("ntpkg.downloading", format!("{name} {version}")));
         download_with_progress(url, &installer_path)?;
         print_success(&format!("Downloaded to {}", installer_path.display()));
 
         if prompt_yes_no("Start MSYS2 installer", true)? {
-            print_info("Launching MSYS2 installer. Complete the setup, then close the installer window...");
+            print_info(&t!("ntpkg.launch_installer"));
             super::launch_installer_and_wait(&installer_path, name, version)?;
 
             let msys2_root = detect_msys2_root()?;
@@ -54,17 +55,24 @@ pub(crate) fn install_msys2(
             let gcc_path = ucrt64_bin.join("gcc.exe");
 
             if !gcc_path.exists() {
-                print_info("GCC not found yet. Run pacman to install it:");
-                println!("  {} \\usr\\bin\\bash.exe --login -c \"pacman -S mingw-w64-ucrt-x86_64-gcc\"", msys2_root.display());
+                print_info(&t!("ntpkg.msys2_gcc_not_found"));
+                println!(
+                    "  {} \\usr\\bin\\bash.exe --login -c \"pacman -S mingw-w64-ucrt-x86_64-gcc\"",
+                    msys2_root.display()
+                );
                 if prompt_yes_no("Open MSYS2 terminal to install GCC now?", true)? {
-                    print_info("Running: pacman -S mingw-w64-ucrt-x86_64-gcc");
+                    print_info(&t!("ntpkg.msys2_running_pacman"));
                     let bash = msys2_root.join("usr").join("bin").join("bash.exe");
                     let status = Command::new(&bash)
-                        .args(["--login", "-c", "pacman -S --noconfirm mingw-w64-ucrt-x86_64-gcc"])
+                        .args([
+                            "--login",
+                            "-c",
+                            "pacman -S --noconfirm mingw-w64-ucrt-x86_64-gcc",
+                        ])
                         .status()
                         .context("Failed to run pacman")?;
                     if !status.success() {
-                        print_info("GCC installation may not have completed. You can install it later via pacman.");
+                        print_info(&t!("ntpkg.msys2_gcc_incomplete"));
                     }
                 }
             }
@@ -78,19 +86,27 @@ pub(crate) fn install_msys2(
             print_success(&format!("MSYS2 detected at {}", msys2_root.display()));
 
             fs::create_dir_all(vdir)?;
-            fs::write(vdir.join(".real_path"), ucrt64_bin.to_string_lossy().as_bytes())
-                .context("Failed to write .real_path")?;
-            fs::write(vdir.join(".msys2_root"), msys2_root.to_string_lossy().as_bytes())
-                .ok();
+            fs::write(
+                vdir.join(".real_path"),
+                ucrt64_bin.to_string_lossy().as_bytes(),
+            )
+            .context("Failed to write .real_path")?;
+            fs::write(
+                vdir.join(".msys2_root"),
+                msys2_root.to_string_lossy().as_bytes(),
+            )
+            .ok();
 
             let mut manifest = load_manifest()?;
             manifest.add_version(name, &gcc_version);
             manifest.activate(name, &gcc_version);
             save_manifest(&manifest)?;
 
-            print_info("MSYS2 installed! Install optional packages via pacman:");
+            print_info(&t!("ntpkg.msys2_installed"));
             println!("  ntc ntpx msys2 bash --login -c \"pacman -S mingw-w64-ucrt-x86_64-SDL2\"");
-            println!("  ntc ntpx msys2 bash --login -c \"pacman -S mingw-w64-ucrt-x86_64-qt6-base\"");
+            println!(
+                "  ntc ntpx msys2 bash --login -c \"pacman -S mingw-w64-ucrt-x86_64-qt6-base\""
+            );
             println!("  ntc ntpx msys2 bash --login -c \"pacman -S mingw-w64-ucrt-x86_64-raylib\"");
             println!("  ntc ntpx msys2 bash --login -c \"pacman -S mingw-w64-ucrt-x86_64-vulkan-loader mingw-w64-ucrt-x86_64-vulkan-headers\"");
         }
@@ -101,7 +117,7 @@ pub(crate) fn install_msys2(
     #[cfg(not(windows))]
     {
         let _ = (name, version, source, vdir);
-        print_info("On this platform, install GCC with your package manager:");
+        print_info(&t!("ntpkg.msys2_linux_gcc"));
         println!("  Ubuntu/Debian: sudo apt install build-essential");
         println!("  macOS:         xcode-select --install");
         println!("  Fedora:        sudo dnf install gcc gcc-c++");
@@ -151,12 +167,16 @@ fn detect_msys2_root() -> Result<PathBuf> {
         return Ok(default);
     }
 
-    let user_input = crate::utils::interactive::prompt_text("Enter MSYS2 installation path (e.g., C:\\msys64)")?;
+    let user_input =
+        crate::utils::interactive::prompt_text("Enter MSYS2 installation path (e.g., C:\\msys64)")?;
     let p = PathBuf::from(user_input.trim());
     if p.join("usr").join("bin").join("bash.exe").exists() {
         Ok(p)
     } else {
-        bail!("MSYS2 not found at {}. Make sure MSYS2 is installed correctly.", p.display());
+        bail!(
+            "MSYS2 not found at {}. Make sure MSYS2 is installed correctly.",
+            p.display()
+        );
     }
 }
 

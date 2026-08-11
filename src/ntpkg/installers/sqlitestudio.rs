@@ -6,6 +6,7 @@ use super::super::download::{download_with_progress, extract_archive, find_binar
 use super::super::manager::{copy_recursive, load_manifest, platform_key, save_manifest};
 use super::super::types::{bin_dir, ArchiveType, PackageSource};
 use crate::output::{print_info, print_success};
+use crate::t;
 
 pub(crate) fn install_sqlitestudio(
     name: &str,
@@ -34,12 +35,20 @@ pub(crate) fn install_sqlitestudio(
     if url.ends_with(".dmg") {
         anyhow::bail!("macOS .dmg format is not supported by ntpkg. Install SQLiteStudio manually from https://sqlitestudio.pl");
     }
-    let archive_type = if url.ends_with(".zip") { ArchiveType::Zip } else { ArchiveType::TarXz };
+    let archive_type = if url.ends_with(".zip") {
+        ArchiveType::Zip
+    } else {
+        ArchiveType::TarXz
+    };
 
-    print_info("Extracting...");
+    print_info(&t!("ntpkg.extracting"));
     extract_archive(&archive_path, &tmp_dir, archive_type)?;
 
-    let binary_name = if cfg!(windows) { "SQLiteStudio.exe" } else { "SQLiteStudio" };
+    let binary_name = if cfg!(windows) {
+        "SQLiteStudio.exe"
+    } else {
+        "SQLiteStudio"
+    };
     let sqlitestudio_bin = find_binary(&tmp_dir, "SQLiteStudio")
         .ok_or_else(|| anyhow::anyhow!("Could not find {binary_name} in archive"))?;
 
@@ -61,8 +70,11 @@ pub(crate) fn install_sqlitestudio(
         }
     }
 
-    fs::write(vdir.join(".real_path"), target_dir.to_string_lossy().as_bytes())
-        .context("Failed to write .real_path")?;
+    fs::write(
+        vdir.join(".real_path"),
+        target_dir.to_string_lossy().as_bytes(),
+    )
+    .context("Failed to write .real_path")?;
 
     let _ = fs::remove_dir_all(&tmp_dir);
 

@@ -1,13 +1,16 @@
 use crate::config::Config;
 use crate::navigator::Navigator;
-use crate::output::{print_error, print_success, print_info};
+use crate::output::{print_error, print_info, print_success};
+use crate::t;
 
 use anyhow::Result;
 use colored::*;
 use std::io::{self, Write};
 use std::path::Path;
 
-const IMAGE_EXTENSIONS: &[&str] = &["png", "jpg", "jpeg", "gif", "bmp", "ico", "tiff", "tif", "webp"];
+const IMAGE_EXTENSIONS: &[&str] = &[
+    "png", "jpg", "jpeg", "gif", "bmp", "ico", "tiff", "tif", "webp",
+];
 
 fn is_image_file(path: &Path) -> bool {
     path.is_file()
@@ -66,7 +69,9 @@ fn open_image_default(path: &std::path::Path) -> Result<()> {
     }
     #[cfg(target_os = "android")]
     {
-        std::process::Command::new("termux-open").arg(path).status()?;
+        std::process::Command::new("termux-open")
+            .arg(path)
+            .status()?;
     }
     Ok(())
 }
@@ -75,12 +80,17 @@ fn prompt_format() -> Result<(crate::image2doc::OutputFormat, bool)> {
     loop {
         println!();
         println!("{}", "Select output format:".cyan().bold());
-        println!("  {}. Narrative description (for AI)", "1".yellow());
-        println!("  {}. Markdown (default)", "2".yellow());
-        println!("  {}. JSON", "3".yellow());
-        println!("  {}. HTML", "4".yellow());
-        println!("  {}. TXT", "5".yellow());
-        println!("  {}. Cancel", "0".red());
+        println!("  {}. {}", "1".yellow(), t!("cmd.image.desc_narrative"));
+        println!(
+            "  {}. {} {}",
+            "2".yellow(),
+            t!("cmd.image.desc_markdown"),
+            t!("cmd.image.default_label").dimmed()
+        );
+        println!("  {}. {}", "3".yellow(), t!("cmd.image.desc_json"));
+        println!("  {}. {}", "4".yellow(), t!("cmd.image.desc_html"));
+        println!("  {}. {}", "5".yellow(), t!("cmd.image.desc_txt"));
+        println!("  {}. {}", "0".red(), t!("cmd.image.desc_cancel"));
         println!();
         print!("{} ", "format>".green().bold());
         io::stdout().flush()?;
@@ -96,7 +106,7 @@ fn prompt_format() -> Result<(crate::image2doc::OutputFormat, bool)> {
             "4" | "html" => (crate::image2doc::OutputFormat::Html, false),
             "5" | "txt" | "text" => (crate::image2doc::OutputFormat::Txt, false),
             "0" | "q" | "exit" => {
-                println!("{}", "Cancelled.".dimmed());
+                println!("{}", t!("cmd.image.cancelled").dimmed());
                 return Ok((crate::image2doc::OutputFormat::Markdown, false));
             }
             _ => {
@@ -177,23 +187,34 @@ pub fn cmd_image(args: &str, nav: &mut Navigator) -> Result<bool> {
         let files = find_image_files(nav)?;
 
         if files.is_empty() {
-            print_error("No image files found in current directory.");
+            print_error(&t!("cmd.image.no_files"));
             return Ok(false);
         }
 
         println!();
-        println!("{}", "══════════════════════════════════════════════".cyan());
-        println!("{}", "  Select an image to convert".cyan().bold());
-        println!("{}", "══════════════════════════════════════════════".cyan());
+        println!(
+            "{}",
+            "══════════════════════════════════════════════".cyan()
+        );
+        println!("{}", t!("cmd.image.select_image").cyan().bold());
+        println!(
+            "{}",
+            "══════════════════════════════════════════════".cyan()
+        );
 
         for (i, (name, path)) in files.iter().enumerate() {
             let size_str = get_file_size(path);
-            println!("  {}. {} {}", (i + 1).to_string().yellow(), name.blue(), size_str.dimmed());
+            println!(
+                "  {}. {} {}",
+                (i + 1).to_string().yellow(),
+                name.blue(),
+                size_str.dimmed()
+            );
         }
 
-        println!("  {}. Cancel", "0".red());
+        println!("  {}. {}", "0".red(), t!("cmd.image.desc_cancel"));
         println!();
-        print!("{} ", format!("Enter number (1-{}) or 0: ", files.len()).green());
+        print!("{} ", t!("cmd.image.enter_number", files.len()).green());
         io::stdout().flush()?;
 
         let mut input = String::new();
@@ -201,7 +222,7 @@ pub fn cmd_image(args: &str, nav: &mut Navigator) -> Result<bool> {
         let input = input.trim();
 
         if input == "0" || input.is_empty() {
-            println!("{}", "Cancelled.".dimmed());
+            println!("{}", t!("cmd.image.cancelled").dimmed());
             return Ok(false);
         }
 
@@ -266,10 +287,14 @@ pub fn cmd_image(args: &str, nav: &mut Navigator) -> Result<bool> {
                     i += 1;
                     match parts[i].to_lowercase().as_str() {
                         "json" => output_format = crate::image2doc::OutputFormat::Json,
-                        "md" | "markdown" => output_format = crate::image2doc::OutputFormat::Markdown,
+                        "md" | "markdown" => {
+                            output_format = crate::image2doc::OutputFormat::Markdown
+                        }
                         "html" => output_format = crate::image2doc::OutputFormat::Html,
                         "txt" | "text" => output_format = crate::image2doc::OutputFormat::Txt,
-                        "desc" | "description" => output_format = crate::image2doc::OutputFormat::Description,
+                        "desc" | "description" => {
+                            output_format = crate::image2doc::OutputFormat::Description
+                        }
                         f => {
                             print_error(&format!("Unknown format: {}", f));
                             return Ok(false);
@@ -277,7 +302,7 @@ pub fn cmd_image(args: &str, nav: &mut Navigator) -> Result<bool> {
                     }
                     save_to_file = false;
                 } else {
-                    print_error("Missing format after 'to'.");
+                    print_error(&t!("cmd.image.missing_to_format"));
                     return Ok(false);
                 }
             }
@@ -286,10 +311,14 @@ pub fn cmd_image(args: &str, nav: &mut Navigator) -> Result<bool> {
                     i += 1;
                     match parts[i].to_lowercase().as_str() {
                         "json" => output_format = crate::image2doc::OutputFormat::Json,
-                        "md" | "markdown" => output_format = crate::image2doc::OutputFormat::Markdown,
+                        "md" | "markdown" => {
+                            output_format = crate::image2doc::OutputFormat::Markdown
+                        }
                         "html" => output_format = crate::image2doc::OutputFormat::Html,
                         "txt" | "text" => output_format = crate::image2doc::OutputFormat::Txt,
-                        "desc" | "description" => output_format = crate::image2doc::OutputFormat::Description,
+                        "desc" | "description" => {
+                            output_format = crate::image2doc::OutputFormat::Description
+                        }
                         f => {
                             print_error(&format!("Unknown format: {}", f));
                             return Ok(false);
@@ -297,22 +326,29 @@ pub fn cmd_image(args: &str, nav: &mut Navigator) -> Result<bool> {
                     }
                     save_to_file = true;
                 } else {
-                    print_error("Missing format after 'out'.");
+                    print_error(&t!("cmd.image.missing_out_format"));
                     return Ok(false);
                 }
             }
             "--ocr" => ocr_enabled = true,
             "--layout" => layout_enabled = true,
+            "--" => break,
             _ => {
                 print_error(&format!("Unknown option: {}", parts[i]));
-                println!("Usage: image <path> [to|out <format>] [--ocr] [--layout]");
+                println!("{}", t!("cmd.image.usage"));
                 return Ok(false);
             }
         }
         i += 1;
     }
 
-    convert_and_output(&image_path, output_format, save_to_file, ocr_enabled, layout_enabled)?;
+    convert_and_output(
+        &image_path,
+        output_format,
+        save_to_file,
+        ocr_enabled,
+        layout_enabled,
+    )?;
 
     Ok(false)
 }

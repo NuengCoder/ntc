@@ -2,6 +2,7 @@ use anyhow::Result;
 use crossterm::event::{Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 
 use crate::editor::{sel_range, Editor, Mode};
+use crate::t;
 
 impl Editor {
     pub(crate) fn handle_query_event(&mut self, ev: Event) -> Result<()> {
@@ -79,7 +80,11 @@ impl Editor {
             return;
         }
 
-        let commands: Vec<&str> = trimmed.split(';').map(|s| s.trim()).filter(|s| !s.is_empty()).collect();
+        let commands: Vec<&str> = trimmed
+            .split(';')
+            .map(|s| s.trim())
+            .filter(|s| !s.is_empty())
+            .collect();
         for cmd in commands {
             if !self.exec_one(cmd) {
                 break;
@@ -166,7 +171,7 @@ impl Editor {
             let expanded = self.expand_alias(&stored, rest_args);
             self.execute_query(&expanded);
         } else {
-            self.status_msg = Some(format!("Unknown query: {}", cmd));
+            self.status_msg = Some(t!("editor.query_unknown", cmd));
         }
     }
 
@@ -180,7 +185,7 @@ impl Editor {
             let expanded = self.expand_alias(&stored, rest_args);
             self.execute_query(&expanded);
         } else {
-            self.status_msg = Some(format!("Alias not found: {}", name));
+            self.status_msg = Some(t!("editor.query_alias_not_found", name));
         }
     }
 
@@ -244,7 +249,7 @@ impl Editor {
         if args.is_empty() {
             self.clear_selection();
             self.clear_extra_cursors();
-            self.status_msg = Some("Selection cleared".into());
+            self.status_msg = Some(t!("editor.query_selection_cleared"));
             return;
         }
 
@@ -287,11 +292,22 @@ impl Editor {
             let mut matches: Vec<(usize, usize)> = Vec::new();
 
             let (search_s, search_e) = if let (Some(s), Some(e)) = (range_start, range_end) {
-                (s.max(1).saturating_sub(1), e.max(1).saturating_sub(1).min(self.lines.len().saturating_sub(1)))
+                (
+                    s.max(1).saturating_sub(1),
+                    e.max(1)
+                        .saturating_sub(1)
+                        .min(self.lines.len().saturating_sub(1)),
+                )
             } else if do_all || range_start.is_none() {
                 (0, self.lines.len().saturating_sub(1))
             } else {
-                let n = range_start.map(|n| n.max(1).saturating_sub(1).min(self.lines.len().saturating_sub(1))).unwrap_or(0);
+                let n = range_start
+                    .map(|n| {
+                        n.max(1)
+                            .saturating_sub(1)
+                            .min(self.lines.len().saturating_sub(1))
+                    })
+                    .unwrap_or(0);
                 (n, n)
             };
 
@@ -309,7 +325,7 @@ impl Editor {
             }
 
             if matches.is_empty() {
-                self.status_msg = Some(format!("No matches for '{}'", pat));
+                self.status_msg = Some(t!("editor.query_no_matches", pat));
                 return;
             }
 
@@ -330,52 +346,55 @@ impl Editor {
                     anchor: Some((my, mb)),
                 });
             }
-            self.status_msg = Some(format!("Selected {} occurrence(s) of '{}'", matches.len(), pat));
+            self.status_msg = Some(t!("editor.query_selected_occurrences", matches.len(), pat));
             return;
         }
 
         if do_all {
             self.select_all();
-            self.status_msg = Some("Selected all lines".into());
+            self.status_msg = Some(t!("editor.query_selected_all_lines"));
         } else if let (Some(s), Some(e)) = (range_start, range_end) {
             let s = s.max(1).saturating_sub(1);
             let e = e.max(1).saturating_sub(1);
             let max_idx = self.lines.len().saturating_sub(1);
             if s > max_idx {
-                self.status_msg = Some(format!("Start line {} out of range (max {})", s + 1, max_idx + 1));
+                self.status_msg = Some(t!("editor.query_start_out_of_range", s + 1, max_idx + 1));
                 return;
             }
             let ey = e.min(max_idx);
             self.cursor.selection_anchor = Some((s, 0));
             self.cursor.y = ey;
             self.cursor.byte = self.lines[ey].len();
-            self.status_msg = Some(format!("Selected lines {}-{}", s + 1, ey + 1));
+            self.status_msg = Some(t!("editor.query_selected_lines_range", s + 1, ey + 1));
         } else if let Some(n) = range_start {
-            let n = n.max(1).saturating_sub(1).min(self.lines.len().saturating_sub(1));
+            let n = n
+                .max(1)
+                .saturating_sub(1)
+                .min(self.lines.len().saturating_sub(1));
             self.cursor.selection_anchor = Some((n, 0));
             self.cursor.byte = self.lines[n].len();
-            self.status_msg = Some(format!("Selected line {}", n + 1));
+            self.status_msg = Some(t!("editor.query_selected_line", n + 1));
         }
     }
 
     fn cmd_replace(&mut self, args: &str) {
         let args = args.trim();
         if args.is_empty() {
-            self.status_msg = Some("/p <find> to <replace>".into());
+            self.status_msg = Some(t!("editor.query_replace_usage"));
             return;
         }
         let sep = " to ";
         let pos = match args.rfind(sep) {
             Some(p) => p,
             None => {
-                self.status_msg = Some("Format: /p <find> to <replace>".into());
+                self.status_msg = Some(t!("editor.query_replace_format"));
                 return;
             }
         };
         let find = &args[..pos];
         let replace = &args[pos + sep.len()..];
         if find.is_empty() {
-            self.status_msg = Some("Empty find pattern".into());
+            self.status_msg = Some(t!("editor.query_empty_pattern"));
             return;
         }
 
@@ -441,7 +460,7 @@ impl Editor {
 
         self.modified = true;
         self.search.mark_dirty();
-        self.status_msg = Some(format!("Replaced {} occurrence(s)", count));
+        self.status_msg = Some(t!("editor.query_replaced_count", count));
     }
 
     fn cmd_qal(&mut self, args: &str) {
@@ -453,28 +472,28 @@ impl Editor {
             "add" => {
                 let aparts: Vec<&str> = subargs.splitn(2, ' ').collect();
                 if aparts.len() < 2 {
-                    self.status_msg = Some("/qal add <name> <query>".into());
+                    self.status_msg = Some(t!("editor.query_qal_add_usage"));
                     return;
                 }
                 let name = aparts[0];
                 let query = aparts[1];
                 self.qal_aliases.insert(name.to_string(), query.to_string());
-                self.status_msg = Some(format!("Alias '{}' added", name));
+                self.status_msg = Some(t!("editor.query_qal_added", name));
             }
             "rm" | "remove" => {
                 if subargs.is_empty() {
-                    self.status_msg = Some("/qal rm <name>".into());
+                    self.status_msg = Some(t!("editor.query_qal_rm_usage"));
                     return;
                 }
                 if self.qal_aliases.remove(subargs).is_some() {
-                    self.status_msg = Some(format!("Alias '{}' removed", subargs));
+                    self.status_msg = Some(t!("editor.query_qal_removed", subargs));
                 } else {
-                    self.status_msg = Some(format!("Alias '{}' not found", subargs));
+                    self.status_msg = Some(t!("editor.query_qal_not_found", subargs));
                 }
             }
             "info" => {
                 if subargs.is_empty() {
-                    self.status_msg = Some("/qal info <name>".into());
+                    self.status_msg = Some(t!("editor.query_qal_info_usage"));
                     return;
                 }
                 match self.qal_aliases.get(subargs) {
@@ -482,55 +501,58 @@ impl Editor {
                         self.status_msg = Some(format!("'{}' -> {}", subargs, query));
                     }
                     None => {
-                        self.status_msg = Some(format!("Alias '{}' not found", subargs));
+                        self.status_msg = Some(t!("editor.query_qal_not_found", subargs));
                     }
                 }
             }
             "edit" => {
                 let aparts: Vec<&str> = subargs.splitn(2, ' ').collect();
                 if aparts.len() < 2 {
-                    self.status_msg = Some("/qal edit <name> <new_query>".into());
+                    self.status_msg = Some(t!("editor.query_qal_edit_usage"));
                     return;
                 }
                 let name = aparts[0];
                 let query = aparts[1];
                 if self.qal_aliases.contains_key(name) {
                     self.qal_aliases.insert(name.to_string(), query.to_string());
-                    self.status_msg = Some(format!("Alias '{}' updated", name));
+                    self.status_msg = Some(t!("editor.query_qal_updated", name));
                 } else {
-                    self.status_msg = Some(format!("Alias '{}' not found", name));
+                    self.status_msg = Some(t!("editor.query_qal_not_found", name));
                 }
             }
             "rnm" | "rename" => {
                 let rparts: Vec<&str> = subargs.splitn(3, ' ').collect();
                 if rparts.len() < 3 || rparts[1] != "to" {
-                    self.status_msg = Some("/qal rnm <old> to <new>".into());
+                    self.status_msg = Some(t!("editor.query_qal_rnm_usage"));
                     return;
                 }
                 let old = rparts[0];
                 let new = rparts[2];
                 if let Some(query) = self.qal_aliases.remove(old) {
                     self.qal_aliases.insert(new.to_string(), query);
-                    self.status_msg = Some(format!("Renamed '{}' to '{}'", old, new));
+                    self.status_msg = Some(t!("editor.query_qal_renamed", old, new));
                 } else {
-                    self.status_msg = Some(format!("Alias '{}' not found", old));
+                    self.status_msg = Some(t!("editor.query_qal_not_found", old));
                 }
             }
             "list" | "ls" => {
                 if self.qal_aliases.is_empty() {
-                    self.status_msg = Some("No query aliases".into());
+                    self.status_msg = Some(t!("editor.query_qal_no_aliases"));
                 } else {
                     let mut sorted: Vec<_> = self.qal_aliases.iter().collect();
                     sorted.sort_by(|a, b| a.0.cmp(b.0));
-                    let lines: Vec<String> = sorted.iter().map(|(n, q)| format!("{} → {}", n, q)).collect();
-                    self.status_msg = Some(format!("Aliases: {}", lines.join(" | ")));
+                    let lines: Vec<String> = sorted
+                        .iter()
+                        .map(|(n, q)| format!("{} → {}", n, q))
+                        .collect();
+                    self.status_msg = Some(t!("editor.query_qal_list", lines.join(" | ")));
                 }
             }
             "run" => {
                 self.cmd_alias_invoke(subargs);
             }
             _ => {
-                self.status_msg = Some("/qal: add|rm|info|edit|rnm|list|run".into());
+                self.status_msg = Some(t!("editor.query_qal_help"));
             }
         }
     }
@@ -538,28 +560,28 @@ impl Editor {
     fn cmd_add(&mut self, args: &str) {
         let args = args.trim();
         if args.is_empty() {
-            self.status_msg = Some("/add <text> to #end|#start|#hm".into());
+            self.status_msg = Some(t!("editor.query_add_usage"));
             return;
         }
         let sep = " to ";
         let pos = match args.rfind(sep) {
             Some(p) => p,
             None => {
-                self.status_msg = Some("Format: /add <text> to #end|#start|#hm".into());
+                self.status_msg = Some(t!("editor.query_add_format"));
                 return;
             }
         };
         let text = &args[..pos];
         let target = args[pos + sep.len()..].trim();
         if text.is_empty() || target.is_empty() {
-            self.status_msg = Some("Format: /add <text> to #end|#start|#hm".into());
+            self.status_msg = Some(t!("editor.query_add_format"));
             return;
         }
 
         let is_end = target.eq_ignore_ascii_case("#end");
         let is_start = target.eq_ignore_ascii_case("#start") || target.eq_ignore_ascii_case("#hm");
         if !is_end && !is_start {
-            self.status_msg = Some("Position must be #end, #start, or #hm".into());
+            self.status_msg = Some(t!("editor.query_add_position"));
             return;
         }
 
@@ -586,34 +608,34 @@ impl Editor {
         }
         self.modified = true;
         self.search.mark_dirty();
-        self.status_msg = Some(format!("Added text to {} line(s)", row_end - row_start + 1));
+        self.status_msg = Some(t!("editor.query_added_text", row_end - row_start + 1));
     }
 
     fn cmd_set(&mut self, args: &str) {
         let args = args.trim();
         if args.is_empty() {
-            self.status_msg = Some("/set <pattern> to #end|#start|#hm".into());
+            self.status_msg = Some(t!("editor.query_set_usage"));
             return;
         }
         let sep = " to ";
         let pos = match args.rfind(sep) {
             Some(p) => p,
             None => {
-                self.status_msg = Some("Format: /set <pattern> to #end|#start|#hm".into());
+                self.status_msg = Some(t!("editor.query_set_format"));
                 return;
             }
         };
         let pattern = &args[..pos];
         let target = args[pos + sep.len()..].trim();
         if pattern.is_empty() || target.is_empty() {
-            self.status_msg = Some("Format: /set <pattern> to #end|#start|#hm".into());
+            self.status_msg = Some(t!("editor.query_set_format"));
             return;
         }
 
         let is_end = target.eq_ignore_ascii_case("#end");
         let is_start = target.eq_ignore_ascii_case("#start") || target.eq_ignore_ascii_case("#hm");
         if !is_end && !is_start {
-            self.status_msg = Some("Position must be #end, #start, or #hm".into());
+            self.status_msg = Some(t!("editor.query_add_position"));
             return;
         }
 
@@ -639,7 +661,7 @@ impl Editor {
         }
 
         if matches.is_empty() {
-            self.status_msg = Some(format!("No lines contain '{}'", pattern));
+            self.status_msg = Some(t!("editor.query_no_pattern_matches", pattern));
             return;
         }
 
@@ -681,12 +703,15 @@ impl Editor {
 
         self.modified = true;
         self.search.mark_dirty();
-        self.status_msg = Some(format!("Set alignment on {} line(s)", matches.len()));
+        self.status_msg = Some(t!("editor.query_set_alignment", matches.len()));
     }
 
     fn cmd_upper_lower(&mut self, is_upper: bool) {
         if !self.has_selection() {
-            self.status_msg = Some(format!("/{}(selection required)", if is_upper { "upper" } else { "lower" }));
+            self.status_msg = Some(t!(
+                "editor.query_upper_lower_required",
+                if is_upper { "upper" } else { "lower" }
+            ));
             return;
         }
         let text = self.selected_text();
@@ -742,10 +767,9 @@ impl Editor {
         self.modified = true;
         self.search.mark_dirty();
         self.status_msg = Some(if is_upper {
-            "Uppercased selection".into()
+            t!("editor.query_uppercased")
         } else {
-            "Lowercased selection".into()
+            t!("editor.query_lowercased")
         });
     }
-
 }

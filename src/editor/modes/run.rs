@@ -1,12 +1,17 @@
 use anyhow::Result;
-use crossterm::event::{Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers, EnableMouseCapture};
+use crossterm::event::{EnableMouseCapture, Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 use crossterm::execute;
 
-use crate::editor::{Editor, Focus, Mode};
 use crate::editor::types::RunMessage;
+use crate::editor::{Editor, Focus, Mode};
+use crate::t;
 
 impl Editor {
-    pub(crate) fn handle_run_event(&mut self, ev: Event, stdout: &mut std::io::Stdout) -> Result<()> {
+    pub(crate) fn handle_run_event(
+        &mut self,
+        ev: Event,
+        stdout: &mut std::io::Stdout,
+    ) -> Result<()> {
         if let Event::Resize(w, h) = ev {
             self.term_w = w as usize;
             self.term_h = h as usize;
@@ -32,11 +37,10 @@ impl Editor {
 
             if m.row as usize >= split {
                 match m.kind {
-                    crossterm::event::MouseEventKind::ScrollUp
-                        if self.sv.run > 0 => {
-                            self.sv.run = self.sv.run.saturating_sub(3);
-                            self.mark_all_dirty();
-                        }
+                    crossterm::event::MouseEventKind::ScrollUp if self.sv.run > 0 => {
+                        self.sv.run = self.sv.run.saturating_sub(3);
+                        self.mark_all_dirty();
+                    }
                     crossterm::event::MouseEventKind::ScrollDown => {
                         let panel_h = self.run_panel_height();
                         let max = self.run_lines.len().saturating_sub(panel_h);
@@ -53,43 +57,56 @@ impl Editor {
         }
 
         if !self.run_cmd_buf.is_empty() {
-            if let Event::Key(KeyEvent { code, kind: KeyEventKind::Press, .. }) = ev { match code {
-                KeyCode::Esc => {
-                    self.run_cmd_buf.clear();
-                    self.mark_all_dirty();
-                }
-                KeyCode::Enter => {
-                    let cmd = self.run_cmd_buf.clone();
-                    self.run_cmd_buf.clear();
-                    if let Some(rest) = cmd.strip_prefix(":run ") {
-                        let rest = rest.trim();
-                        if !rest.is_empty() {
-                            self.start_run(rest);
-                        }
-                    } else if let Some(rest) = cmd.strip_prefix(":") {
-                        let rest = rest.trim();
-                        if !rest.is_empty() {
-                            self.run_lines.clear();
-                            self.sv.run = 0;
-                            self.start_run(rest);
-                        }
+            if let Event::Key(KeyEvent {
+                code,
+                kind: KeyEventKind::Press,
+                ..
+            }) = ev
+            {
+                match code {
+                    KeyCode::Esc => {
+                        self.run_cmd_buf.clear();
+                        self.mark_all_dirty();
                     }
-                    self.mark_all_dirty();
+                    KeyCode::Enter => {
+                        let cmd = self.run_cmd_buf.clone();
+                        self.run_cmd_buf.clear();
+                        if let Some(rest) = cmd.strip_prefix(":run ") {
+                            let rest = rest.trim();
+                            if !rest.is_empty() {
+                                self.start_run(rest);
+                            }
+                        } else if let Some(rest) = cmd.strip_prefix(":") {
+                            let rest = rest.trim();
+                            if !rest.is_empty() {
+                                self.run_lines.clear();
+                                self.sv.run = 0;
+                                self.start_run(rest);
+                            }
+                        }
+                        self.mark_all_dirty();
+                    }
+                    KeyCode::Backspace => {
+                        self.run_cmd_buf.pop();
+                        self.mark_all_dirty();
+                    }
+                    KeyCode::Char(c) => {
+                        self.run_cmd_buf.push(c);
+                        self.mark_all_dirty();
+                    }
+                    _ => {}
                 }
-                KeyCode::Backspace => {
-                    self.run_cmd_buf.pop();
-                    self.mark_all_dirty();
-                }
-                KeyCode::Char(c) => {
-                    self.run_cmd_buf.push(c);
-                    self.mark_all_dirty();
-                }
-                _ => {}
-            } }
+            }
             return Ok(());
         }
 
-        if let Event::Key(KeyEvent { code, modifiers, kind: KeyEventKind::Press, .. }) = &ev {
+        if let Event::Key(KeyEvent {
+            code,
+            modifiers,
+            kind: KeyEventKind::Press,
+            ..
+        }) = &ev
+        {
             let ctrl = modifiers.contains(KeyModifiers::CONTROL);
             if ctrl {
                 match code {
@@ -131,7 +148,11 @@ impl Editor {
             }
         }
         match ev {
-            Event::Key(KeyEvent { code: KeyCode::Esc, kind: KeyEventKind::Press, .. }) => {
+            Event::Key(KeyEvent {
+                code: KeyCode::Esc,
+                kind: KeyEventKind::Press,
+                ..
+            }) => {
                 if let Some(mut child) = self.run_child.take() {
                     let _ = child.kill();
                     let _ = child.wait();
@@ -145,7 +166,11 @@ impl Editor {
                 let _ = execute!(stdout, EnableMouseCapture);
                 self.mark_all_dirty();
             }
-            Event::Key(KeyEvent { code: KeyCode::Char(':'), kind: KeyEventKind::Press, .. }) => {
+            Event::Key(KeyEvent {
+                code: KeyCode::Char(':'),
+                kind: KeyEventKind::Press,
+                ..
+            }) => {
                 self.run_cmd_buf = ":".into();
                 self.mark_all_dirty();
             }
@@ -186,36 +211,67 @@ impl Editor {
                 self.run_cmd_buf = ":".into();
                 self.mark_all_dirty();
             }
-            Event::Key(KeyEvent { code: KeyCode::Up, kind: KeyEventKind::Press, .. })
-            | Event::Key(KeyEvent { code: KeyCode::Char('k'), kind: KeyEventKind::Press, .. })
-                if self.sv.run > 0 => {
-                    self.sv.run -= 1;
-                    self.mark_all_dirty();
-                }
-            Event::Key(KeyEvent { code: KeyCode::Down, kind: KeyEventKind::Press, .. })
-            | Event::Key(KeyEvent { code: KeyCode::Char('j'), kind: KeyEventKind::Press, .. }) => {
+            Event::Key(KeyEvent {
+                code: KeyCode::Up,
+                kind: KeyEventKind::Press,
+                ..
+            })
+            | Event::Key(KeyEvent {
+                code: KeyCode::Char('k'),
+                kind: KeyEventKind::Press,
+                ..
+            }) if self.sv.run > 0 => {
+                self.sv.run -= 1;
+                self.mark_all_dirty();
+            }
+            Event::Key(KeyEvent {
+                code: KeyCode::Down,
+                kind: KeyEventKind::Press,
+                ..
+            })
+            | Event::Key(KeyEvent {
+                code: KeyCode::Char('j'),
+                kind: KeyEventKind::Press,
+                ..
+            }) => {
                 let panel_h = self.run_panel_height();
                 if self.sv.run + panel_h < self.run_lines.len() {
                     self.sv.run += 1;
                     self.mark_all_dirty();
                 }
             }
-            Event::Key(KeyEvent { code: KeyCode::PageUp, kind: KeyEventKind::Press, .. }) => {
+            Event::Key(KeyEvent {
+                code: KeyCode::PageUp,
+                kind: KeyEventKind::Press,
+                ..
+            }) => {
                 let panel_h = self.run_panel_height();
                 self.sv.run = self.sv.run.saturating_sub(panel_h);
                 self.mark_all_dirty();
             }
-            Event::Key(KeyEvent { code: KeyCode::PageDown, kind: KeyEventKind::Press, .. }) => {
+            Event::Key(KeyEvent {
+                code: KeyCode::PageDown,
+                kind: KeyEventKind::Press,
+                ..
+            }) => {
                 let panel_h = self.run_panel_height();
                 let max = self.run_lines.len().saturating_sub(panel_h);
                 self.sv.run = (self.sv.run + panel_h).min(max);
                 self.mark_all_dirty();
             }
-            Event::Key(KeyEvent { code: KeyCode::Home, kind: KeyEventKind::Press, .. }) => {
+            Event::Key(KeyEvent {
+                code: KeyCode::Home,
+                kind: KeyEventKind::Press,
+                ..
+            }) => {
                 self.sv.run = 0;
                 self.mark_all_dirty();
             }
-            Event::Key(KeyEvent { code: KeyCode::End, kind: KeyEventKind::Press, .. }) => {
+            Event::Key(KeyEvent {
+                code: KeyCode::End,
+                kind: KeyEventKind::Press,
+                ..
+            }) => {
                 let panel_h = self.run_panel_height();
                 self.sv.run = self.run_lines.len().saturating_sub(panel_h);
                 self.mark_all_dirty();
@@ -237,22 +293,22 @@ impl Editor {
         let cmd_line = cmd_line.to_string();
 
         let child_result = {
-                #[cfg(windows)]
-                let shell = "cmd";
-                #[cfg(windows)]
-                let flag = "/C";
-                #[cfg(not(windows))]
-                let shell = "sh";
-                #[cfg(not(windows))]
-                let flag = "-c";
-                std::process::Command::new(shell)
-                    .args([flag, &cmd_line])
-                    .current_dir(&cwd)
-                    .stdin(std::process::Stdio::null())
-                    .stdout(std::process::Stdio::piped())
-                    .stderr(std::process::Stdio::piped())
-                    .spawn()
-            };
+            #[cfg(windows)]
+            let shell = "cmd";
+            #[cfg(windows)]
+            let flag = "/C";
+            #[cfg(not(windows))]
+            let shell = "sh";
+            #[cfg(not(windows))]
+            let flag = "-c";
+            std::process::Command::new(shell)
+                .args([flag, &cmd_line])
+                .current_dir(&cwd)
+                .stdin(std::process::Stdio::null())
+                .stdout(std::process::Stdio::piped())
+                .stderr(std::process::Stdio::piped())
+                .spawn()
+        };
 
         match child_result {
             Ok(mut child) => {
@@ -264,19 +320,27 @@ impl Editor {
                 std::thread::spawn(move || {
                     use std::io::{BufRead, BufReader};
 
-                    let read_pipe = |reader: Option<Box<dyn std::io::Read + Send>>, tx: &std::sync::mpsc::Sender<RunMessage>| {
-                        if let Some(pipe) = reader {
-                            let buf = BufReader::new(pipe);
-                            for l in buf.lines().map_while(Result::ok) {
-                                if tx.send(RunMessage::Line(l)).is_err() {
-                                    break;
+                    let read_pipe =
+                        |reader: Option<Box<dyn std::io::Read + Send>>,
+                         tx: &std::sync::mpsc::Sender<RunMessage>| {
+                            if let Some(pipe) = reader {
+                                let buf = BufReader::new(pipe);
+                                for l in buf.lines().map_while(Result::ok) {
+                                    if tx.send(RunMessage::Line(l)).is_err() {
+                                        break;
+                                    }
                                 }
                             }
-                        }
-                    };
+                        };
 
-                    read_pipe(stdout_pipe.map(|p| Box::new(p) as Box<dyn std::io::Read + Send>), &tx);
-                    read_pipe(stderr_pipe.map(|p| Box::new(p) as Box<dyn std::io::Read + Send>), &tx);
+                    read_pipe(
+                        stdout_pipe.map(|p| Box::new(p) as Box<dyn std::io::Read + Send>),
+                        &tx,
+                    );
+                    read_pipe(
+                        stderr_pipe.map(|p| Box::new(p) as Box<dyn std::io::Read + Send>),
+                        &tx,
+                    );
 
                     let _ = tx.send(RunMessage::Done);
                 });
@@ -293,7 +357,7 @@ impl Editor {
                 self.mark_all_dirty();
             }
             Err(e) => {
-                self.status_msg = Some(format!("run: {}", e));
+                self.status_msg = Some(t!("editor.mode_run_err", e));
             }
         }
     }

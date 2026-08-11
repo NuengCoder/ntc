@@ -1,11 +1,12 @@
 //! Navigation commands: `cd`, `back`, `godrive`, `gos`, `gosc`, `fgo`, `where`.
 
+use super::parse_search_args;
 use crate::explorer::human_readable_size;
 use crate::navigator::{clear_screen, Navigator};
 use crate::output::{print_error, print_success};
-use crate::shell::helpers::{show_tree, gosc_loop};
+use crate::shell::helpers::{gosc_loop, show_tree};
+use crate::t;
 use crate::teleport::TeleportManager;
-use super::parse_search_args;
 
 use anyhow::Result;
 use colored::*;
@@ -14,11 +15,11 @@ use std::path::{Path, PathBuf};
 
 pub fn cmd_cd(args: &str, nav: &mut Navigator) -> Result<bool> {
     if args.is_empty() {
-        println!("Usage: cd <directory_path>");
-        println!("       cd to <tp_name>      Teleport to savepoint");
-        println!("Example: cd C:\\Users");
-        println!("         cd subdir");
-        println!("         cd to work         # Teleport to 'work' savepoint");
+        println!("{}", t!("cmd.nav.cd.usage1"));
+        println!("{}", t!("cmd.nav.cd.usage2"));
+        println!("{}", t!("cmd.nav.cd.example1"));
+        println!("{}", t!("cmd.nav.cd.example2"));
+        println!("{}", t!("cmd.nav.cd.example3"));
     } else {
         let parts: Vec<&str> = args.split_whitespace().collect();
         if parts.len() >= 2 && parts[0].to_lowercase() == "to" {
@@ -26,16 +27,16 @@ pub fn cmd_cd(args: &str, nav: &mut Navigator) -> Result<bool> {
             if TeleportManager::get_all().contains_key(&tp_name.to_lowercase()) {
                 TeleportManager::jump_by_name(nav, tp_name)?;
                 clear_screen();
-                show_tree(nav, Some(1), false, false, false, false, false);
+                show_tree(nav, Some(1), false, false, false, false, false, false);
             } else {
-                print_error(&format!("Teleport point not found: '{}'", tp_name));
-                println!("Use 'tp list' to see all savepoints.");
+                print_error(&t!("cmd.nav.cd.tp_not_found", tp_name));
+                println!("{}", t!("cmd.nav.cd.tp_list"));
             }
         } else {
             nav.go_to(Path::new(args))?;
             clear_screen();
-            print_success(&format!("Navigated to: {}", nav.display_path()));
-            show_tree(nav, Some(1), false, false, false, false, false);
+            print_success(&t!("cmd.nav.cd.navigated", nav.display_path()));
+            show_tree(nav, Some(1), false, false, false, false, false, false);
         }
     }
     Ok(false)
@@ -45,44 +46,44 @@ pub fn cmd_godrive(args: &str, nav: &mut Navigator) -> Result<bool> {
     #[cfg(not(windows))]
     {
         let _ = (args, nav);
-        print_error("Drive navigation is only supported on Windows.");
+        print_error(&t!("cmd.nav.drive_windows_only"));
     }
     #[cfg(windows)]
     if args.is_empty() {
         let drives = Navigator::list_drives();
-        println!("{}", "Available drives:".cyan().bold());
+        println!("{}", t!("nav.available_drives").cyan().bold());
         for (i, d) in drives.iter().enumerate() {
             println!("  {}: {}:\\", i + 1, d);
         }
         println!();
-        print!("Enter drive letter or number (or 'cancel'): ");
+        print!("{}", t!("nav.drive_prompt"));
 
         let mut choice = String::new();
         std::io::stdin().read_line(&mut choice)?;
         let choice = choice.trim().to_lowercase();
 
         if choice == "cancel" || choice.is_empty() {
-            println!("Cancelled.");
+            println!("{}", t!("nav.cancelled"));
         } else if choice.len() == 1 && choice.chars().next().unwrap().is_alphabetic() {
             nav.go_drive(choice.chars().next().unwrap())?;
             clear_screen();
-            show_tree(nav, Some(1), false, false, false, false, false);
+            show_tree(nav, Some(1), false, false, false, false, false, false);
         } else if let Ok(num) = choice.parse::<usize>() {
             if num > 0 && num <= drives.len() {
                 nav.go_drive(drives[num - 1])?;
                 clear_screen();
-                show_tree(nav, Some(1), false, false, false, false, false);
+                show_tree(nav, Some(1), false, false, false, false, false, false);
             } else {
-                print_error("Invalid drive number.");
+                print_error(&t!("cmd.nav.invalid_drive"));
             }
         } else {
-            print_error("Invalid input.");
+            print_error(&t!("cmd.nav.invalid_input"));
         }
     } else {
         let letter = args.chars().next().unwrap_or('C');
         nav.go_drive(letter)?;
         clear_screen();
-        show_tree(nav, Some(1), false, false, false, false, false);
+        show_tree(nav, Some(1), false, false, false, false, false, false);
     }
     Ok(false)
 }
@@ -92,7 +93,7 @@ pub fn cmd_back(args: &str, nav: &mut Navigator) -> Result<bool> {
         match nav.go_back() {
             Ok(()) => {
                 clear_screen();
-                show_tree(nav, Some(1), false, false, false, false, false);
+                show_tree(nav, Some(1), false, false, false, false, false, false);
             }
             Err(e) => print_error(&format!("{}", e)),
         }
@@ -107,7 +108,7 @@ pub fn cmd_back(args: &str, nav: &mut Navigator) -> Result<bool> {
                             if i == 0 {
                                 print_error(&format!("{}", e));
                             } else {
-                                print_error(&format!("Null parent at step {} - nowhere to go back", i + 1));
+                                print_error(&t!("cmd.nav.back.invalid_step", i + 1));
                             }
                             success = false;
                             break;
@@ -116,10 +117,10 @@ pub fn cmd_back(args: &str, nav: &mut Navigator) -> Result<bool> {
                 }
                 if success {
                     clear_screen();
-                    show_tree(nav, Some(1), false, false, false, false, false);
+                    show_tree(nav, Some(1), false, false, false, false, false, false);
                 }
             }
-            _ => print_error(&format!("Invalid number: {}. Usage: back [n]", args)),
+            _ => print_error(&t!("cmd.nav.back.invalid_number", args)),
         }
     }
     Ok(false)
@@ -136,23 +137,49 @@ pub fn cmd_where(nav: &mut Navigator) -> Result<bool> {
                 .unwrap_or_else(|| PathBuf::from("Not found"))
         });
 
+    let a = |s: &str| crate::utils::terminal::asciify(s);
     println!();
-    println!("{}", "╔══════════════════════════════════════════════════════════════════╗".cyan());
-    println!("{}", "║                         ntc Location Info                        ║".cyan());
-    println!("{}", "╚══════════════════════════════════════════════════════════════════╝".cyan());
+    println!(
+        "{}",
+        a("╔══════════════════════════════════════════════════════════════════╗").cyan()
+    );
+    println!(
+        "{}",
+        a(&format!("{:^76}", t!("cmd.nav.where.title"))).cyan()
+    );
+    println!(
+        "{}",
+        a("╚══════════════════════════════════════════════════════════════════╝").cyan()
+    );
     println!();
-    println!("  {} {}", "📁 Executable:".green().bold(), exe.display().to_string().cyan());
-    println!("  {} {}", "⚙️  Config file:".yellow().bold(), config_path.display().to_string().cyan());
-    println!("  {} {}", "📂 Current dir:".blue().bold(), nav.display_path().cyan());
+    println!(
+        "  {} {}",
+        t!("cmd.nav.where.executable").green().bold(),
+        exe.display().to_string().cyan()
+    );
+    println!(
+        "  {} {}",
+        t!("cmd.nav.where.config_file").yellow().bold(),
+        config_path.display().to_string().cyan()
+    );
+    println!(
+        "  {} {}",
+        t!("cmd.nav.where.current_dir").blue().bold(),
+        nav.display_path().cyan()
+    );
     println!();
 
     if config_path.exists() {
-        println!("  {}", "✓ Config file exists".green());
+        println!("{}", t!("nav.config_exists").green());
         if let Ok(metadata) = std::fs::metadata(&config_path) {
-            println!("  {} {}", "📏 Config size:".dimmed(), human_readable_size(metadata.len()).dimmed());
+            println!(
+                "  {} {}",
+                t!("cmd.nav.where.config_size").dimmed(),
+                human_readable_size(metadata.len()).dimmed()
+            );
         }
     } else {
-        println!("  {}", "⚠ Config file not found (will be created on first save)".yellow());
+        println!("  {}", t!("cmd.nav.where.config_missing").yellow());
     }
     println!();
     Ok(false)
@@ -161,10 +188,10 @@ pub fn cmd_where(nav: &mut Navigator) -> Result<bool> {
 pub fn cmd_gos(nav: &mut Navigator) -> Result<bool> {
     let dirs = nav.list_subdirs()?;
     println!();
-    println!("{}", "gos where?".cyan().bold());
-    println!("  {} {}", "0".yellow(), "exit".dimmed());
+    println!("{}", t!("nav.gos_where").cyan().bold());
+    println!("  {} {}", "0".yellow(), t!("cmd.nav.gos.exit").dimmed());
     if dirs.is_empty() {
-        println!("  {}", "(no subdirectories)".dimmed());
+        println!("  {}", t!("cmd.nav.gos.empty").dimmed());
     } else {
         for (i, name) in &dirs {
             println!("  {} {}", i.to_string().yellow(), name.bright_magenta());
@@ -178,34 +205,34 @@ pub fn cmd_gos(nav: &mut Navigator) -> Result<bool> {
     let choice = choice.trim();
 
     if choice == "0" || choice.is_empty() {
-        println!("{}", "Staying here.".dimmed());
+        println!("{}", t!("cmd.nav.gos.staying").dimmed());
     } else if let Ok(num) = choice.parse::<usize>() {
         if let Some((_, name)) = dirs.iter().find(|(i, _)| *i == num) {
             let new_path = nav.current_path().join(name);
             nav.go_to(&new_path)?;
             clear_screen();
-            print_success(&format!("Navigated to: {}", nav.display_path()));
-            show_tree(nav, Some(1), false, false, false, false, false);
+            print_success(&t!("cmd.nav.cd.navigated", nav.display_path()));
+            show_tree(nav, Some(1), false, false, false, false, false, false);
         } else {
-            print_error("Invalid number.");
+            print_error(&t!("cmd.nav.invalid_number"));
         }
     } else {
-        print_error("Invalid input.");
+        print_error(&t!("cmd.nav.invalid_input"));
     }
     Ok(false)
 }
 
 pub fn cmd_gosc(nav: &mut Navigator) -> Result<bool> {
     gosc_loop(nav)?;
-    show_tree(nav, Some(1), false, false, false, false, false);
+    show_tree(nav, Some(1), false, false, false, false, false, false);
     Ok(false)
 }
 
 pub fn cmd_fgo(args: &str, nav: &mut Navigator) -> Result<bool> {
     if args.is_empty() {
-        print_error("Usage: fgo <pattern> [-d <depth>]");
-        println!("  fgo main.rs        # search then pick file to navigate to its parent");
-        println!("  fgo main.rs -d 5   # search up to 5 levels deep");
+        print_error(&t!("cmd.nav.fgo_usage"));
+        println!("{}", t!("cmd.nav.fgo.example1"));
+        println!("{}", t!("cmd.nav.fgo.example2"));
         return Ok(false);
     }
     let (pattern, max_depth) = parse_search_args(args);
@@ -216,20 +243,25 @@ pub fn cmd_fgo(args: &str, nav: &mut Navigator) -> Result<bool> {
         return Ok(false);
     }
     println!();
-    println!("{}", format!("🔍 Found {} file(s) for \"{}\":", results.len(), pattern).cyan().bold());
+    println!(
+        "{}",
+        t!("cmd.nav.fgo.found", results.len(), pattern)
+            .cyan()
+            .bold()
+    );
     for (i, r) in results.iter().enumerate() {
         let path_str = r.full_path.to_string_lossy();
         println!("  {}. {}", (i + 1).to_string().yellow(), path_str.dimmed());
     }
-    println!("  {}", "0. Cancel".red());
+    println!("  {}", t!("cmd.nav.fgo.cancel").red());
     println!();
-    print!("{} ", "Select file to navigate to its parent directory: ".green());
+    print!("{} ", t!("cmd.nav.fgo.select").green());
     io::stdout().flush()?;
     let mut input = String::new();
     io::stdin().read_line(&mut input)?;
     let input = input.trim();
     if input == "0" || input.is_empty() {
-        println!("{}", "Cancelled.".dimmed());
+        println!("{}", t!("cmd.nav.fgo.cancelled").dimmed());
         return Ok(false);
     }
     if let Ok(n) = input.parse::<usize>() {
@@ -238,13 +270,13 @@ pub fn cmd_fgo(args: &str, nav: &mut Navigator) -> Result<bool> {
             let parent = target.parent().unwrap_or(target);
             nav.go_to(parent)?;
             clear_screen();
-            print_success(&format!("Navigated to: {}", nav.display_path()));
-            show_tree(nav, Some(1), false, false, false, false, false);
+            print_success(&t!("cmd.nav.cd.navigated", nav.display_path()));
+            show_tree(nav, Some(1), false, false, false, false, false, false);
         } else {
-            print_error("Invalid selection.");
+            print_error(&t!("cmd.nav.invalid_selection"));
         }
     } else {
-        print_error("Invalid input.");
+        print_error(&t!("cmd.nav.invalid_input"));
     }
     Ok(false)
 }

@@ -19,18 +19,20 @@
 [vars]
 # CC = "gcc"
 # FLAGS = "-O2"
-ver = "2.4.0"
+ver = "2.4.2"
 lux = "ntc-v$(ver)-linux-x86_64.tar.gz"
 adb = "ntc-v$(ver)-aarch64-linux-android.tar.gz"
 win = "ntc-v$(ver)-windows-x86_64.zip"
 deb = "ntc_$(ver)-1_amd64.deb"
 wini = "ntc-installer-$(ver).exe"
+win_arm = "ntc-v$(ver)-windows-arm64.zip"
 
 lux_w = "target/release"
 adb_w = "target/aarch64-linux-android/release"
 win_w = "target/release/ntc.exe"
 deb_w = "target/debian/ntc_$(ver)-1_amd64.deb"
 wini_w = "installer/ntc-installer-$(ver).exe"
+win_arm_w = "target/aarch64-pc-windows-msvc/release/ntc.exe"
 
 # ── Targets ────────────────────────────────────────────────────────────
 # Each target can have:
@@ -73,21 +75,25 @@ cmd = "tar -czvf $(lux) -C $(lux_w) ntc && tar -czvf $(adb) -C $(adb_w) ntc"
 deps = []
 cmd = "powershell Compress-Archive -Path $(win_w) -DestinationPath $(win)"
 
+[targets.zip_arm]
+deps = []
+cmd = "powershell Compress-Archive -Path $(win_arm_w) -DestinationPath $(win_arm)"
+
 [targets.cpdeb]
 deps = []
-cmd = "cp $(deb_w) $(deb)"
+cmd = "COPY $(deb_w) $(deb)"
 
 [targets.cpwin]
 deps = []
-cmd = "cp $(wini_w) $(wini)"
+cmd = "COPY $(wini_w) $(wini)"
 
 [targets.setpack]
-deps = ["tar","zip","cpdeb","cpwin"]
+deps = ["tar","zip","zip_arm","cpdeb","cpwin"]
 cmd = "echo pack setup completed!"
 
 [targets.rmpack]
 deps = []
-cmd = "rmf $(lux) && rmf $(adb) && rmf $(win) && rmf $(deb) && rmf $(wini)"
+cmd = "rmf $(lux) && rmf $(adb) && rmf $(win) && rmf $(deb) && rmf $(wini) && rmf $(win_arm)"
 
 [targets.padb]
 deps = []
@@ -104,6 +110,14 @@ cmd = "git add . && git commit -m $(ver) && git tag v$(ver) && git push origin m
 [targets.rmtag]
 deps = []
 cmd = "git tag -d v$(ver) && git push origin --delete v$(ver)"
+
+[targets.repush]
+deps = []
+cmd = "git push origin --delete v$(ver) && git push origin main --tags"
+
+[targets.pull]
+deps = []
+cmd = "git pull origin main --rebase"
 
 [targets.clean]
 deps = []

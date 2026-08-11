@@ -12,6 +12,4 @@ pub(crate) use self::extract::{
 };
 pub(crate) use self::hover_detailed::hover_info_detailed;
 pub(crate) use self::hover_simple::hover_info;
-pub(crate) use self::lexicon::{
-    builtin_function_names, constant_names, keyword_names, type_names,
-};
+pub(crate) use self::lexicon::{builtin_function_names, constant_names, keyword_names, type_names};

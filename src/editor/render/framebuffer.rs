@@ -1,6 +1,6 @@
 use crossterm::cursor::MoveTo;
-use crossterm::style::{Print, SetBackgroundColor, SetForegroundColor};
 use crossterm::queue;
+use crossterm::style::{Print, SetBackgroundColor, SetForegroundColor};
 use std::io::Write;
 
 /// A single cell in the framebuffer.
@@ -80,18 +80,24 @@ impl FrameBuffer {
                     if need_move || cur.fg != last_fg || cur.bg != last_bg {
                         queue!(stdout, MoveTo(x as u16, y as u16))?;
                         if cur.fg != last_fg {
-                            queue!(stdout, SetForegroundColor(crossterm::style::Color::Rgb {
-                                r: cur.fg.0,
-                                g: cur.fg.1,
-                                b: cur.fg.2,
-                            }))?;
+                            queue!(
+                                stdout,
+                                SetForegroundColor(crossterm::style::Color::Rgb {
+                                    r: cur.fg.0,
+                                    g: cur.fg.1,
+                                    b: cur.fg.2,
+                                })
+                            )?;
                         }
                         if cur.bg != last_bg {
-                            queue!(stdout, SetBackgroundColor(crossterm::style::Color::Rgb {
-                                r: cur.bg.0,
-                                g: cur.bg.1,
-                                b: cur.bg.2,
-                            }))?;
+                            queue!(
+                                stdout,
+                                SetBackgroundColor(crossterm::style::Color::Rgb {
+                                    r: cur.bg.0,
+                                    g: cur.bg.1,
+                                    b: cur.bg.2,
+                                })
+                            )?;
                         }
                         last_fg = cur.fg;
                         last_bg = cur.bg;

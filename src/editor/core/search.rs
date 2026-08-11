@@ -1,4 +1,5 @@
 use crate::editor::Editor;
+use crate::t;
 
 impl Editor {
     pub(crate) fn rebuild_search_matches(&mut self) {
@@ -39,7 +40,11 @@ impl Editor {
 
     pub(crate) fn search_next(&mut self) {
         if self.search.matches.is_empty() {
-            self.status_msg = Some(format!("Pattern not found: {}", self.search.query));
+            self.status_msg = Some(format!(
+                "{} {}",
+                t!("editor.search_pattern_not_found"),
+                self.search.query
+            ));
             return;
         }
         self.search.match_idx = (self.search.match_idx + 1) % self.search.matches.len();
@@ -48,7 +53,11 @@ impl Editor {
 
     pub(crate) fn search_prev(&mut self) {
         if self.search.matches.is_empty() {
-            self.status_msg = Some(format!("Pattern not found: {}", self.search.query));
+            self.status_msg = Some(format!(
+                "{} {}",
+                t!("editor.search_pattern_not_found"),
+                self.search.query
+            ));
             return;
         }
         if self.search.match_idx == 0 {

@@ -11,6 +11,7 @@ use std::path::{Path, PathBuf};
 
 use crate::navigator::Navigator;
 use crate::output::{print_error, print_info, print_success, print_warning};
+use crate::t;
 
 #[derive(Serialize, Deserialize, Clone)]
 struct SmtpProfile {
@@ -56,18 +57,13 @@ fn generate_id() -> String {
 }
 
 fn encode_password(pwd: &str) -> String {
-    base64::Engine::encode(
-        &base64::engine::general_purpose::STANDARD,
-        pwd.as_bytes(),
-    )
+    base64::Engine::encode(&base64::engine::general_purpose::STANDARD, pwd.as_bytes())
 }
 
 fn decode_password(encoded: &str) -> Result<String> {
-    let bytes = base64::Engine::decode(
-        &base64::engine::general_purpose::STANDARD,
-        encoded,
-    )?;
-    String::from_utf8(bytes).map_err(|e| anyhow::anyhow!("Invalid password encoding: {}", e))
+    let bytes = base64::Engine::decode(&base64::engine::general_purpose::STANDARD, encoded)?;
+    String::from_utf8(bytes)
+        .map_err(|e| anyhow::anyhow!("{}", t!("cmd.smtp.invalid_pwd_encoding", e)))
 }
 
 fn tokenize(input: &str) -> Vec<String> {
@@ -121,66 +117,122 @@ pub fn cmd_smtp(args: &str, _nav: &mut Navigator) -> Result<bool> {
         match tokens[i].as_str() {
             "-i" | "--server" => {
                 i += 1;
-                server = tokens.get(i).ok_or_else(|| anyhow::anyhow!("Missing server after -i"))?.clone();
+                server = tokens
+                    .get(i)
+                    .ok_or_else(|| anyhow::anyhow!("{}", t!("cmd.smtp.missing_server")))?
+                    .clone();
                 is_creating = true;
             }
             "-p" | "--port" => {
                 i += 1;
-                port = tokens.get(i).ok_or_else(|| anyhow::anyhow!("Missing port after -p"))?.parse()
-                    .map_err(|_| anyhow::anyhow!("Invalid port number"))?;
+                port = tokens
+                    .get(i)
+                    .ok_or_else(|| anyhow::anyhow!("{}", t!("cmd.smtp.missing_port")))?
+                    .parse()
+                    .map_err(|_| anyhow::anyhow!("{}", t!("cmd.smtp.invalid_port")))?;
             }
             "-u" | "--user" => {
                 i += 1;
-                user = tokens.get(i).ok_or_else(|| anyhow::anyhow!("Missing username after -u"))?.clone();
+                user = tokens
+                    .get(i)
+                    .ok_or_else(|| anyhow::anyhow!("{}", t!("cmd.smtp.missing_user")))?
+                    .clone();
             }
             "-pwd" | "--password" => {
                 i += 1;
-                password = tokens.get(i).ok_or_else(|| anyhow::anyhow!("Missing password after -pwd"))?.clone();
+                password = tokens
+                    .get(i)
+                    .ok_or_else(|| anyhow::anyhow!("{}", t!("cmd.smtp.missing_password")))?
+                    .clone();
             }
             "--id-ls" => list_profiles = true,
             "--id-info" => {
                 i += 1;
-                info_id = tokens.get(i).ok_or_else(|| anyhow::anyhow!("Missing ID after --id-info"))?.clone();
+                info_id = tokens
+                    .get(i)
+                    .ok_or_else(|| anyhow::anyhow!("{}", t!("cmd.smtp.missing_id_info")))?
+                    .clone();
             }
             "--id-rm" => {
                 i += 1;
-                remove_id = tokens.get(i).ok_or_else(|| anyhow::anyhow!("Missing ID after --id-rm"))?.clone();
+                remove_id = tokens
+                    .get(i)
+                    .ok_or_else(|| anyhow::anyhow!("{}", t!("cmd.smtp.missing_id_rm")))?
+                    .clone();
             }
             "--id" => {
                 i += 1;
-                profile_id = tokens.get(i).ok_or_else(|| anyhow::anyhow!("Missing ID after --id"))?.clone();
+                profile_id = tokens
+                    .get(i)
+                    .ok_or_else(|| anyhow::anyhow!("{}", t!("cmd.smtp.missing_id")))?
+                    .clone();
             }
             "--to" | "-t" => {
                 i += 1;
-                let val = tokens.get(i).ok_or_else(|| anyhow::anyhow!("Missing recipient after --to"))?.clone();
-                to_addrs = val.split(',').map(|s| s.trim().to_string()).filter(|s| !s.is_empty()).collect();
+                let val = tokens
+                    .get(i)
+                    .ok_or_else(|| anyhow::anyhow!("{}", t!("cmd.smtp.missing_recipient_to")))?
+                    .clone();
+                to_addrs = val
+                    .split(',')
+                    .map(|s| s.trim().to_string())
+                    .filter(|s| !s.is_empty())
+                    .collect();
             }
             "--cc" | "-c" => {
                 i += 1;
-                let val = tokens.get(i).ok_or_else(|| anyhow::anyhow!("Missing recipient after --cc"))?.clone();
-                cc_addrs = val.split(',').map(|s| s.trim().to_string()).filter(|s| !s.is_empty()).collect();
+                let val = tokens
+                    .get(i)
+                    .ok_or_else(|| anyhow::anyhow!("{}", t!("cmd.smtp.missing_recipient_cc")))?
+                    .clone();
+                cc_addrs = val
+                    .split(',')
+                    .map(|s| s.trim().to_string())
+                    .filter(|s| !s.is_empty())
+                    .collect();
             }
             "--bcc" => {
                 i += 1;
-                let val = tokens.get(i).ok_or_else(|| anyhow::anyhow!("Missing recipient after --bcc"))?.clone();
-                bcc_addrs = val.split(',').map(|s| s.trim().to_string()).filter(|s| !s.is_empty()).collect();
+                let val = tokens
+                    .get(i)
+                    .ok_or_else(|| anyhow::anyhow!("{}", t!("cmd.smtp.missing_recipient_bcc")))?
+                    .clone();
+                bcc_addrs = val
+                    .split(',')
+                    .map(|s| s.trim().to_string())
+                    .filter(|s| !s.is_empty())
+                    .collect();
             }
             "-s" | "--subject" => {
                 i += 1;
-                subject = tokens.get(i).ok_or_else(|| anyhow::anyhow!("Missing subject after -s"))?.clone();
+                subject = tokens
+                    .get(i)
+                    .ok_or_else(|| anyhow::anyhow!("{}", t!("cmd.smtp.missing_subject")))?
+                    .clone();
             }
             "-b" | "--body" => {
                 i += 1;
-                body = tokens.get(i).ok_or_else(|| anyhow::anyhow!("Missing body after -b"))?.clone();
+                body = tokens
+                    .get(i)
+                    .ok_or_else(|| anyhow::anyhow!("{}", t!("cmd.smtp.missing_body")))?
+                    .clone();
             }
             "-f" | "--attach" => {
                 i += 1;
-                let val = tokens.get(i).ok_or_else(|| anyhow::anyhow!("Missing path after -f"))?.clone();
-                let paths: Vec<String> = val.split(',').map(|s| s.trim().to_string()).filter(|s| !s.is_empty()).collect();
+                let val = tokens
+                    .get(i)
+                    .ok_or_else(|| anyhow::anyhow!("{}", t!("cmd.smtp.missing_path")))?
+                    .clone();
+                let paths: Vec<String> = val
+                    .split(',')
+                    .map(|s| s.trim().to_string())
+                    .filter(|s| !s.is_empty())
+                    .collect();
                 attach_paths.extend(paths);
             }
+            "--" => break,
             _ => {
-                anyhow::bail!("Unknown option: {}", tokens[i]);
+                anyhow::bail!("{}", t!("cmd.smtp.unknown_option", tokens[i]));
             }
         }
         i += 1;
@@ -200,7 +252,15 @@ pub fn cmd_smtp(args: &str, _nav: &mut Navigator) -> Result<bool> {
         return cmd_smtp_create(&server, port, &user, &password);
     }
     if !profile_id.is_empty() {
-        return cmd_smtp_send(&profile_id, &to_addrs, &cc_addrs, &bcc_addrs, &subject, &body, &attach_paths);
+        return cmd_smtp_send(
+            &profile_id,
+            &to_addrs,
+            &cc_addrs,
+            &bcc_addrs,
+            &subject,
+            &body,
+            &attach_paths,
+        );
     }
 
     print_smtp_help();
@@ -209,7 +269,7 @@ pub fn cmd_smtp(args: &str, _nav: &mut Navigator) -> Result<bool> {
 
 fn cmd_smtp_create(server: &str, port: u16, user: &str, password: &str) -> Result<bool> {
     if server.is_empty() || user.is_empty() || password.is_empty() {
-        anyhow::bail!("Server, username, and password are required. Usage: smtp -i <server> -p <port> -u <user> -pwd <password>");
+        anyhow::bail!("{}", t!("cmd.smtp.create_usage"));
     }
 
     let mut profiles = load_profiles();
@@ -226,41 +286,78 @@ fn cmd_smtp_create(server: &str, port: u16, user: &str, password: &str) -> Resul
     });
 
     save_profiles(&profiles)?;
-    print_success(&format!("SMTP profile saved: {}", id.bold()));
+    print_success(&t!("cmd.smtp.profile_saved", id.bold()));
     Ok(false)
 }
 
 fn cmd_smtp_ls() -> Result<bool> {
     let profiles = load_profiles();
     if profiles.is_empty() {
-        println!("  {}  No SMTP profiles found.", "─".dimmed());
-        println!("  Create one: {} -i <server> -p <port> -u <user> -pwd <password>", "smtp".yellow());
+        println!("  {}  {}", "─".dimmed(), t!("cmd.smtp.no_profiles"));
+        println!(
+            "  {} {}",
+            t!("cmd.smtp.create_one_hint").yellow(),
+            t!("cmd.smtp.create_syntax")
+        );
         return Ok(false);
     }
 
-    println!("{}", "SMTP Profiles:".bold());
+    println!("{}", t!("cmd.smtp.profiles_title").bold());
     println!("{}", "─────────────".dimmed());
     for p in &profiles {
         let masked = format!("{}***", &p.user[..p.user.len().min(3)]);
-        println!("  {}  {} @ {}:{}  ({})", p.id.bold().green(), masked.dimmed(), p.server.cyan(), p.port, p.created.dimmed());
+        println!(
+            "  {}  {} @ {}:{}  ({})",
+            p.id.bold().green(),
+            masked.dimmed(),
+            p.server.cyan(),
+            p.port,
+            p.created.dimmed()
+        );
     }
     Ok(false)
 }
 
 fn cmd_smtp_info(id: &str) -> Result<bool> {
     let profiles = load_profiles();
-    let profile = profiles.iter().find(|p| p.id == id || p.id.starts_with(id))
-        .ok_or_else(|| anyhow::anyhow!("Profile not found: {}", id))?;
+    let profile = profiles
+        .iter()
+        .find(|p| p.id == id || p.id.starts_with(id))
+        .ok_or_else(|| anyhow::anyhow!("{}", t!("cmd.smtp.profile_not_found", id)))?;
 
     let pwd_plain = decode_password(&profile.password).unwrap_or_else(|_| "***".to_string());
 
-    println!("{}", "SMTP Profile:".bold());
-    println!("  {}  {}", "ID:".dimmed(), profile.id.green());
-    println!("  {}  {}", "Server:".dimmed(), profile.server.cyan());
-    println!("  {}  {}", "Port:".dimmed(), profile.port.to_string().yellow());
-    println!("  {}  {}", "User:".dimmed(), profile.user.bold());
-    println!("  {}  {}", "Password:".dimmed(), pwd_plain.dimmed());
-    println!("  {}  {}", "Created:".dimmed(), profile.created.dimmed());
+    println!("{}", t!("cmd.smtp.profile_label").bold());
+    println!(
+        "  {}  {}",
+        t!("cmd.smtp.id_label").dimmed(),
+        profile.id.green()
+    );
+    println!(
+        "  {}  {}",
+        t!("cmd.smtp.server_label").dimmed(),
+        profile.server.cyan()
+    );
+    println!(
+        "  {}  {}",
+        t!("cmd.smtp.port_label").dimmed(),
+        profile.port.to_string().yellow()
+    );
+    println!(
+        "  {}  {}",
+        t!("cmd.smtp.user_label").dimmed(),
+        profile.user.bold()
+    );
+    println!(
+        "  {}  {}",
+        t!("cmd.smtp.password_label").dimmed(),
+        pwd_plain.dimmed()
+    );
+    println!(
+        "  {}  {}",
+        t!("cmd.smtp.created_label").dimmed(),
+        profile.created.dimmed()
+    );
     Ok(false)
 }
 
@@ -269,10 +366,10 @@ fn cmd_smtp_rm(id: &str) -> Result<bool> {
     let len_before = profiles.len();
     profiles.retain(|p| p.id != id && !p.id.starts_with(id));
     if profiles.len() == len_before {
-        anyhow::bail!("Profile not found: {}", id);
+        anyhow::bail!("{}", t!("cmd.smtp.profile_not_found", id));
     }
     save_profiles(&profiles)?;
-    print_info(&format!("Removed SMTP profile: {}", id));
+    print_info(&t!("cmd.smtp.removed_profile", id));
     Ok(false)
 }
 
@@ -286,18 +383,20 @@ fn cmd_smtp_send(
     attach_paths: &[String],
 ) -> Result<bool> {
     let profiles = load_profiles();
-    let profile = profiles.iter().find(|p| p.id == profile_id || p.id.starts_with(profile_id))
-        .ok_or_else(|| anyhow::anyhow!("Profile not found: {}", profile_id))?;
+    let profile = profiles
+        .iter()
+        .find(|p| p.id == profile_id || p.id.starts_with(profile_id))
+        .ok_or_else(|| anyhow::anyhow!("{}", t!("cmd.smtp.profile_not_found", profile_id)))?;
 
     if to_addrs.is_empty() {
-        anyhow::bail!("Recipient required. Use --to <email>");
+        anyhow::bail!("{}", t!("cmd.smtp.need_recipient"));
     }
     if subject.is_empty() {
-        anyhow::bail!("Subject required. Use -s <subject>");
+        anyhow::bail!("{}", t!("cmd.smtp.need_subject"));
     }
 
-    let password_plain = decode_password(&profile.password)
-        .context("Failed to decode stored password")?;
+    let password_plain =
+        decode_password(&profile.password).context(t!("cmd.smtp.decode_failed").to_string())?;
 
     // Collect attachment files
     let mut attachment_files: Vec<PathBuf> = Vec::new();
@@ -312,19 +411,19 @@ fn cmd_smtp_send(
                 .map(|e| e.path().to_path_buf())
                 .collect();
             if entries.is_empty() {
-                print_warning(&format!("No files found in directory: {}", path_str));
+                print_warning(&t!("cmd.smtp.no_files_in_dir", path_str));
             }
             attachment_files.extend(entries);
         } else if p.is_file() {
             if is_blocked_executable(&p) {
-                print_warning(&format!("Skipping executable file: {}", path_str));
+                print_warning(&t!("cmd.smtp.skipping_exec", path_str));
             } else {
                 attachment_files.push(p);
             }
         } else if p.exists() {
-            print_warning(&format!("Skipping (not a file or directory): {}", path_str));
+            print_warning(&t!("cmd.smtp.skipping_not_file", path_str));
         } else {
-            print_warning(&format!("Path not found: {}", path_str));
+            print_warning(&t!("cmd.smtp.path_not_found", path_str));
         }
     }
 
@@ -333,38 +432,42 @@ fn cmd_smtp_send(
     attachment_files.retain(|p| seen.insert(p.canonicalize().unwrap_or_else(|_| p.to_path_buf())));
 
     // Build the email
-    let from: Mailbox = format!("<{}>", profile.user).parse()
-        .context("Invalid sender email address")?;
+    let from: Mailbox = format!("<{}>", profile.user)
+        .parse()
+        .context(t!("cmd.smtp.invalid_sender").to_string())?;
 
-    let mut builder = Message::builder()
-        .from(from)
-        .subject(subject);
+    let mut builder = Message::builder().from(from).subject(subject);
 
     // Add recipients
     for addr in to_addrs {
-        let mb: Mailbox = addr.parse().context(format!("Invalid recipient: {}", addr))?;
+        let mb: Mailbox = addr
+            .parse()
+            .context(t!("cmd.smtp.invalid_recipient", addr).to_string())?;
         builder = builder.to(mb);
     }
     for addr in cc_addrs {
-        let mb: Mailbox = addr.parse().context(format!("Invalid CC: {}", addr))?;
+        let mb: Mailbox = addr
+            .parse()
+            .context(t!("cmd.smtp.invalid_cc", addr).to_string())?;
         builder = builder.cc(mb);
     }
     for addr in bcc_addrs {
-        let mb: Mailbox = addr.parse().context(format!("Invalid BCC: {}", addr))?;
+        let mb: Mailbox = addr
+            .parse()
+            .context(t!("cmd.smtp.invalid_bcc", addr).to_string())?;
         builder = builder.bcc(mb);
     }
 
     // Build multipart message
-    let mut multipart = MultiPart::mixed()
-        .singlepart(
-            SinglePart::builder()
-                .header(header::ContentType::TEXT_PLAIN)
-                .body(body.to_string()),
-        );
+    let mut multipart = MultiPart::mixed().singlepart(
+        SinglePart::builder()
+            .header(header::ContentType::TEXT_PLAIN)
+            .body(body.to_string()),
+    );
 
     for file_path in &attachment_files {
         let data = fs::read(file_path)
-            .with_context(|| format!("Failed to read attachment: {}", file_path.display()))?;
+            .with_context(|| t!("cmd.smtp.read_attach_fail", file_path.display()).to_string())?;
         let filename = file_path
             .file_name()
             .map(|n| n.to_string_lossy().to_string())
@@ -385,7 +488,7 @@ fn cmd_smtp_send(
 
     let msg = builder
         .multipart(multipart)
-        .context("Failed to build email message")?;
+        .context(t!("cmd.smtp.build_fail").to_string())?;
 
     // Connect and send
     let creds = Credentials::new(profile.user.clone(), password_plain);
@@ -405,25 +508,25 @@ fn cmd_smtp_send(
     let mailer = match transport_result {
         Ok(m) => m,
         Err(e) => {
-            print_error(&format!("Failed to configure SMTP transport: {}", e));
+            print_error(&t!("cmd.smtp.transport_fail", e));
             return Ok(false);
         }
     };
 
-    print_info(&format!("Sending email to {}...", to_addrs.join(", ")));
+    print_info(&t!("cmd.smtp.sending", to_addrs.join(", ")));
 
     match mailer.send(&msg) {
         Ok(_) => {
             let file_count = attachment_files.len();
             let file_info = if file_count > 0 {
-                format!(" ({} attachment{})", file_count, if file_count == 1 { "" } else { "s" })
+                t!("cmd.smtp.with_attachments", file_count)
             } else {
                 String::new()
             };
-            print_success(&format!("Email sent successfully{}", file_info));
+            print_success(&t!("cmd.smtp.send_ok", file_info));
         }
         Err(e) => {
-            print_error(&format!("Failed to send email: {}", e));
+            print_error(&t!("cmd.smtp.send_fail", e));
         }
     }
 
@@ -433,13 +536,38 @@ fn cmd_smtp_send(
 fn is_blocked_executable(path: &Path) -> bool {
     matches!(
         path.extension().and_then(|e| e.to_str()).unwrap_or(""),
-        "exe" | "dll" | "msi" | "msp" | "mst" | "bat" | "cmd"
-        | "ps1" | "psm1" | "psd1" | "scr" | "com" | "pif"
-        | "apk" | "xapk" | "ipa" | "app" | "dmg" | "pkg"
-        | "sh" | "bash" | "zsh" | "ksh" | "bin"
-        | "deb" | "rpm" | "jar"
-        | "vb" | "vbs" | "vbe"
-        | "wsf" | "wsh"
+        "exe"
+            | "dll"
+            | "msi"
+            | "msp"
+            | "mst"
+            | "bat"
+            | "cmd"
+            | "ps1"
+            | "psm1"
+            | "psd1"
+            | "scr"
+            | "com"
+            | "pif"
+            | "apk"
+            | "xapk"
+            | "ipa"
+            | "app"
+            | "dmg"
+            | "pkg"
+            | "sh"
+            | "bash"
+            | "zsh"
+            | "ksh"
+            | "bin"
+            | "deb"
+            | "rpm"
+            | "jar"
+            | "vb"
+            | "vbs"
+            | "vbe"
+            | "wsf"
+            | "wsh"
     )
 }
 
@@ -474,30 +602,30 @@ fn guess_mime(path: &Path) -> String {
 }
 
 fn print_smtp_help() {
-    println!("{}", "SMTP Email Client".bold());
+    println!("{}", t!("cmd.smtp.help_title").bold());
     println!();
-    println!("{}", "Create a profile:".cyan().bold());
-    println!("  smtp -i <server> -p <port> -u <user> -pwd <password>");
-    println!("  Example: smtp -i smtp.gmail.com -p 587 -u me@gmail.com -pwd app123");
+    println!("{}", t!("cmd.smtp.help_create_title").cyan().bold());
+    println!("  {}", t!("cmd.smtp.help_create_syntax"));
+    println!("  {}", t!("cmd.smtp.help_create_example"));
     println!();
-    println!("{}", "List profiles:".cyan().bold());
-    println!("  smtp --id-ls");
+    println!("{}", t!("cmd.smtp.help_list_title").cyan().bold());
+    println!("  {}", t!("cmd.smtp.help_list_syntax"));
     println!();
-    println!("{}", "Show profile info:".cyan().bold());
-    println!("  smtp --id-info <id>");
+    println!("{}", t!("cmd.smtp.help_info_title").cyan().bold());
+    println!("  {}", t!("cmd.smtp.help_info_syntax"));
     println!();
-    println!("{}", "Delete a profile:".cyan().bold());
-    println!("  smtp --id-rm <id>");
+    println!("{}", t!("cmd.smtp.help_rm_title").cyan().bold());
+    println!("  {}", t!("cmd.smtp.help_rm_syntax"));
     println!();
-    println!("{}", "Send email:".cyan().bold());
-    println!("  smtp --id <id> --to <email> [--cc <email>] [--bcc <email>] -s <subject> -b <body> [-f <files>]");
+    println!("{}", t!("cmd.smtp.help_send_title").cyan().bold());
+    println!("  {}", t!("cmd.smtp.help_send_syntax"));
     println!();
-    println!("{}", "Attachments:".cyan().bold());
-    println!("  -f accepts comma-separated file paths and directories (files are expanded recursively)");
-    println!("  Example: smtp --id a1b2 --to user@test.com -s \"Report\" -b \"See attached\" -f \"./report.pdf,./images/\"");
+    println!("{}", t!("cmd.smtp.help_attachments_title").cyan().bold());
+    println!("  {}", t!("cmd.smtp.help_attachments_desc"));
+    println!("  {}", t!("cmd.smtp.help_attachments_example"));
     println!();
-    println!("{}", "Ports:".cyan().bold());
-    println!("  587  STARTTLS (default)");
-    println!("  465  TLS (SMTPS)");
-    println!("  25   Plain (if supported by server)");
+    println!("{}", t!("cmd.smtp.help_ports_title").cyan().bold());
+    println!("  {}", t!("cmd.smtp.help_port_587"));
+    println!("  {}", t!("cmd.smtp.help_port_465"));
+    println!("  {}", t!("cmd.smtp.help_port_25"));
 }

@@ -22,6 +22,9 @@ if %errorlevel% neq 0 (
     exit /b 1
 )
 
+:: Statically link CRT to avoid vcruntime140.dll dependency
+set RUSTFLAGS=-Ctarget-feature=+crt-static
+
 :: Build release binary
 cargo build --release
 

@@ -16,20 +16,15 @@ pub fn download_with_progress(url: &str, dest_path: &Path) -> Result<()> {
     );
     pb.set_message(format!("Downloading {}", url));
 
-    let response = ureq::get(url)
-        .call()
-        .with_context(|| {
-            // Check if status indicates 404 for better error message
-            let hint = if let Some(name) = extract_package_name(url) {
-                format!(
-                    "Package '{}' may not exist for this platform/version",
-                    name
-                )
-            } else {
-                "Download URL may be unreachable".to_string()
-            };
-            format!("Failed to send download request: {hint}")
-        })?;
+    let response = ureq::get(url).call().with_context(|| {
+        // Check if status indicates 404 for better error message
+        let hint = if let Some(name) = extract_package_name(url) {
+            format!("Package '{}' may not exist for this platform/version", name)
+        } else {
+            "Download URL may be unreachable".to_string()
+        };
+        format!("Failed to send download request: {hint}")
+    })?;
 
     let total = response
         .headers()
@@ -97,9 +92,7 @@ pub fn extract_archive(archive_path: &Path, dest_dir: &Path, kind: ArchiveType) 
         ArchiveType::Zip => extract_zip(archive_path, dest_dir),
         ArchiveType::Msi | ArchiveType::Pkg => {
             // MSI/PKG installers are copied as-is for manual install
-            let fname = archive_path
-                .file_name()
-                .unwrap_or(archive_path.as_os_str());
+            let fname = archive_path.file_name().unwrap_or(archive_path.as_os_str());
             let dest = dest_dir.join(fname);
             fs::copy(archive_path, &dest)
                 .with_context(|| format!("Failed to copy to {}", dest.display()))?;
@@ -139,8 +132,8 @@ fn extract_tar_xz(archive_path: &Path, dest_dir: &Path) -> Result<()> {
 fn extract_zip(archive_path: &Path, dest_dir: &Path) -> Result<()> {
     let file = fs::File::open(archive_path)
         .with_context(|| format!("Failed to open {}", archive_path.display()))?;
-    let mut archive =
-        zip::ZipArchive::new(file).with_context(|| format!("Failed to read zip {}", archive_path.display()))?;
+    let mut archive = zip::ZipArchive::new(file)
+        .with_context(|| format!("Failed to read zip {}", archive_path.display()))?;
     archive
         .extract(dest_dir)
         .with_context(|| format!("Failed to extract zip to {}", dest_dir.display()))?;
@@ -159,15 +152,47 @@ pub fn find_binary(extract_dir: &Path, binary_name: &str) -> Option<PathBuf> {
 }
 
 fn extract_package_name(url: &str) -> Option<String> {
-    let name_versions = ["python", "node", "ruby", "go", "dotnet", "java", "kotlin", "swift", "php", "zig", "msys2", "lua", "nim", "flutter", "kubectl", "helm", "kind", "kustomize", "docker", "docker-compose", "act", "devops-tool", "scala", "opencode", "mimocode", "kilocode", "sqlitestudio", "sqlite"];
+    let name_versions = [
+        "python",
+        "node",
+        "ruby",
+        "go",
+        "dotnet",
+        "java",
+        "kotlin",
+        "swift",
+        "php",
+        "zig",
+        "msys2",
+        "lua",
+        "nim",
+        "flutter",
+        "kubectl",
+        "helm",
+        "kind",
+        "kustomize",
+        "docker",
+        "docker-compose",
+        "act",
+        "devops-tool",
+        "scala",
+        "opencode",
+        "mimocode",
+        "kilocode",
+        "freebuff",
+        "vscode",
+        "sqlitestudio",
+        "sqlite",
+        "ffmpeg",
+        "imagemagick",
+        "nginx",
+    ];
     for nv in &name_versions {
         if url.contains(nv) {
             return Some(nv.to_string());
         }
     }
-    url.split('/')
-        .nth(3)
-        .map(|s| s.to_string())
+    url.split('/').nth(3).map(|s| s.to_string())
 }
 
 fn find_file_recursive(dir: &Path, name: &str) -> Option<PathBuf> {
@@ -178,10 +203,7 @@ fn find_file_recursive(dir: &Path, name: &str) -> Option<PathBuf> {
                 if let Some(found) = find_file_recursive(&path, name) {
                     return Some(found);
                 }
-            } else if path
-                .file_name()
-                .and_then(|n| n.to_str()) == Some(name)
-            {
+            } else if path.file_name().and_then(|n| n.to_str()) == Some(name) {
                 return Some(path);
             }
         }

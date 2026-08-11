@@ -144,19 +144,14 @@ pub fn detect_language(ext: &str) -> Option<SyntaxLanguage> {
         "txt" | "text" | "log" => Some(SyntaxLanguage::Txt),
         "mod" => Some(SyntaxLanguage::GoMod),
         "sum" => Some(SyntaxLanguage::GoSum),
-        "glsl" | "vert" | "vs" | "vsh"
-        | "frag" | "fs" | "fsh"
-        | "geom" | "gs" | "gsh"
-        | "tesc" | "tese"
-        | "comp" | "csh"
-        | "rgen" | "rint" | "rahit" | "rchit" | "rmiss" | "rcall"
-        | "mesh" | "task"
-        | "hlsl" | "spvasm" => Some(SyntaxLanguage::Glsl),
+        "glsl" | "vert" | "vs" | "vsh" | "frag" | "fs" | "fsh" | "geom" | "gs" | "gsh" | "tesc"
+        | "tese" | "comp" | "csh" | "rgen" | "rint" | "rahit" | "rchit" | "rmiss" | "rcall"
+        | "mesh" | "task" | "hlsl" | "spvasm" => Some(SyntaxLanguage::Glsl),
         "css" | "scss" | "less" | "sass" | "qss" => Some(SyntaxLanguage::Css),
         "bat" | "cmd" => Some(SyntaxLanguage::Bat),
         "ps1" | "psm1" | "psd1" | "pssc" => Some(SyntaxLanguage::Ps1),
-        "env" | "gitignore" | "dockerignore" | "hgignore" | "editorconfig"
-        | "toml" | "ini" | "cfg" | "conf" => Some(SyntaxLanguage::Dotenv),
+        "env" | "gitignore" | "dockerignore" | "hgignore" | "editorconfig" | "toml" | "ini"
+        | "cfg" | "conf" => Some(SyntaxLanguage::Dotenv),
         "ral" => Some(SyntaxLanguage::NtcRal),
         "igcare" => Some(SyntaxLanguage::NtcIgcare),
         "math" => Some(SyntaxLanguage::NtcMath),

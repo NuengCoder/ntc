@@ -1,5 +1,6 @@
 use crate::navigator::Navigator;
-use crate::output::{print_error, print_success, print_info};
+use crate::output::{print_error, print_info, print_success};
+use crate::t;
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use std::fs;
@@ -55,7 +56,13 @@ pub fn push_clip(content: &str) {
         .duration_since(std::time::UNIX_EPOCH)
         .unwrap_or_default()
         .as_secs();
-    entries.insert(0, ClipEntry { content: content.to_string(), ts });
+    entries.insert(
+        0,
+        ClipEntry {
+            content: content.to_string(),
+            ts,
+        },
+    );
     entries.truncate(MAX_ENTRIES);
     let _ = save_history(&entries);
 }
@@ -71,18 +78,18 @@ pub fn cmd_clip(args: &str, _nav: &mut Navigator) -> Result<bool> {
             match n {
                 Some(i) if i >= 1 => cmd_select(i),
                 _ => {
-                    print_error("Usage: clip select <N>");
+                    print_error(&t!("cmd.clipboard.select_usage"));
                     Ok(false)
                 }
             }
         }
         "clear" | "cl" => cmd_clear(),
         _ => {
-            print_error(&format!("Unknown clip subcommand: {}", subcmd));
-            println!("  clip               Show clipboard history");
-            println!("  clip list          Show clipboard history");
-            println!("  clip select <N>    Copy entry N back to clipboard");
-            println!("  clip clear         Clear clipboard history");
+            print_error(&t!("cmd.clipboard.unknown_sub", subcmd));
+            println!("  {}", t!("cmd.clipboard.help_list"));
+            println!("  {}", t!("cmd.clipboard.help_list"));
+            println!("  {}", t!("cmd.clipboard.help_select"));
+            println!("  {}", t!("cmd.clipboard.help_clear"));
             Ok(false)
         }
     }
@@ -101,11 +108,11 @@ fn cmd_list() -> Result<bool> {
 
     let entries = load_history();
     if entries.is_empty() {
-        print_info("Clipboard history is empty.");
+        print_info(&t!("cmd.clipboard.empty"));
         return Ok(false);
     }
 
-    println!("  Clipboard History (last {}):", MAX_ENTRIES);
+    println!("  {}", t!("cmd.clipboard.history_header", MAX_ENTRIES));
     for (i, entry) in entries.iter().enumerate() {
         let date = chrono::DateTime::from_timestamp(entry.ts as i64, 0)
             .map(|dt| dt.format("%Y-%m-%d %H:%M:%S").to_string())
@@ -127,7 +134,7 @@ fn cmd_select(n: usize) -> Result<bool> {
     let entry = match entries.get(idx) {
         Some(e) => e,
         None => {
-            print_error(&format!("Entry #{} not found (have {} entries).", n, entries.len()));
+            print_error(&t!("cmd.clipboard.entry_not_found", n, entries.len()));
             return Ok(false);
         }
     };
@@ -135,9 +142,9 @@ fn cmd_select(n: usize) -> Result<bool> {
     #[cfg(not(target_os = "android"))]
     {
         let mut cb = arboard::Clipboard::new()
-            .map_err(|e| anyhow::anyhow!("Failed to access clipboard: {}", e))?;
+            .map_err(|e| anyhow::anyhow!("{}", t!("cmd.clipboard.access_fail", e)))?;
         cb.set_text(&entry.content)
-            .map_err(|e| anyhow::anyhow!("Failed to set clipboard: {}", e))?;
+            .map_err(|e| anyhow::anyhow!("{}", t!("cmd.clipboard.set_fail", e)))?;
     }
     #[cfg(target_os = "android")]
     {
@@ -145,7 +152,7 @@ fn cmd_select(n: usize) -> Result<bool> {
         let mut child = std::process::Command::new("termux-clipboard-set")
             .stdin(std::process::Stdio::piped())
             .spawn()
-            .map_err(|e| anyhow::anyhow!("termux-clipboard-set not available: {}", e))?;
+            .map_err(|e| anyhow::anyhow!("{}", t!("cmd.clipboard.termux_unavailable", e)))?;
         if let Some(ref mut stdin) = child.stdin.take() {
             stdin.write_all(entry.content.as_bytes())?;
         }
@@ -155,25 +162,25 @@ fn cmd_select(n: usize) -> Result<bool> {
     let date = chrono::DateTime::from_timestamp(entry.ts as i64, 0)
         .map(|dt| dt.format("%Y-%m-%d %H:%M:%S").to_string())
         .unwrap_or_else(|| "?".to_string());
-    print_success(&format!("Copied entry #{} ({}) to clipboard.", n, date));
+    print_success(&t!("cmd.clipboard.copied_entry", n, date));
     Ok(false)
 }
 
 fn cmd_clear() -> Result<bool> {
     let entries = load_history();
     if entries.is_empty() {
-        print_info("Clipboard history is already empty.");
+        print_info(&t!("cmd.clipboard.already_empty"));
         return Ok(false);
     }
-    print!("  Clear {} clipboard entr{}? (y/N): ", entries.len(), if entries.len() == 1 { "y" } else { "ies" });
+    print!("  {}", t!("cmd.clipboard.clear_prompt", entries.len()));
     io::stdout().flush()?;
     let mut input = String::new();
     io::stdin().read_line(&mut input)?;
     if matches!(input.trim().to_lowercase().as_str(), "y" | "yes") {
         save_history(&[])?;
-        print_success("Clipboard history cleared.");
+        print_success(&t!("cmd.clipboard.cleared"));
     } else {
-        print_info("Clear cancelled.");
+        print_info(&t!("cmd.clipboard.clear_cancelled"));
     }
     Ok(false)
 }

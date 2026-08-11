@@ -1,7 +1,7 @@
-use crate::image2doc::analyzer::{ImageAnalysis, LayoutElement, ElementType};
+use crate::image2doc::analyzer::{ElementType, ImageAnalysis, LayoutElement};
 use crate::image2doc::classify::Classification;
-use crate::image2doc::converter::Metadata;
 use crate::image2doc::color;
+use crate::image2doc::converter::Metadata;
 
 /// Generate a rich, natural-language description of an image
 /// that tells an AI what the image looks like in plain prose.
@@ -23,14 +23,19 @@ pub fn generate_description(
     ));
     desc.push_str(&format!(
         " with dimensions {}×{} pixels, format {}, file size {}.",
-        metadata.width, metadata.height,
+        metadata.width,
+        metadata.height,
         metadata.format,
         crate::explorer::human_readable_size(metadata.file_size),
     ));
     desc.push('\n');
 
     // ── Color and visual theme ───────────────────────────────────
-    let theme = if analysis.color_analysis.is_dark { "dark" } else { "light" };
+    let theme = if analysis.color_analysis.is_dark {
+        "dark"
+    } else {
+        "light"
+    };
     let brightness_desc = brightness_phrase(analysis.color_analysis.brightness);
     let gradient_desc = if analysis.color_analysis.gradient_ratio > 0.15 {
         " It features smooth gradient transitions, giving it a polished, modern look."
@@ -39,20 +44,28 @@ pub fn generate_description(
     };
     desc.push_str(&format!(
         "The visual theme is **{}**{} with {} brightness.{}\n",
-        theme, theme_detail(analysis.color_analysis.is_dark, classification),
-        brightness_desc, gradient_desc,
+        theme,
+        theme_detail(analysis.color_analysis.is_dark, classification),
+        brightness_desc,
+        gradient_desc,
     ));
 
     // Dominant colors
     if !analysis.color_analysis.dominant_colors.is_empty() {
         desc.push_str("The dominant colors are: ");
-        let named: Vec<String> = analysis.color_analysis.dominant_colors.iter().map(|(c, pct)| {
-            format!("{} **{}** ({:.1}%)",
-                color_hex_preview(c[0], c[1], c[2]),
-                color::color_name(c[0], c[1], c[2]),
-                pct,
-            )
-        }).collect();
+        let named: Vec<String> = analysis
+            .color_analysis
+            .dominant_colors
+            .iter()
+            .map(|(c, pct)| {
+                format!(
+                    "{} **{}** ({:.1}%)",
+                    color_hex_preview(c[0], c[1], c[2]),
+                    color::color_name(c[0], c[1], c[2]),
+                    pct,
+                )
+            })
+            .collect();
         desc.push_str(&named.join(", "));
         desc.push_str(".\n");
     }
@@ -67,11 +80,7 @@ pub fn generate_description(
             let h = elem.bounds.3;
             let pos_phrase = position_phrase(x, y, w, h, metadata.width, metadata.height);
 
-            desc.push_str(&format!(
-                "{}. {}",
-                i + 1,
-                element_phrase(elem),
-            ));
+            desc.push_str(&format!("{}. {}", i + 1, element_phrase(elem),));
             desc.push_str(&format!(" — located {} ", pos_phrase));
 
             if let Some(ref text) = elem.text {
@@ -93,10 +102,7 @@ pub fn generate_description(
     if let Some(text) = extracted_text {
         if !text.is_empty() {
             let preview: String = text.chars().take(120).collect();
-            desc.push_str(&format!(
-                "\n**Text content:** \"{}...\"\n",
-                preview,
-            ));
+            desc.push_str(&format!("\n**Text content:** \"{}...\"\n", preview,));
         }
     }
 
@@ -123,41 +129,69 @@ pub fn generate_description(
 
 fn vowel_sound(s: &str) -> &'static str {
     let starts_with_vowel = s.starts_with(['a', 'e', 'i', 'o', 'u', 'A', 'E', 'I', 'O', 'U']);
-    if starts_with_vowel { "n" } else { "" }
+    if starts_with_vowel {
+        "n"
+    } else {
+        ""
+    }
 }
 
 fn confidence_phrase(conf: f32) -> &'static str {
-    if conf > 0.9 { " (high confidence)" }
-    else if conf > 0.7 { " (moderate confidence)" }
-    else if conf > 0.5 { " (fair confidence)" }
-    else { " (low confidence)" }
+    if conf > 0.9 {
+        " (high confidence)"
+    } else if conf > 0.7 {
+        " (moderate confidence)"
+    } else if conf > 0.5 {
+        " (fair confidence)"
+    } else {
+        " (low confidence)"
+    }
 }
 
 fn confidence_adverb(conf: f32) -> &'static str {
-    if conf > 0.85 { "confidently detected" }
-    else if conf > 0.6 { "likely" }
-    else if conf > 0.4 { "possibly" }
-    else { "" }
+    if conf > 0.85 {
+        "confidently detected"
+    } else if conf > 0.6 {
+        "likely"
+    } else if conf > 0.4 {
+        "possibly"
+    } else {
+        ""
+    }
 }
 
 fn brightness_phrase(b: f32) -> &'static str {
-    if b > 0.8 { "very bright" }
-    else if b > 0.6 { "bright" }
-    else if b > 0.4 { "moderate" }
-    else if b > 0.2 { "dim" }
-    else { "very dark" }
+    if b > 0.8 {
+        "very bright"
+    } else if b > 0.6 {
+        "bright"
+    } else if b > 0.4 {
+        "moderate"
+    } else if b > 0.2 {
+        "dim"
+    } else {
+        "very dark"
+    }
 }
 
 fn density_level(d: f32) -> &'static str {
-    if d > 0.5 { "high" }
-    else if d > 0.3 { "moderate" }
-    else { "low" }
+    if d > 0.5 {
+        "high"
+    } else if d > 0.3 {
+        "moderate"
+    } else {
+        "low"
+    }
 }
 
 fn sym_level(s: f32) -> &'static str {
-    if s > 0.8 { "strong" }
-    else if s > 0.5 { "moderate" }
-    else { "weak" }
+    if s > 0.8 {
+        "strong"
+    } else if s > 0.5 {
+        "moderate"
+    } else {
+        "weak"
+    }
 }
 
 fn theme_detail(is_dark: bool, classification: &Classification) -> &'static str {
@@ -192,7 +226,8 @@ fn element_phrase(elem: &LayoutElement) -> String {
         ElementType::Separator => "a **divider or separator**",
     };
 
-    let font_hint = elem.font_size_pt
+    let font_hint = elem
+        .font_size_pt
         .map(|f| format!(" (est. {}pt font)", f))
         .unwrap_or_default();
 

@@ -1,6 +1,6 @@
-use crate::image2doc::converter::Metadata;
 use crate::image2doc::analyzer::{ImageAnalysis, LayoutElement};
 use crate::image2doc::classify::Classification;
+use crate::image2doc::converter::Metadata;
 
 pub fn render(
     metadata: &Metadata,
@@ -18,11 +18,15 @@ pub fn render(
     html.push_str("<title>Image Analysis</title>\n");
     html.push_str("<style>\n");
     html.push_str("body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 960px; margin: 0 auto; padding: 20px; background: #f5f5f5; color: #333; }\n");
-    html.push_str("h1 { color: #2c3e50; border-bottom: 2px solid #3498db; padding-bottom: 10px; }\n");
+    html.push_str(
+        "h1 { color: #2c3e50; border-bottom: 2px solid #3498db; padding-bottom: 10px; }\n",
+    );
     html.push_str("h2 { color: #2980b9; margin-top: 30px; }\n");
     html.push_str("h3 { color: #555; margin: 10px 0 5px; }\n");
     html.push_str("table { border-collapse: collapse; width: 100%; background: white; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }\n");
-    html.push_str("th, td { padding: 8px 12px; text-align: left; border-bottom: 1px solid #ddd; }\n");
+    html.push_str(
+        "th, td { padding: 8px 12px; text-align: left; border-bottom: 1px solid #ddd; }\n",
+    );
     html.push_str("th { background: #3498db; color: white; }\n");
     html.push_str("tr:hover { background: #f1f1f1; }\n");
     html.push_str(".card { background: white; border-radius: 8px; padding: 20px; margin: 20px 0; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }\n");
@@ -43,34 +47,81 @@ pub fn render(
     html.push_str("</style>\n</head>\n<body>\n");
 
     // Header
-    html.push_str(&format!("<h1>Image Analysis: {}</h1>\n", escape_html(&metadata.path)));
+    html.push_str(&format!(
+        "<h1>Image Analysis: {}</h1>\n",
+        escape_html(&metadata.path)
+    ));
 
     // Classification card
     html.push_str("<div class=\"card\">\n<h2>Image Classification</h2>\n");
-    html.push_str(&format!("<p><span class=\"badge badge-dark\">{}</span>", classification.image_type.label()));
-    html.push_str(&format!(" <strong>Confidence:</strong> {:.0}%</p>\n", classification.confidence * 100.0));
-    html.push_str(&format!("<p><em>{}</em></p>\n", classification.image_type.description()));
+    html.push_str(&format!(
+        "<p><span class=\"badge badge-dark\">{}</span>",
+        classification.image_type.label()
+    ));
+    html.push_str(&format!(
+        " <strong>Confidence:</strong> {:.0}%</p>\n",
+        classification.confidence * 100.0
+    ));
+    html.push_str(&format!(
+        "<p><em>{}</em></p>\n",
+        classification.image_type.description()
+    ));
     html.push_str("</div>\n");
 
     // Metadata card
     html.push_str("<div class=\"card\">\n<h2>Metadata</h2>\n");
     html.push_str("<table>\n");
     html.push_str("<tr><th>Property</th><th>Value</th></tr>\n");
-    html.push_str(&format!("<tr><td>Format</td><td>{}</td></tr>\n", escape_html(&metadata.format)));
-    html.push_str(&format!("<tr><td>Dimensions</td><td>{} x {} px</td></tr>\n", metadata.width, metadata.height));
-    html.push_str(&format!("<tr><td>File size</td><td>{}</td></tr>\n", crate::explorer::human_readable_size(metadata.file_size)));
-    html.push_str(&format!("<tr><td>Aspect ratio</td><td>{:.2}</td></tr>\n", metadata.aspect_ratio));
+    html.push_str(&format!(
+        "<tr><td>Format</td><td>{}</td></tr>\n",
+        escape_html(&metadata.format)
+    ));
+    html.push_str(&format!(
+        "<tr><td>Dimensions</td><td>{} x {} px</td></tr>\n",
+        metadata.width, metadata.height
+    ));
+    html.push_str(&format!(
+        "<tr><td>File size</td><td>{}</td></tr>\n",
+        crate::explorer::human_readable_size(metadata.file_size)
+    ));
+    html.push_str(&format!(
+        "<tr><td>Aspect ratio</td><td>{:.2}</td></tr>\n",
+        metadata.aspect_ratio
+    ));
     html.push_str("</table>\n</div>\n");
 
     // Color analysis
     html.push_str("<div class=\"card\">\n<h2>Color Analysis</h2>\n");
-    let theme_class = if analysis.color_analysis.is_dark { "badge-dark" } else { "badge-light" };
-    let theme_label = if analysis.color_analysis.is_dark { "Dark" } else { "Light" };
-    html.push_str(&format!("<p><span class=\"badge {}\">{}</span>", theme_class, theme_label));
-    html.push_str(&format!(" <strong>Brightness:</strong> {:.1}%", analysis.color_analysis.brightness * 100.0));
-    html.push_str(&format!(" <strong>Contrast ratio:</strong> {:.2}:1", analysis.color_analysis.contrast));
-    html.push_str(&format!(" <strong>Unique colors:</strong> {}", analysis.color_analysis.color_count));
-    html.push_str(&format!(" <strong>Gradient ratio:</strong> {:.1}%</p>\n", analysis.color_analysis.gradient_ratio * 100.0));
+    let theme_class = if analysis.color_analysis.is_dark {
+        "badge-dark"
+    } else {
+        "badge-light"
+    };
+    let theme_label = if analysis.color_analysis.is_dark {
+        "Dark"
+    } else {
+        "Light"
+    };
+    html.push_str(&format!(
+        "<p><span class=\"badge {}\">{}</span>",
+        theme_class, theme_label
+    ));
+    html.push_str(&format!(
+        " <strong>Brightness:</strong> {:.1}%",
+        analysis.color_analysis.brightness * 100.0
+    ));
+    html.push_str(&format!(
+        " <strong>Contrast ratio:</strong> {:.2}:1",
+        analysis.color_analysis.contrast
+    ));
+    html.push_str(&format!(
+        " <strong>Unique colors:</strong> {}",
+        analysis.color_analysis.color_count
+    ));
+    html.push_str(&format!(
+        " <strong>Gradient ratio:</strong> {:.1}%</p>\n",
+        analysis.color_analysis.gradient_ratio * 100.0
+    ));
     html.push_str("<h3>Dominant colors</h3>\n<div>\n");
     for (color, pct) in &analysis.color_analysis.dominant_colors {
         let hex = format!("#{:02x}{:02x}{:02x}", color[0], color[1], color[2]);
@@ -86,10 +137,22 @@ pub fn render(
     html.push_str("<div class=\"card\">\n<h2>Image Analysis Metrics</h2>\n");
     html.push_str("<table>\n");
     html.push_str("<tr><th>Metric</th><th>Value</th></tr>\n");
-    html.push_str(&format!("<tr><td>Edge density</td><td>{:.1}%</td></tr>\n", analysis.edge_density * 100.0));
-    html.push_str(&format!("<tr><td>Text density</td><td>{:.1}%</td></tr>\n", analysis.text_density * 100.0));
-    html.push_str(&format!("<tr><td>Horizontal symmetry</td><td>{:.1}%</td></tr>\n", analysis.symmetry * 100.0));
-    html.push_str(&format!("<tr><td>Gradient ratio</td><td>{:.1}%</td></tr>\n", analysis.color_analysis.gradient_ratio * 100.0));
+    html.push_str(&format!(
+        "<tr><td>Edge density</td><td>{:.1}%</td></tr>\n",
+        analysis.edge_density * 100.0
+    ));
+    html.push_str(&format!(
+        "<tr><td>Text density</td><td>{:.1}%</td></tr>\n",
+        analysis.text_density * 100.0
+    ));
+    html.push_str(&format!(
+        "<tr><td>Horizontal symmetry</td><td>{:.1}%</td></tr>\n",
+        analysis.symmetry * 100.0
+    ));
+    html.push_str(&format!(
+        "<tr><td>Gradient ratio</td><td>{:.1}%</td></tr>\n",
+        analysis.color_analysis.gradient_ratio * 100.0
+    ));
     html.push_str("</table>\n</div>\n");
 
     // ASCII preview
@@ -124,13 +187,19 @@ pub fn render(
             let w = elem.bounds.2;
             let h = elem.bounds.3;
             let conf = elem.confidence * 100.0;
-            let font = elem.font_size_pt.map(|f| format!("{}pt", f)).unwrap_or_default();
+            let font = elem
+                .font_size_pt
+                .map(|f| format!("{}pt", f))
+                .unwrap_or_default();
             html.push_str(&format!(
                 "<div class=\"layout-row\"><span class=\"layout-type\">{}</span><span class=\"layout-pos\">({},{})</span><span class=\"layout-size\">{}×{}</span><span class=\"layout-font\">{}</span><span class=\"layout-conf\">{:.0}%</span>",
                 type_str, x, y, w, h, font, conf
             ));
             if let Some(ref text) = elem.text {
-                html.push_str(&format!("<span class=\"layout-text\">“{}”</span>", escape_html(text)));
+                html.push_str(&format!(
+                    "<span class=\"layout-text\">“{}”</span>",
+                    escape_html(text)
+                ));
             }
             html.push_str("</div>\n");
         }
@@ -139,7 +208,10 @@ pub fn render(
 
     // Footer
     html.push_str("<div class=\"footer\">\n");
-    html.push_str(&format!("Generated by ntc v{} - Image to Document Converter\n", env!("CARGO_PKG_VERSION")));
+    html.push_str(&format!(
+        "Generated by ntc v{} - Image to Document Converter\n",
+        env!("CARGO_PKG_VERSION")
+    ));
     html.push_str("</div>\n</body>\n</html>\n");
 
     html

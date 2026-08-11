@@ -1,7 +1,10 @@
 use crate::config::Config;
-use crate::explorer::{format_tree, format_tree_with_sizes, generate_tree, calculate_total_size, human_readable_size};
+use crate::explorer::{
+    calculate_total_size, format_tree, format_tree_with_sizes, generate_tree, human_readable_size,
+};
 use crate::navigator::Navigator;
 use crate::output::{print_error, print_separator, print_success, print_warning};
+use crate::t;
 
 use anyhow::Result;
 use colored::*;
@@ -21,7 +24,8 @@ pub(crate) fn show_tree(
     max_depth_override: Option<usize>,
     show_progress: bool,
     include_files: bool,
-    show_sizes: bool,
+    show_filesize: bool,
+    show_dirsize: bool,
     copy_to_clipboard: bool,
     care_sizes: bool,
 ) {
@@ -31,7 +35,7 @@ pub(crate) fn show_tree(
     println!();
 
     let mut tree = if show_progress {
-        run_with_spinner("Building directory tree...", || {
+        run_with_spinner(&t!("helpers.building_tree"), || {
             generate_tree(
                 &nav.current_path().to_string_lossy(),
                 max_depth_override,
@@ -48,15 +52,24 @@ pub(crate) fn show_tree(
         )
     };
 
-    let tree_str = if show_sizes {
+    let show_any_size = show_filesize || show_dirsize;
+    let tree_str = if show_any_size {
         if show_progress {
-            run_with_spinner("Calculating directory sizes...", || {
+            run_with_spinner(&t!("helpers.calculating_sizes"), || {
                 crate::explorer::compute_tree_sizes(&mut tree, None, care_sizes);
             });
         } else {
             crate::explorer::compute_tree_sizes(&mut tree, None, care_sizes);
         }
-        format_tree_with_sizes(&tree, "", true, true, care_sizes, None)
+        format_tree_with_sizes(
+            &tree,
+            "",
+            true,
+            show_filesize,
+            show_dirsize,
+            care_sizes,
+            None,
+        )
     } else {
         format_tree(&tree, "", true)
     };
@@ -98,101 +111,135 @@ pub(crate) fn show_tree(
 }
 
 pub(super) fn gosc_loop(nav: &mut Navigator) -> Result<()> {
+    let a = |s: &str| crate::utils::terminal::asciify(s);
     loop {
         let dirs = nav.list_subdirs()?;
         crate::navigator::clear_screen();
-        show_tree(nav, Some(1), false, false, false, false, false);
-        
+        show_tree(nav, Some(1), false, false, false, false, false, false);
+
         println!();
-        println!("╔══════════════════════════════════════════════════╗");
-        println!("║{:^50}║", "gosc — Navigate Continuously".cyan().bold());
-        println!("╠══════════════════════════════════════════════════╣");
-        println!("║ {} go back 1 level", "-1".yellow());
-        println!("║ {} go back 2 levels", "-2".yellow());
-        println!("║ {} go back n levels", "-n".yellow());
-        println!("║ {} view --care -d 1 (files + care)", "v".yellow());
-        println!("║ {} size --care (total size)", "s".yellow());
-        println!("║ {} view -s --care -d 1 (files + sizes + care)", "vs".yellow());
-        println!("║ {} exit gosc", "0".red());
-        println!("╠──────────────────────────────────────────────────╣");
-        
+        println!(
+            "{}",
+            a("╔══════════════════════════════════════════════════╗")
+        );
+        println!(
+            "{}",
+            a(&format!("║{:^50}║", t!("gosc.panel.title").cyan().bold()))
+        );
+        println!(
+            "{}",
+            a("╠══════════════════════════════════════════════════╣")
+        );
+        println!("║ {} {}", "-1".yellow(), t!("gosc.panel.back_1"));
+        println!("║ {} {}", "-2".yellow(), t!("gosc.panel.back_2"));
+        println!("║ {} {}", "-n".yellow(), t!("gosc.panel.back_n"));
+        println!("║ {} {}", "v".yellow(), t!("gosc.panel.view_care"));
+        println!("║ {} {}", "s".yellow(), t!("gosc.panel.size_care"));
+        println!("║ {} {}", "vs".yellow(), t!("gosc.panel.view_size_care"));
+        println!("║ {} {}", "0".red(), t!("gosc.panel.exit"));
+        println!(
+            "{}",
+            a("╠──────────────────────────────────────────────────╣")
+        );
+
         if dirs.is_empty() {
-            println!("║ {}", "(no subdirectories)".dimmed());
+            println!("║ {}", t!("gosc.panel.empty").dimmed());
         } else {
             for (i, name) in &dirs {
                 println!("║ {}. {}", i.to_string().yellow(), name.bright_purple());
             }
         }
-        
-        println!("╚──────────────────────────────────────────────────╝");
+
+        println!(
+            "{}",
+            a("╚──────────────────────────────────────────────────╝")
+        );
         println!();
-        print!("{} ", "gosc>".green().bold());
-        
+        print!("{} ", t!("gosc.prompt").green().bold());
+
         let mut input = String::new();
         std::io::stdin().read_line(&mut input)?;
         let input = input.trim();
-        
+
         if input.is_empty() {
             continue;
         }
-        
+
         if input == "0" {
-            println!("{}", "Exiting gosc...".dimmed());
+            println!("{}", t!("gosc.exiting").dimmed());
             break Ok(());
         }
-        
-        // Handle v, s, vs commands - create output zone below the menu
+
         match input {
             "s" => {
-                // size --care: show total directory size
                 println!();
-                println!("{}", "─── Output Zone ───────────────────────────────────".cyan());
-                let total = run_with_spinner("Calculating directory size...", || {
+                println!("{}", t!("gosc.output_zone").cyan());
+                let total = run_with_spinner(&t!("gosc.calculating_size"), || {
                     calculate_total_size(nav.current_path())
                 });
                 let bytes_str = format!("{}", total);
                 let human_str = human_readable_size(total);
                 let w = bytes_str.len().max(human_str.len()) + 18;
-                println!("┌{}┐", "─".repeat(w));
-                println!("│{:^w$}│", "Current Directory Size".cyan().bold(), w = w);
-                println!("├{}┤", "─".repeat(w));
-                println!("│ Bytes: {:<w$} │", bytes_str.yellow(), w = w - 9);
-                println!("│ Human: {:<w$} │", human_str.green().bold(), w = w - 9);
-                println!("└{}┘", "─".repeat(w));
-                println!("{}", "──────────────────────────────────────────────────".cyan());
+                let v = a("│");
+                let h = a("─");
+                println!("{}{}{}", a("┌"), h.repeat(w), a("┐"));
+                println!(
+                    "{}{:^w$}{}",
+                    v,
+                    t!("gosc.size_title").cyan().bold(),
+                    v,
+                    w = w
+                );
+                println!("{}{}{}", a("├"), h.repeat(w), a("┤"));
+                println!(
+                    "{} {} {:<pad$} {}",
+                    v,
+                    t!("gosc.size_bytes"),
+                    bytes_str.yellow(),
+                    v,
+                    pad = w - 9
+                );
+                println!(
+                    "{} {} {:<pad$} {}",
+                    v,
+                    t!("gosc.size_human"),
+                    human_str.green().bold(),
+                    v,
+                    pad = w - 9
+                );
+                println!("{}{}{}", a("└"), h.repeat(w), a("┘"));
+                println!("{}", t!("gosc.output_zone_end").cyan());
                 println!();
-                print!("{} ", "Press Enter to continue...".dimmed());
+                print!("{} ", t!("gosc.press_enter").dimmed());
                 let mut dummy = String::new();
                 std::io::stdin().read_line(&mut dummy)?;
                 continue;
             }
             "v" => {
-                // view --care -d 1: show files with care, depth 1
                 println!();
-                println!("{}", "─── Output Zone ───────────────────────────────────".cyan());
-                show_tree(nav, Some(1), false, true, false, false, true);
-                println!("{}", "──────────────────────────────────────────────────".cyan());
+                println!("{}", t!("gosc.output_zone").cyan());
+                show_tree(nav, Some(1), false, true, false, false, false, true);
+                println!("{}", t!("gosc.output_zone_end").cyan());
                 println!();
-                print!("{} ", "Press Enter to continue...".dimmed());
+                print!("{} ", t!("gosc.press_enter").dimmed());
                 let mut dummy = String::new();
                 std::io::stdin().read_line(&mut dummy)?;
                 continue;
             }
             "vs" => {
-                // view -s --care -d 1: show files with sizes and care, depth 1
                 println!();
-                println!("{}", "─── Output Zone ───────────────────────────────────".cyan());
-                show_tree(nav, Some(1), false, true, true, false, true);
-                println!("{}", "──────────────────────────────────────────────────".cyan());
+                println!("{}", t!("gosc.output_zone").cyan());
+                show_tree(nav, Some(1), false, true, true, true, false, true);
+                println!("{}", t!("gosc.output_zone_end").cyan());
                 println!();
-                print!("{} ", "Press Enter to continue...".dimmed());
+                print!("{} ", t!("gosc.press_enter").dimmed());
                 let mut dummy = String::new();
                 std::io::stdin().read_line(&mut dummy)?;
                 continue;
             }
             _ => {}
         }
-        
+
         if let Some(back_str) = input.strip_prefix('-') {
             match back_str.parse::<usize>() {
                 Ok(n) if n > 0 => {
@@ -201,24 +248,24 @@ pub(super) fn gosc_loop(nav: &mut Navigator) -> Result<()> {
                     }
                 }
                 Err(_) => {
-                    print_error(&format!("Invalid back count: {}", back_str));
+                    print_error(&t!("helpers.invalid_back_count", back_str));
                 }
                 Ok(_) => {}
             }
             continue;
         }
-        
+
         match input.parse::<usize>() {
             Ok(num) => {
                 if let Some((_, name)) = dirs.iter().find(|(i, _)| *i == num) {
                     let new_path = nav.current_path().join(name);
                     let _ = nav.go_to(&new_path);
                 } else {
-                    print_error(&format!("Invalid number: {}", num));
+                    print_error(&t!("helpers.invalid_num", num));
                 }
             }
             Err(_) => {
-                print_error(&format!("Invalid input: {}", input));
+                print_error(&t!("helpers.invalid_input", input));
             }
         }
     }
@@ -232,13 +279,17 @@ pub(super) fn open_with_fallback(config_path: &std::path::Path) {
             let status = std::process::Command::new("cmd")
                 .args(["/C", "start", "", path_str])
                 .status();
-            if status.is_ok() { return; }
+            if status.is_ok() {
+                return;
+            }
         }
     }
     #[cfg(target_os = "macos")]
     {
         let status = std::process::Command::new("open").arg(config_path).status();
-        if status.is_ok() { return; }
+        if status.is_ok() {
+            return;
+        }
     }
     #[cfg(target_os = "linux")]
     {
@@ -250,7 +301,9 @@ pub(super) fn open_with_fallback(config_path: &std::path::Path) {
                     proc.arg(arg);
                 }
                 proc.arg(config_path);
-                if proc.status().is_ok() { return; }
+                if proc.status().is_ok() {
+                    return;
+                }
             }
         }
         if std::process::Command::new("xdg-open")
@@ -260,7 +313,7 @@ pub(super) fn open_with_fallback(config_path: &std::path::Path) {
         {
             return;
         }
-        for editor in &["vim", "nano", "nvim","emacs"] {
+        for editor in &["vim", "nano", "nvim", "emacs"] {
             if std::process::Command::new(editor)
                 .arg(config_path)
                 .status()
@@ -270,7 +323,7 @@ pub(super) fn open_with_fallback(config_path: &std::path::Path) {
             }
         }
     }
-    crate::output::print_info("No external editor found. Opening built-in editor...");
+    crate::output::print_info(&t!("helpers.no_editor"));
     let _ = crate::editor::edit_file(config_path);
 }
 
@@ -320,7 +373,7 @@ fn export_path(name: &str, ext: &str) -> std::path::PathBuf {
 pub(crate) fn ral_export_all(name: &str) -> Result<()> {
     let aliases = Config::global_get_run_aliases();
     if aliases.is_empty() {
-        print_warning("No run aliases to export.");
+        print_warning(&t!("helpers.no_ral_to_export"));
         return Ok(());
     }
     let path = export_path(name, "ntc.ral");
@@ -331,7 +384,7 @@ pub(crate) fn ral_export_all(name: &str) -> Result<()> {
 pub(crate) fn ral_export_select(nav: &mut Navigator, name: &str) -> Result<()> {
     let aliases = Config::global_get_run_aliases();
     if aliases.is_empty() {
-        print_warning("No run aliases to export.");
+        print_warning(&t!("helpers.no_ral_to_export"));
         return Ok(());
     }
 
@@ -342,30 +395,69 @@ pub(crate) fn ral_export_select(nav: &mut Navigator, name: &str) -> Result<()> {
 
     loop {
         crate::navigator::clear_screen();
-        show_tree(nav, Some(1), false, false, false, false, false);
+        show_tree(nav, Some(1), false, false, false, false, false, false);
 
         println!();
-        println!("╔══════════════════════════════════════════════════╗");
-        println!("║{:^50}║", "ral export — Select Aliases to Export".cyan().bold());
-        println!("╠══════════════════════════════════════════════════╣");
-        println!("║ {} select/deselect by number     ", "<n>".yellow());
-        println!("║ {} select all                    ", "a".yellow());
-        println!("║ {} finish export ({})           ", "0".red(), if selected.is_empty() { "cancel".red() } else { format!("{} selected", selected.len()).green() });
-        println!("╠──────────────────────────────────────────────────╣");
+        println!(
+            "{}",
+            crate::utils::terminal::asciify("╔══════════════════════════════════════════════════╗")
+        );
+        println!(
+            "{}",
+            crate::utils::terminal::asciify(&format!(
+                "║{:^50}║",
+                t!("ral_export.title").cyan().bold()
+            ))
+        );
+        println!(
+            "{}",
+            crate::utils::terminal::asciify("╠══════════════════════════════════════════════════╣")
+        );
+        println!("║ {} {}     ", "<n>".yellow(), t!("ral_export.select"));
+        println!(
+            "║ {} {}                    ",
+            "a".yellow(),
+            t!("ral_export.all")
+        );
+        println!(
+            "║ {} {} ({})           ",
+            "0".red(),
+            t!("ral_export.finish"),
+            if selected.is_empty() {
+                t!("ral_export.cancel").red()
+            } else {
+                format!("{} {}", selected.len(), t!("ral_export.selected")).green()
+            }
+        );
+        println!(
+            "{}",
+            crate::utils::terminal::asciify("╠──────────────────────────────────────────────────╣")
+        );
 
         for (i, (aname, cmd)) in sorted.iter().enumerate() {
             let idx = i + 1;
             let mark = if selected.contains(&idx) {
-                " (selected)".green().to_string()
+                format!(" {}", t!("ral_export.selected_mark"))
+                    .green()
+                    .to_string()
             } else {
                 String::new()
             };
-            println!("║ {}. {} -> {}{}", idx.to_string().yellow(), aname.blue(), cmd.dimmed(), mark);
+            println!(
+                "║ {}. {} -> {}{}",
+                idx.to_string().yellow(),
+                aname.blue(),
+                cmd.dimmed(),
+                mark
+            );
         }
 
-        println!("╚══════════════════════════════════════════════════╝");
+        println!(
+            "{}",
+            crate::utils::terminal::asciify("╚══════════════════════════════════════════════════╝")
+        );
         println!();
-        print!("{} ", "ral-export>".green().bold());
+        print!("{} ", t!("ral_export.prompt").green().bold());
 
         let mut input = String::new();
         std::io::stdin().read_line(&mut input)?;
@@ -377,11 +469,12 @@ pub(crate) fn ral_export_select(nav: &mut Navigator, name: &str) -> Result<()> {
 
         if input == "0" {
             if selected.is_empty() {
-                println!("{}", "Export cancelled.".dimmed());
+                println!("{}", t!("ral_export.export_cancelled").dimmed());
                 return Ok(());
             }
             // Export selected aliases
-            let mut map: std::collections::HashMap<String, String> = std::collections::HashMap::new();
+            let mut map: std::collections::HashMap<String, String> =
+                std::collections::HashMap::new();
             let mut sel_indices: Vec<usize> = selected.iter().cloned().collect();
             sel_indices.sort();
             for idx in sel_indices {
@@ -407,10 +500,10 @@ pub(crate) fn ral_export_select(nav: &mut Navigator, name: &str) -> Result<()> {
                     selected.insert(num);
                 }
             } else {
-                print_error(&format!("Invalid number: {}. Use 1-{} or 0 to finish.", num, sorted.len()));
+                print_error(&t!("helpers.invalid_num_range", num, sorted.len()));
             }
         } else {
-            print_error(&format!("Invalid input: {}", input));
+            print_error(&t!("helpers.invalid_input", input));
         }
     }
 }
@@ -433,9 +526,9 @@ fn write_ral_file(
     std::fs::write(path, &content)?;
 
     if let Some(cnt) = count {
-        print_success(&format!("Exported {} alias(es) to: {}", cnt, path.display()));
+        print_success(&t!("helpers.exported_count", cnt, path.display()));
     } else {
-        print_success(&format!("Exported all {} alias(es) to: {}", sorted.len(), path.display()));
+        print_success(&t!("helpers.exported_all", sorted.len(), path.display()));
     }
     Ok(())
 }
@@ -443,13 +536,13 @@ fn write_ral_file(
 pub(crate) fn ral_import(path_str: &str) -> Result<()> {
     let path = std::path::Path::new(path_str);
     if !path.exists() {
-        print_error(&format!("File not found: {}", path.display()));
+        print_error(&t!("helpers.file_not_found", path.display()));
         return Ok(());
     }
     Config::import_run_aliases_from_file(path)
         .map_err(|e| anyhow::anyhow!("Failed to import: {}", e))?;
     Config::reload_global();
-    print_success(&format!("Imported run aliases from: {}", path.display()));
+    print_success(&t!("helpers.imported_ral", path.display()));
     Ok(())
 }
 
@@ -464,7 +557,7 @@ pub(crate) fn igcare_export_all(name: &str) -> Result<()> {
         extra_supported_files: Config::get_extra_supported_files_combined(),
     };
     write_igcare_file(&path, &combined)?;
-    print_success(&format!("Exported all ignore/care settings to: {}", path.display()));
+    print_success(&t!("helpers.exported_igcare_all", path.display()));
     Ok(())
 }
 
@@ -487,11 +580,11 @@ pub(crate) fn igcare_export_select(name: &str) -> Result<()> {
     };
 
     let category_labels = [
-        "Ignored directories",
-        "Ignored extensions",
-        "Extra supported extensions",
-        "Ignored files",
-        "Extra supported files",
+        t!("igcare_export.ignored_dirs"),
+        t!("igcare_export.ignored_extensions"),
+        t!("igcare_export.extra_supported_extensions"),
+        t!("igcare_export.ignored_files"),
+        t!("igcare_export.extra_supported_files"),
     ];
 
     let category_fields: [&std::collections::HashSet<String>; 5] = [
@@ -509,29 +602,68 @@ pub(crate) fn igcare_export_select(name: &str) -> Result<()> {
         crate::navigator::clear_screen();
 
         println!();
-        println!("╔══════════════════════════════════════════════════╗");
-        println!("║{:^50}║", "igcare export — Select Categories".cyan().bold());
-        println!("╠══════════════════════════════════════════════════╣");
-        println!("║ {} select/deselect by number     ", "<n>".yellow());
-        println!("║ {} select all                    ", "a".yellow());
-        println!("║ {} finish export ({})           ", "0".red(), if selected.is_empty() { "cancel".red() } else { format!("{} selected", selected.len()).green() });
-        println!("╠──────────────────────────────────────────────────╣");
+        println!(
+            "{}",
+            crate::utils::terminal::asciify("╔══════════════════════════════════════════════════╗")
+        );
+        println!(
+            "{}",
+            crate::utils::terminal::asciify(&format!(
+                "║{:^50}║",
+                t!("igcare_export.title").cyan().bold()
+            ))
+        );
+        println!(
+            "{}",
+            crate::utils::terminal::asciify("╠══════════════════════════════════════════════════╣")
+        );
+        println!("║ {} {}     ", "<n>".yellow(), t!("igcare_export.select"));
+        println!(
+            "║ {} {}                    ",
+            "a".yellow(),
+            t!("igcare_export.all")
+        );
+        println!(
+            "║ {} {} ({})           ",
+            "0".red(),
+            t!("igcare_export.finish"),
+            if selected.is_empty() {
+                t!("igcare_export.cancel").red()
+            } else {
+                format!("{} {}", selected.len(), t!("igcare_export.selected")).green()
+            }
+        );
+        println!(
+            "{}",
+            crate::utils::terminal::asciify("╠──────────────────────────────────────────────────╣")
+        );
 
         for (i, label) in category_labels.iter().enumerate() {
             let idx = i + 1;
             let count = category_fields[i].len();
-            let count_str = format!(" ({} item(s))", count).yellow();
+            let count_str = format!(" ({})", t!("igcare_export.items", count)).yellow();
             let mark = if selected.contains(&idx) {
-                " (selected)".green().to_string()
+                format!(" {}", t!("igcare_export.selected_mark"))
+                    .green()
+                    .to_string()
             } else {
                 String::new()
             };
-            println!("║ {}. {}{}{}", idx.to_string().yellow(), label.cyan(), count_str, mark);
+            println!(
+                "║ {}. {}{}{}",
+                idx.to_string().yellow(),
+                label.cyan(),
+                count_str,
+                mark
+            );
         }
 
-        println!("╚══════════════════════════════════════════════════╝");
+        println!(
+            "{}",
+            crate::utils::terminal::asciify("╚══════════════════════════════════════════════════╝")
+        );
         println!();
-        print!("{} ", "igcare-export>".green().bold());
+        print!("{} ", t!("igcare_export.prompt").green().bold());
 
         let mut input = String::new();
         std::io::stdin().read_line(&mut input)?;
@@ -543,21 +675,25 @@ pub(crate) fn igcare_export_select(name: &str) -> Result<()> {
 
         if input == "0" {
             if selected.is_empty() {
-                println!("{}", "Export cancelled.".dimmed());
+                println!("{}", t!("helpers.export_cancelled").dimmed());
                 return Ok(());
             }
             let mut sel: Vec<usize> = selected.iter().cloned().collect();
             sel.sort();
             let path = export_path(name, "ntc.igcare");
             write_igcare_file_selective(&path, &combined, &sel)?;
-            print_success(&format!("Exported {} category(ies) to: {}", sel.len(), path.display()));
+            print_success(&t!(
+                "helpers.exported_categories",
+                sel.len(),
+                path.display()
+            ));
             return Ok(());
         }
 
         if input == "a" {
             let path = export_path(name, "ntc.igcare");
             write_igcare_file(&path, &combined)?;
-            print_success(&format!("Exported all ignore/care settings to: {}", path.display()));
+            print_success(&t!("helpers.exported_igcare_all", path.display()));
             return Ok(());
         }
 
@@ -569,10 +705,10 @@ pub(crate) fn igcare_export_select(name: &str) -> Result<()> {
                     selected.insert(num);
                 }
             } else {
-                print_error(&format!("Invalid number: {}. Use 1-{} or 0 to finish.", num, total));
+                print_error(&t!("helpers.invalid_num_range", num, total));
             }
         } else {
-            print_error(&format!("Invalid input: {}", input));
+            print_error(&t!("helpers.invalid_input", input));
         }
     }
 }
@@ -594,11 +730,26 @@ fn format_set(items: &std::collections::HashSet<String>) -> String {
 fn write_igcare_file(path: &std::path::Path, cfg: &CombinedIgcare) -> Result<()> {
     let mut content = String::from("# ntc ignore/care settings export\n");
     content.push_str("# Import with: igcare import <file>\n\n");
-    content.push_str(&format!("ignored_directory_names = {}\n\n", format_set(&cfg.ignored_directory_names)));
-    content.push_str(&format!("ignored_extensions = {}\n\n", format_set(&cfg.ignored_extensions)));
-    content.push_str(&format!("extra_supported_extensions = {}\n\n", format_set(&cfg.extra_supported_extensions)));
-    content.push_str(&format!("ignored_files = {}\n\n", format_set(&cfg.ignored_files)));
-    content.push_str(&format!("extra_supported_files = {}\n", format_set(&cfg.extra_supported_files)));
+    content.push_str(&format!(
+        "ignored_directory_names = {}\n\n",
+        format_set(&cfg.ignored_directory_names)
+    ));
+    content.push_str(&format!(
+        "ignored_extensions = {}\n\n",
+        format_set(&cfg.ignored_extensions)
+    ));
+    content.push_str(&format!(
+        "extra_supported_extensions = {}\n\n",
+        format_set(&cfg.extra_supported_extensions)
+    ));
+    content.push_str(&format!(
+        "ignored_files = {}\n\n",
+        format_set(&cfg.ignored_files)
+    ));
+    content.push_str(&format!(
+        "extra_supported_files = {}\n",
+        format_set(&cfg.extra_supported_files)
+    ));
 
     std::fs::write(path, &content)?;
     Ok(())
@@ -612,7 +763,10 @@ fn write_igcare_file_selective(
     let category_fields: Vec<(&str, &std::collections::HashSet<String>)> = vec![
         ("ignored_directory_names", &cfg.ignored_directory_names),
         ("ignored_extensions", &cfg.ignored_extensions),
-        ("extra_supported_extensions", &cfg.extra_supported_extensions),
+        (
+            "extra_supported_extensions",
+            &cfg.extra_supported_extensions,
+        ),
         ("ignored_files", &cfg.ignored_files),
         ("extra_supported_files", &cfg.extra_supported_files),
     ];
@@ -634,12 +788,12 @@ fn write_igcare_file_selective(
 pub(crate) fn igcare_import(path_str: &str) -> Result<()> {
     let path = std::path::Path::new(path_str);
     if !path.exists() {
-        print_error(&format!("File not found: {}", path.display()));
+        print_error(&t!("helpers.file_not_found", path.display()));
         return Ok(());
     }
     Config::import_igcare_from_file(path)
         .map_err(|e| anyhow::anyhow!("Failed to import: {}", e))?;
     Config::reload_global();
-    print_success(&format!("Imported ignore/care settings from: {}", path.display()));
+    print_success(&t!("helpers.imported_igcare", path.display()));
     Ok(())
 }

@@ -5,21 +5,21 @@ use std::process::Command;
 
 #[cfg(windows)]
 use super::super::download::{download_with_progress, extract_archive, find_binary};
-use super::super::types::PackageSource;
-#[cfg(windows)]
-use super::super::types::bin_dir;
 use super::super::manager::find_system_binary;
-use super::super::manager::{load_manifest, save_manifest};
 #[cfg(windows)]
 use super::super::manager::{copy_recursive, platform_key};
+use super::super::manager::{load_manifest, save_manifest};
+#[cfg(windows)]
+use super::super::types::bin_dir;
+use super::super::types::PackageSource;
 use crate::output::{print_info, print_success};
+use crate::t;
 use crate::utils::interactive::prompt_yes_no;
 
 pub(crate) fn install_git(
     name: &str,
     version: &str,
-    #[allow(unused_variables)]
-    source: &PackageSource,
+    #[allow(unused_variables)] source: &PackageSource,
     vdir: &Path,
 ) -> Result<()> {
     if let Some(git_path) = find_system_binary("git") {
@@ -32,7 +32,7 @@ pub(crate) fn install_git(
             ),
             true,
         )? {
-            print_info("Skipped registering git with ntpkg.");
+            print_info(&t!("ntpkg.skip_register", "git"));
             return Ok(());
         }
 
@@ -47,13 +47,16 @@ pub(crate) fn install_git(
         manifest.activate(name, &system_ver);
         save_manifest(&manifest)?;
 
-        print_success(&format!("{} {} registered (system install)", name, system_ver));
+        print_success(&format!(
+            "{} {} registered (system install)",
+            name, system_ver
+        ));
         return Ok(());
     }
 
     #[cfg(windows)]
     {
-        print_info("Git not found on PATH. Downloading MinGit...");
+        print_info(&t!("ntpkg.git_not_found"));
         return install_mingit(name, version, source, vdir);
     }
 
@@ -77,7 +80,10 @@ pub(crate) fn get_git_version(git_path: &Path) -> Result<String> {
         .context("Failed to run git --version")?;
 
     if !output.status.success() {
-        bail!("git --version failed (exit code {:?})", output.status.code());
+        bail!(
+            "git --version failed (exit code {:?})",
+            output.status.code()
+        );
     }
 
     let stdout = String::from_utf8_lossy(&output.stdout);
@@ -121,7 +127,7 @@ pub(crate) fn install_mingit(
     print_info(&format!("Downloading Git {version}..."));
     download_with_progress(url, &archive_path)?;
 
-    print_info("Extracting...");
+    print_info(&t!("ntpkg.extracting"));
     extract_archive(&archive_path, &tmp_dir, source.archive_type)?;
 
     let git_bin = find_binary(&tmp_dir, "git")

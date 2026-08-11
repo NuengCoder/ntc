@@ -1,6 +1,7 @@
 use crate::config::Config;
-use crate::explorer::{generate_tree, format_tree, TreeNode};
+use crate::explorer::{format_tree, generate_tree, TreeNode};
 use crate::output::cat_file_with_line_numbers;
+use crate::t;
 use anyhow::Result;
 use std::path::{Path, PathBuf};
 use std::time::Instant;
@@ -10,8 +11,11 @@ pub struct HtmlReportGenerator;
 impl HtmlReportGenerator {
     pub fn generate(dir_path: &Path, output_path: &Path, depth: Option<usize>) -> Result<()> {
         let start = Instant::now();
-        let dir_name = dir_path.file_name().map(|n| n.to_string_lossy()).unwrap_or_else(|| std::borrow::Cow::Borrowed("root"));
-        eprintln!("📊 Generating HTML report for: {}", dir_name);
+        let dir_name = dir_path
+            .file_name()
+            .map(|n| n.to_string_lossy())
+            .unwrap_or_else(|| std::borrow::Cow::Borrowed("root"));
+        eprintln!("{}", t!("report.generating_html", dir_name));
 
         // Generate tree (same as before)
         let tree = generate_tree(dir_path.to_string_lossy().as_ref(), depth, true, None);
@@ -61,16 +65,22 @@ impl HtmlReportGenerator {
         let html_output = template
             .replace("{{title}}", &dir_name)
             .replace("{{version}}", env!("CARGO_PKG_VERSION"))
-            .replace("{{date}}", &chrono::Local::now().format("%Y-%m-%d %H:%M:%S").to_string())
+            .replace(
+                "{{date}}",
+                &chrono::Local::now().format("%Y-%m-%d %H:%M:%S").to_string(),
+            )
             .replace("{{total_files}}", &total_files.to_string())
             .replace("{{total_dirs}}", &total_dirs.to_string())
             .replace("{{total_size}}", &total_size_str)
-            .replace("{{scan_time}}", &format!("{:.2}", start.elapsed().as_secs_f64()))
+            .replace(
+                "{{scan_time}}",
+                &format!("{:.2}", start.elapsed().as_secs_f64()),
+            )
             .replace("{{tree}}", &tree_str)
             .replace("{{files}}", &files_html);
 
         std::fs::write(output_path, html_output)?;
-        eprintln!("✅ HTML report saved to: {}", output_path.display());
+        eprintln!("{}", t!("report.saved_html", output_path.display()));
         Ok(())
     }
 }
@@ -87,4 +97,3 @@ fn count_dirs(node: &TreeNode) -> u64 {
     }
     count
 }
-

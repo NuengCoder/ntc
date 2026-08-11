@@ -1,5 +1,5 @@
-use crate::nfe::state::{NfeState, PanelFocus};
 use crate::nfe::fileops;
+use crate::nfe::state::{NfeState, PanelFocus};
 
 use anyhow::Result;
 use crossterm::event::{self, Event, KeyCode, KeyEventKind, MouseEvent, MouseEventKind};
@@ -136,7 +136,10 @@ fn handle_key(state: &mut NfeState, key: crossterm::event::KeyEvent) -> Result<A
                 state.selected = state.entries.len().saturating_sub(1);
                 state.scroll_to_selected();
             } else {
-                state.preview_scroll = state.preview_content.len().saturating_sub(state.list_height());
+                state.preview_scroll = state
+                    .preview_content
+                    .len()
+                    .saturating_sub(state.list_height());
             }
             Ok(Action::Continue)
         }
@@ -370,18 +373,26 @@ fn handle_mouse(state: &mut NfeState, mouse: MouseEvent) {
 // ── Goto mode (g key) ──
 
 fn enter_goto_mode(state: &mut NfeState) -> Result<()> {
-    use std::io::{stdout, Write};
     use crossterm::cursor::MoveTo;
-    use crossterm::style::{Print, ResetColor, SetBackgroundColor, SetForegroundColor};
     use crossterm::queue;
+    use crossterm::style::{Print, ResetColor, SetBackgroundColor, SetForegroundColor};
+    use std::io::{stdout, Write};
 
     let status_row = state.term_h.saturating_sub(1);
     let mut buf = String::new();
 
     loop {
         let prompt = format!(" Go to: {} ", buf);
-        let bg = crossterm::style::Color::Rgb { r: 40, g: 40, b: 60 };
-        let fg = crossterm::style::Color::Rgb { r: 220, g: 220, b: 240 };
+        let bg = crossterm::style::Color::Rgb {
+            r: 40,
+            g: 40,
+            b: 60,
+        };
+        let fg = crossterm::style::Color::Rgb {
+            r: 220,
+            g: 220,
+            b: 240,
+        };
 
         queue!(
             stdout(),
@@ -435,7 +446,10 @@ fn enter_goto_mode(state: &mut NfeState) -> Result<()> {
                             let matches: Vec<String> = entries
                                 .filter_map(|e| e.ok())
                                 .map(|e| e.file_name().to_string_lossy().to_string())
-                                .filter(|n| n.to_lowercase().starts_with(&buf.to_lowercase()) && Path::new(n).is_dir())
+                                .filter(|n| {
+                                    n.to_lowercase().starts_with(&buf.to_lowercase())
+                                        && Path::new(n).is_dir()
+                                })
                                 .collect();
                             if matches.len() == 1 {
                                 buf = matches[0].clone();
@@ -456,18 +470,26 @@ fn enter_goto_mode(state: &mut NfeState) -> Result<()> {
 // ── Filter mode (/ key) ──
 
 fn enter_filter_mode(state: &mut NfeState) -> Result<()> {
-    use std::io::{stdout, Write};
     use crossterm::cursor::MoveTo;
-    use crossterm::style::{Print, ResetColor, SetBackgroundColor, SetForegroundColor};
     use crossterm::queue;
+    use crossterm::style::{Print, ResetColor, SetBackgroundColor, SetForegroundColor};
+    use std::io::{stdout, Write};
 
     let status_row = state.term_h.saturating_sub(1);
     let mut filter = state.filter.clone();
 
     loop {
         let prompt = format!(" Filter: {} ", filter);
-        let bg = crossterm::style::Color::Rgb { r: 40, g: 40, b: 60 };
-        let fg = crossterm::style::Color::Rgb { r: 220, g: 220, b: 240 };
+        let bg = crossterm::style::Color::Rgb {
+            r: 40,
+            g: 40,
+            b: 60,
+        };
+        let fg = crossterm::style::Color::Rgb {
+            r: 220,
+            g: 220,
+            b: 240,
+        };
 
         queue!(
             stdout(),

@@ -2,10 +2,10 @@
 //! Provides `impl Config` blocks for the convenience methods that read and
 //! mutate the global singleton, plus local ntconfig.toml file management.
 
-use crate::config::{Config, LocalConfig, validate_alias_name};
+use crate::config::{validate_alias_name, Config, LocalConfig};
 
-use serde::Deserialize;
 use crate::output::{print_error, print_success};
+use serde::Deserialize;
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 
@@ -177,6 +177,28 @@ impl Config {
         cfg.save();
     }
 
+    pub fn global_get_language() -> String {
+        Self::read_global().language.clone()
+    }
+    pub fn global_set_language(lang: &str) {
+        let mut cfg = Self::write_global();
+        cfg.language = lang.to_string();
+        cfg.save();
+    }
+
+    pub fn global_get_language_active() -> bool {
+        Self::read_global().language_active
+    }
+    pub fn global_set_language_active(active: bool) {
+        let mut cfg = Self::write_global();
+        cfg.language_active = active;
+        cfg.save();
+    }
+
+    pub fn global_reload_lang() {
+        crate::utils::config::lang::reload();
+    }
+
     // Parse helpers
     pub fn parse_on_off(state: &str) -> Option<bool> {
         match state.to_uppercase().as_str() {
@@ -192,7 +214,7 @@ impl Config {
     pub fn global_get_teleports() -> HashMap<String, PathBuf> {
         Self::read_global().teleports.clone()
     }
-    
+
     pub fn global_set_teleports(teleports: HashMap<String, PathBuf>) {
         let mut cfg = Self::write_global();
         cfg.teleports = teleports;
@@ -202,24 +224,24 @@ impl Config {
     pub fn global_rename_run_alias(old_name: &str, new_name: &str) -> bool {
         let old_lower = old_name.to_lowercase();
         let new_lower = new_name.to_lowercase();
-        
+
         // Validate new name
         if !validate_alias_name(&new_lower) {
             return false;
         }
-        
+
         let mut cfg = Self::write_global();
-        
+
         // Check if old alias exists
         if !cfg.run_aliases.contains_key(&old_lower) {
             return false;
         }
-        
+
         // Check if new name already exists
         if cfg.run_aliases.contains_key(&new_lower) {
             return false;
         }
-        
+
         // Perform rename
         if let Some(command) = cfg.run_aliases.remove(&old_lower) {
             cfg.run_aliases.insert(new_lower, command);
@@ -227,29 +249,32 @@ impl Config {
             return false;
         }
         cfg.save();
-        
+
         true
     }
 
     pub fn global_get_run_aliases() -> HashMap<String, String> {
         Self::read_global().run_aliases.clone()
     }
-    
+
     pub fn global_add_run_alias(name: &str, command: &str) {
         let mut cfg = Self::write_global();
-        cfg.run_aliases.insert(name.to_lowercase(), command.to_string());
+        cfg.run_aliases
+            .insert(name.to_lowercase(), command.to_string());
         cfg.save();
     }
-    
+
     pub fn global_remove_run_alias(name: &str) {
         let mut cfg = Self::write_global();
         cfg.run_aliases.remove(&name.to_lowercase());
         cfg.save();
     }
-    
+
     pub fn global_update_run_alias(name: &str, command: &str) -> bool {
         let mut cfg = Self::write_global();
-        if let std::collections::hash_map::Entry::Occupied(mut e) = cfg.run_aliases.entry(name.to_lowercase()) {
+        if let std::collections::hash_map::Entry::Occupied(mut e) =
+            cfg.run_aliases.entry(name.to_lowercase())
+        {
             e.insert(command.to_string());
             cfg.save();
             true
@@ -266,7 +291,8 @@ impl Config {
 
     pub fn global_add_math_fn(name: &str, def: &str) {
         let mut cfg = Self::write_global();
-        cfg.math_functions.insert(name.to_lowercase(), def.to_string());
+        cfg.math_functions
+            .insert(name.to_lowercase(), def.to_string());
         cfg.save();
     }
 
@@ -278,7 +304,9 @@ impl Config {
 
     pub fn global_update_math_fn(name: &str, def: &str) -> bool {
         let mut cfg = Self::write_global();
-        if let std::collections::hash_map::Entry::Occupied(mut e) = cfg.math_functions.entry(name.to_lowercase()) {
+        if let std::collections::hash_map::Entry::Occupied(mut e) =
+            cfg.math_functions.entry(name.to_lowercase())
+        {
             e.insert(def.to_string());
             cfg.save();
             true
@@ -312,7 +340,9 @@ impl Config {
     }
 
     /// Write local config file
-    fn write_local_config(local: &LocalConfig) -> std::result::Result<(), Box<dyn std::error::Error>> {
+    fn write_local_config(
+        local: &LocalConfig,
+    ) -> std::result::Result<(), Box<dyn std::error::Error>> {
         if let Some(path) = Self::get_local_config_path() {
             let toml = toml::to_string_pretty(local)?;
             std::fs::write(&path, toml)?;
@@ -375,7 +405,9 @@ impl Config {
     }
 
     /// Add ignored directory to local config (or global if no local config)
-    pub fn local_add_ignored_dir(name: &str) -> std::result::Result<(), Box<dyn std::error::Error>> {
+    pub fn local_add_ignored_dir(
+        name: &str,
+    ) -> std::result::Result<(), Box<dyn std::error::Error>> {
         Self::modify_local_vec(
             |lc| &mut lc.ignored_directory_names,
             Config::global_add_ignored_dir,
@@ -386,7 +418,9 @@ impl Config {
     }
 
     /// Remove ignored directory from local config (or global if no local config)
-    pub fn local_remove_ignored_dir(name: &str) -> std::result::Result<(), Box<dyn std::error::Error>> {
+    pub fn local_remove_ignored_dir(
+        name: &str,
+    ) -> std::result::Result<(), Box<dyn std::error::Error>> {
         Self::remove_from_local_vec(
             |lc| &mut lc.ignored_directory_names,
             Config::global_remove_ignored_dir,
@@ -397,7 +431,9 @@ impl Config {
     }
 
     /// Add ignored extension to local config (or global if no local config)
-    pub fn local_add_ignored_extension(ext: &str) -> std::result::Result<(), Box<dyn std::error::Error>> {
+    pub fn local_add_ignored_extension(
+        ext: &str,
+    ) -> std::result::Result<(), Box<dyn std::error::Error>> {
         let ext_lower = ext.to_lowercase();
         // Pre-add to global's `ignored_extensions` before going through the helper
         // so the fn pointer path can be used.
@@ -416,14 +452,18 @@ impl Config {
     }
 
     /// Add extra supported extension to local config (or global if no local config)
-    pub fn local_add_extra_supported_extension(ext: &str) -> std::result::Result<(), Box<dyn std::error::Error>> {
+    pub fn local_add_extra_supported_extension(
+        ext: &str,
+    ) -> std::result::Result<(), Box<dyn std::error::Error>> {
         let ext_lower = ext.to_lowercase();
         if Self::get_local_config_path().is_none() {
             Config::global_add_extra_supported_extension(&ext_lower);
             return Ok(());
         }
         let mut local = Self::read_local_config().unwrap_or_default();
-        let vec = local.extra_supported_extensions.get_or_insert_with(Vec::new);
+        let vec = local
+            .extra_supported_extensions
+            .get_or_insert_with(Vec::new);
         if !vec.contains(&ext_lower) {
             vec.push(ext_lower.clone());
         }
@@ -433,7 +473,9 @@ impl Config {
     }
 
     /// Add ignored file to local config (or global if no local config)
-    pub fn local_add_ignored_file(name: &str) -> std::result::Result<(), Box<dyn std::error::Error>> {
+    pub fn local_add_ignored_file(
+        name: &str,
+    ) -> std::result::Result<(), Box<dyn std::error::Error>> {
         Self::modify_local_vec(
             |lc| &mut lc.ignored_files,
             Config::global_add_ignored_file,
@@ -444,7 +486,9 @@ impl Config {
     }
 
     /// Add extra supported file to local config (or global if no local config)
-    pub fn local_add_extra_supported_file(name: &str) -> std::result::Result<(), Box<dyn std::error::Error>> {
+    pub fn local_add_extra_supported_file(
+        name: &str,
+    ) -> std::result::Result<(), Box<dyn std::error::Error>> {
         Self::modify_local_vec(
             |lc| &mut lc.extra_supported_files,
             Config::global_add_extra_supported_file,
@@ -455,7 +499,10 @@ impl Config {
     }
 
     /// Add run alias to local config (or global if no local config)
-    pub fn local_add_run_alias(name: &str, command: &str) -> std::result::Result<(), Box<dyn std::error::Error>> {
+    pub fn local_add_run_alias(
+        name: &str,
+        command: &str,
+    ) -> std::result::Result<(), Box<dyn std::error::Error>> {
         let name_lower = name.to_lowercase();
         if Self::get_local_config_path().is_some() {
             let mut local = Self::read_local_config().unwrap_or_default();
@@ -469,13 +516,18 @@ impl Config {
             print_success(&format!("Alias '{}' -> '{}' (local config)", name, command));
         } else {
             Config::global_add_run_alias(name, command);
-            print_success(&format!("Alias '{}' -> '{}' (global config)", name, command));
+            print_success(&format!(
+                "Alias '{}' -> '{}' (global config)",
+                name, command
+            ));
         }
         Ok(())
     }
 
     /// Remove run alias from local config (or global if no local config)
-    pub fn local_remove_run_alias(name: &str) -> std::result::Result<(), Box<dyn std::error::Error>> {
+    pub fn local_remove_run_alias(
+        name: &str,
+    ) -> std::result::Result<(), Box<dyn std::error::Error>> {
         let name_lower = name.to_lowercase();
         if Self::get_local_config_path().is_some() {
             let mut local = Self::read_local_config().unwrap_or_default();
@@ -500,7 +552,10 @@ impl Config {
     }
 
     /// Update run alias in local config (or global if no local config)
-    pub fn local_update_run_alias(name: &str, command: &str) -> std::result::Result<bool, Box<dyn std::error::Error>> {
+    pub fn local_update_run_alias(
+        name: &str,
+        command: &str,
+    ) -> std::result::Result<bool, Box<dyn std::error::Error>> {
         let name_lower = name.to_lowercase();
         if Self::get_local_config_path().is_some() {
             let mut local = Self::read_local_config().unwrap_or_default();
@@ -508,7 +563,10 @@ impl Config {
                 if let std::collections::hash_map::Entry::Occupied(mut e) = map.entry(name_lower) {
                     e.insert(command.to_string());
                     Self::write_local_config(&local)?;
-                    print_success(&format!("Updated alias '{}' -> '{}' (local config)", name, command));
+                    print_success(&format!(
+                        "Updated alias '{}' -> '{}' (local config)",
+                        name, command
+                    ));
                     return Ok(true);
                 }
             }
@@ -517,7 +575,10 @@ impl Config {
         } else {
             let result = Config::global_update_run_alias(name, command);
             if result {
-                print_success(&format!("Updated alias '{}' -> '{}' (global config)", name, command));
+                print_success(&format!(
+                    "Updated alias '{}' -> '{}' (global config)",
+                    name, command
+                ));
             } else {
                 print_error(&format!("Alias '{}' not found in global config", name));
             }
@@ -544,13 +605,19 @@ impl Config {
             };
             local.run_aliases = None;
             Self::write_local_config(&local)?;
-            print_success(&format!("Cleared {} run alias(es) from local config.", count));
+            print_success(&format!(
+                "Cleared {} run alias(es) from local config.",
+                count
+            ));
         } else {
             let mut cfg = Config::write_global();
             let count = cfg.run_aliases.len();
             cfg.run_aliases.clear();
             cfg.save();
-            print_success(&format!("Cleared {} run alias(es) from global config.", count));
+            print_success(&format!(
+                "Cleared {} run alias(es) from global config.",
+                count
+            ));
         }
         Ok(())
     }
@@ -558,7 +625,7 @@ impl Config {
     pub fn global_get_watch_trigger_alias() -> Option<String> {
         Self::read_global().watch_trigger_alias.clone()
     }
-    
+
     pub fn global_set_watch_trigger_alias(alias: Option<String>) {
         let mut cfg = Self::write_global();
         cfg.watch_trigger_alias = alias;
@@ -566,6 +633,38 @@ impl Config {
     }
 
     // ---- QSC (Quick Short Command) ----
+
+    pub fn global_get_ascii_fallback() -> bool {
+        Self::read_global().ascii_fallback
+    }
+
+    pub fn global_set_ascii_fallback(enabled: bool) {
+        let mut cfg = Self::write_global();
+        cfg.ascii_fallback = enabled;
+        cfg.save();
+    }
+
+    // ---- tmprt (OpenWeather) ----
+
+    pub fn global_get_openweather_api_key() -> Option<String> {
+        Self::read_global().openweather_api_key.clone()
+    }
+
+    pub fn global_set_openweather_api_key(key: Option<String>) {
+        let mut cfg = Self::write_global();
+        cfg.openweather_api_key = key;
+        cfg.save();
+    }
+
+    pub fn global_get_openweather_default_city() -> Option<String> {
+        Self::read_global().openweather_default_city.clone()
+    }
+
+    pub fn global_set_openweather_default_city(city: Option<String>) {
+        let mut cfg = Self::write_global();
+        cfg.openweather_default_city = city;
+        cfg.save();
+    }
 
     pub fn global_get_qsc() -> Option<crate::config::QscHotkey> {
         Self::read_global().qsc.clone()
@@ -610,7 +709,11 @@ impl Config {
             if !c.is_alphanumeric() {
                 return None;
             }
-        } else if !["F1","F2","F3","F4","F5","F6","F7","F8","F9","F10","F11","F12"].contains(&key.as_str()) {
+        } else if ![
+            "F1", "F2", "F3", "F4", "F5", "F6", "F7", "F8", "F9", "F10", "F11", "F12",
+        ]
+        .contains(&key.as_str())
+        {
             return None;
         }
         // Require at least one modifier
@@ -618,14 +721,21 @@ impl Config {
             return None;
         }
 
-        Some(crate::config::QscHotkey { ctrl, shift, alt, key })
+        Some(crate::config::QscHotkey {
+            ctrl,
+            shift,
+            alt,
+            key,
+        })
     }
 
     // ---- Import helpers ----
 
     /// Import run aliases from a `.ntc.ral` file and merge into local or global config.
     /// Batches writes: reads the target config once, applies all changes, writes once.
-    pub fn import_run_aliases_from_file(path: &Path) -> std::result::Result<(), Box<dyn std::error::Error>> {
+    pub fn import_run_aliases_from_file(
+        path: &Path,
+    ) -> std::result::Result<(), Box<dyn std::error::Error>> {
         let content = std::fs::read_to_string(path)?;
         #[derive(Deserialize)]
         struct RalFile {
@@ -640,7 +750,9 @@ impl Config {
         if Self::get_local_config_path().is_some() {
             // Batch into local config: read once, apply all, write once
             let mut local = Self::read_local_config().unwrap_or_default();
-            let map = local.run_aliases.get_or_insert_with(std::collections::HashMap::new);
+            let map = local
+                .run_aliases
+                .get_or_insert_with(std::collections::HashMap::new);
             for (name, cmd) in &aliases {
                 map.insert(name.to_lowercase(), cmd.clone());
             }
@@ -659,7 +771,9 @@ impl Config {
 
     /// Import ignore/care settings from a `.ntc.igcare` file and merge into local or global config.
     /// Batches writes: reads the target config once, applies all changes, writes once.
-    pub fn import_igcare_from_file(path: &Path) -> std::result::Result<(), Box<dyn std::error::Error>> {
+    pub fn import_igcare_from_file(
+        path: &Path,
+    ) -> std::result::Result<(), Box<dyn std::error::Error>> {
         let content = std::fs::read_to_string(path)?;
         #[derive(Deserialize)]
         struct IgcareFile {

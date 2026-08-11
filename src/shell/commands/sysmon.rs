@@ -1,7 +1,9 @@
 use anyhow::Result;
-use crossterm::cursor::{Hide, Show, MoveTo};
-use crossterm::event::{self, DisableMouseCapture, EnableMouseCapture, Event, KeyCode, KeyEventKind};
-use crossterm::style::{Print, ResetColor, SetForegroundColor, SetBackgroundColor};
+use crossterm::cursor::{Hide, MoveTo, Show};
+use crossterm::event::{
+    self, DisableMouseCapture, EnableMouseCapture, Event, KeyCode, KeyEventKind,
+};
+use crossterm::style::{Print, ResetColor, SetBackgroundColor, SetForegroundColor};
 use crossterm::terminal::{self, Clear, ClearType, EnterAlternateScreen, LeaveAlternateScreen};
 use crossterm::{execute, queue};
 use std::collections::{HashMap, HashSet};
@@ -12,7 +14,12 @@ use sysinfo::{Disks, System};
 const REFRESH_MS: u64 = 1500;
 
 #[derive(Debug)]
-enum SortBy { Cpu, Mem, Pid, Name }
+enum SortBy {
+    Cpu,
+    Mem,
+    Pid,
+    Name,
+}
 
 struct SysMon {
     sys: System,
@@ -71,11 +78,16 @@ impl SysMon {
         self.refresh_filtered();
     }
 
-    fn build_tree(&self, all_pids: &[sysinfo::Pid]) -> (Vec<sysinfo::Pid>, HashMap<sysinfo::Pid, usize>) {
+    fn build_tree(
+        &self,
+        all_pids: &[sysinfo::Pid],
+    ) -> (Vec<sysinfo::Pid>, HashMap<sysinfo::Pid, usize>) {
         let pid_set: HashSet<sysinfo::Pid> = all_pids.iter().copied().collect();
-        let parent_map: HashMap<sysinfo::Pid, sysinfo::Pid> = all_pids.iter()
+        let parent_map: HashMap<sysinfo::Pid, sysinfo::Pid> = all_pids
+            .iter()
             .filter_map(|pid| {
-                self.sys.process(*pid)
+                self.sys
+                    .process(*pid)
                     .and_then(|p| p.parent())
                     .filter(|ppid| pid_set.contains(ppid))
                     .map(|ppid| (*pid, ppid))
@@ -87,7 +99,8 @@ impl SysMon {
             children.entry(parent).or_default().push(child);
         }
 
-        let mut roots: Vec<sysinfo::Pid> = all_pids.iter()
+        let mut roots: Vec<sysinfo::Pid> = all_pids
+            .iter()
             .filter(|pid| !parent_map.contains_key(pid))
             .copied()
             .collect();
@@ -97,30 +110,58 @@ impl SysMon {
             SortBy::Pid => roots.sort_by(|a, b| if sort_desc { b.cmp(a) } else { a.cmp(b) }),
             SortBy::Name => {
                 roots.sort_by(|a, b| {
-                    let na = self.sys.process(*a).map(|p| p.name().to_string_lossy().to_string()).unwrap_or_default();
-                    let nb = self.sys.process(*b).map(|p| p.name().to_string_lossy().to_string()).unwrap_or_default();
-                    if sort_desc { nb.cmp(&na) } else { na.cmp(&nb) }
+                    let na = self
+                        .sys
+                        .process(*a)
+                        .map(|p| p.name().to_string_lossy().to_string())
+                        .unwrap_or_default();
+                    let nb = self
+                        .sys
+                        .process(*b)
+                        .map(|p| p.name().to_string_lossy().to_string())
+                        .unwrap_or_default();
+                    if sort_desc {
+                        nb.cmp(&na)
+                    } else {
+                        na.cmp(&nb)
+                    }
                 });
             }
             SortBy::Cpu => {
                 roots.sort_by(|a, b| {
                     let ca = self.sys.process(*a).map(|p| p.cpu_usage()).unwrap_or(0.0);
                     let cb = self.sys.process(*b).map(|p| p.cpu_usage()).unwrap_or(0.0);
-                    if sort_desc { cb.total_cmp(&ca) } else { ca.total_cmp(&cb) }
+                    if sort_desc {
+                        cb.total_cmp(&ca)
+                    } else {
+                        ca.total_cmp(&cb)
+                    }
                 });
             }
             SortBy::Mem => {
                 roots.sort_by(|a, b| {
                     let ma = self.sys.process(*a).map(|p| p.memory()).unwrap_or(0);
                     let mb = self.sys.process(*b).map(|p| p.memory()).unwrap_or(0);
-                    if sort_desc { mb.cmp(&ma) } else { ma.cmp(&mb) }
+                    if sort_desc {
+                        mb.cmp(&ma)
+                    } else {
+                        ma.cmp(&mb)
+                    }
                 });
             }
         }
         for list in children.values_mut() {
             list.sort_by(|a, b| {
-                let na = self.sys.process(*a).map(|p| p.name().to_string_lossy().to_string()).unwrap_or_default();
-                let nb = self.sys.process(*b).map(|p| p.name().to_string_lossy().to_string()).unwrap_or_default();
+                let na = self
+                    .sys
+                    .process(*a)
+                    .map(|p| p.name().to_string_lossy().to_string())
+                    .unwrap_or_default();
+                let nb = self
+                    .sys
+                    .process(*b)
+                    .map(|p| p.name().to_string_lossy().to_string())
+                    .unwrap_or_default();
                 na.cmp(&nb)
             });
         }
@@ -153,20 +194,28 @@ impl SysMon {
 
     fn refresh_filtered(&mut self) {
         // On each full refresh, clear killed PIDs that are no longer in the system
-        self.killed.retain(|pid| self.sys.processes().contains_key(pid));
+        self.killed
+            .retain(|pid| self.sys.processes().contains_key(pid));
 
-        let all: Vec<sysinfo::Pid> = self.sys.processes().keys()
+        let all: Vec<sysinfo::Pid> = self
+            .sys
+            .processes()
+            .keys()
             .filter(|pid| !self.killed.contains(pid))
-            .copied().collect();
+            .copied()
+            .collect();
         let all = if self.filter.is_empty() {
             all
         } else {
             let lower = self.filter.to_lowercase();
-            all.into_iter().filter(|&pid| {
-                self.sys.process(pid).map(|p| {
-                    p.name().to_string_lossy().to_lowercase().contains(&lower)
-                }).unwrap_or(false)
-            }).collect()
+            all.into_iter()
+                .filter(|&pid| {
+                    self.sys
+                        .process(pid)
+                        .map(|p| p.name().to_string_lossy().to_lowercase().contains(&lower))
+                        .unwrap_or(false)
+                })
+                .collect()
         };
         let (flat, depths) = self.build_tree(&all);
         self.flat_pids = flat;
@@ -175,7 +224,9 @@ impl SysMon {
     }
 
     fn proc_rows(&self) -> usize {
-        (self.term_h as u16).saturating_sub(self.used_rows() as u16).max(3) as usize
+        (self.term_h as u16)
+            .saturating_sub(self.used_rows() as u16)
+            .max(3) as usize
     }
 
     fn used_rows(&self) -> usize {
@@ -185,7 +236,9 @@ impl SysMon {
             let cell_w = 22; // "C 0 [---------- 100%]" ~22 chars
             let num_cols = (self.term_w / cell_w).max(1);
             (cpus + num_cols - 1) / num_cols
-        } else { 0 };
+        } else {
+            0
+        };
         1 + 1 + 1 + self.disks.len() + cpu_rows + 1
     }
 
@@ -212,26 +265,47 @@ impl SysMon {
             " sys  |  q=quit  s=sort  arrows=nav  k=kill  c={cpu_label}CPU  F=filter  Enter=expand  |  sort: {sort_name}"
         );
         queue!(
-            stdout, MoveTo(0, 0),
-            SetForegroundColor(fg_info), SetBackgroundColor(bg_status),
+            stdout,
+            MoveTo(0, 0),
+            SetForegroundColor(fg_info),
+            SetBackgroundColor(bg_status),
             Print(&header[..header.len().min(cols)]),
             ResetColor,
         )?;
 
         let mut row: u16 = 1;
-        queue!(stdout, MoveTo(0, row), Print(&"\u{2500}".repeat(cols)), ResetColor)?;
+        queue!(
+            stdout,
+            MoveTo(0, row),
+            Print(&"\u{2500}".repeat(cols)),
+            ResetColor
+        )?;
         row += 1;
 
         // ── Memory ──
         let total_mem = self.sys.total_memory();
         let used_mem = self.sys.used_memory();
-        let mem_pct = used_mem.checked_mul(100).and_then(|v| v.checked_div(total_mem)).unwrap_or(0) as usize;
+        let mem_pct = used_mem
+            .checked_mul(100)
+            .and_then(|v| v.checked_div(total_mem))
+            .unwrap_or(0) as usize;
         let bar = render_text_bar(mem_pct);
-        let fg = if mem_pct > 80 { fg_err } else if mem_pct > 50 { fg_warn } else { fg_success };
+        let fg = if mem_pct > 80 {
+            fg_err
+        } else if mem_pct > 50 {
+            fg_warn
+        } else {
+            fg_success
+        };
         queue!(
-            stdout, MoveTo(0, row),
+            stdout,
+            MoveTo(0, row),
             SetForegroundColor(fg),
-            Print(&format!(" MEM  {bar}  {} / {}", format_size(used_mem), format_size(total_mem))),
+            Print(&format!(
+                " MEM  {bar}  {} / {}",
+                format_size(used_mem),
+                format_size(total_mem)
+            )),
             ResetColor,
         )?;
         row += 1;
@@ -239,31 +313,61 @@ impl SysMon {
         // ── Swap ──
         let total_swap = self.sys.total_swap();
         let used_swap = self.sys.used_swap();
-        let swap_pct = used_swap.checked_mul(100).and_then(|v| v.checked_div(total_swap)).unwrap_or(0) as usize;
+        let swap_pct = used_swap
+            .checked_mul(100)
+            .and_then(|v| v.checked_div(total_swap))
+            .unwrap_or(0) as usize;
         let bar = render_text_bar(swap_pct);
-        let fg = if swap_pct > 80 { fg_err } else if swap_pct > 50 { fg_warn } else { fg_success };
+        let fg = if swap_pct > 80 {
+            fg_err
+        } else if swap_pct > 50 {
+            fg_warn
+        } else {
+            fg_success
+        };
         queue!(
-            stdout, MoveTo(0, row),
+            stdout,
+            MoveTo(0, row),
             SetForegroundColor(fg),
-            Print(&format!(" SWAP {bar}  {} / {}", format_size(used_swap), format_size(total_swap))),
+            Print(&format!(
+                " SWAP {bar}  {} / {}",
+                format_size(used_swap),
+                format_size(total_swap)
+            )),
             ResetColor,
         )?;
         row += 1;
 
         // ── Disks ──
         for disk in &self.disks {
-            if row >= (self.term_h as u16).saturating_sub(1) { break; }
+            if row >= (self.term_h as u16).saturating_sub(1) {
+                break;
+            }
             let total = disk.total_space();
             let avail = disk.available_space();
             let used = total.saturating_sub(avail);
-            let pct = used.checked_mul(100).and_then(|v| v.checked_div(total)).unwrap_or(0) as usize;
+            let pct = used
+                .checked_mul(100)
+                .and_then(|v| v.checked_div(total))
+                .unwrap_or(0) as usize;
             let bar = render_text_bar(pct);
             let mount = disk.mount_point().to_string_lossy();
-            let fg = if pct > 85 { fg_err } else if pct > 60 { fg_warn } else { fg_success };
+            let fg = if pct > 85 {
+                fg_err
+            } else if pct > 60 {
+                fg_warn
+            } else {
+                fg_success
+            };
             queue!(
-                stdout, MoveTo(0, row),
+                stdout,
+                MoveTo(0, row),
                 SetForegroundColor(fg),
-                Print(&format!(" {mount} {bar}  {} / {}", format_size(used), format_size(total))),
+                Print(&format!(
+                    " {mount} {bar}  {} / {}",
+                    format_size(used),
+                    format_size(total)
+                )),
                 ResetColor,
             )?;
             row += 1;
@@ -279,16 +383,27 @@ impl SysMon {
             let num_rows = (cpus.len() + num_cols - 1) / num_cols;
 
             for ri in 0..num_rows {
-                if row >= (self.term_h as u16).saturating_sub(1) { break; }
+                if row >= (self.term_h as u16).saturating_sub(1) {
+                    break;
+                }
                 let mut line_x = 2u16;
                 for ci in 0..num_cols {
                     let idx = ri * num_cols + ci;
-                    if idx >= cpus.len() { break; }
+                    if idx >= cpus.len() {
+                        break;
+                    }
                     let pct = cpus[idx].cpu_usage() as usize;
                     let bar = render_text_bar(pct);
-                    let fg = if pct > 80 { fg_err } else if pct > 50 { fg_warn } else { fg_success };
+                    let fg = if pct > 80 {
+                        fg_err
+                    } else if pct > 50 {
+                        fg_warn
+                    } else {
+                        fg_success
+                    };
                     queue!(
-                        stdout, MoveTo(line_x, row),
+                        stdout,
+                        MoveTo(line_x, row),
                         SetForegroundColor(fg),
                         Print(&format!("C{:>2} {}", idx, bar)),
                         ResetColor,
@@ -301,7 +416,12 @@ impl SysMon {
 
         // Separator after metrics
         if row < self.term_h as u16 {
-            queue!(stdout, MoveTo(0, row), Print(&"\u{2500}".repeat(cols)), ResetColor)?;
+            queue!(
+                stdout,
+                MoveTo(0, row),
+                Print(&"\u{2500}".repeat(cols)),
+                ResetColor
+            )?;
             row += 1;
         }
 
@@ -309,8 +429,10 @@ impl SysMon {
         if self.filtering {
             let filter_display = format!(" filter: {}_", self.filter);
             queue!(
-                stdout, MoveTo(0, row),
-                SetForegroundColor(fg_info), SetBackgroundColor(bg_status),
+                stdout,
+                MoveTo(0, row),
+                SetForegroundColor(fg_info),
+                SetBackgroundColor(bg_status),
                 Print(&filter_display[..filter_display.len().min(cols)]),
                 ResetColor,
             )?;
@@ -318,7 +440,8 @@ impl SysMon {
         } else if !self.filter.is_empty() {
             let filter_display = format!(" filter: {}  (F to edit, Esc to clear)", self.filter);
             queue!(
-                stdout, MoveTo(0, row),
+                stdout,
+                MoveTo(0, row),
                 SetForegroundColor(fg_warn),
                 Print(&filter_display[..filter_display.len().min(cols)]),
                 ResetColor,
@@ -334,9 +457,13 @@ impl SysMon {
             SortBy::Pid => "PID",
             SortBy::Name => "NAME",
         };
-        let header_str = format!(" {:>6} {:>6} {:>7}  {}", "PID", sort_label, "CPU%", "Command");
+        let header_str = format!(
+            " {:>6} {:>6} {:>7}  {}",
+            "PID", sort_label, "CPU%", "Command"
+        );
         queue!(
-            stdout, MoveTo(0, row),
+            stdout,
+            MoveTo(0, row),
             SetForegroundColor(fg_info),
             Print(&header_str[..header_str.len().min(cols)]),
             ResetColor,
@@ -356,9 +483,14 @@ impl SysMon {
         let tree_children: HashMap<sysinfo::Pid, Vec<sysinfo::Pid>> = {
             let mut map: HashMap<sysinfo::Pid, Vec<sysinfo::Pid>> = HashMap::new();
             for (p, proc) in self.sys.processes() {
-                if self.killed.contains(p) { continue; }
+                if self.killed.contains(p) {
+                    continue;
+                }
                 if let Some(ppid) = proc.parent() {
-                    if ppid != *p && self.sys.processes().contains_key(&ppid) && !self.killed.contains(&ppid) {
+                    if ppid != *p
+                        && self.sys.processes().contains_key(&ppid)
+                        && !self.killed.contains(&ppid)
+                    {
                         map.entry(ppid).or_default().push(*p);
                     }
                 }
@@ -371,7 +503,10 @@ impl SysMon {
             children: &HashMap<sysinfo::Pid, Vec<sysinfo::Pid>>,
             sys: &sysinfo::System,
         ) -> (f32, u64) {
-            let own = sys.process(pid).map(|p| (p.cpu_usage(), p.memory())).unwrap_or((0.0, 0));
+            let own = sys
+                .process(pid)
+                .map(|p| (p.cpu_usage(), p.memory()))
+                .unwrap_or((0.0, 0));
             let (mut tcpu, mut tmem) = own;
             if let Some(kids) = children.get(&pid) {
                 for &k in kids {
@@ -386,7 +521,9 @@ impl SysMon {
         for i in 0..proc_h {
             let idx = self.scroll + i;
             let r = row + i as u16;
-            if r >= self.term_h as u16 { break; }
+            if r >= self.term_h as u16 {
+                break;
+            }
             if idx >= total_procs {
                 queue!(stdout, MoveTo(0, r), Clear(ClearType::UntilNewLine))?;
                 continue;
@@ -407,11 +544,19 @@ impl SysMon {
                 (proc_info.cpu_usage(), proc_info.memory())
             };
             let mem_mb = mem as f64 / 1024.0 / 1024.0;
-            let cmd = proc_info.cmd().first().map(|s| s.to_string_lossy()).unwrap_or_default();
+            let cmd = proc_info
+                .cmd()
+                .first()
+                .map(|s| s.to_string_lossy())
+                .unwrap_or_default();
 
             let indent = "  ".repeat(depth);
             let toggle = if has_children {
-                if is_expanded { "\u{25bc} " } else { "\u{25b6} " }
+                if is_expanded {
+                    "\u{25bc} "
+                } else {
+                    "\u{25b6} "
+                }
             } else {
                 "  "
             };
@@ -419,11 +564,16 @@ impl SysMon {
             let is_sel = idx == self.sel;
             let line = format!("{indent}{toggle}{pid:>6} {mem_mb:>6.1}M {cpu:>6.1}  {name} {cmd}");
             let line_ref: &str = &line;
-            let truncated = if line.len() > cols { &line_ref[..cols] } else { line_ref };
+            let truncated = if line.len() > cols {
+                &line_ref[..cols]
+            } else {
+                line_ref
+            };
 
             if is_sel {
                 queue!(
-                    stdout, MoveTo(0, r),
+                    stdout,
+                    MoveTo(0, r),
                     SetBackgroundColor(bg_sel),
                     Print(truncated),
                     ResetColor,
@@ -439,7 +589,9 @@ impl SysMon {
 }
 
 fn terminal_size() -> (usize, usize) {
-    crossterm::terminal::size().map(|(w, h)| (w as usize, h as usize)).unwrap_or((80, 24))
+    crossterm::terminal::size()
+        .map(|(w, h)| (w as usize, h as usize))
+        .unwrap_or((80, 24))
 }
 
 fn render_text_bar(pct: usize) -> String {
@@ -469,7 +621,12 @@ struct TerminalGuard;
 impl Drop for TerminalGuard {
     fn drop(&mut self) {
         let _ = terminal::disable_raw_mode();
-        let _ = execute!(std::io::stdout(), DisableMouseCapture, Show, LeaveAlternateScreen);
+        let _ = execute!(
+            std::io::stdout(),
+            DisableMouseCapture,
+            Show,
+            LeaveAlternateScreen
+        );
     }
 }
 
@@ -498,7 +655,9 @@ pub fn cmd_sys(_args: &str, _nav: &mut crate::navigator::Navigator) -> Result<bo
         let ev = event::read()?;
         match ev {
             Event::Key(ke) => {
-                if ke.kind != KeyEventKind::Press { continue; }
+                if ke.kind != KeyEventKind::Press {
+                    continue;
+                }
                 match ke.code {
                     KeyCode::Esc | KeyCode::Char('q') => {
                         if sm.filtering {
@@ -538,11 +697,15 @@ pub fn cmd_sys(_args: &str, _nav: &mut crate::navigator::Navigator) -> Result<bo
                         }
                     }
                     KeyCode::Up => {
-                        if sm.sel > 0 { sm.sel -= 1; }
+                        if sm.sel > 0 {
+                            sm.sel -= 1;
+                        }
                         sm.render(&mut stdout)?;
                     }
                     KeyCode::Down => {
-                        if sm.sel + 1 < sm.flat_pids.len() { sm.sel += 1; }
+                        if sm.sel + 1 < sm.flat_pids.len() {
+                            sm.sel += 1;
+                        }
                         sm.render(&mut stdout)?;
                     }
                     KeyCode::PageUp => {
@@ -615,19 +778,21 @@ pub fn cmd_sys(_args: &str, _nav: &mut crate::navigator::Navigator) -> Result<bo
                 sm.term_h = h as usize;
                 sm.render(&mut stdout)?;
             }
-            Event::Mouse(m) => {
-                match m.kind {
-                    crossterm::event::MouseEventKind::ScrollUp => {
-                        if sm.sel > 0 { sm.sel -= 1; }
-                        sm.render(&mut stdout)?;
+            Event::Mouse(m) => match m.kind {
+                crossterm::event::MouseEventKind::ScrollUp => {
+                    if sm.sel > 0 {
+                        sm.sel -= 1;
                     }
-                    crossterm::event::MouseEventKind::ScrollDown => {
-                        if sm.sel + 1 < sm.flat_pids.len() { sm.sel += 1; }
-                        sm.render(&mut stdout)?;
-                    }
-                    _ => {}
+                    sm.render(&mut stdout)?;
                 }
-            }
+                crossterm::event::MouseEventKind::ScrollDown => {
+                    if sm.sel + 1 < sm.flat_pids.len() {
+                        sm.sel += 1;
+                    }
+                    sm.render(&mut stdout)?;
+                }
+                _ => {}
+            },
             _ => {}
         }
 

@@ -1,10 +1,10 @@
 // Submodules
-pub(crate) mod token;
 mod ast;
-mod eval;
 mod builtins;
 mod check;
+mod eval;
 mod function;
+pub(crate) mod token;
 
 use std::collections::HashMap;
 use std::path::Path;
@@ -14,11 +14,13 @@ use std::time::{Duration, Instant};
 use anyhow::{bail, Result};
 use colored::Colorize;
 
+use crate::t;
+
 use self::ast::{Expr, Parser};
-use self::eval::{eval, EvalResult};
-use self::token::tokenize;
 pub(crate) use self::builtins::{builtin_function_names, constant_names};
 pub(crate) use self::check::validate;
+use self::eval::{eval, EvalResult};
+use self::token::tokenize;
 
 // ============================================================================
 // Main entry point
@@ -44,12 +46,12 @@ pub fn run(input: &str) -> Result<()> {
         if path.is_file() {
             return handle_file(path);
         } else {
-            bail!("'{}' is a directory, not a file", input);
+            bail!(t!("math.is_directory", input));
         }
     }
 
     if input.ends_with(".ntc.math") {
-        bail!("File not found: '{}'", input);
+        bail!(t!("math.file_not_found", input));
     }
 
     let mut vars = HashMap::new();
@@ -61,39 +63,39 @@ pub fn run(input: &str) -> Result<()> {
 // Help
 // ============================================================================
 fn print_help() {
-    println!("{}", "Math Module - Usage:".cyan().bold());
-    println!("  math <expression>       Evaluate a math expression");
-    println!("  math <func>(<args>)     Call a built-in or user-defined function");
-    println!("  math timer [seconds]    Lap timer or countdown with alarm");
-    println!("  math fun add <name>(<params>) = <body>   Define a function");
-    println!("  math fun rm <name>      Remove a function");
-    println!("  math fun edit <name> = <body>  Update a function");
-    println!("  math fun info <name>    Show function details");
-    println!("  math fun ls             List all user-defined functions");
-    println!("  math <file>.ntc.math    Compile and run a math file");
+    println!("{}", t!("math.help_title").cyan().bold());
+    println!("{}", t!("math.help_expr"));
+    println!("{}", t!("math.help_func_call"));
+    println!("{}", t!("math.help_timer"));
+    println!("{}", t!("math.help_fun_add"));
+    println!("{}", t!("math.help_fun_rm"));
+    println!("{}", t!("math.help_fun_edit"));
+    println!("{}", t!("math.help_fun_info"));
+    println!("{}", t!("math.help_fun_ls"));
+    println!("{}", t!("math.help_file"));
     println!();
-    println!("{}", "Examples:".green());
-    println!("  math 3+4*5                           → 23");
-    println!("  math sin(PI/2)                       → 1");
-    println!("  math sqrt(144)                        → 12");
-    println!("  math rand(1,100)                      → 42");
-    println!("  math toBinary(255)                    → 11111111");
-    println!("  math toHex(255)                       → FF");
-    println!("  math toHB(1048576)                    → 1.00 MB");
-    println!("  math 0xFF + 0b1010                   → 265");
-    println!("  math timer 10                        → countdown 10s");
-    println!("  math fun add square(x) = x^2");
-    println!("  math square(5)                        → 25");
+    println!("{}", t!("math.examples_header").green());
+    println!("{}", t!("math.example_add"));
+    println!("{}", t!("math.example_sin"));
+    println!("{}", t!("math.example_sqrt"));
+    println!("{}", t!("math.example_rand"));
+    println!("{}", t!("math.example_tobinary"));
+    println!("{}", t!("math.example_tohex"));
+    println!("{}", t!("math.example_tohb"));
+    println!("{}", t!("math.example_hexbin"));
+    println!("{}", t!("math.example_timer"));
+    println!("{}", t!("math.example_fun_def"));
+    println!("{}", t!("math.example_fun_call"));
     println!();
-    println!("{}", "Built-in functions:".yellow());
-    println!("  print: print values (like Python)");
-    println!("  trig: sin, cos, tan, cot, sec, csc");
-    println!("  inv:  arcsin/asin, arccos/acos, arctan/atan, arccot/acot, arcsec/asec, arccsc/acsc");
-    println!("  math: sqrt, pow(x,y), abs, floor, ceil, round, ln/log, log2, log10");
-    println!("  agg:  sum, min, max, avg");
-    println!("  conv: toBinary, toHex, to8/toOctal, toDecimal, toHB");
-    println!("  rand: rand(min,max)");
-    println!("  constants: PI, E, PHI, TAU");
+    println!("{}", t!("math.builtin_header").yellow());
+    println!("{}", t!("math.builtin_print"));
+    println!("{}", t!("math.builtin_trig"));
+    println!("{}", t!("math.builtin_inv_trig"));
+    println!("{}", t!("math.builtin_math"));
+    println!("{}", t!("math.builtin_agg"));
+    println!("{}", t!("math.builtin_conv"));
+    println!("{}", t!("math.builtin_rand"));
+    println!("{}", t!("math.builtin_constants"));
 }
 
 // ============================================================================
@@ -106,22 +108,27 @@ fn handle_timer(args: &str) -> Result<()> {
         let mut timer = TIMER_START.lock().unwrap_or_else(|e| e.into_inner());
         if let Some(start) = *timer {
             let elapsed = start.elapsed();
-            println!("Lap time: {}.{:03} seconds", elapsed.as_secs(), elapsed.subsec_millis());
+            println!(
+                "{}",
+                t!("math.lap_time", elapsed.as_secs(), elapsed.subsec_millis())
+            );
             *timer = None;
         } else {
             *timer = Some(Instant::now());
-            println!("Timer started...");
+            println!("{}", t!("math.timer_started"));
         }
         return Ok(());
     }
 
-    let seconds: u64 = args.split_whitespace().next()
+    let seconds: u64 = args
+        .split_whitespace()
+        .next()
         .and_then(|s| s.parse().ok())
-        .ok_or_else(|| anyhow::anyhow!("Usage: math timer <seconds>"))?;
+        .ok_or_else(|| anyhow::anyhow!(t!("math.timer_usage")))?;
 
-    println!("Countdown: {} seconds", seconds);
+    println!("{}", t!("math.countdown", seconds));
     for remaining in (0..=seconds).rev() {
-        print!("\rTime remaining: {:>3} seconds  ", remaining);
+        print!("\r{}", t!("math.time_remaining", remaining));
         use std::io::Write;
         std::io::stdout().flush()?;
         if remaining > 0 {
@@ -137,7 +144,7 @@ fn handle_timer(args: &str) -> Result<()> {
         std::thread::sleep(Duration::from_millis(300));
     }
 
-    println!("{}", "Time's up!".red().bold());
+    println!("{}", t!("math.times_up").red().bold());
     Ok(())
 }
 
@@ -146,17 +153,22 @@ fn handle_timer(args: &str) -> Result<()> {
 // ============================================================================
 fn handle_file(path: &Path) -> Result<()> {
     let content = std::fs::read_to_string(path)
-        .map_err(|e| anyhow::anyhow!("Failed to read '{}': {}", path.display(), e))?;
+        .map_err(|e| anyhow::anyhow!(t!("math.failed_read", path.display(), e)))?;
     let content = content.trim_start_matches('\u{feff}');
 
-    println!("{}", format!("╔═ Compiled: {} ═╗", path.display()).cyan().bold());
+    println!(
+        "{}",
+        t!("math.compiled_header", path.display()).cyan().bold()
+    );
 
     let mut vars: HashMap<String, f64> = HashMap::new();
     let mut has_return = false;
 
     for (line_num, raw_line) in content.lines().enumerate() {
         let line = raw_line.trim();
-        if line.is_empty() || line.starts_with('#') || line.starts_with("//") { continue; }
+        if line.is_empty() || line.starts_with('#') || line.starts_with("//") {
+            continue;
+        }
 
         match eval_line_in_file(line, &mut vars) {
             Ok(Some(result)) => {
@@ -165,7 +177,12 @@ fn handle_file(path: &Path) -> Result<()> {
             }
             Ok(None) => {}
             Err(e) => {
-                eprintln!("  {} at line {}: {}", "Error".red().bold(), line_num + 1, e);
+                eprintln!(
+                    "  {} at line {}: {}",
+                    t!("math.error").red().bold(),
+                    line_num + 1,
+                    e
+                );
             }
         }
     }
@@ -174,7 +191,7 @@ fn handle_file(path: &Path) -> Result<()> {
         // If no return statement, print the value of the last non-assignment line
     }
 
-    println!("{}", format!("╚═ End: {} ═╝", path.display()).cyan().bold());
+    println!("{}", t!("math.exec_end", path.display()).cyan().bold());
     Ok(())
 }
 
@@ -208,7 +225,9 @@ fn eval_line_in_file(line: &str, vars: &mut HashMap<String, f64>) -> Result<Opti
 // ============================================================================
 fn eval_line(line: &str, vars: &mut HashMap<String, f64>, print_result: bool) -> Result<()> {
     let trimmed = line.trim();
-    if trimmed.is_empty() || trimmed.starts_with('#') { return Ok(()); }
+    if trimmed.is_empty() || trimmed.starts_with('#') {
+        return Ok(());
+    }
 
     let tokens = tokenize(trimmed)?;
     let mut parser = Parser::new(tokens);
@@ -371,8 +390,16 @@ mod tests {
     #[test]
     fn test_trig_functions() {
         let sin_pi: f64 = eval_to_string("sin(PI)").unwrap().parse().unwrap();
-        assert!((sin_pi - 0.0).abs() < 1e-10, "sin(PI) should be ~0, got {}", sin_pi);
+        assert!(
+            (sin_pi - 0.0).abs() < 1e-10,
+            "sin(PI) should be ~0, got {}",
+            sin_pi
+        );
         let cos_pi: f64 = eval_to_string("cos(PI)").unwrap().parse().unwrap();
-        assert!((cos_pi + 1.0).abs() < 1e-10, "cos(PI) should be ~-1, got {}", cos_pi);
+        assert!(
+            (cos_pi + 1.0).abs() < 1e-10,
+            "cos(PI) should be ~-1, got {}",
+            cos_pi
+        );
     }
 }

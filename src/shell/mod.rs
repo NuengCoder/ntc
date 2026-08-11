@@ -4,8 +4,8 @@
 mod alias;
 pub(crate) mod commands;
 pub(crate) mod entry;
-pub(crate) mod helpers;
 mod help;
+pub(crate) mod helpers;
 mod hinter;
 pub(crate) mod venv;
 

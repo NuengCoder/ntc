@@ -1,7 +1,7 @@
 use crossterm::cursor::MoveTo;
+use crossterm::queue;
 use crossterm::style::{Print, ResetColor, SetBackgroundColor, SetForegroundColor};
 use crossterm::terminal::{Clear, ClearType};
-use crossterm::queue;
 
 use super::super::Editor;
 
@@ -21,16 +21,26 @@ impl Editor {
         // Clear the content area
         for r in 0..rows {
             let row = content_y + r;
-            if row >= self.term_h { break; }
-            queue!(stdout, MoveTo(0, row as u16), Clear(ClearType::UntilNewLine))?;
+            if row >= self.term_h {
+                break;
+            }
+            queue!(
+                stdout,
+                MoveTo(0, row as u16),
+                Clear(ClearType::UntilNewLine)
+            )?;
         }
 
         for r in 0..rows {
             let row = content_y + r;
-            if row >= self.term_h { break; }
+            if row >= self.term_h {
+                break;
+            }
 
             let base = hex.offset + r * BYTES_PER_ROW;
-            if base >= hex.data.len() { break; }
+            if base >= hex.data.len() {
+                break;
+            }
 
             let mut x: usize = 0;
 

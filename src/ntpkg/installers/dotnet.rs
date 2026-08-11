@@ -6,6 +6,7 @@ use super::super::download::{download_with_progress, extract_archive};
 use super::super::manager::{copy_recursive, load_manifest, platform_key, save_manifest};
 use super::super::types::PackageSource;
 use crate::output::{print_info, print_success};
+use crate::t;
 
 pub(crate) fn install_dotnet(
     name: &str,
@@ -35,7 +36,7 @@ pub(crate) fn install_dotnet(
     print_info(&format!("Downloading {name} SDK {version}..."));
     download_with_progress(url, &archive_path)?;
 
-    print_info("Extracting...");
+    print_info(&t!("ntpkg.extracting"));
     extract_archive(&archive_path, &tmp_dir, source.archive_type)?;
 
     let _ = fs::remove_file(&archive_path);
@@ -43,8 +44,7 @@ pub(crate) fn install_dotnet(
     fs::create_dir_all(vdir)?;
     copy_recursive(&tmp_dir, vdir)?;
 
-    fs::write(vdir.join(".real_path"), vdir.to_string_lossy().as_bytes())
-        .ok();
+    fs::write(vdir.join(".real_path"), vdir.to_string_lossy().as_bytes()).ok();
 
     let _ = fs::remove_dir_all(&tmp_dir);
 

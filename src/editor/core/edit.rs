@@ -18,7 +18,10 @@ impl Editor {
         if matches!(self.syntax.language, Some(SyntaxLanguage::Mql)) {
             self.trigger_function_signature();
         }
-        if matches!(self.syntax.language, Some(SyntaxLanguage::NtcMath | SyntaxLanguage::Mql)) {
+        if matches!(
+            self.syntax.language,
+            Some(SyntaxLanguage::NtcMath | SyntaxLanguage::Mql)
+        ) {
             self.trigger_completion();
         }
     }
@@ -67,18 +70,29 @@ impl Editor {
         let inside = &prefix[paren_pos + 1..];
         let mut depth = 0u32;
         #[allow(clippy::match_single_binding)]
-        let param_idx = inside.chars().filter(|&c| match c {
-            '(' => { depth += 1; false },
-            ')' => { if depth > 0 { depth -= 1; } false },
-            ',' if depth == 0 => true,
-            _ => false,
-        }).count();
+        let param_idx = inside
+            .chars()
+            .filter(|&c| match c {
+                '(' => {
+                    depth += 1;
+                    false
+                }
+                ')' => {
+                    if depth > 0 {
+                        depth -= 1;
+                    }
+                    false
+                }
+                ',' if depth == 0 => true,
+                _ => false,
+            })
+            .count();
 
         let fmt_one = |p: &str| -> String {
             let p = p.trim();
             let t: Vec<&str> = p.split_whitespace().collect();
             if t.len() >= 2 {
-                format!("{}: {}", t[t.len()-1], t[..t.len()-1].join(" "))
+                format!("{}: {}", t[t.len() - 1], t[..t.len() - 1].join(" "))
             } else {
                 p.to_string()
             }
@@ -87,7 +101,8 @@ impl Editor {
         // Look up builtin with detailed info
         if let Some(doc) = crate::mql::hover_info_detailed(&name) {
             let doc_lines: Vec<&str> = doc.lines().collect();
-            let param_items: Vec<String> = doc_lines.iter()
+            let param_items: Vec<String> = doc_lines
+                .iter()
                 .skip_while(|l| l.contains('—'))
                 .skip_while(|l| l.trim().is_empty())
                 .take_while(|l| l.contains(':') && !l.starts_with("Returns"))
@@ -117,10 +132,7 @@ impl Editor {
                 if func.params.is_empty() {
                     self.hover_text = Some(format!("{} {}", func.return_type, func.name));
                 } else {
-                    let param_list: Vec<String> = func.params
-                        .split(',')
-                        .map(fmt_one)
-                        .collect();
+                    let param_list: Vec<String> = func.params.split(',').map(fmt_one).collect();
                     self.hover_text = if param_idx < param_list.len() {
                         Some(param_list[param_idx].clone())
                     } else if !param_list.is_empty() {
@@ -130,7 +142,9 @@ impl Editor {
                     };
                 }
                 if let Some(mut display) = self.hover_text.take() {
-                    if let Some(box_content) = crate::mql::extract_comment_box(&self.lines, func.line) {
+                    if let Some(box_content) =
+                        crate::mql::extract_comment_box(&self.lines, func.line)
+                    {
                         display.push_str(&format!("\n\n{}", box_content));
                     }
                     self.hover_text = Some(display);

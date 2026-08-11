@@ -17,22 +17,92 @@ pub(crate) static ALIAS_GENERATION: AtomicU64 = AtomicU64::new(0);
 /// Built-in commands for the ntc shell (lowercase).
 fn builtin_commands() -> Vec<&'static str> {
     vec![
-        "cd", "godrive", "god", "back", "b", "view", "ls",
-        "report", "txtc", "txtf",
-        "config", "clear", "version", "where",
-        "gos", "gosc", "ral", "ran", "run", "r", "showcg", "help", "exit", "quit",
-        "ignore", "care", "igcared",
-        "size", "tp", "opencg", "resetcg", "restorecg", "local",
-        "ne", "ntceditor", "igcare",
-        "esc", "backup", "gs", "fs", "ds", "fgo", "fsc", "locate",
-        "dino", "math", "theme" , "tpb", "tutorial", "init", "deinit",
-        "explorer", "nfe",
-        "rnmf", "rnmd",
-        "image", "img" , "py_activate", "py_deactivate", "showenv",
-        "ntpkg", "ntpx", "tl", "http", "dl", "up", "ping", "dns", "smtp", "serve", "clip", "qsc",
-        "todo", "encode", "decode", "cvcode", "fmt", "qr",
-        "usrpath", "syspath", "mode",
-        "pathcp", "say", "print",
+        "cd",
+        "godrive",
+        "god",
+        "back",
+        "b",
+        "view",
+        "ls",
+        "report",
+        "txtc",
+        "txtf",
+        "config",
+        "clear",
+        "version",
+        "where",
+        "gos",
+        "gosc",
+        "ral",
+        "ran",
+        "run",
+        "r",
+        "showcg",
+        "help",
+        "exit",
+        "quit",
+        "ignore",
+        "care",
+        "igcared",
+        "size",
+        "tp",
+        "opencg",
+        "resetcg",
+        "restorecg",
+        "local",
+        "ne",
+        "ntceditor",
+        "igcare",
+        "esc",
+        "backup",
+        "gs",
+        "fs",
+        "ds",
+        "fgo",
+        "fsc",
+        "locate",
+        "dino",
+        "math",
+        "theme",
+        "tpb",
+        "tutorial",
+        "init",
+        "deinit",
+        "explorer",
+        "nfe",
+        "rnmf",
+        "rnmd",
+        "image",
+        "img",
+        "py_activate",
+        "py_deactivate",
+        "showenv",
+        "ntpkg",
+        "ntpx",
+        "tl",
+        "http",
+        "dl",
+        "up",
+        "ping",
+        "dns",
+        "smtp",
+        "serve",
+        "clip",
+        "qsc",
+        "todo",
+        "encode",
+        "decode",
+        "cvcode",
+        "fmt",
+        "qr",
+        "usrpath",
+        "syspath",
+        "autoup",
+        "mode",
+        "pathcp",
+        "say",
+        "print",
+        "tmprt",
     ]
 }
 
@@ -195,11 +265,8 @@ fn subcommands_for(parts: &[&str]) -> Vec<&'static str> {
         "ral" => {
             if parts.len() == 1 {
                 vec![
-                    "add", "edit", "rm", "remove",
-                    "list", "ls", "info",
-                    "rnm", "rename", "export", "import",
-                    "make", "mk",
-                    "cls", "clear",
+                    "add", "edit", "rm", "remove", "list", "ls", "info", "rnm", "rename", "export",
+                    "import", "make", "mk", "cls", "clear",
                 ]
             } else {
                 match parts[1].to_lowercase().as_str() {
@@ -211,16 +278,14 @@ fn subcommands_for(parts: &[&str]) -> Vec<&'static str> {
         // tp add / tp jump / tp list / tp info / tp rm / tp rnm / tp cls / tp help
         //   tp jump <name> and tp to <name> suggest teleports via teleport_names_for_command
         "tp" => vec![
-            "add", "jump", "to", "info", "list", "ls",
-            "rm", "rnm", "rename", "cls", "help",
+            "add", "jump", "to", "info", "list", "ls", "rm", "rnm", "rename", "cls", "help",
         ],
         // (watch is now a subcommand of config)
         // tpb history / tpb clear
         "tpb" => vec!["history", "hist", "h", "clear", "cls"],
         "theme" => vec![
-            "add", "rm", "remove", "edit", "info", "export", "import",
-            "make", "mk", "where", "wh", "reload",
-            "n", "number", "rnm", "rename", "list" , "ls" ,
+            "add", "rm", "remove", "edit", "info", "export", "import", "make", "mk", "where", "wh",
+            "reload", "n", "number", "rnm", "rename", "list", "ls",
         ],
         // igcare export / igcare import / igcare export --all / igcare export --select
         "igcare" => {
@@ -238,25 +303,56 @@ fn subcommands_for(parts: &[&str]) -> Vec<&'static str> {
         // config output / config depth / config linenumbers / config color / config autosuggest / config threads / config history / config watch
         "config" => {
             if parts.len() == 1 {
-                vec!["output", "out", "depth", "d", "linenumbers", "ln", "line", "color", "c", "autosuggest", "as", "threads", "t", "history", "h", "watch", "w", "qsc"]
+                vec![
+                    "output",
+                    "out",
+                    "depth",
+                    "d",
+                    "linenumbers",
+                    "ln",
+                    "line",
+                    "color",
+                    "c",
+                    "autosuggest",
+                    "as",
+                    "threads",
+                    "t",
+                    "history",
+                    "h",
+                    "watch",
+                    "w",
+                    "qsc",
+                    "lang",
+                    "language",
+                ]
             } else {
                 match parts[1].to_lowercase().as_str() {
                     "watch" | "w" if parts.len() == 2 => vec!["ON", "OFF", "trigger"],
                     "watch" | "w" if parts.len() >= 3 => vec!["off"],
+                    "lang" | "language" if parts.len() == 2 => vec!["english", "thai", "lao", "chinese"],
                     _ => vec![],
                 }
             }
         }
         // backup create / backup restore / backup undo / backup clear / backup recreate / backup diff / backup list
-        "backup" if parts.len() == 1 => vec!["create", "cr", "restore", "rs", "undo", "ud", "clear", "cl", "recreate", "re", "diff", "list", "ls"],
+        "backup" if parts.len() == 1 => vec![
+            "create", "cr", "restore", "rs", "undo", "ud", "clear", "cl", "recreate", "re", "diff",
+            "list", "ls",
+        ],
         // backup restore --choose / --deleted / --force
-        "backup" if parts.len() >= 2 && matches!(parts[1], "restore" | "rs") => vec!["--choose", "--deleted", "--force", "-f"],
+        "backup" if parts.len() >= 2 && matches!(parts[1], "restore" | "rs") => {
+            vec!["--choose", "--deleted", "--force", "-f"]
+        }
         // backup undo --cls / backup undo --force
-        "backup" if parts.len() >= 2 && matches!(parts[1], "undo" | "ud") => vec!["--cls", "--clear", "--force", "-f"],
+        "backup" if parts.len() >= 2 && matches!(parts[1], "undo" | "ud") => {
+            vec!["--cls", "--clear", "--force", "-f"]
+        }
         // backup clear --force
         "backup" if parts.len() >= 2 && matches!(parts[1], "clear" | "cl") => vec!["--force", "-f"],
         // backup recreate --force
-        "backup" if parts.len() >= 2 && matches!(parts[1], "recreate" | "re") => vec!["--force", "-f"],
+        "backup" if parts.len() >= 2 && matches!(parts[1], "recreate" | "re") => {
+            vec!["--force", "-f"]
+        }
         // report txt / report json / report md / report html / report pdf / report docx / report xlsx
         "report" if parts.len() == 1 => vec!["txt", "json", "md", "html", "pdf", "docx", "xlsx"],
         // ignore dir / ignore ext / ignore file
@@ -274,51 +370,129 @@ fn subcommands_for(parts: &[&str]) -> Vec<&'static str> {
         // size --care
         "size" if parts.len() == 1 => vec!["--care"],
         // view flags
-        "view" if parts.len() == 1 => vec!["-s", "--size", "-c", "--cp", "--care", "-d", "--depth"],
+        "view" if parts.len() == 1 => vec![
+            "-s",
+            "--size",
+            "-fs",
+            "--filesize",
+            "-ds",
+            "--dirsize",
+            "-c",
+            "--cp",
+            "--care",
+            "-d",
+            "--depth",
+            "-t",
+            "--time",
+        ],
         // ui (now a no-op after modern mode removal)
         "ui" => vec!["classic"],
         // ntpkg install / ntpkg uninstall / ntpkg list / ntpkg use / ntpkg which / ntpkg available / ntpkg search / ntpkg info
         "ntpkg" => vec![
-            "install", "i",
-            "uninstall", "rm",
-            "list", "ls",
+            "install",
+            "i",
+            "uninstall",
+            "rm",
+            "list",
+            "ls",
             "search",
             "info",
             "use",
             "which",
-            "available", "avail",
+            "available",
+            "avail",
             "help",
         ],
         "ntpx" => vec![], // Completions come from ntpkg_names_for_command
         // tl file / tl ext / tl dir
         "tl" if parts.len() == 1 => vec!["file", "ext", "dir"],
+        "tl" if parts.len() == 2 && matches!(parts[1], "ext" | "dir") => {
+            vec!["-s", "-n", "-l", "-r"]
+        }
         // dl flags
-        "dl" if !parts.is_empty() => vec!["--progress", "--resume", "--stop", "--cancel", "-o", "--output"],
+        "dl" if !parts.is_empty() => vec![
+            "--progress",
+            "--resume",
+            "--stop",
+            "--cancel",
+            "-o",
+            "--output",
+        ],
         // ping flags
         "ping" if !parts.is_empty() => vec!["-c", "--count"],
         // dns flags
         "dns" if !parts.is_empty() => vec!["-t", "--type"],
         // serve flags
-        "serve" if !parts.is_empty() => vec!["--port", "-p", "--bind", "-b", "--https", "-s", "--tunnel", "-t", "--spa", "--web-dir", "-w", "--help", "-h"],
+        "serve" if !parts.is_empty() => vec![
+            "--port",
+            "-p",
+            "--bind",
+            "-b",
+            "--https",
+            "-s",
+            "--tunnel",
+            "-t",
+            "--spa",
+            "--web-dir",
+            "-w",
+            "--help",
+            "-h",
+        ],
         // smtp flags
         "smtp" if parts.len() == 1 => vec!["-i", "--server", "--id-ls"],
         "smtp" if parts.len() >= 2 => vec![
-            "-i", "--server", "-p", "--port", "-u", "--user",
-            "-pwd", "--password", "--id", "--id-ls", "--id-info",
-            "--id-rm", "-t", "--to", "-c", "--cc", "--bcc",
-            "-s", "--subject", "-b", "--body", "-f", "--attach",
-            "-h", "--help",
+            "-i",
+            "--server",
+            "-p",
+            "--port",
+            "-u",
+            "--user",
+            "-pwd",
+            "--password",
+            "--id",
+            "--id-ls",
+            "--id-info",
+            "--id-rm",
+            "-t",
+            "--to",
+            "-c",
+            "--cc",
+            "--bcc",
+            "-s",
+            "--subject",
+            "-b",
+            "--body",
+            "-f",
+            "--attach",
+            "-h",
+            "--help",
         ],
         // up flags
         "up" if !parts.is_empty() => vec!["-H", "--header", "-d", "--data", "--post"],
         // http methods then flags
         "http" if parts.len() == 1 => vec!["GET", "POST", "PUT", "DELETE", "PATCH", "HEAD"],
         "http" if parts.len() >= 2 => vec![
-            "-H", "--header", "-d", "--data", "--json",
-            "-q", "--query", "-a", "--auth", "--bearer",
-            "-t", "--timeout", "-s", "--silent",
-            "-o", "--output", "-v", "--verbose",
-            "--no-pretty", "-h", "--help",
+            "-H",
+            "--header",
+            "-d",
+            "--data",
+            "--json",
+            "-q",
+            "--query",
+            "-a",
+            "--auth",
+            "--bearer",
+            "-t",
+            "--timeout",
+            "-s",
+            "--silent",
+            "-o",
+            "--output",
+            "-v",
+            "--verbose",
+            "--no-pretty",
+            "-h",
+            "--help",
         ],
         // ne --init <file> / ne --super <file> / ne --hyper <name> --lang <lang>
         "ne" | "ntceditor" if parts.len() == 1 => vec!["--init", "--super", "--hyper"],
@@ -328,7 +502,9 @@ fn subcommands_for(parts: &[&str]) -> Vec<&'static str> {
         // qsc listen / stop / status
         "qsc" if parts.len() == 1 => vec!["listen", "start", "stop", "status", "stat", "startup"],
         // todo info / add / rm / clear
-        "todo" if parts.len() == 1 => vec!["info", "add", "rm", "remove", "clear", "cl", "list", "ls"],
+        "todo" if parts.len() == 1 => {
+            vec!["info", "add", "rm", "remove", "clear", "cl", "list", "ls"]
+        }
         // encode b2 / b64 / hex / url
         "encode" if parts.len() == 1 => vec!["b2", "b64", "base64", "hex", "url"],
         // decode b2 / b64 / hex / url
@@ -340,10 +516,27 @@ fn subcommands_for(parts: &[&str]) -> Vec<&'static str> {
         // mode subcommands
         "mode" if parts.len() == 1 => vec!["admin", "normal"],
         // usrpath / syspath subcommands
-        "usrpath" | "syspath" if parts.len() == 1 => vec!["show", "ls", "add", "rm", "remove", "move", "mv"],
-        "usrpath" | "syspath" if parts.len() >= 2 && matches!(parts[1], "add") => vec!["--cwd", "--here"],
+        "usrpath" | "syspath" if parts.len() == 1 => {
+            vec!["show", "ls", "add", "rm", "remove", "move", "mv"]
+        }
+        "usrpath" | "syspath" if parts.len() >= 2 && matches!(parts[1], "add") => {
+            vec!["--cwd", "--here"]
+        }
+        // autoup subcommands
+        "autoup" if parts.len() == 1 => vec![
+            "list", "ls", "add", "rm", "remove", "disable", "enable", "help",
+        ],
         // say flags
         "say" | "print" if parts.len() == 1 => vec!["--loop", "-n", "-t"],
+        // tmprt com / weather / key / city / sensors
+        "tmprt" if parts.len() == 1 => vec![
+            "com", "computer", "hw", "hardware", "weather", "w", "key", "city", "sensors",
+            "sensor",
+        ],
+        // tmprt sensors <sub>
+        "tmprt" if parts.len() >= 2 && matches!(parts[1], "sensors" | "sensor") => {
+            vec!["status", "install", "uninstall", "debug"]
+        }
         // Default: no known subcommands
         _ => vec![],
     }
@@ -375,8 +568,10 @@ impl NtcHinter {
 }
 
 fn build_command_set() -> HashSet<String> {
-    let mut cmds: HashSet<String> =
-        builtin_commands().into_iter().map(|s| s.to_string()).collect();
+    let mut cmds: HashSet<String> = builtin_commands()
+        .into_iter()
+        .map(|s| s.to_string())
+        .collect();
     let aliases = Config::global_get_run_aliases();
     for name in aliases.keys() {
         cmds.insert(name.clone());
@@ -567,6 +762,67 @@ impl Hinter for NtcHinter {
                     return Some(rest.to_string());
                 }
                 // If no unique ntpkg name match, fall through to subcommands
+            }
+
+            // Special grouped matching for `config <subcommand>` — treats aliases
+            // (e.g. lang/language, line/linenumbers/ln) as a single setting so that
+            // ambiguous prefixes like "l" return None while "li" suggests "line".
+            if parent_parts.len() == 1 && parent_parts[0].to_lowercase() == "config" {
+                const CONFIG_GROUPS: &[&[&str]] = &[
+                    &["output", "out"],
+                    &["depth", "d"],
+                    &["linenumbers", "line", "ln"],
+                    &["color", "c"],
+                    &["autosuggest", "as"],
+                    &["threads", "t"],
+                    &["history", "h"],
+                    &["watch", "w"],
+                    &["qsc"],
+                    &["language", "lang"],
+                ];
+
+                let lower = last_part.to_lowercase();
+                let mut matched_groups: Vec<&&[&str]> = Vec::new();
+                for g in CONFIG_GROUPS {
+                    if g.iter().any(|m| m.starts_with(&lower)) {
+                        matched_groups.push(g);
+                    }
+                }
+
+                if matched_groups.len() == 1 {
+                    let group = matched_groups[0];
+                    let candidates: Vec<&str> = group
+                        .iter()
+                        .filter(|m| m.starts_with(&lower) && m.len() > last_part.len())
+                        .copied()
+                        .collect();
+
+                    if !candidates.is_empty() {
+                        let exact_match = group.iter().any(|m| *m == lower);
+                        let suggestion = if exact_match {
+                            // Typed an exact alias — suggest the longer one if available
+                            let longer: Vec<&str> = candidates
+                                .iter()
+                                .filter(|m| m.len() > lower.len())
+                                .copied()
+                                .collect();
+                            if longer.len() == 1 {
+                                longer[0]
+                            } else {
+                                let last_word_start = typed.len() - last_part.len();
+                                let rest = &candidates[0][typed.len() - last_word_start..];
+                                return Some(rest.to_string());
+                            }
+                        } else {
+                            // No exact match — suggest the shortest candidate
+                            candidates.iter().min_by_key(|m| m.len()).copied().unwrap()
+                        };
+                        let last_word_start = typed.len() - last_part.len();
+                        let rest = &suggestion[typed.len() - last_word_start..];
+                        return Some(rest.to_string());
+                    }
+                }
+                // Matched zero or >1 groups — no hint
             }
 
             let subs = subcommands_for(parent_parts);

@@ -4,7 +4,13 @@ use anyhow::Result;
 
 pub(super) fn generate_header_guard(stem: &str, ext: &str) -> String {
     stem.chars()
-        .map(|c| if c.is_alphanumeric() { c.to_ascii_uppercase() } else { '_' })
+        .map(|c| {
+            if c.is_alphanumeric() {
+                c.to_ascii_uppercase()
+            } else {
+                '_'
+            }
+        })
         .collect::<String>()
         + "_"
         + &ext.to_ascii_uppercase()
@@ -347,7 +353,10 @@ pub fn init_file(path: &Path) -> Result<bool> {
     let ext = path.extension().and_then(|e| e.to_str()).unwrap_or("");
     let template = match ext {
         "h" | "hpp" => {
-            let stem = path.file_stem().and_then(|s| s.to_str()).unwrap_or("HEADER");
+            let stem = path
+                .file_stem()
+                .and_then(|s| s.to_str())
+                .unwrap_or("HEADER");
             generate_header_template(stem, ext)
         }
         _ => generate_template(ext).to_string(),

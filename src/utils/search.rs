@@ -6,7 +6,7 @@
 
 use crate::config::Config;
 use crate::filetype::{make_ignored_dir_filter, strip_unc_prefix, FormatConfig};
-use crate::fuzzy::{top_fuzzy_matches, top_fuzzy_dir_matches, MAX_FUZZY_SUGGESTIONS};
+use crate::fuzzy::{top_fuzzy_dir_matches, top_fuzzy_matches, MAX_FUZZY_SUGGESTIONS};
 use rayon::prelude::*;
 use std::path::{Path, PathBuf};
 use walkdir::WalkDir;
@@ -109,15 +109,30 @@ pub enum MatchKind {
 
 impl SearchResult {
     pub fn exact(full_path: PathBuf, name: String) -> Self {
-        Self { full_path, name, match_kind: MatchKind::Exact, score: 1.0 }
+        Self {
+            full_path,
+            name,
+            match_kind: MatchKind::Exact,
+            score: 1.0,
+        }
     }
 
     pub fn partial(full_path: PathBuf, name: String) -> Self {
-        Self { full_path, name, match_kind: MatchKind::Partial, score: 1.0 }
+        Self {
+            full_path,
+            name,
+            match_kind: MatchKind::Partial,
+            score: 1.0,
+        }
     }
 
     pub fn fuzzy(full_path: PathBuf, name: String, score: f64) -> Self {
-        Self { full_path, name, match_kind: MatchKind::Fuzzy, score }
+        Self {
+            full_path,
+            name,
+            match_kind: MatchKind::Fuzzy,
+            score,
+        }
     }
 
     /// True for exact or partial matches (not fuzzy)
@@ -246,7 +261,10 @@ pub fn search_files(root: &Path, pattern: &str, max_depth: usize) -> Vec<SearchR
         } else if file_name_lower.contains(&pattern_lower) {
             partial_matches.push(SearchResult::partial(full_path, file_name));
         } else {
-            fuzzy_candidates.push(Candidate { name: file_name, full_path });
+            fuzzy_candidates.push(Candidate {
+                name: file_name,
+                full_path,
+            });
         }
     }
 
@@ -323,7 +341,10 @@ pub fn search_directories(root: &Path, pattern: &str, max_depth: usize) -> Vec<S
         } else if dir_name_lower.contains(&pattern_lower) {
             partial_matches.push(SearchResult::partial(full_path, dir_name));
         } else {
-            fuzzy_candidates.push(Candidate { name: dir_name, full_path });
+            fuzzy_candidates.push(Candidate {
+                name: dir_name,
+                full_path,
+            });
         }
     }
 
@@ -371,12 +392,13 @@ pub fn search_all(root: &Path, pattern: &str, max_depth: usize) -> Vec<SearchRes
     let dirs = search_directories(root, pattern, max_depth);
 
     let has_exact = files.iter().any(|r| r.match_kind == MatchKind::Exact)
-                 || dirs.iter().any(|r| r.match_kind == MatchKind::Exact);
+        || dirs.iter().any(|r| r.match_kind == MatchKind::Exact);
     let has_partial = files.iter().any(|r| r.match_kind == MatchKind::Partial)
-                  || dirs.iter().any(|r| r.match_kind == MatchKind::Partial);
+        || dirs.iter().any(|r| r.match_kind == MatchKind::Partial);
 
     if has_exact {
-        let mut results: Vec<SearchResult> = files.into_iter()
+        let mut results: Vec<SearchResult> = files
+            .into_iter()
             .chain(dirs)
             .filter(|r| r.match_kind == MatchKind::Exact)
             .collect();
@@ -385,7 +407,8 @@ pub fn search_all(root: &Path, pattern: &str, max_depth: usize) -> Vec<SearchRes
     }
 
     if has_partial {
-        let mut results: Vec<SearchResult> = files.into_iter()
+        let mut results: Vec<SearchResult> = files
+            .into_iter()
             .chain(dirs)
             .filter(|r| r.match_kind == MatchKind::Partial)
             .collect();
@@ -394,11 +417,16 @@ pub fn search_all(root: &Path, pattern: &str, max_depth: usize) -> Vec<SearchRes
     }
 
     // Fuzzy — combine all fuzzy results, sorted by score descending
-    let mut results: Vec<SearchResult> = files.into_iter()
+    let mut results: Vec<SearchResult> = files
+        .into_iter()
         .chain(dirs)
         .filter(|r| r.match_kind == MatchKind::Fuzzy)
         .collect();
-    results.sort_by(|a, b| b.score.partial_cmp(&a.score).unwrap_or(std::cmp::Ordering::Equal));
+    results.sort_by(|a, b| {
+        b.score
+            .partial_cmp(&a.score)
+            .unwrap_or(std::cmp::Ordering::Equal)
+    });
     results
 }
 
@@ -426,7 +454,8 @@ pub fn search_content(root: &Path, pattern: &str, max_depth: usize) -> Vec<Conte
         .par_iter()
         .filter_map(|path| {
             let content = std::fs::read_to_string(path).ok()?;
-            let matches: Vec<ContentMatch> = content.lines()
+            let matches: Vec<ContentMatch> = content
+                .lines()
                 .enumerate()
                 .filter(|(_, line)| line.to_lowercase().contains(&pattern_lower))
                 .map(|(i, line)| ContentMatch {
@@ -435,7 +464,11 @@ pub fn search_content(root: &Path, pattern: &str, max_depth: usize) -> Vec<Conte
                     line: line.to_string(),
                 })
                 .collect();
-            if matches.is_empty() { None } else { Some(matches) }
+            if matches.is_empty() {
+                None
+            } else {
+                Some(matches)
+            }
         })
         .flatten()
         .collect();
@@ -522,7 +555,7 @@ pub fn format_search_results(
         return output;
     }
 
-    let has_exact   = results.iter().any(|r| r.match_kind == MatchKind::Exact);
+    let has_exact = results.iter().any(|r| r.match_kind == MatchKind::Exact);
     let has_partial = results.iter().any(|r| r.match_kind == MatchKind::Partial);
 
     if has_exact {
@@ -719,9 +752,10 @@ mod tests {
     #[test]
     fn test_format_results_exact() {
         let dir = tempdir().unwrap();
-        let results = vec![
-            SearchResult::exact(dir.path().join("main.c"), "main.c".to_string()),
-        ];
+        let results = vec![SearchResult::exact(
+            dir.path().join("main.c"),
+            "main.c".to_string(),
+        )];
         let output = format_search_results(&results, "main.c", 2, true);
         assert!(output.contains("Exact matches"));
         assert!(output.contains("main.c"));
@@ -731,9 +765,10 @@ mod tests {
     #[test]
     fn test_format_results_partial() {
         let dir = tempdir().unwrap();
-        let results = vec![
-            SearchResult::partial(dir.path().join("main_helper.c"), "main_helper.c".to_string()),
-        ];
+        let results = vec![SearchResult::partial(
+            dir.path().join("main_helper.c"),
+            "main_helper.c".to_string(),
+        )];
         let output = format_search_results(&results, "main", 2, true);
         assert!(output.contains("Partial matches"));
         assert!(output.contains("main_helper.c"));
@@ -742,9 +777,11 @@ mod tests {
     #[test]
     fn test_format_results_fuzzy() {
         let dir = tempdir().unwrap();
-        let results = vec![
-            SearchResult::fuzzy(dir.path().join("main.c"), "main.c".to_string(), 0.92),
-        ];
+        let results = vec![SearchResult::fuzzy(
+            dir.path().join("main.c"),
+            "main.c".to_string(),
+            0.92,
+        )];
         let output = format_search_results(&results, "mian.c", 2, true);
         assert!(output.contains("Did you mean?"));
         assert!(output.contains("92% match"));

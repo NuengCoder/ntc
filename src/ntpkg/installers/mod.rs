@@ -10,25 +10,29 @@ mod devops_tool;
 mod docker;
 mod docker_compose;
 mod dotnet;
+mod ffmpeg;
 mod flutter;
+mod freebuff;
 mod gh;
 mod git;
 mod go;
 mod helm;
+mod imagemagick;
 mod java;
+mod kilocode;
 mod kind;
 mod kotlin;
 mod kubectl;
 mod kustomize;
-mod kilocode;
 mod lua;
-mod nim;
 mod mimocode;
 mod msys2;
+mod nim;
+mod nginx;
+mod node;
 mod npm_guide;
 mod omniroute;
 mod opencode;
-mod node;
 mod php;
 pub(crate) mod python;
 mod ruby;
@@ -37,6 +41,8 @@ mod scala;
 mod sqlite;
 mod sqlitestudio;
 mod swift;
+mod tesseract;
+mod vscode;
 mod zig;
 
 pub(crate) use act::install_act;
@@ -45,24 +51,28 @@ pub(crate) use devops_tool::install_devops_tool;
 pub(crate) use docker::install_docker;
 pub(crate) use docker_compose::install_docker_compose;
 pub(crate) use dotnet::install_dotnet;
+pub(crate) use ffmpeg::install_ffmpeg;
 pub(crate) use flutter::install_flutter;
+pub(crate) use freebuff::install_freebuff;
 pub(crate) use gh::install_gh;
 pub(crate) use git::install_git;
 pub(crate) use go::install_go;
 pub(crate) use helm::install_helm;
+pub(crate) use imagemagick::install_imagemagick;
 pub(crate) use java::install_java;
+pub(crate) use kilocode::install_kilocode;
 pub(crate) use kind::install_kind;
 pub(crate) use kotlin::install_kotlin;
 pub(crate) use kubectl::install_kubectl;
 pub(crate) use kustomize::install_kustomize;
-pub(crate) use kilocode::install_kilocode;
 pub(crate) use lua::install_lua;
 pub(crate) use mimocode::install_mimocode;
-pub(crate) use nim::install_nim;
 pub(crate) use msys2::install_msys2;
+pub(crate) use nim::install_nim;
+pub(crate) use nginx::install_nginx;
+pub(crate) use node::install_prebuilt_node;
 pub(crate) use omniroute::install_omniroute;
 pub(crate) use opencode::install_opencode;
-pub(crate) use node::install_prebuilt_node;
 pub(crate) use php::install_php;
 pub(crate) use ruby::install_ruby;
 pub(crate) use rust::install_rust;
@@ -70,11 +80,17 @@ pub(crate) use scala::install_scala;
 pub(crate) use sqlite::install_sqlite;
 pub(crate) use sqlitestudio::install_sqlitestudio;
 pub(crate) use swift::install_swift;
+pub(crate) use tesseract::install_tesseract;
+pub(crate) use vscode::install_vscode;
 pub(crate) use zig::install_zig;
 
 /// Launch an installer (.exe/.pkg) and wait for the user to finish.
 /// On Windows, uses ShellExecute (via PowerShell) to request administrator elevation.
-pub(crate) fn launch_installer_and_wait(installer: &Path, name: &str, _version: &str) -> Result<()> {
+pub(crate) fn launch_installer_and_wait(
+    installer: &Path,
+    name: &str,
+    _version: &str,
+) -> Result<()> {
     #[cfg(windows)]
     {
         let installer_disp = installer.display();
@@ -89,7 +105,11 @@ pub(crate) fn launch_installer_and_wait(installer: &Path, name: &str, _version: 
 
         if let Some(code) = status.code() {
             if code != 0 && code != 1 {
-                print_error(&format!("{} installer exited with code {:?}", name, status.code()));
+                print_error(&format!(
+                    "{} installer exited with code {:?}",
+                    name,
+                    status.code()
+                ));
             }
         }
     }
@@ -101,7 +121,11 @@ pub(crate) fn launch_installer_and_wait(installer: &Path, name: &str, _version: 
             .with_context(|| format!("Failed to launch {} installer", name))?;
 
         if !status.success() {
-            print_error(&format!("{} installer exited with code {:?}", name, status.code()));
+            print_error(&format!(
+                "{} installer exited with code {:?}",
+                name,
+                status.code()
+            ));
         }
     }
 
@@ -120,7 +144,8 @@ pub(crate) fn find_installer_in_dir(dir: &Path, name: &str, _version: &str) -> O
             let path = entry.path();
             if path.is_file() {
                 if let Some(fname) = path.file_name().and_then(|n| n.to_str()) {
-                    if fname.starts_with(&format!("{name}-")) && fname.ends_with(&format!(".{ext}")) {
+                    if fname.starts_with(&format!("{name}-")) && fname.ends_with(&format!(".{ext}"))
+                    {
                         return Some(path);
                     }
                 }

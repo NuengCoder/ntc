@@ -1,4 +1,5 @@
 use crate::navigator::Navigator;
+use crate::t;
 use anyhow::{Context, Result};
 use colored::*;
 use std::time::{Duration, Instant};
@@ -63,50 +64,87 @@ fn parse_request(method: &str, args: &str) -> Result<RequestConfig> {
         match t.as_str() {
             "-H" | "--header" => {
                 i += 1;
-                let h = tokens.get(i).ok_or_else(|| anyhow::anyhow!("Missing header value after -H"))?;
+                let h = tokens
+                    .get(i)
+                    .ok_or_else(|| anyhow::anyhow!("{}", t!("cmd.http.missing_header")))?;
                 if let Some((k, v)) = h.split_once(':') {
-                    cfg.headers.push((k.trim().to_string(), v.trim().to_string()));
+                    cfg.headers
+                        .push((k.trim().to_string(), v.trim().to_string()));
                 } else {
-                    anyhow::bail!("Invalid header format, expected \"Key: Value\", got: {}", h);
+                    anyhow::bail!("{}", t!("cmd.http.invalid_header", h));
                 }
             }
             "-d" | "--data" | "--body" => {
                 i += 1;
-                cfg.body = Some(tokens.get(i).ok_or_else(|| anyhow::anyhow!("Missing body data after -d"))?.clone());
+                cfg.body = Some(
+                    tokens
+                        .get(i)
+                        .ok_or_else(|| anyhow::anyhow!("{}", t!("cmd.http.missing_body_data")))?
+                        .clone(),
+                );
             }
             "-s" | "--silent" => cfg.silent = true,
             "-o" | "--output" => {
                 i += 1;
-                cfg.output = Some(tokens.get(i).ok_or_else(|| anyhow::anyhow!("Missing filename after -o"))?.clone());
+                cfg.output = Some(
+                    tokens
+                        .get(i)
+                        .ok_or_else(|| anyhow::anyhow!("{}", t!("cmd.http.missing_filename")))?
+                        .clone(),
+                );
             }
             "-v" | "--verbose" => cfg.verbose = true,
             "--json" => {
                 i += 1;
-                cfg.json_body = Some(tokens.get(i).ok_or_else(|| anyhow::anyhow!("Missing JSON data after --json"))?.clone());
+                cfg.json_body = Some(
+                    tokens
+                        .get(i)
+                        .ok_or_else(|| anyhow::anyhow!("{}", t!("cmd.http.missing_json")))?
+                        .clone(),
+                );
             }
             "-a" | "--auth" => {
                 i += 1;
-                cfg.auth = Some(tokens.get(i).ok_or_else(|| anyhow::anyhow!("Missing user:pass after -a"))?.clone());
+                cfg.auth = Some(
+                    tokens
+                        .get(i)
+                        .ok_or_else(|| anyhow::anyhow!("{}", t!("cmd.http.missing_auth")))?
+                        .clone(),
+                );
             }
             "--bearer" => {
                 i += 1;
-                cfg.bearer = Some(tokens.get(i).ok_or_else(|| anyhow::anyhow!("Missing token after --bearer"))?.clone());
+                cfg.bearer = Some(
+                    tokens
+                        .get(i)
+                        .ok_or_else(|| anyhow::anyhow!("{}", t!("cmd.http.missing_bearer")))?
+                        .clone(),
+                );
             }
             "-q" | "--query" => {
                 i += 1;
-                let q = tokens.get(i).ok_or_else(|| anyhow::anyhow!("Missing key=value after -q"))?.clone();
+                let q = tokens
+                    .get(i)
+                    .ok_or_else(|| anyhow::anyhow!("{}", t!("cmd.http.missing_query")))?
+                    .clone();
                 if let Some((k, v)) = q.split_once('=') {
                     cfg.query.push((k.to_string(), v.to_string()));
                 } else {
-                    anyhow::bail!("Invalid query format, expected key=value, got: {}", q);
+                    anyhow::bail!("{}", t!("cmd.http.invalid_query", q));
                 }
             }
             "-t" | "--timeout" => {
                 i += 1;
-                let secs = tokens.get(i).ok_or_else(|| anyhow::anyhow!("Missing seconds after -t"))?;
-                cfg.timeout = secs.parse().map_err(|_| anyhow::anyhow!("Invalid timeout: {}", secs))?;
+                let secs = tokens
+                    .get(i)
+                    .ok_or_else(|| anyhow::anyhow!("{}", t!("cmd.http.missing_timeout")))?
+                    .clone();
+                cfg.timeout = secs
+                    .parse()
+                    .map_err(|_| anyhow::anyhow!("{}", t!("cmd.http.invalid_timeout", secs)))?;
             }
             "--no-pretty" => cfg.no_pretty = true,
+            "--" => break,
             _ => {
                 if !url_found {
                     cfg.url = tokens[i].clone();
@@ -118,7 +156,7 @@ fn parse_request(method: &str, args: &str) -> Result<RequestConfig> {
     }
 
     if cfg.url.is_empty() {
-        anyhow::bail!("URL is required. Usage: http <method> <url>");
+        anyhow::bail!("{}", t!("cmd.http.url_required"));
     }
 
     Ok(cfg)
@@ -152,7 +190,8 @@ fn build_url(base: &str, query: &[(String, String)]) -> String {
     if query.is_empty() {
         return base.to_string();
     }
-    let params: Vec<String> = query.iter()
+    let params: Vec<String> = query
+        .iter()
         .map(|(k, v)| format!("{}={}", url_encode(k), url_encode(v)))
         .collect();
     let sep = if base.contains('?') { "&" } else { "?" };
@@ -195,12 +234,17 @@ fn execute_request(cfg: &RequestConfig) -> Result<()> {
     }
 
     if let Some(ref up) = cfg.auth {
-        let encoded = base64::Engine::encode(&base64::engine::general_purpose::STANDARD, up.as_str());
+        let encoded =
+            base64::Engine::encode(&base64::engine::general_purpose::STANDARD, up.as_str());
         req_builder = req_builder.header("Authorization", &format!("Basic {}", encoded));
     }
 
     let body_to_send = if let Some(ref j) = cfg.json_body {
-        if !cfg.headers.iter().any(|(k, _)| k.eq_ignore_ascii_case("content-type")) {
+        if !cfg
+            .headers
+            .iter()
+            .any(|(k, _)| k.eq_ignore_ascii_case("content-type"))
+        {
             req_builder = req_builder.header("Content-Type", "application/json");
         }
         j.clone()
@@ -211,22 +255,50 @@ fn execute_request(cfg: &RequestConfig) -> Result<()> {
     };
 
     if cfg.verbose {
-        eprintln!("{} {} {}", ">".blue().bold(), cfg.method.blue().bold(), url.blue());
+        eprintln!(
+            "{} {} {}",
+            t!("cmd.http.verbose_prefix").blue().bold(),
+            cfg.method.blue().bold(),
+            url.blue()
+        );
         for (k, v) in &cfg.headers {
-            eprintln!("{} {}: {}", ">".blue(), k.cyan(), v);
+            eprintln!(
+                "{} {}: {}",
+                t!("cmd.http.verbose_prefix").blue(),
+                k.cyan(),
+                v
+            );
         }
         if cfg.bearer.is_some() {
-            eprintln!("{} Authorization: {}", ">".blue(), "Bearer <token>".dimmed());
+            eprintln!(
+                "{} {} {}",
+                t!("cmd.http.verbose_prefix").blue(),
+                t!("cmd.http.authorization_label"),
+                t!("cmd.http.bearer_placeholder").dimmed()
+            );
         }
         if cfg.auth.is_some() {
-            eprintln!("{} Authorization: {}", ">".blue(), "Basic <encoded>".dimmed());
+            eprintln!(
+                "{} {} {}",
+                t!("cmd.http.verbose_prefix").blue(),
+                t!("cmd.http.authorization_label"),
+                t!("cmd.http.basic_placeholder").dimmed()
+            );
         }
         if !body_to_send.is_empty() {
-            eprintln!("{}", ">".blue());
+            eprintln!("{}", t!("cmd.http.verbose_prefix").blue());
             if body_to_send.len() <= 500 {
-                eprintln!("{} {}", ">".blue(), body_to_send.dimmed());
+                eprintln!(
+                    "{} {}",
+                    t!("cmd.http.verbose_prefix").blue(),
+                    body_to_send.dimmed()
+                );
             } else {
-                eprintln!("{} {}...", ">".blue(), body_to_send[..500].dimmed());
+                eprintln!(
+                    "{} {}...",
+                    t!("cmd.http.verbose_prefix").blue(),
+                    body_to_send[..500].dimmed()
+                );
             }
         }
     }
@@ -234,24 +306,45 @@ fn execute_request(cfg: &RequestConfig) -> Result<()> {
     let start = Instant::now();
     let has_body = !body_to_send.is_empty();
     let response = if has_body {
-        agent.run(req_builder.body(body_to_send).map_err(|e| anyhow::anyhow!("Invalid body: {}", e))?)
+        agent.run(
+            req_builder
+                .body(body_to_send)
+                .map_err(|e| anyhow::anyhow!("{}", t!("cmd.http.invalid_body", e)))?,
+        )
     } else {
-        agent.run(req_builder.body(()).map_err(|e| anyhow::anyhow!("Invalid request: {}", e))?)
+        agent.run(
+            req_builder
+                .body(())
+                .map_err(|e| anyhow::anyhow!("{}", t!("cmd.http.invalid_request", e)))?,
+        )
     }
-    .with_context(|| format!("{} {} failed", cfg.method, url))?;
+    .with_context(|| t!("cmd.http.request_failed", cfg.method.clone(), url.clone()).to_string())?;
 
     let elapsed = start.elapsed();
 
     let status = response.status();
-    let status_text = status.canonical_reason().unwrap_or("Unknown");
-    let headers: Vec<(String, String)> = response.headers().iter()
-        .map(|(n, v)| (n.as_str().to_string(), v.to_str().unwrap_or("<binary>").to_string()))
+    let unknown = t!("cmd.http.unknown_status");
+    let status_text = status.canonical_reason().unwrap_or(&unknown);
+    let headers: Vec<(String, String)> = response
+        .headers()
+        .iter()
+        .map(|(n, v)| {
+            (
+                n.as_str().to_string(),
+                v.to_str().unwrap_or("<binary>").to_string(),
+            )
+        })
         .collect();
     let body = response.into_body().read_to_string().unwrap_or_default();
     let byte_count = body.len();
 
     if !cfg.silent {
-        let status_line = format!("{} {} {}  ", cfg.method, cfg.url, status);
+        let status_line = t!(
+            "cmd.http.status_line",
+            &cfg.method,
+            &cfg.url,
+            status.as_u16()
+        );
         if status.is_success() {
             print!("{}", status_line.green().bold());
         } else if status.is_server_error() {
@@ -261,9 +354,16 @@ fn execute_request(cfg: &RequestConfig) -> Result<()> {
         } else {
             print!("{}", status_line.cyan().bold());
         }
-        println!("{}  {} bytes", format_elapsed(elapsed).dimmed(), byte_count.to_string().dimmed());
+        println!(
+            "{}  {}",
+            format_elapsed(elapsed).dimmed(),
+            t!("cmd.http.byte_count", byte_count).dimmed()
+        );
 
-        println!("{}", format!("{} {}", status.as_u16(), status_text).dimmed());
+        println!(
+            "{}",
+            format!("{} {}", status.as_u16(), status_text).dimmed()
+        );
         for (name, value) in &headers {
             println!("{}: {}", name.cyan(), value);
         }
@@ -271,10 +371,9 @@ fn execute_request(cfg: &RequestConfig) -> Result<()> {
     }
 
     if let Some(path) = &cfg.output {
-        std::fs::write(path, &body)
-            .with_context(|| format!("Failed to write to {}", path))?;
+        std::fs::write(path, &body).with_context(|| t!("cmd.http.write_fail", path).to_string())?;
         if !cfg.silent {
-            crate::output::print_success(&format!("Saved {} bytes to {}", byte_count, path));
+            crate::output::print_success(&t!("cmd.http.saved_bytes", byte_count, path));
         }
     } else if cfg.silent {
         println!("{}", body);
@@ -333,7 +432,11 @@ fn highlight_json(text: &str) {
             } else {
                 println!("{}{}", prefix, trimmed.cyan());
             }
-        } else if trimmed.starts_with('{') || trimmed.starts_with('}') || trimmed.starts_with('[') || trimmed.starts_with(']') {
+        } else if trimmed.starts_with('{')
+            || trimmed.starts_with('}')
+            || trimmed.starts_with('[')
+            || trimmed.starts_with(']')
+        {
             println!("{}{}", prefix, trimmed.dimmed());
         } else if trimmed.starts_with("null") {
             println!("{}{}", prefix, trimmed.dimmed().italic());
@@ -346,36 +449,36 @@ fn highlight_json(text: &str) {
 }
 
 fn print_help() {
-    println!("{}", "HTTP API Client".bold());
+    println!("{}", t!("cmd.http.help_title").bold());
     println!();
-    println!("{}", "Usage:".bold());
-    println!("  http <method> <url> [options]");
-    println!("  <url>                          (GET by default if URL is first argument)");
+    println!("{}", t!("cmd.http.help_usage_title").bold());
+    println!("  {}", t!("cmd.http.help_usage_line"));
+    println!("  {}", t!("cmd.http.help_usage_default"));
     println!();
-    println!("{}", "Methods:".bold());
-    println!("  GET, POST, PUT, DELETE, PATCH, HEAD");
+    println!("{}", t!("cmd.http.help_methods_title").bold());
+    println!("  {}", t!("cmd.http.help_methods"));
     println!();
-    println!("{}", "Options:".bold());
-    println!("  -H, --header <\"Key: Value\">     Add request header (repeatable)");
-    println!("  -d, --data <body>              Request body");
-    println!("  --json <data>                  Send as JSON (auto-sets Content-Type)");
-    println!("  -q, --query <key=value>        URL query parameter (repeatable)");
-    println!("  -a, --auth <user:pass>         Basic authentication");
-    println!("  --bearer <token>               Bearer token authentication");
-    println!("  -t, --timeout <secs>           Request timeout (default 30)");
-    println!("  -s, --silent                   Show body only (no status/headers)");
-    println!("  -o, --output <file>            Save body to file (raw)");
-    println!("  -v, --verbose                  Show outgoing request details");
-    println!("  --no-pretty                    Disable JSON pretty-printing");
-    println!("  -h, --help                     Show this help");
+    println!("{}", t!("cmd.http.help_options_title").bold());
+    println!("  {}", t!("cmd.http.help_header"));
+    println!("  {}", t!("cmd.http.help_body"));
+    println!("  {}", t!("cmd.http.help_json"));
+    println!("  {}", t!("cmd.http.help_query"));
+    println!("  {}", t!("cmd.http.help_auth"));
+    println!("  {}", t!("cmd.http.help_bearer"));
+    println!("  {}", t!("cmd.http.help_timeout"));
+    println!("  {}", t!("cmd.http.help_silent"));
+    println!("  {}", t!("cmd.http.help_output"));
+    println!("  {}", t!("cmd.http.help_verbose"));
+    println!("  {}", t!("cmd.http.help_no_pretty"));
+    println!("  {}", t!("cmd.http.help_help"));
     println!();
-    println!("{}", "Examples:".bold());
-    println!("  http GET https://api.github.com/users/octocat");
-    println!("  http POST https://httpbin.org/post -H \"Content-Type: application/json\" --json {{\"name\":\"test\"}}");
-    println!("  http GET https://api.example.com/search -q q=hello -q page=1 -s > results.json");
-    println!("  http GET https://api.example.com/data --bearer mytoken -o response.json");
-    println!("  http GET https://api.example.com/health -s -t 5");
-    println!("  http GET https://api.example.com/users -a admin:secret123");
+    println!("{}", t!("cmd.http.help_examples_title").bold());
+    println!("  {}", t!("cmd.http.help_example1"));
+    println!("  {}", t!("cmd.http.help_example2"));
+    println!("  {}", t!("cmd.http.help_example3"));
+    println!("  {}", t!("cmd.http.help_example4"));
+    println!("  {}", t!("cmd.http.help_example5"));
+    println!("  {}", t!("cmd.http.help_example6"));
 }
 
 #[cfg(test)]
@@ -391,7 +494,16 @@ mod tests {
     #[test]
     fn test_tokenize_quoted() {
         let t = tokenize("GET -H \"Content-Type: application/json\" -d 'hello world'");
-        assert_eq!(t, vec!["GET", "-H", "Content-Type: application/json", "-d", "hello world"]);
+        assert_eq!(
+            t,
+            vec![
+                "GET",
+                "-H",
+                "Content-Type: application/json",
+                "-d",
+                "hello world"
+            ]
+        );
     }
 
     #[test]

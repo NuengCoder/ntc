@@ -1,7 +1,8 @@
-use std::path::Path;
 use std::fs;
+use std::path::Path;
 
-use anyhow::{Result, bail};
+use crate::t;
+use anyhow::{bail, Result};
 
 use super::simple::generate_header_guard;
 
@@ -16,18 +17,18 @@ fn write_file(path: &Path, content: &str) -> Result<()> {
 
 pub fn init_hyper_project(name: &str, lang: &str) -> Result<bool> {
     if lang != "c" {
-        bail!("Unsupported language '{}'. Only 'c' is supported.", lang);
+        bail!("{}", t!("editor.hyper_unsupported_lang", lang));
     }
     if name.contains('.') {
-        bail!("Project name '{}' contains an extension. Use a name without dots.", name);
+        bail!("{}", t!("editor.hyper_name_with_ext", name));
     }
 
     let root = Path::new(name);
     if root.exists() {
-        bail!("Directory '{}' already exists.", name);
+        bail!("{}", t!("editor.hyper_dir_exists", name));
     }
 
-    println!("Creating hyper project '{}' (C)...", name);
+    println!("{}", t!("editor.hyper_creating", name));
 
     for dir in &["", "dsa", "debug", "os", "header", "ntclib"] {
         fs::create_dir_all(root.join(dir))?;
@@ -95,7 +96,7 @@ pub fn init_hyper_project(name: &str, lang: &str) -> Result<bool> {
     // NTCRANFILE.toml
     write_file(&r("NTCRANFILE.toml"), &ntc_ranfile_toml(name))?;
 
-    println!("Hyper project '{}' created successfully!", name);
+    println!("{}", t!("editor.hyper_created", name));
     Ok(true)
 }
 
@@ -103,7 +104,10 @@ pub fn init_hyper_project(name: &str, lang: &str) -> Result<bool> {
 
 fn arraylist_h() -> String {
     let g = guard("_arraylist_h");
-    format!("#ifndef {g}\n#define {g}\n\n{}\n\n#endif /* {g} */\n", include_str!("hyper_project/dsa/_arraylist.h"))
+    format!(
+        "#ifndef {g}\n#define {g}\n\n{}\n\n#endif /* {g} */\n",
+        include_str!("hyper_project/dsa/_arraylist.h")
+    )
 }
 
 fn arraylist_c() -> &'static str {
@@ -114,7 +118,10 @@ fn arraylist_c() -> &'static str {
 
 fn linkedlist_h() -> String {
     let g = guard("_linkedlist_h");
-    format!("#ifndef {g}\n#define {g}\n\n{}\n\n#endif /* {g} */\n", include_str!("hyper_project/dsa/_linkedlist.h"))
+    format!(
+        "#ifndef {g}\n#define {g}\n\n{}\n\n#endif /* {g} */\n",
+        include_str!("hyper_project/dsa/_linkedlist.h")
+    )
 }
 
 fn linkedlist_c() -> &'static str {
@@ -125,7 +132,10 @@ fn linkedlist_c() -> &'static str {
 
 fn doublylinkedlist_h() -> String {
     let g = guard("_doublylinkedlist_h");
-    format!("#ifndef {g}\n#define {g}\n\n{}\n\n#endif /* {g} */\n", include_str!("hyper_project/dsa/_doublylinkedlist.h"))
+    format!(
+        "#ifndef {g}\n#define {g}\n\n{}\n\n#endif /* {g} */\n",
+        include_str!("hyper_project/dsa/_doublylinkedlist.h")
+    )
 }
 
 fn doublylinkedlist_c() -> &'static str {
@@ -136,7 +146,10 @@ fn doublylinkedlist_c() -> &'static str {
 
 fn circularlinkedlist_h() -> String {
     let g = guard("_circularlinkedlist_h");
-    format!("#ifndef {g}\n#define {g}\n\n{}\n\n#endif /* {g} */\n", include_str!("hyper_project/dsa/_circularlinkedlist.h"))
+    format!(
+        "#ifndef {g}\n#define {g}\n\n{}\n\n#endif /* {g} */\n",
+        include_str!("hyper_project/dsa/_circularlinkedlist.h")
+    )
 }
 
 fn circularlinkedlist_c() -> &'static str {
@@ -147,7 +160,10 @@ fn circularlinkedlist_c() -> &'static str {
 
 fn stack_h() -> String {
     let g = guard("_stack_h");
-    format!("#ifndef {g}\n#define {g}\n\n{}\n\n#endif /* {g} */\n", include_str!("hyper_project/dsa/_stack.h"))
+    format!(
+        "#ifndef {g}\n#define {g}\n\n{}\n\n#endif /* {g} */\n",
+        include_str!("hyper_project/dsa/_stack.h")
+    )
 }
 
 fn stack_c() -> &'static str {
@@ -158,7 +174,10 @@ fn stack_c() -> &'static str {
 
 fn queue_h() -> String {
     let g = guard("_queue_h");
-    format!("#ifndef {g}\n#define {g}\n\n{}\n\n#endif /* {g} */\n", include_str!("hyper_project/dsa/_queue.h"))
+    format!(
+        "#ifndef {g}\n#define {g}\n\n{}\n\n#endif /* {g} */\n",
+        include_str!("hyper_project/dsa/_queue.h")
+    )
 }
 
 fn queue_c() -> &'static str {
@@ -169,7 +188,10 @@ fn queue_c() -> &'static str {
 
 fn binarytree_h() -> String {
     let g = guard("_binarytree_h");
-    format!("#ifndef {g}\n#define {g}\n\n{}\n\n#endif /* {g} */\n", include_str!("hyper_project/dsa/_binarytree.h"))
+    format!(
+        "#ifndef {g}\n#define {g}\n\n{}\n\n#endif /* {g} */\n",
+        include_str!("hyper_project/dsa/_binarytree.h")
+    )
 }
 
 fn binarytree_c() -> &'static str {
@@ -180,7 +202,10 @@ fn binarytree_c() -> &'static str {
 
 fn tree_h() -> String {
     let g = guard("_tree_h");
-    format!("#ifndef {g}\n#define {g}\n\n{}\n\n#endif /* {g} */\n", include_str!("hyper_project/dsa/_tree.h"))
+    format!(
+        "#ifndef {g}\n#define {g}\n\n{}\n\n#endif /* {g} */\n",
+        include_str!("hyper_project/dsa/_tree.h")
+    )
 }
 
 fn tree_c() -> &'static str {
@@ -191,7 +216,10 @@ fn tree_c() -> &'static str {
 
 fn hashmap_h() -> String {
     let g = guard("_hashmap_h");
-    format!("#ifndef {g}\n#define {g}\n\n{}\n\n#endif /* {g} */\n", include_str!("hyper_project/dsa/_hashmap.h"))
+    format!(
+        "#ifndef {g}\n#define {g}\n\n{}\n\n#endif /* {g} */\n",
+        include_str!("hyper_project/dsa/_hashmap.h")
+    )
 }
 
 fn hashmap_c() -> &'static str {
@@ -202,7 +230,10 @@ fn hashmap_c() -> &'static str {
 
 fn hashtable_h() -> String {
     let g = guard("_hashtable_h");
-    format!("#ifndef {g}\n#define {g}\n\n{}\n\n#endif /* {g} */\n", include_str!("hyper_project/dsa/_hashtable.h"))
+    format!(
+        "#ifndef {g}\n#define {g}\n\n{}\n\n#endif /* {g} */\n",
+        include_str!("hyper_project/dsa/_hashtable.h")
+    )
 }
 
 fn hashtable_c() -> &'static str {
@@ -213,7 +244,10 @@ fn hashtable_c() -> &'static str {
 
 fn hashset_h() -> String {
     let g = guard("_hashset_h");
-    format!("#ifndef {g}\n#define {g}\n\n{}\n\n#endif /* {g} */\n", include_str!("hyper_project/dsa/_hashset.h"))
+    format!(
+        "#ifndef {g}\n#define {g}\n\n{}\n\n#endif /* {g} */\n",
+        include_str!("hyper_project/dsa/_hashset.h")
+    )
 }
 
 fn hashset_c() -> &'static str {
@@ -224,7 +258,10 @@ fn hashset_c() -> &'static str {
 
 fn hash_h() -> String {
     let g = guard("_hash_h");
-    format!("#ifndef {g}\n#define {g}\n\n{}\n\n#endif /* {g} */\n", include_str!("hyper_project/dsa/_hash.h"))
+    format!(
+        "#ifndef {g}\n#define {g}\n\n{}\n\n#endif /* {g} */\n",
+        include_str!("hyper_project/dsa/_hash.h")
+    )
 }
 
 fn hash_c() -> &'static str {
@@ -235,7 +272,10 @@ fn hash_c() -> &'static str {
 
 fn heap_h() -> String {
     let g = guard("_heap_h");
-    format!("#ifndef {g}\n#define {g}\n\n{}\n\n#endif /* {g} */\n", include_str!("hyper_project/dsa/_heap.h"))
+    format!(
+        "#ifndef {g}\n#define {g}\n\n{}\n\n#endif /* {g} */\n",
+        include_str!("hyper_project/dsa/_heap.h")
+    )
 }
 
 fn heap_c() -> &'static str {
@@ -246,7 +286,10 @@ fn heap_c() -> &'static str {
 
 fn priorityqueue_h() -> String {
     let g = guard("_priorityqueue_h");
-    format!("#ifndef {g}\n#define {g}\n\n{}\n\n#endif /* {g} */\n", include_str!("hyper_project/dsa/_priorityqueue.h"))
+    format!(
+        "#ifndef {g}\n#define {g}\n\n{}\n\n#endif /* {g} */\n",
+        include_str!("hyper_project/dsa/_priorityqueue.h")
+    )
 }
 
 fn priorityqueue_c() -> &'static str {
@@ -257,7 +300,10 @@ fn priorityqueue_c() -> &'static str {
 
 fn graph_h() -> String {
     let g = guard("_graph_h");
-    format!("#ifndef {g}\n#define {g}\n\n{}\n\n#endif /* {g} */\n", include_str!("hyper_project/dsa/_graph.h"))
+    format!(
+        "#ifndef {g}\n#define {g}\n\n{}\n\n#endif /* {g} */\n",
+        include_str!("hyper_project/dsa/_graph.h")
+    )
 }
 
 fn graph_c() -> &'static str {
@@ -268,7 +314,10 @@ fn graph_c() -> &'static str {
 
 fn map_h() -> String {
     let g = guard("_map_h");
-    format!("#ifndef {g}\n#define {g}\n\n{}\n\n#endif /* {g} */\n", include_str!("hyper_project/dsa/_map.h"))
+    format!(
+        "#ifndef {g}\n#define {g}\n\n{}\n\n#endif /* {g} */\n",
+        include_str!("hyper_project/dsa/_map.h")
+    )
 }
 
 fn map_c() -> &'static str {
@@ -279,7 +328,10 @@ fn map_c() -> &'static str {
 
 fn set_h() -> String {
     let g = guard("_set_h");
-    format!("#ifndef {g}\n#define {g}\n\n{}\n\n#endif /* {g} */\n", include_str!("hyper_project/dsa/_set.h"))
+    format!(
+        "#ifndef {g}\n#define {g}\n\n{}\n\n#endif /* {g} */\n",
+        include_str!("hyper_project/dsa/_set.h")
+    )
 }
 
 fn set_c() -> &'static str {
@@ -290,7 +342,10 @@ fn set_c() -> &'static str {
 
 fn rope_h() -> String {
     let g = guard("_rope_h");
-    format!("#ifndef {g}\n#define {g}\n\n{}\n\n#endif /* {g} */\n", include_str!("hyper_project/dsa/_rope.h"))
+    format!(
+        "#ifndef {g}\n#define {g}\n\n{}\n\n#endif /* {g} */\n",
+        include_str!("hyper_project/dsa/_rope.h")
+    )
 }
 
 fn rope_c() -> &'static str {
@@ -301,7 +356,10 @@ fn rope_c() -> &'static str {
 
 fn trie_h() -> String {
     let g = guard("_trie_h");
-    format!("#ifndef {g}\n#define {g}\n\n{}\n\n#endif /* {g} */\n", include_str!("hyper_project/dsa/_trie.h"))
+    format!(
+        "#ifndef {g}\n#define {g}\n\n{}\n\n#endif /* {g} */\n",
+        include_str!("hyper_project/dsa/_trie.h")
+    )
 }
 
 fn trie_c() -> &'static str {
@@ -312,7 +370,10 @@ fn trie_c() -> &'static str {
 
 fn lsearch_h() -> String {
     let g = guard("_lsearch_h");
-    format!("#ifndef {g}\n#define {g}\n\n{}\n\n#endif /* {g} */\n", include_str!("hyper_project/dsa/_lsearch.h"))
+    format!(
+        "#ifndef {g}\n#define {g}\n\n{}\n\n#endif /* {g} */\n",
+        include_str!("hyper_project/dsa/_lsearch.h")
+    )
 }
 
 fn lsearch_c() -> &'static str {
@@ -323,7 +384,10 @@ fn lsearch_c() -> &'static str {
 
 fn bsearch_h() -> String {
     let g = guard("_bsearch_h");
-    format!("#ifndef {g}\n#define {g}\n\n{}\n\n#endif /* {g} */\n", include_str!("hyper_project/dsa/_bsearch.h"))
+    format!(
+        "#ifndef {g}\n#define {g}\n\n{}\n\n#endif /* {g} */\n",
+        include_str!("hyper_project/dsa/_bsearch.h")
+    )
 }
 
 fn bsearch_c() -> &'static str {
@@ -334,7 +398,10 @@ fn bsearch_c() -> &'static str {
 
 fn debug_h() -> String {
     let g = guard("debug_h");
-    format!("#ifndef {g}\n#define {g}\n\n{}\n\n#endif /* {g} */\n", include_str!("hyper_project/debug/debug.h"))
+    format!(
+        "#ifndef {g}\n#define {g}\n\n{}\n\n#endif /* {g} */\n",
+        include_str!("hyper_project/debug/debug.h")
+    )
 }
 
 fn debug_c() -> &'static str {
@@ -345,7 +412,10 @@ fn debug_c() -> &'static str {
 
 fn os_h() -> String {
     let g = guard("os_h");
-    format!("#ifndef {g}\n#define {g}\n\n{}\n\n#endif /* {g} */\n", include_str!("hyper_project/os/os.h"))
+    format!(
+        "#ifndef {g}\n#define {g}\n\n{}\n\n#endif /* {g} */\n",
+        include_str!("hyper_project/os/os.h")
+    )
 }
 
 fn os_c() -> &'static str {
@@ -356,14 +426,20 @@ fn os_c() -> &'static str {
 
 fn ntc_h() -> String {
     let g = guard("ntc_h");
-    format!("#ifndef {g}\n#define {g}\n\n{}\n\n#endif /* {g} */\n", include_str!("hyper_project/header/ntc.h"))
+    format!(
+        "#ifndef {g}\n#define {g}\n\n{}\n\n#endif /* {g} */\n",
+        include_str!("hyper_project/header/ntc.h")
+    )
 }
 
 // ── ntclib ────────────────────────────────────────────────────────────────────
 
 fn ntclib_h() -> String {
     let g = guard("ntclib_h");
-    format!("#ifndef {g}\n#define {g}\n\n{}\n\n#endif /* {g} */\n", include_str!("hyper_project/ntclib/ntc_lib.h"))
+    format!(
+        "#ifndef {g}\n#define {g}\n\n{}\n\n#endif /* {g} */\n",
+        include_str!("hyper_project/ntclib/ntc_lib.h")
+    )
 }
 
 fn ntclib_c() -> &'static str {

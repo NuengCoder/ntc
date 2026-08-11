@@ -5,12 +5,12 @@ use std::collections::HashMap;
 
 #[derive(Debug, Clone)]
 pub struct ColorAnalysis {
-    pub dominant_colors: Vec<(Rgba<u8>, f32)>,  // Color + percentage
-    pub brightness: f32,                         // Average brightness (0-1)
-    pub contrast: f32,                           // Contrast ratio
-    pub is_dark: bool,                           // Dark vs light theme
-    pub color_count: usize,                      // Unique colors
-    pub gradient_ratio: f32,                     // Fraction of smooth gradient transitions
+    pub dominant_colors: Vec<(Rgba<u8>, f32)>, // Color + percentage
+    pub brightness: f32,                       // Average brightness (0-1)
+    pub contrast: f32,                         // Contrast ratio
+    pub is_dark: bool,                         // Dark vs light theme
+    pub color_count: usize,                    // Unique colors
+    pub gradient_ratio: f32,                   // Fraction of smooth gradient transitions
 }
 
 const NAMED_COLORS: &[(&str, u8, u8, u8)] = &[
@@ -169,7 +169,7 @@ pub fn analyze_colors(img: &DynamicImage, quantize: usize) -> ColorAnalysis {
     let mut color_counts: HashMap<u32, u32> = HashMap::new();
     let (width, height) = img.dimensions();
     let total_pixels = (width * height) as f32;
-    
+
     // Single pass: collect color frequencies and calculate brightness simultaneously
     let mut total_brightness = 0.0;
     for pixel in img.pixels() {
@@ -181,13 +181,13 @@ pub fn analyze_colors(img: &DynamicImage, quantize: usize) -> ColorAnalysis {
         let brightness = 0.299 * rgba[0] as f32 + 0.587 * rgba[1] as f32 + 0.114 * rgba[2] as f32;
         total_brightness += brightness;
     }
-    
+
     let avg_brightness = total_brightness / total_pixels / 255.0;
-    
+
     // Find dominant colors
     let mut sorted: Vec<(u32, u32)> = color_counts.into_iter().collect();
     sorted.sort_by_key(|b| std::cmp::Reverse(b.1));
-    
+
     let dominant_colors: Vec<(Rgba<u8>, f32)> = sorted
         .iter()
         .take(5)
@@ -197,9 +197,9 @@ pub fn analyze_colors(img: &DynamicImage, quantize: usize) -> ColorAnalysis {
             (rgba, percentage)
         })
         .collect();
-    
+
     let contrast = calculate_contrast(&dominant_colors);
-    
+
     ColorAnalysis {
         dominant_colors,
         brightness: avg_brightness,

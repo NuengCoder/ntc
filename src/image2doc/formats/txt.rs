@@ -1,6 +1,6 @@
-use crate::image2doc::converter::Metadata;
 use crate::image2doc::analyzer::{ImageAnalysis, LayoutElement};
 use crate::image2doc::classify::Classification;
+use crate::image2doc::converter::Metadata;
 
 pub fn render(
     metadata: &Metadata,
@@ -19,39 +19,83 @@ pub fn render(
 
     // Classification
     output.push_str("--- CLASSIFICATION ---\n");
-    output.push_str(&format!("  Type:        {} (confidence: {:.0}%)\n", classification.image_type.label(), classification.confidence * 100.0));
-    output.push_str(&format!("  Description: {}\n\n", classification.image_type.description()));
+    output.push_str(&format!(
+        "  Type:        {} (confidence: {:.0}%)\n",
+        classification.image_type.label(),
+        classification.confidence * 100.0
+    ));
+    output.push_str(&format!(
+        "  Description: {}\n\n",
+        classification.image_type.description()
+    ));
 
     // Metadata
     output.push_str("--- METADATA ---\n");
     output.push_str(&format!("  Path:        {}\n", metadata.path));
     output.push_str(&format!("  Format:      {}\n", metadata.format));
-    output.push_str(&format!("  Dimensions:  {} x {} px\n", metadata.width, metadata.height));
-    output.push_str(&format!("  File size:   {}\n", crate::explorer::human_readable_size(metadata.file_size)));
+    output.push_str(&format!(
+        "  Dimensions:  {} x {} px\n",
+        metadata.width, metadata.height
+    ));
+    output.push_str(&format!(
+        "  File size:   {}\n",
+        crate::explorer::human_readable_size(metadata.file_size)
+    ));
     output.push_str(&format!("  Modified:    {}\n", metadata.modified));
     output.push_str(&format!("  Aspect ratio: {:.2}\n\n", metadata.aspect_ratio));
 
     // Color analysis
     output.push_str("--- COLOR ANALYSIS ---\n");
-    let theme = if analysis.color_analysis.is_dark { "Dark" } else { "Light" };
+    let theme = if analysis.color_analysis.is_dark {
+        "Dark"
+    } else {
+        "Light"
+    };
     output.push_str(&format!("  Theme:       {}\n", theme));
-    output.push_str(&format!("  Brightness:  {:.1}%\n", analysis.color_analysis.brightness * 100.0));
-    output.push_str(&format!("  Contrast:    {:.2}:1\n", analysis.color_analysis.contrast));
-    output.push_str(&format!("  Unique colors: {}\n", analysis.color_analysis.color_count));
-    output.push_str(&format!("  Gradient:    {:.1}%\n", analysis.color_analysis.gradient_ratio * 100.0));
+    output.push_str(&format!(
+        "  Brightness:  {:.1}%\n",
+        analysis.color_analysis.brightness * 100.0
+    ));
+    output.push_str(&format!(
+        "  Contrast:    {:.2}:1\n",
+        analysis.color_analysis.contrast
+    ));
+    output.push_str(&format!(
+        "  Unique colors: {}\n",
+        analysis.color_analysis.color_count
+    ));
+    output.push_str(&format!(
+        "  Gradient:    {:.1}%\n",
+        analysis.color_analysis.gradient_ratio * 100.0
+    ));
     output.push_str("  Dominant colors:\n");
     for (color, pct) in &analysis.color_analysis.dominant_colors {
         let name = crate::image2doc::color::color_name(color[0], color[1], color[2]);
-        output.push_str(&format!("    - #{:02x}{:02x}{:02x}  {}  ({:.1}%)\n", color[0], color[1], color[2], name, pct));
+        output.push_str(&format!(
+            "    - #{:02x}{:02x}{:02x}  {}  ({:.1}%)\n",
+            color[0], color[1], color[2], name, pct
+        ));
     }
     output.push('\n');
 
     // Image analysis metrics
     output.push_str("--- IMAGE ANALYSIS ---\n");
-    output.push_str(&format!("  Edge density:         {:.1}%\n", analysis.edge_density * 100.0));
-    output.push_str(&format!("  Text density:         {:.1}%\n", analysis.text_density * 100.0));
-    output.push_str(&format!("  Horizontal symmetry:  {:.1}%\n", analysis.symmetry * 100.0));
-    output.push_str(&format!("  Gradient ratio:       {:.1}%\n\n", analysis.color_analysis.gradient_ratio * 100.0));
+    output.push_str(&format!(
+        "  Edge density:         {:.1}%\n",
+        analysis.edge_density * 100.0
+    ));
+    output.push_str(&format!(
+        "  Text density:         {:.1}%\n",
+        analysis.text_density * 100.0
+    ));
+    output.push_str(&format!(
+        "  Horizontal symmetry:  {:.1}%\n",
+        analysis.symmetry * 100.0
+    ));
+    output.push_str(&format!(
+        "  Gradient ratio:       {:.1}%\n\n",
+        analysis.color_analysis.gradient_ratio * 100.0
+    ));
 
     // ASCII preview
     output.push_str("--- ASCII PREVIEW ---\n");
@@ -82,8 +126,21 @@ pub fn render(
             let y = elem.bounds.1;
             let w = elem.bounds.2;
             let h = elem.bounds.3;
-            let font_str = elem.font_size_pt.map(|f| format!(" {}pt", f)).unwrap_or_default();
-            output.push_str(&format!("  {}. {} at ({},{}) [{}x{}]{}(confidence: {:.0}%)", i + 1, type_str, x, y, w, h, font_str, elem.confidence * 100.0));
+            let font_str = elem
+                .font_size_pt
+                .map(|f| format!(" {}pt", f))
+                .unwrap_or_default();
+            output.push_str(&format!(
+                "  {}. {} at ({},{}) [{}x{}]{}(confidence: {:.0}%)",
+                i + 1,
+                type_str,
+                x,
+                y,
+                w,
+                h,
+                font_str,
+                elem.confidence * 100.0
+            ));
             if let Some(ref text) = elem.text {
                 output.push_str(&format!(" text: \"{}\"", text));
             }
@@ -94,7 +151,10 @@ pub fn render(
 
     // Footer
     output.push_str("---\n");
-    output.push_str(&format!("Generated by ntc v{} - Image to Document Converter\n", env!("CARGO_PKG_VERSION")));
+    output.push_str(&format!(
+        "Generated by ntc v{} - Image to Document Converter\n",
+        env!("CARGO_PKG_VERSION")
+    ));
 
     output
 }

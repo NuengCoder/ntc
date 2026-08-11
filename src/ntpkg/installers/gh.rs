@@ -4,9 +4,12 @@ use std::path::Path;
 use std::process::Command;
 
 use super::super::download::{download_with_progress, extract_archive, find_binary};
+use super::super::manager::{
+    copy_recursive, find_system_binary, load_manifest, platform_key, save_manifest,
+};
 use super::super::types::{bin_dir, ArchiveType, PackageSource};
-use super::super::manager::{copy_recursive, find_system_binary, load_manifest, platform_key, save_manifest};
 use crate::output::{print_info, print_success};
+use crate::t;
 use crate::utils::interactive::prompt_yes_no;
 
 pub(crate) fn install_gh(
@@ -25,7 +28,7 @@ pub(crate) fn install_gh(
             ),
             true,
         )? {
-            print_info("Skipped registering gh with ntpkg.");
+            print_info(&t!("ntpkg.skip_register", "gh"));
             return Ok(());
         }
 
@@ -40,7 +43,10 @@ pub(crate) fn install_gh(
         manifest.activate(name, &system_ver);
         save_manifest(&manifest)?;
 
-        print_success(&format!("{} {} registered (system install)", name, system_ver));
+        print_success(&format!(
+            "{} {} registered (system install)",
+            name, system_ver
+        ));
         return Ok(());
     }
 
@@ -87,7 +93,9 @@ pub(crate) fn install_prebuilt_gh(
         _ => "tar.gz",
     };
     let archive_name = format!("gh_{version}_{platform_key}.{ext}");
-    let archive_path = std::env::temp_dir().join(format!("ntc-install-gh-{version}")).join(&archive_name);
+    let archive_path = std::env::temp_dir()
+        .join(format!("ntc-install-gh-{version}"))
+        .join(&archive_name);
 
     let tmp_dir = archive_path.parent().unwrap().to_path_buf();
     if tmp_dir.exists() {
@@ -98,7 +106,7 @@ pub(crate) fn install_prebuilt_gh(
     print_info(&format!("Downloading {name} {version}..."));
     download_with_progress(url, &archive_path)?;
 
-    print_info("Extracting...");
+    print_info(&t!("ntpkg.extracting"));
     extract_archive(&archive_path, &tmp_dir, source.archive_type)?;
 
     let gh_bin = find_binary(&tmp_dir, "gh")

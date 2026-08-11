@@ -2,10 +2,19 @@ use anyhow::Result;
 use crossterm::event::{Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 use crossterm::style::Color;
 
-use crate::editor::{prev_char_byte, next_char_byte, prev_word_byte, next_word_byte, sel_range, set_status_bar, Editor, Mode};
+use crate::t;
+
+use crate::editor::{
+    next_char_byte, next_word_byte, prev_char_byte, prev_word_byte, sel_range, set_status_bar,
+    Editor, Mode,
+};
 
 impl Editor {
-    pub(crate) fn handle_insert_event(&mut self, ev: Event, stdout: &mut std::io::Stdout) -> Result<()> {
+    pub(crate) fn handle_insert_event(
+        &mut self,
+        ev: Event,
+        stdout: &mut std::io::Stdout,
+    ) -> Result<()> {
         if let Event::Key(KeyEvent {
             kind: KeyEventKind::Press,
             ..
@@ -58,14 +67,19 @@ impl Editor {
                 match (ctrl, alt, shift, code) {
                     (true, _, _, KeyCode::Char('s')) => match self.save() {
                         Ok(()) => {
-                            let _ = set_status_bar(stdout, Color::Green, Color::White, " Saved \u{2713}");
+                            let _ = set_status_bar(
+                                stdout,
+                                Color::Green,
+                                Color::White,
+                                &t!("editor.saved_full"),
+                            );
                         }
                         Err(e) => {
                             let _ = set_status_bar(
                                 stdout,
                                 Color::Red,
                                 Color::White,
-                                &format!(" Save failed: {}", e),
+                                &t!("editor.cmd_save_failed", e),
                             );
                         }
                     },
@@ -98,9 +112,12 @@ impl Editor {
                         } else {
                             let (tw, th) = crate::editor::helpers::term_size();
                             let term_h = (th as f64 * 0.4) as u16;
-                            let cwd = std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from("."));
+                            let cwd = std::env::current_dir()
+                                .unwrap_or_else(|_| std::path::PathBuf::from("."));
                             let shell = if cfg!(windows) { "powershell" } else { "sh" };
-                            match crate::editor::terminal::TerminalState::spawn(shell, tw as u16, term_h, &cwd) {
+                            match crate::editor::terminal::TerminalState::spawn(
+                                shell, tw as u16, term_h, &cwd,
+                            ) {
                                 Ok(term) => {
                                     self.terminal = Some(term);
                                     self.run_panel_open = false;
@@ -108,7 +125,7 @@ impl Editor {
                                     self.mark_all_dirty();
                                 }
                                 Err(e) => {
-                                    self.status_msg = Some(format!("Terminal error: {}", e));
+                                    self.status_msg = Some(t!("editor.mode_terminal_err", e));
                                 }
                             }
                         }
@@ -130,9 +147,8 @@ impl Editor {
                     (true, _, _, KeyCode::Char('v')) => {}
                     (true, _, _, KeyCode::Char('p')) => self.paste(),
 
-                    (true, _, _, KeyCode::Char('='))
-                    | (true, _, _, KeyCode::Char('-')) => {
-                        self.status_msg = Some("Zoom: Ctrl++ / Ctrl+- in terminal emulator".into());
+                    (true, _, _, KeyCode::Char('=')) | (true, _, _, KeyCode::Char('-')) => {
+                        self.status_msg = Some(t!("editor.mode_zoom_hint"));
                     }
 
                     (true, false, _, KeyCode::Char('d')) => {
@@ -194,8 +210,7 @@ impl Editor {
                     (true, _, _, KeyCode::Char('w')) => {
                         self.mode = Mode::Visual;
                         self.clear_selection();
-                        self.status_msg =
-                            Some("Visual mode — arrow keys to select, Esc to exit".into());
+                        self.status_msg = Some(t!("editor.mode_visual_start"));
                     }
                     (true, _, _, KeyCode::Char('h')) => {
                         self.mode = Mode::Help;
@@ -214,18 +229,19 @@ impl Editor {
                         self.sv.x = (self.sv.x + 3).min(self.max_scroll_x());
                     }
 
-                    (false, false, false, KeyCode::Up)
-                        if self.cursor.y > 0 => {
-                            self.cursor.y -= 1;
-                        }
+                    (false, false, false, KeyCode::Up) if self.cursor.y > 0 => {
+                        self.cursor.y -= 1;
+                    }
                     (false, false, false, KeyCode::Down)
-                        if self.cursor.y + 1 < self.lines.len() => {
-                            self.cursor.y += 1;
-                        }
+                        if self.cursor.y + 1 < self.lines.len() =>
+                    {
+                        self.cursor.y += 1;
+                    }
                     (false, false, false, KeyCode::Left) => {
                         if let Some((ay, ab)) = self.cursor.selection_anchor {
                             if (ay, ab) != (self.cursor.y, self.cursor.byte) {
-                                let ((sy, sb), _) = sel_range(self.cursor.y, self.cursor.byte, ay, ab);
+                                let ((sy, sb), _) =
+                                    sel_range(self.cursor.y, self.cursor.byte, ay, ab);
                                 self.cursor.y = sy;
                                 self.cursor.byte = sb;
                             }
@@ -240,7 +256,9 @@ impl Editor {
                                     self.cursor.byte = self.lines[prev].len();
                                     break;
                                 }
-                                if prev == 0 { break; }
+                                if prev == 0 {
+                                    break;
+                                }
                                 prev -= 1;
                             }
                         }
@@ -248,7 +266,8 @@ impl Editor {
                     (false, false, false, KeyCode::Right) => {
                         if let Some((ay, ab)) = self.cursor.selection_anchor {
                             if (ay, ab) != (self.cursor.y, self.cursor.byte) {
-                                let (_, (ey, eb)) = sel_range(self.cursor.y, self.cursor.byte, ay, ab);
+                                let (_, (ey, eb)) =
+                                    sel_range(self.cursor.y, self.cursor.byte, ay, ab);
                                 self.cursor.y = ey;
                                 self.cursor.byte = eb;
                             }
@@ -435,8 +454,7 @@ impl Editor {
                     (false, false, false, KeyCode::Tab) => self.indent_lines(),
                     (false, false, _, KeyCode::BackTab) => self.dedent_lines(),
 
-                    (false, false, false, KeyCode::Enter)
-                    | (true, _, _, KeyCode::Enter) => {
+                    (false, false, false, KeyCode::Enter) | (true, _, _, KeyCode::Enter) => {
                         if self.has_multiple_cursors() {
                             self.multi_split_line();
                         } else {
@@ -491,7 +509,11 @@ impl Editor {
         Ok(())
     }
 
-    pub(crate) fn handle_insert_multi_event(&mut self, ev: Event, stdout: &mut std::io::Stdout) -> Result<()> {
+    pub(crate) fn handle_insert_multi_event(
+        &mut self,
+        ev: Event,
+        stdout: &mut std::io::Stdout,
+    ) -> Result<()> {
         if let Event::Key(KeyEvent {
             code: KeyCode::Esc,
             modifiers,
@@ -502,7 +524,7 @@ impl Editor {
             if !modifiers.contains(KeyModifiers::CONTROL) {
                 self.clear_extra_cursors();
                 self.mode = Mode::Insert;
-                self.status_msg = Some("Exited multi-cursor mode".into());
+                self.status_msg = Some(t!("editor.mode_exited_multi"));
                 return Ok(());
             }
         }

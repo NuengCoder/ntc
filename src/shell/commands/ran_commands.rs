@@ -3,10 +3,11 @@ use crate::output::{print_error, print_success};
 use crate::ranfile::parser::{self, RANFILE_NAME, RANFILE_TEMPLATE};
 use crate::ranfile::runner::run_target;
 use crate::shell::alias::expand_command_line;
+use crate::t;
 
 use anyhow::Result;
-use std::path::Path;
 use colored::Colorize;
+use std::path::Path;
 
 pub(crate) fn cmd_ran(args: &str, nav: &mut Navigator) -> Result<bool> {
     let args = args.trim();
@@ -23,7 +24,7 @@ pub(crate) fn cmd_ran(args: &str, nav: &mut Navigator) -> Result<bool> {
         for part in expanded {
             let lower = part.trim().to_lowercase();
             if lower.starts_with("ran ") || lower == "ran" {
-                print_error("Calling 'ran' from within a NTCRANFILE target is not allowed");
+                print_error(&t!("ran.calling_not_allowed"));
                 return Ok(false);
             }
             match super::execute_command(&part, nav, &None) {
@@ -39,7 +40,7 @@ pub(crate) fn cmd_ran(args: &str, nav: &mut Navigator) -> Result<bool> {
 
     if args.is_empty() || args == "standalone" {
         if let Err(e) = run_target("standalone", &cwd, &mut exec) {
-            print_error(&format!("ran: {}", e));
+            print_error(&t!("ran.error_prefix", e));
         }
         return Ok(false);
     }
@@ -52,12 +53,15 @@ pub(crate) fn cmd_ran(args: &str, nav: &mut Navigator) -> Result<bool> {
     match sub {
         "init" => cmd_ran_init(rest),
         "deinit" => cmd_ran_deinit(rest),
-        "help" => { print_ran_usage(); Ok(false) }
+        "help" => {
+            print_ran_usage();
+            Ok(false)
+        }
         "list" | "ls" => cmd_ran_list(nav),
         target => {
             let target = target.to_string();
             if let Err(e) = run_target(&target, &cwd, &mut exec) {
-                print_error(&format!("ran: {}", e));
+                print_error(&t!("ran.error_prefix", e));
             }
             Ok(false)
         }
@@ -69,12 +73,12 @@ fn cmd_ran_init(_args: &str) -> Result<bool> {
     let path = cwd.join(RANFILE_NAME);
 
     if path.exists() {
-        print_error(&format!("{} already exists in {}", RANFILE_NAME, cwd.display()));
+        print_error(&t!("ran.already_exists", RANFILE_NAME, cwd.display()));
         return Ok(false);
     }
 
     std::fs::write(&path, RANFILE_TEMPLATE)?;
-    print_success(&format!("Created {}", path.display()));
+    print_success(&t!("ran.created", path.display()));
     Ok(false)
 }
 
@@ -82,24 +86,24 @@ fn cmd_ran_deinit(_args: &str) -> Result<bool> {
     let cwd = match std::env::current_dir() {
         Ok(d) => d,
         Err(e) => {
-            print_error(&format!("Failed to get current directory: {}", e));
+            print_error(&t!("ran.get_cwd_failed", e));
             return Ok(false);
         }
     };
     let path = cwd.join(RANFILE_NAME);
 
     if !path.exists() {
-        print_error(&format!("No {} found in {}", RANFILE_NAME, cwd.display()));
+        print_error(&t!("ran.not_found", RANFILE_NAME, cwd.display()));
         return Ok(false);
     }
 
     match std::fs::remove_file(&path) {
         Ok(_) => {
-            print_success(&format!("Removed {}", path.display()));
+            print_success(&t!("ran.removed", path.display()));
             Ok(false)
         }
         Err(e) => {
-            print_error(&format!("Failed to remove {}: {}", path.display(), e));
+            print_error(&t!("ran.remove_failed", path.display(), e));
             Ok(false)
         }
     }
@@ -114,43 +118,42 @@ fn cmd_ran_list(nav: &mut Navigator) -> Result<bool> {
     Ok(false)
 }
 
-/// Run a command for a ran target, return true if the exit status was success.
 fn run_target_cmd(cmd: &str, cwd: &Path) -> bool {
     use crate::output::print_info;
-    print_info(&format!("Executing: {}", cmd));
+    print_info(&t!("ran.executing", cmd));
     println!();
     match super::run_system_command(cmd, cwd) {
         Ok(status) => {
             println!();
             if status.success() {
-                crate::output::print_success("Command completed successfully.");
+                crate::output::print_success(&t!("ran.completed"));
                 true
             } else {
                 match status.code() {
-                    Some(code) => crate::output::print_error(&format!("Command exited with code: {}", code)),
-                    None => crate::output::print_warning("Command terminated (Ctrl+C)"),
+                    Some(code) => crate::output::print_error(&t!("ran.exit_code", code)),
+                    None => crate::output::print_warning(&t!("ran.terminated")),
                 }
                 false
             }
         }
         Err(e) => {
             println!();
-            crate::output::print_error(&format!("Failed to execute command: {}", e));
+            crate::output::print_error(&t!("ran.exec_failed", e));
             false
         }
     }
 }
 
 fn print_ran_usage() {
-    println!("{}", "ran — ntc task runner (like Make but ntc-native)".cyan().bold());
+    println!("{}", t!("ran.help_title").cyan().bold());
     println!();
-    println!("Usage:");
-    println!("  ran                        Run the 'standalone' target (default)");
-    println!("  ran <target>               Run a specific target");
-    println!("  ran init                   Create a {} in the current directory", RANFILE_NAME);
-    println!("  ran deinit                 Remove {} from the current directory", RANFILE_NAME);
-    println!("  ran list                   List all available targets");
-    println!("  ran help                   Show this help");
+    println!("{}", t!("ran.help_usage"));
+    println!("{}", t!("ran.help_standalone"));
+    println!("{}", t!("ran.help_target"));
+    println!("{}", t!("ran.help_init_fmt", RANFILE_NAME));
+    println!("{}", t!("ran.help_deinit_fmt", RANFILE_NAME));
+    println!("{}", t!("ran.help_list"));
+    println!("{}", t!("ran.help_help"));
     println!();
     println!("NTCRANFILE.toml example:");
     println!("  [vars]");
@@ -169,20 +172,20 @@ fn print_ran_usage() {
     println!("  deps = []");
     println!("  cmd = \"rm -rf *.o app\"");
     println!();
-    println!("{}", "Variables:".yellow());
-    println!("  Define variables under [vars] and reference them with $(VAR_NAME) in commands.");
-    println!("  They work like Make variables but use $(...) syntax.");
+    println!("{}", t!("ran.section_vars").yellow());
+    println!("{}", t!("ran.desc_vars"));
+    println!("{}", t!("ran.desc_vars2"));
     println!();
-    println!("{}", "Dependencies:".yellow());
-    println!("  Targets can depend on other targets. Dependencies run first, in order.");
+    println!("{}", t!("ran.section_deps").yellow());
+    println!("{}", t!("ran.desc_deps"));
     println!();
-    println!("{}", "Run aliases:".yellow());
-    println!("  Commands are expanded through ntc's run-alias system, so aliases work too.");
-    println!("  Prefix with 'run ' to bypass alias expansion and run directly as a system command.");
+    println!("{}", t!("ran.section_aliases").yellow());
+    println!("{}", t!("ran.desc_aliases"));
+    println!("{}", t!("ran.desc_aliases2"));
     println!();
-    println!("{}", "Reserved target names:".red());
-    println!("  init, deinit, help, list, ls — these cannot be used as target names.");
+    println!("{}", t!("ran.section_reserved").red());
+    println!("{}", t!("ran.desc_reserved"));
     println!();
-    println!("{}", "Note:".yellow());
-    println!("  Calling 'ran' from within a NTCRANFILE target command is not allowed.");
+    println!("{}", t!("ran.section_note").yellow());
+    println!("{}", t!("ran.desc_note"));
 }

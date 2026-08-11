@@ -1,12 +1,12 @@
 [Setup]
 AppName=ntc
-AppVersion=2.4.0
+AppVersion=2.4.2
 AppPublisher=NuengCoder
 AppPublisherURL=https://github.com/NuengCoder/ntc
 DefaultDirName={autopf}\ntc
 DefaultGroupName=ntc
 OutputDir=.\installer
-OutputBaseFilename=ntc-installer-2.4.0
+OutputBaseFilename=ntc-installer-2.4.2
 SetupIconFile=assets\ntc_image.ico
 Compression=lzma
 SolidCompression=yes
@@ -16,6 +16,12 @@ PrivilegesRequiredOverridesAllowed=dialog
 
 [Files]
 Source: "target\release\ntc.exe"; DestDir: "{app}"; Flags: ignoreversion
+Source: "target\release\*.dll"; DestDir: "{app}"; Flags: ignoreversion skipifsourcedoesntexist
+Source: "target\release\*.dll"; DestDir: "{app}\dll"; Flags: ignoreversion skipifsourcedoesntexist
+Source: "target\release\deps\*.dll"; DestDir: "{app}\dll"; Flags: ignoreversion skipifsourcedoesntexist
+
+[Dirs]
+Name: "{app}\dll"
 
 [Icons]
 Name: "{group}\ntc"; Filename: "{app}\ntc.exe"; Comment: "Navigate, Toolkit, Center - Interactive shell"
@@ -37,6 +43,17 @@ Root: HKLM; Subkey: "SYSTEM\CurrentControlSet\Control\Session Manager\Environmen
 Filename: "{app}\ntc.exe"; Parameters: "--version"; Flags: runhidden; Description: "Verify installation";
 
 [Code]
+function IsVCRedistInstalled: boolean;
+var
+  ResultCode: integer;
+begin
+  Result := Exec('cmd.exe', '/c "where /q vcruntime140.dll"', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+  if not Result then
+    Result := FileExists(ExpandConstant('{syswow64}\vcruntime140.dll')) or
+              FileExists(ExpandConstant('{sysnative}\vcruntime140.dll')) or
+              FileExists(ExpandConstant('{win}\System32\vcruntime140.dll'));
+end;
+
 function NeedsAddUserPath(Param: string): boolean;
 var
   OrigPath: string;

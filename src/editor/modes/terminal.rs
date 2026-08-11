@@ -2,6 +2,7 @@ use anyhow::Result;
 use crossterm::event::{Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers, MouseEventKind};
 
 use crate::editor::{Editor, Focus};
+use crate::t;
 
 impl Editor {
     pub(crate) fn handle_terminal_event(
@@ -22,7 +23,10 @@ impl Editor {
 
                 // Click in editor area → switch focus to editor
                 if (m.row as usize) < split {
-                    if matches!(m.kind, MouseEventKind::Down(crossterm::event::MouseButton::Left)) {
+                    if matches!(
+                        m.kind,
+                        MouseEventKind::Down(crossterm::event::MouseButton::Left)
+                    ) {
                         self.focus = Focus::Editor;
                     }
                     self.handle_mouse(m);
@@ -55,7 +59,8 @@ impl Editor {
                             term.dirty = true;
                         }
                         MouseEventKind::ScrollRight => {
-                            self.sv.terminal_scroll_x = (self.sv.terminal_scroll_x + 3).min(max_scroll_x);
+                            self.sv.terminal_scroll_x =
+                                (self.sv.terminal_scroll_x + 3).min(max_scroll_x);
                             term.dirty = true;
                         }
                         MouseEventKind::Down(crossterm::event::MouseButton::Left) => {
@@ -91,8 +96,13 @@ impl Editor {
                                     term.follow_mode = true;
                                     let total = term.total_lines();
                                     let cursor_abs_y = term.scrollback.len() + term.cursor_y;
-                                    self.sv.run = (cursor_abs_y + 1).saturating_sub(panel_h).min(total.saturating_sub(panel_h));
-                                    term.ensure_cursor_visible_x(&mut self.sv.terminal_scroll_x, editor_cols.saturating_sub(1));
+                                    self.sv.run = (cursor_abs_y + 1)
+                                        .saturating_sub(panel_h)
+                                        .min(total.saturating_sub(panel_h));
+                                    term.ensure_cursor_visible_x(
+                                        &mut self.sv.terminal_scroll_x,
+                                        editor_cols.saturating_sub(1),
+                                    );
                                     term.dirty = true;
                                 }
                             }
@@ -102,7 +112,12 @@ impl Editor {
                 }
                 return Ok(());
             }
-            Event::Key(KeyEvent { code, modifiers, kind: KeyEventKind::Press, .. }) => {
+            Event::Key(KeyEvent {
+                code,
+                modifiers,
+                kind: KeyEventKind::Press,
+                ..
+            }) => {
                 let ctrl = modifiers.contains(KeyModifiers::CONTROL);
                 let shift = modifiers.contains(KeyModifiers::SHIFT);
                 let alt = modifiers.contains(KeyModifiers::ALT);
@@ -119,7 +134,8 @@ impl Editor {
                                 if let Some(text) = term.selected_text() {
                                     self.clipboard = text.clone();
                                     Self::push_to_system_clipboard(&text);
-                                    self.status_msg = Some(format!("Copied {} chars", self.clipboard.len()));
+                                    self.status_msg =
+                                        Some(t!("editor.mode_term_copied", self.clipboard.len()));
                                 }
                                 term.clear_selection();
                             } else {
@@ -127,8 +143,13 @@ impl Editor {
                                 term.follow_mode = true;
                                 let total = term.total_lines();
                                 let cursor_abs_y = term.scrollback.len() + term.cursor_y;
-                                self.sv.run = (cursor_abs_y + 1).saturating_sub(panel_h).min(total.saturating_sub(panel_h));
-                                term.ensure_cursor_visible_x(&mut self.sv.terminal_scroll_x, editor_cols.saturating_sub(1));
+                                self.sv.run = (cursor_abs_y + 1)
+                                    .saturating_sub(panel_h)
+                                    .min(total.saturating_sub(panel_h));
+                                term.ensure_cursor_visible_x(
+                                    &mut self.sv.terminal_scroll_x,
+                                    editor_cols.saturating_sub(1),
+                                );
                                 term.dirty = true;
                             }
                         }
@@ -139,7 +160,8 @@ impl Editor {
                             let text = term.visible_text(self.sv.run, panel_h);
                             self.clipboard = text.clone();
                             Self::push_to_system_clipboard(&text);
-                            self.status_msg = Some(format!("Copied {} chars", self.clipboard.len()));
+                            self.status_msg =
+                                Some(t!("editor.mode_term_copied", self.clipboard.len()));
                         }
                     }
                     (true, false, KeyCode::Char('t')) => {
@@ -155,8 +177,13 @@ impl Editor {
                             term.follow_mode = true;
                             let total = term.total_lines();
                             let cursor_abs_y = term.scrollback.len() + term.cursor_y;
-                            self.sv.run = (cursor_abs_y + 1).saturating_sub(panel_h).min(total.saturating_sub(panel_h));
-                            term.ensure_cursor_visible_x(&mut self.sv.terminal_scroll_x, editor_cols.saturating_sub(1));
+                            self.sv.run = (cursor_abs_y + 1)
+                                .saturating_sub(panel_h)
+                                .min(total.saturating_sub(panel_h));
+                            term.ensure_cursor_visible_x(
+                                &mut self.sv.terminal_scroll_x,
+                                editor_cols.saturating_sub(1),
+                            );
                             term.dirty = true;
                         }
                     }
@@ -168,8 +195,13 @@ impl Editor {
                             term.follow_mode = true;
                             let total = term.total_lines();
                             let cursor_abs_y = term.scrollback.len() + term.cursor_y;
-                            self.sv.run = (cursor_abs_y + 1).saturating_sub(panel_h).min(total.saturating_sub(panel_h));
-                            term.ensure_cursor_visible_x(&mut self.sv.terminal_scroll_x, editor_cols.saturating_sub(1));
+                            self.sv.run = (cursor_abs_y + 1)
+                                .saturating_sub(panel_h)
+                                .min(total.saturating_sub(panel_h));
+                            term.ensure_cursor_visible_x(
+                                &mut self.sv.terminal_scroll_x,
+                                editor_cols.saturating_sub(1),
+                            );
                             term.dirty = true;
                         }
                     }
@@ -181,8 +213,13 @@ impl Editor {
                             term.follow_mode = true;
                             let total = term.total_lines();
                             let cursor_abs_y = term.scrollback.len() + term.cursor_y;
-                            self.sv.run = (cursor_abs_y + 1).saturating_sub(panel_h).min(total.saturating_sub(panel_h));
-                            term.ensure_cursor_visible_x(&mut self.sv.terminal_scroll_x, editor_cols.saturating_sub(1));
+                            self.sv.run = (cursor_abs_y + 1)
+                                .saturating_sub(panel_h)
+                                .min(total.saturating_sub(panel_h));
+                            term.ensure_cursor_visible_x(
+                                &mut self.sv.terminal_scroll_x,
+                                editor_cols.saturating_sub(1),
+                            );
                             term.dirty = true;
                         }
                     }
@@ -196,8 +233,13 @@ impl Editor {
                             term.follow_mode = true;
                             let total = term.total_lines();
                             let cursor_abs_y = term.scrollback.len() + term.cursor_y;
-                            self.sv.run = (cursor_abs_y + 1).saturating_sub(panel_h).min(total.saturating_sub(panel_h));
-                            term.ensure_cursor_visible_x(&mut self.sv.terminal_scroll_x, editor_cols.saturating_sub(1));
+                            self.sv.run = (cursor_abs_y + 1)
+                                .saturating_sub(panel_h)
+                                .min(total.saturating_sub(panel_h));
+                            term.ensure_cursor_visible_x(
+                                &mut self.sv.terminal_scroll_x,
+                                editor_cols.saturating_sub(1),
+                            );
                             term.dirty = true;
                         }
                     }
@@ -209,8 +251,13 @@ impl Editor {
                             term.follow_mode = true;
                             let total = term.total_lines();
                             let cursor_abs_y = term.scrollback.len() + term.cursor_y;
-                            self.sv.run = (cursor_abs_y + 1).saturating_sub(panel_h).min(total.saturating_sub(panel_h));
-                            term.ensure_cursor_visible_x(&mut self.sv.terminal_scroll_x, editor_cols.saturating_sub(1));
+                            self.sv.run = (cursor_abs_y + 1)
+                                .saturating_sub(panel_h)
+                                .min(total.saturating_sub(panel_h));
+                            term.ensure_cursor_visible_x(
+                                &mut self.sv.terminal_scroll_x,
+                                editor_cols.saturating_sub(1),
+                            );
                             term.dirty = true;
                         }
                     }
@@ -222,16 +269,23 @@ impl Editor {
                             term.follow_mode = true;
                             let total = term.total_lines();
                             let cursor_abs_y = term.scrollback.len() + term.cursor_y;
-                            self.sv.run = (cursor_abs_y + 1).saturating_sub(panel_h).min(total.saturating_sub(panel_h));
-                            term.ensure_cursor_visible_x(&mut self.sv.terminal_scroll_x, editor_cols.saturating_sub(1));
+                            self.sv.run = (cursor_abs_y + 1)
+                                .saturating_sub(panel_h)
+                                .min(total.saturating_sub(panel_h));
+                            term.ensure_cursor_visible_x(
+                                &mut self.sv.terminal_scroll_x,
+                                editor_cols.saturating_sub(1),
+                            );
                             term.dirty = true;
                         }
                     }
                     (false, false, KeyCode::Right) if alt => {
                         let editor_cols = self.term_w.saturating_sub(self.editor_offset());
                         if let Some(ref mut term) = self.terminal {
-                            let max_scroll_x = term.width.saturating_sub(editor_cols.saturating_sub(1));
-                            self.sv.terminal_scroll_x = (self.sv.terminal_scroll_x + 3).min(max_scroll_x);
+                            let max_scroll_x =
+                                term.width.saturating_sub(editor_cols.saturating_sub(1));
+                            self.sv.terminal_scroll_x =
+                                (self.sv.terminal_scroll_x + 3).min(max_scroll_x);
                             term.dirty = true;
                         }
                     }
@@ -249,8 +303,13 @@ impl Editor {
                             term.follow_mode = true;
                             let total = term.total_lines();
                             let cursor_abs_y = term.scrollback.len() + term.cursor_y;
-                            self.sv.run = (cursor_abs_y + 1).saturating_sub(panel_h).min(total.saturating_sub(panel_h));
-                            term.ensure_cursor_visible_x(&mut self.sv.terminal_scroll_x, editor_cols.saturating_sub(1));
+                            self.sv.run = (cursor_abs_y + 1)
+                                .saturating_sub(panel_h)
+                                .min(total.saturating_sub(panel_h));
+                            term.ensure_cursor_visible_x(
+                                &mut self.sv.terminal_scroll_x,
+                                editor_cols.saturating_sub(1),
+                            );
                             term.dirty = true;
                         }
                     }
@@ -262,8 +321,13 @@ impl Editor {
                             term.follow_mode = true;
                             let total = term.total_lines();
                             let cursor_abs_y = term.scrollback.len() + term.cursor_y;
-                            self.sv.run = (cursor_abs_y + 1).saturating_sub(panel_h).min(total.saturating_sub(panel_h));
-                            term.ensure_cursor_visible_x(&mut self.sv.terminal_scroll_x, editor_cols.saturating_sub(1));
+                            self.sv.run = (cursor_abs_y + 1)
+                                .saturating_sub(panel_h)
+                                .min(total.saturating_sub(panel_h));
+                            term.ensure_cursor_visible_x(
+                                &mut self.sv.terminal_scroll_x,
+                                editor_cols.saturating_sub(1),
+                            );
                             term.dirty = true;
                         }
                     }

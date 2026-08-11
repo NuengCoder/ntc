@@ -19,7 +19,10 @@ impl StdoutGuard {
         }
         const STD_OUTPUT_HANDLE: u32 = 0xFFFFFFF5u32;
         let original_fd = unsafe { GetStdHandle(STD_OUTPUT_HANDLE) };
-        StdoutGuard { original_fd, tmp_file }
+        StdoutGuard {
+            original_fd,
+            tmp_file,
+        }
     }
 }
 
@@ -73,8 +76,7 @@ fn with_stdout_captured<F: FnOnce()>(f: F) -> String {
     let tmp_file2 = tmp_file.clone();
 
     // Open a file for writing (will be the new stdout)
-    let file = std::fs::File::create(&tmp_file)
-        .expect("failed to create capture temp file");
+    let file = std::fs::File::create(&tmp_file).expect("failed to create capture temp file");
 
     extern "system" {
         fn SetStdHandle(nStdHandle: u32, hHandle: RawHandle) -> i32;
@@ -102,8 +104,8 @@ fn with_stdout_captured<F: FnOnce()>(f: F) -> String {
 /// Uses a RAII guard to ensure stdout is restored even if `f()` panics.
 #[cfg(not(windows))]
 fn with_stdout_captured<F: FnOnce()>(f: F) -> String {
-    use std::os::unix::io::AsRawFd;
     use libc;
+    use std::os::unix::io::AsRawFd;
 
     // Create a temp file path
     let tmp_dir = std::env::temp_dir();
@@ -111,8 +113,7 @@ fn with_stdout_captured<F: FnOnce()>(f: F) -> String {
     let tmp_file2 = tmp_file.clone();
 
     // Open a file for writing
-    let file = std::fs::File::create(&tmp_file)
-        .expect("failed to create capture temp file");
+    let file = std::fs::File::create(&tmp_file).expect("failed to create capture temp file");
 
     let fd = file.as_raw_fd();
 

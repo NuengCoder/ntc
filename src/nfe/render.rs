@@ -1,7 +1,7 @@
 use crossterm::cursor::MoveTo;
+use crossterm::queue;
 use crossterm::style::{Print, ResetColor, SetBackgroundColor, SetForegroundColor};
 use crossterm::terminal::{Clear, ClearType};
-use crossterm::queue;
 use std::io::Write;
 
 use crate::nfe::state::{NfeState, PanelFocus};
@@ -30,13 +30,28 @@ impl NfeState {
         let cols = self.term_w;
         let path_str = self.current_dir.to_string_lossy();
 
-        let bg = crossterm::style::Color::Rgb { r: 30, g: 30, b: 50 };
-        let fg = crossterm::style::Color::Rgb { r: 200, g: 200, b: 220 };
+        let bg = crossterm::style::Color::Rgb {
+            r: 30,
+            g: 30,
+            b: 50,
+        };
+        let fg = crossterm::style::Color::Rgb {
+            r: 200,
+            g: 200,
+            b: 220,
+        };
 
         let icon = "\u{1F4C1} ";
         let display = if path_str.len() + icon.len() > cols.saturating_sub(2) {
             let max = cols.saturating_sub(icon.len() + 4);
-            let truncated: String = path_str.chars().rev().take(max).collect::<Vec<_>>().into_iter().rev().collect();
+            let truncated: String = path_str
+                .chars()
+                .rev()
+                .take(max)
+                .collect::<Vec<_>>()
+                .into_iter()
+                .rev()
+                .collect();
             format!("{}...{}", icon, truncated)
         } else {
             format!("{}{}", icon, path_str)
@@ -77,7 +92,11 @@ impl NfeState {
             let row = content_top + i;
             let idx = self.scroll + i;
             let is_selected = idx == self.selected && self.focus == PanelFocus::List;
-            let cell_bg = if is_selected { selected_bg.clone() } else { bg.clone() };
+            let cell_bg = if is_selected {
+                selected_bg.clone()
+            } else {
+                bg.clone()
+            };
 
             let full_w = num_w + list_w;
             queue!(
@@ -89,8 +108,16 @@ impl NfeState {
 
             // Relative line number
             if idx < self.entries.len() {
-                let dist = if idx >= self.selected { idx - self.selected } else { self.selected - idx };
-                let num_str = if dist == 0 { " 0 ".to_string() } else { format!("{:>2} ", dist) };
+                let dist = if idx >= self.selected {
+                    idx - self.selected
+                } else {
+                    self.selected - idx
+                };
+                let num_str = if dist == 0 {
+                    " 0 ".to_string()
+                } else {
+                    format!("{:>2} ", dist)
+                };
                 let num_fg = if dist == 0 {
                     theme.editor.sidebar_current.to_crossterm()
                 } else {
@@ -111,7 +138,12 @@ impl NfeState {
                 let icon = if entry.is_dir { "\u{1F4C1} " } else { "  " };
                 let name_width = list_w.saturating_sub(1);
                 let display_name: String = if entry.name.chars().count() > name_width {
-                    entry.name.chars().take(name_width.saturating_sub(3)).collect::<String>() + "..."
+                    entry
+                        .name
+                        .chars()
+                        .take(name_width.saturating_sub(3))
+                        .collect::<String>()
+                        + "..."
                 } else {
                     entry.name.clone()
                 };
@@ -143,7 +175,10 @@ impl NfeState {
         let x = num_w + list_w;
         let content_top = 1;
         let list_h = self.list_height();
-        let border_fg = crate::utils::theme::ThemeManager::current().editor.border.to_crossterm();
+        let border_fg = crate::utils::theme::ThemeManager::current()
+            .editor
+            .border
+            .to_crossterm();
 
         for i in 0..list_h {
             let row = content_top + i;
@@ -235,7 +270,11 @@ impl NfeState {
         let preview_w = self.preview_width();
         let mut lines = Vec::new();
 
-        lines.push(format!("\u{2500}{:\u{2500}<pw$}", entry.name, pw = preview_w.saturating_sub(2)));
+        lines.push(format!(
+            "\u{2500}{:\u{2500}<pw$}",
+            entry.name,
+            pw = preview_w.saturating_sub(2)
+        ));
         lines.push(String::new());
 
         let size_str = crate::explorer::human_readable_size(entry.size);
@@ -263,7 +302,11 @@ impl NfeState {
 
     fn render_dir_preview_lines(&self, entry: &crate::nfe::state::FileEntry) -> Vec<String> {
         let mut lines = Vec::new();
-        lines.push(format!("\u{2500}{:\u{2500}<pw$}", entry.name, pw = self.preview_width().saturating_sub(2)));
+        lines.push(format!(
+            "\u{2500}{:\u{2500}<pw$}",
+            entry.name,
+            pw = self.preview_width().saturating_sub(2)
+        ));
         lines.push(String::new());
 
         match std::fs::read_dir(&entry.path) {
@@ -305,7 +348,11 @@ impl NfeState {
                 let max_lines = self.list_height() * 2;
                 match std::fs::read_to_string(&entry.path) {
                     Ok(content) => {
-                        let lines: Vec<String> = content.lines().take(max_lines).map(|l| l.to_string()).collect();
+                        let lines: Vec<String> = content
+                            .lines()
+                            .take(max_lines)
+                            .map(|l| l.to_string())
+                            .collect();
                         self.preview_content = if content.lines().count() > max_lines {
                             let mut l = lines;
                             l.push("... (file truncated)".to_string());
@@ -341,7 +388,11 @@ impl NfeState {
         let file_count = self.files.len();
         let total = dir_count + file_count;
         let sort_label = self.sort_mode.label();
-        let sort_arrow = if self.sort_desc { "\u{25BC}" } else { "\u{25B2}" };
+        let sort_arrow = if self.sort_desc {
+            "\u{25BC}"
+        } else {
+            "\u{25B2}"
+        };
 
         let mut left = format!(
             " {} items | {} dirs | {} files | Sort: {}{} ",
@@ -377,8 +428,16 @@ impl NfeState {
         let padding = cols.saturating_sub(left.chars().count() + right.chars().count());
         let full_line = format!("{}{}{}", left, " ".repeat(padding), right);
 
-        let bg = crossterm::style::Color::Rgb { r: 30, g: 30, b: 50 };
-        let fg = crossterm::style::Color::Rgb { r: 180, g: 180, b: 200 };
+        let bg = crossterm::style::Color::Rgb {
+            r: 30,
+            g: 30,
+            b: 50,
+        };
+        let fg = crossterm::style::Color::Rgb {
+            r: 180,
+            g: 180,
+            b: 200,
+        };
 
         queue!(
             stdout,
@@ -396,8 +455,16 @@ impl NfeState {
         let cols = self.term_w;
         let status_row = self.term_h.saturating_sub(1);
         let prompt = format!(" Go to line (+N / -N / N): {} ", self.line_prompt);
-        let bg = crossterm::style::Color::Rgb { r: 40, g: 40, b: 60 };
-        let fg = crossterm::style::Color::Rgb { r: 220, g: 220, b: 240 };
+        let bg = crossterm::style::Color::Rgb {
+            r: 40,
+            g: 40,
+            b: 60,
+        };
+        let fg = crossterm::style::Color::Rgb {
+            r: 220,
+            g: 220,
+            b: 240,
+        };
         queue!(
             stdout,
             MoveTo(0, status_row as u16),
@@ -413,9 +480,20 @@ impl NfeState {
         let cols = self.term_w;
         let status_row = self.term_h.saturating_sub(1);
         let count = self.find_results.len();
-        let prompt = format!(" Find (recursive): {}  [{} matches] ", self.find_query, count);
-        let bg = crossterm::style::Color::Rgb { r: 40, g: 60, b: 40 };
-        let fg = crossterm::style::Color::Rgb { r: 150, g: 255, b: 150 };
+        let prompt = format!(
+            " Find (recursive): {}  [{} matches] ",
+            self.find_query, count
+        );
+        let bg = crossterm::style::Color::Rgb {
+            r: 40,
+            g: 60,
+            b: 40,
+        };
+        let fg = crossterm::style::Color::Rgb {
+            r: 150,
+            g: 255,
+            b: 150,
+        };
         queue!(
             stdout,
             MoveTo(0, status_row as u16),
@@ -484,8 +562,16 @@ impl NfeState {
         ];
 
         for y in 0..rows {
-            let row_bg = crossterm::style::Color::Rgb { r: 20, g: 20, b: 35 };
-            let row_fg = crossterm::style::Color::Rgb { r: 180, g: 180, b: 200 };
+            let row_bg = crossterm::style::Color::Rgb {
+                r: 20,
+                g: 20,
+                b: 35,
+            };
+            let row_fg = crossterm::style::Color::Rgb {
+                r: 180,
+                g: 180,
+                b: 200,
+            };
             queue!(
                 stdout,
                 MoveTo(0, y as u16),
@@ -503,12 +589,29 @@ impl NfeState {
                 let left_pad = cols.saturating_sub(total_len) / 2;
                 let padded = format!("{}{}", " ".repeat(left_pad), line);
 
-                let fg = if line.contains("║") && !line.contains("═") && !line.contains("Press") {
-                    crossterm::style::Color::Rgb { r: 220, g: 220, b: 240 }
-                } else if line.contains("═") || line.contains("╔") || line.contains("╚") || line.contains("╠") {
-                    crossterm::style::Color::Rgb { r: 120, g: 120, b: 180 }
+                let fg = if line.contains("║") && !line.contains("═") && !line.contains("Press")
+                {
+                    crossterm::style::Color::Rgb {
+                        r: 220,
+                        g: 220,
+                        b: 240,
+                    }
+                } else if line.contains("═")
+                    || line.contains("╔")
+                    || line.contains("╚")
+                    || line.contains("╠")
+                {
+                    crossterm::style::Color::Rgb {
+                        r: 120,
+                        g: 120,
+                        b: 180,
+                    }
                 } else {
-                    crossterm::style::Color::Rgb { r: 160, g: 160, b: 180 }
+                    crossterm::style::Color::Rgb {
+                        r: 160,
+                        g: 160,
+                        b: 180,
+                    }
                 };
                 queue!(
                     stdout,
@@ -530,7 +633,10 @@ impl NfeState {
     }
 
     pub fn scroll_preview_down(&mut self) {
-        let max_lines = self.preview_content.len().saturating_sub(self.list_height());
+        let max_lines = self
+            .preview_content
+            .len()
+            .saturating_sub(self.list_height());
         if self.preview_scroll < max_lines {
             self.preview_scroll += 1;
         }

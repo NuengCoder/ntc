@@ -7,6 +7,7 @@ mod types;
 use colored::Colorize;
 
 use crate::output::{print_error, print_info, print_success};
+use crate::t;
 use crate::utils::interactive::{InteractiveMenu, MenuItem};
 use anyhow::Result;
 
@@ -20,10 +21,12 @@ pub fn cmd_ntpkg(args: &str, _nav: &mut crate::navigator::Navigator) -> Result<b
             let name = parts.get(1).unwrap_or(&"");
             let version = parts.get(2).unwrap_or(&"");
             if name.is_empty() {
-                print_error("Usage: ntpkg install <language> [version]");
+                print_error(&t!("ntpkg.install_usage"));
                 return Ok(false);
             }
-            let ver = if version.is_empty() || (*name == "java" && !version.is_empty() && !version.contains('-')) {
+            let ver = if version.is_empty()
+                || (*name == "java" && !version.is_empty() && !version.contains('-'))
+            {
                 let initial = if version.is_empty() {
                     match pick_version_interactive(name) {
                         Some(v) => v,
@@ -50,19 +53,19 @@ pub fn cmd_ntpkg(args: &str, _nav: &mut crate::navigator::Navigator) -> Result<b
             };
             match manager::install_package(name, &ver) {
                 Ok(()) => {
-                    print_success(&format!("{} {} installed!", name, ver));
+                    print_success(&t!("ntpkg.installed_msg", name, ver));
                     let install_dir = types::version_dir(name, &ver);
                     println!();
-                    print_info(&format!("Install location: {}", install_dir.display()));
+                    print_info(&t!("ntpkg.install_loc", install_dir.display()));
                     print_info(&format!("cd {}", install_dir.display()));
                     #[cfg(windows)]
                     {
                         let bin_path = types::version_dir(name, &ver);
                         println!();
-                        print_info("Add to your user PATH:");
+                        print_info(&t!("ntpkg.add_to_user_path"));
                         println!("  usrpath add {}", bin_path.display());
                         println!();
-                        print_info("Add to your system PATH (requires admin):");
+                        print_info(&t!("ntpkg.add_to_sys_path"));
                         println!("  mode admin");
                         println!("  syspath add {}", bin_path.display());
                     }
@@ -70,11 +73,11 @@ pub fn cmd_ntpkg(args: &str, _nav: &mut crate::navigator::Navigator) -> Result<b
                     {
                         let bin_path = types::bin_dir(name, &ver);
                         println!();
-                        print_info("Add to your PATH:");
+                        print_info(&t!("ntpkg.add_to_path"));
                         println!("  export PATH=\"{}$PATH\"", bin_path.display());
                     }
                 }
-                Err(e) => print_error(&format!("Install failed: {:#}", e)),
+                Err(e) => print_error(&t!("ntpkg.install_failed", e)),
             }
             Ok(false)
         }
@@ -82,7 +85,7 @@ pub fn cmd_ntpkg(args: &str, _nav: &mut crate::navigator::Navigator) -> Result<b
             let name = *parts.get(1).unwrap_or(&"");
             let mut version = parts.get(2).unwrap_or(&"").to_string();
             if name.is_empty() {
-                print_error("Usage: ntpkg uninstall <language> [version]");
+                print_error(&t!("ntpkg.uninstall_usage"));
                 return Ok(false);
             }
             if version.is_empty() {
@@ -90,13 +93,13 @@ pub fn cmd_ntpkg(args: &str, _nav: &mut crate::navigator::Navigator) -> Result<b
                 if let Some(active) = manifest.active.get(name) {
                     version = active.clone();
                 } else {
-                    print_error(&format!("No active version for '{name}' and no version specified"));
+                    print_error(&t!("ntpkg.no_active_version", name));
                     return Ok(false);
                 }
             }
             match manager::uninstall_package(name, &version) {
-                Ok(()) => print_success(&format!("{} {} removed", name, version)),
-                Err(e) => print_error(&format!("Uninstall failed: {:#}", e)),
+                Ok(()) => print_success(&t!("ntpkg.removed_msg", name, version)),
+                Err(e) => print_error(&t!("ntpkg.uninstall_failed", e)),
             }
             Ok(false)
         }
@@ -104,11 +107,11 @@ pub fn cmd_ntpkg(args: &str, _nav: &mut crate::navigator::Navigator) -> Result<b
             match manager::list_packages() {
                 Ok(packages) => {
                     if packages.is_empty() {
-                        print_info("No packages installed. Use 'ntpkg install <language>'");
+                        print_info(&t!("ntpkg.no_packages"));
                     } else {
                         println!();
                         for (name, version, active) in &packages {
-                            let marker = if *active { " (active)" } else { "" };
+                            let marker = if *active { t!("ntpkg.active_marker") } else { String::new() };
                             println!("  {} {}{}", name, version, marker);
                         }
                         println!();
@@ -122,11 +125,11 @@ pub fn cmd_ntpkg(args: &str, _nav: &mut crate::navigator::Navigator) -> Result<b
             let name = parts.get(1).unwrap_or(&"");
             let version = parts.get(2).unwrap_or(&"");
             if name.is_empty() || version.is_empty() {
-                print_error("Usage: ntpkg use <language> <version>");
+                print_error(&t!("ntpkg.use_usage"));
                 return Ok(false);
             }
             match manager::use_package(name, version) {
-                Ok(()) => print_success(&format!("Now using {} {}", name, version)),
+                Ok(()) => print_success(&t!("ntpkg.now_using", name, version)),
                 Err(e) => print_error(&format!("{:#}", e)),
             }
             Ok(false)
@@ -134,13 +137,13 @@ pub fn cmd_ntpkg(args: &str, _nav: &mut crate::navigator::Navigator) -> Result<b
         "which" => {
             let name = parts.get(1).unwrap_or(&"");
             if name.is_empty() {
-                print_error("Usage: ntpkg which <language> [version]");
+                print_error(&t!("ntpkg.which_usage"));
                 return Ok(false);
             }
             let version = parts.get(2).copied();
             match manager::which_package(name, version) {
                 Ok(path) => println!("{}", path.display()),
-                Err(e) => print_error(&format!("{:#}", e)),
+                Err(e) => print_error(&t!("ntpkg.install_failed", e)),
             }
             Ok(false)
         }
@@ -148,16 +151,16 @@ pub fn cmd_ntpkg(args: &str, _nav: &mut crate::navigator::Navigator) -> Result<b
             let name = parts.get(1).unwrap_or(&"");
             if name.is_empty() {
                 let langs = sources::list_supported_languages();
-                println!("  Supported languages:");
+                println!("{}", t!("ntpkg.supported_langs"));
                 for lang in langs {
                     println!("    {}", lang);
                 }
-                println!("  Use 'ntpkg available <language>' to list versions.");
+                println!("{}", t!("ntpkg.available_hint"));
                 return Ok(false);
             }
             let versions = sources::list_available_versions(name);
             if versions.is_empty() {
-                print_info(&format!("No versions tracked for '{name}'"));
+                print_info(&t!("ntpkg.no_versions", name));
             } else {
                 println!();
                 for v in &versions {
@@ -174,27 +177,34 @@ pub fn cmd_ntpkg(args: &str, _nav: &mut crate::navigator::Navigator) -> Result<b
             sorted.sort_by(|a, b| a.0.cmp(b.0));
             let matched = if let Some(kw) = keyword {
                 let kw_lower = kw.to_lowercase();
-                sorted.into_iter().filter(|(name, desc)| {
-                    name.to_lowercase().contains(&kw_lower) || desc.to_lowercase().contains(&kw_lower)
-                }).collect::<Vec<_>>()
+                sorted
+                    .into_iter()
+                    .filter(|(name, desc)| {
+                        name.to_lowercase().contains(&kw_lower)
+                            || desc.to_lowercase().contains(&kw_lower)
+                    })
+                    .collect::<Vec<_>>()
             } else {
                 sorted
             };
             if matched.is_empty() {
-                print_info(&format!("No packages match '{}'", keyword.unwrap_or("")));
+                print_info(&t!("ntpkg.no_match", keyword.unwrap_or("")));
             } else {
                 println!();
                 println!("╔══════════════════════════════════════════════════════════════════╗");
-                println!("║{:^60}", "Available packages".cyan().bold());
+                println!("║{:^60}", t!("ntpkg.available_title").cyan().bold());
                 if let Some(kw) = keyword {
-                    println!("║  {}                                  ", format!("(filter: \"{kw}\")").dimmed());
+                    println!(
+                        "║  {}                                  ",
+                        t!("ntpkg.filter_label", kw).dimmed()
+                    );
                 }
                 println!("╠══════════════════════════════════════════════════════════════════╣");
                 for (name, desc) in &matched {
                     println!("║  {:<12} {:<45}", name.cyan(), desc);
                 }
                 println!("╚══════════════════════════════════════════════════════════════════╝");
-                println!("  {} packages", matched.len());
+                println!("  {}", t!("ntpkg.package_count", matched.len()));
                 println!();
             }
             Ok(false)
@@ -202,7 +212,7 @@ pub fn cmd_ntpkg(args: &str, _nav: &mut crate::navigator::Navigator) -> Result<b
         "info" => {
             let name = parts.get(1).copied().unwrap_or("");
             if name.is_empty() {
-                print_error("Usage: ntpkg info <language>");
+                print_error(&t!("ntpkg.info_usage"));
                 return Ok(false);
             }
             let manifest = manager::load_manifest()?;
@@ -212,21 +222,21 @@ pub fn cmd_ntpkg(args: &str, _nav: &mut crate::navigator::Navigator) -> Result<b
             let has_bin_dir = active.is_some() && vdir.exists();
             println!();
             println!("╔══════════════════════════════════════════════════════════════════╗");
-            println!("║{:^60}", format!("Package info: {name}").cyan().bold());
+            println!("║{:^60}", t!("ntpkg.package_info_title", name).cyan().bold());
             println!("╠══════════════════════════════════════════════════════════════════╣");
             if let Some(ver) = active {
-                println!("║  {:<20} {:<37}", "Active:", ver.to_string().green());
+                println!("║  {:<20} {:<37}", t!("ntpkg.active_label"), ver.to_string().green());
             } else {
-                println!("║  {:<20} {:<37}", "Active:", "(not set)".dimmed());
+                println!("║  {:<20} {:<37}", t!("ntpkg.active_label"), t!("ntpkg.not_set").dimmed());
             }
             if let Some(vers) = installed {
                 let versions_str = vers.join(", ");
-                println!("║  {:<20} {:<37}", "Installed:", versions_str);
+                println!("║  {:<20} {:<37}", t!("ntpkg.installed_label"), versions_str);
             } else {
-                println!("║  {:<20} {:<37}", "Installed:", "(none)".dimmed());
+                println!("║  {:<20} {:<37}", t!("ntpkg.installed_label"), t!("ntpkg.none").dimmed());
             }
             if active.is_some() {
-                println!("║  {:<20} {:<37}", "Location:", vdir.display().to_string());
+                println!("║  {:<20} {:<37}", t!("ntpkg.location_label"), vdir.display().to_string());
                 if has_bin_dir {
                     if let Ok(entries) = std::fs::read_dir(&vdir) {
                         let bins: Vec<String> = entries
@@ -236,7 +246,7 @@ pub fn cmd_ntpkg(args: &str, _nav: &mut crate::navigator::Navigator) -> Result<b
                             .collect();
                         if !bins.is_empty() {
                             let bins_str = bins.join(", ");
-                            println!("║  {:<20} {:<37}", "Binaries:", bins_str);
+                            println!("║  {:<20} {:<37}", t!("ntpkg.binaries_label"), bins_str);
                         }
                     }
                 }
@@ -250,7 +260,7 @@ pub fn cmd_ntpkg(args: &str, _nav: &mut crate::navigator::Navigator) -> Result<b
             Ok(false)
         }
         _ => {
-            print_error(&format!("Unknown ntpkg subcommand: '{}'. Use 'ntpkg help'", subcmd));
+            print_error(&t!("ntpkg.unknown_subcmd", subcmd));
             Ok(false)
         }
     }
@@ -260,7 +270,7 @@ pub fn cmd_ntpkg(args: &str, _nav: &mut crate::navigator::Navigator) -> Result<b
 pub fn cmd_ntpx(args: &str, _nav: &mut crate::navigator::Navigator) -> Result<bool> {
     let parts: Vec<&str> = args.splitn(2, ' ').collect();
     if parts.is_empty() || parts[0].is_empty() {
-        print_error("Usage: ntpx <package> [binary] [args...]");
+        print_error(&t!("ntpkg.ntpx_usage"));
         return Ok(false);
     }
 
@@ -272,7 +282,7 @@ pub fn cmd_ntpx(args: &str, _nav: &mut crate::navigator::Navigator) -> Result<bo
     match manager::execute_package(pkg, &binary, &exec_args) {
         Ok(_code) => {}
         Err(e) => {
-            print_error(&format!("ntpx: {:#}", e));
+            print_error(&t!("ntpkg.install_failed", e));
         }
     }
     Ok(false)
@@ -287,11 +297,17 @@ fn resolve_ntpx_binary_and_args(pkg: &str, rest: &str) -> (String, Vec<String>) 
     let first = tokens[0];
 
     if first.starts_with('-') {
-        return (pkg.to_string(), tokens.iter().map(|s| s.to_string()).collect());
+        return (
+            pkg.to_string(),
+            tokens.iter().map(|s| s.to_string()).collect(),
+        );
     }
 
     if tokens.len() == 1 {
-        return (pkg.to_string(), tokens.iter().map(|s| s.to_string()).collect());
+        return (
+            pkg.to_string(),
+            tokens.iter().map(|s| s.to_string()).collect(),
+        );
     }
 
     let binary = first.to_string();
@@ -303,7 +319,7 @@ fn resolve_ntpx_binary_and_args(pkg: &str, rest: &str) -> (String, Vec<String>) 
 fn pick_version_interactive(name: &str) -> Option<String> {
     let versions = sources::list_available_versions(name);
     if versions.is_empty() {
-        print_error(&format!("No versions available for '{name}'"));
+        print_error(&t!("ntpkg.no_versions_for", name));
         return None;
     }
     let latest = versions.last().map(|s| s.as_str()).unwrap_or("");
@@ -319,10 +335,10 @@ fn pick_version_interactive(name: &str) -> Option<String> {
             MenuItem::with_detail(&label, detail)
         })
         .collect();
-    let title = format!("Select {name} version");
+    let title = t!("ntpkg.select_version", name);
     let menu = InteractiveMenu::new(&title)
         .items(items)
-        .prompt(format!("Enter number (1-{}) or 0: ", versions.len()));
+        .prompt(t!("ntpkg.enter_number", versions.len()));
     menu.run().ok().flatten().map(|i| versions[i].clone())
 }
 
@@ -335,15 +351,18 @@ fn pick_java_version_interactive(feature: &str, versions: &[String]) -> Option<S
     let items: Vec<MenuItem> = versions
         .iter()
         .map(|v| {
-            let label = v.strip_prefix("jdk-").or_else(|| v.strip_prefix("jdk")).unwrap_or(v);
+            let label = v
+                .strip_prefix("jdk-")
+                .or_else(|| v.strip_prefix("jdk"))
+                .unwrap_or(v);
             let detail = if v.as_str() == latest { "(latest)" } else { "" };
             MenuItem::with_detail(label, detail)
         })
         .collect();
-    let title = format!("Select JDK {feature} version");
+    let title = t!("ntpkg.select_jdk_version", feature);
     let menu = InteractiveMenu::new(&title)
         .items(items)
-        .prompt(format!("Enter number (1-{}) or 0: ", versions.len()));
+        .prompt(t!("ntpkg.enter_number", versions.len()));
     menu.run().ok().flatten().map(|i| versions[i].clone())
 }
 
@@ -354,24 +373,24 @@ pub fn build_package_path_entries() -> Vec<std::path::PathBuf> {
 
 fn print_help() {
     println!();
-    println!("  ntpkg — ntc package manager for language runtimes");
+    println!("{}", t!("ntpkg.help_usage"));
     println!();
-    println!("  Usage:");
-    println!("    ntpkg install <language> [version]   Download & install a runtime");
-    println!("    ntpkg uninstall <language> [version]  Remove an installed runtime");
-    println!("    ntpkg list                           Show installed runtimes");
-    println!("    ntpkg use <language> <version>        Activate a specific version");
-    println!("    ntpkg which <language>                Show path to active runtime");
-    println!("    ntpkg available [language]             List languages or downloadable versions");
-    println!("    ntpkg help                            Show this help");
+    println!("{}", t!("ntpkg.help_usage_title"));
+    println!("{}", t!("ntpkg.help_install"));
+    println!("{}", t!("ntpkg.help_uninstall"));
+    println!("{}", t!("ntpkg.help_list"));
+    println!("{}", t!("ntpkg.help_use"));
+    println!("{}", t!("ntpkg.help_which"));
+    println!("{}", t!("ntpkg.help_available"));
+    println!("{}", t!("ntpkg.help_help"));
     println!();
-    println!("  ntpx — run any installed package's binary");
-    println!("    ntpx <package> [binary] [args...]");
+    println!("{}", t!("ntpkg.ntpx_header"));
+    println!("{}", t!("ntpkg.ntpx_usage_line"));
     println!();
-    println!("  Examples:");
-    println!("    ntpx go version              # run 'go version'");
-    println!("    ntpx python --version        # run 'python --version'");
-    println!("    ntpx msys2 gcc --version     # run 'gcc --version' (explicit binary)");
+    println!("{}", t!("ntpkg.help_examples_title"));
+    println!("{}", t!("ntpkg.help_ex_ntpx_go"));
+    println!("{}", t!("ntpkg.help_ex_ntpx_py"));
+    println!("{}", t!("ntpkg.help_ex_ntpx_msys2"));
     println!("    ntpkg install python 3.13");
     println!("    ntpkg install git 2.45");
     println!("    ntpkg install gh 2.58");

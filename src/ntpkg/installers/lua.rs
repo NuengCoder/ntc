@@ -7,6 +7,7 @@ use super::super::download::{download_with_progress, extract_archive};
 use super::super::manager::{find_system_binary, load_manifest, platform_key, save_manifest};
 use super::super::types::{bin_dir, ArchiveType, PackageSource};
 use crate::output::{print_info, print_success};
+use crate::t;
 
 pub(crate) fn install_lua(
     name: &str,
@@ -40,18 +41,14 @@ pub(crate) fn install_lua(
     Ok(())
 }
 
-fn build_lua_from_source(
-    tarball: &Path,
-    name: &str,
-    version: &str,
-) -> Result<()> {
+fn build_lua_from_source(tarball: &Path, name: &str, version: &str) -> Result<()> {
     let build_dir = std::env::temp_dir().join(format!("ntc-build-lua-{version}"));
     if build_dir.exists() {
         let _ = fs::remove_dir_all(&build_dir);
     }
     fs::create_dir_all(&build_dir)?;
 
-    print_info("Extracting...");
+    print_info(&t!("ntpkg.extracting"));
     extract_archive(tarball, &build_dir, ArchiveType::TarGz)?;
 
     let source_dir = find_source_dir(&build_dir, version)?;
@@ -129,7 +126,8 @@ fn check_build_deps() -> Result<()> {
         if find_system_binary(tool).is_none() {
             let hint = if find_system_binary("pacman").is_some() {
                 "sudo pacman -S base-devel"
-            } else if find_system_binary("apt-get").is_some() || find_system_binary("apt").is_some() {
+            } else if find_system_binary("apt-get").is_some() || find_system_binary("apt").is_some()
+            {
                 "sudo apt install build-essential"
             } else if find_system_binary("dnf").is_some() {
                 "sudo dnf groupinstall 'Development Tools'"
@@ -141,9 +139,7 @@ fn check_build_deps() -> Result<()> {
                 "install gcc, make and related build tools"
             };
 
-            bail!(
-                "Build tool '{tool}' not found.\n  Install build dependencies:\n    {hint}"
-            );
+            bail!("Build tool '{tool}' not found.\n  Install build dependencies:\n    {hint}");
         }
     }
     Ok(())
@@ -155,9 +151,7 @@ fn check_build_deps() -> Result<()> {
     for tool in &tools {
         if find_system_binary(tool).is_none() {
             let hint = "Install MSYS2 via 'ntpkg install msys2', then run: pacman -S mingw-w64-ucrt-x86_64-gcc make";
-            bail!(
-                "Build tool '{tool}' not found.\n  Install build dependencies:\n    {hint}"
-            );
+            bail!("Build tool '{tool}' not found.\n  Install build dependencies:\n    {hint}");
         }
     }
     Ok(())

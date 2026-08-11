@@ -6,6 +6,7 @@ use super::super::download::{download_with_progress, extract_archive};
 use super::super::manager::{copy_recursive, load_manifest, platform_key, save_manifest};
 use super::super::types::PackageSource;
 use crate::output::{print_info, print_success};
+use crate::t;
 
 pub(crate) fn install_scala(
     name: &str,
@@ -20,7 +21,11 @@ pub(crate) fn install_scala(
         .ok_or_else(|| anyhow::anyhow!("No download URL for platform '{platform_key}'"))?;
 
     let archive_name = url.split('/').last().unwrap_or("scala-archive");
-    let archive_name = if archive_name.is_empty() { "scala-archive" } else { archive_name };
+    let archive_name = if archive_name.is_empty() {
+        "scala-archive"
+    } else {
+        archive_name
+    };
 
     let tmp_dir = std::env::temp_dir().join(format!("ntc-install-{name}-{version}"));
     if tmp_dir.exists() {
@@ -32,7 +37,7 @@ pub(crate) fn install_scala(
     print_info(&format!("Downloading {name} {version}..."));
     download_with_progress(url, &archive_path)?;
 
-    print_info("Extracting...");
+    print_info(&t!("ntpkg.extracting"));
     extract_archive(&archive_path, &tmp_dir, source.archive_type)?;
 
     let scala_bin = find_scala_binary(&tmp_dir)
@@ -47,8 +52,11 @@ pub(crate) fn install_scala(
     copy_recursive(scala_root, vdir)?;
 
     let bin_path = vdir.join("bin");
-    fs::write(vdir.join(".real_path"), bin_path.to_string_lossy().as_bytes())
-        .context("Failed to write .real_path")?;
+    fs::write(
+        vdir.join(".real_path"),
+        bin_path.to_string_lossy().as_bytes(),
+    )
+    .context("Failed to write .real_path")?;
 
     let _ = fs::remove_dir_all(&tmp_dir);
 
@@ -75,10 +83,7 @@ fn find_file_recursive(dir: &Path, name: &str) -> Option<std::path::PathBuf> {
                 if let Some(found) = find_file_recursive(&path, name) {
                     return Some(found);
                 }
-            } else if path
-                .file_name()
-                .and_then(|n| n.to_str()) == Some(name)
-            {
+            } else if path.file_name().and_then(|n| n.to_str()) == Some(name) {
                 return Some(path);
             }
         }

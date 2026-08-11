@@ -34,9 +34,15 @@ pub(crate) fn install_kind(
         fs::set_permissions(&target, fs::Permissions::from_mode(0o755))?;
     }
 
-    fs::write(vdir.join(".real_path"), bin_dir.to_string_lossy().as_bytes())?;
+    fs::write(
+        vdir.join(".real_path"),
+        bin_dir.to_string_lossy().as_bytes(),
+    )?;
 
-    print_success(&format!("{name} {version} installed at {}", target.display()));
+    print_success(&format!(
+        "{name} {version} installed at {}",
+        target.display()
+    ));
 
     let mut manifest = load_manifest()?;
     manifest.add_version(name, version);

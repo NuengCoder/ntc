@@ -6,6 +6,7 @@ use super::super::download::{download_with_progress, extract_archive, find_binar
 use super::super::manager::{copy_recursive, load_manifest, platform_key, save_manifest};
 use super::super::types::PackageSource;
 use crate::output::{print_info, print_success};
+use crate::t;
 
 pub(crate) fn install_go(
     name: &str,
@@ -36,7 +37,7 @@ pub(crate) fn install_go(
     print_info(&format!("Downloading {name} {version}..."));
     download_with_progress(url, &archive_path)?;
 
-    print_info("Extracting...");
+    print_info(&t!("ntpkg.extracting"));
     extract_archive(&archive_path, &tmp_dir, source.archive_type)?;
 
     let go_bin = find_binary(&tmp_dir, "go")
@@ -50,8 +51,11 @@ pub(crate) fn install_go(
     copy_recursive(go_root, vdir)?;
 
     let bin_path = vdir.join("bin");
-    fs::write(vdir.join(".real_path"), bin_path.to_string_lossy().as_bytes())
-        .ok();
+    fs::write(
+        vdir.join(".real_path"),
+        bin_path.to_string_lossy().as_bytes(),
+    )
+    .ok();
 
     let _ = fs::remove_dir_all(&tmp_dir);
 

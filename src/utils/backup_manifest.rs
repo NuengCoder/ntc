@@ -3,10 +3,10 @@
 // Version: v1.8.2
 // Cross-platform: Windows, Linux, macOS
 
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::time::SystemTime;
-use std::collections::HashMap;
 
 /// Maximum file size to include in backup (50 MB)
 pub const MAX_BACKUP_FILE_SIZE: u64 = 50 * 1024 * 1024;
@@ -59,9 +59,9 @@ pub enum SkipReason {
 impl SkipReason {
     pub fn as_str(&self) -> &'static str {
         match self {
-            SkipReason::TooLarge       => "TOO_LARGE",
+            SkipReason::TooLarge => "TOO_LARGE",
             SkipReason::IgnoredByConfig => "IGNORED_BY_CONFIG",
-            SkipReason::IgnoredByUser   => "IGNORED_BY_USER",
+            SkipReason::IgnoredByUser => "IGNORED_BY_USER",
         }
     }
 }
@@ -174,7 +174,12 @@ impl BackupManifest {
         if is_new {
             self.new_files.push(rel_path.clone());
         }
-        self.files.push(BackupFileEntry { rel_path, hash, size, modified });
+        self.files.push(BackupFileEntry {
+            rel_path,
+            hash,
+            size,
+            modified,
+        });
         self.total_size += size;
     }
 
@@ -185,7 +190,11 @@ impl BackupManifest {
         reason: SkipReason,
         detail: Option<String>,
     ) {
-        self.skipped_files.push(SkippedFileEntry { rel_path, reason, detail });
+        self.skipped_files.push(SkippedFileEntry {
+            rel_path,
+            reason,
+            detail,
+        });
     }
 
     /// Recalculate human-readable size — call after all files are added
@@ -208,7 +217,11 @@ impl BackupManifest {
         out.push_str("# ================================================\n\n");
 
         for s in &self.skipped_files {
-            let detail = s.detail.as_deref().map(|d| format!(" ({})", d)).unwrap_or_default();
+            let detail = s
+                .detail
+                .as_deref()
+                .map(|d| format!(" ({})", d))
+                .unwrap_or_default();
             out.push_str(&format!(
                 "[{}] {}{}\n",
                 s.reason.as_str(),
@@ -261,8 +274,7 @@ impl BackupIndex {
 
     /// Path to a specific backup snapshot directory
     pub fn get_backup_path(project_hash: &str, backup_number: usize) -> PathBuf {
-        Self::get_project_backup_dir(project_hash)
-            .join(format!("bkup_{}", backup_number))
+        Self::get_project_backup_dir(project_hash).join(format!("bkup_{}", backup_number))
     }
 
     /// Undo root directory for a project

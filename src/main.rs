@@ -1,9 +1,9 @@
-use ntc::cli;
-use ntc::shell;
-use ntc::Config;
-use ntc::utils;
 use anyhow::Result;
 use colored::*;
+use ntc::cli;
+use ntc::shell;
+use ntc::utils;
+use ntc::Config;
 
 fn run() -> Result<bool> {
     utils::theme::ThemeManager::ensure_default_themes();
@@ -22,13 +22,19 @@ const RAINBOW: [(u8, u8, u8); 7] = [
 ];
 
 fn rainbow(s: &str, offset: usize) -> String {
-    s.chars().enumerate().map(|(i, c)|
-        format!("{}", c.to_string().truecolor(
-            RAINBOW[(offset + i) % 7].0,
-            RAINBOW[(offset + i) % 7].1,
-            RAINBOW[(offset + i) % 7].2,
-        ))
-    ).collect()
+    s.chars()
+        .enumerate()
+        .map(|(i, c)| {
+            format!(
+                "{}",
+                c.to_string().truecolor(
+                    RAINBOW[(offset + i) % 7].0,
+                    RAINBOW[(offset + i) % 7].1,
+                    RAINBOW[(offset + i) % 7].2,
+                )
+            )
+        })
+        .collect()
 }
 
 fn print_logo() {
@@ -43,7 +49,8 @@ fn print_logo() {
     for line in &logo {
         println!(" {}", rainbow(line, 0));
     }
-    println!(" {}  {}  {}",
+    println!(
+        " {}  {}  {}",
         rainbow("Navigate", 0),
         rainbow("Toolkit", 0),
         rainbow("Center", 0),

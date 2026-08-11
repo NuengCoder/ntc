@@ -3,9 +3,10 @@ use crate::backup_manifest::{BackupIndex, BackupManifest};
 use crate::config::Config;
 use crate::filetype::FormatConfig;
 use crate::output::{print_error, print_info, print_success};
+use crate::t;
 use anyhow::Result;
 use colored::*;
-use sha2::{Sha256, Digest};
+use sha2::{Digest, Sha256};
 use std::collections::HashMap;
 use std::fs;
 use std::io::{self, Write};
@@ -48,9 +49,9 @@ pub enum SideBySideKind {
 
 #[derive(Debug, Clone)]
 enum DiffOp {
-    Equal(usize, usize),   // FIX: store indices, not content strings
-    Insert(usize),         // FIX: index into current
-    Delete(usize),         // FIX: index into backup
+    Equal(usize, usize), // FIX: store indices, not content strings
+    Insert(usize),       // FIX: index into current
+    Delete(usize),       // FIX: index into backup
 }
 
 pub struct BackupDiff;
@@ -59,23 +60,32 @@ impl BackupDiff {
     pub fn run_diff_interactive(project_root: &Path) -> Result<()> {
         let backups = BackupManager::list_backups(project_root)?;
         if backups.is_empty() {
-            print_info("No backups found for this project. Use 'bkup' to create one.");
+            print_info(&t!("backup_diff.none"));
             return Ok(());
         }
 
         println!();
-        println!("{}", "==================================================".cyan());
-        println!("{}", "📊 Select a backup to diff against current project".cyan().bold());
-        println!("{}", "==================================================".cyan());
+        println!(
+            "{}",
+            "==================================================".cyan()
+        );
+        println!("{}", t!("backup_diff.select_title").cyan().bold());
+        println!(
+            "{}",
+            "==================================================".cyan()
+        );
         for (i, (num, date, size, file_count)) in backups.iter().enumerate() {
             println!(
-                "  {}. Backup #{} — {} — {} — {} files",
-                i + 1, num, date, size, file_count
+                "{}",
+                t!("backup.select_entry", i + 1, num, date, size, file_count)
             );
         }
-        println!("  {}", "0. Cancel".red());
+        println!("  {}", t!("backup_diff.cancel_opt").red());
         println!();
-        print!("{} ", format!("Select backup (1-{}): ", backups.len()).green());
+        print!(
+            "{} ",
+            t!("backup_diff.select_prompt", backups.len()).green()
+        );
         io::stdout().flush()?;
 
         let mut input = String::new();
@@ -83,7 +93,7 @@ impl BackupDiff {
         let input = input.trim();
 
         if input == "0" || input.is_empty() {
-            println!("{}", "Diff cancelled.".dimmed());
+            println!("{}", t!("backup_diff.cancelled").dimmed());
             return Ok(());
         }
 
@@ -93,25 +103,25 @@ impl BackupDiff {
                 Self::generate_diff(project_root, backup_num)
             }
             Ok(_) => {
-                print_error(&format!("Invalid selection: {}", input));
+                print_error(&t!("backup_diff.invalid_selection", input));
                 Ok(())
             }
             Err(_) => {
-                print_error(&format!("Invalid input: {}", input));
+                print_error(&t!("backup_diff.invalid_input", input));
                 Ok(())
             }
         }
     }
 
     pub fn generate_diff(project_root: &Path, backup_number: usize) -> Result<()> {
-        print_info(&format!("Comparing current project with backup #{}...", backup_number));
+        print_info(&t!("backup_diff.comparing", backup_number));
 
         let project_hash = crate::backup::compute_project_hash(project_root);
         let backup_path = BackupIndex::get_backup_path(&project_hash, backup_number);
         let manifest_path = backup_path.join(".manifest.json");
 
         if !manifest_path.exists() {
-            print_error(&format!("Backup #{} not found.", backup_number));
+            print_error(&t!("backup_diff.not_found", backup_number));
             return Ok(());
         }
 
@@ -132,19 +142,21 @@ impl BackupDiff {
         }
 
         let mut current_files: HashMap<String, String> = HashMap::new();
-        let walker = WalkDir::new(project_root)
-            .into_iter()
-            .filter_entry(|e| {
-                if e.depth() == 0 { return true; }
-                if e.file_type().is_dir() {
-                    let name = e.file_name().to_string_lossy().to_lowercase();
-                    return !ignored_dirs.contains(&name);
-                }
-                true
-            });
+        let walker = WalkDir::new(project_root).into_iter().filter_entry(|e| {
+            if e.depth() == 0 {
+                return true;
+            }
+            if e.file_type().is_dir() {
+                let name = e.file_name().to_string_lossy().to_lowercase();
+                return !ignored_dirs.contains(&name);
+            }
+            true
+        });
 
         for entry in walker.filter_map(|e| e.ok()) {
-            if !entry.file_type().is_file() { continue; }
+            if !entry.file_type().is_file() {
+                continue;
+            }
             let rel_path = match entry.path().strip_prefix(project_root) {
                 Ok(p) => p.to_path_buf(),
                 Err(_) => continue,
@@ -156,7 +168,9 @@ impl BackupDiff {
             if fmt_cfg.ignored_files.contains(&file_name.to_string()) {
                 continue;
             }
-            let ext = entry.path().extension()
+            let ext = entry
+                .path()
+                .extension()
                 .and_then(|e| e.to_str())
                 .unwrap_or("");
             if fmt_cfg.ignored_extensions.contains(&ext.to_lowercase()) {
@@ -183,7 +197,8 @@ impl BackupDiff {
                         side_by_side: Vec::new(),
                     });
                 } else {
-                    let is_binary = crate::filetype::is_known_unsupported_format(&project_root.join(&rel_path));
+                    let is_binary =
+                        crate::filetype::is_known_unsupported_format(&project_root.join(&rel_path));
                     let side_by_side = if is_binary {
                         Vec::new()
                     } else {
@@ -230,7 +245,8 @@ impl BackupDiff {
                 FileStatus::Deleted => 2,
                 FileStatus::Unchanged => 3,
             };
-            order(&a.status).cmp(&order(&b.status))
+            order(&a.status)
+                .cmp(&order(&b.status))
                 .then(a.rel_path.cmp(&b.rel_path))
         });
 
@@ -240,7 +256,7 @@ impl BackupDiff {
         let output_path = crate::output::build_output_path(&output_filename);
         fs::write(&output_path, html)?;
 
-        print_success(&format!("Diff report saved to: {}", output_path.display()));
+        print_success(&t!("backup_diff.saved_to", output_path.display()));
         Self::open_in_browser(&output_path);
 
         Ok(())
@@ -278,9 +294,10 @@ impl BackupDiff {
             for k in (-d_signed..=d_signed).step_by(2) {
                 let idx = (k + offset as isize) as usize;
 
-                let x = if k == -d_signed || (k != d_signed
-                    && v[(k - 1 + offset as isize) as usize]
-                       < v[(k + 1 + offset as isize) as usize])
+                let x = if k == -d_signed
+                    || (k != d_signed
+                        && v[(k - 1 + offset as isize) as usize]
+                            < v[(k + 1 + offset as isize) as usize])
                 {
                     v[(k + 1 + offset as isize) as usize]
                 } else {
@@ -290,7 +307,8 @@ impl BackupDiff {
                 let mut cx = x;
                 let mut cy = cx - k;
 
-                while (cx as usize) < n && (cy as usize) < m
+                while (cx as usize) < n
+                    && (cy as usize) < m
                     && backup[cx as usize] == current[cy as usize]
                 {
                     cx += 1;
@@ -316,9 +334,10 @@ impl BackupDiff {
             let d_signed = d as isize;
             let k_val = x - y;
 
-            let prev_k = if k_val == -d_signed || (k_val != d_signed
-                && v_slice[(k_val - 1 + offset as isize) as usize]
-                   < v_slice[(k_val + 1 + offset as isize) as usize])
+            let prev_k = if k_val == -d_signed
+                || (k_val != d_signed
+                    && v_slice[(k_val - 1 + offset as isize) as usize]
+                        < v_slice[(k_val + 1 + offset as isize) as usize])
             {
                 k_val + 1
             } else {
@@ -361,7 +380,7 @@ impl BackupDiff {
     /// - CRLF stripping applied when reading file lines so cross-platform diffs are clean.
     /// - Adjacent Delete+Insert pairs are now fused into Modified rows.
     fn compute_side_by_side(backup_path: &Path, current_path: &Path) -> Vec<SideBySideLine> {
-        let backup_content  = fs::read_to_string(backup_path).unwrap_or_default();
+        let backup_content = fs::read_to_string(backup_path).unwrap_or_default();
         let current_content = fs::read_to_string(current_path).unwrap_or_default();
 
         // FIX: strip trailing \r so Windows CRLF files compare cleanly on Linux/macOS
@@ -388,8 +407,8 @@ impl BackupDiff {
             match &ops[i] {
                 DiffOp::Equal(bi, ci) => {
                     result.push(SideBySideLine {
-                        left_num:  Some(bi + 1),
-                        left_content:  Some(backup_lines[*bi].clone()),
+                        left_num: Some(bi + 1),
+                        left_content: Some(backup_lines[*bi].clone()),
                         right_num: Some(ci + 1),
                         right_content: Some(current_lines[*ci].clone()),
                         kind: SideBySideKind::Unchanged,
@@ -401,8 +420,8 @@ impl BackupDiff {
                     if i + 1 < ops.len() {
                         if let DiffOp::Insert(ci) = &ops[i + 1] {
                             result.push(SideBySideLine {
-                                left_num:  Some(bi + 1),
-                                left_content:  Some(backup_lines[*bi].clone()),
+                                left_num: Some(bi + 1),
+                                left_content: Some(backup_lines[*bi].clone()),
                                 right_num: Some(ci + 1),
                                 right_content: Some(current_lines[*ci].clone()),
                                 kind: SideBySideKind::Modified,
@@ -412,8 +431,8 @@ impl BackupDiff {
                         }
                     }
                     result.push(SideBySideLine {
-                        left_num:  Some(bi + 1),
-                        left_content:  Some(backup_lines[*bi].clone()),
+                        left_num: Some(bi + 1),
+                        left_content: Some(backup_lines[*bi].clone()),
                         right_num: None,
                         right_content: None,
                         kind: SideBySideKind::Removed,
@@ -422,8 +441,8 @@ impl BackupDiff {
                 }
                 DiffOp::Insert(ci) => {
                     result.push(SideBySideLine {
-                        left_num:  None,
-                        left_content:  None,
+                        left_num: None,
+                        left_content: None,
                         right_num: Some(ci + 1),
                         right_content: Some(current_lines[*ci].clone()),
                         kind: SideBySideKind::Added,
@@ -465,13 +484,17 @@ impl BackupDiff {
                 FileStatus::Unchanged => ("ℹ️", "status-unchanged", "Unchanged"),
             };
 
-            let file_label = diff.rel_path.file_name()
+            let file_label = diff
+                .rel_path
+                .file_name()
                 .map(|n| n.to_string_lossy().to_string())
                 .unwrap_or_default();
 
-            let is_binary_skipped = diff.status == FileStatus::Modified && diff.side_by_side.is_empty();
+            let is_binary_skipped =
+                diff.status == FileStatus::Modified && diff.side_by_side.is_empty();
             let side_by_side_html = if is_binary_skipped {
-                r#"<div class="binary-notice">📦 Binary file — diff not available</div>"#.to_string()
+                r#"<div class="binary-notice">📦 Binary file — diff not available</div>"#
+                    .to_string()
             } else if diff.status == FileStatus::Modified && !diff.side_by_side.is_empty() {
                 let mut rows = String::new();
                 for sbs in &diff.side_by_side {
@@ -484,17 +507,29 @@ impl BackupDiff {
                     };
 
                     let left_num = sbs.left_num.map(|n| n.to_string()).unwrap_or_default();
-                    let left_content = sbs.left_content.as_deref()
-                        .map(|s| s.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;"))
+                    let left_content = sbs
+                        .left_content
+                        .as_deref()
+                        .map(|s| {
+                            s.replace("&", "&amp;")
+                                .replace("<", "&lt;")
+                                .replace(">", "&gt;")
+                        })
                         .unwrap_or_default();
                     let right_num = sbs.right_num.map(|n| n.to_string()).unwrap_or_default();
-                    let right_content = sbs.right_content.as_deref()
-                        .map(|s| s.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;"))
+                    let right_content = sbs
+                        .right_content
+                        .as_deref()
+                        .map(|s| {
+                            s.replace("&", "&amp;")
+                                .replace("<", "&lt;")
+                                .replace(">", "&gt;")
+                        })
                         .unwrap_or_default();
 
                     // Show direction arrow only for pure Add/Remove rows
                     let empty_marker = match sbs.kind {
-                        SideBySideKind::Added   => r#"<span class="empty-marker">⟵ added</span>"#,
+                        SideBySideKind::Added => r#"<span class="empty-marker">⟵ added</span>"#,
                         SideBySideKind::Removed => r#"<span class="empty-marker">⟶ removed</span>"#,
                         _ => "",
                     };
@@ -502,7 +537,7 @@ impl BackupDiff {
                     // For Added rows: put the arrow in the LEFT (empty) cell
                     // For Removed rows: put the arrow in the RIGHT (empty) cell
                     let (left_extra, right_extra) = match sbs.kind {
-                        SideBySideKind::Added   => (empty_marker, ""),
+                        SideBySideKind::Added => (empty_marker, ""),
                         SideBySideKind::Removed => ("", empty_marker),
                         _ => ("", ""),
                     };
@@ -539,9 +574,7 @@ impl BackupDiff {
                             <div class="sbs-grid">{}</div>
                         </div>
                     </div>"#,
-                    idx, idx, line_count,
-                    file_label, file_label,
-                    rows
+                    idx, idx, line_count, file_label, file_label, rows
                 )
             } else {
                 String::new()
@@ -560,7 +593,14 @@ impl BackupDiff {
                         {}
                     </div>
                 </div>"#,
-                status_class, idx, icon, rel_path_str, status_class, status_label, idx, side_by_side_html
+                status_class,
+                idx,
+                icon,
+                rel_path_str,
+                status_class,
+                status_label,
+                idx,
+                side_by_side_html
             ));
         }
 
@@ -724,12 +764,20 @@ function filterFiles() {{
 </script>
 </body>
 </html>"#,
-            project_name, backup_number,
-            project_name, backup_number,
-            date, backup_date, diffs.len(),
-            modified_count, new_count, deleted_count, unchanged_count,
+            project_name,
+            backup_number,
+            project_name,
+            backup_number,
+            date,
+            backup_date,
+            diffs.len(),
+            modified_count,
+            new_count,
+            deleted_count,
+            unchanged_count,
             files_html,
-            env!("CARGO_PKG_VERSION"), date
+            env!("CARGO_PKG_VERSION"),
+            date
         )
     }
 
@@ -751,7 +799,7 @@ function filterFiles() {{
         }
         #[cfg(target_os = "android")]
         {
-            crate::output::print_info(&format!("Open the file manually: {}", url));
+            crate::output::print_info(&t!("backup_diff.open_manually", url));
         }
     }
 }

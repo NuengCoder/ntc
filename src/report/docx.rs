@@ -1,5 +1,5 @@
 use crate::config::Config;
-use crate::explorer::{generate_tree, format_tree};
+use crate::explorer::{format_tree, generate_tree};
 use crate::output::cat_file_with_line_numbers;
 use anyhow::Result;
 use docx_rs::*;
@@ -28,7 +28,11 @@ fn normal_run(text: &str, size: usize) -> Run {
 }
 
 pub fn generate_docx_report(dir_path: &Path, output_path: &Path) -> Result<()> {
-    let dir_name = dir_path.file_name().unwrap_or_default().to_string_lossy().to_string();
+    let dir_name = dir_path
+        .file_name()
+        .unwrap_or_default()
+        .to_string_lossy()
+        .to_string();
     let show_lines = Config::global_get_show_line_numbers();
     let max_depth = Config::global_get_max_depth();
     let tree = generate_tree(dir_path.to_string_lossy().as_ref(), None, true, None);
@@ -67,8 +71,14 @@ pub fn generate_docx_report(dir_path: &Path, output_path: &Path) -> Result<()> {
     let (supported_files, unsupported_files) = collect_files(dir_path, max_depth);
 
     for file_path in &supported_files {
-        let name = file_path.file_name().unwrap_or_default().to_string_lossy().to_string();
-        doc = doc.add_paragraph(Paragraph::new().add_run(mono_run(&format!("── {} ──", name), 20).bold()));
+        let name = file_path
+            .file_name()
+            .unwrap_or_default()
+            .to_string_lossy()
+            .to_string();
+        doc = doc.add_paragraph(
+            Paragraph::new().add_run(mono_run(&format!("── {} ──", name), 20).bold()),
+        );
 
         match cat_file_with_line_numbers(file_path, show_lines) {
             Ok(content) => {
@@ -77,16 +87,21 @@ pub fn generate_docx_report(dir_path: &Path, output_path: &Path) -> Result<()> {
                 }
             }
             Err(_) => {
-                doc = doc.add_paragraph(Paragraph::new().add_run(mono_run("[Error reading file]", 20)));
+                doc = doc
+                    .add_paragraph(Paragraph::new().add_run(mono_run("[Error reading file]", 20)));
             }
         }
     }
 
     if !unsupported_files.is_empty() {
-        doc = doc.add_paragraph(Paragraph::new().add_run(mono_run("── Unsupported Files (skipped) ──", 20).bold()));
+        doc = doc.add_paragraph(
+            Paragraph::new().add_run(mono_run("── Unsupported Files (skipped) ──", 20).bold()),
+        );
         for file_path in &unsupported_files {
             let name = file_path.file_name().unwrap_or_default().to_string_lossy();
-            doc = doc.add_paragraph(Paragraph::new().add_run(mono_run(&format!("Skipped: {}", name), 20)));
+            doc = doc.add_paragraph(
+                Paragraph::new().add_run(mono_run(&format!("Skipped: {}", name), 20)),
+            );
         }
     }
 

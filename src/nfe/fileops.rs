@@ -5,8 +5,8 @@ use std::io::{stdout, Write};
 pub fn rename_entry(state: &mut NfeState, entry: &FileEntry) -> Result<()> {
     use crossterm::cursor::MoveTo;
     use crossterm::event::{self, Event, KeyCode, KeyEventKind};
-    use crossterm::style::{Print, ResetColor, SetBackgroundColor, SetForegroundColor};
     use crossterm::queue;
+    use crossterm::style::{Print, ResetColor, SetBackgroundColor, SetForegroundColor};
     use std::time::Duration;
 
     let status_row = state.term_h.saturating_sub(1);
@@ -14,8 +14,16 @@ pub fn rename_entry(state: &mut NfeState, entry: &FileEntry) -> Result<()> {
 
     loop {
         let prompt = format!(" Rename '{}' to: {} ", entry.name, new_name);
-        let bg = crossterm::style::Color::Rgb { r: 40, g: 40, b: 60 };
-        let fg = crossterm::style::Color::Rgb { r: 220, g: 220, b: 240 };
+        let bg = crossterm::style::Color::Rgb {
+            r: 40,
+            g: 40,
+            b: 60,
+        };
+        let fg = crossterm::style::Color::Rgb {
+            r: 220,
+            g: 220,
+            b: 240,
+        };
 
         queue!(
             stdout(),
@@ -72,16 +80,24 @@ pub fn rename_entry(state: &mut NfeState, entry: &FileEntry) -> Result<()> {
 pub fn delete_entry(state: &mut NfeState, entry: &FileEntry) -> Result<()> {
     use crossterm::cursor::MoveTo;
     use crossterm::event::{self, Event, KeyCode, KeyEventKind};
-    use crossterm::style::{Print, ResetColor, SetBackgroundColor, SetForegroundColor};
     use crossterm::queue;
+    use crossterm::style::{Print, ResetColor, SetBackgroundColor, SetForegroundColor};
     use std::time::Duration;
 
     let status_row = state.term_h.saturating_sub(1);
     let mut confirmed = false;
 
     let prompt = format!(" Delete '{}'? (y/N): ", entry.name);
-    let bg = crossterm::style::Color::Rgb { r: 80, g: 30, b: 30 };
-    let fg = crossterm::style::Color::Rgb { r: 255, g: 150, b: 150 };
+    let bg = crossterm::style::Color::Rgb {
+        r: 80,
+        g: 30,
+        b: 30,
+    };
+    let fg = crossterm::style::Color::Rgb {
+        r: 255,
+        g: 150,
+        b: 150,
+    };
 
     queue!(
         stdout(),
@@ -138,8 +154,8 @@ pub fn delete_entry(state: &mut NfeState, entry: &FileEntry) -> Result<()> {
 pub fn create_file(state: &mut NfeState) -> Result<()> {
     use crossterm::cursor::MoveTo;
     use crossterm::event::{self, Event, KeyCode, KeyEventKind};
-    use crossterm::style::{Print, ResetColor, SetBackgroundColor, SetForegroundColor};
     use crossterm::queue;
+    use crossterm::style::{Print, ResetColor, SetBackgroundColor, SetForegroundColor};
     use std::time::Duration;
 
     let status_row = state.term_h.saturating_sub(1);
@@ -147,8 +163,16 @@ pub fn create_file(state: &mut NfeState) -> Result<()> {
 
     loop {
         let prompt = format!(" New file: {} ", name);
-        let bg = crossterm::style::Color::Rgb { r: 40, g: 60, b: 40 };
-        let fg = crossterm::style::Color::Rgb { r: 150, g: 255, b: 150 };
+        let bg = crossterm::style::Color::Rgb {
+            r: 40,
+            g: 60,
+            b: 40,
+        };
+        let fg = crossterm::style::Color::Rgb {
+            r: 150,
+            g: 255,
+            b: 150,
+        };
 
         queue!(
             stdout(),
@@ -205,8 +229,8 @@ pub fn create_file(state: &mut NfeState) -> Result<()> {
 pub fn create_dir(state: &mut NfeState) -> Result<()> {
     use crossterm::cursor::MoveTo;
     use crossterm::event::{self, Event, KeyCode, KeyEventKind};
-    use crossterm::style::{Print, ResetColor, SetBackgroundColor, SetForegroundColor};
     use crossterm::queue;
+    use crossterm::style::{Print, ResetColor, SetBackgroundColor, SetForegroundColor};
     use std::time::Duration;
 
     let status_row = state.term_h.saturating_sub(1);
@@ -214,8 +238,16 @@ pub fn create_dir(state: &mut NfeState) -> Result<()> {
 
     loop {
         let prompt = format!(" New directory: {} ", name);
-        let bg = crossterm::style::Color::Rgb { r: 40, g: 60, b: 40 };
-        let fg = crossterm::style::Color::Rgb { r: 150, g: 255, b: 150 };
+        let bg = crossterm::style::Color::Rgb {
+            r: 40,
+            g: 60,
+            b: 40,
+        };
+        let fg = crossterm::style::Color::Rgb {
+            r: 150,
+            g: 255,
+            b: 150,
+        };
 
         queue!(
             stdout(),

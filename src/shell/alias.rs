@@ -54,7 +54,7 @@ pub(super) fn parse_call_syntax(token: &str) -> (&str, Option<&str>) {
     if let Some(paren_start) = token.find('(') {
         if token.ends_with(')') {
             let base = token[..paren_start].trim_end();
-            let arg  = &token[paren_start + 1..token.len() - 1];
+            let arg = &token[paren_start + 1..token.len() - 1];
             return (base, Some(arg));
         }
     }
@@ -122,7 +122,8 @@ fn parse_var_ref(chars: &[char], mut i: usize) -> Option<VarRef> {
         let start = i;
         let mut colon_pos = None;
         while i < chars.len() && chars[i] != '}' {
-            if chars[i] == ':' && i + 1 < chars.len() && chars[i + 1] == '-' && colon_pos.is_none() {
+            if chars[i] == ':' && i + 1 < chars.len() && chars[i + 1] == '-' && colon_pos.is_none()
+            {
                 colon_pos = Some(i);
             }
             i += 1;
@@ -143,7 +144,9 @@ fn parse_var_ref(chars: &[char], mut i: usize) -> Option<VarRef> {
         (name, i, default_val)
     } else {
         // $name syntax — first char must be [a-z0-9_]
-        if i >= chars.len() || !(chars[i].is_ascii_lowercase() || chars[i].is_ascii_digit() || chars[i] == '_') {
+        if i >= chars.len()
+            || !(chars[i].is_ascii_lowercase() || chars[i].is_ascii_digit() || chars[i] == '_')
+        {
             return None;
         }
         let start = i;
@@ -166,9 +169,19 @@ fn parse_var_ref(chars: &[char], mut i: usize) -> Option<VarRef> {
             suffix_end += 1;
         }
         let suffix: String = chars[suffix_start..suffix_end].iter().collect();
-        Some(VarRef { name, end: suffix_end, array_suffix: Some(suffix), default_val })
+        Some(VarRef {
+            name,
+            end: suffix_end,
+            array_suffix: Some(suffix),
+            default_val,
+        })
     } else {
-        Some(VarRef { name, end, array_suffix: None, default_val })
+        Some(VarRef {
+            name,
+            end,
+            array_suffix: None,
+            default_val,
+        })
     }
 }
 
@@ -209,20 +222,38 @@ fn substitute_params(template: &str, args: &[&str]) -> String {
                 if let Some(ref suffix) = vr.array_suffix {
                     // Array expansion: $name[]suffix or ${name}[]suffix
                     if let Some(val) = map.get(vr.name.as_str()) {
-                        let elements: Vec<&str> = if val.starts_with('[') && val.ends_with(']') && val.len() >= 2 {
-                            val[1..val.len()-1].split(',').map(|s| s.trim()).filter(|s| !s.is_empty()).collect()
-                        } else {
-                            vec![val]
-                        };
-                        let expanded: Vec<String> = elements.iter().map(|e| format!("{}{}", e, suffix)).collect();
+                        let elements: Vec<&str> =
+                            if val.starts_with('[') && val.ends_with(']') && val.len() >= 2 {
+                                val[1..val.len() - 1]
+                                    .split(',')
+                                    .map(|s| s.trim())
+                                    .filter(|s| !s.is_empty())
+                                    .collect()
+                            } else {
+                                vec![val]
+                            };
+                        let expanded: Vec<String> = elements
+                            .iter()
+                            .map(|e| format!("{}{}", e, suffix))
+                            .collect();
                         result.push_str(&expanded.join(" "));
                     } else if let Some(ref default) = vr.default_val {
-                        let elements: Vec<&str> = if default.starts_with('[') && default.ends_with(']') && default.len() >= 2 {
-                            default[1..default.len()-1].split(',').map(|s| s.trim()).filter(|s| !s.is_empty()).collect()
+                        let elements: Vec<&str> = if default.starts_with('[')
+                            && default.ends_with(']')
+                            && default.len() >= 2
+                        {
+                            default[1..default.len() - 1]
+                                .split(',')
+                                .map(|s| s.trim())
+                                .filter(|s| !s.is_empty())
+                                .collect()
                         } else {
                             vec![default.as_str()]
                         };
-                        let expanded: Vec<String> = elements.iter().map(|e| format!("{}{}", e, suffix)).collect();
+                        let expanded: Vec<String> = elements
+                            .iter()
+                            .map(|e| format!("{}{}", e, suffix))
+                            .collect();
                         result.push_str(&expanded.join(" "));
                     } else {
                         result.push('$');
@@ -288,23 +319,25 @@ pub(super) fn extract_param_names(template: &str) -> Vec<String> {
 /// Parse a parameter hint like `"x=a,e=txt"` into `[("x", "a"), ("e", "txt")]`.
 /// A param without `=` has no default (e.g. `"x,y"`).
 pub(super) fn parse_param_defaults(hint: &str) -> Vec<(String, String)> {
-    hint.split(',').filter_map(|part| {
-        let part = part.trim();
-        if part.is_empty() {
-            return None;
-        }
-        if let Some(eq) = part.find('=') {
-            let name = part[..eq].trim().to_string();
-            let val = part[eq + 1..].trim().to_string();
-            if !name.is_empty() {
-                Some((name, val))
-            } else {
-                None
+    hint.split(',')
+        .filter_map(|part| {
+            let part = part.trim();
+            if part.is_empty() {
+                return None;
             }
-        } else {
-            None // no default
-        }
-    }).collect()
+            if let Some(eq) = part.find('=') {
+                let name = part[..eq].trim().to_string();
+                let val = part[eq + 1..].trim().to_string();
+                if !name.is_empty() {
+                    Some((name, val))
+                } else {
+                    None
+                }
+            } else {
+                None // no default
+            }
+        })
+        .collect()
 }
 
 /// Walk a template and replace bare `$name` / `${name}` references with `{name:-default}`
@@ -410,7 +443,7 @@ pub(super) fn expand_command_line(input: &str) -> Vec<String> {
     if input.trim().is_empty() {
         return vec![];
     }
-    
+
     let parts = split_on_ampersands(input);
     let mut result = Vec::new();
     for part in parts {

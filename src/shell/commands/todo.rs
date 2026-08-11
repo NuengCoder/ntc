@@ -1,5 +1,6 @@
 use crate::navigator::Navigator;
-use crate::output::{print_error, print_success, print_info, print_warning};
+use crate::output::{print_error, print_info, print_success, print_warning};
+use crate::t;
 use anyhow::{anyhow, bail, Result};
 use colored::*;
 use std::io::{self, Write};
@@ -31,27 +32,32 @@ fn save_tasks(cwd: &Path, tasks: &[String]) -> Result<()> {
 
 fn display_tasks(tasks: &[String]) {
     if tasks.is_empty() {
-        println!("  {}", "No tasks.".dimmed());
+        println!("  {}", t!("cmd.todo.no_tasks").dimmed());
         return;
     }
     let width = tasks.len().to_string().len().max(1);
     for (i, task) in tasks.iter().enumerate() {
-        println!("  {num:>width$}. {task}", num = i + 1, width = width, task = task);
+        println!(
+            "  {num:>width$}. {task}",
+            num = i + 1,
+            width = width,
+            task = task
+        );
     }
 }
 
 fn parse_add_args(args: &str) -> Result<(String, Option<usize>)> {
     let args = args.trim();
     if !args.starts_with('"') {
-        bail!("Task name must be in quotes");
+        bail!("{}", t!("cmd.todo.must_be_quoted"));
     }
     let end_quote = args[1..]
         .find('"')
         .map(|i| i + 1)
-        .ok_or_else(|| anyhow!("Missing closing quote"))?;
+        .ok_or_else(|| anyhow!("{}", t!("cmd.todo.missing_quote")))?;
     let name = args[1..end_quote].trim().to_string();
     if name.is_empty() {
-        bail!("Task name cannot be empty");
+        bail!("{}", t!("cmd.todo.empty_name"));
     }
     let rest = args[end_quote + 1..].trim();
     if rest.is_empty() {
@@ -60,17 +66,17 @@ fn parse_add_args(args: &str) -> Result<(String, Option<usize>)> {
     if let Some(pos) = rest.find("->") {
         let num_str = rest[pos + 2..].trim();
         if num_str.is_empty() {
-            bail!("Missing position number after '->'");
+            bail!("{}", t!("cmd.todo.missing_position"));
         }
         let n: usize = num_str
             .parse()
-            .map_err(|_| anyhow!("Invalid position: '{}' must be a number", num_str))?;
+            .map_err(|_| anyhow!("{}", t!("cmd.todo.invalid_position", num_str)))?;
         if n == 0 {
-            bail!("Position must be 1-based (minimum 1)");
+            bail!("{}", t!("cmd.todo.position_one_based"));
         }
         return Ok((name, Some(n)));
     }
-    bail!("Unexpected text after task name: '{}'", rest);
+    bail!("{}", t!("cmd.todo.unexpected_text", rest));
 }
 
 pub fn cmd_todo(args: &str, nav: &mut Navigator) -> Result<bool> {
@@ -85,14 +91,14 @@ pub fn cmd_todo(args: &str, nav: &mut Navigator) -> Result<bool> {
         "rm" | "remove" => cmd_rm(subargs, &cwd),
         "clear" | "cl" => cmd_clear(subargs, &cwd),
         _ => {
-            print_error(&format!("Unknown todo subcommand: '{}'", subcmd));
+            print_error(&t!("cmd.todo.unknown_sub", subcmd));
             println!();
-            println!("{}", "Usage:".cyan().bold());
-            println!("  todo                    Show all tasks");
-            println!("  todo info [N]           Show all tasks or task N");
-            println!("  todo add \"name\" [-> N]  Add task (optionally at position N)");
-            println!("  todo rm <N>             Remove task N");
-            println!("  todo clear              Clear all tasks (with confirmation)");
+            println!("{}", t!("cmd.todo.usage_title").cyan().bold());
+            println!("  {}", t!("cmd.todo.help_show"));
+            println!("  {}", t!("cmd.todo.help_info"));
+            println!("  {}", t!("cmd.todo.help_add"));
+            println!("  {}", t!("cmd.todo.help_rm"));
+            println!("  {}", t!("cmd.todo.help_clear"));
             Ok(false)
         }
     }
@@ -102,26 +108,31 @@ fn cmd_info(args: &str, cwd: &Path) -> Result<bool> {
     let tasks = load_tasks(cwd)?;
     let args = args.trim();
     if args.is_empty() {
-        println!("{}", "TODO LIST:".cyan().bold());
+        println!("{}", t!("cmd.todo.list_title").cyan().bold());
         println!();
         display_tasks(&tasks);
     } else {
-        let n: usize = args.parse().map_err(|_| {
-            anyhow!("Usage: todo info <N>  — N must be a number")
-        })?;
+        let n: usize = args
+            .parse()
+            .map_err(|_| anyhow!("{}", t!("cmd.todo.info_usage")))?;
         if n == 0 || n > tasks.len() {
-            print_error(&format!("Task #{} not found (have {} tasks)", n, tasks.len()));
+            print_error(&t!("cmd.todo.task_not_found", n, tasks.len()));
             return Ok(false);
         }
         let width = tasks.len().to_string().len().max(1);
-        println!("{num:>width$}. {task}", num = n, width = width, task = &tasks[n - 1]);
+        println!(
+            "{num:>width$}. {task}",
+            num = n,
+            width = width,
+            task = &tasks[n - 1]
+        );
     }
     Ok(false)
 }
 
 fn cmd_add(args: &str, cwd: &Path) -> Result<bool> {
     if args.is_empty() {
-        print_error("Usage: todo add \"task name\" [-> N]");
+        print_error(&t!("cmd.todo.add_usage"));
         return Ok(false);
     }
     let (name, position) = parse_add_args(args)?;
@@ -140,42 +151,42 @@ fn cmd_add(args: &str, cwd: &Path) -> Result<bool> {
     }
 
     save_tasks(cwd, &tasks)?;
-    print_success(&format!("Task added: {}", name));
+    print_success(&t!("cmd.todo.task_added", name));
     Ok(false)
 }
 
 fn cmd_rm(args: &str, cwd: &Path) -> Result<bool> {
     let args = args.trim();
     if args.is_empty() {
-        print_error("Usage: todo rm <N>");
+        print_error(&t!("cmd.todo.rm_usage"));
         return Ok(false);
     }
     let n: usize = args
         .parse()
-        .map_err(|_| anyhow!("Usage: todo rm <N>  — N must be a number"))?;
+        .map_err(|_| anyhow!("{}", t!("cmd.todo.rm_usage_num")))?;
     if n == 0 {
-        print_error("Task numbers are 1-based (minimum 1)");
+        print_error(&t!("cmd.todo.one_based"));
         return Ok(false);
     }
     let mut tasks = load_tasks(cwd)?;
     if n > tasks.len() {
-        print_error(&format!("Task #{} not found (have {} tasks)", n, tasks.len()));
+        print_error(&t!("cmd.todo.task_not_found", n, tasks.len()));
         return Ok(false);
     }
     let removed = tasks.remove(n - 1);
     save_tasks(cwd, &tasks)?;
-    print_success(&format!("Task removed: {}", removed));
+    print_success(&t!("cmd.todo.task_removed", removed));
     Ok(false)
 }
 
 fn cmd_clear(_args: &str, cwd: &Path) -> Result<bool> {
     let tasks = load_tasks(cwd)?;
     if tasks.is_empty() {
-        print_info("No tasks to clear.");
+        print_info(&t!("cmd.todo.none_to_clear"));
         return Ok(false);
     }
 
-    print_warning(&format!("Clear all {} tasks? [y/N] ", tasks.len()));
+    print_warning(&t!("cmd.todo.clear_prompt", tasks.len()));
     io::stdout().flush()?;
     let mut input = String::new();
     io::stdin().read_line(&mut input)?;
@@ -183,9 +194,9 @@ fn cmd_clear(_args: &str, cwd: &Path) -> Result<bool> {
 
     if input == "y" || input == "yes" {
         save_tasks(cwd, &[])?;
-        print_success("All tasks cleared.");
+        print_success(&t!("cmd.todo.all_cleared"));
     } else {
-        print_info("Cancelled.");
+        print_info(&t!("cmd.todo.cancelled"));
     }
     Ok(false)
 }

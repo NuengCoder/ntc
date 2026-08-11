@@ -26,10 +26,7 @@ pub(crate) fn validate(input: &str) -> Result<(), (String, usize)> {
         i += 1;
     }
     if in_string {
-        return Err((
-            "Unclosed string literal".to_string(),
-            string_start,
-        ));
+        return Err(("Unclosed string literal".to_string(), string_start));
     }
 
     // ── check 2: character literal validity (odd single quotes) ───────────
@@ -48,10 +45,7 @@ pub(crate) fn validate(input: &str) -> Result<(), (String, usize)> {
         j += 1;
     }
     if in_char {
-        return Err((
-            "Unclosed character literal".to_string(),
-            char_start,
-        ));
+        return Err(("Unclosed character literal".to_string(), char_start));
     }
 
     // ── check 3: misplaced colon (not part of ternary ?:) ─────────────────
@@ -67,22 +61,37 @@ pub(crate) fn validate(input: &str) -> Result<(), (String, usize)> {
     // We skip: preprocessor, control flow keywords, function declarations,
     // and block boundaries.
     let last_char = trimmed.chars().last().unwrap_or(' ');
-    if !last_char.is_whitespace() && last_char != ';' && last_char != '{' && last_char != '}'
-        && last_char != ':' && last_char != ','
+    if !last_char.is_whitespace()
+        && last_char != ';'
+        && last_char != '{'
+        && last_char != '}'
+        && last_char != ':'
+        && last_char != ','
     {
         // Skip known line-ending-safe patterns
         let first_word = trimmed.split_whitespace().next().unwrap_or("");
         let is_control_flow = matches!(
             first_word,
-            "if" | "else" | "for" | "while" | "do" | "switch" | "case"
-                | "break" | "continue" | "return" | "default"
+            "if" | "else"
+                | "for"
+                | "while"
+                | "do"
+                | "switch"
+                | "case"
+                | "break"
+                | "continue"
+                | "return"
+                | "default"
         );
         let is_preproc = trimmed.starts_with('#');
         let is_block_comment = trimmed.starts_with("/*");
         let is_block_comment_end = trimmed.ends_with("*/");
         let is_single_line_comment = trimmed.contains("//");
 
-        if !is_control_flow && !is_preproc && !is_block_comment && !is_block_comment_end
+        if !is_control_flow
+            && !is_preproc
+            && !is_block_comment
+            && !is_block_comment_end
             && !is_single_line_comment
             && !trimmed.starts_with("//")
         {

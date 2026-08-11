@@ -1,5 +1,5 @@
 use crate::config::Config;
-use crate::explorer::{generate_tree, format_tree};
+use crate::explorer::{format_tree, generate_tree};
 use crate::output::cat_file_with_line_numbers;
 use anyhow::Result;
 use printpdf::*;
@@ -20,7 +20,11 @@ fn collect_files(dir_path: &Path, max_depth: usize) -> (Vec<PathBuf>, Vec<PathBu
 }
 
 pub fn generate_pdf_report(dir_path: &Path, output_path: &Path) -> Result<()> {
-    let dir_name = dir_path.file_name().unwrap_or_default().to_string_lossy().to_string();
+    let dir_name = dir_path
+        .file_name()
+        .unwrap_or_default()
+        .to_string_lossy()
+        .to_string();
     let show_lines = Config::global_get_show_line_numbers();
     let max_depth = Config::global_get_max_depth();
     let tree = generate_tree(dir_path.to_string_lossy().as_ref(), None, true, None);
@@ -81,7 +85,8 @@ pub fn generate_pdf_report(dir_path: &Path, output_path: &Path) -> Result<()> {
 
     // Title
     let title = format!("{} - Directory Report", dir_name);
-    st.layer().use_text(title, TITLE_SIZE, MARGIN, st.y, &font_bold);
+    st.layer()
+        .use_text(title, TITLE_SIZE, MARGIN, st.y, &font_bold);
     st.y = Mm(st.y.0 - TITLE_SIZE - 6.0);
 
     let date = chrono::Local::now().format("%Y-%m-%d %H:%M:%S").to_string();
@@ -93,7 +98,13 @@ pub fn generate_pdf_report(dir_path: &Path, output_path: &Path) -> Result<()> {
 
     // Tree heading
     st.ensure_space(20.0);
-    st.layer().use_text("Directory Tree".to_string(), HEADING_SIZE, MARGIN, st.y, &font_bold);
+    st.layer().use_text(
+        "Directory Tree".to_string(),
+        HEADING_SIZE,
+        MARGIN,
+        st.y,
+        &font_bold,
+    );
     st.y = Mm(st.y.0 - HEADING_SIZE - 4.0);
 
     // Tree content
@@ -106,7 +117,8 @@ pub fn generate_pdf_report(dir_path: &Path, output_path: &Path) -> Result<()> {
 
     // Content section header
     st.write_text(&font_mono, &"=".repeat(90));
-    st.layer().use_text(dir_name.clone(), HEADING_SIZE, MARGIN, st.y, &font_bold);
+    st.layer()
+        .use_text(dir_name.clone(), HEADING_SIZE, MARGIN, st.y, &font_bold);
     st.y = Mm(st.y.0 - HEADING_SIZE - 4.0);
     st.write_text(&font_mono, &"=".repeat(90));
 
@@ -114,7 +126,11 @@ pub fn generate_pdf_report(dir_path: &Path, output_path: &Path) -> Result<()> {
     let (supported_files, unsupported_files) = collect_files(dir_path, max_depth);
 
     for file_path in &supported_files {
-        let name = file_path.file_name().unwrap_or_default().to_string_lossy().to_string();
+        let name = file_path
+            .file_name()
+            .unwrap_or_default()
+            .to_string_lossy()
+            .to_string();
 
         st.ensure_space(20.0);
         st.write_text(&font_mono, &format!("── {} ──", name));
@@ -142,6 +158,7 @@ pub fn generate_pdf_report(dir_path: &Path, output_path: &Path) -> Result<()> {
         }
     }
 
-    st.doc.save(&mut BufWriter::new(File::create(output_path)?))?;
+    st.doc
+        .save(&mut BufWriter::new(File::create(output_path)?))?;
     Ok(())
 }

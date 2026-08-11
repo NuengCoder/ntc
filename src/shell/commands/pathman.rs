@@ -2,9 +2,10 @@ use crate::navigator::Navigator;
 use crate::output::print_error;
 #[cfg(windows)]
 use crate::output::{print_info, print_success};
-use anyhow::Result;
+use crate::t;
 #[cfg(windows)]
 use anyhow::anyhow;
+use anyhow::Result;
 #[cfg(windows)]
 use colored::*;
 #[cfg(windows)]
@@ -46,32 +47,36 @@ fn dispatch_path(args: &str, nav: &mut Navigator, key: &str, name: &str) -> Resu
     #[cfg(not(windows))]
     {
         let _ = (args, nav, key, name);
-        print_error("usrpath/syspath is a Windows-only feature.");
+        print_error(&t!("cmd.pathman.windows_only"));
         Ok(false)
     }
 }
 
 #[cfg(windows)]
 fn print_usage(name: &str) {
-    println!("{}", "Usage:".cyan().bold());
-    println!("  {name} show                     Show PATH entries with indices");
-    println!("  {name} add <path>               Add a directory to PATH");
-    println!("  {name} add --cwd | --here       Add current directory to PATH");
-    println!("  {name} rm <path-or-number>      Remove from PATH (by path or index)");
-    println!("  {name} move <n> <m>             Move entry #n to position #m");
+    println!("{}", t!("cmd.pathman.usage_title").cyan().bold());
+    println!("  {}", t!("cmd.pathman.help_show", name));
+    println!("  {}", t!("cmd.pathman.help_add", name));
+    println!("  {}", t!("cmd.pathman.help_add_cwd", name));
+    println!("  {}", t!("cmd.pathman.help_rm", name));
+    println!("  {}", t!("cmd.pathman.help_move", name));
     println!();
-    println!("{}", "Examples:".green());
-    println!("  {name} show");
-    println!("  {name} add C:\\Tools");
-    println!("  {name} add --cwd");
-    println!("  {name} rm 3                    Remove entry #3 from the list");
-    println!("  {name} rm C:\\OldTools");
-    println!("  {name} move 3 1               Move entry #3 to the top");
+    println!("{}", t!("cmd.pathman.examples_title").green());
+    println!("  {}", t!("cmd.pathman.example_show", name));
+    println!("  {}", t!("cmd.pathman.example_add", name));
+    println!("  {}", t!("cmd.pathman.example_add_cwd", name));
+    println!("  {}", t!("cmd.pathman.example_rm_idx", name));
+    println!("  {}", t!("cmd.pathman.example_rm_path", name));
+    println!("  {}", t!("cmd.pathman.example_move", name));
 }
 
 #[cfg(windows)]
-fn print_level_name(key: &str) -> &'static str {
-    if key == USER_KEY { "User" } else { "System" }
+fn print_level_name(key: &str) -> String {
+    if key == USER_KEY {
+        t!("cmd.pathman.user_level")
+    } else {
+        t!("cmd.pathman.system_level")
+    }
 }
 
 #[cfg(windows)]
@@ -86,7 +91,7 @@ fn cmd_show(key: &str, name: &str) -> Result<bool> {
     println!("╠══════════════════════════════════════════════════════════════════╣");
 
     if entries.is_empty() {
-        println!("║  {}", "(PATH is empty or not set)".dimmed());
+        println!("║  {}", t!("cmd.pathman.empty_path").dimmed());
     } else {
         for (i, entry) in entries.iter().enumerate() {
             println!("║  {:<3} {}", format!("{}.", i + 1).yellow(), entry);
@@ -94,7 +99,10 @@ fn cmd_show(key: &str, name: &str) -> Result<bool> {
     }
 
     println!("╚══════════════════════════════════════════════════════════════════╝");
-    println!("  Total: {} entries", entries.len().to_string().cyan());
+    println!(
+        "  {}",
+        t!("cmd.pathman.total_entries", entries.len()).cyan()
+    );
     println!();
     Ok(false)
 }
@@ -123,7 +131,7 @@ fn cmd_add(key: &str, name: &str, args: &str, nav: &Navigator) -> Result<bool> {
     let normalized_new = normalize_path(&dir_display);
 
     if entries.iter().any(|e| normalize_path(e) == normalized_new) {
-        print_info(&format!("Already in PATH: {}", dir_display));
+        print_info(&t!("cmd.pathman.already_in_path", dir_display));
         return Ok(false);
     }
 
@@ -132,7 +140,7 @@ fn cmd_add(key: &str, name: &str, args: &str, nav: &Navigator) -> Result<bool> {
     let new_path = join_path(&entries);
     write_path(key, &new_path)?;
 
-    print_success(&format!("Added to {name}: {}", dir_display));
+    print_success(&t!("cmd.pathman.added_to_path", name, dir_display));
     print_restart_note();
     Ok(false)
 }
@@ -140,7 +148,7 @@ fn cmd_add(key: &str, name: &str, args: &str, nav: &Navigator) -> Result<bool> {
 #[cfg(windows)]
 fn cmd_rm(key: &str, args: &str, name: &str) -> Result<bool> {
     if args.is_empty() {
-        print_error("Usage: usrpath rm <path-or-number>");
+        print_error(&t!("cmd.pathman.rm_usage"));
         return Ok(false);
     }
 
@@ -148,25 +156,23 @@ fn cmd_rm(key: &str, args: &str, name: &str) -> Result<bool> {
     let mut entries = split_path(&current);
 
     let removed = if let Ok(idx) = args.parse::<usize>() {
-        // Remove by 1-based index
         if idx >= 1 && idx <= entries.len() {
             let entry = entries.remove(idx - 1);
-            print_success(&format!("Removed from {name}: {entry}"));
+            print_success(&t!("cmd.pathman.removed_from_path", name, entry));
             true
         } else {
-            print_error(&format!("Index out of range: {idx} (1-{})", entries.len()));
+            print_error(&t!("cmd.pathman.idx_out_of_range", idx, entries.len()));
             return Ok(false);
         }
     } else {
-        // Remove by path match
         let target_normalized = normalize_path(args);
         let before = entries.len();
         entries.retain(|e| normalize_path(e) != target_normalized);
         if entries.len() < before {
-            print_success(&format!("Removed from {name}: {args}"));
+            print_success(&t!("cmd.pathman.removed_from_path", name, args));
             true
         } else {
-            print_error(&format!("Not found in PATH: {args}"));
+            print_error(&t!("cmd.pathman.not_found_in_path", args));
             return Ok(false);
         }
     };
@@ -184,7 +190,7 @@ fn cmd_rm(key: &str, args: &str, name: &str) -> Result<bool> {
 fn cmd_move(key: &str, args: &str, name: &str) -> Result<bool> {
     let parts: Vec<&str> = args.split_whitespace().collect();
     if parts.len() < 2 {
-        print_error(&format!("Usage: {name} move <n> <m>"));
+        print_error(&t!("cmd.pathman.move_usage", name));
         return Ok(false);
     }
 
@@ -194,7 +200,7 @@ fn cmd_move(key: &str, args: &str, name: &str) -> Result<bool> {
     let (select, target) = match (select, target) {
         (Ok(s), Ok(t)) => (s, t),
         _ => {
-            print_error("Indices must be numbers");
+            print_error(&t!("cmd.pathman.indices_numbers"));
             return Ok(false);
         }
     };
@@ -203,16 +209,16 @@ fn cmd_move(key: &str, args: &str, name: &str) -> Result<bool> {
     let mut entries = split_path(&current);
 
     if select < 1 || select > entries.len() {
-        print_error(&format!("Index out of range: {select} (1-{})", entries.len()));
+        print_error(&t!("cmd.pathman.idx_out_of_range", select, entries.len()));
         return Ok(false);
     }
     if target < 1 || target > entries.len() {
-        print_error(&format!("Index out of range: {target} (1-{})", entries.len()));
+        print_error(&t!("cmd.pathman.idx_out_of_range", target, entries.len()));
         return Ok(false);
     }
 
     if select == target {
-        print_info("Source and target are the same — nothing to move");
+        print_info(&t!("cmd.pathman.same_source_target"));
         return Ok(false);
     }
 
@@ -228,7 +234,7 @@ fn cmd_move(key: &str, args: &str, name: &str) -> Result<bool> {
     let new_path = join_path(&entries);
     write_path(key, &new_path)?;
 
-    print_success(&format!("Moved to position #{target} in {name}: {entry}"));
+    print_success(&t!("cmd.pathman.moved", target, name, entry));
     print_restart_note();
     Ok(false)
 }
@@ -238,14 +244,14 @@ fn read_path(key: &str) -> Result<String> {
     let output = std::process::Command::new("reg")
         .args(["query", key, "/v", "PATH"])
         .output()
-        .map_err(|e| anyhow!("Failed to query registry: {e}"))?;
+        .map_err(|e| anyhow!("{}", t!("cmd.pathman.reg_query_fail", e)))?;
 
     if !output.status.success() {
         let err = String::from_utf8_lossy(&output.stderr);
         if err.contains("does not exist") || err.contains("not found") {
             return Ok(String::new());
         }
-        return Err(anyhow!("Registry query failed: {}", err.trim()));
+        return Err(anyhow!("{}", t!("cmd.pathman.reg_query_fail", err.trim())));
     }
 
     let stdout = String::from_utf8_lossy(&output.stdout);
@@ -267,31 +273,42 @@ fn parse_reg_value(line: &str) -> Option<String> {
     let rest = line[after_name..].trim_start();
     let after_type = rest.find(char::is_whitespace)?;
     let val = rest[after_type..].trim_start();
-    if val.is_empty() { None } else { Some(val.to_string()) }
+    if val.is_empty() {
+        None
+    } else {
+        Some(val.to_string())
+    }
 }
 
 #[cfg(windows)]
 fn write_path(key: &str, path_value: &str) -> Result<()> {
     let output = std::process::Command::new("reg")
         .args([
-            "add", key, "/v", "PATH", "/t", "REG_EXPAND_SZ",
-            "/d", path_value, "/f",
+            "add",
+            key,
+            "/v",
+            "PATH",
+            "/t",
+            "REG_EXPAND_SZ",
+            "/d",
+            path_value,
+            "/f",
         ])
         .output()
-        .map_err(|e| anyhow!("Failed to write registry: {e}"))?;
+        .map_err(|e| anyhow!("{}", t!("cmd.pathman.reg_write_fail", e)))?;
 
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr);
         let err_lower = stderr.to_lowercase();
         if err_lower.contains("access is denied") || err_lower.contains("access denied") {
             println!();
-            print_info("Run your terminal as Administrator (right-click → \"Run as administrator\"),");
-            print_info("then run the command again. Or use:  mode admin");
-            return Err(anyhow::anyhow!("Access denied — administrator privileges required."));
+            print_info(&t!("cmd.pathman.run_as_admin"));
+            print_info(&t!("cmd.pathman.mode_admin_hint"));
+            return Err(anyhow::anyhow!("{}", t!("cmd.pathman.access_denied")));
         }
         return Err(anyhow!(
-            "Failed to update PATH: {}",
-            stderr.trim()
+            "{}",
+            t!("cmd.pathman.path_update_fail", stderr.trim())
         ));
     }
 
@@ -300,7 +317,8 @@ fn write_path(key: &str, path_value: &str) -> Result<()> {
 
 #[cfg(windows)]
 fn split_path(value: &str) -> Vec<String> {
-    value.split(';')
+    value
+        .split(';')
         .map(|s| s.trim().to_string())
         .filter(|s| !s.is_empty())
         .collect()
@@ -320,5 +338,5 @@ fn normalize_path(s: &str) -> String {
 #[cfg(windows)]
 fn print_restart_note() {
     println!();
-    print_info("Changes will apply to new terminal windows.");
+    print_info(&t!("cmd.pathman.new_terminal"));
 }

@@ -1,5 +1,6 @@
 use anyhow::Result;
 use colored::*;
+use crate::t;
 use std::io::{self, Write};
 
 pub struct InteractiveMenu<'a> {
@@ -17,11 +18,17 @@ pub struct MenuItem {
 
 impl MenuItem {
     pub fn simple(label: impl Into<String>) -> Self {
-        Self { label: label.into(), detail: String::new() }
+        Self {
+            label: label.into(),
+            detail: String::new(),
+        }
     }
 
     pub fn with_detail(label: impl Into<String>, detail: impl Into<String>) -> Self {
-        Self { label: label.into(), detail: detail.into() }
+        Self {
+            label: label.into(),
+            detail: detail.into(),
+        }
     }
 }
 
@@ -67,7 +74,7 @@ impl<'a> InteractiveMenu<'a> {
         println!("{}", "  ═══════════════════════════════════════".cyan());
 
         if self.items.is_empty() {
-            println!("  {}", "(no items)".dimmed());
+            println!("{}", t!("interactive.no_items").dimmed());
         } else {
             for (i, item) in self.items.iter().enumerate() {
                 if item.detail.is_empty() {
@@ -95,18 +102,18 @@ impl<'a> InteractiveMenu<'a> {
         let input = input.trim();
 
         if self.show_cancel && (input == "0" || input.is_empty()) {
-            println!("  {}", "Cancelled.".dimmed());
+            println!("{}", t!("interactive.cancelled").dimmed());
             return Ok(None);
         }
 
         match input.parse::<usize>() {
             Ok(n) if n >= 1 && n <= self.items.len() => Ok(Some(n - 1)),
             Ok(_) => {
-                println!("  {}", "Invalid selection.".red());
+                println!("{}", t!("interactive.invalid_selection").red());
                 Ok(None)
             }
             Err(_) => {
-                println!("  {}", "Invalid input.".red());
+                println!("{}", t!("interactive.invalid_input").red());
                 Ok(None)
             }
         }

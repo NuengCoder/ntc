@@ -4,24 +4,72 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 
 use super::sources;
-use super::types::{
-    bin_dir, manifest_path, package_dir, version_dir, PackageManifest,
-};
-use crate::output::print_info;
+use super::types::{bin_dir, manifest_path, package_dir, version_dir, PackageManifest};
 #[cfg(not(windows))]
 use crate::output::print_success;
+use crate::output::{print_info, print_warning};
+use crate::t;
 use crate::utils::interactive::prompt_yes_no;
 
 use super::installers;
 
+/// Detect whether ntc is running inside Termux (Android).
+pub(crate) fn is_termux() -> bool {
+    if let Ok(prefix) = std::env::var("PREFIX") {
+        if prefix.contains("com.termux") {
+            return true;
+        }
+    }
+    Path::new("/data/data/com.termux/files/usr/bin/pkg").exists()
+}
+
+/// Termux `pkg install` name for a runtime whose official linux-aarch64
+/// build is glibc-linked (and thus unreliable on Android/bionic).
+fn termux_pkg_hint(name: &str) -> Option<&'static str> {
+    Some(match name {
+        "node" => "nodejs",
+        "python" => "python",
+        "php" => "php",
+        "ruby" => "ruby",
+        "lua" => "lua54",
+        "dotnet" => "dotnet",
+        "kotlin" => "kotlin",
+        "scala" => "scala",
+        "flutter" => "flutter",
+        "java" => "openjdk-17",
+        "docker" => "docker",
+        "ffmpeg" => "ffmpeg",
+        "imagemagick" => "imagemagick",
+        "tesseract" => "tesseract",
+        "nginx" => "nginx",
+        _ => return None,
+    })
+}
+
+/// Warn when installing a glibc-linked runtime on Termux.
+pub(crate) fn warn_termux_install(name: &str) {
+    if is_termux() {
+        if let Some(pkg) = termux_pkg_hint(name) {
+            print_warning(&t!("ntpkg.termux_hint", pkg));
+        }
+    }
+}
+
 /// Install a language runtime.
 pub fn install_package(name: &str, version: &str) -> Result<()> {
+    warn_termux_install(name);
+
     let source = sources::get_source(name, version)
         .ok_or_else(|| anyhow::anyhow!("Unknown package '{name}' or version '{version}'"))?;
 
     let vdir = version_dir(name, version);
     if vdir.exists() {
-        bail!("{} {} is already installed at {}", name, version, vdir.display());
+        bail!(
+            "{} {} is already installed at {}",
+            name,
+            version,
+            vdir.display()
+        );
     }
 
     if name == "cloudflare" {
@@ -84,6 +132,10 @@ pub fn install_package(name: &str, version: &str) -> Result<()> {
         return installers::install_nim(name, version, &source, &vdir);
     }
 
+    if name == "nginx" {
+        return installers::install_nginx(name, version, &source, &vdir);
+    }
+
     if name == "dotnet" {
         return installers::install_dotnet(name, version, &source, &vdir);
     }
@@ -144,6 +196,14 @@ pub fn install_package(name: &str, version: &str) -> Result<()> {
         return installers::install_kilocode(name, version, &source, &vdir);
     }
 
+    if name == "freebuff" {
+        return installers::install_freebuff(name, version, &source, &vdir);
+    }
+
+    if name == "vscode" {
+        return installers::install_vscode(name, version, &source, &vdir);
+    }
+
     if name == "sqlite" {
         return installers::install_sqlite(name, version, &source, &vdir);
     }
@@ -152,13 +212,31 @@ pub fn install_package(name: &str, version: &str) -> Result<()> {
         return installers::install_sqlitestudio(name, version, &source, &vdir);
     }
 
+    if name == "ffmpeg" {
+        return installers::install_ffmpeg(name, version, &source, &vdir);
+    }
+
+    if name == "imagemagick" {
+        return installers::install_imagemagick(name, version, &source, &vdir);
+    }
+
+    if name == "tesseract" {
+        return installers::install_tesseract(name, version, &source, &vdir);
+    }
+
     #[cfg(not(windows))]
     {
         if let Some(sys_path) = installers::python::detect_system_python(version)? {
             fs::create_dir_all(&vdir)?;
-            fs::write(vdir.join(".real_path"), sys_path.to_string_lossy().as_bytes())
-                .context("Failed to write .real_path")?;
-            print_success(&format!("Using system {name} {version} at {}", sys_path.display()));
+            fs::write(
+                vdir.join(".real_path"),
+                sys_path.to_string_lossy().as_bytes(),
+            )
+            .context("Failed to write .real_path")?;
+            print_success(&format!(
+                "Using system {name} {version} at {}",
+                sys_path.display()
+            ));
 
             let mut manifest = load_manifest()?;
             manifest.add_version(name, version);
@@ -198,15 +276,25 @@ pub fn uninstall_package(name: &str, version: &str) -> Result<()> {
             .ok()
             .and_then(|s| {
                 let trimmed = s.trim().to_string();
-                if trimmed.is_empty() { None } else { Some(trimmed) }
+                if trimmed.is_empty() {
+                    None
+                } else {
+                    Some(trimmed)
+                }
             })
             .map(|p| !PathBuf::from(p).starts_with(&vdir))
             .unwrap_or(false);
 
     if is_system_package {
         let real_path = fs::read_to_string(vdir.join(".real_path")).unwrap_or_default();
-        print_info(&format!("Installed at {} (system package)", real_path.trim()));
-        if !prompt_yes_no("Remove from ntpkg tracking only (system package stays installed)", true)? {
+        print_info(&format!(
+            "Installed at {} (system package)",
+            real_path.trim()
+        ));
+        if !prompt_yes_no(
+            "Remove from ntpkg tracking only (system package stays installed)",
+            true,
+        )? {
             return Ok(());
         }
     } else {
@@ -216,14 +304,15 @@ pub fn uninstall_package(name: &str, version: &str) -> Result<()> {
                 &format!("Launch {name} installer to uninstall (click Uninstall in the window)"),
                 true,
             )? {
-                print_info("Launching uninstaller. Complete uninstallation, then close the window...");
+                print_info(
+                    "Launching uninstaller. Complete uninstallation, then close the window...",
+                );
                 installers::launch_installer_and_wait(&installer_path, name, version)?;
             }
         }
     }
 
-    fs::remove_dir_all(&vdir)
-        .with_context(|| format!("Failed to remove {}", vdir.display()))?;
+    fs::remove_dir_all(&vdir).with_context(|| format!("Failed to remove {}", vdir.display()))?;
 
     let mut manifest = load_manifest()?;
     manifest.remove_version(name, version);
@@ -367,17 +456,16 @@ pub(crate) fn save_manifest(manifest: &PackageManifest) -> Result<()> {
         .with_context(|| format!("Failed to create packages dir {}", dir.display()))?;
 
     let path = manifest_path();
-    let content = toml::to_string_pretty(manifest)
-        .with_context(|| "Failed to serialize manifest")?;
-    fs::write(&path, &content)
-        .with_context(|| format!("Failed to write {}", path.display()))?;
+    let content =
+        toml::to_string_pretty(manifest).with_context(|| "Failed to serialize manifest")?;
+    fs::write(&path, &content).with_context(|| format!("Failed to write {}", path.display()))?;
     Ok(())
 }
 
 pub(crate) fn platform_key() -> String {
     let os = if cfg!(target_os = "windows") {
         "windows"
-    } else if cfg!(target_os = "linux") {
+    } else if cfg!(any(target_os = "linux", target_os = "android")) {
         "linux"
     } else if cfg!(target_os = "macos") {
         "macos"
@@ -414,8 +502,8 @@ pub fn execute_package(name: &str, binary: &str, args: &[String]) -> Result<i32>
     let vdir = version_dir(name, version);
 
     let bin_dir = if vdir.join(".real_path").exists() {
-        let content = fs::read_to_string(vdir.join(".real_path"))
-            .context("Failed to read .real_path")?;
+        let content =
+            fs::read_to_string(vdir.join(".real_path")).context("Failed to read .real_path")?;
         PathBuf::from(content.trim())
     } else {
         bin_dir(name, version)

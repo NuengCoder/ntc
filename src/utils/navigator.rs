@@ -1,5 +1,6 @@
 use crate::filetype::strip_unc_prefix;
 use crate::shell::venv::{detect_active_venv, has_venv_in_dir};
+use crate::t;
 use anyhow::{Context, Result};
 use std::env;
 use std::path::{Path, PathBuf};
@@ -14,7 +15,7 @@ impl Navigator {
     /// Create a new Navigator starting from the current directory
     pub fn new() -> Result<Self> {
         let current_dir = env::current_dir().context("Failed to get current directory")?;
-        Ok(Self { 
+        Ok(Self {
             current_dir,
             venv_name: detect_active_venv(),
         })
@@ -41,7 +42,7 @@ impl Navigator {
             None => String::new(),
         }
     }
-    
+
     /// Get colored venv prefix using theme
     pub fn get_colored_venv_prefix(&self) -> String {
         match &self.venv_name {
@@ -60,41 +61,43 @@ impl Navigator {
             Err(_) => {
                 // If canonicalize fails, try to clean the path first
                 let path_str = path.to_string_lossy();
-                let clean_path = Path::new(path_str.strip_prefix(r"\\?\").unwrap_or(&path_str)).to_path_buf();
-                clean_path.canonicalize()
-                    .with_context(|| format!("Cannot navigate to: {}", path.display()))?
+                let clean_path =
+                    Path::new(path_str.strip_prefix(r"\\?\").unwrap_or(&path_str)).to_path_buf();
+                clean_path
+                    .canonicalize()
+                    .with_context(|| t!("navigator.cannot_navigate_to", path.display()))?
             }
         };
-        
+
         if canonical.is_dir() {
             let has_local_config = canonical.join("ntconfig.toml").exists();
             env::set_current_dir(&canonical)?;
             self.current_dir = canonical;
-            
+
             // Re-detect venv after directory change
-            self.venv_name = detect_active_venv();  
-            
+            self.venv_name = detect_active_venv();
+
             // Optional: Show hint if venv exists but not activated
             if self.venv_name.is_none() && has_venv_in_dir(&self.current_dir) {
                 #[cfg(not(target_os = "android"))]
                 {
                     use colored::Colorize;
                     println!();
-                    println!("{}", "💡 Tip: Python virtual environment detected!".cyan());
+                    println!("{}", t!("navigator.venv_tip").cyan());
                     #[cfg(windows)]
-                    println!("   Run: .\\venv\\Scripts\\activate");
+                    println!("{}", t!("navigator.venv_activate_win"));
                     #[cfg(not(windows))]
-                    println!("   Run: source ./venv/bin/activate");
+                    println!("{}", t!("navigator.venv_activate_unix"));
                 }
             }
-            
+
             if has_local_config {
                 crate::config::Config::reload_global();
             }
-            
+
             Ok(())
         } else {
-            anyhow::bail!("{} is not a directory", path.display())
+            anyhow::bail!(t!("navigator.not_a_directory", path.display()))
         }
     }
 
@@ -109,7 +112,7 @@ impl Navigator {
         #[cfg(not(windows))]
         {
             let _ = drive_letter;
-            anyhow::bail!("Drive navigation is only supported on Windows")
+            anyhow::bail!(t!("navigator.drive_windows_only"))
         }
     }
 
@@ -136,10 +139,11 @@ impl Navigator {
 
     /// Go back to the parent directory
     pub fn go_back(&mut self) -> Result<()> {
-        let parent = self.current_dir
+        let parent = self
+            .current_dir
             .parent()
             .map(|p| p.to_path_buf())
-            .ok_or_else(|| anyhow::anyhow!("Already at root, cannot go back further"))?;
+            .ok_or_else(|| anyhow::anyhow!(t!("navigator.already_root")))?;
         self.go_to(&parent)
     }
 
@@ -160,11 +164,18 @@ impl Navigator {
                 }
             }
             Err(e) => {
-                eprintln!("Warning: could not read directory '{}': {}", self.current_dir.display(), e);
+                eprintln!(
+                    "{}",
+                    t!("navigator.cannot_read_dir", self.current_dir.display(), e)
+                );
             }
         }
         dirs.sort_by_cached_key(|a| a.to_lowercase());
-        Ok(dirs.into_iter().enumerate().map(|(i, n)| (i + 1, n)).collect())
+        Ok(dirs
+            .into_iter()
+            .enumerate()
+            .map(|(i, n)| (i + 1, n))
+            .collect())
     }
 }
 
@@ -178,4 +189,3 @@ pub fn clear_screen() {
 fn strip_extended_prefix(path: &Path) -> String {
     strip_unc_prefix(path)
 }
-

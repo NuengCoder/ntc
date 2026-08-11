@@ -6,6 +6,7 @@ use std::process::Command;
 use super::super::manager::load_manifest;
 use super::super::types::version_dir;
 use crate::output::{print_info, print_success};
+use crate::t;
 
 pub(crate) fn print_npm_guide(name: &str, npm_pkg: &str) -> Result<()> {
     let node_path = find_node();
@@ -14,7 +15,7 @@ pub(crate) fn print_npm_guide(name: &str, npm_pkg: &str) -> Result<()> {
     let (node_ok, npm_ok) = (node_path.is_some(), npm_path.is_some());
 
     if !node_ok || !npm_ok {
-        print_info("Node.js/npm not detected.");
+        print_info(&t!("ntpkg.npm_not_detected"));
         println!();
         println!("  ── Install Node.js first ──");
         println!();
@@ -43,7 +44,7 @@ pub(crate) fn print_npm_guide(name: &str, npm_pkg: &str) -> Result<()> {
         println!("    ntpkg install {name}");
         println!();
     } else {
-        print_success("Node.js and npm detected");
+        print_success(&t!("ntpkg.npm_detected"));
         println!();
 
         let npm_bin = detect_npm_bin_dir();
@@ -57,7 +58,7 @@ pub(crate) fn print_npm_guide(name: &str, npm_pkg: &str) -> Result<()> {
                 println!("    {}", bin_dir.display());
                 println!();
             } else {
-                print_success("npm global bin is in PATH");
+                print_success(&t!("ntpkg.npm_bin_in_path"));
                 println!();
             }
         }
@@ -127,7 +128,11 @@ fn find_ntpkg_node_bin() -> Option<PathBuf> {
     let dir = version_dir("node", active_ver);
     let node_exe = if cfg!(windows) { "node.exe" } else { "node" };
     let candidate = dir.join(node_exe);
-    if candidate.exists() { Some(candidate) } else { None }
+    if candidate.exists() {
+        Some(candidate)
+    } else {
+        None
+    }
 }
 
 fn find_ntpkg_npm_bin() -> Option<PathBuf> {
@@ -140,10 +145,14 @@ fn find_ntpkg_npm_bin() -> Option<PathBuf> {
     let npm_exe = if cfg!(windows) { "npm.cmd" } else { "npm" };
 
     let candidate = dir.join(npm_exe);
-    if candidate.exists() { return Some(candidate); }
+    if candidate.exists() {
+        return Some(candidate);
+    }
 
     let candidate2 = dir.join("bin").join("npm");
-    if candidate2.exists() { return Some(candidate2); }
+    if candidate2.exists() {
+        return Some(candidate2);
+    }
 
     None
 }
@@ -172,8 +181,7 @@ fn find_node_common_locations() -> Option<PathBuf> {
         }
 
         if let Ok(userprofile) = std::env::var("USERPROFILE") {
-            let nvm_root = PathBuf::from(&userprofile)
-                .join(r"AppData\Roaming\nvm");
+            let nvm_root = PathBuf::from(&userprofile).join(r"AppData\Roaming\nvm");
             if let Ok(entries) = std::fs::read_dir(&nvm_root) {
                 for entry in entries.flatten() {
                     let p = entry.path().join("node.exe");
@@ -221,8 +229,7 @@ fn find_npm_common_locations() -> Option<PathBuf> {
         }
 
         if let Ok(userprofile) = std::env::var("USERPROFILE") {
-            let nvm_root = PathBuf::from(&userprofile)
-                .join(r"AppData\Roaming\nvm");
+            let nvm_root = PathBuf::from(&userprofile).join(r"AppData\Roaming\nvm");
             if let Ok(entries) = std::fs::read_dir(&nvm_root) {
                 for entry in entries.flatten() {
                     let p = entry.path().join("npm.cmd");
@@ -247,10 +254,7 @@ fn find_npm_common_locations() -> Option<PathBuf> {
 }
 
 fn detect_npm_bin_dir() -> Option<PathBuf> {
-    let output = Command::new("npm")
-        .args(["root", "-g"])
-        .output()
-        .ok()?;
+    let output = Command::new("npm").args(["root", "-g"]).output().ok()?;
 
     if !output.status.success() {
         return None;

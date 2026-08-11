@@ -4,10 +4,11 @@
 use crate::backup::BackupManager;
 use crate::backup_diff::BackupDiff;
 use crate::backup_manifest::display_path;
-use crate::utils::interactive::{InteractiveMenu, MenuItem};
 use crate::navigator::{clear_screen, Navigator};
-use crate::output::{print_error, print_success, print_info};
+use crate::output::{print_error, print_info, print_success};
 use crate::shell::helpers::show_tree;
+use crate::t;
+use crate::utils::interactive::{InteractiveMenu, MenuItem};
 
 use anyhow::Result;
 use colored::*;
@@ -27,23 +28,23 @@ pub fn cmd_backup(args: &str, nav: &mut Navigator) -> Result<bool> {
         "diff" => cmd_diff(subargs, nav),
         "list" | "ls" => cmd_list(nav),
         _ => {
-            println!("{}", "backup — Manage project backups".cyan().bold());
-            println!("  backup create             Create a new backup");
-            println!("  backup list               List all backups");
-            println!("  backup restore [num]      Restore a backup (interactive if no num)");
-            println!("  backup restore --choose   Pick a backup from an interactive menu");
-            println!("  backup restore --deleted  Restore only files deleted since the backup");
-            println!("  backup restore --choose --deleted  Pick + restore-deleted");
-            println!("  backup undo               Undo last restore");
-            println!("  backup undo --cls         Clear undo history");
-            println!("  backup undo --force       Clear undo history (no confirm)");
-            println!("  backup clear              Delete all backups (with confirmation)");
-            println!("  backup clear --force      Delete all backups (no confirmation)");
-            println!("  backup recreate           Clear all + undo history + create fresh");
-            println!("  backup recreate --force   Same, skip all confirmations");
-            println!("  backup diff [num]         Diff current project against a backup");
+            println!("{}", t!("backup.help_title").cyan().bold());
+            println!("{}", t!("backup.help_create"));
+            println!("{}", t!("backup.help_list"));
+            println!("{}", t!("backup.help_restore"));
+            println!("{}", t!("backup.help_restore_choose"));
+            println!("{}", t!("backup.help_restore_deleted"));
+            println!("{}", t!("backup.help_restore_choose_deleted"));
+            println!("{}", t!("backup.help_undo"));
+            println!("{}", t!("backup.help_undo_cls"));
+            println!("{}", t!("backup.help_undo_force"));
+            println!("{}", t!("backup.help_clear"));
+            println!("{}", t!("backup.help_clear_force"));
+            println!("{}", t!("backup.help_recreate"));
+            println!("{}", t!("backup.help_recreate_force"));
+            println!("{}", t!("backup.help_diff"));
             println!();
-            println!("{}", "Examples:".green());
+            println!("{}", t!("backup.help_examples").green());
             println!("  backup create");
             println!("  backup restore 3");
             println!("  backup undo");
@@ -63,18 +64,19 @@ fn cmd_create(args: &str, nav: &mut Navigator) -> Result<bool> {
         "--verify" | "-v" => {
             let exists = BackupManager::has_backups(nav.current_path());
             let project_hash = crate::backup::compute_project_hash(nav.current_path());
-            let backup_dir = crate::backup_manifest::BackupIndex::get_project_backup_dir(&project_hash);
+            let backup_dir =
+                crate::backup_manifest::BackupIndex::get_project_backup_dir(&project_hash);
             if exists {
                 let count = BackupManager::list_backups(nav.current_path())?.len();
-                print_success(&format!("Backups exist: {} backup(s) at {}", count, display_path(&backup_dir)));
+                print_success(&t!("backup.exists", count, display_path(&backup_dir)));
             } else {
-                print_info("No backups found for this project.");
-                println!("{}", "Use 'backup create' to create your first backup.".green());
+                print_info(&t!("backup.none"));
+                println!("{}", t!("backup.create_hint").green());
             }
         }
         _ => {
             if !args.is_empty() {
-                print_error(&format!("Unknown backup create option: {}", args));
+                print_error(&t!("backup.unknown_create_option", args));
             } else {
                 BackupManager::create_backup(nav.current_path())?;
             }
@@ -86,36 +88,39 @@ fn cmd_create(args: &str, nav: &mut Navigator) -> Result<bool> {
 fn cmd_clear(args: &str, nav: &mut Navigator) -> Result<bool> {
     if args == "--force" || args == "-f" {
         BackupManager::clear_backups(nav.current_path())?;
-        print_success("All backups deleted.");
+        print_success(&t!("backup.cleared"));
     } else if args.is_empty() {
         let backups = BackupManager::list_backups(nav.current_path())?;
         if backups.is_empty() {
-            print_info("No backups found for this project.");
+            print_info(&t!("backup.none"));
             return Ok(false);
         }
         println!();
-        println!("{}", "⚠️  WARNING: This will delete ALL backups for this project!".yellow().bold());
-        println!("{}", format!("You have {} backup(s):", backups.len()).yellow());
+        println!("{}", t!("backup.warning_title").yellow().bold());
+        println!("{}", t!("backup.warning_count", backups.len()).yellow());
         for (num, date, size, file_count) in backups.iter().take(10) {
-            println!("  Backup #{} — {} — {} — {} files", num, date, size, file_count);
+            println!(
+                "{}",
+                t!("backup.entry_file_count", num, date, size, file_count)
+            );
         }
         if backups.len() > 10 {
-            println!("  ... and {} more", backups.len() - 10);
+            println!("{}", t!("backup.and_more", backups.len() - 10));
         }
         println!();
-        print!("{} ", "Type 'yes' to confirm: ".red());
+        print!("{} ", t!("backup.confirm").red());
         io::stdout().flush()?;
         let mut input = String::new();
         io::stdin().read_line(&mut input)?;
         if matches!(input.trim().to_lowercase().as_str(), "y" | "yes") {
             BackupManager::clear_backups(nav.current_path())?;
-            print_success("All backups deleted.");
+            print_success(&t!("backup.cleared"));
         } else {
-            println!("{}", "Clear cancelled.".dimmed());
+            println!("{}", t!("backup.cancelled").dimmed());
         }
     } else {
-        print_error(&format!("Unknown backup clear option: {}", args));
-        println!("Usage: backup clear [--force]");
+        print_error(&t!("backup.unknown_clear_option", args));
+        println!("{}", t!("backup.usage_clear"));
     }
     Ok(false)
 }
@@ -124,8 +129,8 @@ fn cmd_recreate(args: &str, nav: &mut Navigator) -> Result<bool> {
     let force = args == "--force" || args == "-f";
 
     if !force && !args.is_empty() {
-        print_error(&format!("Unknown backup recreate option: {}", args));
-        println!("Usage: backup recreate [--force]");
+        print_error(&t!("backup.unknown_recreate_option", args));
+        println!("{}", t!("backup.usage_recreate"));
         return Ok(false);
     }
 
@@ -133,7 +138,7 @@ fn cmd_recreate(args: &str, nav: &mut Navigator) -> Result<bool> {
         BackupManager::clear_backups(nav.current_path())?;
         BackupManager::clear_undo_history(nav.current_path())?;
         BackupManager::create_backup(nav.current_path())?;
-        print_success("Project recreated: old backups cleared, fresh backup created.");
+        print_success(&t!("backup.recreated"));
     }
     Ok(false)
 }
@@ -142,7 +147,7 @@ fn confirm_recreate(nav: &mut Navigator) -> Result<bool> {
     let has_backups = BackupManager::has_backups(nav.current_path());
 
     if !has_backups {
-        println!("{}", "No existing backups found. Creating fresh backup anyway? (y/N): ".yellow());
+        println!("{}", t!("backup.recreate_prompt").yellow());
         io::stdout().flush()?;
         let mut input = String::new();
         io::stdin().read_line(&mut input)?;
@@ -150,12 +155,12 @@ fn confirm_recreate(nav: &mut Navigator) -> Result<bool> {
     }
 
     println!();
-    println!("{}", "⚠️  RECREATE will:".yellow().bold());
-    println!("  1. Delete ALL existing backups");
-    println!("  2. Clear undo history");
-    println!("  3. Create a fresh backup of the current state");
+    println!("{}", t!("backup.recreate_will_title").yellow().bold());
+    println!("{}", t!("backup.recreate_step1"));
+    println!("{}", t!("backup.recreate_step2"));
+    println!("{}", t!("backup.recreate_step3"));
     println!();
-    print!("{} ", "Proceed? (y/N): ".red());
+    print!("{} ", t!("backup.recreate_proceed").red());
     io::stdout().flush()?;
     let mut input = String::new();
     io::stdin().read_line(&mut input)?;
@@ -164,9 +169,9 @@ fn confirm_recreate(nav: &mut Navigator) -> Result<bool> {
 
 fn cmd_restore(args: &str, nav: &mut Navigator) -> Result<bool> {
     let tokens: Vec<&str> = args.split_whitespace().collect();
-    let has_choose  = tokens.contains(&"--choose");
+    let has_choose = tokens.contains(&"--choose");
     let has_deleted = tokens.contains(&"--deleted");
-    let has_force   = tokens.contains(&"--force") || tokens.contains(&"-f");
+    let has_force = tokens.contains(&"--force") || tokens.contains(&"-f");
 
     // Extract explicit backup number if present
     let explicit_num = tokens.iter().find_map(|t| t.parse::<usize>().ok());
@@ -175,51 +180,55 @@ fn cmd_restore(args: &str, nav: &mut Navigator) -> Result<bool> {
 
     let backup_number = match explicit_num {
         Some(n) => n,
-        None if has_choose || has_deleted => {
-            match pick_backup_interactive(&project_root)? {
-                Some(n) => n,
-                None => return Ok(false),
-            }
-        }
+        None if has_choose || has_deleted => match pick_backup_interactive(&project_root)? {
+            Some(n) => n,
+            None => return Ok(false),
+        },
         None if args.is_empty() => {
             // Original stdin-based interactive picker (backward compat)
             let backups = BackupManager::list_backups(&project_root)?;
             if backups.is_empty() {
-                print_info("No backups found for this project. Use 'backup create' to make one.");
+                print_info(&t!("backup.none"));
                 return Ok(false);
             }
             println!();
-            println!("{}", "==================================================".cyan());
-            println!("{}", "  Available Backups (newest first)".cyan().bold());
-            println!("{}", "==================================================".cyan());
+            println!(
+                "{}",
+                "==================================================".cyan()
+            );
+            println!("{}", t!("backup.available_title").cyan().bold());
+            println!(
+                "{}",
+                "==================================================".cyan()
+            );
             for (i, (num, date, size, file_count)) in backups.iter().enumerate() {
                 println!(
-                    "  {}. Backup #{} — {} — {} — {} files",
-                    i + 1, num, date, size, file_count
+                    "{}",
+                    t!("backup.select_entry", i + 1, num, date, size, file_count)
                 );
             }
-            println!("  {}", "0. Cancel".red());
+            println!("{}", t!("backup.cancel_opt").red());
             println!();
-            print!("{} ", format!("Select backup to restore (1-{}): ", backups.len()).green());
+            print!("{} ", t!("backup.select_prompt", backups.len()).green());
             io::stdout().flush()?;
             let mut input = String::new();
             io::stdin().read_line(&mut input)?;
             let input = input.trim();
             if input == "0" || input.is_empty() {
-                println!("{}", "Restore cancelled.".dimmed());
+                println!("{}", t!("backup.restore_cancelled").dimmed());
                 return Ok(false);
             }
             match input.parse::<usize>() {
                 Ok(n) if n >= 1 && n <= backups.len() => backups[n - 1].0,
                 _ => {
-                    print_error(&format!("Invalid selection: {}", input));
+                    print_error(&t!("backup.invalid_selection", input));
                     return Ok(false);
                 }
             }
         }
         _ => {
-            print_error(&format!("Invalid argument: {}", args));
-            println!("Usage: backup restore [--choose] [--deleted] [num]");
+            print_error(&t!("backup.invalid_arg", args));
+            println!("{}", t!("backup.usage_restore"));
             return Ok(false);
         }
     };
@@ -233,7 +242,7 @@ fn cmd_restore(args: &str, nav: &mut Navigator) -> Result<bool> {
     match result {
         Ok(()) => {
             clear_screen();
-            show_tree(nav, Some(1), false, false, false, false, false);
+            show_tree(nav, Some(1), false, false, false, false, false, false);
         }
         Err(e) => print_error(&format!("{}", e)),
     }
@@ -245,20 +254,24 @@ fn cmd_restore(args: &str, nav: &mut Navigator) -> Result<bool> {
 fn pick_backup_interactive(project_root: &std::path::Path) -> Result<Option<usize>> {
     let backups = BackupManager::list_backups(project_root)?;
     if backups.is_empty() {
-        print_info("No backups found for this project. Use 'backup create' to make one.");
+        print_info(&t!("backup.none"));
         return Ok(None);
     }
 
-    let items: Vec<MenuItem> = backups.iter().map(|(num, date, size, count)| {
-        MenuItem::with_detail(
-            format!("Backup #{}", num),
-            format!("{} — {} — {} files", date, size, count),
-        )
-    }).collect();
+    let items: Vec<MenuItem> = backups
+        .iter()
+        .map(|(num, date, size, count)| {
+            MenuItem::with_detail(
+                t!("backup.menu_item", num),
+                t!("backup.pick_detail", date, size, count),
+            )
+        })
+        .collect();
 
-    let menu = InteractiveMenu::new("Select a backup to restore from")
+    let title = t!("backup.pick_title");
+    let menu = InteractiveMenu::new(&title)
         .items(items)
-        .prompt(format!("Enter number (1-{}) or 0: ", backups.len()));
+        .prompt(t!("backup.pick_prompt", backups.len()));
 
     menu.run().map(|opt| opt.map(|i| backups[i].0))
 }
@@ -267,14 +280,14 @@ fn cmd_undo(args: &str, nav: &mut Navigator) -> Result<bool> {
     match args {
         "--cls" | "--clear" => {
             println!();
-            print!("{} ", "⚠ Clear undo history? This cannot be undone. (y/N):".red());
+            print!("{} ", t!("backup.clear_history_prompt").red());
             io::stdout().flush()?;
             let mut input = String::new();
             io::stdin().read_line(&mut input)?;
             if matches!(input.trim().to_lowercase().as_str(), "y" | "yes") {
                 BackupManager::clear_undo_history(nav.current_path())?;
             } else {
-                println!("{}", "Clear cancelled.".dimmed());
+                println!("{}", t!("backup.cancelled").dimmed());
             }
         }
         "--force" | "-f" => {
@@ -282,11 +295,11 @@ fn cmd_undo(args: &str, nav: &mut Navigator) -> Result<bool> {
         }
         _ => {
             if !args.is_empty() {
-                print_error(&format!("Unknown backup undo option: {}", args));
+                print_error(&t!("backup.unknown_undo_option", args));
             } else {
                 BackupManager::undo_last_restore(nav.current_path())?;
                 clear_screen();
-                show_tree(nav, Some(1), false, false, false, false, false);
+                show_tree(nav, Some(1), false, false, false, false, false, false);
             }
         }
     }
@@ -299,7 +312,7 @@ fn cmd_diff(args: &str, nav: &mut Navigator) -> Result<bool> {
     } else {
         match args.parse::<usize>() {
             Ok(n) => BackupDiff::generate_diff(nav.current_path(), n)?,
-            Err(_) => print_error(&format!("Invalid argument: {}. Usage: backup diff <number>", args)),
+            Err(_) => print_error(&t!("backup.invalid_diff_arg", args)),
         }
     }
     Ok(false)
@@ -311,13 +324,16 @@ fn cmd_list(nav: &mut Navigator) -> Result<bool> {
     let backup_dir = crate::backup_manifest::BackupIndex::get_project_backup_dir(&project_hash);
     if exists {
         let backups = BackupManager::list_backups(nav.current_path())?;
-        println!("{}", format!("Backups for this project: {} found", backups.len()).cyan().bold());
+        println!("{}", t!("backup.list_title", backups.len()).cyan().bold());
         for (num, date, size, file_count) in &backups {
-            println!("  #{} — {} — {} — {} files", num, date, size, file_count);
+            println!("{}", t!("backup.list_entry", num, date, size, file_count));
         }
-        println!("{}", format!("Location: {}", display_path(&backup_dir)).dimmed());
+        println!(
+            "{}",
+            t!("backup.list_location", display_path(&backup_dir)).dimmed()
+        );
     } else {
-        print_info("No backups found for this project.");
+        print_info(&t!("backup.none"));
     }
     Ok(false)
 }

@@ -1,15 +1,12 @@
-use crate::syntax::types::{Token, TokenType, SyntaxLanguage};
-use crate::syntax::language::{
-    is_ident_start, is_ident_continue, line_comment_prefix,
-    has_block_comments, has_xml_comments, has_ps_block_comments,
-    has_pascal_comments, has_preprocessor,
-    is_char_literal_supported, has_regex_literals, has_tag_syntax,
-    is_rust_attr_start, has_annotation_at, has_css_at_rules,
-    is_css_at_rule, is_css_property, is_keyword, is_type_name,
-    is_type_name_upper_heuristic, is_builtin, is_function_call,
-    is_constant, has_toml_fields,
-};
 use super::types::detect_language;
+use crate::syntax::language::{
+    has_annotation_at, has_block_comments, has_css_at_rules, has_pascal_comments, has_preprocessor,
+    has_ps_block_comments, has_regex_literals, has_tag_syntax, has_toml_fields, has_xml_comments,
+    is_builtin, is_char_literal_supported, is_constant, is_css_at_rule, is_css_property,
+    is_function_call, is_ident_continue, is_ident_start, is_keyword, is_rust_attr_start,
+    is_type_name, is_type_name_upper_heuristic, line_comment_prefix,
+};
+use crate::syntax::types::{SyntaxLanguage, Token, TokenType};
 
 #[derive(Clone)]
 pub struct SyntaxHighlighter {
@@ -292,21 +289,39 @@ impl SyntaxHighlighter {
 
             if matches!(lang, SyntaxLanguage::Markdown) {
                 if md_first_non_ws == Some(i) && bytes[i] == b'#' {
-                    tokens.push(Token { start: i, end: len, token_type: TokenType::Keyword });
+                    tokens.push(Token {
+                        start: i,
+                        end: len,
+                        token_type: TokenType::Keyword,
+                    });
                     return tokens;
                 }
                 if bytes[i] == b'`' {
                     let start = i;
                     let mut backtick_count = 0;
-                    while i < len && bytes[i] == b'`' { i += 1; backtick_count += 1; }
+                    while i < len && bytes[i] == b'`' {
+                        i += 1;
+                        backtick_count += 1;
+                    }
                     while i < len {
                         if bytes[i] == b'`' {
                             let mut close_count = 0;
-                            while i < len && bytes[i] == b'`' { i += 1; close_count += 1; }
-                            if close_count == backtick_count { break; }
-                        } else { i += 1; }
+                            while i < len && bytes[i] == b'`' {
+                                i += 1;
+                                close_count += 1;
+                            }
+                            if close_count == backtick_count {
+                                break;
+                            }
+                        } else {
+                            i += 1;
+                        }
                     }
-                    tokens.push(Token { start, end: i, token_type: TokenType::Builtin });
+                    tokens.push(Token {
+                        start,
+                        end: i,
+                        token_type: TokenType::Builtin,
+                    });
                     continue;
                 }
             }
@@ -379,11 +394,7 @@ impl SyntaxHighlighter {
                 continue;
             }
 
-            if has_block_comments(lang)
-                && i + 1 < len
-                && bytes[i] == b'/'
-                && bytes[i + 1] == b'*'
-            {
+            if has_block_comments(lang) && i + 1 < len && bytes[i] == b'/' && bytes[i + 1] == b'*' {
                 let start = i;
                 i += 2;
                 let mut closed = false;
@@ -548,8 +559,7 @@ impl SyntaxHighlighter {
                 continue;
             }
 
-            if is_rust_attr_start(lang) && bytes[i] == b'#' && i + 1 < len && bytes[i + 1] == b'['
-            {
+            if is_rust_attr_start(lang) && bytes[i] == b'#' && i + 1 < len && bytes[i + 1] == b'[' {
                 let start = i;
                 i += 2;
                 let mut depth = 1;
@@ -615,8 +625,11 @@ impl SyntaxHighlighter {
                 continue;
             }
 
-            if has_regex_literals(lang) && bytes[i] == b'/' && !self.in_regex
-                && (i == 0 || !matches!(bytes[i - 1], b'a'..=b'z' | b'A'..=b'Z' | b'0'..=b'9' | b')' | b']' | b'}' | b'_'))
+            if has_regex_literals(lang)
+                && bytes[i] == b'/'
+                && !self.in_regex
+                && (i == 0
+                    || !matches!(bytes[i - 1], b'a'..=b'z' | b'A'..=b'Z' | b'0'..=b'9' | b')' | b']' | b'}' | b'_'))
             {
                 let start = i;
                 i += 1;
@@ -664,9 +677,7 @@ impl SyntaxHighlighter {
 
                 if i < len && (is_ident_start(bytes[i]) || bytes[i] == b'>') {
                     while i < len
-                        && (is_ident_continue(bytes[i])
-                            || bytes[i] == b'-'
-                            || bytes[i] == b':')
+                        && (is_ident_continue(bytes[i]) || bytes[i] == b'-' || bytes[i] == b':')
                     {
                         i += 1;
                     }
@@ -676,8 +687,11 @@ impl SyntaxHighlighter {
                             let mut brace_depth = 1;
                             i += 1;
                             while i < len && brace_depth > 0 {
-                                if bytes[i] == b'{' { brace_depth += 1; }
-                                else if bytes[i] == b'}' { brace_depth -= 1; }
+                                if bytes[i] == b'{' {
+                                    brace_depth += 1;
+                                } else if bytes[i] == b'}' {
+                                    brace_depth -= 1;
+                                }
                                 i += 1;
                             }
                         } else if bytes[i] == b'"' || bytes[i] == b'\'' {
@@ -685,22 +699,41 @@ impl SyntaxHighlighter {
                             let qs = i;
                             i += 1;
                             while i < len && bytes[i] != q {
-                                if bytes[i] == b'\\' { i += 2; continue; }
+                                if bytes[i] == b'\\' {
+                                    i += 2;
+                                    continue;
+                                }
                                 i += 1;
                             }
-                            if i < len { i += 1; }
-                            if qs > sub_start {
-                                tokens.push(Token { start: sub_start, end: qs, token_type: TokenType::Tag });
+                            if i < len {
+                                i += 1;
                             }
-                            tokens.push(Token { start: qs, end: i, token_type: TokenType::String });
+                            if qs > sub_start {
+                                tokens.push(Token {
+                                    start: sub_start,
+                                    end: qs,
+                                    token_type: TokenType::Tag,
+                                });
+                            }
+                            tokens.push(Token {
+                                start: qs,
+                                end: i,
+                                token_type: TokenType::String,
+                            });
                             sub_start = i;
                         } else {
                             i += 1;
                         }
                     }
-                    if i < len && bytes[i] == b'>' { i += 1; }
+                    if i < len && bytes[i] == b'>' {
+                        i += 1;
+                    }
                     if i > sub_start {
-                        tokens.push(Token { start: sub_start, end: i, token_type: TokenType::Tag });
+                        tokens.push(Token {
+                            start: sub_start,
+                            end: i,
+                            token_type: TokenType::Tag,
+                        });
                     }
                     continue;
                 }
@@ -719,10 +752,14 @@ impl SyntaxHighlighter {
                     } else if bytes[i] == b'"' {
                         i += 1;
                         while i < len && bytes[i] != b'"' {
-                            if bytes[i] == b'\\' { i += 1; }
+                            if bytes[i] == b'\\' {
+                                i += 1;
+                            }
                             i += 1;
                         }
-                        if i < len { i += 1; }
+                        if i < len {
+                            i += 1;
+                        }
                         continue;
                     }
                     i += 1;
@@ -735,7 +772,11 @@ impl SyntaxHighlighter {
                 continue;
             }
 
-            if has_preprocessor(lang) && bytes[i] == b'#' && i + 1 < len && is_ident_start(bytes[i + 1]) {
+            if has_preprocessor(lang)
+                && bytes[i] == b'#'
+                && i + 1 < len
+                && is_ident_start(bytes[i + 1])
+            {
                 let start = i;
                 i += 1;
                 while i < len && is_ident_continue(bytes[i]) {
@@ -770,12 +811,15 @@ impl SyntaxHighlighter {
                 let tt = if is_keyword(lang, word) {
                     TokenType::Keyword
                 } else if is_type_name(lang, word)
-                    || (is_type_name_upper_heuristic(lang) && word.starts_with(|c: char| c.is_uppercase()))
+                    || (is_type_name_upper_heuristic(lang)
+                        && word.starts_with(|c: char| c.is_uppercase()))
                 {
                     TokenType::Type
                 } else if is_constant(lang, word) {
                     TokenType::Constant
-                } else if is_builtin(lang, word) || (matches!(lang, SyntaxLanguage::Css) && is_css_property(word)) {
+                } else if is_builtin(lang, word)
+                    || (matches!(lang, SyntaxLanguage::Css) && is_css_property(word))
+                {
                     TokenType::Builtin
                 } else if is_function_call(word, next) {
                     TokenType::Function
@@ -795,9 +839,23 @@ impl SyntaxHighlighter {
                 let two = &bytes[i..i + 2];
                 if matches!(
                     two,
-                    b"==" | b"!=" | b"<=" | b">=" | b"->" | b"=>" | b"++" | b"--"
-                        | b"&&" | b"||" | b"<<" | b">>" | b"::" | b".." | b"|>"
-                        | b"//" | b"**"
+                    b"=="
+                        | b"!="
+                        | b"<="
+                        | b">="
+                        | b"->"
+                        | b"=>"
+                        | b"++"
+                        | b"--"
+                        | b"&&"
+                        | b"||"
+                        | b"<<"
+                        | b">>"
+                        | b"::"
+                        | b".."
+                        | b"|>"
+                        | b"//"
+                        | b"**"
                 ) {
                     tokens.push(Token {
                         start: i,
@@ -811,7 +869,10 @@ impl SyntaxHighlighter {
 
             if i + 2 < len {
                 let three = &bytes[i..i + 3];
-                if matches!(three, b"===" | b"!==" | b"<=>" | b">>=" | b"<<=" | b"..=" | b"|>=") {
+                if matches!(
+                    three,
+                    b"===" | b"!==" | b"<=>" | b">>=" | b"<<=" | b"..=" | b"|>="
+                ) {
                     tokens.push(Token {
                         start: i,
                         end: i + 3,
@@ -824,11 +885,23 @@ impl SyntaxHighlighter {
 
             let b = bytes[i];
             if b.is_ascii_punctuation() {
-                tokens.push(Token { start: i, end: i + 1, token_type: TokenType::Punctuation });
+                tokens.push(Token {
+                    start: i,
+                    end: i + 1,
+                    token_type: TokenType::Punctuation,
+                });
             } else if !b.is_ascii() {
-                tokens.push(Token { start: i, end: i + 1, token_type: TokenType::Normal });
+                tokens.push(Token {
+                    start: i,
+                    end: i + 1,
+                    token_type: TokenType::Normal,
+                });
             } else {
-                tokens.push(Token { start: i, end: i + 1, token_type: TokenType::Operator });
+                tokens.push(Token {
+                    start: i,
+                    end: i + 1,
+                    token_type: TokenType::Operator,
+                });
             }
             i += 1;
         }

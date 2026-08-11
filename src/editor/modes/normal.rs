@@ -1,10 +1,15 @@
 use anyhow::Result;
 use crossterm::event::{Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 
-use crate::editor::{prev_char_byte, next_char_byte, prev_word_byte, next_word_byte, Editor, Mode};
+use crate::editor::{next_char_byte, next_word_byte, prev_char_byte, prev_word_byte, Editor, Mode};
+use crate::t;
 
 impl Editor {
-    pub(crate) fn handle_normal_event(&mut self, ev: Event, stdout: &mut std::io::Stdout) -> Result<()> {
+    pub(crate) fn handle_normal_event(
+        &mut self,
+        ev: Event,
+        stdout: &mut std::io::Stdout,
+    ) -> Result<()> {
         match ev {
             Event::Key(KeyEvent {
                 code,
@@ -23,8 +28,7 @@ impl Editor {
                     (true, KeyCode::Char('w')) => {
                         self.mode = Mode::Visual;
                         self.clear_selection();
-                        self.status_msg =
-                            Some("Visual mode — arrow keys to select, Esc to exit".into());
+                        self.status_msg = Some(t!("editor.mode_visual_start"));
                     }
                     (true, KeyCode::Char('a')) => {
                         self.select_all();
@@ -52,9 +56,8 @@ impl Editor {
                         }
                         self.mark_all_dirty();
                     }
-                    (true, KeyCode::Char('='))
-                    | (true, KeyCode::Char('-')) => {
-                        self.status_msg = Some("Zoom: Ctrl++ / Ctrl+- in terminal emulator".into());
+                    (true, KeyCode::Char('=')) | (true, KeyCode::Char('-')) => {
+                        self.status_msg = Some(t!("editor.mode_zoom_hint"));
                     }
                     (false, KeyCode::Char(':')) => {
                         self.mode = Mode::Command;
@@ -67,7 +70,7 @@ impl Editor {
                     (true, KeyCode::Char('q')) => {
                         if self.has_multiple_cursors() {
                             self.clear_extra_cursors();
-                            self.status_msg = Some("Cleared extra cursors".into());
+                            self.status_msg = Some(t!("editor.mode_cleared_cursors"));
                         } else {
                             let should_quit = self.close_current_tab();
                             if should_quit && self.exit_flow(stdout)? {
@@ -81,7 +84,7 @@ impl Editor {
                     (false, KeyCode::Esc) => {
                         if self.has_multiple_cursors() {
                             self.clear_extra_cursors();
-                            self.status_msg = Some("Cleared extra cursors".into());
+                            self.status_msg = Some(t!("editor.mode_cleared_cursors"));
                         } else if self.exit_flow(stdout)? {
                             return Err(anyhow::anyhow!("__exit__"));
                         }
@@ -104,9 +107,12 @@ impl Editor {
                         } else {
                             let (tw, th) = crate::editor::helpers::term_size();
                             let term_h = (th as f64 * 0.4) as u16;
-                            let cwd = std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from("."));
+                            let cwd = std::env::current_dir()
+                                .unwrap_or_else(|_| std::path::PathBuf::from("."));
                             let shell = if cfg!(windows) { "powershell" } else { "sh" };
-                            match crate::editor::terminal::TerminalState::spawn(shell, tw as u16, term_h, &cwd) {
+                            match crate::editor::terminal::TerminalState::spawn(
+                                shell, tw as u16, term_h, &cwd,
+                            ) {
                                 Ok(term) => {
                                     self.terminal = Some(term);
                                     self.run_panel_open = false;
@@ -114,7 +120,7 @@ impl Editor {
                                     self.mark_all_dirty();
                                 }
                                 Err(e) => {
-                                    self.status_msg = Some(format!("Terminal error: {}", e));
+                                    self.status_msg = Some(t!("editor.mode_terminal_err", e));
                                 }
                             }
                         }
@@ -207,7 +213,9 @@ impl Editor {
                                     self.cursor.byte = self.lines[prev].len();
                                     break;
                                 }
-                                if prev == 0 { break; }
+                                if prev == 0 {
+                                    break;
+                                }
                                 prev -= 1;
                             }
                         }
@@ -281,7 +289,8 @@ impl Editor {
                         let rows = self.term_h.saturating_sub(4);
                         if self.has_multiple_cursors() {
                             self.for_each_cursor(false, |e| {
-                                e.cursor.y = (e.cursor.y + rows).min(e.lines.len().saturating_sub(1));
+                                e.cursor.y =
+                                    (e.cursor.y + rows).min(e.lines.len().saturating_sub(1));
                             });
                         } else {
                             self.cursor.y =

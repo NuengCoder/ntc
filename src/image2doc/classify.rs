@@ -62,19 +62,47 @@ pub fn classify_image(img: &DynamicImage, edge_density: f32, text_density: f32) 
     // Classify based on heuristics
 
     // Logo: small, few colors, high contrast, centered, uniform borders
-    let logo_score = score_logo(color_count, color_uniformity, edge_ratio, border_uniformity, total_pixels);
+    let logo_score = score_logo(
+        color_count,
+        color_uniformity,
+        edge_ratio,
+        border_uniformity,
+        total_pixels,
+    );
 
     // Screenshot: defined borders, high text density, sharp edges, uniform color regions
-    let screenshot_score = score_screenshot(border_uniformity, text_region_density, edge_ratio, brightness_variance, color_count);
+    let screenshot_score = score_screenshot(
+        border_uniformity,
+        text_region_density,
+        edge_ratio,
+        brightness_variance,
+        color_count,
+    );
 
     // Document: high contrast, uniform background, organized text lines
-    let document_score = score_document(border_uniformity, color_count, edge_ratio, text_region_density, color_uniformity);
+    let document_score = score_document(
+        border_uniformity,
+        color_count,
+        edge_ratio,
+        text_region_density,
+        color_uniformity,
+    );
 
     // UI Mockup: many rectangular regions, low entropy, defined color palette
-    let ui_score = score_ui_mockup(color_count, edge_ratio, text_region_density, brightness_variance);
+    let ui_score = score_ui_mockup(
+        color_count,
+        edge_ratio,
+        text_region_density,
+        brightness_variance,
+    );
 
     // Photo: high color count, natural tones, no defined borders, smooth gradients
-    let photo_score = score_photo(color_count, brightness_variance, border_uniformity, edge_ratio);
+    let photo_score = score_photo(
+        color_count,
+        brightness_variance,
+        border_uniformity,
+        edge_ratio,
+    );
 
     // Normalize scores so each category can reach 1.0
     let max_scores = [0.9, 0.9, 0.9, 0.75, 0.75];
@@ -86,7 +114,10 @@ pub fn classify_image(img: &DynamicImage, edge_density: f32, text_density: f32) 
         (ImageType::Photo, photo_score / max_scores[4]),
     ];
 
-    let best = scores.iter().max_by(|a, b| a.1.partial_cmp(&b.1).unwrap_or(std::cmp::Ordering::Equal)).unwrap();
+    let best = scores
+        .iter()
+        .max_by(|a, b| a.1.partial_cmp(&b.1).unwrap_or(std::cmp::Ordering::Equal))
+        .unwrap();
     let confidence = best.1.clamp(0.0, 1.0);
 
     Classification {
@@ -133,7 +164,9 @@ fn measure_color_uniformity(img: &DynamicImage) -> f32 {
             samples += 1;
         }
     }
-    if samples == 0 { return 1.0; }
+    if samples == 0 {
+        return 1.0;
+    }
     let avg_diff = total_diff / samples as f32;
     // Normalize: 0 = uniform, 1 = varied
     (avg_diff / (255.0 * 3.0)).min(1.0)
@@ -215,82 +248,159 @@ fn measure_brightness_variance(img: &DynamicImage) -> f32 {
         return 0.0;
     }
     let mean = brightnesses.iter().sum::<f32>() / brightnesses.len() as f32;
-    let variance = brightnesses.iter().map(|v| (v - mean).powi(2)).sum::<f32>() / brightnesses.len() as f32;
+    let variance =
+        brightnesses.iter().map(|v| (v - mean).powi(2)).sum::<f32>() / brightnesses.len() as f32;
     (variance.sqrt() / 255.0).min(1.0)
 }
 
 // Scoring functions — each returns a confidence between 0 and 1
 
-fn score_logo(color_count: u32, uniformity: f32, _edge_ratio: f32, border_uniformity: f32, total_pixels: f32) -> f32 {
+fn score_logo(
+    color_count: u32,
+    uniformity: f32,
+    _edge_ratio: f32,
+    border_uniformity: f32,
+    total_pixels: f32,
+) -> f32 {
     // _edge_ratio intentionally unused - logos have variable edge ratios
     let mut score = 0.0;
     // Logos have few colors
-    if color_count <= 20 { score += 0.3; }
-    else if color_count <= 50 { score += 0.15; }
+    if color_count <= 20 {
+        score += 0.3;
+    } else if color_count <= 50 {
+        score += 0.15;
+    }
     // Logos are often small
-    if total_pixels < 50000.0 { score += 0.2; }
+    if total_pixels < 50000.0 {
+        score += 0.2;
+    }
     // Uniform borders (logo on white/transparent background)
-    if border_uniformity > 0.9 { score += 0.2; }
+    if border_uniformity > 0.9 {
+        score += 0.2;
+    }
     // High color uniformity (solid color blocks)
-    if uniformity < 0.3 { score += 0.2; }
+    if uniformity < 0.3 {
+        score += 0.2;
+    }
     score
 }
 
-fn score_screenshot(border_uniformity: f32, text_density: f32, edge_ratio: f32, brightness_variance: f32, color_count: u32) -> f32 {
+fn score_screenshot(
+    border_uniformity: f32,
+    text_density: f32,
+    edge_ratio: f32,
+    brightness_variance: f32,
+    color_count: u32,
+) -> f32 {
     let mut score = 0.0;
     // Screenshots have very uniform borders (title bar, taskbar)
-    if border_uniformity > 0.85 { score += 0.25; }
-    else if border_uniformity > 0.7 { score += 0.1; }
+    if border_uniformity > 0.85 {
+        score += 0.25;
+    } else if border_uniformity > 0.7 {
+        score += 0.1;
+    }
     // Screenshots have high text density
-    if text_density > 0.3 { score += 0.2; }
+    if text_density > 0.3 {
+        score += 0.2;
+    }
     // Sharp edges from UI elements
-    if edge_ratio > 0.15 && edge_ratio < 0.6 { score += 0.15; }
+    if edge_ratio > 0.15 && edge_ratio < 0.6 {
+        score += 0.15;
+    }
     // Moderate brightness variance (windows, content areas)
-    if brightness_variance > 0.15 && brightness_variance < 0.6 { score += 0.15; }
+    if brightness_variance > 0.15 && brightness_variance < 0.6 {
+        score += 0.15;
+    }
     // Moderate color count (not too few like logo, not too many like photo)
-    if color_count > 30 && color_count < 200 { score += 0.15; }
+    if color_count > 30 && color_count < 200 {
+        score += 0.15;
+    }
     score
 }
 
-fn score_document(border_uniformity: f32, color_count: u32, edge_ratio: f32, text_density: f32, uniformity: f32) -> f32 {
+fn score_document(
+    border_uniformity: f32,
+    color_count: u32,
+    edge_ratio: f32,
+    text_density: f32,
+    uniformity: f32,
+) -> f32 {
     let mut score = 0.0;
     // Documents have high border uniformity (white borders)
-    if border_uniformity > 0.9 { score += 0.2; }
+    if border_uniformity > 0.9 {
+        score += 0.2;
+    }
     // Few colors (black text on white)
-    if color_count <= 40 { score += 0.25; }
-    else if color_count <= 100 { score += 0.1; }
+    if color_count <= 40 {
+        score += 0.25;
+    } else if color_count <= 100 {
+        score += 0.1;
+    }
     // High edge ratio from text
-    if edge_ratio > 0.3 && edge_ratio < 0.7 { score += 0.2; }
+    if edge_ratio > 0.3 && edge_ratio < 0.7 {
+        score += 0.2;
+    }
     // High text region density
-    if text_density > 0.3 { score += 0.15; }
+    if text_density > 0.3 {
+        score += 0.15;
+    }
     // High uniformity (white background)
-    if uniformity < 0.2 { score += 0.1; }
+    if uniformity < 0.2 {
+        score += 0.1;
+    }
     score
 }
 
-fn score_ui_mockup(color_count: u32, edge_ratio: f32, text_density: f32, brightness_variance: f32) -> f32 {
+fn score_ui_mockup(
+    color_count: u32,
+    edge_ratio: f32,
+    text_density: f32,
+    brightness_variance: f32,
+) -> f32 {
     let mut score = 0.0;
     // UI mockups have defined color palette
-    if color_count > 20 && color_count < 100 { score += 0.2; }
+    if color_count > 20 && color_count < 100 {
+        score += 0.2;
+    }
     // High edge ratio from component boundaries
-    if edge_ratio > 0.2 && edge_ratio < 0.5 { score += 0.2; }
+    if edge_ratio > 0.2 && edge_ratio < 0.5 {
+        score += 0.2;
+    }
     // Some text but not dense
-    if text_density > 0.15 && text_density < 0.4 { score += 0.2; }
+    if text_density > 0.15 && text_density < 0.4 {
+        score += 0.2;
+    }
     // Moderate brightness variance
-    if brightness_variance > 0.2 && brightness_variance < 0.5 { score += 0.15; }
+    if brightness_variance > 0.2 && brightness_variance < 0.5 {
+        score += 0.15;
+    }
     score
 }
 
-fn score_photo(color_count: u32, brightness_variance: f32, border_uniformity: f32, edge_ratio: f32) -> f32 {
+fn score_photo(
+    color_count: u32,
+    brightness_variance: f32,
+    border_uniformity: f32,
+    edge_ratio: f32,
+) -> f32 {
     let mut score = 0.0;
     // Photos have many colors
-    if color_count > 150 { score += 0.25; }
-    else if color_count > 80 { score += 0.15; }
+    if color_count > 150 {
+        score += 0.25;
+    } else if color_count > 80 {
+        score += 0.15;
+    }
     // High brightness variance (natural lighting)
-    if brightness_variance > 0.3 { score += 0.2; }
+    if brightness_variance > 0.3 {
+        score += 0.2;
+    }
     // Non-uniform borders (no clear frame)
-    if border_uniformity < 0.6 { score += 0.15; }
+    if border_uniformity < 0.6 {
+        score += 0.15;
+    }
     // Moderate edge ratio (not as sharp as text, not as smooth as gradients)
-    if edge_ratio > 0.05 && edge_ratio < 0.3 { score += 0.15; }
+    if edge_ratio > 0.05 && edge_ratio < 0.3 {
+        score += 0.15;
+    }
     score
 }

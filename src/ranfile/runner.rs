@@ -1,19 +1,24 @@
 use crate::output::{print_error, print_info, print_success, print_warning};
 use crate::ranfile::parser::parse;
 use crate::ranfile::types::Ranfile;
+use crate::t;
 use anyhow::Result;
 use colored::Colorize;
 use std::collections::HashSet;
 use std::path::Path;
 
 /// Run a specific target by name (e.g. "build"), or `"standalone"` if none given.
-pub(crate) fn run_target(name: &str, cwd: &Path, exec_fn: &mut dyn FnMut(&str, &Path) -> Result<bool>) -> Result<bool> {
+pub(crate) fn run_target(
+    name: &str,
+    cwd: &Path,
+    exec_fn: &mut dyn FnMut(&str, &Path) -> Result<bool>,
+) -> Result<bool> {
     let ranfile = parse(cwd)?;
 
     // Verify target exists
     if !ranfile.targets.contains_key(name) {
         print_error(&format!("Target '{}' not found in NTCRANFILE.toml", name));
-        println!("Run {} to see available targets.", "ran list".green());
+        println!("{}", t!("ranfile.runner.hint", "ran list".green()));
         return Ok(false);
     }
 
@@ -67,7 +72,10 @@ fn resolve_order(name: &str, ranfile: &Ranfile) -> Result<Vec<String>, String> {
         order: &mut Vec<String>,
     ) -> Result<(), String> {
         if stack.contains(current) {
-            return Err(format!("Circular dependency detected involving target '{}'", current));
+            return Err(format!(
+                "Circular dependency detected involving target '{}'",
+                current
+            ));
         }
         if visited.contains(current) {
             return Ok(());
@@ -78,7 +86,10 @@ fn resolve_order(name: &str, ranfile: &Ranfile) -> Result<Vec<String>, String> {
         if let Some(target) = ranfile.targets.get(current) {
             for dep in &target.deps {
                 if !ranfile.targets.contains_key(dep) {
-                    return Err(format!("Target '{}' depends on '{}' but '{}' is not defined", current, dep, dep));
+                    return Err(format!(
+                        "Target '{}' depends on '{}' but '{}' is not defined",
+                        current, dep, dep
+                    ));
                 }
                 dfs(dep, ranfile, visited, stack, order)?;
             }
@@ -141,7 +152,10 @@ mod tests {
         vars.insert("FLAGS".to_string(), "-O2".to_string());
 
         assert_eq!(expand_vars("$(CC) main.c", &vars), "gcc main.c");
-        assert_eq!(expand_vars("$(CC) $(FLAGS) main.c", &vars), "gcc -O2 main.c");
+        assert_eq!(
+            expand_vars("$(CC) $(FLAGS) main.c", &vars),
+            "gcc -O2 main.c"
+        );
         assert_eq!(expand_vars("echo nothing", &vars), "echo nothing");
         assert_eq!(expand_vars("$(UNKNOWN)", &vars), "");
     }
@@ -149,15 +163,24 @@ mod tests {
     #[test]
     fn test_resolve_order_simple() {
         let mut targets = std::collections::HashMap::new();
-        targets.insert("build".to_string(), RanTarget {
-            deps: vec!["lint".to_string()],
-            cmd: "echo build".to_string(),
-        });
-        targets.insert("lint".to_string(), RanTarget {
-            deps: vec![],
-            cmd: "echo lint".to_string(),
-        });
-        let rf = Ranfile { vars: HashMap::new(), targets };
+        targets.insert(
+            "build".to_string(),
+            RanTarget {
+                deps: vec!["lint".to_string()],
+                cmd: "echo build".to_string(),
+            },
+        );
+        targets.insert(
+            "lint".to_string(),
+            RanTarget {
+                deps: vec![],
+                cmd: "echo lint".to_string(),
+            },
+        );
+        let rf = Ranfile {
+            vars: HashMap::new(),
+            targets,
+        };
 
         let order = resolve_order("build", &rf).unwrap();
         assert_eq!(order, vec!["lint", "build"]);
@@ -166,11 +189,17 @@ mod tests {
     #[test]
     fn test_resolve_order_missing_dep() {
         let mut targets = std::collections::HashMap::new();
-        targets.insert("build".to_string(), RanTarget {
-            deps: vec!["nonexistent".to_string()],
-            cmd: String::new(),
-        });
-        let rf = Ranfile { vars: HashMap::new(), targets };
+        targets.insert(
+            "build".to_string(),
+            RanTarget {
+                deps: vec!["nonexistent".to_string()],
+                cmd: String::new(),
+            },
+        );
+        let rf = Ranfile {
+            vars: HashMap::new(),
+            targets,
+        };
 
         assert!(resolve_order("build", &rf).is_err());
     }

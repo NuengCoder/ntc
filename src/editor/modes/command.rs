@@ -4,7 +4,11 @@ use crossterm::event::{Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 use crate::editor::{Editor, Mode};
 
 impl Editor {
-    pub(crate) fn handle_command_event(&mut self, ev: Event, stdout: &mut std::io::Stdout) -> Result<()> {
+    pub(crate) fn handle_command_event(
+        &mut self,
+        ev: Event,
+        stdout: &mut std::io::Stdout,
+    ) -> Result<()> {
         match ev {
             Event::Key(KeyEvent {
                 code,
@@ -70,7 +74,7 @@ impl Editor {
                         _ => {}
                     },
                 }
-            },
+            }
             Event::Resize(w, h) => {
                 self.term_w = w as usize;
                 self.term_h = h as usize;

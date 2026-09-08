@@ -267,8 +267,22 @@ pub fn cmd_ral(args: &str, nav: &mut Navigator) -> Result<bool> {
                 if subargs.is_empty() {
                     print_error(&t!("alias.ral.usage_info"));
                 } else {
+                    let mut edit_mode = false;
+                    let mut name_parts: Vec<&str> = Vec::new();
+                    for tok in subargs.split_whitespace() {
+                        if tok == "--edit" || tok == "-e" {
+                            edit_mode = true;
+                        } else {
+                            name_parts.push(tok);
+                        }
+                    }
+                    if name_parts.is_empty() {
+                        print_error(&t!("alias.ral.usage_info"));
+                        return Ok(false);
+                    }
+                    let name = name_parts.join(" ");
                     let aliases = Config::global_get_run_aliases();
-                    let name_lower = subargs.to_lowercase();
+                    let name_lower = name.to_lowercase();
                     if let Some(cmd) = aliases.get(&name_lower) {
                         println!();
                         println!(
@@ -318,8 +332,17 @@ pub fn cmd_ral(args: &str, nav: &mut Navigator) -> Result<bool> {
                         };
                         println!("  {}: {}", t!("alias.ral.info_source").yellow(), source);
                         println!();
+                        if edit_mode {
+                            let escaped = cmd.replace('"', "\\\"");
+                            let snippet = format!("ral edit {} \"{}\"", name, escaped);
+                            crate::output::copy_to_clipboard(&snippet, "ral edit")?;
+                            print_success(&t!("alias.ral.info_edit_copied"));
+                            println!("  {}", snippet.green().bold());
+                            println!("  {}", t!("alias.ral.info_edit_hint").dimmed());
+                            println!();
+                        }
                     } else {
-                        print_error(&t!("alias.ral.not_found", subargs));
+                        print_error(&t!("alias.ral.not_found", name));
                     }
                 }
             }

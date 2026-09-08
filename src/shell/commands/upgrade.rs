@@ -1,7 +1,8 @@
 use crate::output::{print_error, print_info, print_success};
 use crate::t;
 use anyhow::{anyhow, Context, Result};
-use std::io::Read;
+use std::io::{Cursor, Read};
+use std::path::{Path, PathBuf};
 
 const REPO: &str = "NuengCoder/ntc";
 const GITHUB_API: &str = "https://api.github.com";
@@ -35,31 +36,62 @@ pub fn cmd_upgrade() -> Result<bool> {
     print_info(&t!("cmd.upgrade.downloading"));
 
     let exe_path = std::env::current_exe().context(t!("cmd.upgrade.exe_path_fail").to_string())?;
+    let exe_path = resolve_executable_path(&exe_path);
 
     let tmp_dir = std::env::temp_dir().join("ntc_update");
     std::fs::create_dir_all(&tmp_dir).context(t!("cmd.upgrade.tmpdir_fail").to_string())?;
 
-    let tmp_name = if cfg!(windows) {
+    let bin_key = match platform_binary_key() {
+        Ok(k) => k,
+        Err(e) => {
+            print_error(&e.to_string());
+            return Ok(false);
+        }
+    };
+
+    let assets = match fetch_assets(&latest) {
+        Ok(a) => a,
+        Err(e) => {
+            print_error(&t!("cmd.upgrade.check_fail", e));
+            return Ok(false);
+        }
+    };
+
+    let bin_url = match pick_binary_asset(&assets, &bin_key) {
+        Some(u) => u,
+        None => {
+            #[cfg(windows)]
+            {
+                if let Some(inst) = pick_installer_asset(&assets) {
+                    return launch_installer_download(&inst).map(|_| false);
+                }
+            }
+            print_error(&t!("cmd.upgrade.no_asset_match", bin_key));
+            return Ok(false);
+        }
+    };
+
+    let exe_names: &[&str] = if cfg!(windows) {
+        &["ntc.exe", "ntc"]
+    } else {
+        &["ntc"]
+    };
+
+    let tmp_exe = tmp_dir.join(if cfg!(windows) {
         "ntc_new.exe"
     } else {
         "ntc_new"
-    };
-    let tmp_exe = tmp_dir.join(tmp_name);
+    });
 
-    if let Err(e) = download_release_binary(&latest, &tmp_exe) {
+    if let Err(e) = download_extract_binary(&bin_url, &tmp_exe, exe_names) {
         print_error(&t!("cmd.upgrade.download_fail", e));
         return Ok(false);
     }
 
     print_success(&t!("cmd.upgrade.download_complete"));
 
-    if let Err(e) = install_binary(&tmp_exe, &exe_path, &latest) {
+    if let Err(e) = install_binary(&tmp_exe, &exe_path, &assets, &latest) {
         print_error(&t!("cmd.upgrade.install_fail", e));
-
-        let hint = platform_install_hint(&exe_path);
-        if !hint.is_empty() {
-            print_info(&hint);
-        }
         return Ok(false);
     }
 
@@ -90,16 +122,43 @@ fn fetch_latest_release() -> Result<String> {
     Ok(tag.trim_start_matches('v').to_string())
 }
 
-fn download_release_binary(version: &str, dest: &std::path::Path) -> Result<()> {
-    let asset_urls = get_asset_urls(version)?;
+fn fetch_assets(version: &str) -> Result<Vec<(String, String)>> {
+    let url = format!("{GITHUB_API}/repos/{REPO}/releases/tags/v{version}");
 
-    if asset_urls.is_empty() {
-        return Err(anyhow!("{}", t!("cmd.upgrade.no_assets", version)));
+    let response = ureq::get(&url)
+        .header("User-Agent", "ntc")
+        .call()
+        .map_err(|e| anyhow!("{}", t!("cmd.upgrade.api_request_fail", e)))?;
+
+    let mut body = response.into_body();
+    let mut raw = String::new();
+    body.as_reader()
+        .read_to_string(&mut raw)
+        .context(t!("cmd.upgrade.api_read_fail").to_string())?;
+
+    let json: serde_json::Value =
+        serde_json::from_str(&raw).context(t!("cmd.upgrade.api_parse_fail").to_string())?;
+
+    let assets = json["assets"]
+        .as_array()
+        .ok_or_else(|| anyhow!("{}", t!("cmd.upgrade.no_assets_release", version)))?;
+
+    let mut out = Vec::new();
+    for asset in assets {
+        if let (Some(name), Some(url)) = (
+            asset["name"].as_str(),
+            asset["browser_download_url"].as_str(),
+        ) {
+            if !name.is_empty() && !url.is_empty() {
+                out.push((url.to_string(), name.to_string()));
+            }
+        }
     }
 
-    let url = &asset_urls[0];
-    print_info(&t!("cmd.upgrade.downloading_url", url));
+    Ok(out)
+}
 
+fn download_to_vec(url: &str) -> Result<Vec<u8>> {
     let response = ureq::get(url)
         .header("User-Agent", "ntc")
         .call()
@@ -139,126 +198,237 @@ fn download_release_binary(version: &str, dest: &std::path::Path) -> Result<()> 
     }
     println!();
 
-    std::fs::write(dest, &buf).context(t!("cmd.upgrade.write_fail").to_string())?;
+    Ok(buf)
+}
+
+fn download_extract_binary(url: &str, tmp_exe: &Path, exe_names: &[&str]) -> Result<()> {
+    print_info(&t!("cmd.upgrade.downloading_url", url));
+
+    let buf = download_to_vec(url)?;
+    let lower = url.to_lowercase();
+
+    let bytes = if lower.ends_with(".zip") {
+        print_info(&t!("cmd.upgrade.extracting"));
+        extract_zip(&buf, exe_names)?
+    } else if lower.ends_with(".tar.gz") || lower.ends_with(".tgz") || lower.ends_with(".gz") {
+        print_info(&t!("cmd.upgrade.extracting"));
+        extract_tar_gz(&buf, exe_names)?
+    } else {
+        buf
+    };
+
+    std::fs::write(tmp_exe, &bytes).context(t!("cmd.upgrade.write_fail").to_string())?;
     Ok(())
 }
 
-fn get_asset_urls(version: &str) -> Result<Vec<String>> {
-    let url = format!("{GITHUB_API}/repos/{REPO}/releases/tags/v{version}");
+fn extract_zip(buf: &[u8], exe_names: &[&str]) -> Result<Vec<u8>> {
+    let mut archive = zip::ZipArchive::new(Cursor::new(buf))
+        .map_err(|e| anyhow!("{}", t!("cmd.upgrade.extract_fail", e)))?;
 
-    let response = ureq::get(&url)
-        .header("User-Agent", "ntc")
-        .call()
-        .map_err(|e| anyhow!("{}", t!("cmd.upgrade.api_request_fail", e)))?;
-
-    let mut body = response.into_body();
-    let mut raw = String::new();
-    body.as_reader()
-        .read_to_string(&mut raw)
-        .context(t!("cmd.upgrade.api_read_fail").to_string())?;
-
-    let json: serde_json::Value =
-        serde_json::from_str(&raw).context(t!("cmd.upgrade.api_parse_fail").to_string())?;
-
-    let assets = json["assets"]
-        .as_array()
-        .ok_or_else(|| anyhow!("{}", t!("cmd.upgrade.no_assets_release", version)))?;
-
-    let target_hint = platform_asset_hint();
-
-    let mut candidates: Vec<String> = Vec::new();
-    let mut fallbacks: Vec<String> = Vec::new();
-
-    for asset in assets {
-        let name = asset["name"].as_str().unwrap_or("");
-        let browser_url = asset["browser_download_url"].as_str().unwrap_or("");
-
-        if browser_url.is_empty() {
+    for i in 0..archive.len() {
+        let mut file = archive
+            .by_index(i)
+            .map_err(|e| anyhow!("{}", t!("cmd.upgrade.extract_fail", e)))?;
+        if file.is_dir() {
             continue;
         }
-
-        let lower = name.to_lowercase();
-
-        if target_hint.iter().any(|h| lower.contains(h)) {
-            candidates.push(browser_url.to_string());
-        } else if !lower.contains("source")
-            && !lower.contains("tar.gz")
-            && !lower.contains("tar.xz")
-        {
-            fallbacks.push(browser_url.to_string());
+        let name = file.name().to_string();
+        let base = Path::new(&name)
+            .file_name()
+            .map(|b| b.to_string_lossy().into_owned())
+            .unwrap_or_default();
+        if exe_names.contains(&base.as_str()) {
+            let mut bytes = Vec::new();
+            file.read_to_end(&mut bytes)
+                .context(t!("cmd.upgrade.extract_fail").to_string())?;
+            return Ok(bytes);
         }
     }
 
-    if !candidates.is_empty() {
-        return Ok(candidates);
-    }
-
-    if !fallbacks.is_empty() {
-        return Ok(fallbacks);
-    }
-
-    for asset in assets {
-        if let Some(url) = asset["browser_download_url"].as_str() {
-            candidates.push(url.to_string());
-        }
-    }
-
-    Ok(candidates)
+    Err(anyhow!(
+        "{}",
+        t!("cmd.upgrade.no_file_in_archive", exe_names[0])
+    ))
 }
 
-fn platform_asset_hint() -> Vec<&'static str> {
-    #[cfg(target_os = "windows")]
+fn extract_tar_gz(buf: &[u8], exe_names: &[&str]) -> Result<Vec<u8>> {
+    use flate2::read::GzDecoder;
+
+    let decoder = GzDecoder::new(Cursor::new(buf));
+    let mut archive = tar::Archive::new(decoder);
+
+    let entries = archive
+        .entries()
+        .map_err(|e| anyhow!("{}", t!("cmd.upgrade.extract_fail", e)))?;
+
+    for entry in entries {
+        let mut file = entry
+            .map_err(|e| anyhow!("{}", t!("cmd.upgrade.extract_fail", e)))?;
+        if !file.header().entry_type().is_file() {
+            continue;
+        }
+        let path = file
+            .path()
+            .map(|p| p.into_owned())
+            .map_err(|e| anyhow!("{}", t!("cmd.upgrade.extract_fail", e)))?;
+        let base = path
+            .file_name()
+            .map(|b| b.to_string_lossy().into_owned())
+            .unwrap_or_default();
+        if exe_names.contains(&base.as_str()) {
+            let mut bytes = Vec::new();
+            file.read_to_end(&mut bytes)
+                .context(t!("cmd.upgrade.extract_fail").to_string())?;
+            return Ok(bytes);
+        }
+    }
+
+    Err(anyhow!(
+        "{}",
+        t!("cmd.upgrade.no_file_in_archive", exe_names[0])
+    ))
+}
+
+fn pick_binary_asset(assets: &[(String, String)], bin_key: &str) -> Option<String> {
+    let mut fallback: Option<String> = None;
+    for (url, name) in assets {
+        let lower = name.to_lowercase();
+        if !lower.contains(bin_key) || lower.contains("installer") || lower.ends_with(".deb") {
+            continue;
+        }
+        #[cfg(windows)]
+        {
+            if lower.ends_with(".zip") {
+                return Some(url.clone());
+            }
+            if fallback.is_none() {
+                fallback = Some(url.clone());
+            }
+        }
+        #[cfg(not(windows))]
+        {
+            if lower.ends_with(".tar.gz") || lower.ends_with(".tgz") {
+                return Some(url.clone());
+            }
+            if fallback.is_none() {
+                fallback = Some(url.clone());
+            }
+        }
+    }
+    fallback
+}
+
+#[cfg(windows)]
+fn pick_installer_asset(assets: &[(String, String)]) -> Option<String> {
+    assets
+        .iter()
+        .map(|(u, n)| (u, n.to_lowercase()))
+        .find(|(_, n)| n.contains("installer") && n.ends_with(".exe"))
+        .map(|(u, _)| u.clone())
+}
+
+#[cfg(windows)]
+fn launch_installer_download(installer_url: &str) -> Result<()> {
+    let tmp_dir = std::env::temp_dir().join("ntc_update");
+    std::fs::create_dir_all(&tmp_dir).context(t!("cmd.upgrade.tmpdir_fail").to_string())?;
+
+    let installer_path = tmp_dir.join("ntc-installer.exe");
+    let buf = download_to_vec(installer_url)
+        .context(t!("cmd.upgrade.download_fail").to_string())?;
+    std::fs::write(&installer_path, &buf).context(t!("cmd.upgrade.write_fail").to_string())?;
+
+    print_info(&t!("cmd.upgrade.installer_launch"));
+    std::process::Command::new(&installer_path)
+        .args(["/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART", "/SP-"])
+        .spawn()
+        .context(t!("cmd.upgrade.installer_launch_fail").to_string())?;
+
+    std::process::exit(0);
+}
+
+fn platform_binary_key() -> Result<String> {
+    #[cfg(windows)]
     {
-        vec!["windows", ".exe"]
+        let key = windows_asset_key(std::env::consts::ARCH)
+            .ok_or_else(|| anyhow!("{}", t!("cmd.upgrade.no_arch_asset", std::env::consts::ARCH)))?;
+        Ok(key.to_string())
     }
     #[cfg(all(target_os = "linux", not(target_os = "android")))]
     {
-        vec!["linux", "unknown-linux"]
+        match std::env::consts::ARCH {
+            "x86_64" => Ok("linux-x86_64".to_string()),
+            "aarch64" => Ok("linux-aarch64".to_string()),
+            _ => Err(anyhow!(
+                "{}",
+                t!("cmd.upgrade.no_arch_asset", std::env::consts::ARCH)
+            )),
+        }
     }
     #[cfg(target_os = "android")]
     {
-        vec!["android", "linux-android"]
+        match std::env::consts::ARCH {
+            "aarch64" => Ok("aarch64-linux-android".to_string()),
+            "x86_64" => Ok("x86_64-linux-android".to_string()),
+            "arm" => Ok("armv7-linux-androideabi".to_string()),
+            _ => Err(anyhow!(
+                "{}",
+                t!("cmd.upgrade.no_arch_asset", std::env::consts::ARCH)
+            )),
+        }
     }
     #[cfg(target_os = "macos")]
     {
-        vec!["darwin", "apple-darwin", "macos"]
+        match std::env::consts::ARCH {
+            "aarch64" => Ok("macos-aarch64".to_string()),
+            "x86_64" => Ok("macos-x86_64".to_string()),
+            _ => Err(anyhow!(
+                "{}",
+                t!("cmd.upgrade.no_arch_asset", std::env::consts::ARCH)
+            )),
+        }
     }
-    #[cfg(not(any(
-        target_os = "windows",
-        target_os = "linux",
-        target_os = "android",
-        target_os = "macos"
-    )))]
+    #[cfg(not(any(windows, target_os = "linux", target_os = "android", target_os = "macos")))]
     {
-        vec![]
+        Err(anyhow!(
+            "{}",
+            t!(
+                "cmd.upgrade.unsupported_platform",
+                std::env::consts::ARCH
+            )
+        ))
     }
 }
 
-fn platform_install_hint(_exe_path: &std::path::Path) -> String {
-    #[cfg(target_os = "windows")]
-    {
-        String::new()
+#[cfg(windows)]
+fn windows_asset_key(arch: &str) -> Option<&'static str> {
+    match arch {
+        "x86_64" => Some("windows-x86_64"),
+        "aarch64" => Some("windows-arm64"),
+        _ => None,
     }
-    #[cfg(all(unix, not(target_os = "android")))]
-    {
-        t!("cmd.upgrade.sudo_hint", _exe_path.display())
+}
+
+fn resolve_executable_path(path: &Path) -> PathBuf {
+    std::fs::canonicalize(path).unwrap_or_else(|_| path.to_path_buf())
+}
+
+#[cfg(windows)]
+fn dir_is_writable(dir: &Path) -> bool {
+    let probe = dir.join(format!(".ntc_write_probe_{}", std::process::id()));
+    let ok = std::fs::File::create(&probe).is_ok();
+    if ok {
+        let _ = std::fs::remove_file(&probe);
     }
-    #[cfg(target_os = "android")]
-    {
-        String::new()
-    }
-    #[cfg(not(any(unix, windows)))]
-    {
-        String::new()
-    }
+    ok
 }
 
 fn install_binary(
-    tmp_path: &std::path::Path,
-    dst_path: &std::path::Path,
+    tmp_path: &Path,
+    dst_path: &Path,
+    assets: &[(String, String)],
     version: &str,
 ) -> Result<bool> {
-    let result = install_binary_impl(tmp_path, dst_path);
+    let result = install_binary_impl(tmp_path, dst_path, assets, version);
 
     if result.is_ok() {
         println!();
@@ -271,56 +441,169 @@ fn install_binary(
 }
 
 #[cfg(windows)]
-fn install_binary_impl(tmp_path: &std::path::Path, dst_path: &std::path::Path) -> Result<bool> {
-    let ps_script = format!(
-        r#"Start-Sleep -Seconds 1; try {{ Copy-Item -LiteralPath '{src}' -Destination '{dst}' -Force; Write-Host 'Update complete' }} catch {{ Write-Host 'Update failed: $_' }}"#,
-        src = tmp_path.display(),
-        dst = dst_path.display(),
-    );
+fn install_binary_impl(
+    tmp_path: &Path,
+    dst_path: &Path,
+    assets: &[(String, String)],
+    _version: &str,
+) -> Result<bool> {
+    let dst_dir = dst_path
+        .parent()
+        .ok_or_else(|| anyhow!("{}", t!("cmd.upgrade.exe_path_fail", dst_path.display())))?;
 
-    let _ = std::process::Command::new("powershell")
-        .args([
-            "-NoProfile",
-            "-WindowStyle",
-            "Hidden",
-            "-Command",
-            &ps_script,
-        ])
-        .spawn();
+    if dir_is_writable(dst_dir) {
+        let ps_script = format!(
+            r#"Start-Sleep -Seconds 3; $maxRetries = 3; $retryCount = 0; while ($retryCount -lt $maxRetries) {{ try {{ Copy-Item -LiteralPath '{src}' -Destination '{dst}' -Force; Write-Host 'Update complete'; exit 0 }} catch {{ $retryCount++; if ($retryCount -ge $maxRetries) {{ Write-Host "Update failed after $maxRetries attempts: $_"; exit 1 }} Start-Sleep -Seconds 1 }} }}"#,
+            src = tmp_path.display(),
+            dst = dst_path.display(),
+        );
 
-    print_info(&t!("cmd.upgrade.after_restart"));
-    println!();
+        let _ = std::process::Command::new("powershell")
+            .args([
+                "-NoProfile",
+                "-WindowStyle",
+                "Hidden",
+                "-Command",
+                &ps_script,
+            ])
+            .spawn();
 
-    std::process::exit(0);
+        print_info(&t!("cmd.upgrade.after_restart"));
+        println!();
+
+        std::process::exit(0);
+    }
+
+    let installer_url = pick_installer_asset(assets)
+        .ok_or_else(|| anyhow!("{}", t!("cmd.upgrade.no_installer_asset")))?;
+
+    launch_installer_download(&installer_url).map(|_| false)
+}
+
+#[cfg(unix)]
+fn replace_binary_at(tmp_path: &Path, dst_path: &Path) -> Result<()> {
+    use std::os::unix::fs::PermissionsExt;
+
+    let dst_dir = dst_path
+        .parent()
+        .ok_or_else(|| anyhow!("{}", t!("cmd.upgrade.exe_path_fail", dst_path.display())))?;
+
+    let staging = dst_dir.join(format!(".ntc_new_{}", std::process::id()));
+
+    let cleanup = || {
+        let _ = std::fs::remove_file(&staging);
+    };
+
+    std::fs::copy(tmp_path, &staging)
+        .map_err(|e| anyhow!("{}", t!("cmd.upgrade.copy_fail", e)))?;
+
+    if let Err(e) = std::fs::set_permissions(&staging, std::fs::Permissions::from_mode(0o755)) {
+        cleanup();
+        return Err(anyhow!("{}", t!("cmd.upgrade.perm_fail", e)));
+    }
+
+    std::fs::rename(&staging, dst_path)
+        .map_err(|e| anyhow!("{}", t!("cmd.upgrade.copy_fail", e)))?;
+
+    Ok(())
 }
 
 #[cfg(all(unix, not(target_os = "android")))]
-fn install_binary_impl(tmp_path: &std::path::Path, dst_path: &std::path::Path) -> Result<bool> {
-    use std::os::unix::fs::PermissionsExt;
+fn install_binary_impl(
+    tmp_path: &Path,
+    dst_path: &Path,
+    _assets: &[(String, String)],
+    _version: &str,
+) -> Result<bool> {
+    match replace_binary_at(tmp_path, dst_path) {
+        Ok(()) => Ok(false),
+        Err(_direct_fail) => {
+            let home = dirs::home_dir().context(t!("cmd.upgrade.home_fail").to_string())?;
+            let bin_dir = home.join(".local").join("bin");
+            std::fs::create_dir_all(&bin_dir)
+                .context(t!("cmd.upgrade.home_fail").to_string())?;
+            let bin_path = bin_dir.join("ntc");
+            replace_binary_at(tmp_path, &bin_path)?;
 
-    std::fs::copy(tmp_path, dst_path).context(t!("cmd.upgrade.copy_fail").to_string())?;
+            #[cfg(target_os = "macos")]
+            {
+                let _ = std::process::Command::new("xattr")
+                    .arg("-cr")
+                    .arg(&bin_path)
+                    .status();
+            }
 
-    let perms = std::fs::Permissions::from_mode(0o755);
-    std::fs::set_permissions(dst_path, perms).context(t!("cmd.upgrade.perm_fail").to_string())?;
-
-    Ok(false)
+            ensure_path_export(&bin_dir)?;
+            print_success(&t!("cmd.upgrade.installed_user_dir", bin_path.display()));
+            println!();
+            Ok(false)
+        }
+    }
 }
 
 #[cfg(target_os = "android")]
-fn install_binary_impl(tmp_path: &std::path::Path, dst_path: &std::path::Path) -> Result<bool> {
-    use std::os::unix::fs::PermissionsExt;
-
-    std::fs::copy(tmp_path, dst_path).context(t!("cmd.upgrade.copy_fail_android").to_string())?;
-
-    let perms = std::fs::Permissions::from_mode(0o755);
-    std::fs::set_permissions(dst_path, perms).context(t!("cmd.upgrade.perm_fail").to_string())?;
-
+fn install_binary_impl(
+    tmp_path: &Path,
+    dst_path: &Path,
+    _assets: &[(String, String)],
+    _version: &str,
+) -> Result<bool> {
+    replace_binary_at(tmp_path, dst_path)
+        .context(t!("cmd.upgrade.copy_fail_android").to_string())?;
     Ok(false)
 }
 
 #[cfg(not(any(unix, windows)))]
-fn install_binary_impl(_tmp_path: &std::path::Path, _dst_path: &std::path::Path) -> Result<bool> {
-    Err(anyhow!("{}", t!("cmd.upgrade.unsupported_platform")))
+fn install_binary_impl(
+    _tmp_path: &Path,
+    _dst_path: &Path,
+    _assets: &[(String, String)],
+    _version: &str,
+) -> Result<bool> {
+    Err(anyhow!("{}", t!("cmd.upgrade.unsupported_platform", "unknown")))
+}
+
+#[cfg(all(unix, not(target_os = "android")))]
+fn ensure_path_export(bin_dir: &Path) -> Result<()> {
+    use std::fs;
+
+    let export_line = format!("export PATH=\"{}\":$PATH", bin_dir.display());
+    let home = dirs::home_dir().context(t!("cmd.upgrade.home_fail").to_string())?;
+
+    let shell = std::env::var("SHELL").unwrap_or_default();
+    let mut candidates = vec![home.join(".bashrc"), home.join(".profile")];
+    if shell.contains("zsh") {
+        candidates.insert(0, home.join(".zshrc"));
+    }
+    if cfg!(target_os = "macos") {
+        candidates.push(home.join(".zprofile"));
+    }
+
+    let existing: Vec<PathBuf> = candidates.into_iter().filter(|p| p.exists()).collect();
+    let targets = if existing.is_empty() {
+        vec![home.join(".bashrc")]
+    } else {
+        existing
+    };
+
+    for rc in &targets {
+        let content = fs::read_to_string(rc).unwrap_or_default();
+        if content.contains(&export_line) {
+            continue;
+        }
+        let mut updated = content;
+        if !updated.ends_with('\n') {
+            updated.push('\n');
+        }
+        updated.push_str(&export_line);
+        updated.push('\n');
+        match fs::write(rc, updated) {
+            Ok(_) => print_info(&t!("cmd.upgrade.path_exported", rc.display())),
+            Err(e) => print_info(&format!("  (could not update {}: {})", rc.display(), e)),
+        }
+    }
+
+    Ok(())
 }
 
 fn is_newer(latest: &str, current: &str) -> bool {
@@ -337,4 +620,130 @@ fn is_newer(latest: &str, current: &str) -> bool {
     }
 
     latest_parts.len() > current_parts.len()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[cfg(windows)]
+    #[test]
+    fn windows_arch_key_mapping() {
+        assert_eq!(windows_asset_key("x86_64"), Some("windows-x86_64"));
+        assert_eq!(windows_asset_key("aarch64"), Some("windows-arm64"));
+        assert_eq!(windows_asset_key("arm"), None);
+        assert_eq!(windows_asset_key("i686"), None);
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn windows_asset_selection_picks_matching_arch_only() {
+        let assets = vec![
+            (
+                "https://x/ntc-installer-2.4.2.exe".to_string(),
+                "ntc-installer-2.4.2.exe".to_string(),
+            ),
+            (
+                "https://x/ntc-v2.4.2-windows-arm64.zip".to_string(),
+                "ntc-v2.4.2-windows-arm64.zip".to_string(),
+            ),
+            (
+                "https://x/ntc-v2.4.2-windows-x86_64.zip".to_string(),
+                "ntc-v2.4.2-windows-x86_64.zip".to_string(),
+            ),
+            (
+                "https://x/ntc_2.4.2-1_amd64.deb".to_string(),
+                "ntc_2.4.2-1_amd64.deb".to_string(),
+            ),
+        ];
+
+        assert_eq!(
+            pick_binary_asset(&assets, "windows-x86_64").as_deref(),
+            Some("https://x/ntc-v2.4.2-windows-x86_64.zip")
+        );
+        assert_eq!(
+            pick_binary_asset(&assets, "windows-arm64").as_deref(),
+            Some("https://x/ntc-v2.4.2-windows-arm64.zip")
+        );
+        assert_eq!(pick_binary_asset(&assets, "windows-i686"), None);
+        assert_eq!(
+            pick_installer_asset(&assets).as_deref(),
+            Some("https://x/ntc-installer-2.4.2.exe")
+        );
+    }
+
+    #[cfg(all(target_os = "linux", not(target_os = "android")))]
+    #[test]
+    fn linux_asset_selection_never_picks_android_or_other_arch() {
+        let assets = vec![
+            (
+                "https://x/ntc-v2.4.2-aarch64-linux-android.tar.gz".to_string(),
+                "ntc-v2.4.2-aarch64-linux-android.tar.gz".to_string(),
+            ),
+            (
+                "https://x/ntc-v2.4.2-linux-x86_64.tar.gz".to_string(),
+                "ntc-v2.4.2-linux-x86_64.tar.gz".to_string(),
+            ),
+            (
+                "https://x/ntc-v2.4.2-macos-aarch64.tar.gz".to_string(),
+                "ntc-v2.4.2-macos-aarch64.tar.gz".to_string(),
+            ),
+        ];
+
+        assert_eq!(
+            pick_binary_asset(&assets, "linux-x86_64").as_deref(),
+            Some("https://x/ntc-v2.4.2-linux-x86_64.tar.gz")
+        );
+        assert_eq!(pick_binary_asset(&assets, "linux-aarch64"), None);
+    }
+
+    #[test]
+    fn progress_pct_format_replaces_all_placeholders() {
+        let pct = 50.0_f64;
+        let downloaded: u64 = 12345678;
+        let total: u64 = 24691356;
+        let result = crate::t!("cmd.upgrade.progress_pct", pct, downloaded, total);
+        assert!(
+            !result.contains("{"),
+            "template placeholder was not replaced: {result}"
+        );
+        assert!(
+            result.contains("50"),
+            "percentage value missing from output: {result}"
+        );
+    }
+
+    #[test]
+    fn progress_bytes_format_replaces_all_placeholders() {
+        let downloaded: u64 = 12345678;
+        let result = crate::t!("cmd.upgrade.progress_bytes", downloaded);
+        assert!(
+            !result.contains("{"),
+            "template placeholder was not replaced: {result}"
+        );
+        assert!(
+            result.contains("12345678"),
+            "downloaded value missing from output: {result}"
+        );
+    }
+
+    #[test]
+    fn is_newer_recognizes_newer_version() {
+        assert!(is_newer("2.5.0", "2.4.3"));
+        assert!(is_newer("3.0.0", "2.9.9"));
+        assert!(is_newer("2.4.4", "2.4.3"));
+    }
+
+    #[test]
+    fn is_newer_rejects_older_or_equal_version() {
+        assert!(!is_newer("2.4.3", "2.4.3"));
+        assert!(!is_newer("2.4.2", "2.4.3"));
+        assert!(!is_newer("1.9.9", "2.0.0"));
+    }
+
+    #[test]
+    fn is_newer_handles_different_component_counts() {
+        assert!(is_newer("2.4.3.1", "2.4.3"));
+        assert!(!is_newer("2.4.3", "2.4.3.1"));
+    }
 }

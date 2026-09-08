@@ -1490,15 +1490,22 @@ fn spawn_cloudflared(port: u16) {
         .spawn()
     {
         Ok(mut c) => {
-            print_info(&format!("Cloudflared tunnel starting (PID {})", c.id()));
+            print_info(&t!(
+                "cmd.serve.cloudflared_starting",
+                c.id()
+            ));
             std::thread::spawn(move || {
                 let _ = c.wait();
             });
         }
-        Err(e) => print_error(&format!(
-            "cloudflared not found: {}. Install: ntpkg install cloudflare",
-            e
-        )),
+        Err(e) => {
+            let hint = if crate::ntpkg::manager::is_termux() {
+                "pkg install cloudflared"
+            } else {
+                "ntpkg install cloudflare"
+            };
+            print_error(&t!("cmd.serve.cloudflared_missing", e, hint));
+        }
     }
 }
 

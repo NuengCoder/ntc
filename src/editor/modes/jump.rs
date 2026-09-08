@@ -42,6 +42,9 @@ impl Editor {
                 }
                 _ => {}
             }
+        } else if let Event::Resize(w, h) = ev {
+            self.term_w = w as usize;
+            self.term_h = h as usize;
         }
         Ok(())
     }

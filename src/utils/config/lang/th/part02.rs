@@ -193,6 +193,7 @@ pub fn fill(m: &mut HashMap<String, String>) {
     m.insert("cli.known_flag.setT".into(), "--setT [threads] แสดงหรือตั้งค่าจำนวนเธรด".into());
     m.insert("cli.known_flag.showcg".into(), "--showcg แสดงภาพรวมการกำหนดค่าปัจจุบัน".into());
     m.insert("cli.known_flag.size".into(), "--size แสดงขนาดไดเรกทอรีปัจจุบัน".into());
+    m.insert("cli.known_flag.path".into(), "--path <path|@tp> เส้นทางเป้าหมายหรือจุดบันทึก (ใช้กับ --size หรือ --view)".into());
     m.insert("cli.known_flag.teleport_at".into(), "ntc @<name> เปิดและเทเลพอร์ตไปยังจุดบันทึก".into());
     m.insert("cli.known_flag.tp_add".into(), "--tp-add <name> บันทึกไดเรกทอรีปัจจุบันเป็นจุดเทเลพอร์ต".into());
     m.insert("cli.known_flag.tp_list".into(), "--tp-list แสดงรายการจุดเทเลพอร์ตทั้งหมด".into());
@@ -256,6 +257,7 @@ pub fn fill(m: &mut HashMap<String, String>) {
     m.insert("cli.run.help_sett".into(), "แสดงหรือตั้งค่าจำนวนเธรด".into());
     m.insert("cli.run.help_showcg".into(), "แสดงภาพรวมการกำหนดค่าปัจจุบัน".into());
     m.insert("cli.run.help_size".into(), "แสดงขนาดไดเรกทอรีปัจจุบัน".into());
+    m.insert("cli.run.help_path".into(), "เส้นทางเป้าหมายหรือจุดบันทึก (ใช้กับ --size หรือ --view)".into());
     m.insert("cli.run.help_time".into(), "แสดงเวลาที่ใช้ (ใช้ร่วมกับ --size หรือ --view)".into());
     m.insert("cli.run.help_tp_add".into(), "บันทึกไดเรกทอรีปัจจุบันเป็นจุดเทเลพอร์ต".into());
     m.insert("cli.run.help_tp_list".into(), "แสดงรายการจุดเทเลพอร์ตทั้งหมด".into());

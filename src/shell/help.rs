@@ -39,14 +39,17 @@ pub(super) fn print_interactive_help() {
     print_theme_help();
     print_teleport_help();
     print_ran_help();
+    print_scr_help();
     print_alias_help();
     print_view_help();
+    print_size_help();
     print_report_help();
     print_backup_help();
     print_search_help();
     print_igcare_help();
     print_network_help();
     print_tmprt_help();
+    print_git_help();
     print_clipboard_help();
     print_qsc_help();
     print_todo_help();
@@ -94,6 +97,8 @@ fn print_config_help() {
     usage("help.config.threads");
     usage("help.config.history");
     usage("help.config.autosuggest");
+    usage("help.config.git");
+    usage("help.config.dir_view");
     usage("help.config.watch");
     usage("help.config.watch_trigger");
     usage("help.config.watch_trigger_off");
@@ -195,6 +200,19 @@ fn print_ran_help() {
     example_row("help.ran.example3");
 }
 
+fn print_scr_help() {
+    section_header("help.scr.title");
+    usage("help.scr.run");
+    usage("help.scr.continue");
+    usage("help.scr.init");
+    usage("help.scr.ls");
+    usage("help.scr.help");
+    println!("{}", t!("help.examples_header").green());
+    example_row("help.scr.example1");
+    example_row("help.scr.example2");
+    example_row("help.scr.example3");
+}
+
 fn print_alias_help() {
     section_header("help.alias.title");
     usage("help.alias.add");
@@ -233,12 +251,28 @@ fn print_view_help() {
     usage("help.view.depth");
     usage("help.view.care");
     usage("help.view.time");
+    usage("help.view.path");
     println!("{}", t!("help.examples_header").green());
     example_row("help.view.example1");
     example_row("help.view.example2");
     example_row("help.view.example3");
     example_row("help.view.example4");
     example_row("help.view.example5");
+    example_row("help.view.example6");
+    example_row("help.view.example7");
+}
+
+fn print_size_help() {
+    section_header("help.size.title");
+    usage("help.size.size");
+    usage("help.size.path");
+    usage("help.size.care");
+    usage("help.size.time");
+    println!("{}", t!("help.examples_header").green());
+    example_row("help.size.example1");
+    example_row("help.size.example2");
+    example_row("help.size.example3");
+    example_row("help.size.example4");
 }
 
 fn print_report_help() {
@@ -326,6 +360,7 @@ fn print_network_help() {
     usage("help.network.ping");
     usage("help.network.dns");
     usage("help.network.smtp");
+    usage("help.network.spec");
     usage("help.network.serve");
     println!("{}", t!("help.examples_header").green());
     example_row("help.network.example1");
@@ -348,6 +383,19 @@ fn print_tmprt_help() {
     example_row("help.tmprt.example2");
     example_row("help.tmprt.example3");
     example_row("help.tmprt.example4");
+}
+
+fn print_git_help() {
+    section_header("help.git.title");
+    usage("help.git.status");
+    usage("help.git.branch");
+    usage("help.git.log");
+    usage("help.git.diff");
+    usage("help.git.passthrough");
+    println!("{}", t!("help.examples_header").green());
+    example_row("help.git.example1");
+    example_row("help.git.example2");
+    example_row("help.git.example3");
 }
 
 fn print_clipboard_help() {

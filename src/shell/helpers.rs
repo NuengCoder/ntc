@@ -2,18 +2,156 @@ use crate::config::Config;
 use crate::explorer::{
     calculate_total_size, format_tree, format_tree_with_sizes, generate_tree, human_readable_size,
 };
+use crate::filetype::strip_unc_prefix;
 use crate::navigator::Navigator;
 use crate::output::{print_error, print_separator, print_success, print_warning};
 use crate::t;
+use crate::teleport::TeleportManager;
 
-use anyhow::Result;
+use anyhow::{bail, Result};
 use colored::*;
 use std::collections::HashSet;
 use std::io::{self, Write};
+use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::thread;
 use std::time::Duration;
+
+// ============================================================================
+// Target path resolution for size / view (paths and teleport savepoints)
+// ============================================================================
+
+/// Result of extracting a target path specifier from command args.
+pub(crate) struct TargetArg {
+    pub path: Option<PathBuf>,
+    pub rest: Vec<String>,
+}
+
+/// Tokenize args respecting double-quoted sections (so quoted paths survive).
+fn tokenize_args(args: &str) -> Vec<String> {
+    let mut parts: Vec<String> = Vec::new();
+    let mut current = String::new();
+    let mut in_quotes = false;
+    for ch in args.chars() {
+        match ch {
+            '"' => in_quotes = !in_quotes,
+            ' ' | '\t' if !in_quotes => {
+                if !current.is_empty() {
+                    parts.push(std::mem::take(&mut current));
+                }
+            }
+            _ => current.push(ch),
+        }
+    }
+    if !current.is_empty() {
+        parts.push(current);
+    }
+    parts
+}
+
+/// Pull a target path specifier out of `size`/`view` args.
+/// Recognizes `-p <val>` / `--path <val>`, `@name`, a bare non-flag token,
+/// and tokens after `--`. `value_flags` are flags that take a value (e.g.
+/// `-d`/`--depth`) and are preserved in `rest` along with their value so the
+/// caller's flag parser can consume them unchanged.
+fn extract_target_spec(args: &str, value_flags: &[&str]) -> (Option<String>, Vec<String>) {
+    let tokens = tokenize_args(args);
+    let mut target: Option<String> = None;
+    let mut rest: Vec<String> = Vec::new();
+    let mut i = 0;
+    while i < tokens.len() {
+        let tok = &tokens[i];
+        match tok.as_str() {
+            "-p" | "--path" => {
+                if i + 1 < tokens.len() {
+                    if target.is_none() {
+                        target = Some(tokens[i + 1].clone());
+                    }
+                    i += 1;
+                }
+            }
+            "--" => {
+                for j in (i + 1)..tokens.len() {
+                    if target.is_none() && !tokens[j].is_empty() {
+                        target = Some(tokens[j].clone());
+                    }
+                }
+                break;
+            }
+            _ => {
+                if tok.starts_with('@') && tok.len() > 1 {
+                    if target.is_none() {
+                        target = Some(tok.clone());
+                    }
+                } else if value_flags.contains(&tok.as_str()) {
+                    rest.push(tok.clone());
+                    if i + 1 < tokens.len() {
+                        rest.push(tokens[i + 1].clone());
+                        i += 1;
+                    }
+                } else if tok.starts_with('-') {
+                    rest.push(tok.clone());
+                } else if target.is_none() {
+                    target = Some(tok.clone());
+                } else {
+                    rest.push(tok.clone());
+                }
+            }
+        }
+        i += 1;
+    }
+    (target, rest)
+}
+
+/// Resolve a path specifier to a concrete directory.
+/// `@name` always means a teleport savepoint. Otherwise the disk path wins;
+/// a matching teleport name is used as a fallback.
+pub(crate) fn resolve_target_spec(spec: &str, nav: &Navigator) -> Result<PathBuf> {
+    let name = spec.strip_prefix('@').unwrap_or(spec);
+
+    if spec.starts_with('@') {
+        if let Some(p) = TeleportManager::get_path(name) {
+            return Ok(p);
+        }
+        print_error(&t!("cmd.target.tp_not_found", name));
+        bail!(t!("cmd.target.tp_not_found", name));
+    }
+
+    let p = Path::new(spec);
+    let full = if p.is_absolute() {
+        p.to_path_buf()
+    } else {
+        nav.current_path().join(p)
+    };
+
+    if full.exists() {
+        if full.is_dir() {
+            return Ok(full);
+        }
+        print_error(&t!("cmd.target.not_dir", strip_unc_prefix(&full)));
+        bail!(t!("cmd.target.not_dir", strip_unc_prefix(&full)));
+    }
+
+    if let Some(tp) = TeleportManager::get_path(name) {
+        return Ok(tp);
+    }
+
+    print_error(&t!("cmd.target.not_found", spec));
+    bail!(t!("cmd.target.not_found", spec));
+}
+
+/// Parse `size`/`view` args: extract an optional target path and return the
+/// remaining flag tokens for the caller's existing parser. On failure a
+/// localized error has already been printed, so callers just stop.
+pub(crate) fn parse_target_arg(args: &str, nav: &Navigator) -> Result<TargetArg> {
+    let (spec, rest) = extract_target_spec(args, &["-d", "--depth"]);
+    let path = match spec {
+        Some(s) => Some(resolve_target_spec(&s, nav)?),
+        None => None,
+    };
+    Ok(TargetArg { path, rest })
+}
 
 // ============================================================================
 // Helper functions (gosc, show_tree, file menus, spinner, system command)
@@ -29,15 +167,39 @@ pub(crate) fn show_tree(
     copy_to_clipboard: bool,
     care_sizes: bool,
 ) {
+    show_tree_at(
+        nav.current_path(),
+        max_depth_override,
+        show_progress,
+        include_files,
+        show_filesize,
+        show_dirsize,
+        copy_to_clipboard,
+        care_sizes,
+    );
+}
+
+/// Same as `show_tree` but renders the tree for `target` instead of the
+/// navigator's current directory.
+pub(crate) fn show_tree_at(
+    target: &Path,
+    max_depth_override: Option<usize>,
+    show_progress: bool,
+    include_files: bool,
+    show_filesize: bool,
+    show_dirsize: bool,
+    copy_to_clipboard: bool,
+    care_sizes: bool,
+) {
     println!();
     print_separator("Current Directory");
-    println!("Path: {}", nav.display_path().cyan());
+    println!("Path: {}", strip_unc_prefix(target).cyan());
     println!();
 
     let mut tree = if show_progress {
         run_with_spinner(&t!("helpers.building_tree"), || {
             generate_tree(
-                &nav.current_path().to_string_lossy(),
+                &target.to_string_lossy(),
                 max_depth_override,
                 include_files,
                 None,
@@ -45,7 +207,7 @@ pub(crate) fn show_tree(
         })
     } else {
         generate_tree(
-            &nav.current_path().to_string_lossy(),
+            &target.to_string_lossy(),
             max_depth_override,
             include_files,
             None,
@@ -53,6 +215,15 @@ pub(crate) fn show_tree(
     };
 
     let show_any_size = show_filesize || show_dirsize;
+    // Annotate file entries with git status symbols when in a repo
+    if crate::config::Config::global_get_git_integration_enabled()
+        && crate::utils::git::is_repo(target)
+    {
+        let status = crate::utils::git::status_map(target);
+        if !status.is_empty() {
+            crate::explorer::annotate_git_status(&mut tree, &status);
+        }
+    }
     let tree_str = if show_any_size {
         if show_progress {
             run_with_spinner(&t!("helpers.calculating_sizes"), || {

@@ -11,7 +11,7 @@ pub fn fill(m: &mut HashMap<String, String>) {
     m.insert("help.alias.export_all".into(), "ral export --all <ชื่อ> ## ส่งออก alias ทั้งหมดไปยัง <ชื่อ>.ntc.ral".into());
     m.insert("help.alias.export_select".into(), "ral export --select <ชื่อ> ## เลือก alias เพื่อส่งออก".into());
     m.insert("help.alias.import".into(), "ral import <ไฟล์> ## นำเข้า alias จากไฟล์ .ntc.ral".into());
-    m.insert("help.alias.info".into(), "ral info <ชื่อ> ## แสดงรายละเอียด alias".into());
+    m.insert("help.alias.info".into(), "ral info <ชื่อ> [--edit] ## แสดงรายละเอียด alias (--edit: คัดลอกคำสั่งแก้ไขไปยังคลิปบอร์ด)".into());
     m.insert("help.alias.list".into(), "ral list ## แสดง alias ทั้งหมด".into());
     m.insert("help.alias.make".into(), "ral make [ชื่อ] ## สร้างเทมเพลต alias ใน CWD".into());
     m.insert("help.alias.rm".into(), "ral rm <ชื่อ>[, ...] ## ลบ alias".into());
@@ -157,6 +157,7 @@ pub fn fill(m: &mut HashMap<String, String>) {
     m.insert("help.network.ping".into(), "ping <host> ## ICMP ping (-c count)".into());
     m.insert("help.network.serve".into(), "serve [port] ## เซิร์ฟเวอร์ไฟล์ HTTP (--https, --tunnel, --spa, --web-dir)".into());
     m.insert("help.network.smtp".into(), "smtp ## SMTP email client (--id, -i, -u, -pwd, -s, -b, -f, --to)".into());
+    m.insert("help.network.spec".into(), "spec ## แสดงสเปกคอมพิวเตอร์/ระบบ (CPU, GPU, RAM, พื้นที่เก็บ, OS, เลขซีเรียล)".into());
     m.insert("help.network.sys".into(), "sys, top ## ตัวตรวจสอบระบบแบบสด (CPU, หน่วยความจำ, ดิสก์, โพรเซส)".into());
     m.insert("help.network.title".into(), "คำสั่งระบบและเครือข่าย (SYSTEM & NETWORK):".into());
     m.insert("help.network.up".into(), "up <file> <url> ## อัปโหลดไฟล์ (--post, -H, -d)".into());

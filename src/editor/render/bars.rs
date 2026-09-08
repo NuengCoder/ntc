@@ -192,6 +192,8 @@ impl Editor {
                 Mode::Jump => t!("editor.mode_jump"),
                 Mode::Query => t!("editor.mode_query"),
                 Mode::Hex => t!("editor.mode_hex"),
+                Mode::Encoding => t!("editor.mode_encoding"),
+                Mode::GitDiff => t!("editor.mode_git_diff"),
             },
         }
     }
@@ -260,8 +262,23 @@ impl Editor {
             };
             let col = byte_to_col(self.current(), self.cursor.byte) + 1;
             let total = self.lines.len();
+            let git_frag = if crate::config::Config::global_get_git_integration_enabled() {
+                crate::utils::git::prompt_fragment(
+                    &self.path
+                        .parent()
+                        .map(|p| p.to_path_buf())
+                        .unwrap_or_else(|| std::path::PathBuf::from(".")),
+                )
+            } else {
+                String::new()
+            };
+            let git_str = if git_frag.is_empty() {
+                String::new()
+            } else {
+                format!(" [{}] ", git_frag)
+            };
             let status = format!(
-                " {} {}{}   Ln {}/{}  Col {}{}  ",
+                " {} {}{}   Ln {}/{}  Col {}{}{} [{}] ",
                 label,
                 self.path
                     .file_name()
@@ -272,6 +289,8 @@ impl Editor {
                 total,
                 col,
                 sel_str,
+                git_str,
+                self.encoding.label(),
             );
             let right = if self.modified {
                 t!("editor.status_modified")
@@ -282,7 +301,11 @@ impl Editor {
         };
 
         let pad = avail_w.saturating_sub(status.len() + right.len() + 2);
-        let full = format!("{}{}{} ", status, " ".repeat(pad), right);
+        let mut full = format!("{}{}{} ", status, " ".repeat(pad), right);
+        if full.chars().count() > avail_w {
+            let end = full.floor_char_boundary(avail_w);
+            full.truncate(end);
+        }
 
         let use_color = self.editor_cfg.color_enabled;
         let status_bg = if use_color {
@@ -479,6 +502,16 @@ impl Editor {
                     );
                     (String::new(), hint)
                 }
+                Mode::Encoding => {
+                    let current = self.encoding.label();
+                    let hint = format!(
+                        " {} {}  {}",
+                        t!("editor.hint_encoding"),
+                        current,
+                        t!("editor.enc_hint")
+                    );
+                    (String::new(), hint)
+                }
                 Mode::Hex => {
                     let msg = if self.hex.as_ref().map(|h| h.modified).unwrap_or(false) {
                         let hex = self.hex.as_ref().unwrap();
@@ -500,6 +533,27 @@ impl Editor {
                         String::new()
                     };
                     (msg, String::new())
+                }
+                Mode::GitDiff => {
+                    if let Some(state) = &self.git_diff {
+                        let total = state.lines.len();
+                        let lines_shown = self.term_h.saturating_sub(4);
+                        let pct = if total > 0 {
+                            (((state.scroll + lines_shown) as f64 / total as f64) * 100.0) as usize
+                        } else {
+                            100
+                        };
+                        (
+                            format!(
+                                " {} {}",
+                                t!("editor.mode_git_diff"),
+                                t!("editor.git_quit_hint")
+                            ),
+                            format!(" {}% ", pct.min(100)),
+                        )
+                    } else {
+                        (String::new(), String::new())
+                    }
                 }
                 Mode::Query => {
                     let hint = if self.query_buf.is_empty() {

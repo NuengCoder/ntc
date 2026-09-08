@@ -60,6 +60,11 @@ pub fn fill(m: &mut HashMap<String, String>) {
     m.insert("editor.mode_exited_multi".into(), "ออกจากโหมดเคอร์เซอร์หลายตัวแล้ว".into());
     m.insert("editor.mode_finder".into(), "[Finder]".into());
     m.insert("editor.mode_gosc".into(), "[Gosc]".into());
+    m.insert("editor.mode_git_diff".into(), "[GitDiff]".into());
+    m.insert("editor.git_no_diff".into(), "git: ไม่มีความต่างของไฟล์นี้".into());
+    m.insert("editor.git_no_blame".into(), "git: ไม่มีข้อมูล blame สำหรับบรรทัดนี้".into());
+    m.insert("editor.git_disabled".into(), "ปิดใช้งาน git integration แล้ว (config git ON เพื่อเปิด)".into());
+    m.insert("editor.git_quit_hint".into(), "Esc/q เพื่อปิด".into());
     m.insert("editor.mode_help".into(), "[Help]".into());
     m.insert("editor.mode_hex".into(), "[HEX]".into());
     m.insert("editor.mode_insert".into(), "[Insert]".into());
@@ -136,6 +141,18 @@ pub fn fill(m: &mut HashMap<String, String>) {
     m.insert("editor.run_terminated".into(), "โพรเซสสิ้นสุดแล้ว".into());
     m.insert("editor.save_auto_error".into(), "ข้อผิดพลาดการบันทึกอัตโนมัติ: {}".into());
     m.insert("editor.save_failed".into(), "บันทึกล้มเหลว: {}".into());
+    m.insert("editor.encoding_changed".into(), "เปลี่ยนการเข้ารหัส".into());
+    m.insert("editor.enc_title".into(), "การเข้ารหัส".into());
+    m.insert(
+        "editor.enc_hint".into(),
+        "↑↓ เลือก · Enter ยืนยัน · Esc ยกเลิก".into(),
+    );
+    m.insert("editor.hint_encoding".into(), "การเข้ารหัส:".into());
+    m.insert("editor.encoding_reload_error".into(), "โหลดซ้ำล้มเหลว: {}".into());
+    m.insert(
+        "editor.encoding_applied_on_save".into(),
+        "ใช้ในการบันทึกครั้งถัดไป".into(),
+    );
     m.insert("editor.save_prompt".into(), "บันทึกไฟล์ [Y|N]?".into());
     m.insert("editor.saved".into(), "บันทึกแล้ว \u{2713}".into());
     m.insert("editor.saved_full".into(), " บันทึกแล้ว ✓".into());

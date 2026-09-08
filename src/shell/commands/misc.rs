@@ -3,13 +3,13 @@ use crate::config::Config;
 use crate::explorer::{
     calculate_dir_size, calculate_total_size, format_duration, human_readable_size,
 };
-use crate::filetype::is_supported_format;
+use crate::filetype::{is_supported_format, strip_unc_prefix};
 use crate::navigator::{clear_screen, Navigator};
 use crate::output::{cat_file, print_error, print_info, print_success, print_warning};
 use crate::search;
 use crate::session::SessionState;
 use crate::shell::help::{print_interactive_help, print_tp_help};
-use crate::shell::helpers::{run_with_spinner, show_tree};
+use crate::shell::helpers::{parse_target_arg, run_with_spinner, show_tree};
 use crate::shell::venv::clear_venv_environment;
 use crate::teleport::TeleportManager;
 use crate::watcher;
@@ -25,51 +25,55 @@ use std::sync::Arc;
 pub fn cmd_clear(_args: &str, nav: &mut Navigator) -> Result<bool> {
     clear_screen();
     println!();
-    #[cfg(not(target_os = "android"))]
-    {
-        use colored::Colorize;
-        let theme = crate::utils::theme::ThemeManager::current();
-        let a = |s: &str| crate::utils::terminal::asciify(s);
-        let version = env!("CARGO_PKG_VERSION");
-        println!(
-            "{}",
-            a("╔══════════════════════════════════════════════════════════════════╗")
-        );
-        println!(
-            "{}",
-            a(&format!("{:^66}", t!("misc.clear.welcome", version)))
-                .color(theme.shell.help_header.to_colored())
-                .bold()
-        );
-        println!(
-            "{}",
-            a("╚══════════════════════════════════════════════════════════════════╝")
-        );
-    }
-    #[cfg(target_os = "android")]
-    {
-        println!(
-            "{}",
-            crate::utils::terminal::asciify(
-                "╔══════════════════════════════════════════════════════════════════╗"
-            )
-        );
-        println!(
-            "{}",
-            crate::utils::terminal::asciify(&format!(
-                "{:^66}",
-                t!("misc.clear.welcome", env!("CARGO_PKG_VERSION"))
-            ))
-        );
-        println!(
-            "{}",
-            crate::utils::terminal::asciify(
-                "╚══════════════════════════════════════════════════════════════════╝"
-            )
-        );
+    if Config::global_get_dir_view_enabled() {
+        #[cfg(not(target_os = "android"))]
+        {
+            use colored::Colorize;
+            let theme = crate::utils::theme::ThemeManager::current();
+            let a = |s: &str| crate::utils::terminal::asciify(s);
+            let version = env!("CARGO_PKG_VERSION");
+            println!(
+                "{}",
+                a("╔══════════════════════════════════════════════════════════════════╗")
+            );
+            println!(
+                "{}",
+                a(&format!("{:^66}", t!("misc.clear.welcome", version)))
+                    .color(theme.shell.help_header.to_colored())
+                    .bold()
+            );
+            println!(
+                "{}",
+                a("╚══════════════════════════════════════════════════════════════════╝")
+            );
+        }
+        #[cfg(target_os = "android")]
+        {
+            println!(
+                "{}",
+                crate::utils::terminal::asciify(
+                    "╔══════════════════════════════════════════════════════════════════╗"
+                )
+            );
+            println!(
+                "{}",
+                crate::utils::terminal::asciify(&format!(
+                    "{:^66}",
+                    t!("misc.clear.welcome", env!("CARGO_PKG_VERSION"))
+                ))
+            );
+            println!(
+                "{}",
+                crate::utils::terminal::asciify(
+                    "╚══════════════════════════════════════════════════════════════════╝"
+                )
+            );
+        }
     }
     println!("{}", t!("misc.clear.type_help").dimmed());
-    show_tree(nav, Some(1), false, false, false, false, false, false);
+    if Config::global_get_dir_view_enabled() {
+        show_tree(nav, Some(1), false, false, false, false, false, false);
+    }
     Ok(false)
 }
 
@@ -198,10 +202,19 @@ pub fn cmd_ne(args: &str, nav: &mut Navigator) -> Result<bool> {
 }
 
 pub fn cmd_size(args: &str, nav: &mut Navigator) -> Result<bool> {
+    let parsed = match parse_target_arg(args, nav) {
+        Ok(p) => p,
+        Err(_) => return Ok(false),
+    };
+    let show_path = parsed.path.is_some();
+    let target = parsed
+        .path
+        .unwrap_or_else(|| nav.current_path().to_path_buf());
+
     let mut care = false;
     let mut show_time = false;
-    for arg in args.split_whitespace() {
-        match arg {
+    for arg in &parsed.rest {
+        match arg.as_str() {
             "--care" => care = true,
             "--time" | "-t" => show_time = true,
             _ => {}
@@ -210,19 +223,27 @@ pub fn cmd_size(args: &str, nav: &mut Navigator) -> Result<bool> {
     let start = std::time::Instant::now();
     let total = if care {
         run_with_spinner(&t!("misc.size.calculating"), || {
-            calculate_total_size(nav.current_path())
+            calculate_total_size(&target)
         })
     } else {
         run_with_spinner(&t!("misc.size.calculating"), || {
-            calculate_dir_size(nav.current_path())
+            calculate_dir_size(&target)
         })
     };
     let elapsed = start.elapsed();
     let bytes_str = format!("{}", total);
     let human_str = human_readable_size(total);
     let time_str = format_duration(elapsed);
+    let path_str = if show_path {
+        strip_unc_prefix(&target)
+    } else {
+        String::new()
+    };
     let max_label = 8;
-    let max_value = bytes_str.len().max(human_str.len()).max(time_str.len());
+    let mut max_value = bytes_str.len().max(human_str.len()).max(time_str.len());
+    if show_path {
+        max_value = max_value.max(path_str.len());
+    }
     let w = max_label + max_value + 10;
 
     let bytes_label = t!("misc.size.bytes_label");
@@ -235,6 +256,17 @@ pub fn cmd_size(args: &str, nav: &mut Navigator) -> Result<bool> {
     println!();
     println!("{}{}{}", a("┌"), h.repeat(w), a("┐"));
     println!("{}{:^w$}", v, title_label.cyan().bold(), w = w);
+    if show_path {
+        let path_label = t!("misc.size.path_label");
+        println!("{}{}{}", a("├"), h.repeat(w), a("┤"));
+        println!(
+            "{} {} {:<w$} ",
+            v,
+            path_label.yellow(),
+            path_str.cyan(),
+            w = w - path_label.len() - 4
+        );
+    }
     println!("{}{}{}", a("├"), h.repeat(w), a("┤"));
     println!(
         "{} {} {:<w$} ",
@@ -1143,6 +1175,15 @@ pub fn cmd_fallback(
             TeleportManager::jump_by_name(nav, tp_name)?;
             return Ok(false);
         }
+    }
+
+    // Try math expression evaluation for inputs that look like math
+    let trimmed = input.trim();
+    if crate::math::is_math_expression(trimmed) {
+        if let Err(e) = crate::math::run(trimmed) {
+            print_error(&format!("{}", e));
+        }
+        return Ok(false);
     }
 
     let cmd_part = input.trim();

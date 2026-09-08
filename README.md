@@ -64,6 +64,7 @@ ntc
 ## Future Features (v2.4.1 – v2.5.0)
 
 - `config lang <language>` — set UI language (english, chinese, thai, lao, ...)
+- `scr` — run `.ntc` automation scripts (variables, interpolation, positional args)
 - New sub-features and enhancements
 - Bug fixes and improvements
 

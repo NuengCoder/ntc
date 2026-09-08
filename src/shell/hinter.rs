@@ -35,6 +35,8 @@ fn builtin_commands() -> Vec<&'static str> {
         "gosc",
         "ral",
         "ran",
+        "scr",
+        "script",
         "run",
         "r",
         "showcg",
@@ -87,6 +89,7 @@ fn builtin_commands() -> Vec<&'static str> {
         "dns",
         "smtp",
         "serve",
+        "spec",
         "clip",
         "qsc",
         "todo",
@@ -103,6 +106,7 @@ fn builtin_commands() -> Vec<&'static str> {
         "say",
         "print",
         "tmprt",
+        "git",
     ]
 }
 
@@ -171,6 +175,28 @@ fn ran_target_names_for_command(parts: &[&str]) -> Vec<String> {
     };
     match ran_parser::parse(&cwd) {
         Ok(ranfile) => ranfile.targets.into_keys().collect(),
+        Err(_) => vec![],
+    }
+}
+
+/// Returns the list of `*.ntc` script names in cwd for `scr <script>`.
+fn scr_scripts_for_command(parts: &[&str]) -> Vec<String> {
+    if parts.len() != 1 {
+        return vec![];
+    }
+    let root = parts[0].to_lowercase();
+    if root != "scr" && root != "script" {
+        return vec![];
+    }
+    let cwd = match std::env::current_dir() {
+        Ok(d) => d,
+        Err(_) => return vec![],
+    };
+    match crate::script::list_scripts(&cwd) {
+        Ok(scripts) => scripts
+            .into_iter()
+            .filter_map(|p| p.file_name().map(|n| n.to_string_lossy().to_string()))
+            .collect(),
         Err(_) => vec![],
     }
 }
@@ -271,6 +297,7 @@ fn subcommands_for(parts: &[&str]) -> Vec<&'static str> {
             } else {
                 match parts[1].to_lowercase().as_str() {
                     "export" => vec!["--all", "-a", "--select", "-s"],
+                    "info" => vec!["--edit", "-e"],
                     _ => vec![],
                 }
             }
@@ -300,6 +327,8 @@ fn subcommands_for(parts: &[&str]) -> Vec<&'static str> {
         }
         // ran init / ran deinit / ran list
         "ran" if parts.len() == 1 => vec!["init", "deinit", "help", "list", "ls"],
+        // scr init / scr ls / scr help
+        "scr" | "script" if parts.len() == 1 => vec!["init", "ls", "list", "help"],
         // config output / config depth / config linenumbers / config color / config autosuggest / config threads / config history / config watch
         "config" => {
             if parts.len() == 1 {
@@ -324,12 +353,17 @@ fn subcommands_for(parts: &[&str]) -> Vec<&'static str> {
                     "qsc",
                     "lang",
                     "language",
+                    "git",
+                    "dir_view",
+                    "dv",
                 ]
             } else {
                 match parts[1].to_lowercase().as_str() {
                     "watch" | "w" if parts.len() == 2 => vec!["ON", "OFF", "trigger"],
                     "watch" | "w" if parts.len() >= 3 => vec!["off"],
                     "lang" | "language" if parts.len() == 2 => vec!["english", "thai", "lao", "chinese"],
+                    "git" if parts.len() == 2 => vec!["ON", "OFF"],
+                    "dir_view" | "dv" if parts.len() == 2 => vec!["ON", "OFF"],
                     _ => vec![],
                 }
             }
@@ -367,8 +401,8 @@ fn subcommands_for(parts: &[&str]) -> Vec<&'static str> {
         "deinit" if parts.len() == 1 => vec!["--all", "-a", "--ran", "--local"],
         // showenv --all / showenv -d
         "showenv" if parts.len() == 1 => vec!["--all", "-a", "-d", "--depth"],
-        // size --care
-        "size" if parts.len() == 1 => vec!["--care"],
+        // size --care / size -p <path> / size --path <path>
+        "size" if parts.len() == 1 => vec!["--care", "-p", "--path"],
         // view flags
         "view" if parts.len() == 1 => vec![
             "-s",
@@ -384,6 +418,8 @@ fn subcommands_for(parts: &[&str]) -> Vec<&'static str> {
             "--depth",
             "-t",
             "--time",
+            "-p",
+            "--path",
         ],
         // ui (now a no-op after modern mode removal)
         "ui" => vec!["classic"],
@@ -537,6 +573,12 @@ fn subcommands_for(parts: &[&str]) -> Vec<&'static str> {
         "tmprt" if parts.len() >= 2 && matches!(parts[1], "sensors" | "sensor") => {
             vec!["status", "install", "uninstall", "debug"]
         }
+        // git subcommands
+        "git" if parts.len() == 1 => vec![
+            "status", "st", "branch", "b", "log", "l", "diff", "d", "add", "a", "commit", "push",
+            "pull", "clone", "checkout", "co", "merge", "fetch", "remote", "init", "stash",
+            "rebase", "tag", "help", "h",
+        ],
         // Default: no known subcommands
         _ => vec![],
     }
@@ -744,6 +786,26 @@ impl Hinter for NtcHinter {
                 // If no unique ran target match, fall through to ntpkg names
             }
 
+            // Match against *.ntc script names (for commands like scr deploy.ntc, script build.ntc)
+            let scr_scripts = scr_scripts_for_command(parent_parts);
+            if !scr_scripts.is_empty() {
+                let lower = last_part.to_lowercase();
+                let mut matches: Vec<&str> = scr_scripts
+                    .iter()
+                    .filter(|name| name.starts_with(&lower) && name.len() > last_part.len())
+                    .map(|s| s.as_str())
+                    .collect();
+                matches.sort();
+                matches.dedup();
+
+                if matches.len() == 1 {
+                    let last_word_start = typed.len() - last_part.len();
+                    let rest = &matches[0][typed.len() - last_word_start..];
+                    return Some(rest.to_string());
+                }
+                // If no unique script match, fall through to ntpkg names
+            }
+
             // Match against ntpkg argument names (languages, versions, installed packages)
             let ntpkg_names = ntpkg_names_for_command(parent_parts);
             if !ntpkg_names.is_empty() {
@@ -779,6 +841,8 @@ impl Hinter for NtcHinter {
                     &["watch", "w"],
                     &["qsc"],
                     &["language", "lang"],
+                    &["git"],
+                    &["dir_view", "dv"],
                 ];
 
                 let lower = last_part.to_lowercase();

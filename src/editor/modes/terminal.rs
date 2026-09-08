@@ -376,6 +376,24 @@ impl Editor {
                     _ => {}
                 }
             }
+            Event::Resize(w, h) => {
+                self.term_w = w as usize;
+                self.term_h = h as usize;
+                let panel_h = self.run_panel_height();
+                let (max_scroll, max_scroll_x) = match self.terminal.as_ref() {
+                    Some(t) => (
+                        t.total_lines().saturating_sub(panel_h),
+                        t.width.saturating_sub(panel_h),
+                    ),
+                    None => (0, 0),
+                };
+                self.sv.run = self.sv.run.min(max_scroll);
+                self.sv.terminal_scroll_x = self.sv.terminal_scroll_x.min(max_scroll_x);
+                if let Some(ref mut term) = self.terminal {
+                    term.dirty = true;
+                }
+                self.mark_all_dirty();
+            }
             _ => {}
         }
         Ok(())

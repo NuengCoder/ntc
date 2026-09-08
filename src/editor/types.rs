@@ -48,6 +48,8 @@ pub(crate) enum Mode {
     Jump,
     Query,
     Hex,
+    Encoding,
+    GitDiff,
 }
 
 /// Which panel has keyboard focus.
@@ -459,6 +461,48 @@ impl Sidebar {
 
 // ── Tab (per-file state for multi-tab support) ──────────────────────────────
 
+/// Text encoding of the active buffer. Detected on load (BOM sniffing) and
+/// selectable at runtime via Ctrl+U in normal mode.
+#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
+pub(crate) enum EditorEncoding {
+    Utf8,
+    Utf16Le,
+    Utf16Be,
+    Windows1252,
+}
+
+impl EditorEncoding {
+    pub(crate) fn label(&self) -> &'static str {
+        match self {
+            Self::Utf8 => "UTF-8",
+            Self::Utf16Le => "UTF-16LE",
+            Self::Utf16Be => "UTF-16BE",
+            Self::Windows1252 => "Windows-1252",
+        }
+    }
+
+    /// Byte order mark prepended when saving in this encoding. UTF-8 and
+    /// Windows-1252 have no BOM (a UTF-8 BOM would change file bytes on save);
+    /// UTF-16 requires one for unambiguous detection.
+    pub(crate) fn bom(&self) -> &'static [u8] {
+        match self {
+            Self::Utf8 => b"",
+            Self::Utf16Le => b"\xff\xfe",
+            Self::Utf16Be => b"\xfe\xff",
+            Self::Windows1252 => b"",
+        }
+    }
+}
+
+/// All encodings offered by the Ctrl+U picker, in display order.
+pub(crate) const ALL_ENCODINGS: [EditorEncoding; 4] = [
+    EditorEncoding::Utf8,
+    EditorEncoding::Utf16Le,
+    EditorEncoding::Utf16Be,
+    EditorEncoding::Windows1252,
+];
+
+
 /// Holds the complete state of one editor tab.
 /// When a tab is inactive, its state is stored here.
 /// When activated, the state is swapped onto the Editor's direct fields.
@@ -503,6 +547,7 @@ define_tab! {
     prev_mode: Mode,
     cursor_visible: bool,
     last_blink: Instant,
+    encoding: EditorEncoding,
 }
 
 // ── gs search: doubly circular linked list ──────────────────────────────────
@@ -744,14 +789,26 @@ pub(crate) struct Editor {
     // Session auto-save timer
     pub(crate) last_session_save: Instant,
 
-    // Frame buffer for double-buffered rendering
-    pub(crate) framebuffer: Option<super::render::framebuffer::FrameBuffer>,
-
     // Terminal state for embedded terminal
     pub(crate) terminal: Option<super::terminal::TerminalState>,
 
     // Hex viewer/editor state
     pub(crate) hex: Option<HexViewer>,
+
+    // Text encoding of the active buffer
+    pub(crate) encoding: EditorEncoding,
+
+    // Selected row in the Ctrl+U encoding picker
+    pub(crate) encoding_sel: usize,
+
+    // Git diff overlay state
+    pub(crate) git_diff: Option<GitDiffState>,
+}
+
+#[derive(Clone)]
+pub(crate) struct GitDiffState {
+    pub(crate) lines: Vec<String>,
+    pub(crate) scroll: usize,
 }
 
 #[derive(Clone)]
@@ -769,11 +826,12 @@ pub(crate) struct HexViewer {
 
 impl Editor {
     pub(crate) fn new(path: &Path) -> Result<Self> {
-        let content: Vec<String> = if path.exists() {
-            crate::editor::core::read_file_lines(path)
-                .with_context(|| format!("Cannot read {}", path.display()))?
+        let (content, encoding) = if path.exists() {
+            let (lines, enc) = crate::editor::core::read_file_lines(path)
+                .with_context(|| format!("Cannot read {}", path.display()))?;
+            (lines, enc)
         } else {
-            vec![]
+            (vec![], EditorEncoding::Utf8)
         };
         let lines = if content.is_empty() {
             vec![String::new()]
@@ -850,9 +908,11 @@ impl Editor {
             cursor_visible: true,
             last_blink: Instant::now(),
             last_session_save: Instant::now(),
-            framebuffer: None,
             terminal: None,
             hex: None,
+            encoding,
+            encoding_sel: 0,
+            git_diff: None,
         })
     }
 
@@ -987,21 +1047,31 @@ impl Editor {
         }
     }
 
-    /// Restore a specific tab's state from a snapshot.
-    pub(crate) fn restore_tab_from_snapshot(&mut self, idx: usize, snapshot: &SessionSnapshot) {
-        if let Some(tab_snap) = snapshot.tabs.get(idx) {
-            if idx < self.tabs.len() {
-                let max_y = self.tabs[idx].lines.len().saturating_sub(1);
-                self.tabs[idx].cursor.y = tab_snap.cursor_y.min(max_y);
-                self.tabs[idx].cursor.byte =
-                    tab_snap.cursor_byte.min(self.tabs[idx].lines[max_y].len());
-                self.tabs[idx].sv.offset = tab_snap.scroll.min(max_y);
-                self.tabs[idx].sv.x = tab_snap.scroll_x;
-                self.tabs[idx].modified = tab_snap.modified;
-                self.tabs[idx].undo_stack = tab_snap.undo_stack.clone();
-                self.tabs[idx].redo_stack = tab_snap.redo_stack.clone();
-            }
+    /// Find the tab index for a given path.
+    pub(crate) fn find_tab_by_path(&self, path: &Path) -> Option<usize> {
+        self.tabs.iter().position(|t| t.path == path)
+    }
+
+    /// Restore tab `idx`'s cursor/scroll/undo state from `tab_snap`. Cursor is
+    /// clamped against its OWN line (char-boundary), not the last line.
+    pub(crate) fn restore_tab_from_snapshot_path(&mut self, idx: usize, tab_snap: &TabSnapshot) {
+        if idx >= self.tabs.len() {
+            return;
         }
+        let max_y = self.tabs[idx].lines.len().saturating_sub(1);
+        let cy = tab_snap.cursor_y.min(max_y);
+        self.tabs[idx].cursor.y = cy;
+        let clen = self.tabs[idx].lines[cy].len();
+        let mut cb = tab_snap.cursor_byte.min(clen);
+        while cb > 0 && !self.tabs[idx].lines[cy].is_char_boundary(cb) {
+            cb -= 1;
+        }
+        self.tabs[idx].cursor.byte = cb;
+        self.tabs[idx].sv.offset = tab_snap.scroll.min(max_y);
+        self.tabs[idx].sv.x = tab_snap.scroll_x;
+        self.tabs[idx].modified = tab_snap.modified;
+        self.tabs[idx].undo_stack = tab_snap.undo_stack.clone();
+        self.tabs[idx].redo_stack = tab_snap.redo_stack.clone();
     }
 
     /// Update hover text for the word under the cursor (normal mode).

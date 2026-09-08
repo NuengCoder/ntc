@@ -158,6 +158,9 @@ impl Editor {
                         self.jump_buf.clear();
                         self.status_msg = None;
                     }
+                    (true, KeyCode::Char('u')) => {
+                        self.open_encoding_picker();
+                    }
                     (false, KeyCode::Left) if alt => {
                         self.sv.x = self.sv.x.saturating_sub(3);
                     }

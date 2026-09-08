@@ -2,41 +2,13 @@ use std::path::Path;
 
 use anyhow::Context;
 
-use crate::editor::{Editor, Mode, Tab};
+use crate::editor::{save_lines_to, Editor, EditorEncoding, Mode, Tab};
 use crate::t;
 
-pub(crate) fn read_file_lines(path: &Path) -> anyhow::Result<Vec<String>> {
-    let bytes = std::fs::read(path)
-        .with_context(|| format!("{} {}", t!("editor.tab_cannot_open"), path.display()))?;
-    if bytes.is_empty() {
-        return Ok(vec![]);
-    }
-    let content = if bytes.starts_with(b"\xef\xbb\xbf") {
-        encoding_rs::UTF_8
-            .decode_without_bom_handling(&bytes[3..])
-            .0
-            .into_owned()
-    } else if bytes.starts_with(b"\xff\xfe") {
-        encoding_rs::UTF_16LE
-            .decode_without_bom_handling(&bytes[2..])
-            .0
-            .into_owned()
-    } else if bytes.starts_with(b"\xfe\xff") {
-        encoding_rs::UTF_16BE
-            .decode_without_bom_handling(&bytes[2..])
-            .0
-            .into_owned()
-    } else {
-        let (decoded, had_errors) = encoding_rs::UTF_8.decode_without_bom_handling(&bytes);
-        if had_errors {
-            encoding_rs::WINDOWS_1252
-                .decode_without_bom_handling(&bytes)
-                .0
-                .into_owned()
-        } else {
-            decoded.into_owned()
-        }
-    };
+/// Split decoded text into editor lines (one String per logical line; a
+/// trailing newline yields a final empty line, and an empty buffer becomes a
+/// single empty line).
+fn content_to_lines(content: &str) -> Vec<String> {
     let mut lines: Vec<String> = Vec::new();
     for line in content.lines() {
         lines.push(line.to_string());
@@ -47,7 +19,85 @@ pub(crate) fn read_file_lines(path: &Path) -> anyhow::Result<Vec<String>> {
     if lines.is_empty() {
         lines.push(String::new());
     }
-    Ok(lines)
+    lines
+}
+
+/// Decode raw file bytes using an explicit encoding. The encoding's own BOM is
+/// skipped when present so reloading a file with the same encoding is stable.
+pub(crate) fn decode_bytes_to_lines(bytes: &[u8], enc: EditorEncoding) -> Vec<String> {
+    let bom = enc.bom();
+    let body = if !bom.is_empty() && bytes.starts_with(bom) {
+        &bytes[bom.len()..]
+    } else {
+        bytes
+    };
+    let content = match enc {
+        EditorEncoding::Utf8 => encoding_rs::UTF_8
+            .decode_without_bom_handling(body)
+            .0
+            .into_owned(),
+        EditorEncoding::Utf16Le => encoding_rs::UTF_16LE
+            .decode_without_bom_handling(body)
+            .0
+            .into_owned(),
+        EditorEncoding::Utf16Be => encoding_rs::UTF_16BE
+            .decode_without_bom_handling(body)
+            .0
+            .into_owned(),
+        EditorEncoding::Windows1252 => encoding_rs::WINDOWS_1252
+            .decode_without_bom_handling(body)
+            .0
+            .into_owned(),
+    };
+    content_to_lines(&content)
+}
+
+/// Read a file into lines, decoding according to its byte order mark (falling
+/// back to UTF-8 and then Windows-1252). Returns the lines plus the detected
+/// encoding so the buffer can round-trip bytes losslessly on save.
+pub(crate) fn read_file_lines(path: &Path) -> anyhow::Result<(Vec<String>, EditorEncoding)> {
+    let bytes = std::fs::read(path)
+        .with_context(|| format!("{} {}", t!("editor.tab_cannot_open"), path.display()))?;
+    if bytes.is_empty() {
+        return Ok((vec![String::new()], EditorEncoding::Utf8));
+    }
+    let (skip, enc) = if bytes.starts_with(b"\xef\xbb\xbf") {
+        (3, EditorEncoding::Utf8)
+    } else if bytes.starts_with(b"\xff\xfe") {
+        (2, EditorEncoding::Utf16Le)
+    } else if bytes.starts_with(b"\xfe\xff") {
+        (2, EditorEncoding::Utf16Be)
+    } else {
+        let (_, had_errors) = encoding_rs::UTF_8.decode_without_bom_handling(&bytes);
+        if had_errors {
+            (0, EditorEncoding::Windows1252)
+        } else {
+            (0, EditorEncoding::Utf8)
+        }
+    };
+    Ok((decode_bytes_to_lines(&bytes[skip..], enc), enc))
+}
+
+impl Editor {
+    /// Re-read the on-disk file with the active encoding and replace the
+    /// buffer. Used when the user confirms an encoding change on a clean file.
+    pub(crate) fn reload_with_encoding(&mut self) -> anyhow::Result<()> {
+        if !self.path.exists() {
+            return Ok(());
+        }
+        let bytes = std::fs::read(&self.path)?;
+        self.lines = decode_bytes_to_lines(&bytes, self.encoding);
+        self.modified = false;
+        self.undo_stack.clear();
+        self.redo_stack.clear();
+        self.cursor.selection_anchor = None;
+        self.cursor.extra_cursors.clear();
+        self.syntax.resize_cache(self.lines.len());
+        self.syntax.invalidate_all();
+        self.clamp();
+        self.mark_all_dirty();
+        Ok(())
+    }
 }
 
 impl Editor {
@@ -155,6 +205,15 @@ impl Editor {
                 if self.is_scratch_path(&self.path) {
                     return true;
                 }
+                // Last real tab: never discard unsaved work. Save (or abort the
+                // close on failure) before replacing it with the scratch tab.
+                if self.modified {
+                    if let Err(e) = self.save() {
+                        self.status_msg = Some(format!("{} {}", t!("editor.save_failed"), e));
+                        return false;
+                    }
+                    self.clear_recovery_snapshot();
+                }
                 self.open_scratch_tab();
                 self.tabs.remove(0);
                 self.active_tab = 0;
@@ -163,7 +222,11 @@ impl Editor {
                 return false;
             }
             if self.modified {
-                let _ = self.save();
+                if let Err(e) = self.save() {
+                    self.status_msg = Some(format!("{} {}", t!("editor.save_failed"), e));
+                    return false;
+                }
+                self.clear_recovery_snapshot();
             }
             self.tabs.remove(idx);
             if self.active_tab >= self.tabs.len() {
@@ -173,6 +236,16 @@ impl Editor {
             self.mark_all_dirty();
             false
         } else {
+            // Closing a background tab: persist any unsaved edits first.
+            if self.tabs[idx].modified && !self.is_scratch_path(&self.tabs[idx].path) {
+                let path = self.tabs[idx].path.clone();
+                let lines = self.tabs[idx].lines.clone();
+                let encoding = self.tabs[idx].encoding;
+                if let Err(e) = save_lines_to(&path, &lines, encoding) {
+                    self.status_msg = Some(format!("{} {}", t!("editor.save_failed"), e));
+                    return false;
+                }
+            }
             if idx < self.active_tab {
                 self.active_tab -= 1;
             }
@@ -186,9 +259,9 @@ impl Editor {
     }
 
     pub(crate) fn load_file(&mut self, path: &Path) -> bool {
-        let content: Vec<String> = if path.exists() {
+        let (content, enc) = if path.exists() {
             match read_file_lines(path) {
-                Ok(content) => content,
+                Ok((content, enc)) => (content, enc),
                 Err(e) => {
                     self.status_msg = Some(format!(
                         "{} {}: {}",
@@ -200,7 +273,7 @@ impl Editor {
                 }
             }
         } else {
-            vec![]
+            (vec![], EditorEncoding::Utf8)
         };
         self.lines = if content.is_empty() {
             vec![String::new()]
@@ -208,6 +281,7 @@ impl Editor {
             content
         };
         self.path = path.to_path_buf();
+        self.encoding = enc;
         self.modified = false;
         self.cursor.y = 0;
         self.cursor.byte = 0;

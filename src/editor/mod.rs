@@ -21,15 +21,17 @@ mod unicode;
 
 pub(crate) use completion::CompletionItem;
 pub(crate) use types::{
-    CursorPos, Editor, Focus, HexViewer, Mode, Snapshot, Tab, GOTO_LINE, MIN_SIDEBAR_WIDTH,
+    CursorPos, Editor, EditorEncoding, Focus, HexViewer, Mode, Snapshot, Tab, ALL_ENCODINGS,
+    GOTO_LINE, MIN_SIDEBAR_WIDTH,
 };
 
 pub(crate) use unicode::{
-    auto_pair, byte_to_col, char_col_width, col_to_byte, is_ctrl_char, next_char_byte,
+    auto_pair, byte_to_col, char_col_width, ci_find, col_to_byte, is_ctrl_char, next_char_byte,
     next_word_byte, prev_char_byte, prev_word_byte,
 };
 
 pub(crate) use helpers::{gutter_width, prompt_yes_no, sel_range, set_status_bar};
+pub(crate) use core::save_lines_to;
 
 // ── public API ──────────────────────────────────────────────────────────────
 

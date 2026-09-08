@@ -46,7 +46,7 @@ pub fn build_map() -> HashMap<String, String> {
 
     m.insert("alias.ral.import_cmd".into(), " ral import <file> Import aliases from a .ntc.ral file".into());
 
-    m.insert("alias.ral.info_cmd".into(), " ral info <name> Show alias details".into());
+    m.insert("alias.ral.info_cmd".into(), " ral info <name> [--edit] Show alias details (--edit copies the edit command to clipboard)".into());
 
     m.insert("alias.ral.info_command".into(), "Command".into());
 
@@ -63,6 +63,10 @@ pub fn build_map() -> HashMap<String, String> {
     m.insert("alias.ral.info_source_local".into(), "local (ntconfig.toml)".into());
 
     m.insert("alias.ral.info_title".into(), "\u{1F4CC} Alias Info".into());
+
+    m.insert("alias.ral.info_edit_copied".into(), "Edit command copied to clipboard:".into());
+
+    m.insert("alias.ral.info_edit_hint".into(), "Paste it, tweak the command, then press Enter.".into());
 
     m.insert("alias.ral.invalid_name".into(), "Invalid alias name: '{}'".into());
 
@@ -126,7 +130,7 @@ pub fn build_map() -> HashMap<String, String> {
 
     m.insert("alias.ral.usage_import".into(), "Usage: ral import <file>".into());
 
-    m.insert("alias.ral.usage_info".into(), "Usage: ral info <alias>".into());
+    m.insert("alias.ral.usage_info".into(), "Usage: ral info <alias> [--edit]".into());
 
     m.insert("alias.ral.usage_rm".into(), "Usage: ral rm <name>[, <name>, ...]".into());
 
@@ -862,6 +866,8 @@ pub fn build_map() -> HashMap<String, String> {
 
     m.insert("cli.known_flag.size".into(), "--size Show current directory size".into());
 
+    m.insert("cli.known_flag.path".into(), "--path <path|@tp> Target path or teleport savepoint (use with --size or --view)".into());
+
     m.insert("cli.known_flag.teleport_at".into(), "ntc @<name> Launch and teleport to savepoint".into());
 
     m.insert("cli.known_flag.tp_add".into(), "--tp-add <name> Save current directory as teleport point".into());
@@ -977,6 +983,8 @@ pub fn build_map() -> HashMap<String, String> {
     m.insert("cli.run.help_modn".into(), "modn".into());
 
     m.insert("cli.run.help_output".into(), "Output filename for report".into());
+
+    m.insert("cli.run.help_path".into(), "Target path or teleport savepoint (use with --size or --view)".into());
 
     m.insert("cli.run.help_ral_export_all".into(), "Export all run aliases to <name>.ntc.ral".into());
 
@@ -2014,9 +2022,15 @@ pub fn build_map() -> HashMap<String, String> {
 
     m.insert("cmd.report.unknown_option".into(), "Unknown view option: {}".into());
 
-    m.insert("cmd.report.view_usage".into(), "Usage: view [-s|--size] [-c|--cp] [--care] [-t|--time] [-d|--depth <n>]".into());
+    m.insert("cmd.report.view_usage".into(), "Usage: view [-s|--size] [-c|--cp] [--care] [-t|--time] [-d|--depth <n>] [-p|--path <path|@tp>]".into());
 
     m.insert("cmd.serve.db_title".into(), "Database:".into());
+
+    m.insert("cmd.target.not_dir".into(), "'{}' is not a directory".into());
+
+    m.insert("cmd.target.not_found".into(), "Path '{}' not found".into());
+
+    m.insert("cmd.target.tp_not_found".into(), "Savepoint '{}' not found".into());
 
     m.insert("cmd.serve.db_title".into(), "Database:".into());
 
@@ -2105,6 +2119,10 @@ pub fn build_map() -> HashMap<String, String> {
     m.insert("cmd.serve.usage_title".into(), "Usage:".into());
 
     m.insert("cmd.serve.usage_title".into(), "Usage:".into());
+
+    m.insert("cmd.serve.cloudflared_starting".into(), "Cloudflared tunnel starting (PID {})".into());
+
+    m.insert("cmd.serve.cloudflared_missing".into(), "cloudflared not found: {}. Install: {}".into());
 
     m.insert("cmd.smtp.build_fail".into(), "Failed to build email message".into());
 
@@ -2426,8 +2444,6 @@ pub fn build_map() -> HashMap<String, String> {
 
     m.insert("cmd.upgrade.copy_fail".into(), "Failed to copy binary: {}".into());
 
-    m.insert("cmd.upgrade.copy_fail".into(), "Failed to copy binary: {}".into());
-
     m.insert("cmd.upgrade.copy_fail_android".into(), "Failed to copy binary. Check disk space or permissions.".into());
 
     m.insert("cmd.upgrade.dev_build".into(), "You may be running a development build.".into());
@@ -2442,29 +2458,19 @@ pub fn build_map() -> HashMap<String, String> {
 
     m.insert("cmd.upgrade.exe_path_fail".into(), "Failed to get executable path: {}".into());
 
-    m.insert("cmd.upgrade.exe_path_fail".into(), "Failed to get executable path: {}".into());
-
     m.insert("cmd.upgrade.install_fail".into(), "Installation failed: {}".into());
 
     m.insert("cmd.upgrade.missing_tag".into(), "Missing 'tag_name' in GitHub release response".into());
 
     m.insert("cmd.upgrade.new_version".into(), "New version available: ntc {}".into());
 
-    m.insert("cmd.upgrade.no_assets".into(), "No assets found in release v{}".into());
-
-    m.insert("cmd.upgrade.no_assets".into(), "No assets found in release v{}".into());
-
     m.insert("cmd.upgrade.no_assets_release".into(), "No assets found in release v{}".into());
 
     m.insert("cmd.upgrade.perm_fail".into(), "Failed to set executable permissions: {}".into());
 
-    m.insert("cmd.upgrade.perm_fail".into(), "Failed to set executable permissions: {}".into());
+    m.insert("cmd.upgrade.progress_bytes".into(), "Downloaded: {} bytes".into());
 
-    m.insert("cmd.upgrade.progress_bytes".into(), "Progress: {:.0}% ({}/{})".into());
-
-    m.insert("cmd.upgrade.progress_bytes".into(), "Progress: {:.0}% ({}/{})".into());
-
-    m.insert("cmd.upgrade.progress_pct".into(), "Progress: {:.0}%".into());
+    m.insert("cmd.upgrade.progress_pct".into(), "Progress: {}%".into());
 
     m.insert("cmd.upgrade.restart".into(), "Restart ntc to use the new version.".into());
 
@@ -2474,19 +2480,35 @@ pub fn build_map() -> HashMap<String, String> {
 
     m.insert("cmd.upgrade.time_remaining".into(), "Time remaining: {:>3} seconds  ".into());
 
-    m.insert("cmd.upgrade.time_remaining".into(), "Time remaining: {:>3} seconds  ".into());
-
     m.insert("cmd.upgrade.tmpdir_fail".into(), "Failed to create temp directory: {}".into());
-
-    m.insert("cmd.upgrade.tmpdir_fail".into(), "Failed to create temp directory: {}".into());
-
-    m.insert("cmd.upgrade.unsupported_platform".into(), "Unsupported platform: {}".into());
 
     m.insert("cmd.upgrade.unsupported_platform".into(), "Unsupported platform: {}".into());
 
     m.insert("cmd.upgrade.updated".into(), "ntc has been updated to v{}!".into());
 
     m.insert("cmd.upgrade.write_fail".into(), "Failed to write downloaded file".into());
+
+    m.insert("cmd.upgrade.no_arch_asset".into(), "No prebuilt ntc binary for this architecture ({}). Build from source: cargo build --release".into());
+
+    m.insert("cmd.upgrade.no_asset_match".into(), "No release asset matches platform key '{}'".into());
+
+    m.insert("cmd.upgrade.extracting".into(), "Extracting binary...".into());
+
+    m.insert("cmd.upgrade.extract_fail".into(), "Failed to read/parse downloaded archive: {}".into());
+
+    m.insert("cmd.upgrade.no_file_in_archive".into(), "Could not find '{}' inside the downloaded archive".into());
+
+    m.insert("cmd.upgrade.no_installer_asset".into(), "Could not find a Windows installer asset to update ntc".into());
+
+    m.insert("cmd.upgrade.installer_launch".into(), "Launching the ntc installer (silent)...".into());
+
+    m.insert("cmd.upgrade.installer_launch_fail".into(), "Failed to launch the installer: {}".into());
+
+    m.insert("cmd.upgrade.home_fail".into(), "Could not determine your home directory".into());
+
+    m.insert("cmd.upgrade.installed_user_dir".into(), "ntc installed to {} (user install, no admin/sudo required).".into());
+
+    m.insert("cmd.upgrade.path_exported".into(), "PATH updated in {}".into());
 
     m.insert("config.general.autosuggest".into(), " config autosuggest ON|OFF Show/set autosuggest".into());
 
@@ -2982,7 +3004,7 @@ pub fn build_map() -> HashMap<String, String> {
 
     m.insert("editor.gs_loading".into(), " finding... {} pls wait".into());
 
-    m.insert("editor.help_screen".into(), " NORMAL MODE (read-only)\n ^O enter Insert mode\n ^W enter Visual mode\n ^G jump to line number (Jump mode)\n : open command line\n ^E open command line (alt)\n :auto on enable auto-save on exit\n :auto off disable auto-save on exit\n ^H open this help screen\n ^Q close current tab / quit (if last tab)\n ^Q+Shift close all tabs\n ^PgDn next tab\n ^PgUp previous tab\n ^N open file in new tab\n ^F find / search in file\n ^D add cursor at next occurrence\n ^Alt+D split primary cursor\n mouse click tab bar, scroll wheel to navigate\n arrows move primary cursor\n Sh+arrows word-level movement\n\n INSERT MODE (editing)\n ^C copy selection\n ^F find / search\n ^N open file in new tab\n ^G jump to line (returns to Insert)\n ^Z undo\n ^R redo\n ^Y yank (copy) current line\n ^A select all\n ^L select current line\n ^D find next occurrence\n ^Alt+D split cursor at selection\n ^X cut selection\n ^S save\n ^W enter Visual mode\n ^E open command line\n Esc return to Normal mode\n ^Q quit (with save prompt)\n ^H help\n Home start of line\n End end of line\n ^D auto enters Insert* (multi-cursor)\n Esc returns to Insert\n\n VISUAL MODE (selection)\n arrows extend selection\n ^F find / search\n ^N open file in new tab\n ^G jump to line (returns to Visual)\n ^O enter Insert mode\n ^E open command line\n ^C copy + exit\n ^X cut + exit\n ^Q quit (with save prompt)\n ^H help\n Esc exit visual mode\n mouse click & drag to select\n\n COMMAND MODE\n :<number> go to line number\n :l N or :line N go to line N\n :q or :quit quit editor (with save prompt)\n :wq save and quit\n :w or :write save file\n :auto on enable auto-save\n :auto off disable auto-save\n :syntax on enable syntax highlighting\n :syntax off disable syntax highlighting\n :cd <path> change directory (Navigator)\n :back [N] go to parent directory (N levels)\n :gos <N> navigate to Nth subdirectory\n :gosc list numbered subdirectories\n :mkdir <dir> create directory\n :mkd <dir> create directory (alias for :mkdir)\n :touch <file> create new file\n :mkf <file> create new file (alias for :touch)\n :rmd <target> recursively delete directory\n :rmf <target> force delete file or directory\n :rnmf <src> <dst> rename file\n :rnmd <src> <dst> rename directory\n :ne <file> navigate & edit (create if missing)\n :ne . show CWD in sidebar\n :theme <name> switch to theme by name\n :theme list list available themes\n :theme show current theme\n :tp <name> jump to teleport savepoint\n :tp-add <name> save CWD as teleport\n :gs <pattern> search file contents across project\n :run <command> execute command in persistent run panel\n Esc cancel\n\n QUERY MODE (Ctrl+Alt+Q in Insert, :x in Command)\n /s /l clear selection\n /s /l /a select all lines\n /s /l N to M select lines N..M (1-indexed)\n /s /l N to M /e str filter selected lines containing str\n /p old to new replace all 'old' with 'new' in selection\n /upper uppercase selection (selection required)\n /lower lowercase selection (selection required)\n /add <text> to #end append text to each selected line\n /add <text> to #start prepend text to each selected line\n /set <pat> to #end right-align first occurrence of pat\n /set <pat> to #start left-align first occurrence of pat\n /qal add <n> <q> add query alias (e.g. /qal sw /p ${1} to ${2})\n /qal rm <n> remove alias\n /qal info <n> show alias\n /qal edit <n> <q> update alias\n /qal rnm <a> to <b> rename alias\n /qal list list aliases\n /q <name> [args] run alias\n <name> [args] run alias directly (no /)\n /undo undo\n /redo redo\n /exit /quit /Esc exit Query Mode\n ; chain multiple commands\n ${1} ${2} alias positional params\n ${1:-default} alias param with default\n ${1[]} alias array param (all remaining args)\n\n TERMINAL / RUN PANEL\n Ctrl+T toggle terminal panel\n :run <command> execute command, opens persistent run panel\n mouse click panel to focus, click editor to return\n Esc (in panel) run: close | terminal: return to editor\n drag \u{2500}\u{2500}\u{2500} row resize panel height".into());
+    m.insert("editor.help_screen".into(), " NORMAL MODE (read-only)\n ^O enter Insert mode\n ^W enter Visual mode\n ^G jump to line number (Jump mode)\n : open command line\n ^E open command line (alt)\n :auto on enable auto-save on exit\n :auto off disable auto-save on exit\n ^H open this help screen\n ^Q close current tab / quit (if last tab)\n ^Q+Shift close all tabs\n ^PgDn next tab\n ^PgUp previous tab\n ^N open file in new tab\n ^F find / search in file\n ^D add cursor at next occurrence\n ^Alt+D split primary cursor\n mouse click tab bar, scroll wheel to navigate\n arrows move primary cursor\n Sh+arrows word-level movement\n\n INSERT MODE (editing)\n ^C copy selection\n ^F find / search\n ^N open file in new tab\n ^G jump to line (returns to Insert)\n ^Z undo\n ^R redo\n ^Y yank (copy) current line\n ^A select all\n ^L select current line\n ^D find next occurrence\n ^Alt+D split cursor at selection\n ^X cut selection\n ^S save\n ^W enter Visual mode\n ^E open command line\n Esc return to Normal mode\n ^Q quit (with save prompt)\n ^H help\n Home start of line\n End end of line\n ^D auto enters Insert* (multi-cursor)\n Esc returns to Insert\n\n VISUAL MODE (selection)\n arrows extend selection\n ^F find / search\n ^N open file in new tab\n ^G jump to line (returns to Visual)\n ^O enter Insert mode\n ^E open command line\n ^C copy + exit\n ^X cut + exit\n ^Q quit (with save prompt)\n ^H help\n Esc exit visual mode\n mouse click & drag to select\n\n COMMAND MODE\n :<number> go to line number\n :l N or :line N go to line N\n :q or :quit quit editor (with save prompt)\n :wq save and quit\n :w or :write save file\n :auto on enable auto-save\n :auto off disable auto-save\n :syntax on enable syntax highlighting\n :syntax off disable syntax highlighting\n :cd <path> change directory (Navigator)\n :back [N] go to parent directory (N levels)\n :gos <N> navigate to Nth subdirectory\n :gosc list numbered subdirectories\n :mkdir <dir> create directory\n :mkd <dir> create directory (alias for :mkdir)\n :touch <file> create new file\n :mkf <file> create new file (alias for :touch)\n :rmd <target> recursively delete directory\n :rmf <target> force delete file or directory\n :rnmf <src> <dst> rename file\n :rnmd <src> <dst> rename directory\n :ne <file> navigate & edit (create if missing)\n :ne . show CWD in sidebar\n :theme <name> switch to theme by name\n :theme list list available themes\n :theme show current theme\n :git diff or :gd show git diff of current file\n :git blame or :blame show blame of current line\n :tp <name> jump to teleport savepoint\n :tp-add <name> save CWD as teleport\n :gs <pattern> search file contents across project\n :run <command> execute command in persistent run panel\n Esc cancel\n\n QUERY MODE (Ctrl+Alt+Q in Insert, :x in Command)\n /s /l clear selection\n /s /l /a select all lines\n /s /l N to M select lines N..M (1-indexed)\n /s /l N to M /e str filter selected lines containing str\n /p old to new replace all 'old' with 'new' in selection\n /upper uppercase selection (selection required)\n /lower lowercase selection (selection required)\n /add <text> to #end append text to each selected line\n /add <text> to #start prepend text to each selected line\n /set <pat> to #end right-align first occurrence of pat\n /set <pat> to #start left-align first occurrence of pat\n /qal add <n> <q> add query alias (e.g. /qal sw /p ${1} to ${2})\n /qal rm <n> remove alias\n /qal info <n> show alias\n /qal edit <n> <q> update alias\n /qal rnm <a> to <b> rename alias\n /qal list list aliases\n /q <name> [args] run alias\n <name> [args] run alias directly (no /)\n /undo undo\n /redo redo\n /exit /quit /Esc exit Query Mode\n ; chain multiple commands\n ${1} ${2} alias positional params\n ${1:-default} alias param with default\n ${1[]} alias array param (all remaining args)\n\n TERMINAL / RUN PANEL\n Ctrl+T toggle terminal panel\n :run <command> execute command, opens persistent run panel\n mouse click panel to focus, click editor to return\n Esc (in panel) run: close | terminal: return to editor\n drag \u{2500}\u{2500}\u{2500} row resize panel height".into());
 
     m.insert("editor.hex_cannot_read".into(), "hex: cannot read file: {}".into());
 
@@ -3179,6 +3201,14 @@ pub fn build_map() -> HashMap<String, String> {
     m.insert("editor.mode_exited_multi".into(), "Exited multi-cursor mode".into());
 
     m.insert("editor.mode_finder".into(), "[Finder]".into());
+
+    m.insert("editor.mode_encoding".into(), "[Encoding]".into());
+
+    m.insert("editor.mode_git_diff".into(), "[GitDiff]".into());
+    m.insert("editor.git_no_diff".into(), "git: no diff for this file".into());
+    m.insert("editor.git_no_blame".into(), "git: no blame info for this line".into());
+    m.insert("editor.git_disabled".into(), "git integration is disabled (config git ON)".into());
+    m.insert("editor.git_quit_hint".into(), "Esc/q to close".into());
 
     m.insert("editor.mode_gosc".into(), "[Gosc]".into());
 
@@ -3427,6 +3457,17 @@ pub fn build_map() -> HashMap<String, String> {
     m.insert("editor.save_auto_error".into(), "Auto-save error: {}".into());
 
     m.insert("editor.save_failed".into(), "Save failed: {}".into());
+
+    m.insert("editor.encoding_changed".into(), "Encoding changed".into());
+
+    m.insert("editor.enc_title".into(), "Encoding".into());
+    m.insert("editor.enc_hint".into(), "↑↓ select · Enter confirm · Esc cancel".into());
+    m.insert("editor.hint_encoding".into(), "Encoding:".into());
+    m.insert("editor.encoding_reload_error".into(), "Reload failed: {}".into());
+    m.insert(
+        "editor.encoding_applied_on_save".into(),
+        "applied on next save".into(),
+    );
 
     m.insert("editor.save_prompt".into(), "Save file [Y|N]?".into());
 
@@ -3680,7 +3721,7 @@ pub fn build_map() -> HashMap<String, String> {
 
     m.insert("help.alias.import".into(), "ral import <file> ## Import aliases from .ntc.ral file".into());
 
-    m.insert("help.alias.info".into(), "ral info <name> ## Show alias details".into());
+    m.insert("help.alias.info".into(), "ral info <name> [--edit] ## Show alias details (--edit: copy edit command to clipboard)".into());
 
     m.insert("help.alias.list".into(), "ral list ## Show all aliases".into());
 
@@ -3972,6 +4013,8 @@ pub fn build_map() -> HashMap<String, String> {
 
     m.insert("help.network.smtp".into(), "smtp ## SMTP email client (--id, -i, -u, -pwd, -s, -b, -f, --to)".into());
 
+    m.insert("help.network.spec".into(), "spec ## Show computer/system specifications (CPU, GPU, RAM, storage, OS, serial)".into());
+
     m.insert("help.network.sys".into(), "sys, top ## Live system monitor (CPU, memory, disk, processes)".into());
 
     m.insert("help.network.title".into(), "SYSTEM & NETWORK COMMANDS:".into());
@@ -4114,6 +4157,24 @@ pub fn build_map() -> HashMap<String, String> {
 
     m.insert("help.report.xlsx".into(), "report xlsx [path] ## Generate XLSX report (with dependency analysis)".into());
 
+    m.insert("help.scr.continue".into(), "scr -c <file.ntc> [args...] ## Run script, continue after errors".into());
+
+    m.insert("help.scr.example1".into(), "scr deploy.ntc ## Run deploy.ntc".into());
+
+    m.insert("help.scr.example2".into(), "scr build.ntc dev prod ## Pass args $1=dev, $2=prod".into());
+
+    m.insert("help.scr.example3".into(), "scr -c setup.ntc ## Run and continue after errors".into());
+
+    m.insert("help.scr.help".into(), "scr help ## Show scr usage".into());
+
+    m.insert("help.scr.init".into(), "scr init [name] ## Create a script template".into());
+
+    m.insert("help.scr.ls".into(), "scr ls ## List *.ntc scripts in the current directory".into());
+
+    m.insert("help.scr.run".into(), "scr <file.ntc> [args...] ## Run an automation script".into());
+
+    m.insert("help.scr.title".into(), "SCR / AUTOMATION SCRIPT COMMANDS:".into());
+
     m.insert("help.search.ds".into(), "ds <pattern> [-d <n>] ## Search directories by name".into());
 
     m.insert("help.search.fs".into(), "fs <pattern> [-d <n>] ## Search files by name (fuzzy fallback)".into());
@@ -4127,6 +4188,16 @@ pub fn build_map() -> HashMap<String, String> {
     m.insert("help.search.locate".into(), "locate <pattern> [-d <n>] ## Search both files and directories".into());
 
     m.insert("help.search.title".into(), "SEARCH COMMANDS:".into());
+
+    m.insert("help.size.care".into(), "size --care ## Calculate size including everything (care mode)".into());
+
+    m.insert("help.size.path".into(), "size -p, --path <path|@tp> ## Show size of a specific path or teleport savepoint".into());
+
+    m.insert("help.size.size".into(), "size ## Show current directory size".into());
+
+    m.insert("help.size.time".into(), "size -t, --time ## Show elapsed time".into());
+
+    m.insert("help.size.title".into(), "SIZE COMMAND:".into());
 
     m.insert("help.syscmd.any".into(), "<any command> ## NTC passes unknown commands to your system".into());
 
@@ -4230,6 +4301,8 @@ pub fn build_map() -> HashMap<String, String> {
 
     m.insert("help.view.filesize".into(), "view -fs, --filesize ## Show tree with file sizes only".into());
 
+    m.insert("help.view.path".into(), "view -p, --path <path|@tp> ## Show tree of a specific path or teleport savepoint".into());
+
     m.insert("help.view.size".into(), "view -s, --size ## Show tree with dir and file sizes".into());
 
     m.insert("help.view.time".into(), "view --time, -t ## Show tree with execution time".into());
@@ -4301,6 +4374,18 @@ pub fn build_map() -> HashMap<String, String> {
     m.insert("help.view.example4".into(), "view --cp ## Show tree and copy to clipboard".into());
 
     m.insert("help.view.example5".into(), "view --time ## Show tree with execution time".into());
+
+    m.insert("help.view.example6".into(), "view -p C:\\code\\project ## Show tree of a specific path".into());
+
+    m.insert("help.view.example7".into(), "view @web ## Show tree of a teleport savepoint".into());
+
+    m.insert("help.size.example1".into(), "size ## Show current directory size".into());
+
+    m.insert("help.size.example2".into(), "size ../src ## Show size of another directory".into());
+
+    m.insert("help.size.example3".into(), "size -p C:\\code\\project ## Show size of a specific path".into());
+
+    m.insert("help.size.example4".into(), "size @web --care -t ## Care mode with elapsed time for a savepoint".into());
 
     m.insert("help.report.example1".into(), "report txt ## Generate TXT report".into());
 
@@ -4864,6 +4949,8 @@ pub fn build_map() -> HashMap<String, String> {
 
     m.insert("misc.size.human_label".into(), "Human:".into());
 
+    m.insert("misc.size.path_label".into(), "Path:".into());
+
     m.insert("misc.size.time_label".into(), "Time:".into());
 
     m.insert("misc.size.title".into(), "Current Directory Size".into());
@@ -5069,6 +5156,8 @@ pub fn build_map() -> HashMap<String, String> {
     m.insert("msg.showcg.label_threads".into(), "Threads:".into());
 
     m.insert("msg.showcg.label_watcher".into(), "Watcher:".into());
+
+    m.insert("msg.showcg.label_dir_view".into(), "Dir View:".into());
 
     m.insert("msg.showcg.title".into(), "Current Configuration".into());
 
@@ -5290,6 +5379,40 @@ pub fn build_map() -> HashMap<String, String> {
 
     m.insert("ntpkg.npm_not_detected".into(), "Node.js/npm not detected.".into());
 
+    m.insert("ntpkg.npm_section_node_first".into(), "  ── Install Node.js first ──".into());
+
+    m.insert("ntpkg.npm_node_found_at".into(), "  ✓ Node.js found at: {}".into());
+
+    m.insert("ntpkg.npm_node_not_found".into(), "  ✗ Node.js not found".into());
+
+    m.insert("ntpkg.npm_install_via_pkg".into(), "  Install via pkg:".into());
+
+    m.insert("ntpkg.npm_install_via_ntpkg".into(), "  Install via ntpkg:".into());
+
+    m.insert("ntpkg.npm_ntpkg_cmd".into(), "    ntpkg install {}".into());
+
+    m.insert("ntpkg.npm_cmd".into(), "    npm i -g {}".into());
+
+    m.insert("ntpkg.npm_or_download_nodejs".into(), "  Or download from: https://nodejs.org".into());
+
+    m.insert("ntpkg.npm_or_fnm_nvm_volta".into(), "  Or install via fnm/nvm/volta".into());
+
+    m.insert("ntpkg.npm_found_at".into(), "  ✓ npm found at: {}".into());
+
+    m.insert("ntpkg.npm_not_found".into(), "  ✗ npm not found".into());
+
+    m.insert("ntpkg.npm_then_run".into(), "  Then run:".into());
+
+    m.insert("ntpkg.npm_then_rerun".into(), "  Then re-run:".into());
+
+    m.insert("ntpkg.npm_bin_not_in_path".into(), "npm global bin not found in PATH ({})".into());
+
+    m.insert("ntpkg.path_add_label".into(), "  Add to PATH:".into());
+
+    m.insert("ntpkg.npm_install_section".into(), "  ── Install {} ──".into());
+
+    m.insert("ntpkg.npm_run_cmd_label".into(), "  Run this command:".into());
+
     m.insert("ntpkg.ntpx_usage".into(), "Usage: ntpx <package> [binary] [args...]".into());
 
     m.insert("ntpkg.package_count".into(), "{} packages".into());
@@ -5304,7 +5427,11 @@ pub fn build_map() -> HashMap<String, String> {
 
     m.insert("ntpkg.skip_register".into(), "Skipped registering {} with ntpkg.".into());
 
-    m.insert("ntpkg.termux_hint".into(), "On Termux, prefer installing via pkg (linux-aarch64 builds are glibc-linked): pkg install {}".into());
+    m.insert("ntpkg.termux_use_pkg".into(), "On Termux, install via pkg instead of ntpkg:".into());
+
+    m.insert("ntpkg.termux_cmd".into(), "    pkg install {}".into());
+
+    m.insert("ntpkg.termux_no_pkg".into(), "No Termux pkg package available for '{}'.".into());
 
     m.insert("ntpkg.src_act".into(), "act - Run GitHub Actions locally".into());
 
@@ -5650,6 +5777,64 @@ pub fn build_map() -> HashMap<String, String> {
 
     m.insert("report.saved_to".into(), "Report saved to: {}".into());
 
+    m.insert("scr.calling_not_allowed".into(), "Nested scr calls are not allowed inside a script".into());
+
+    m.insert("scr.cmd_failed".into(), "command failed".into());
+
+    m.insert("scr.completed".into(), "Script '{}' completed successfully ({} commands)".into());
+
+    m.insert("scr.continue_warn".into(), "Continuing after error at line {}".into());
+
+    m.insert("scr.desc_args".into(), " $1..$9, $@ Positional script arguments".into());
+
+    m.insert("scr.desc_force".into(), " @ <cmd> Force a system command (bypass ntc builtins)".into());
+
+    m.insert("scr.desc_interp".into(), " $var / ${var} / ${var:-default} Variable interpolation".into());
+
+    m.insert("scr.desc_set".into(), " set NAME = value Define a variable".into());
+
+    m.insert("scr.done_errors".into(), "Script '{}' finished with {} error(s)".into());
+
+    m.insert("scr.error_at".into(), "Error at {}:{} \u{2014} {}".into());
+
+    m.insert("scr.executing".into(), "[{}] Executing: {}".into());
+
+    m.insert("scr.failed_abort".into(), "Script '{}' aborted at line {} ({} error(s))".into());
+
+    m.insert("scr.help_continue".into(), " scr -c <file.ntc> [args...] Continue after errors".into());
+
+    m.insert("scr.help_help".into(), " scr help Show this help".into());
+
+    m.insert("scr.help_init".into(), " scr init [name] Create a script template".into());
+
+    m.insert("scr.help_ls".into(), " scr ls List *.ntc scripts in the current directory".into());
+
+    m.insert("scr.help_run".into(), " scr <file.ntc> [args...] Run an automation script".into());
+
+    m.insert("scr.help_title".into(), "scr \u{2014} ntc automation script runner".into());
+
+    m.insert("scr.help_usage".into(), "Usage:".into());
+
+    m.insert("scr.init_created".into(), "Created template {}".into());
+
+    m.insert("scr.init_exists".into(), "{} already exists".into());
+
+    m.insert("scr.ls_empty".into(), "No *.ntc scripts found in {}".into());
+
+    m.insert("scr.ls_title".into(), "AUTOMATION SCRIPTS:".into());
+
+    m.insert("scr.no_commands".into(), "{} contains no commands to run".into());
+
+    m.insert("scr.not_found".into(), "Script not found: {} ({})".into());
+
+    m.insert("scr.start".into(), "Running script {}...".into());
+
+    m.insert("scr.syscmd".into(), "Executing: {}".into());
+
+    m.insert("scr.syscmd_exit".into(), "Command exited with code: {}".into());
+
+    m.insert("scr.syscmd_terminated".into(), "Command terminated (Ctrl+C)".into());
+
     m.insert("status.none".into(), "none".into());
 
     m.insert("status.off".into(), "OFF".into());
@@ -5932,7 +6117,147 @@ pub fn build_map() -> HashMap<String, String> {
 
     m.insert("help.tmprt.example4".into(), "tmprt city Bangkok ## Set default city".into());
 
+    m.insert("help.git.title".into(), "GIT INTEGRATION COMMANDS:".into());
+
+    m.insert("help.git.status".into(), "git status | st ## Pretty-printed repo status".into());
+
+    m.insert("help.git.branch".into(), "git branch | b ## List branches (current highlighted)".into());
+
+    m.insert("help.git.log".into(), "git log | l ## Colored recent commit log".into());
+
+    m.insert("help.git.diff".into(), "git diff ## Show working tree diff".into());
+
+    m.insert("help.git.passthrough".into(), "git <any> ## All other git subcommands pass through".into());
+
+    m.insert("help.git.example1".into(), "git status ## Show branch + staged/unstaged/untracked".into());
+
+    m.insert("help.git.example2".into(), "git branch -a ## List all branches (passthrough)".into());
+
+    m.insert("help.git.example3".into(), "git commit -am \"msg\" ## Normal git flow (passthrough)".into());
+
+    m.insert("help.config.git".into(), "config git ON|OFF ## Enable/disable git integration (prompt + symbols)".into());
+
+    m.insert("help.config.dir_view".into(), "config dir_view ON|OFF ## Show/hide directory tree in shell".into());
+
+    m.insert("git.no_git_binary".into(), "Git is not installed. Run `ntpkg install git` to install it.".into());
+
+    m.insert("git.not_repo".into(), "Not a git repository (or any of the parent directories).".into());
+
+    m.insert("git.executing".into(), "Executing: {}".into());
+
+    m.insert("git.completed".into(), "git command completed.".into());
+
+    m.insert("git.exit_code".into(), "Command exited with code: {}".into());
+
+    m.insert("git.terminated".into(), "Command terminated.".into());
+
+    m.insert("git.failed".into(), "Failed to execute command: {}".into());
+
+    m.insert("git.checking_status".into(), "Checking status".into());
+
+    m.insert("git.status_failed".into(), "Could not read git status.".into());
+
+    m.insert("git.branch_header".into(), "On branch".into());
+
+    m.insert("git.upstream".into(), "tracking {}".into());
+
+    m.insert("git.ahead".into(), "ahead {}".into());
+
+    m.insert("git.behind".into(), "behind {}".into());
+
+    m.insert("git.detached_header".into(), "Detached HEAD".into());
+
+    m.insert("git.section_conflicts".into(), "Unmerged paths:".into());
+
+    m.insert("git.section_staged".into(), "Changes to be committed:".into());
+
+    m.insert("git.section_unstaged".into(), "Changes not staged for commit:".into());
+
+    m.insert("git.section_untracked".into(), "Untracked files:".into());
+
+    m.insert("git.clean".into(), "Working tree clean.".into());
+
+    m.insert("git.branch_failed".into(), "Could not list branches.".into());
+
+    m.insert("git.log_failed".into(), "Could not read git log.".into());
+
+    m.insert("git.log_empty".into(), "No commits found.".into());
+
+    m.insert("git.help_title".into(), "GIT INTEGRATION:".into());
+
+    m.insert("git.help_status".into(), "git status ## Show branch + staged/unstaged/untracked".into());
+
+    m.insert("git.help_branch".into(), "git branch ## List branches".into());
+
+    m.insert("git.help_log".into(), "git log ## Recent colored commits".into());
+
+    m.insert("git.help_diff".into(), "git diff ## Working tree diff".into());
+
+    m.insert("git.help_passthrough".into(), "git <any> ## Everything else passes to real git".into());
+
+    m.insert("git.examples_header".into(), "EXAMPLES:".into());
+
+    m.insert("git.help_example1".into(), "git status".into());
+
+    m.insert("git.help_example2".into(), "git checkout main".into());
+
+    m.insert("msg.setGit.status".into(), "Git integration is: {}".into());
+
+    m.insert("msg.setGit.on".into(), "Git integration enabled.".into());
+
+    m.insert("msg.setGit.off".into(), "Git integration disabled.".into());
+
+    m.insert("msg.setGit.error".into(), "Usage: config git ON|OFF".into());
+
+    m.insert("msg.setDV.status".into(), "Dir view is: {}".into());
+
+    m.insert("msg.setDV.on".into(), "Dir view enabled.".into());
+
+    m.insert("msg.setDV.off".into(), "Dir view disabled.".into());
+
+    m.insert("msg.setDV.error".into(), "Usage: config dir_view ON|OFF".into());
+
     m.insert("cmd.tmprt.unknown_sub".into(), "Unknown tmprt subcommand: {}".into());
+
+    m.insert("cmd.spec.other".into(), "Other".into());
+
+    m.insert("cmd.spec.title".into(), "SYSTEM SPECIFICATIONS".into());
+
+    m.insert("cmd.spec.cpu".into(), "CPU".into());
+
+    m.insert("cmd.spec.vendor".into(), "Vendor".into());
+
+    m.insert("cmd.spec.generation".into(), "Generation".into());
+
+    m.insert("cmd.spec.model".into(), "Model".into());
+
+    m.insert("cmd.spec.cores".into(), "Cores / Threads".into());
+
+    m.insert("cmd.spec.gpu".into(), "GPU".into());
+
+    m.insert("cmd.spec.ram".into(), "RAM".into());
+
+    m.insert("cmd.spec.storage".into(), "Storage".into());
+
+    m.insert("cmd.spec.total".into(), "Total".into());
+
+    m.insert("cmd.spec.os".into(), "OS".into());
+
+    m.insert("cmd.spec.manufacturer".into(), "Manufacturer".into());
+
+    m.insert("cmd.spec.computer_model".into(), "Computer Model".into());
+
+    m.insert("cmd.spec.serial".into(), "Serial Number".into());
+
+    m.insert("cmd.spec.hostname".into(), "Hostname".into());
+
+    m.insert("cmd.spec.kernel".into(), "Kernel".into());
+
+    m.insert("cmd.spec.uptime".into(), "Uptime".into());
+
+    m.insert("cmd.spec.unknown".into(), "Unknown".into());
+
+    m.insert("cmd.spec.custom".into(), "Custom".into());
 
     m.insert("cmd.tmprt.usage_title".into(), "Usage:".into());
 

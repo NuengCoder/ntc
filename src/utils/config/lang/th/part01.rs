@@ -21,7 +21,7 @@ pub fn fill(m: &mut HashMap<String, String>) {
     m.insert("alias.ral.export_select_cmd".into(), " ral export --select <ชื่อ> เลือก alias เพื่อส่งออกไปยัง <ชื่อ>.ntc.ral".into());
     m.insert("alias.ral.file_exists".into(), "ไฟล์มีอยู่แล้ว: {}".into());
     m.insert("alias.ral.import_cmd".into(), " ral import <ไฟล์> นำเข้า alias จากไฟล์ .ntc.ral".into());
-    m.insert("alias.ral.info_cmd".into(), " ral info <ชื่อ> แสดงรายละเอียด alias".into());
+    m.insert("alias.ral.info_cmd".into(), " ral info <ชื่อ> [--edit] แสดงรายละเอียด alias (--edit คัดลอกคำสั่งแก้ไขไปยังคลิปบอร์ด)".into());
     m.insert("alias.ral.info_command".into(), "คำสั่ง".into());
     m.insert("alias.ral.info_name".into(), "ชื่อ".into());
     m.insert("alias.ral.info_none".into(), "ไม่มี".into());
@@ -30,6 +30,8 @@ pub fn fill(m: &mut HashMap<String, String>) {
     m.insert("alias.ral.info_source_global".into(), "global".into());
     m.insert("alias.ral.info_source_local".into(), "local (ntconfig.toml)".into());
     m.insert("alias.ral.info_title".into(), "\u{1F4CC} ข้อมูล Alias".into());
+    m.insert("alias.ral.info_edit_copied".into(), "คัดลอกคำสั่งแก้ไขไปยังคลิปบอร์ดแล้ว:".into());
+    m.insert("alias.ral.info_edit_hint".into(), "วางมัน ปรับแก้คำสั่ง แล้วกด Enter.".into());
     m.insert("alias.ral.invalid_name".into(), "ชื่อ alias ไม่ถูกต้อง: '{}'".into());
     m.insert("alias.ral.invalid_suffix".into(), "{} (ไม่ถูกต้อง)".into());
     m.insert("alias.ral.list_cmd".into(), " ral list แสดง alias ทั้งหมด".into());
@@ -61,7 +63,7 @@ pub fn fill(m: &mut HashMap<String, String>) {
     m.insert("alias.ral.usage_export".into(), "การใช้งาน: ral export --all <ชื่อ> | ral export --select <ชื่อ>".into());
     m.insert("alias.ral.usage_hint".into(), "การใช้งาน: <alias> หรือ <alias>(<arg>) สำหรับ alias แบบมีพารามิเตอร์".into());
     m.insert("alias.ral.usage_import".into(), "การใช้งาน: ral import <ไฟล์>".into());
-    m.insert("alias.ral.usage_info".into(), "การใช้งาน: ral info <alias>".into());
+    m.insert("alias.ral.usage_info".into(), "การใช้งาน: ral info <alias> [--edit]".into());
     m.insert("alias.ral.usage_rm".into(), "การใช้งาน: ral rm <ชื่อ>[, <ชื่อ>, ...]".into());
     m.insert("alias.ral.usage_rnm".into(), "การใช้งาน: ral rnm <ชื่อเก่า> to <ชื่อใหม่>".into());
     m.insert("alias.ral.usage_with_run".into(), "การใช้งานกับ run:".into());

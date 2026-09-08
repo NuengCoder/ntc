@@ -21,6 +21,15 @@ pub fn fill(m: &mut HashMap<String, String>) {
     m.insert("help.report.txtc".into(), "txtc <file> ## คัดลอกเนื้อหาไฟล์ไปยังคลิปบอร์ด".into());
     m.insert("help.report.txtf".into(), "txtf <file> ## แสดงเนื้อหาไฟล์".into());
     m.insert("help.report.xlsx".into(), "report xlsx [path] ## สร้างรายงาน XLSX (พร้อมการวิเคราะห์การอ้างอิง)".into());
+    m.insert("help.scr.continue".into(), "scr -c <file.ntc> [args...] ## เรียกสคริปต์ ไปต่อหลังเกิดข้อผิดพลาด".into());
+    m.insert("help.scr.example1".into(), "scr deploy.ntc ## เรียกใช้ deploy.ntc".into());
+    m.insert("help.scr.example2".into(), "scr build.ntc dev prod ## ส่ง args $1=dev, $2=prod".into());
+    m.insert("help.scr.example3".into(), "scr -c setup.ntc ## เรียกใช้และไปต่อหลังข้อผิดพลาด".into());
+    m.insert("help.scr.help".into(), "scr help ## แสดงการใช้งาน scr".into());
+    m.insert("help.scr.init".into(), "scr init [name] ## สร้างเทมเพลตสคริปต์".into());
+    m.insert("help.scr.ls".into(), "scr ls ## แสดงรายชื่อ *.ntc ในไดเรกทอรีปัจจุบัน".into());
+    m.insert("help.scr.run".into(), "scr <file.ntc> [args...] ## เรียกใช้สคริปต์อัตโนมัติ".into());
+    m.insert("help.scr.title".into(), "คำสั่ง SCR / สคริปต์อัตโนมัติ:".into());
     m.insert("help.search.ds".into(), "ds <pattern> [-d <n>] ## ค้นหาไดเรกทอรีตามชื่อ".into());
     m.insert("help.search.fs".into(), "fs <pattern> [-d <n>] ## ค้นหาไฟล์ตามชื่อ (สำรองแบบ fuzzy)".into());
     m.insert("help.search.fsc".into(), "fsc <pattern> [-d <n>] ## ค้นหาไฟล์ เลือกหนึ่งเพื่อแสดงและคัดลอกได้".into());
@@ -28,6 +37,11 @@ pub fn fill(m: &mut HashMap<String, String>) {
     m.insert("help.search.gs_interactive".into(), "gs -i <pattern> [-d <n>] ## grep แบบโต้ตอบ (เรียกดูผลลัพธ์ Enter เพื่อเปิด)".into());
     m.insert("help.search.locate".into(), "locate <pattern> [-d <n>] ## ค้นหาทั้งไฟล์และไดเรกทอรี".into());
     m.insert("help.search.title".into(), "คำสั่งค้นหา (SEARCH):".into());
+    m.insert("help.size.care".into(), "size --care ## คำนวณขนาดรวมทุกอย่าง (โหมด care)".into());
+    m.insert("help.size.path".into(), "size -p, --path <path|@tp> ## แสดงขนาดของเส้นทางหรือจุดเทเลพอร์ตที่ระบุ".into());
+    m.insert("help.size.size".into(), "size ## แสดงขนาดไดเรกทอรีปัจจุบัน".into());
+    m.insert("help.size.time".into(), "size -t, --time ## แสดงเวลาที่ใช้".into());
+    m.insert("help.size.title".into(), "คำสั่งขนาด (SIZE):".into());
     m.insert("help.syscmd.any".into(), "<any command> ## NTC ส่งคำสั่งที่ไม่รู้จักไปยังระบบของคุณ".into());
     m.insert("help.syscmd.native".into(), "shell -- echo, git, dir/ls, ping, เป็นต้น".into());
     m.insert("help.syscmd.native2".into(), "ทั้งหมดทำงาน natively ควบคู่กับคำสั่ง NTC.".into());
@@ -79,6 +93,7 @@ pub fn fill(m: &mut HashMap<String, String>) {
     m.insert("help.view.depth".into(), "view -d, --depth <n> ## แสดงต้นไม้พร้อมความลึกกำหนดเอง".into());
     m.insert("help.view.dirsize".into(), "view -ds, --dirsize ## แสดงต้นไม้พร้อมเฉพาะขนาดไดเรกทอรี".into());
     m.insert("help.view.filesize".into(), "view -fs, --filesize ## แสดงต้นไม้พร้อมเฉพาะขนาดไฟล์".into());
+    m.insert("help.view.path".into(), "view -p, --path <path|@tp> ## แสดงต้นไม้ของเส้นทางหรือจุดเทเลพอร์ตที่ระบุ".into());
     m.insert("help.view.size".into(), "view -s, --size ## แสดงต้นไม้พร้อมขนาดไดเรกทอรีและไฟล์".into());
     m.insert("help.view.time".into(), "view --time, -t ## แสดงต้นไม้พร้อมเวลาดำเนินการ".into());
     m.insert("help.view.title".into(), "คำสั่ง View:".into());
@@ -115,6 +130,12 @@ pub fn fill(m: &mut HashMap<String, String>) {
     m.insert("help.view.example3".into(), "view -d 2 ## แสดงต้นไม้พร้อมความลึก 2".into());
     m.insert("help.view.example4".into(), "view --cp ## แสดงต้นไม้และคัดลอกไปยังคลิปบอร์ด".into());
     m.insert("help.view.example5".into(), "view --time ## แสดงต้นไม้พร้อมเวลาดำเนินการ".into());
+    m.insert("help.view.example6".into(), "view -p C:\\code\\project ## แสดงต้นไม้ของเส้นทางที่ระบุ".into());
+    m.insert("help.view.example7".into(), "view @web ## แสดงต้นไม้ของจุดเทเลพอร์ต".into());
+    m.insert("help.size.example1".into(), "size ## แสดงขนาดไดเรกทอรีปัจจุบัน".into());
+    m.insert("help.size.example2".into(), "size ../src ## แสดงขนาดของไดเรกทอรีอื่น".into());
+    m.insert("help.size.example3".into(), "size -p C:\\code\\project ## แสดงขนาดของเส้นทางที่ระบุ".into());
+    m.insert("help.size.example4".into(), "size @web --care -t ## โหมด care พร้อมเวลาที่ใช้สำหรับจุดเทเลพอร์ต".into());
     m.insert("help.report.example1".into(), "report txt ## สร้างรายงาน TXT".into());
     m.insert("help.report.example2".into(), "report html --cp ## คัดลอกรายงาน HTML ไปยังคลิปบอร์ด".into());
     m.insert("help.report.example3".into(), "report pdf ## สร้างรายงาน PDF".into());

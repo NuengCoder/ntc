@@ -25,19 +25,35 @@ pub(crate) fn is_termux() -> bool {
 
 /// Termux `pkg install` name for a runtime whose official linux-aarch64
 /// build is glibc-linked (and thus unreliable on Android/bionic).
+/// Returns `None` for packages with no package available in the official
+/// Termux repos.
 fn termux_pkg_hint(name: &str) -> Option<&'static str> {
     Some(match name {
-        "node" => "nodejs",
         "python" => "python",
+        "node" => "nodejs",
+        "cloudflare" => "cloudflared",
+        "git" => "git",
+        "gh" => "gh",
+        "java" => "openjdk-17",
+        "kotlin" => "kotlin",
         "php" => "php",
+        "zig" => "zig",
+        "go" => "golang",
+        "rust" => "rust",
         "ruby" => "ruby",
         "lua" => "lua54",
-        "dotnet" => "dotnet",
-        "kotlin" => "kotlin",
-        "scala" => "scala",
+        "nim" => "nim",
+        "dotnet" => "dotnet-sdk-10.0",
         "flutter" => "flutter",
-        "java" => "openjdk-17",
-        "docker" => "docker",
+        "kubectl" => "kubectl",
+        "helm" => "helm",
+        "kind" => "kind",
+        "kustomize" => "kustomize",
+        "docker" => "docker-cli",
+        "docker-compose" => "docker-compose",
+        "act" => "act",
+        "scala" => "scala",
+        "sqlite" => "sqlite",
         "ffmpeg" => "ffmpeg",
         "imagemagick" => "imagemagick",
         "tesseract" => "tesseract",
@@ -46,18 +62,23 @@ fn termux_pkg_hint(name: &str) -> Option<&'static str> {
     })
 }
 
-/// Warn when installing a glibc-linked runtime on Termux.
-pub(crate) fn warn_termux_install(name: &str) {
-    if is_termux() {
-        if let Some(pkg) = termux_pkg_hint(name) {
-            print_warning(&t!("ntpkg.termux_hint", pkg));
+/// Print the `pkg install` recommendation for a Termux install.
+pub(crate) fn print_termux_recommendation(name: &str) {
+    match termux_pkg_hint(name) {
+        Some(pkg) => {
+            print_warning(&t!("ntpkg.termux_use_pkg"));
+            print_info(&t!("ntpkg.termux_cmd", pkg));
         }
+        None => print_warning(&t!("ntpkg.termux_no_pkg", name)),
     }
 }
 
 /// Install a language runtime.
 pub fn install_package(name: &str, version: &str) -> Result<()> {
-    warn_termux_install(name);
+    if is_termux() {
+        print_termux_recommendation(name);
+        return Ok(());
+    }
 
     let source = sources::get_source(name, version)
         .ok_or_else(|| anyhow::anyhow!("Unknown package '{name}' or version '{version}'"))?;
@@ -548,4 +569,46 @@ pub fn execute_package(name: &str, binary: &str, args: &[String]) -> Result<i32>
         .with_context(|| format!("Failed to execute {}", binary_path.display()))?;
 
     Ok(status.code().unwrap_or(1))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::termux_pkg_hint;
+
+    #[test]
+    fn termux_hints_cover_all_supported_packages() {
+        let explicit_none = [
+            "swift",
+            "msys2",
+            "devops-tool",
+            "opencode",
+            "mimocode",
+            "kilocode",
+            "freebuff",
+            "omniroute",
+            "vscode",
+            "sqlitestudio",
+        ];
+        for name in super::super::sources::list_supported_languages() {
+            let hint = termux_pkg_hint(name);
+            if explicit_none.contains(&name) {
+                assert!(hint.is_none(), "{name} should have no pkg fallback");
+            } else {
+                assert!(hint.is_some(), "{name} is missing a Termux pkg hint");
+            }
+        }
+    }
+
+    #[test]
+    fn termux_hint_renames() {
+        assert_eq!(termux_pkg_hint("node"), Some("nodejs"));
+        assert_eq!(termux_pkg_hint("go"), Some("golang"));
+        assert_eq!(termux_pkg_hint("lua"), Some("lua54"));
+        assert_eq!(termux_pkg_hint("dotnet"), Some("dotnet-sdk-10.0"));
+        assert_eq!(termux_pkg_hint("docker"), Some("docker-cli"));
+        assert_eq!(termux_pkg_hint("cloudflare"), Some("cloudflared"));
+        assert_eq!(termux_pkg_hint("java"), Some("openjdk-17"));
+        assert_eq!(termux_pkg_hint("msys2"), None);
+        assert_eq!(termux_pkg_hint("opencode"), None);
+    }
 }

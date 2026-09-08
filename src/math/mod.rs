@@ -25,6 +25,25 @@ use self::token::tokenize;
 // ============================================================================
 // Main entry point
 // ============================================================================
+
+/// Returns true if the input looks like a math expression (starts with digit,
+/// dot, paren, or unary +/- followed by a digit/paren/dot).
+pub fn is_math_expression(input: &str) -> bool {
+    let trimmed = input.trim();
+    if trimmed.is_empty() {
+        return false;
+    }
+    let first = trimmed.chars().next().unwrap();
+    if first.is_ascii_digit() || first == '.' || first == '(' {
+        return true;
+    }
+    if (first == '-' || first == '+') && trimmed.len() > 1 {
+        let second = trimmed.chars().nth(1).unwrap();
+        return second.is_ascii_digit() || second == '(' || second == '.';
+    }
+    false
+}
+
 pub fn run(input: &str) -> Result<()> {
     let input = input.trim();
 

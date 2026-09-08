@@ -97,6 +97,9 @@ pub struct NfeState {
     pub find_query: String,
     pub find_results: Vec<FileEntry>,
     pub find_active: bool,
+
+    // Git status: entry name -> status char (M/A/D/?/U)
+    pub git_status: std::collections::HashMap<String, char>,
 }
 
 impl NfeState {
@@ -136,6 +139,7 @@ impl NfeState {
             find_query: String::new(),
             find_results: Vec::new(),
             find_active: false,
+            git_status: std::collections::HashMap::new(),
         };
         s.reload();
         s
@@ -204,6 +208,22 @@ impl NfeState {
         self.scroll = self.scroll.min(self.entries.len().saturating_sub(1));
         self.preview_content.clear();
         self.preview_file = None;
+
+        self.refresh_git_status();
+    }
+
+    fn refresh_git_status(&mut self) {
+        self.git_status.clear();
+        if !crate::config::Config::global_get_git_integration_enabled() {
+            return;
+        }
+        let map = crate::utils::git::status_map(&self.current_dir);
+        for (path, code) in map {
+            if let Some(name) = path.file_name() {
+                self.git_status
+                    .insert(name.to_string_lossy().to_string(), code);
+            }
+        }
     }
 
     pub fn current_entry(&self) -> Option<&FileEntry> {

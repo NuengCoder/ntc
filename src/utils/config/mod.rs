@@ -77,6 +77,10 @@ pub struct Config {
     #[serde(default = "default_autosuggest_enabled")]
     pub autosuggest_enabled: bool,
 
+    /// Whether git integration (prompt branch, browser symbols) is enabled
+    #[serde(default = "default_git_integration_enabled")]
+    pub git_integration_enabled: bool,
+
     /// QSC (Quick Short Command) global hotkey, if configured
     #[serde(default)]
     pub qsc: Option<QscHotkey>,
@@ -99,6 +103,10 @@ pub struct Config {
     /// Default city used by the `tmprt weather` command when none is given
     #[serde(default)]
     pub openweather_default_city: Option<String>,
+
+    /// Whether directory tree view is shown in shell prompt
+    #[serde(default = "default_dir_view_enabled")]
+    pub dir_view_enabled: bool,
 }
 
 // Single source of truth for alias name validation.
@@ -170,6 +178,7 @@ pub fn validate_alias_name(name: &str) -> bool {
         "clip",
         "qsc",
         "tmprt",
+        "git",
     ];
 
     if name.trim().is_empty() || name.contains(' ') {
@@ -206,6 +215,10 @@ fn default_autosuggest_enabled() -> bool {
     true
 }
 
+fn default_git_integration_enabled() -> bool {
+    true
+}
+
 pub const VALID_LANGUAGES: &[&str] = &["english", "thai", "lao", "chinese"];
 
 fn default_language() -> String {
@@ -213,6 +226,10 @@ fn default_language() -> String {
 }
 
 fn default_language_active() -> bool {
+    true
+}
+
+fn default_dir_view_enabled() -> bool {
     true
 }
 
@@ -245,6 +262,7 @@ impl Config {
             file_watcher_enabled: false,
             color_enabled: default_color_enabled(),
             autosuggest_enabled: default_autosuggest_enabled(),
+            git_integration_enabled: default_git_integration_enabled(),
             teleports: HashMap::new(),
             run_aliases: HashMap::new(),
             math_functions: HashMap::new(),
@@ -255,6 +273,7 @@ impl Config {
             ascii_fallback: false,
             openweather_api_key: None,
             openweather_default_city: None,
+            dir_view_enabled: default_dir_view_enabled(),
         }
     }
 

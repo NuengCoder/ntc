@@ -156,3 +156,194 @@ pub fn available_languages() -> Vec<String> {
 
     langs
 }
+
+#[cfg(test)]
+mod tests {
+    use std::collections::HashMap;
+
+    /// Keys referenced by the Termux / npm-guide / cloudflared features.
+    /// Every key must exist in ALL four bundled language packs so that
+    /// non-English users never see a raw key string.
+    const REQUIRED_KEYS: &[&str] = &[
+        // Termux pkg recommendation
+        "ntpkg.termux_use_pkg",
+        "ntpkg.termux_cmd",
+        "ntpkg.termux_no_pkg",
+        // npm guide
+        "ntpkg.npm_section_node_first",
+        "ntpkg.npm_node_found_at",
+        "ntpkg.npm_node_not_found",
+        "ntpkg.npm_install_via_pkg",
+        "ntpkg.npm_install_via_ntpkg",
+        "ntpkg.npm_ntpkg_cmd",
+        "ntpkg.npm_cmd",
+        "ntpkg.npm_or_download_nodejs",
+        "ntpkg.npm_or_fnm_nvm_volta",
+        "ntpkg.npm_found_at",
+        "ntpkg.npm_not_found",
+        "ntpkg.npm_then_run",
+        "ntpkg.npm_then_rerun",
+        "ntpkg.npm_bin_not_in_path",
+        "ntpkg.path_add_label",
+        "ntpkg.npm_install_section",
+        "ntpkg.npm_run_cmd_label",
+        // cloudflared tunnel
+        "cmd.serve.cloudflared_starting",
+        "cmd.serve.cloudflared_missing",
+    ];
+
+    fn assert_all_present(map: HashMap<String, String>, lang: &str) {
+        assert_keys_present(map, lang, REQUIRED_KEYS);
+    }
+
+    fn assert_keys_present(map: HashMap<String, String>, lang: &str, keys: &[&str]) {
+        let missing: Vec<&str> = keys
+            .iter()
+            .copied()
+            .filter(|k| !map.contains_key(*k))
+            .collect();
+        assert!(
+            missing.is_empty(),
+            "{lang} pack is missing keys: {:?}",
+            missing
+        );
+    }
+
+    #[test]
+    fn termux_and_cloudflared_keys_exist_in_all_languages() {
+        assert_all_present(super::en::build_map(), "english");
+        assert_all_present(super::zh::build_map(), "chinese");
+        assert_all_present(super::th::build_map(), "thai");
+        assert_all_present(super::lo::build_map(), "lao");
+    }
+
+    /// Every `scr` script-runner key must exist in all four bundled language packs.
+    const SCR_KEYS: &[&str] = &[
+        "help.scr.continue",
+        "help.scr.example1",
+        "help.scr.example2",
+        "help.scr.example3",
+        "help.scr.help",
+        "help.scr.init",
+        "help.scr.ls",
+        "help.scr.run",
+        "help.scr.title",
+        "scr.calling_not_allowed",
+        "scr.cmd_failed",
+        "scr.completed",
+        "scr.continue_warn",
+        "scr.desc_args",
+        "scr.desc_force",
+        "scr.desc_interp",
+        "scr.desc_set",
+        "scr.done_errors",
+        "scr.error_at",
+        "scr.executing",
+        "scr.failed_abort",
+        "scr.help_continue",
+        "scr.help_help",
+        "scr.help_init",
+        "scr.help_ls",
+        "scr.help_run",
+        "scr.help_title",
+        "scr.help_usage",
+        "scr.init_created",
+        "scr.init_exists",
+        "scr.ls_empty",
+        "scr.ls_title",
+        "scr.no_commands",
+        "scr.not_found",
+        "scr.start",
+        "scr.syscmd",
+        "scr.syscmd_exit",
+        "scr.syscmd_terminated",
+    ];
+
+    #[test]
+    fn scr_keys_exist_in_all_languages() {
+        assert_keys_present(super::en::build_map(), "english", SCR_KEYS);
+        assert_keys_present(super::zh::build_map(), "chinese", SCR_KEYS);
+        assert_keys_present(super::th::build_map(), "thai", SCR_KEYS);
+        assert_keys_present(super::lo::build_map(), "lao", SCR_KEYS);
+    }
+
+    /// Every `git` integration key must exist in all four bundled language packs.
+    const GIT_KEYS: &[&str] = &[
+        "git.ahead",
+        "git.behind",
+        "git.branch_failed",
+        "git.branch_header",
+        "git.checking_status",
+        "git.clean",
+        "git.completed",
+        "git.detached_header",
+        "git.executing",
+        "git.exit_code",
+        "git.failed",
+        "git.help_branch",
+        "git.help_diff",
+        "git.help_example1",
+        "git.help_example2",
+        "git.help_log",
+        "git.help_passthrough",
+        "git.help_status",
+        "git.help_title",
+        "git.examples_header",
+        "git.log_empty",
+        "git.log_failed",
+        "git.no_git_binary",
+        "git.not_repo",
+        "git.section_conflicts",
+        "git.section_staged",
+        "git.section_unstaged",
+        "git.section_untracked",
+        "git.status_failed",
+        "git.terminated",
+        "git.upstream",
+        "editor.git_disabled",
+        "editor.git_no_blame",
+        "editor.git_no_diff",
+        "editor.git_quit_hint",
+        "editor.mode_git_diff",
+        "help.config.git",
+        "help.git.branch",
+        "help.git.diff",
+        "help.git.example1",
+        "help.git.example2",
+        "help.git.example3",
+        "help.git.log",
+        "help.git.passthrough",
+        "help.git.status",
+        "help.git.title",
+        "msg.setGit.error",
+        "msg.setGit.off",
+        "msg.setGit.on",
+        "msg.setGit.status",
+    ];
+
+    #[test]
+    fn git_keys_exist_in_all_languages() {
+        assert_keys_present(super::en::build_map(), "english", GIT_KEYS);
+        assert_keys_present(super::zh::build_map(), "chinese", GIT_KEYS);
+        assert_keys_present(super::th::build_map(), "thai", GIT_KEYS);
+        assert_keys_present(super::lo::build_map(), "lao", GIT_KEYS);
+    }
+
+    /// Every `dir_view` config key must exist in all four bundled language packs.
+    const DIR_VIEW_KEYS: &[&str] = &[
+        "help.config.dir_view",
+        "msg.setDV.status",
+        "msg.setDV.on",
+        "msg.setDV.off",
+        "msg.setDV.error",
+        "msg.showcg.label_dir_view",
+    ];
+
+    #[test]
+    fn dir_view_keys_exist_in_all_languages() {
+        assert_keys_present(super::en::build_map(), "english", DIR_VIEW_KEYS);
+        assert_keys_present(super::zh::build_map(), "chinese", DIR_VIEW_KEYS);
+        assert_keys_present(super::th::build_map(), "thai", DIR_VIEW_KEYS);
+        assert_keys_present(super::lo::build_map(), "lao", DIR_VIEW_KEYS);
+    }
+}

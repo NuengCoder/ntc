@@ -78,6 +78,27 @@ pub(super) fn eval(expr: &Expr, vars: &mut HashMap<String, f64>) -> Result<EvalR
             };
             Ok(EvalResult::Num(result))
         }
+        Expr::PowerTower(base, exp) => {
+            let b = eval(base, vars)?;
+            let e = eval(exp, vars)?;
+            let bv = match b {
+                EvalResult::Num(n) => n,
+                _ => bail!("Power tower requires numbers"),
+            };
+            let ev = match e {
+                EvalResult::Num(n) => n,
+                _ => bail!("Power tower requires numbers"),
+            };
+            let bvi = ev as i64;
+            if bvi < 0 {
+                bail!("Power tower exponent must be non-negative");
+            }
+            let mut result = 1.0;
+            for _ in 0..bvi {
+                result = bv.powf(result);
+            }
+            Ok(EvalResult::Num(result))
+        }
         Expr::Unary(expr) => {
             let v = eval(expr, vars)?;
             match v {

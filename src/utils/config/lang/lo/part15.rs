@@ -30,6 +30,7 @@ pub fn fill(m: &mut HashMap<String, String>) {
     m.insert("misc.size.bytes_label".into(), "Bytes:".into());
     m.insert("misc.size.calculating".into(), "ກຳລັງຄິດໄລ່ຂະໜາດໄດເຣັກທໍຣີ...".into());
     m.insert("misc.size.human_label".into(), "Human:".into());
+    m.insert("misc.size.path_label".into(), "ເສັ້ນທາງ:".into());
     m.insert("misc.size.time_label".into(), "Time:".into());
     m.insert("misc.size.title".into(), "ຂະໜາດໄດເຣັກທໍຣີປັດຈຸບັນ".into());
     m.insert("misc.tp.example_info".into(), "ຕົວຢ່າງ: tp info my_project".into());
@@ -129,6 +130,8 @@ pub fn fill(m: &mut HashMap<String, String>) {
     m.insert("msg.showcg.label_output_path".into(), "Output Path:".into());
     m.insert("msg.showcg.label_threads".into(), "Threads:".into());
     m.insert("msg.showcg.label_watcher".into(), "Watcher:".into());
+
+    m.insert("msg.showcg.label_dir_view".into(), "Dir View:".into());
     m.insert("msg.showcg.title".into(), "ການຕັ້ງຄ່າປັດຈຸບັນ".into());
     m.insert("msg.size.bytes_label".into(), "Bytes:".into());
     m.insert("msg.size.human_label".into(), "Human:".into());

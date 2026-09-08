@@ -18,7 +18,7 @@ alias.ral.export_name_empty	Export name cannot be empty.
 alias.ral.export_select_cmd	 ral export --select <name> Select aliases to export to <name>.ntc.ral
 alias.ral.file_exists	File already exists: {}
 alias.ral.import_cmd	 ral import <file> Import aliases from a .ntc.ral file
-alias.ral.info_cmd	 ral info <name> Show alias details
+alias.ral.info_cmd	 ral info <name> [--edit] Show alias details (--edit copies the edit command to clipboard)
 alias.ral.info_command	Command
 alias.ral.info_name	Name
 alias.ral.info_none	none
@@ -27,6 +27,8 @@ alias.ral.info_source	Source
 alias.ral.info_source_global	global
 alias.ral.info_source_local	local (ntconfig.toml)
 alias.ral.info_title	\u{1F4CC} Alias Info
+alias.ral.info_edit_copied	Edit command copied to clipboard:
+alias.ral.info_edit_hint	Paste it, tweak the command, then press Enter.
 alias.ral.invalid_name	Invalid alias name: '{}'
 alias.ral.invalid_suffix	{} (INVALID)
 alias.ral.list_cmd	 ral list Show all aliases
@@ -58,7 +60,7 @@ alias.ral.usage_edit	Usage: ral edit <name> <new_command>
 alias.ral.usage_export	Usage: ral export --all <name> | ral export --select <name>
 alias.ral.usage_hint	Usage: <alias> or <alias>(<arg>) for parameterised aliases
 alias.ral.usage_import	Usage: ral import <file>
-alias.ral.usage_info	Usage: ral info <alias>
+alias.ral.usage_info	Usage: ral info <alias> [--edit]
 alias.ral.usage_rm	Usage: ral rm <name>[, <name>, ...]
 alias.ral.usage_rnm	Usage: ral rnm <old_name> to <new_name>
 alias.ral.usage_with_run	Usage with run:
@@ -426,6 +428,7 @@ cli.known_flag.setO	--setO [path] Show or set output directory
 cli.known_flag.setT	--setT [threads] Show or set thread count
 cli.known_flag.showcg	--showcg Show current configuration overview
 cli.known_flag.size	--size Show current directory size
+cli.known_flag.path	--path <path|@tp> Target path or teleport savepoint (use with --size or --view)
 cli.known_flag.teleport_at	ntc @<name> Launch and teleport to savepoint
 cli.known_flag.tp_add	--tp-add <name> Save current directory as teleport point
 cli.known_flag.tp_list	--tp-list List all teleport points
@@ -476,6 +479,7 @@ cli.run.help_math	Evaluate a math expression
 cli.run.help_mode	Switch between normal and admin mode
 cli.run.help_modn	modn
 cli.run.help_output	Output filename for report
+cli.run.help_path	Target path or teleport savepoint (use with --size or --view)
 cli.run.help_ral_export_all	Export all run aliases to <name>.ntc.ral
 cli.run.help_ral_export_select	Select run aliases to export to <name>.ntc.ral
 cli.run.help_ral_import	Import run aliases from .ntc.ral file
@@ -931,8 +935,11 @@ cmd.report.skipped_unsupported	Skipped (not support format): {}
 cmd.report.time_label	Time:
 cmd.report.title	report — Generate project reports
 cmd.report.unknown_option	Unknown view option: {}
-cmd.report.view_usage	Usage: view [-s|--size] [-c|--cp] [--care] [-t|--time] [-d|--depth <n>]
+cmd.report.view_usage	Usage: view [-s|--size] [-c|--cp] [--care] [-t|--time] [-d|--depth <n>] [-p|--path <path|@tp>]
 cmd.serve.db_title	Database:
+cmd.target.not_dir	'{}' is not a directory
+cmd.target.not_found	Path '{}' not found
+cmd.target.tp_not_found	Savepoint '{}' not found
 cmd.serve.example_default	  serve                  HTTP on port 8080
 cmd.serve.example_port	  serve 3000             HTTP on port 3000
 cmd.serve.example_spa	  serve --spa            SPA fallback for React Router
@@ -955,6 +962,8 @@ cmd.serve.options_title	Options:
 cmd.serve.stopped	Server stopped.
 cmd.serve.unknown_option	Unknown: {}
 cmd.serve.usage_title	Usage:
+cmd.serve.cloudflared_starting	Cloudflared tunnel starting (PID {})
+cmd.serve.cloudflared_missing	cloudflared not found: {}. Install: {}
 cmd.smtp.build_fail	Failed to build email message
 cmd.smtp.create_one_hint	  Create one: {} -i <server> -p <port> -u <user> -pwd <password>
 cmd.smtp.create_syntax	smtp -i <server> -p <port> -u <user> -pwd <password>
@@ -1102,6 +1111,17 @@ cmd.upgrade.tmpdir_fail	Failed to create temp directory: {}
 cmd.upgrade.unsupported_platform	Unsupported platform: {}
 cmd.upgrade.updated	ntc has been updated to v{}!
 cmd.upgrade.write_fail	Failed to write downloaded file
+cmd.upgrade.no_arch_asset	No prebuilt ntc binary for this architecture ({}). Build from source: cargo build --release
+cmd.upgrade.no_asset_match	No release asset matches platform key '{}'
+cmd.upgrade.extracting	Extracting binary...
+cmd.upgrade.extract_fail	Failed to read/parse downloaded archive: {}
+cmd.upgrade.no_file_in_archive	Could not find '{}' inside the downloaded archive
+cmd.upgrade.no_installer_asset	Could not find a Windows installer asset to update ntc
+cmd.upgrade.installer_launch	Launching the ntc installer (silent)...
+cmd.upgrade.installer_launch_fail	Failed to launch the installer: {}
+cmd.upgrade.home_fail	Could not determine your home directory
+cmd.upgrade.installed_user_dir	ntc installed to {} (user install, no admin/sudo required).
+cmd.upgrade.path_exported	PATH updated in {}
 config.general.autosuggest	 config autosuggest ON|OFF Show/set autosuggest
 config.general.color	 config color ON|OFF Show/set color
 config.general.depth	 config depth [n] Show/set max depth (1-20)
@@ -1382,6 +1402,7 @@ editor.mode_cleared_cursors	Cleared extra cursors
 editor.mode_command	[Command]
 editor.mode_exited_multi	Exited multi-cursor mode
 editor.mode_finder	[Finder]
+editor.mode_encoding	[Encoding]
 editor.mode_gosc	[Gosc]
 editor.mode_help	[Help]
 editor.mode_hex	[HEX]
@@ -1459,6 +1480,12 @@ editor.run_missing	run: missing command
 editor.run_terminated	Process terminated
 editor.save_auto_error	Auto-save error: {}
 editor.save_failed	Save failed: {}
+editor.encoding_changed	Encoding changed
+editor.enc_title	Encoding
+editor.enc_hint	↑↓ select · Enter confirm · Esc cancel
+editor.hint_encoding	Encoding:
+editor.encoding_reload_error	Reload failed: {}
+editor.encoding_applied_on_save	applied on next save
 editor.save_prompt	Save file [Y|N]?
 editor.saved	Saved \u{2713}
 editor.saved_full	 Saved ✓
@@ -1566,7 +1593,7 @@ help.alias.edit	ral edit <name> \"<cmd>\" ## Update alias
 help.alias.export_all	ral export --all <name> ## Export all aliases to <name>.ntc.ral
 help.alias.export_select	ral export --select <name> ## Select aliases to export
 help.alias.import	ral import <file> ## Import aliases from .ntc.ral file
-help.alias.info	ral info <name> ## Show alias details
+help.alias.info	ral info <name> [--edit] ## Show alias details (--edit: copy edit command to clipboard)
 help.alias.list	ral list ## Show all aliases
 help.alias.make	ral make [name] ## Create alias template in CWD
 help.alias.rm	ral rm <name>[, ...] ## Remove alias(es)
@@ -1712,6 +1739,7 @@ help.network.http	http <method> <url> ## HTTP API client (-H, -d, --json, -q, -a
 help.network.ping	ping <host> ## ICMP ping (-c count)
 help.network.serve	serve [port] ## HTTP file server (--https, --tunnel, --spa, --web-dir)
 help.network.smtp	smtp ## SMTP email client (--id, -i, -u, -pwd, -s, -b, -f, --to)
+help.network.spec	spec ## Show computer/system specifications (CPU, GPU, RAM, storage, OS, serial)
 help.network.sys	sys, top ## Live system monitor (CPU, memory, disk, processes)
 help.network.title	SYSTEM & NETWORK COMMANDS:
 help.network.up	up <file> <url> ## Upload file (--post, -H, -d)
@@ -1783,6 +1811,15 @@ help.report.txt	report txt [path] ## Generate TXT report
 help.report.txtc	txtc <file> ## Copy file content to clipboard
 help.report.txtf	txtf <file> ## Display file content
 help.report.xlsx	report xlsx [path] ## Generate XLSX report (with dependency analysis)
+help.scr.continue	scr -c <file.ntc> [args...] ## Run script, continue after errors
+help.scr.example1	scr deploy.ntc ## Run deploy.ntc
+help.scr.example2	scr build.ntc dev prod ## Pass args $1=dev, $2=prod
+help.scr.example3	scr -c setup.ntc ## Run and continue after errors
+help.scr.help	scr help ## Show scr usage
+help.scr.init	scr init [name] ## Create a script template
+help.scr.ls	scr ls ## List *.ntc scripts in the current directory
+help.scr.run	scr <file.ntc> [args...] ## Run an automation script
+help.scr.title	SCR / AUTOMATION SCRIPT COMMANDS:
 help.search.ds	ds <pattern> [-d <n>] ## Search directories by name
 help.search.fs	fs <pattern> [-d <n>] ## Search files by name (fuzzy fallback)
 help.search.fsc	fsc <pattern> [-d <n>] ## Search files, pick one to display & optionally copy
@@ -1790,6 +1827,11 @@ help.search.gs	gs <pattern> [-d <n>] ## Search file contents (simple grep)
 help.search.gs_interactive	gs -i <pattern> [-d <n>] ## Interactive grep (browse results, Enter to open)
 help.search.locate	locate <pattern> [-d <n>] ## Search both files and directories
 help.search.title	SEARCH COMMANDS:
+help.size.care	size --care ## Calculate size including everything (care mode)
+help.size.path	size -p, --path <path|@tp> ## Show size of a specific path or teleport savepoint
+help.size.size	size ## Show current directory size
+help.size.time	size -t, --time ## Show elapsed time
+help.size.title	SIZE COMMAND:
 help.syscmd.any	<any command> ## NTC passes unknown commands to your system
 help.syscmd.native	shell -- echo, git, dir/ls, ping, etc.
 help.syscmd.native2	all run natively alongside NTC commands.
@@ -1841,6 +1883,7 @@ help.view.cp	view -c, --cp ## Show tree and copy to clipboard
 help.view.depth	view -d, --depth <n> ## Show tree with custom depth
 help.view.dirsize	view -ds, --dirsize ## Show tree with directory sizes only
 help.view.filesize	view -fs, --filesize ## Show tree with file sizes only
+help.view.path	view -p, --path <path|@tp> ## Show tree of a specific path or teleport savepoint
 help.view.size	view -s, --size ## Show tree with dir and file sizes
 help.view.time	view --time, -t ## Show tree with execution time
 help.view.title	VIEW COMMAND:
@@ -1877,6 +1920,12 @@ help.view.example2	view --size ## Show tree with sizes
 help.view.example3	view -d 2 ## Show tree with depth 2
 help.view.example4	view --cp ## Show tree and copy to clipboard
 help.view.example5	view --time ## Show tree with execution time
+help.view.example6	view -p C:\\code\\project ## Show tree of a specific path
+help.view.example7	view @web ## Show tree of a teleport savepoint
+help.size.example1	size ## Show current directory size
+help.size.example2	size ../src ## Show size of another directory
+help.size.example3	size -p C:\\code\\project ## Show size of a specific path
+help.size.example4	size @web --care -t ## Care mode with elapsed time for a savepoint
 help.report.example1	report txt ## Generate TXT report
 help.report.example2	report html --cp ## Copy HTML report to clipboard
 help.report.example3	report pdf ## Generate PDF report
@@ -2155,6 +2204,7 @@ misc.show_env.venv_header	\u{1F40D} Python Virtual Environment:
 misc.size.bytes_label	Bytes:
 misc.size.calculating	Calculating directory size...
 misc.size.human_label	Human:
+misc.size.path_label	Path:
 misc.size.time_label	Time:
 misc.size.title	Current Directory Size
 misc.tp.example_info	Example: tp info my_project
@@ -2361,6 +2411,23 @@ ntpkg.now_using	Now using {} {}
 ntpkg.npm_bin_in_path	npm global bin is in PATH
 ntpkg.npm_detected	Node.js and npm detected
 ntpkg.npm_not_detected	Node.js/npm not detected.
+ntpkg.npm_section_node_first	  ── Install Node.js first ──
+ntpkg.npm_node_found_at	  ✓ Node.js found at: {}
+ntpkg.npm_node_not_found	  ✗ Node.js not found
+ntpkg.npm_install_via_pkg	  Install via pkg:
+ntpkg.npm_install_via_ntpkg	  Install via ntpkg:
+ntpkg.npm_ntpkg_cmd	    ntpkg install {}
+ntpkg.npm_cmd	    npm i -g {}
+ntpkg.npm_or_download_nodejs	  Or download from: https://nodejs.org
+ntpkg.npm_or_fnm_nvm_volta	  Or install via fnm/nvm/volta
+ntpkg.npm_found_at	  ✓ npm found at: {}
+ntpkg.npm_not_found	  ✗ npm not found
+ntpkg.npm_then_run	  Then run:
+ntpkg.npm_then_rerun	  Then re-run:
+ntpkg.npm_bin_not_in_path	npm global bin not found in PATH ({})
+ntpkg.path_add_label	  Add to PATH:
+ntpkg.npm_install_section	  ── Install {} ──
+ntpkg.npm_run_cmd_label	  Run this command:
 ntpkg.ntpx_usage	Usage: ntpx <package> [binary] [args...]
 ntpkg.package_count	{} packages
 ntpkg.php_skip_register	Skipped registering PHP with ntpkg.
@@ -2368,7 +2435,9 @@ ntpkg.removed_msg	{} {} removed
 ntpkg.select_jdk_version	Select JDK {} version
 ntpkg.select_version	Select {} version
 ntpkg.skip_register	Skipped registering {} with ntpkg.
-ntpkg.termux_hint	On Termux, prefer installing via pkg (linux-aarch64 builds are glibc-linked): pkg install {}
+ntpkg.termux_use_pkg	On Termux, install via pkg instead of ntpkg:
+ntpkg.termux_cmd	    pkg install {}
+ntpkg.termux_no_pkg	No Termux pkg package available for '{}'.
 ntpkg.src_act	act - Run GitHub Actions locally
 ntpkg.src_cloudflare	cloudflared - Cloudflare Tunnel client
 ntpkg.src_devops_tool	Azure DevOps CLI tool
@@ -2376,6 +2445,7 @@ ntpkg.src_docker	Docker - Container runtime
 ntpkg.src_docker_compose	Docker Compose - Multi-container orchestration
 ntpkg.src_dotnet	.NET SDK - Cross-platform development
 ntpkg.src_ffmpeg	FFmpeg - Media converter
+ntpkg.src_freebuff	Freebuff - Free AI coding agent
 ntpkg.src_flutter	Flutter - UI toolkit
 ntpkg.src_gh	GitHub CLI - GitHub from terminal
 ntpkg.src_git	Git - Version control
@@ -2503,6 +2573,35 @@ report.saved_html	\u{2705} HTML report saved to: {}
 report.saved_json	\u{2705} JSON report saved to: {}
 report.saved_md	\u{2705} Markdown report saved to: {}
 report.saved_to	Report saved to: {}
+scr.calling_not_allowed	Nested scr calls are not allowed inside a script
+scr.cmd_failed	command failed
+scr.completed	Script '{}' completed successfully ({} commands)
+scr.continue_warn	Continuing after error at line {}
+scr.desc_args	 $1..$9, $@ Positional script arguments
+scr.desc_force	 @ <cmd> Force a system command (bypass ntc builtins)
+scr.desc_interp	 $var / ${var} / ${var:-default} Variable interpolation
+scr.desc_set	 set NAME = value Define a variable
+scr.done_errors	Script '{}' finished with {} error(s)
+scr.error_at	Error at {}:{} \u{2014} {}
+scr.executing	[{}] Executing: {}
+scr.failed_abort	Script '{}' aborted at line {} ({} error(s))
+scr.help_continue	 scr -c <file.ntc> [args...] Continue after errors
+scr.help_help	 scr help Show this help
+scr.help_init	 scr init [name] Create a script template
+scr.help_ls	 scr ls List *.ntc scripts in the current directory
+scr.help_run	 scr <file.ntc> [args...] Run an automation script
+scr.help_title	scr \u{2014} ntc automation script runner
+scr.help_usage	Usage:
+scr.init_created	Created template {}
+scr.init_exists	{} already exists
+scr.ls_empty	No *.ntc scripts found in {}
+scr.ls_title	AUTOMATION SCRIPTS:
+scr.no_commands	{} contains no commands to run
+scr.not_found	Script not found: {} ({})
+scr.start	Running script {}...
+scr.syscmd	Executing: {}
+scr.syscmd_exit	Command exited with code: {}
+scr.syscmd_terminated	Command terminated (Ctrl+C)
 status.none	none
 status.off	OFF
 status.on	ON
@@ -2645,6 +2744,26 @@ help.tmprt.example2	tmprt weather Bangkok ## Weather for Bangkok
 help.tmprt.example3	tmprt key 1234567890abcdef ## Save API key
 help.tmprt.example4	tmprt city Bangkok ## Set default city
 cmd.tmprt.unknown_sub	Unknown tmprt subcommand: {}
+cmd.spec.other	Other
+cmd.spec.title	SYSTEM SPECIFICATIONS
+cmd.spec.cpu	CPU
+cmd.spec.vendor	Vendor
+cmd.spec.generation	Generation
+cmd.spec.model	Model
+cmd.spec.cores	Cores / Threads
+cmd.spec.gpu	GPU
+cmd.spec.ram	RAM
+cmd.spec.storage	Storage
+cmd.spec.total	Total
+cmd.spec.os	OS
+cmd.spec.manufacturer	Manufacturer
+cmd.spec.computer_model	Computer Model
+cmd.spec.serial	Serial Number
+cmd.spec.hostname	Hostname
+cmd.spec.kernel	Kernel
+cmd.spec.uptime	Uptime
+cmd.spec.unknown	Unknown
+cmd.spec.custom	Custom
 cmd.tmprt.usage_title	Usage:
 cmd.tmprt.usage_com	  tmprt com [secs]        Live hardware temperature monitor
 cmd.tmprt.usage_weather	  tmprt weather [city]    Current weather via OpenWeather API

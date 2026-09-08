@@ -132,8 +132,10 @@ impl vte::Perform for VtePerformer {
             'H' | 'f' => {
                 let row = pv.first().copied().unwrap_or(1) as usize;
                 let col = pv.get(1).copied().unwrap_or(1) as usize;
-                self.cursor_y = (row - 1).min(self.height - 1);
-                self.cursor_x = (col - 1).min(self.width - 1);
+                let max_row = self.height.saturating_sub(1);
+                let max_col = self.width.saturating_sub(1);
+                self.cursor_y = row.saturating_sub(1).min(max_row);
+                self.cursor_x = col.saturating_sub(1).min(max_col);
             }
             'J' => {
                 let mode = pv.first().copied().unwrap_or(0);

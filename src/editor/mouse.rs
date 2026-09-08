@@ -12,7 +12,7 @@ impl Editor {
         };
         let c = col as usize;
         let eo = self.editor_offset();
-        let rows = self.term_h.saturating_sub(4);
+        let rows = self.visible_text_rows();
         let gw = gutter_width(self.lines.len());
         if r >= rows {
             return None;
@@ -35,7 +35,7 @@ impl Editor {
     }
 
     fn scroll_from_vclick(&self, row: u16) -> usize {
-        let rows = self.term_h.saturating_sub(4);
+        let rows = self.visible_text_rows();
         let r = if row >= 1 {
             (row - 1) as usize
         } else {
@@ -78,8 +78,7 @@ impl Editor {
             MouseEventKind::Down(MouseButton::Left) => {
                 let eo = self.editor_offset();
                 let col = m.column as usize;
-                let content_rows = self.term_h.saturating_sub(4);
-                let hrow = 1 + content_rows; // horizontal scroll bar row
+                let hrow = 1 + self.visible_text_rows(); // horizontal scroll bar row
                 let tab_bar_h = 1;
                 let sb_col = self.term_w.saturating_sub(1);
 
@@ -112,7 +111,7 @@ impl Editor {
                     }
                     let mut x = eo;
                     for (i, tab) in self.tabs.iter().enumerate() {
-                        let tab_end = x + (self.term_w - eo);
+                        let tab_end = x + self.term_w.saturating_sub(eo);
                         if x >= tab_end {
                             break;
                         }
@@ -157,7 +156,7 @@ impl Editor {
 
                 // Vertical scroll bar click
                 if col == sb_col
-                    && (m.row as usize) < 1 + content_rows
+                    && (m.row as usize) < 1 + self.visible_text_rows()
                     && (m.row as usize) >= tab_bar_h
                 {
                     self.sv.dragging_vscroll = true;
@@ -230,7 +229,7 @@ impl Editor {
             }
             MouseEventKind::Drag(MouseButton::Left) => {
                 if self.sv.dragging_vscroll {
-                    let content_rows = self.term_h.saturating_sub(4);
+                    let content_rows = self.visible_text_rows();
                     let tab_bar_h = 1;
                     let r = if (m.row as usize) >= tab_bar_h {
                         (m.row as usize) - tab_bar_h

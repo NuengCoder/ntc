@@ -14,6 +14,7 @@ pub mod nfe;
 pub mod ntpkg;
 pub mod ranfile;
 pub mod report;
+pub mod script;
 pub mod shell;
 pub mod syntax;
 pub mod tutorial;

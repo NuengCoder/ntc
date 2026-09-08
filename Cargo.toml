@@ -1,6 +1,6 @@
 [package]
 name = "ntc"
-version = "2.4.2"
+version = "2.4.3"
 edition = "2021"
 description = "Navigate, Toolkit, Center - A Combine of Navigation , Project Toolkit Center hub"
 authors = ["NuengCoder"]
@@ -54,6 +54,7 @@ rusqlite = { version = "0.32", features = ["bundled"] }
 mime_guess = "2"
 rust-embed = "8"
 which = "7"
+libloading = "0.8"
 zip = "2"
 tar = "0.4"
 flate2 = "1"

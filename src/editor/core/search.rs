@@ -1,9 +1,9 @@
-use crate::editor::Editor;
+use crate::editor::{ci_find, Editor};
 use crate::t;
 
 impl Editor {
     pub(crate) fn rebuild_search_matches(&mut self) {
-        let q = self.search.query.to_lowercase();
+        let q = self.search.query.clone();
         if !self.search.dirty && self.search.cached_query == q {
             return;
         }
@@ -15,13 +15,11 @@ impl Editor {
             return;
         }
         for (li, line) in self.lines.iter().enumerate() {
-            let lower = line.to_lowercase();
             let mut start = 0;
-            while let Some(pos) = lower[start..].find(&q) {
-                let abs = start + pos;
-                self.search.matches.push((li, abs, abs + q.len()));
-                start = abs + 1;
-                if start >= lower.len() {
+            while let Some((s, e)) = ci_find(line, &q, start) {
+                self.search.matches.push((li, s, e));
+                start = s + 1;
+                if start >= line.len() {
                     break;
                 }
             }

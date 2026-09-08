@@ -20,6 +20,7 @@ pub fn fill(m: &mut HashMap<String, String>) {
     m.insert("help.view.depth".into(), "view -d, --depth <n> ## ສະແດງ tree ດ້ວຍຄວາມເລິກທີ່ກຳນົດ".into());
     m.insert("help.view.dirsize".into(), "view -ds, --dirsize ## ສະແດງ tree ດ້ວຍຂະໜາດໄດເຣັກທໍຣີເທົ່ານັ້ນ".into());
     m.insert("help.view.filesize".into(), "view -fs, --filesize ## ສະແດງ tree ດ້ວຍຂະໜາດໄຟລ໌ເທົ່ານັ້ນ".into());
+    m.insert("help.view.path".into(), "view -p, --path <path|@tp> ## ສະແດງ tree ຂອງ path ຫຼື teleport savepoint ທີ່ລະບຸ".into());
     m.insert("help.view.size".into(), "view -s, --size ## ສະແດງ tree ດ້ວຍຂະໜາດ dir ແລະ file".into());
     m.insert("help.view.time".into(), "view --time, -t ## ສະແດງ tree ພ້ອມເວລາປະຕິບັດງານ".into());
     m.insert("help.view.title".into(), "ຄຳສັ່ງ VIEW:".into());
@@ -56,6 +57,12 @@ pub fn fill(m: &mut HashMap<String, String>) {
     m.insert("help.view.example3".into(), "view -d 2 ## ສະແດງ tree ດ້ວຍຄວາມເລິກ 2".into());
     m.insert("help.view.example4".into(), "view --cp ## ສະແດງ tree ແລະ ສຳເນົາໃສ່ clipboard".into());
     m.insert("help.view.example5".into(), "view --time ## ສະແດງ tree ພ້ອມເວລາປະຕິບັດງານ".into());
+    m.insert("help.view.example6".into(), "view -p C:\\code\\project ## ສະແດງ tree ຂອງ path ທີ່ລະບຸ".into());
+    m.insert("help.view.example7".into(), "view @web ## ສະແດງ tree ຂອງ teleport savepoint".into());
+    m.insert("help.size.example1".into(), "size ## ສະແດງຂະໜາດໄດເຣັກທໍຣີປັດຈຸບັນ".into());
+    m.insert("help.size.example2".into(), "size ../src ## ສະແດງຂະໜາດຂອງໄດເຣັກທໍຣີອື່ນ".into());
+    m.insert("help.size.example3".into(), "size -p C:\\code\\project ## ສະແດງຂະໜາດຂອງ path ທີ່ລະບຸ".into());
+    m.insert("help.size.example4".into(), "size @web --care -t ## ໂໝດ care ພ້ອມເວລາທີ່ໃຊ້ສຳລັບ savepoint".into());
     m.insert("help.report.example1".into(), "report txt ## ສ້າງບົດລາຍງານ TXT".into());
     m.insert("help.report.example2".into(), "report html --cp ## ສຳເນົາບົດລາຍງານ HTML ໃສ່ clipboard".into());
     m.insert("help.report.example3".into(), "report pdf ## ສ້າງບົດລາຍງານ PDF".into());

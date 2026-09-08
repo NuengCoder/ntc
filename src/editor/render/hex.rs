@@ -6,6 +6,8 @@ use crossterm::terminal::{Clear, ClearType};
 use super::super::Editor;
 
 const BYTES_PER_ROW: usize = 16;
+const OFFSET_W: usize = 8;
+const SEP_W: usize = 3;
 
 impl Editor {
     pub(crate) fn render_hex_view(&self, stdout: &mut std::io::Stdout) -> std::io::Result<()> {
@@ -14,11 +16,13 @@ impl Editor {
             Some(h) => h,
             None => return Ok(()),
         };
-        let rows = self.term_h.saturating_sub(4).max(1);
+        let rows = self.visible_text_rows().max(1);
         let cols = self.term_w;
         let content_y = 1;
+        let x_offset = self.editor_offset();
+        let avail_w = cols.saturating_sub(x_offset);
 
-        // Clear the content area
+        // Clear the content area (from the editor offset so the sidebar stays).
         for r in 0..rows {
             let row = content_y + r;
             if row >= self.term_h {
@@ -26,10 +30,14 @@ impl Editor {
             }
             queue!(
                 stdout,
-                MoveTo(0, row as u16),
+                MoveTo(x_offset as u16, row as u16),
                 Clear(ClearType::UntilNewLine)
             )?;
         }
+
+        // How many hex bytes fit next to the offset and ASCII columns:
+        // width = OFFSET_W + SEP_W + (3n + 1) + SEP_W + n = 15 + 4n.
+        let fit_bytes = (avail_w.saturating_sub(15) / 4).min(BYTES_PER_ROW);
 
         for r in 0..rows {
             let row = content_y + r;
@@ -42,24 +50,35 @@ impl Editor {
                 break;
             }
 
-            let mut x: usize = 0;
+            let mut x: usize = x_offset;
 
             // ── Offset column ──
             let offset_str = format!("{:08X}", base);
+            let offset_draw = if offset_str.chars().count() > avail_w {
+                let end = offset_str.floor_char_boundary(avail_w);
+                &offset_str[..end]
+            } else {
+                &offset_str
+            };
             queue!(
                 stdout,
                 MoveTo(x as u16, row as u16),
                 SetForegroundColor(theme.editor.gutter_text.to_crossterm()),
-                Print(&offset_str),
+                Print(offset_draw),
             )?;
-            x += 8;
+            x += OFFSET_W;
+
+            if fit_bytes == 0 {
+                queue!(stdout, ResetColor, Clear(ClearType::UntilNewLine))?;
+                continue;
+            }
 
             // separator
             queue!(stdout, Print(" │ "))?;
-            x += 3;
+            x += SEP_W;
 
             // ── Hex bytes column ──
-            let bytes_end = (base + BYTES_PER_ROW).min(hex.data.len());
+            let bytes_end = (base + fit_bytes).min(hex.data.len());
             for i in base..bytes_end {
                 let b = hex.data[i];
 
@@ -67,17 +86,14 @@ impl Editor {
                     let byte_str = if hex.nibble {
                         format!("{:1X} ", hex.pending_byte >> 4)
                     } else {
-                        format!("{:02X}", b)
+                        format!("{:02X} ", b)
                     };
-                    let rest = if hex.nibble { "" } else { " " };
-
                     queue!(
                         stdout,
                         SetBackgroundColor(theme.editor.cursor_bg.to_crossterm()),
                         SetForegroundColor(theme.editor.cursor_text.to_crossterm()),
                         Print(&byte_str),
                         ResetColor,
-                        Print(rest),
                     )?;
                     x += if hex.nibble { 2 } else { 3 };
                 } else {
@@ -93,19 +109,9 @@ impl Editor {
                 }
             }
 
-            // Pad remaining hex columns if row is incomplete
-            if bytes_end - base < 16 {
-                let remaining = 16 - (bytes_end - base);
-                for i in 0..remaining {
-                    let sep = if i == 7 { "  " } else { " " };
-                    queue!(stdout, Print("  "), Print(sep))?;
-                    x += if i == 7 { 4 } else { 3 };
-                }
-            }
-
             // separator
             queue!(stdout, Print(" │ "))?;
-            x += 3;
+            x += SEP_W;
 
             // ── ASCII column ──
             for i in base..bytes_end {

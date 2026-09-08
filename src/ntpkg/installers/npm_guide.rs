@@ -17,31 +17,41 @@ pub(crate) fn print_npm_guide(name: &str, npm_pkg: &str) -> Result<()> {
     if !node_ok || !npm_ok {
         print_info(&t!("ntpkg.npm_not_detected"));
         println!();
-        println!("  ── Install Node.js first ──");
+        println!("{}", t!("ntpkg.npm_section_node_first"));
         println!();
 
         if let Some(ref np) = node_path {
-            println!("  ✓ Node.js found at: {}", np.display());
+            println!("{}", t!("ntpkg.npm_node_found_at", np.display()));
         } else {
-            println!("  ✗ Node.js not found");
+            println!("{}", t!("ntpkg.npm_node_not_found"));
             println!();
-            println!("  Install via ntpkg:");
-            println!("    ntpkg install node");
-            println!();
-            println!("  Or download from: https://nodejs.org");
-            println!();
-            println!("  Or install via fnm/nvm/volta");
+            if super::super::manager::is_termux() {
+                println!("{}", t!("ntpkg.npm_install_via_pkg"));
+                print_info(&t!("ntpkg.termux_cmd", "nodejs"));
+            } else {
+                println!("{}", t!("ntpkg.npm_install_via_ntpkg"));
+                println!("{}", t!("ntpkg.npm_ntpkg_cmd", "node"));
+                println!();
+                println!("{}", t!("ntpkg.npm_or_download_nodejs"));
+                println!();
+                println!("{}", t!("ntpkg.npm_or_fnm_nvm_volta"));
+            }
         }
 
         if let Some(ref np) = npm_path {
-            println!("  ✓ npm found at: {}", np.display());
+            println!("{}", t!("ntpkg.npm_found_at", np.display()));
         } else {
-            println!("  ✗ npm not found");
+            println!("{}", t!("ntpkg.npm_not_found"));
         }
 
         println!();
-        println!("  Then re-run:");
-        println!("    ntpkg install {name}");
+        if super::super::manager::is_termux() {
+            println!("{}", t!("ntpkg.npm_then_run"));
+            println!("{}", t!("ntpkg.npm_cmd", npm_pkg));
+        } else {
+            println!("{}", t!("ntpkg.npm_then_rerun"));
+            println!("{}", t!("ntpkg.npm_ntpkg_cmd", name));
+        }
         println!();
     } else {
         print_success(&t!("ntpkg.npm_detected"));
@@ -50,11 +60,11 @@ pub(crate) fn print_npm_guide(name: &str, npm_pkg: &str) -> Result<()> {
         let npm_bin = detect_npm_bin_dir();
         if let Some(ref bin_dir) = npm_bin {
             if !is_in_path(bin_dir) {
-                print_info(&format!(
-                    "npm global bin not found in PATH ({})",
+                print_info(&t!(
+                    "ntpkg.npm_bin_not_in_path",
                     bin_dir.display()
                 ));
-                println!("  Add to PATH:");
+                println!("{}", t!("ntpkg.path_add_label"));
                 println!("    {}", bin_dir.display());
                 println!();
             } else {
@@ -63,10 +73,10 @@ pub(crate) fn print_npm_guide(name: &str, npm_pkg: &str) -> Result<()> {
             }
         }
 
-        println!("  ── Install {name} ──");
+        println!("{}", t!("ntpkg.npm_install_section", name));
         println!();
-        println!("  Run this command:");
-        println!("    npm i -g {npm_pkg}");
+        println!("{}", t!("ntpkg.npm_run_cmd_label"));
+        println!("{}", t!("ntpkg.npm_cmd", npm_pkg));
         println!();
     }
 

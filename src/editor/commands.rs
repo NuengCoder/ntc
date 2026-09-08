@@ -98,6 +98,52 @@ impl Editor {
             return Ok(false);
         }
 
+        if cmd == "git diff" || cmd == "gd" {
+            if crate::config::Config::global_get_git_integration_enabled() {
+                let dir = self
+                    .path
+                    .parent()
+                    .map(|p| p.to_path_buf())
+                    .unwrap_or_else(|| std::path::PathBuf::from("."));
+                let lines = crate::utils::git::diff_of_file(&dir, &self.path);
+                match lines {
+                    Some(text) if !text.is_empty() => {
+                        self.git_diff = Some(crate::editor::types::GitDiffState {
+                            lines: text.lines().map(|l| l.to_string()).collect(),
+                            scroll: 0,
+                        });
+                        self.mode = Mode::GitDiff;
+                        self.status_msg = None;
+                        self.mark_all_dirty();
+                    }
+                    _ => self.status_msg = Some(t!("editor.git_no_diff").into()),
+                }
+            } else {
+                self.status_msg = Some(t!("editor.git_disabled").into());
+            }
+            return Ok(false);
+        }
+
+        if cmd == "git blame" || cmd == "blame" {
+            if crate::config::Config::global_get_git_integration_enabled() {
+                let dir = self
+                    .path
+                    .parent()
+                    .map(|p| p.to_path_buf())
+                    .unwrap_or_else(|| std::path::PathBuf::from("."));
+                match crate::utils::git::blame_line(&dir, &self.path, self.cursor.y + 1) {
+                    Some(info) => self.status_msg = Some(format!(
+                        "{} {}  {}  {}",
+                        info.commit, info.author, info.time, info.summary
+                    )),
+                    None => self.status_msg = Some(t!("editor.git_no_blame").into()),
+                }
+            } else {
+                self.status_msg = Some(t!("editor.git_disabled").into());
+            }
+            return Ok(false);
+        }
+
         if let Some(rest) = cmd.strip_prefix("goto ") {
             let rest = rest.trim();
             let addr = if let Some(h) = rest.strip_prefix("0x").or_else(|| rest.strip_prefix("0X"))

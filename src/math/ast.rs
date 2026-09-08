@@ -11,6 +11,7 @@ pub(super) enum Expr {
     Str(String),
     Ident(String),
     Binary(Box<Expr>, char, Box<Expr>),
+    PowerTower(Box<Expr>, Box<Expr>),
     Unary(Box<Expr>),
     Call(String, Vec<Expr>),
     Assign(String, Box<Expr>),
@@ -136,11 +137,23 @@ impl Parser {
     }
 
     fn parse_power(&mut self) -> Result<Expr> {
-        let mut base = self.parse_call()?;
-        if matches!(self.peek(), Token::Op('^')) {
+        let mut base = self.parse_power_tower()?;
+        if matches!(self.peek(), Token::Op('^'))
+            || matches!(self.peek(), Token::OpStr(s) if s == "**")
+        {
             self.advance();
             let exp = self.parse_unary()?;
             base = Expr::Binary(Box::new(base), '^', Box::new(exp));
+        }
+        Ok(base)
+    }
+
+    fn parse_power_tower(&mut self) -> Result<Expr> {
+        let mut base = self.parse_call()?;
+        if matches!(self.peek(), Token::OpStr(s) if s == "***") {
+            self.advance();
+            let exp = self.parse_power_tower()?;
+            base = Expr::PowerTower(Box::new(base), Box::new(exp));
         }
         Ok(base)
     }

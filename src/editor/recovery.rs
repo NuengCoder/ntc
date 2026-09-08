@@ -24,10 +24,25 @@ fn recovery_dir() -> Option<PathBuf> {
     dirs::config_dir().map(|d| d.join("ntc").join("crash_recovery"))
 }
 
+/// Resolve `path` to a stable absolute form (falls back to cwd-joined when the
+/// file does not exist yet). Relative and absolute spellings of the same file
+/// hash to the same recovery key.
+fn normalize_path(path: &Path) -> PathBuf {
+    if let Ok(abs) = std::fs::canonicalize(path) {
+        return abs;
+    }
+    if path.is_absolute() {
+        return path.to_path_buf();
+    }
+    std::env::current_dir()
+        .unwrap_or_else(|_| PathBuf::from("."))
+        .join(path)
+}
+
 /// Compute a safe filename for a given path (SHA-256 hash).
 fn hash_path(path: &Path) -> String {
     let mut hasher = Sha256::new();
-    hasher.update(path.to_string_lossy().as_bytes());
+    hasher.update(normalize_path(path).to_string_lossy().as_bytes());
     format!("{:x}", hasher.finalize())
 }
 
@@ -85,6 +100,15 @@ impl Editor {
     pub(crate) fn clear_recovery_snapshot(&self) {
         if let Some(rpath) = recovery_file_for(&self.path) {
             let _ = fs::remove_file(&rpath);
+        }
+    }
+
+    /// Delete crash recovery files for every open tab (on clean exit).
+    pub(crate) fn clear_all_recovery_snapshots(&self) {
+        let mut paths: Vec<PathBuf> = self.tabs.iter().map(|t| t.path.clone()).collect();
+        paths.push(self.path.clone());
+        for p in paths {
+            RecoveryData::remove_recovery(&p);
         }
     }
 }

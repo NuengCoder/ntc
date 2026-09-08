@@ -69,6 +69,8 @@ pub enum SyntaxLanguage {
     Css,
     Bat,
     Ps1,
+    /// .ntc — ntc automation script file
+    NtcScr,
     /// .ntc.ral — ntc run aliases export file (TOML format)
     NtcRal,
     /// .ntc.igcare — ntc ignore/care settings export file (TOML format)
@@ -152,6 +154,7 @@ pub fn detect_language(ext: &str) -> Option<SyntaxLanguage> {
         "ps1" | "psm1" | "psd1" | "pssc" => Some(SyntaxLanguage::Ps1),
         "env" | "gitignore" | "dockerignore" | "hgignore" | "editorconfig" | "toml" | "ini"
         | "cfg" | "conf" => Some(SyntaxLanguage::Dotenv),
+        "ntc" => Some(SyntaxLanguage::NtcScr),
         "ral" => Some(SyntaxLanguage::NtcRal),
         "igcare" => Some(SyntaxLanguage::NtcIgcare),
         "math" => Some(SyntaxLanguage::NtcMath),

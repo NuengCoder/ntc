@@ -172,6 +172,7 @@ pub fn fill(m: &mut HashMap<String, String>) {
     m.insert("misc.size.bytes_label".into(), "ไบต์:".into());
     m.insert("misc.size.calculating".into(), "กำลังคำนวณขนาดไดเรกทอรี...".into());
     m.insert("misc.size.human_label".into(), "มนุษย์:".into());
+    m.insert("misc.size.path_label".into(), "เส้นทาง:".into());
     m.insert("misc.size.time_label".into(), "เวลา:".into());
     m.insert("misc.size.title".into(), "ขนาดไดเรกทอรีปัจจุบัน".into());
     m.insert("misc.tp.example_info".into(), "ตัวอย่าง: tp info my_project".into());

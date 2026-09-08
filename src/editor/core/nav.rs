@@ -36,9 +36,20 @@ impl Editor {
     }
 
     pub(crate) fn mark_all_dirty(&mut self) {
-        let rows = self.term_h.saturating_sub(4);
+        let rows = self.visible_text_rows();
         self.dirty_start = self.sv.offset;
         self.dirty_end = self.sv.offset + rows;
+    }
+
+    /// Number of text rows available for the main content area, matching the
+    /// geometry used by `render()` (panel split when open, otherwise the full
+    /// editor area minus the bars).
+    pub(crate) fn visible_text_rows(&self) -> usize {
+        if self.run_panel_open || self.terminal.is_some() {
+            self.run_split_row().saturating_sub(1)
+        } else {
+            self.term_h.saturating_sub(5)
+        }
     }
 
     pub(crate) fn max_scroll_x(&self) -> usize {
@@ -56,12 +67,18 @@ impl Editor {
     }
 
     pub(crate) fn scroll_visible(&mut self) {
-        let rows = self.term_h.saturating_sub(5);
-        if self.cursor.y < self.sv.offset {
-            self.sv.offset = self.cursor.y;
-        } else if self.cursor.y >= self.sv.offset + rows {
-            self.sv.offset = self.cursor.y.saturating_sub(rows) + 1;
+        let rows = self.visible_text_rows();
+        // nvim-style scrolloff: keep a small margin of context above and below
+        // the cursor so content never jumps to the very edge of the viewport.
+        let max_offset = self.lines.len().saturating_sub(rows);
+        let soff = 2.min(rows.saturating_sub(1) / 2).min(max_offset);
+
+        if self.cursor.y < self.sv.offset + soff {
+            self.sv.offset = self.cursor.y.saturating_sub(soff);
+        } else if self.cursor.y >= self.sv.offset + rows.saturating_sub(soff) {
+            self.sv.offset = self.cursor.y.saturating_sub(rows.saturating_sub(soff)) + 1;
         }
+        self.sv.offset = self.sv.offset.min(max_offset);
 
         let gw = gutter_width(self.lines.len());
         let eo = self.editor_offset();

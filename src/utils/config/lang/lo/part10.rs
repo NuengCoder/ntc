@@ -15,6 +15,11 @@ pub fn fill(m: &mut HashMap<String, String>) {
     m.insert("editor.mode_exited_multi".into(), "ອອກຈາກ multi-cursor mode ແລ້ວ".into());
     m.insert("editor.mode_finder".into(), "[Finder]".into());
     m.insert("editor.mode_gosc".into(), "[Gosc]".into());
+    m.insert("editor.mode_git_diff".into(), "[GitDiff]".into());
+    m.insert("editor.git_no_diff".into(), "git: ບໍ່ມີຄວາມແຕກຕ່າງຂອງໄຟລ໌ນີ້".into());
+    m.insert("editor.git_no_blame".into(), "git: ບໍ່ມີຂໍ້ມູນ blame ສຳລັບບັນທັດນີ້".into());
+    m.insert("editor.git_disabled".into(), "ປິດ git integration ແລ້ວ (config git ON ເພື່ອເປີດ)".into());
+    m.insert("editor.git_quit_hint".into(), "Esc/q ເພື່ອປິດ".into());
     m.insert("editor.mode_help".into(), "[Help]".into());
     m.insert("editor.mode_hex".into(), "[HEX]".into());
     m.insert("editor.mode_insert".into(), "[Insert]".into());
@@ -91,6 +96,18 @@ pub fn fill(m: &mut HashMap<String, String>) {
     m.insert("editor.run_terminated".into(), "ຢຸດ process ແລ້ວ".into());
     m.insert("editor.save_auto_error".into(), "Auto-save error: {}".into());
     m.insert("editor.save_failed".into(), "ບັນທຶກລົ້ມເຫຼວ: {}".into());
+    m.insert("editor.encoding_changed".into(), "ປ່ຽນການເຂົ້າລະຫັດ".into());
+    m.insert("editor.enc_title".into(), "ການເຂົ້າລະຫັດ".into());
+    m.insert(
+        "editor.enc_hint".into(),
+        "↑↓ ເລືອກ · Enter ຢືນຢັນ · Esc ຍົກເລີກ".into(),
+    );
+    m.insert("editor.hint_encoding".into(), "ການເຂົ້າລະຫັດ:".into());
+    m.insert("editor.encoding_reload_error".into(), "ໂຫຼດຄືນລົ້ມເຫຼວ: {}".into());
+    m.insert(
+        "editor.encoding_applied_on_save".into(),
+        "ຈະນຳໃຊ້ເມື່ອບັນທຶກຕໍ່ໄປ".into(),
+    );
     m.insert("editor.save_prompt".into(), "ບັນທຶກໄຟລ໌ [Y|N]?".into());
     m.insert("editor.saved".into(), "ບັນທຶກແລ້ວ \u{2713}".into());
     m.insert("editor.saved_full".into(), " Saved ✓".into());

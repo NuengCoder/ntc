@@ -23,7 +23,8 @@ pub(super) fn line_comment_prefix(lang: SyntaxLanguage) -> &'static [u8] {
         SyntaxLanguage::NtcRal
         | SyntaxLanguage::NtcIgcare
         | SyntaxLanguage::NtcMath
-        | SyntaxLanguage::NtcTheme => b"#",
+        | SyntaxLanguage::NtcTheme
+        | SyntaxLanguage::NtcScr => b"#",
         SyntaxLanguage::LockFile => b"#",
         SyntaxLanguage::InnoSetup => b"//",
         SyntaxLanguage::Lua | SyntaxLanguage::Haskell | SyntaxLanguage::Elixir => b"--",
@@ -126,6 +127,7 @@ pub(super) fn has_annotation_at(lang: SyntaxLanguage) -> bool {
             | SyntaxLanguage::Python
             | SyntaxLanguage::CSharp
             | SyntaxLanguage::Scala
+            | SyntaxLanguage::NtcScr
     )
 }
 
@@ -1544,6 +1546,7 @@ pub(super) fn is_keyword(lang: SyntaxLanguage, word: &str) -> bool {
         SyntaxLanguage::NtcRal | SyntaxLanguage::NtcIgcare | SyntaxLanguage::NtcTheme => {
             matches!(word, "true" | "false")
         }
+        SyntaxLanguage::NtcScr => matches!(word, "set" | "init" | "list" | "ls" | "help" | "run"),
         SyntaxLanguage::NtcMath => matches!(word, "return" | "true" | "false"),
         SyntaxLanguage::Bat => matches!(
             word,
@@ -2609,6 +2612,12 @@ pub(super) fn is_builtin(lang: SyntaxLanguage, word: &str) -> bool {
                 | "teleport_name"
                 | "alias_name"
                 | "alias_command"
+                | "git_branch"
+                | "git_added"
+                | "git_modified"
+                | "git_deleted"
+                | "git_untracked"
+                | "git_conflict"
                 | "editor_bg"
                 | "gutter_bg"
                 | "status_bg"

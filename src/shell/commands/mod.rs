@@ -20,6 +20,7 @@ mod config_commands;
 mod downloader;
 mod encode_decode;
 mod fmt;
+mod git;
 mod gs_interactive;
 mod http_client;
 mod ignore;
@@ -31,8 +32,10 @@ mod qr;
 mod qsc;
 mod ran_commands;
 mod report;
+mod scr_commands;
 mod serve;
 mod smtp_client;
+mod spec;
 mod sysmon;
 mod theme;
 mod tl;
@@ -82,6 +85,7 @@ pub(crate) fn execute_command(
         "ral" => alias_commands::cmd_ral(args, nav),
         "ran" => ran_commands::cmd_ran(args, nav),
         "run" | "r" => alias_commands::cmd_run(args, nav),
+        "scr" | "script" => scr_commands::cmd_scr(args, nav),
         "showcg" => config_commands::cmd_showcg(args, nav),
         "opencg" | "editcfg" => config_commands::cmd_opencg(args, nav),
         "ne" | "ntceditor" => misc::cmd_ne(args, nav),
@@ -118,6 +122,7 @@ pub(crate) fn execute_command(
         "rnmf" => misc::cmd_rnmf(args, nav),
         "rnmd" => misc::cmd_rnmd(args, nav),
         "sys" | "top" => sysmon::cmd_sys(args, nav),
+        "spec" => spec::cmd_spec(args, nav),
         "theme" => theme::cmd_theme(args, nav),
         "up" => downloader::cmd_up(args, nav),
         "ping" => downloader::cmd_ping(args, nav),
@@ -155,6 +160,7 @@ pub(crate) fn execute_command(
         "say" | "print" => misc::cmd_say(args, nav),
         "pathcp" => misc::cmd_pathcp(args, nav),
         "tmprt" => tmprt::cmd_tmprt(args, nav),
+        "git" => git::cmd_git(args, nav),
         _ => misc::cmd_fallback(input, nav, watcher_handle),
     }
 }

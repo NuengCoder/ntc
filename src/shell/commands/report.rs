@@ -8,7 +8,7 @@ use crate::filetype::is_supported_format;
 use crate::navigator::Navigator;
 use crate::output::{cat_file_with_syntax, print_error, print_success, print_warning};
 use crate::report::{generate_report, ReportFormat};
-use crate::shell::helpers::show_tree;
+use crate::shell::helpers::{show_tree, show_tree_at};
 use crate::t;
 
 use colored::*;
@@ -24,10 +24,14 @@ pub fn cmd_view(args: &str, nav: &mut Navigator) -> Result<bool> {
     let mut care_sizes = false;
     let mut show_time = false;
 
-    let parts: Vec<&str> = args.split_whitespace().collect();
+    let parsed = match crate::shell::helpers::parse_target_arg(args, nav) {
+        Ok(p) => p,
+        Err(_) => return Ok(false),
+    };
+    let parts: Vec<String> = parsed.rest;
     let mut i = 0;
     while i < parts.len() {
-        match parts[i] {
+        match parts[i].as_str() {
             "-s" | "--size" => {
                 show_filesize = true;
                 show_dirsize = true;
@@ -47,7 +51,6 @@ pub fn cmd_view(args: &str, nav: &mut Navigator) -> Result<bool> {
                     }
                 }
             }
-            "--" => break,
             _ => {
                 print_error(&t!("cmd.report.unknown_option", parts[i]));
                 println!("{}", t!("cmd.report.view_usage"));
@@ -59,16 +62,28 @@ pub fn cmd_view(args: &str, nav: &mut Navigator) -> Result<bool> {
 
     let max_depth = depth_override.unwrap_or(Config::global_get_max_depth());
     let start = std::time::Instant::now();
-    show_tree(
-        nav,
-        Some(max_depth),
-        true,
-        true,
-        show_filesize,
-        show_dirsize,
-        copy_to_clipboard,
-        care_sizes,
-    );
+    match &parsed.path {
+        Some(target) => show_tree_at(
+            target,
+            Some(max_depth),
+            true,
+            true,
+            show_filesize,
+            show_dirsize,
+            copy_to_clipboard,
+            care_sizes,
+        ),
+        None => show_tree(
+            nav,
+            Some(max_depth),
+            true,
+            true,
+            show_filesize,
+            show_dirsize,
+            copy_to_clipboard,
+            care_sizes,
+        ),
+    }
     if show_time {
         let elapsed = crate::explorer::format_duration(start.elapsed());
         let time_label = t!("cmd.report.time_label");

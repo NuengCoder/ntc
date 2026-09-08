@@ -4,6 +4,7 @@ mod clipboard;
 mod edit;
 mod nav;
 mod save;
+pub(crate) use save::save_lines_to;
 mod search;
 mod tests;
 mod undo;

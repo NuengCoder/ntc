@@ -192,40 +192,40 @@ impl ThemeManager {
 # File extension: .ntc.theme
 name = "default"
 author = "NuengCoder"
-description = "Default ntc theme with dark background"
+description = "Default ntc theme (VS Code Dark+ inspired)"
 
 [syntax]
-keyword = { r = 200, g = 160, b = 255 }
-string = { r = 103, g = 228, b = 128 }
-comment = { r = 108, g = 108, b = 128 }
-number = { r = 255, g = 202, b = 133 }
-type = { r = 120, g = 220, b = 232 }
-builtin = { r = 255, g = 140, b = 154 }
-function = { r = 130, g = 226, b = 255 }
-operator = { r = 200, g = 200, b = 208 }
-punctuation = { r = 132, g = 132, b = 154 }
-attribute = { r = 162, g = 119, b = 255 }
-macro_token = { r = 176, g = 131, b = 240 }
-regex = { r = 252, g = 169, b = 110 }
-tag = { r = 80, g = 228, b = 200 }
-constant = { r = 229, g = 192, b = 123 }
-normal = { r = 200, g = 200, b = 208 }
+keyword = "bright_cyan"
+string = "bright_green"
+comment = "bright_black"
+number = "bright_green"
+type = "cyan"
+builtin = "bright_red"
+function = "bright_yellow"
+operator = "yellow"
+punctuation = "yellow"
+attribute = "bright_cyan"
+macro_token = "bright_magenta"
+regex = "bright_red"
+tag = "bright_cyan"
+constant = "cyan"
+normal = "bright_white"
 
 [shell]
-prompt_bracket = "cyan"
-prompt_path = "blue"
+prompt_bracket = "bright_cyan"
+prompt_path = "cyan"
 prompt_watcher = "yellow"
 prompt_arrow = "green"
 success = "green"
 error = "red"
 warning = "yellow"
 info = "cyan"
-tree_branch = "green"
-tree_dir = "blue"
-tree_file = "white"
+tree_branch = { r = 30, g = 220, b = 220 }
+tree_dir = "bright_magenta"
+tree_file = "yellow"
 tree_ignored = "bright_black"
 tree_size = "yellow"
-command_output = "white"
+command_output = "yellow"
 separator = "cyan"
 help_header = "cyan"
 help_section = "cyan"
@@ -233,35 +233,41 @@ help_example = "green"
 teleport_name = "bright_blue"
 alias_name = "blue"
 alias_command = "bright_black"
+git_branch = "bright_cyan"
+git_added = "green"
+git_modified = "yellow"
+git_deleted = "red"
+git_untracked = "bright_black"
+git_conflict = "bright_red"
 
 [editor]
-editor_bg = { r = 13, g = 13, b = 21 }
-gutter_bg = { r = 13, g = 13, b = 21 }
-status_bg = { r = 162, g = 119, b = 255 }
-hint_bg = { r = 21, g = 21, b = 29 }
-sidebar_bg = { r = 13, g = 13, b = 21 }
-sidebar_selected_bg = { r = 44, g = 44, b = 58 }
-run_panel_bg = { r = 22, g = 22, b = 30 }
-gutter_text = { r = 108, g = 108, b = 128 }
+editor_bg = { r = 21, g = 19, b = 26 }
+gutter_bg = { r = 24, g = 22, b = 30 }
+status_bg = { r = 130, g = 100, b = 210 }
+hint_bg = { r = 28, g = 26, b = 34 }
+sidebar_bg = { r = 21, g = 19, b = 26 }
+sidebar_selected_bg = { r = 50, g = 45, b = 65 }
+run_panel_bg = { r = 26, g = 24, b = 32 }
+gutter_text = { r = 100, g = 95, b = 118 }
 status_text = "white"
 status_modified = "yellow"
-hint_text = { r = 130, g = 226, b = 255 }
+hint_text = { r = 140, g = 222, b = 255 }
 cursor_bg = "white"
 cursor_text = "black"
 extra_cursor_bg = { r = 255, g = 140, b = 154 }
-selection_bg = { r = 54, g = 51, b = 84 }
-search_match_bg = { r = 44, g = 44, b = 58 }
-search_current_bg = { r = 162, g = 119, b = 255 }
-border = { r = 61, g = 61, b = 77 }
-scrollbar = { r = 61, g = 61, b = 77 }
-scrollbar_thumb = { r = 162, g = 119, b = 255 }
-sidebar_dir = { r = 120, g = 220, b = 232 }
-sidebar_file = { r = 200, g = 200, b = 208 }
-sidebar_current = { r = 255, g = 202, b = 133 }
+selection_bg = { r = 58, g = 50, b = 85 }
+search_match_bg = { r = 48, g = 43, b = 63 }
+search_current_bg = { r = 130, g = 100, b = 210 }
+border = { r = 50, g = 46, b = 62 }
+scrollbar = { r = 38, g = 35, b = 48 }
+scrollbar_thumb = { r = 130, g = 100, b = 210 }
+sidebar_dir = { r = 134, g = 215, b = 235 }
+sidebar_file = { r = 200, g = 200, b = 215 }
+sidebar_current = { r = 255, g = 208, b = 145 }
 sidebar_selected = "white"
-run_header_fg = { r = 70, g = 130, b = 180 }
+run_header_fg = { r = 95, g = 145, b = 205 }
 run_header_unfocused_fg = { r = 45, g = 85, b = 120 }
-run_output_fg = { r = 180, g = 200, b = 210 }
+run_output_fg = { r = 185, g = 198, b = 212 }
 "#
         .to_string()
     }
@@ -311,6 +317,12 @@ help_example = "green"
 teleport_name = "blue"
 alias_name = "blue"
 alias_command = "bright_black"
+git_branch = "blue"
+git_added = "green"
+git_modified = "yellow"
+git_deleted = "red"
+git_untracked = "bright_black"
+git_conflict = "bright_red"
 
 [editor]
 editor_bg = { r = 245, g = 245, b = 245 }
@@ -389,6 +401,12 @@ help_example = "green"
 teleport_name = "bright_blue"
 alias_name = "blue"
 alias_command = "bright_black"
+git_branch = "bright_cyan"
+git_added = "green"
+git_modified = "yellow"
+git_deleted = "red"
+git_untracked = "bright_black"
+git_conflict = "bright_red"
 
 [editor]
 editor_bg = { r = 13, g = 13, b = 21 }

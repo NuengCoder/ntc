@@ -1,9 +1,9 @@
 use crossterm::cursor::MoveTo;
 use crossterm::queue;
-use crossterm::style::{Print, ResetColor, SetBackgroundColor, SetForegroundColor};
+use crossterm::style::{Color, Print, ResetColor, SetBackgroundColor, SetForegroundColor};
 use crossterm::terminal::{Clear, ClearType};
 
-use super::super::{byte_to_col, gutter_width, Editor};
+use super::super::{byte_to_col, gutter_width, Editor, ALL_ENCODINGS};
 use crate::t;
 
 impl Editor {
@@ -284,7 +284,8 @@ impl Editor {
             let prefix = format!(" {:>2}. ", i + 1);
             let name = &self.gosc_dirs[i];
             let display = if name.len() > inner_w.saturating_sub(5) {
-                format!("{}…", &name[..inner_w.saturating_sub(6)])
+                let cut = name.floor_char_boundary(inner_w.saturating_sub(6));
+                format!("{}…", &name[..cut])
             } else {
                 name.clone()
             };
@@ -332,6 +333,138 @@ impl Editor {
             )?;
         }
 
+        Ok(())
+    }
+
+    pub(crate) fn render_encoding_picker(&self, stdout: &mut std::io::Stdout) -> std::io::Result<()> {
+        let theme = crate::utils::theme::ThemeManager::current();
+        let content_top = 1;
+        let cols = self.term_w;
+        let rows = self.term_h.saturating_sub(4);
+        let panel_w = 40usize.min(cols.saturating_sub(4));
+        let panel_h = (ALL_ENCODINGS.len() + 5).min(rows.saturating_sub(4));
+        let left = (cols.saturating_sub(panel_w)) / 2;
+        let top = content_top + (rows.saturating_sub(panel_h)) / 2;
+
+        for i in 0..panel_h {
+            queue!(
+                stdout,
+                MoveTo(left as u16, (top + i) as u16),
+                SetBackgroundColor(theme.editor.sidebar_selected_bg.to_crossterm()),
+                Print(" ".repeat(panel_w)),
+                ResetColor,
+            )?;
+        }
+
+        let title = t!("editor.enc_title");
+        let title_x = left + (panel_w.saturating_sub(title.chars().count())) / 2;
+        queue!(
+            stdout,
+            MoveTo(title_x as u16, top as u16),
+            SetForegroundColor(theme.editor.sidebar_dir.to_crossterm()),
+            SetBackgroundColor(theme.editor.sidebar_selected_bg.to_crossterm()),
+            Print(title),
+            ResetColor,
+        )?;
+
+        let sep = "─".repeat(panel_w.saturating_sub(2));
+        queue!(
+            stdout,
+            MoveTo((left + 1) as u16, (top + 1) as u16),
+            SetForegroundColor(theme.editor.border.to_crossterm()),
+            SetBackgroundColor(theme.editor.sidebar_selected_bg.to_crossterm()),
+            Print(&sep),
+            ResetColor,
+        )?;
+
+        let current = self.encoding;
+        for (i, enc) in ALL_ENCODINGS.iter().enumerate() {
+            let ri = top + 2 + i;
+            let is_sel = i == self.encoding_sel;
+            let is_current = *enc == current;
+            let mark = if is_current { "●" } else { " " };
+            let line = format!(" {}  {}  {}", if is_sel { "▶" } else { " " }, mark, enc.label());
+            let fg = if is_sel {
+                theme.editor.sidebar_selected.to_crossterm()
+            } else if is_current {
+                theme.editor.sidebar_current.to_crossterm()
+            } else {
+                theme.syntax.normal.to_crossterm()
+            };
+            queue!(
+                stdout,
+                MoveTo((left + 2) as u16, ri as u16),
+                SetForegroundColor(fg),
+                SetBackgroundColor(theme.editor.sidebar_selected_bg.to_crossterm()),
+                Print(&line),
+                ResetColor,
+                Clear(ClearType::UntilNewLine),
+            )?;
+        }
+
+        if panel_h >= 5 {
+            let hint_ri = top + panel_h - 2;
+            let hint = t!("editor.enc_hint");
+            queue!(
+                stdout,
+                MoveTo((left + 2) as u16, hint_ri as u16),
+                SetForegroundColor(theme.editor.gutter_text.to_crossterm()),
+                SetBackgroundColor(theme.editor.sidebar_selected_bg.to_crossterm()),
+                Print(hint),
+                ResetColor,
+                Clear(ClearType::UntilNewLine),
+            )?;
+        }
+
+        Ok(())
+    }
+
+    pub(crate) fn render_git_diff(&self, stdout: &mut std::io::Stdout) -> std::io::Result<()> {
+        let theme = crate::utils::theme::ThemeManager::current();
+        if let Some(state) = &self.git_diff {
+            let rows = self.term_h.saturating_sub(4);
+            let cols = self.term_w;
+            let use_color = self.editor_cfg.color_enabled;
+            let content_y = 1;
+            for i in 0..rows {
+                let idx = state.scroll + i;
+                queue!(stdout, MoveTo(0, (content_y + i) as u16), Clear(ClearType::UntilNewLine))?;
+                if let Some(line) = state.lines.get(idx) {
+                    let fg = if use_color && !line.is_empty() {
+                        match line.as_bytes()[0] {
+                            b'+' => theme.shell.git_added.to_crossterm(),
+                            b'-' => theme.shell.git_deleted.to_crossterm(),
+                            b'@' => theme.shell.git_modified.to_crossterm(),
+                            _ => theme.syntax.normal.to_crossterm(),
+                        }
+                    } else {
+                        Color::White
+                    };
+                    let print_len = line.chars().count().min(cols);
+                    let clipped: String = line.chars().take(print_len).collect();
+                    queue!(
+                        stdout,
+                        SetForegroundColor(fg),
+                        Print(&clipped),
+                        ResetColor,
+                    )?;
+                }
+            }
+            let hint = format!(
+                "{} ({} lines) — {}",
+                t!("editor.git_quit_hint"),
+                state.lines.len(),
+                self.path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default(),
+            );
+            queue!(
+                stdout,
+                MoveTo(0, (self.term_h.saturating_sub(2)) as u16),
+                SetForegroundColor(theme.editor.hint_text.to_crossterm()),
+                Print(hint),
+                ResetColor,
+                Clear(ClearType::UntilNewLine),
+            )?;
+        }
         Ok(())
     }
 
@@ -423,14 +556,16 @@ impl Editor {
 
             let label_w = max_label.min(popup_w.saturating_sub(max_detail + 5));
             let label = if item.label.len() > label_w {
-                format!("{}…", &item.label[..label_w.saturating_sub(1)])
+                let cut = item.label.floor_char_boundary(label_w.saturating_sub(1));
+                format!("{}…", &item.label[..cut])
             } else {
                 item.label.clone()
             };
 
             let detail_w = max_detail.min(popup_w.saturating_sub(label_w + 4));
             let detail = if item.detail.len() > detail_w {
-                format!("{}…", &item.detail[..detail_w.saturating_sub(1)])
+                let cut = item.detail.floor_char_boundary(detail_w.saturating_sub(1));
+                format!("{}…", &item.detail[..cut])
             } else {
                 item.detail.clone()
             };
@@ -568,7 +703,8 @@ impl Editor {
         for (i, line_text) in lines.iter().enumerate().take(visible) {
             let y = popup_y + 1 + i;
             let display = if line_text.len() > popup_w.saturating_sub(4) {
-                format!(" {}…", &line_text[..popup_w.saturating_sub(5)])
+                let cut = line_text.floor_char_boundary(popup_w.saturating_sub(5));
+                format!(" {}…", &line_text[..cut])
             } else {
                 format!(" {}", line_text)
             };

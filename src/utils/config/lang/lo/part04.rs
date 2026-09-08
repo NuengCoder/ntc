@@ -36,6 +36,7 @@ pub fn fill(m: &mut HashMap<String, String>) {
     m.insert("cli.run.help_sett".into(), "ສະແດງ ຫຼື ຕັ້ງຈຳນວນ threads".into());
     m.insert("cli.run.help_showcg".into(), "ສະແດງພາບລວມການຕັ້ງຄ່າປັດຈຸບັນ".into());
     m.insert("cli.run.help_size".into(), "ສະແດງຂະໜາດໄດເຣັກທໍຣີປັດຈຸບັນ".into());
+    m.insert("cli.run.help_path".into(), "ເສັ້ນທາງເປົ້າໝາຍ ຫຼື savepoint (ໃຊ້ກັບ --size ຫຼື --view)".into());
     m.insert("cli.run.help_time".into(), "ສະແດງເວລາທີ່ໃຊ້ (ໃຊ້ກັບ --size ຫຼື --view)".into());
     m.insert("cli.run.help_tp_add".into(), "ບັນທຶກໄດເຣັກທໍຣີປັດຈຸບັນເປັນ teleport point".into());
     m.insert("cli.run.help_tp_list".into(), "ລາຍຊື່ teleport points ທັງໝົດ".into());

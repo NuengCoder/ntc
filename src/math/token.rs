@@ -9,6 +9,7 @@ pub(crate) enum Token {
     Str(String),
     Ident(String),
     Op(char),
+    OpStr(String),
     LParen,
     RParen,
     Comma,
@@ -107,7 +108,30 @@ pub(crate) fn tokenize_with_pos(input: &str) -> Result<(Vec<Token>, Vec<usize>)>
             continue;
         }
 
-        if "+-*/^".contains(ch) {
+        if ch == '*' {
+            // Check for *** and ** before single *
+            if i + 2 < chars.len() && chars[i + 1] == '*' && chars[i + 2] == '*' {
+                tokens.push(Token::OpStr("***".to_string()));
+                positions.push(byte_offset);
+                byte_offset += 3;
+                i += 3;
+                continue;
+            }
+            if i + 1 < chars.len() && chars[i + 1] == '*' {
+                tokens.push(Token::OpStr("**".to_string()));
+                positions.push(byte_offset);
+                byte_offset += 2;
+                i += 2;
+                continue;
+            }
+            tokens.push(Token::Op('*'));
+            positions.push(byte_offset);
+            byte_offset += ch.len_utf8();
+            i += 1;
+            continue;
+        }
+
+        if "+-/^".contains(ch) {
             tokens.push(Token::Op(ch));
             positions.push(byte_offset);
             byte_offset += ch.len_utf8();

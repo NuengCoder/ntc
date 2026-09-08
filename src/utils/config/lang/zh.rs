@@ -46,7 +46,7 @@ pub fn build_map() -> HashMap<String, String> {
 
     m.insert("alias.ral.import_cmd".into(), " ral import <文件> 从 .ntc.ral 文件导入别名".into());
 
-    m.insert("alias.ral.info_cmd".into(), " ral info <名称> 显示别名详情".into());
+    m.insert("alias.ral.info_cmd".into(), " ral info <名称> [--edit] 显示别名详情（--edit 将编辑命令复制到剪贴板）".into());
 
     m.insert("alias.ral.info_command".into(), "命令".into());
 
@@ -63,6 +63,10 @@ pub fn build_map() -> HashMap<String, String> {
     m.insert("alias.ral.info_source_local".into(), "本地（ntconfig.toml）".into());
 
     m.insert("alias.ral.info_title".into(), "\u{1F4CC} 别名信息".into());
+
+    m.insert("alias.ral.info_edit_copied".into(), "编辑命令已复制到剪贴板：".into());
+
+    m.insert("alias.ral.info_edit_hint".into(), "粘贴它，调整命令，然后按回车。".into());
 
     m.insert("alias.ral.invalid_name".into(), "无效的别名名称：'{}'".into());
 
@@ -126,7 +130,7 @@ pub fn build_map() -> HashMap<String, String> {
 
     m.insert("alias.ral.usage_import".into(), "用法：ral import <文件>".into());
 
-    m.insert("alias.ral.usage_info".into(), "用法：ral info <别名>".into());
+    m.insert("alias.ral.usage_info".into(), "用法：ral info <别名> [--edit]".into());
 
     m.insert("alias.ral.usage_rm".into(), "用法：ral rm <名称>[, <名称>, ...]".into());
 
@@ -864,6 +868,8 @@ pub fn build_map() -> HashMap<String, String> {
 
     m.insert("cli.known_flag.size".into(), "--size 显示当前目录大小".into());
 
+    m.insert("cli.known_flag.path".into(), "--path <路径|@tp> 目标路径或传送点（与 --size 或 --view 配合使用）".into());
+
     m.insert("cli.known_flag.teleport_at".into(), "ntc @<名称> 启动并传送到保存点".into());
 
     m.insert("cli.known_flag.tp_add".into(), "--tp-add <名称> 将当前目录保存为传送点".into());
@@ -1005,6 +1011,8 @@ pub fn build_map() -> HashMap<String, String> {
     m.insert("cli.run.help_showcg".into(), "显示当前配置总览".into());
 
     m.insert("cli.run.help_size".into(), "显示当前目录大小".into());
+
+    m.insert("cli.run.help_path".into(), "目标路径或传送点（与 --size 或 --view 配合使用）".into());
 
     m.insert("cli.run.help_time".into(), "显示耗时（与 --size 或 --view 一起使用）".into());
 
@@ -2016,7 +2024,13 @@ pub fn build_map() -> HashMap<String, String> {
 
     m.insert("cmd.report.unknown_option".into(), "未知的 view 选项：{}".into());
 
-    m.insert("cmd.report.view_usage".into(), "用法：view [-s|--size] [-c|--cp] [--care] [-t|--time] [-d|--depth <n>]".into());
+    m.insert("cmd.report.view_usage".into(), "用法：view [-s|--size] [-c|--cp] [--care] [-t|--time] [-d|--depth <n>] [-p|--path <路径|@tp>]".into());
+
+    m.insert("cmd.target.not_dir".into(), "“{}”不是目录".into());
+
+    m.insert("cmd.target.not_found".into(), "路径“{}”不存在".into());
+
+    m.insert("cmd.target.tp_not_found".into(), "传送点“{}”不存在".into());
 
     m.insert("cmd.serve.db_title".into(), "数据库：".into());
 
@@ -2107,6 +2121,10 @@ pub fn build_map() -> HashMap<String, String> {
     m.insert("cmd.serve.usage_title".into(), "用法：".into());
 
     m.insert("cmd.serve.usage_title".into(), "用法：".into());
+
+    m.insert("cmd.serve.cloudflared_starting".into(), "cloudflared 隧道正在启动（PID {}）".into());
+
+    m.insert("cmd.serve.cloudflared_missing".into(), "未找到 cloudflared：{}。安装：{}".into());
 
     m.insert("cmd.smtp.build_fail".into(), "构建电子邮件消息失败".into());
 
@@ -2428,8 +2446,6 @@ pub fn build_map() -> HashMap<String, String> {
 
     m.insert("cmd.upgrade.copy_fail".into(), "复制二进制文件失败：{}".into());
 
-    m.insert("cmd.upgrade.copy_fail".into(), "复制二进制文件失败：{}".into());
-
     m.insert("cmd.upgrade.copy_fail_android".into(), "复制二进制文件失败。请检查磁盘空间或权限。".into());
 
     m.insert("cmd.upgrade.dev_build".into(), "您可能正在运行开发版本。".into());
@@ -2444,29 +2460,19 @@ pub fn build_map() -> HashMap<String, String> {
 
     m.insert("cmd.upgrade.exe_path_fail".into(), "获取可执行文件路径失败：{}".into());
 
-    m.insert("cmd.upgrade.exe_path_fail".into(), "获取可执行文件路径失败：{}".into());
-
     m.insert("cmd.upgrade.install_fail".into(), "安装失败：{}".into());
 
     m.insert("cmd.upgrade.missing_tag".into(), "GitHub 发布响应中缺少 'tag_name'".into());
 
     m.insert("cmd.upgrade.new_version".into(), "发现新版本：ntc {}".into());
 
-    m.insert("cmd.upgrade.no_assets".into(), "在发布 v{} 中未找到资源".into());
-
-    m.insert("cmd.upgrade.no_assets".into(), "在发布 v{} 中未找到资源".into());
-
     m.insert("cmd.upgrade.no_assets_release".into(), "在发布 v{} 中未找到资源".into());
 
     m.insert("cmd.upgrade.perm_fail".into(), "设置可执行权限失败：{}".into());
 
-    m.insert("cmd.upgrade.perm_fail".into(), "设置可执行权限失败：{}".into());
+    m.insert("cmd.upgrade.progress_bytes".into(), "已下载：{} 字节".into());
 
-    m.insert("cmd.upgrade.progress_bytes".into(), "进度：{:.0%}（{}/{}）".into());
-
-    m.insert("cmd.upgrade.progress_bytes".into(), "进度：{:.0%}（{}/{}）".into());
-
-    m.insert("cmd.upgrade.progress_pct".into(), "进度：{:.0%}".into());
+    m.insert("cmd.upgrade.progress_pct".into(), "进度：{}%".into());
 
     m.insert("cmd.upgrade.restart".into(), "重新启动 ntc 以使用新版本。".into());
 
@@ -2476,13 +2482,7 @@ pub fn build_map() -> HashMap<String, String> {
 
     m.insert("cmd.upgrade.time_remaining".into(), "剩余时间：{:>3} 秒  ".into());
 
-    m.insert("cmd.upgrade.time_remaining".into(), "剩余时间：{:>3} 秒  ".into());
-
     m.insert("cmd.upgrade.tmpdir_fail".into(), "创建临时目录失败：{}".into());
-
-    m.insert("cmd.upgrade.tmpdir_fail".into(), "创建临时目录失败：{}".into());
-
-    m.insert("cmd.upgrade.unsupported_platform".into(), "不支持的平台：{}".into());
 
     m.insert("cmd.upgrade.unsupported_platform".into(), "不支持的平台：{}".into());
 
@@ -2956,7 +2956,7 @@ pub fn build_map() -> HashMap<String, String> {
 
     m.insert("editor.gs_loading".into(), " 正在查找... {} 请稍候".into());
 
-    m.insert("editor.help_screen".into(), " 普通模式（只读）\n ^O 进入插入模式\n ^W 进入可视模式\n ^G 跳转到行号（跳转模式）\n : 打开命令行\n ^E 打开命令行（备选）\n :auto on 启用退出时自动保存\n :auto off 禁用退出时自动保存\n ^H 打开此帮助屏幕\n ^Q 关闭当前标签 / 退出（如果是最后一个标签）\n ^Q+Shift 关闭所有标签\n ^PgDn 下一个标签\n ^PgUp 上一个标签\n ^N 在新标签中打开文件\n ^F 在文件中查找 / 搜索\n ^D 在下一处添加光标\n ^Alt+D 拆分主光标\n mouse 单击标签栏，滚轮导航\n arrows 移动主光标\n Sh+arrows 单词级移动\n\n 插入模式（编辑）\n ^C 复制选择\n ^F 查找 / 搜索\n ^N 在新标签中打开文件\n ^G 跳转到行（返回插入模式）\n ^Z 撤销\n ^R 重做\n ^Y 复制当前行\n ^A 全选\n ^L 选择当前行\n ^D 查找下一处\n ^Alt+D 在选择处拆分光标\n ^X 剪切选择\n ^S 保存\n ^W 进入可视模式\n ^E 打开命令行\n Esc 返回普通模式\n ^Q 退出（带保存提示）\n ^H 帮助\n Home 行首\n End 行尾\n ^D auto 进入 Insert*（多光标）\n Esc 返回 Insert\n\n 可视模式（选择）\n arrows 扩展选择\n ^F 查找 / 搜索\n ^N 在新标签中打开文件\n ^G 跳转到行（返回可视模式）\n ^O 进入插入模式\n ^E 打开命令行\n ^C 复制并退出\n ^X 剪切并退出\n ^Q 退出（带保存提示）\n ^H 帮助\n Esc 退出可视模式\n mouse 单击并拖动选择\n\n 命令模式\n :<number> 跳转到行号\n :l N 或 :line N 跳转到第 N 行\n :q 或 :quit 退出编辑器（带保存提示）\n :wq 保存并退出\n :w 或 :write 保存文件\n :auto on 启用自动保存\n :auto off 禁用自动保存\n :syntax on 启用语法高亮\n :syntax off 禁用语法高亮\n :cd <路径> 更改目录（导航器）\n :back [N] 返回父目录（N 级）\n :gos <N> 导航到第 N 个子目录\n :gosc 列出编号的子目录\n :mkdir <目录> 创建目录\n :mkd <目录> 创建目录（:mkdir 别名）\n :touch <文件> 创建新文件\n :mkf <文件> 创建新文件（:touch 别名）\n :rmd <目标> 递归删除目录\n :rmf <目标> 强制删除文件或目录\n :rnmf <源> <目标> 重命名文件\n :rnmd <源> <目标> 重命名目录\n :ne <文件> 导航并编辑（不存在则创建）\n :ne . 在侧边栏显示当前目录\n :theme <名称> 按名称切换主题\n :theme list 列出可用主题\n :theme 显示当前主题\n :tp <名称> 跳转到传送点\n :tp-add <名称> 将当前目录保存为传送点\n :gs <模式> 在项目中搜索文件内容\n :run <命令> 在持久运行面板中执行命令\n Esc 取消\n\n 查询模式（插入模式 Ctrl+Alt+Q，命令模式 :x）\n /s /l 清除选择\n /s /l /a 全选行\n /s /l N to M 选择第 N..M 行（从 1 开始）\n /s /l N to M /e str 筛选包含 str 的行\n /p old to new 在选择中将 'old' 替换为 'new'\n /upper 选择转大写（需选择）\n /lower 选择转小写（需选择）\n /add <文本> to #end 在每行末尾追加文本\n /add <文本> to #start 在每行开头插入文本\n /set <模式> to #end 右对齐首处匹配\n /set <模式> to #start 左对齐首处匹配\n /qal add <n> <q> 添加查询别名\n /qal rm <n> 删除别名\n /qal info <n> 显示别名\n /qal edit <n> <q> 更新别名\n /qal rnm <a> to <b> 重命名别名\n /qal list 列出别名\n /q <名称> [参数] 运行别名\n <名称> [参数] 直接运行别名（无 /）\n /undo 撤销\n /redo 重做\n /exit /quit /Esc 退出查询模式\n ; 链式执行多个命令\n ${1} ${2} 别名位置参数\n ${1:-默认值} 带默认值的别名参数\n ${1[]} 别名数组参数（所有剩余参数）\n\n 终端 / 运行面板\n Ctrl+T 切换终端面板\n :run <命令> 执行命令，打开持久运行面板\n mouse 单击面板聚焦，单击编辑器返回\n Esc（面板内） 运行：关闭 | 终端：返回编辑器\n drag \u{2500}\u{2500}\u{2500} row 调整面板高度".into());
+    m.insert("editor.help_screen".into(), " 普通模式（只读）\n ^O 进入插入模式\n ^W 进入可视模式\n ^G 跳转到行号（跳转模式）\n : 打开命令行\n ^E 打开命令行（备选）\n :auto on 启用退出时自动保存\n :auto off 禁用退出时自动保存\n ^H 打开此帮助屏幕\n ^Q 关闭当前标签 / 退出（如果是最后一个标签）\n ^Q+Shift 关闭所有标签\n ^PgDn 下一个标签\n ^PgUp 上一个标签\n ^N 在新标签中打开文件\n ^F 在文件中查找 / 搜索\n ^D 在下一处添加光标\n ^Alt+D 拆分主光标\n mouse 单击标签栏，滚轮导航\n arrows 移动主光标\n Sh+arrows 单词级移动\n\n 插入模式（编辑）\n ^C 复制选择\n ^F 查找 / 搜索\n ^N 在新标签中打开文件\n ^G 跳转到行（返回插入模式）\n ^Z 撤销\n ^R 重做\n ^Y 复制当前行\n ^A 全选\n ^L 选择当前行\n ^D 查找下一处\n ^Alt+D 在选择处拆分光标\n ^X 剪切选择\n ^S 保存\n ^W 进入可视模式\n ^E 打开命令行\n Esc 返回普通模式\n ^Q 退出（带保存提示）\n ^H 帮助\n Home 行首\n End 行尾\n ^D auto 进入 Insert*（多光标）\n Esc 返回 Insert\n\n 可视模式（选择）\n arrows 扩展选择\n ^F 查找 / 搜索\n ^N 在新标签中打开文件\n ^G 跳转到行（返回可视模式）\n ^O 进入插入模式\n ^E 打开命令行\n ^C 复制并退出\n ^X 剪切并退出\n ^Q 退出（带保存提示）\n ^H 帮助\n Esc 退出可视模式\n mouse 单击并拖动选择\n\n 命令模式\n :<number> 跳转到行号\n :l N 或 :line N 跳转到第 N 行\n :q 或 :quit 退出编辑器（带保存提示）\n :wq 保存并退出\n :w 或 :write 保存文件\n :auto on 启用自动保存\n :auto off 禁用自动保存\n :syntax on 启用语法高亮\n :syntax off 禁用语法高亮\n :cd <路径> 更改目录（导航器）\n :back [N] 返回父目录（N 级）\n :gos <N> 导航到第 N 个子目录\n :gosc 列出编号的子目录\n :mkdir <目录> 创建目录\n :mkd <目录> 创建目录（:mkdir 别名）\n :touch <文件> 创建新文件\n :mkf <文件> 创建新文件（:touch 别名）\n :rmd <目标> 递归删除目录\n :rmf <目标> 强制删除文件或目录\n :rnmf <源> <目标> 重命名文件\n :rnmd <源> <目标> 重命名目录\n :ne <文件> 导航并编辑（不存在则创建）\n :ne . 在侧边栏显示当前目录\n :theme <名称> 按名称切换主题\n :theme list 列出可用主题\n :theme 显示当前主题\n :git diff 或 :gd 显示当前文件的 git 差异\n :git blame 或 :blame 显示当前行的 blame 信息\n :tp <名称> 跳转到传送点\n :tp-add <名称> 将当前目录保存为传送点\n :gs <模式> 在项目中搜索文件内容\n :run <命令> 在持久运行面板中执行命令\n Esc 取消\n\n 查询模式（插入模式 Ctrl+Alt+Q，命令模式 :x）\n /s /l 清除选择\n /s /l /a 全选行\n /s /l N to M 选择第 N..M 行（从 1 开始）\n /s /l N to M /e str 筛选包含 str 的行\n /p old to new 在选择中将 'old' 替换为 'new'\n /upper 选择转大写（需选择）\n /lower 选择转小写（需选择）\n /add <文本> to #end 在每行末尾追加文本\n /add <文本> to #start 在每行开头插入文本\n /set <模式> to #end 右对齐首处匹配\n /set <模式> to #start 左对齐首处匹配\n /qal add <n> <q> 添加查询别名\n /qal rm <n> 删除别名\n /qal info <n> 显示别名\n /qal edit <n> <q> 更新别名\n /qal rnm <a> to <b> 重命名别名\n /qal list 列出别名\n /q <名称> [参数] 运行别名\n <名称> [参数] 直接运行别名（无 /）\n /undo 撤销\n /redo 重做\n /exit /quit /Esc 退出查询模式\n ; 链式执行多个命令\n ${1} ${2} 别名位置参数\n ${1:-默认值} 带默认值的别名参数\n ${1[]} 别名数组参数（所有剩余参数）\n\n 终端 / 运行面板\n Ctrl+T 切换终端面板\n :run <命令> 执行命令，打开持久运行面板\n mouse 单击面板聚焦，单击编辑器返回\n Esc（面板内） 运行：关闭 | 终端：返回编辑器\n drag \u{2500}\u{2500}\u{2500} row 调整面板高度".into());
 
     m.insert("editor.hex_cannot_read".into(), "hex：无法读取文件：{}".into());
 
@@ -3153,6 +3153,14 @@ pub fn build_map() -> HashMap<String, String> {
     m.insert("editor.mode_exited_multi".into(), "已退出多光标模式".into());
 
     m.insert("editor.mode_finder".into(), "[查找]".into());
+
+    m.insert("editor.mode_encoding".into(), "[编码]".into());
+
+    m.insert("editor.mode_git_diff".into(), "[Git差异]".into());
+    m.insert("editor.git_no_diff".into(), "git：此文件无差异".into());
+    m.insert("editor.git_no_blame".into(), "git：此行为无 blame 信息".into());
+    m.insert("editor.git_disabled".into(), "git 集成已禁用（config git ON 开启）".into());
+    m.insert("editor.git_quit_hint".into(), "Esc/q 关闭".into());
 
     m.insert("editor.mode_gosc".into(), "[导航]".into());
 
@@ -3401,6 +3409,17 @@ pub fn build_map() -> HashMap<String, String> {
     m.insert("editor.save_auto_error".into(), "自动保存错误：{}".into());
 
     m.insert("editor.save_failed".into(), "保存失败：{}".into());
+
+    m.insert("editor.encoding_changed".into(), "编码已更改".into());
+
+    m.insert("editor.enc_title".into(), "编码".into());
+    m.insert("editor.enc_hint".into(), "↑↓ 选择 · 回车确认 · Esc 取消".into());
+    m.insert("editor.hint_encoding".into(), "编码：".into());
+    m.insert("editor.encoding_reload_error".into(), "重新加载失败：{}".into());
+    m.insert(
+        "editor.encoding_applied_on_save".into(),
+        "保存时应用".into(),
+    );
 
     m.insert("editor.save_prompt".into(), "保存文件 [Y|N]？".into());
 
@@ -3654,7 +3673,7 @@ pub fn build_map() -> HashMap<String, String> {
 
     m.insert("help.alias.import".into(), "ral import <文件> ## 从 .ntc.ral 文件导入别名".into());
 
-    m.insert("help.alias.info".into(), "ral info <名称> ## 显示别名详情".into());
+    m.insert("help.alias.info".into(), "ral info <名称> [--edit] ## 显示别名详情（--edit：将编辑命令复制到剪贴板）".into());
 
     m.insert("help.alias.list".into(), "ral list ## 显示所有别名".into());
 
@@ -3946,6 +3965,8 @@ pub fn build_map() -> HashMap<String, String> {
 
     m.insert("help.network.smtp".into(), "smtp ## SMTP邮件客户端（--id, -i, -u, -pwd, -s, -b, -f, --to）".into());
 
+    m.insert("help.network.spec".into(), "spec ## 显示电脑/系统规格（CPU、显卡、内存、存储、系统、序列号）".into());
+
     m.insert("help.network.sys".into(), "sys, top ## 实时系统监视器（CPU、内存、磁盘、进程）".into());
 
     m.insert("help.network.title".into(), "系统与网络命令：".into());
@@ -4088,6 +4109,24 @@ pub fn build_map() -> HashMap<String, String> {
 
     m.insert("help.report.xlsx".into(), "report xlsx [路径] ## 生成XLSX报告（含依赖分析）".into());
 
+    m.insert("help.scr.continue".into(), "scr -c <file.ntc> [args...] ## 运行脚本，出错后继续".into());
+
+    m.insert("help.scr.example1".into(), "scr deploy.ntc ## 运行 deploy.ntc".into());
+
+    m.insert("help.scr.example2".into(), "scr build.ntc dev prod ## 传入参数 $1=dev, $2=prod".into());
+
+    m.insert("help.scr.example3".into(), "scr -c setup.ntc ## 运行并在出错后继续".into());
+
+    m.insert("help.scr.help".into(), "scr help ## 显示 scr 用法".into());
+
+    m.insert("help.scr.init".into(), "scr init [name] ## 创建脚本模板".into());
+
+    m.insert("help.scr.ls".into(), "scr ls ## 列出当前目录中的 *.ntc 脚本".into());
+
+    m.insert("help.scr.run".into(), "scr <file.ntc> [args...] ## 运行自动化脚本".into());
+
+    m.insert("help.scr.title".into(), "SCR / 自动化脚本命令：".into());
+
     m.insert("help.search.ds".into(), "ds <模式> [-d <n>] ## 按名称搜索目录".into());
 
     m.insert("help.search.fs".into(), "fs <模式> [-d <n>] ## 按名称搜索文件（模糊匹配）".into());
@@ -4101,6 +4140,16 @@ pub fn build_map() -> HashMap<String, String> {
     m.insert("help.search.locate".into(), "locate <模式> [-d <n>] ## 同时搜索文件和目录".into());
 
     m.insert("help.search.title".into(), "搜索命令：".into());
+
+    m.insert("help.size.care".into(), "size --care ## 计算所有文件的大小（care 模式）".into());
+
+    m.insert("help.size.path".into(), "size -p, --path <路径|@tp> ## 显示指定路径或传送点的大小".into());
+
+    m.insert("help.size.size".into(), "size ## 显示当前目录大小".into());
+
+    m.insert("help.size.time".into(), "size -t, --time ## 显示耗时".into());
+
+    m.insert("help.size.title".into(), "大小命令：".into());
 
     m.insert("help.syscmd.any".into(), "<任意命令> ## NTC将未知命令传递给系统".into());
 
@@ -4203,6 +4252,8 @@ pub fn build_map() -> HashMap<String, String> {
     m.insert("help.view.dirsize".into(), "view -ds, --dirsize ## 显示仅含目录大小的树".into());
 
     m.insert("help.view.filesize".into(), "view -fs, --filesize ## 显示仅含文件大小的树".into());
+
+    m.insert("help.view.path".into(), "view -p, --path <路径|@tp> ## 显示指定路径或传送点的树".into());
 
     m.insert("help.view.size".into(), "view -s, --size ## 显示含目录和文件大小的树".into());
 
@@ -4602,6 +4653,8 @@ pub fn build_map() -> HashMap<String, String> {
 
     m.insert("misc.size.human_label".into(), "可读格式：".into());
 
+    m.insert("misc.size.path_label".into(), "路径：".into());
+
     m.insert("misc.size.time_label".into(), "耗时：".into());
 
     m.insert("misc.size.title".into(), "当前目录大小".into());
@@ -4807,6 +4860,8 @@ pub fn build_map() -> HashMap<String, String> {
     m.insert("msg.showcg.label_threads".into(), "线程数：".into());
 
     m.insert("msg.showcg.label_watcher".into(), "监视器：".into());
+
+    m.insert("msg.showcg.label_dir_view".into(), "目录视图：".into());
 
     m.insert("msg.showcg.title".into(), "当前配置".into());
 
@@ -5028,6 +5083,40 @@ pub fn build_map() -> HashMap<String, String> {
 
     m.insert("ntpkg.npm_not_detected".into(), "未检测到Node.js/npm。".into());
 
+    m.insert("ntpkg.npm_section_node_first".into(), "  ── 先安装 Node.js ──".into());
+
+    m.insert("ntpkg.npm_node_found_at".into(), "  ✓ 在 {} 找到 Node.js".into());
+
+    m.insert("ntpkg.npm_node_not_found".into(), "  ✗ 未找到 Node.js".into());
+
+    m.insert("ntpkg.npm_install_via_pkg".into(), "  通过 pkg 安装：".into());
+
+    m.insert("ntpkg.npm_install_via_ntpkg".into(), "  通过 ntpkg 安装：".into());
+
+    m.insert("ntpkg.npm_ntpkg_cmd".into(), "    ntpkg install {}".into());
+
+    m.insert("ntpkg.npm_cmd".into(), "    npm i -g {}".into());
+
+    m.insert("ntpkg.npm_or_download_nodejs".into(), "  或从以下地址下载：https://nodejs.org".into());
+
+    m.insert("ntpkg.npm_or_fnm_nvm_volta".into(), "  或通过 fnm/nvm/volta 安装".into());
+
+    m.insert("ntpkg.npm_found_at".into(), "  ✓ 在 {} 找到 npm".into());
+
+    m.insert("ntpkg.npm_not_found".into(), "  ✗ 未找到 npm".into());
+
+    m.insert("ntpkg.npm_then_run".into(), "  然后运行：".into());
+
+    m.insert("ntpkg.npm_then_rerun".into(), "  然后重新运行：".into());
+
+    m.insert("ntpkg.npm_bin_not_in_path".into(), "npm 全局二进制目录不在 PATH 中（{}）".into());
+
+    m.insert("ntpkg.path_add_label".into(), "  添加到 PATH：".into());
+
+    m.insert("ntpkg.npm_install_section".into(), "  ── 安装 {} ──".into());
+
+    m.insert("ntpkg.npm_run_cmd_label".into(), "  运行此命令：".into());
+
     m.insert("ntpkg.ntpx_usage".into(), "用法：ntpx <包> [二进制] [参数...]".into());
 
     m.insert("ntpkg.package_count".into(), "{} 个包".into());
@@ -5042,7 +5131,11 @@ pub fn build_map() -> HashMap<String, String> {
 
     m.insert("ntpkg.skip_register".into(), "跳过用 ntpkg 注册 {}。".into());
 
-    m.insert("ntpkg.termux_hint".into(), "在 Termux 上建议使用 pkg 安装（linux-aarch64 预编译版依赖 glibc）：pkg install {}".into());
+    m.insert("ntpkg.termux_use_pkg".into(), "在 Termux 上请用 pkg 而非 ntpkg 安装：".into());
+
+    m.insert("ntpkg.termux_cmd".into(), "    pkg install {}".into());
+
+    m.insert("ntpkg.termux_no_pkg".into(), "Termux 中没有与 '{}' 对应的 pkg 包。".into());
 
     m.insert("ntpkg.src_act".into(), "act - 本地运行 GitHub Actions".into());
 
@@ -5388,6 +5481,64 @@ pub fn build_map() -> HashMap<String, String> {
 
     m.insert("report.saved_to".into(), "报告已保存到：{}".into());
 
+    m.insert("scr.calling_not_allowed".into(), "脚本内不允许嵌套调用 scr".into());
+
+    m.insert("scr.cmd_failed".into(), "命令执行失败".into());
+
+    m.insert("scr.completed".into(), "脚本 '{}' 成功完成（{} 条命令）".into());
+
+    m.insert("scr.continue_warn".into(), "在第 {} 行出错后继续".into());
+
+    m.insert("scr.desc_args".into(), " $1..$9, $@ 位置参数".into());
+
+    m.insert("scr.desc_force".into(), " @ <cmd> 强制系统命令（绕过 ntc 内建命令）".into());
+
+    m.insert("scr.desc_interp".into(), " $var / ${var} / ${var:-default} 变量插值".into());
+
+    m.insert("scr.desc_set".into(), " set NAME = value 定义变量".into());
+
+    m.insert("scr.done_errors".into(), "脚本 '{}' 完成，共 {} 个错误".into());
+
+    m.insert("scr.error_at".into(), "错误：{}:{} — {}".into());
+
+    m.insert("scr.executing".into(), "[{}] 执行：{}".into());
+
+    m.insert("scr.failed_abort".into(), "脚本 '{}' 在第 {} 行中止（{} 个错误）".into());
+
+    m.insert("scr.help_continue".into(), " scr -c <file.ntc> [args...] 出错后继续".into());
+
+    m.insert("scr.help_help".into(), " scr help 显示此帮助".into());
+
+    m.insert("scr.help_init".into(), " scr init [name] 创建脚本模板".into());
+
+    m.insert("scr.help_ls".into(), " scr ls 列出当前目录中的 *.ntc 脚本".into());
+
+    m.insert("scr.help_run".into(), " scr <file.ntc> [args...] 运行自动化脚本".into());
+
+    m.insert("scr.help_title".into(), "scr — ntc 自动化脚本运行器".into());
+
+    m.insert("scr.help_usage".into(), "用法：".into());
+
+    m.insert("scr.init_created".into(), "已创建模板 {}".into());
+
+    m.insert("scr.init_exists".into(), "{} 已存在".into());
+
+    m.insert("scr.ls_empty".into(), "在 {} 中未找到 *.ntc 脚本".into());
+
+    m.insert("scr.ls_title".into(), "自动化脚本：".into());
+
+    m.insert("scr.no_commands".into(), "{} 中没有要运行的命令".into());
+
+    m.insert("scr.not_found".into(), "找不到脚本：{}（{}）".into());
+
+    m.insert("scr.start".into(), "正在运行脚本 {}...".into());
+
+    m.insert("scr.syscmd".into(), "执行：{}".into());
+
+    m.insert("scr.syscmd_exit".into(), "命令退出代码：{}".into());
+
+    m.insert("scr.syscmd_terminated".into(), "命令已终止（Ctrl+C）".into());
+
     m.insert("status.none".into(), "无".into());
 
     m.insert("status.off".into(), "关".into());
@@ -5695,6 +5846,14 @@ pub fn build_map() -> HashMap<String, String> {
     m.insert("help.view.example3".into(), "view -d 2 ## 显示深度为 2 的目录树".into());
     m.insert("help.view.example4".into(), "view --cp ## 显示目录树并复制到剪贴板".into());
     m.insert("help.view.example5".into(), "view --time ## 显示带执行时间的目录树".into());
+    m.insert("help.view.example6".into(), "view -p C:\\code\\project ## 显示指定路径的目录树".into());
+    m.insert("help.view.example7".into(), "view @web ## 显示传送点的目录树".into());
+
+    // help size
+    m.insert("help.size.example1".into(), "size ## 显示当前目录大小".into());
+    m.insert("help.size.example2".into(), "size ../src ## 显示其他目录的大小".into());
+    m.insert("help.size.example3".into(), "size -p C:\\code\\project ## 显示指定路径的大小".into());
+    m.insert("help.size.example4".into(), "size @web --care -t ## 传送点使用 care 模式并显示耗时".into());
 
     // help report
     m.insert("help.report.example1".into(), "report txt ## 生成 TXT 报告".into());
@@ -5847,7 +6006,147 @@ pub fn build_map() -> HashMap<String, String> {
 
     m.insert("help.tmprt.example4".into(), "tmprt city Bangkok ## 设置默认城市".into());
 
+    m.insert("help.git.title".into(), "GIT 集成命令：".into());
+
+    m.insert("help.git.status".into(), "git status | st ## 漂亮的仓库状态输出".into());
+
+    m.insert("help.git.branch".into(), "git branch | b ## 列出分支（当前分支高亮）".into());
+
+    m.insert("help.git.log".into(), "git log | l ## 彩色最近提交日志".into());
+
+    m.insert("help.git.diff".into(), "git diff ## 显示工作区差异".into());
+
+    m.insert("help.git.passthrough".into(), "git <任意> ## 其他 git 子命令直接透传".into());
+
+    m.insert("help.git.example1".into(), "git status ## 显示分支和暂存/未暂存/未跟踪".into());
+
+    m.insert("help.git.example2".into(), "git branch -a ## 列出全部分支（透传）".into());
+
+    m.insert("help.git.example3".into(), "git commit -am \"消息\" ## 常规 git 流程（透传）".into());
+
+    m.insert("help.config.git".into(), "config git ON|OFF ## 启用/禁用 git 集成（提示符和符号）".into());
+
+    m.insert("help.config.dir_view".into(), "config dir_view ON|OFF ## 在shell中显示/隐藏目录树".into());
+
+    m.insert("git.no_git_binary".into(), "未安装 Git。请运行 `ntpkg install git` 安装。".into());
+
+    m.insert("git.not_repo".into(), "不是 git 仓库（或其父目录）。".into());
+
+    m.insert("git.executing".into(), "正在执行：{}".into());
+
+    m.insert("git.completed".into(), "git 命令已完成。".into());
+
+    m.insert("git.exit_code".into(), "命令退出码：{}".into());
+
+    m.insert("git.terminated".into(), "命令已被终止。".into());
+
+    m.insert("git.failed".into(), "执行命令失败：{}".into());
+
+    m.insert("git.checking_status".into(), "正在检查状态".into());
+
+    m.insert("git.status_failed".into(), "无法读取 git 状态。".into());
+
+    m.insert("git.branch_header".into(), "当前分支".into());
+
+    m.insert("git.upstream".into(), "跟踪 {}".into());
+
+    m.insert("git.ahead".into(), "领先 {}".into());
+
+    m.insert("git.behind".into(), "落后 {}".into());
+
+    m.insert("git.detached_header".into(), "分离的 HEAD".into());
+
+    m.insert("git.section_conflicts".into(), "未合并的路径：".into());
+
+    m.insert("git.section_staged".into(), "待提交的更改：".into());
+
+    m.insert("git.section_unstaged".into(), "尚未暂存的更改：".into());
+
+    m.insert("git.section_untracked".into(), "未跟踪的文件：".into());
+
+    m.insert("git.clean".into(), "工作区干净。".into());
+
+    m.insert("git.branch_failed".into(), "无法列出分支。".into());
+
+    m.insert("git.log_failed".into(), "无法读取 git 日志。".into());
+
+    m.insert("git.log_empty".into(), "未找到提交。".into());
+
+    m.insert("git.help_title".into(), "GIT 集成：".into());
+
+    m.insert("git.help_status".into(), "git status ## 显示分支和暂存/未暂存/未跟踪".into());
+
+    m.insert("git.help_branch".into(), "git branch ## 列出分支".into());
+
+    m.insert("git.help_log".into(), "git log ## 最近的彩色提交".into());
+
+    m.insert("git.help_diff".into(), "git diff ## 工作区差异".into());
+
+    m.insert("git.help_passthrough".into(), "git <任意> ## 其他都透传给真实 git".into());
+
+    m.insert("git.examples_header".into(), "示例：".into());
+
+    m.insert("git.help_example1".into(), "git status".into());
+
+    m.insert("git.help_example2".into(), "git checkout main".into());
+
+    m.insert("msg.setGit.status".into(), "Git 集成：{}".into());
+
+    m.insert("msg.setGit.on".into(), "已启用 Git 集成。".into());
+
+    m.insert("msg.setGit.off".into(), "已禁用 Git 集成。".into());
+
+    m.insert("msg.setGit.error".into(), "用法：config git ON|OFF".into());
+
+    m.insert("msg.setDV.status".into(), "目录视图：{}".into());
+
+    m.insert("msg.setDV.on".into(), "已启用目录视图。".into());
+
+    m.insert("msg.setDV.off".into(), "已禁用目录视图。".into());
+
+    m.insert("msg.setDV.error".into(), "用法：config dir_view ON|OFF".into());
+
     m.insert("cmd.tmprt.unknown_sub".into(), "未知的 tmprt 子命令：{}".into());
+
+    m.insert("cmd.spec.other".into(), "其他".into());
+
+    m.insert("cmd.spec.title".into(), "系统规格".into());
+
+    m.insert("cmd.spec.cpu".into(), "CPU".into());
+
+    m.insert("cmd.spec.vendor".into(), "厂商".into());
+
+    m.insert("cmd.spec.generation".into(), "代数".into());
+
+    m.insert("cmd.spec.model".into(), "型号".into());
+
+    m.insert("cmd.spec.cores".into(), "核心 / 线程".into());
+
+    m.insert("cmd.spec.gpu".into(), "显卡".into());
+
+    m.insert("cmd.spec.ram".into(), "内存".into());
+
+    m.insert("cmd.spec.storage".into(), "存储".into());
+
+    m.insert("cmd.spec.total".into(), "总计".into());
+
+    m.insert("cmd.spec.os".into(), "操作系统".into());
+
+    m.insert("cmd.spec.manufacturer".into(), "制造商".into());
+
+    m.insert("cmd.spec.computer_model".into(), "电脑型号".into());
+
+    m.insert("cmd.spec.serial".into(), "序列号".into());
+
+    m.insert("cmd.spec.hostname".into(), "主机名".into());
+
+    m.insert("cmd.spec.kernel".into(), "内核".into());
+
+    m.insert("cmd.spec.uptime".into(), "运行时间".into());
+
+    m.insert("cmd.spec.unknown".into(), "未知".into());
+
+    m.insert("cmd.spec.custom".into(), "自定义".into());
 
     m.insert("cmd.tmprt.usage_title".into(), "用法：".into());
 
@@ -6026,6 +6325,8 @@ pub fn build_map() -> HashMap<String, String> {
     m.insert("dl.ping_missing_count".into(), "缺少 -c 后的数量".into());
     m.insert("dl.request_failed".into(), "请求 {} 失败".into());
     m.insert("dl.upload_failed".into(), "上传到 {} 失败".into());
+
+
 
     m
 

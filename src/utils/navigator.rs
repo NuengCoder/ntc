@@ -35,6 +35,15 @@ impl Navigator {
         strip_extended_prefix(&self.current_dir)
     }
 
+    /// Get just the current directory name for compact prompt display
+    pub fn current_dir_name(&self) -> String {
+        self.current_dir
+            .file_name()
+            .and_then(|n| n.to_str())
+            .unwrap_or("~")
+            .to_string()
+    }
+
     /// Get the venv prefix for display
     pub fn get_venv_prefix(&self) -> String {
         match &self.venv_name {

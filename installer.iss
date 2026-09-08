@@ -1,12 +1,12 @@
 [Setup]
 AppName=ntc
-AppVersion=2.4.2
+AppVersion=2.4.3
 AppPublisher=NuengCoder
 AppPublisherURL=https://github.com/NuengCoder/ntc
 DefaultDirName={autopf}\ntc
 DefaultGroupName=ntc
 OutputDir=.\installer
-OutputBaseFilename=ntc-installer-2.4.2
+OutputBaseFilename=ntc-installer-2.4.3
 SetupIconFile=assets\ntc_image.ico
 Compression=lzma
 SolidCompression=yes

@@ -49,7 +49,7 @@ pub fn fill(m: &mut HashMap<String, String>) {
     m.insert("help.alias.export_all".into(), "ral export --all <name> ## ສົ່ງອອກ aliases ທັງໝົດໄປຍັງ <name>.ntc.ral".into());
     m.insert("help.alias.export_select".into(), "ral export --select <name> ## ເລືອກ aliases ເພື່ອສົ່ງອອກ".into());
     m.insert("help.alias.import".into(), "ral import <file> ## ນຳເຂົ້າ aliases ຈາກໄຟລ໌ .ntc.ral".into());
-    m.insert("help.alias.info".into(), "ral info <name> ## ສະແດງລາຍລະອຽດ alias".into());
+    m.insert("help.alias.info".into(), "ral info <name> [--edit] ## ສະແດງລາຍລະອຽດ alias (--edit: ສຳເນົາຄຳສັ່ງແກ້ໄຂໃສ່ clipboard)".into());
     m.insert("help.alias.list".into(), "ral list ## ສະແດງ aliases ທັງໝົດ".into());
     m.insert("help.alias.make".into(), "ral make [name] ## ສ້າງ alias template ໃນ CWD".into());
     m.insert("help.alias.rm".into(), "ral rm <name>[, ...] ## ລຶບ alias".into());

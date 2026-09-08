@@ -1,0 +1,19 @@
+# script.ntc — ntc automation script
+# Run with: scr script.ntc [args...]
+# Each line is a command: ntc builtin, run alias, or system command.
+
+# Define variables (values are interpolated immediately)
+set name = "world"
+set dir = "src"
+
+# ntc command (supports $var / ${var} / ${var:-default})
+cd $dir
+say "Hello $name"
+
+# system command (fallback when not an ntc builtin)
+echo done
+
+# force a system command (bypasses ntc builtins)
+@ echo forced system command
+@ echo "current directory path"
+pathcp

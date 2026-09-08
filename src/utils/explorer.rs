@@ -543,3 +543,16 @@ pub fn format_tree_with_sizes(
 ) -> String {
     format_tree_inner(node, prefix, is_last, show_filesize, show_dirsize, care, pb)
 }
+
+/// Append a git status letter (M/A/D/?/U) to file node names for any path
+/// present in `status`. In-place annotation used right before formatting.
+pub fn annotate_git_status(node: &mut TreeNode, status: &HashMap<PathBuf, char>) {
+    if !node.is_dir {
+        if let Some(code) = status.get(Path::new(&node.path)) {
+            node.name = format!("{} {}", node.name, code);
+        }
+    }
+    for child in &mut node.children {
+        annotate_git_status(child, status);
+    }
+}

@@ -1,4 +1,4 @@
-use super::{is_ctrl_char, prev_char_byte, sel_range, CursorPos, Editor};
+use super::{ci_find, is_ctrl_char, prev_char_byte, sel_range, CursorPos, Editor};
 use crate::t;
 
 impl Editor {
@@ -375,9 +375,6 @@ impl Editor {
         // found occurrence). Searching from here skips the already-selected occurrence.
         let (search_y, search_byte) = (self.cursor.y, self.cursor.byte);
 
-        let q = query.to_lowercase();
-        let q_len = q.len();
-
         // Inline helper: check if (y, byte) already has a cursor
         let pos_has_cursor =
             |extra: &[CursorPos], py: usize, pb: usize, y: usize, byte: usize| -> bool {
@@ -386,16 +383,15 @@ impl Editor {
 
         // Find next occurrence at or after search point
         for li in search_y..self.lines.len() {
-            let lower = self.lines[li].to_lowercase();
+            let line = &self.lines[li];
             let start = if li == search_y { search_byte } else { 0 };
-            if let Some(pos) = lower[start..].find(&q) {
-                let abs_pos = start + pos;
+            if let Some((s, e)) = ci_find(line, &query, start) {
                 let already_exists = pos_has_cursor(
                     &self.cursor.extra_cursors,
                     self.cursor.y,
                     self.cursor.byte,
                     li,
-                    abs_pos + q_len,
+                    e,
                 );
                 if !already_exists {
                     let old_primary = CursorPos {
@@ -405,8 +401,8 @@ impl Editor {
                     };
                     self.cursor.extra_cursors.push(old_primary);
                     self.cursor.y = li;
-                    self.cursor.byte = abs_pos + q_len;
-                    self.cursor.selection_anchor = Some((li, abs_pos));
+                    self.cursor.byte = e;
+                    self.cursor.selection_anchor = Some((li, s));
                     self.cursor.last_added_cursor_idx = Some(self.cursor.extra_cursors.len() - 1);
                     self.mark_all_dirty();
                     self.status_msg = Some(format!(
@@ -422,17 +418,16 @@ impl Editor {
         }
         // Wrap around from top
         for li in 0..=search_y {
-            let lower = self.lines[li].to_lowercase();
+            let line = &self.lines[li];
             let start = 0;
-            if let Some(pos) = lower[start..].find(&q) {
-                let abs_pos = start + pos;
-                if li < search_y || (li == search_y && abs_pos < search_byte) {
+            if let Some((s, e)) = ci_find(line, &query, start) {
+                if li < search_y || (li == search_y && s < search_byte) {
                     let already_exists = pos_has_cursor(
                         &self.cursor.extra_cursors,
                         self.cursor.y,
                         self.cursor.byte,
                         li,
-                        abs_pos + q_len,
+                        e,
                     );
                     if !already_exists {
                         let old_primary = CursorPos {
@@ -442,8 +437,8 @@ impl Editor {
                         };
                         self.cursor.extra_cursors.push(old_primary);
                         self.cursor.y = li;
-                        self.cursor.byte = abs_pos + q_len;
-                        self.cursor.selection_anchor = Some((li, abs_pos));
+                        self.cursor.byte = e;
+                        self.cursor.selection_anchor = Some((li, s));
                         self.cursor.last_added_cursor_idx =
                             Some(self.cursor.extra_cursors.len() - 1);
                         self.mark_all_dirty();

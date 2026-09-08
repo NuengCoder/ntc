@@ -24,6 +24,10 @@ pub fn cmd_ntpkg(args: &str, _nav: &mut crate::navigator::Navigator) -> Result<b
                 print_error(&t!("ntpkg.install_usage"));
                 return Ok(false);
             }
+            if manager::is_termux() {
+                manager::print_termux_recommendation(name);
+                return Ok(false);
+            }
             let ver = if version.is_empty()
                 || (*name == "java" && !version.is_empty() && !version.contains('-'))
             {

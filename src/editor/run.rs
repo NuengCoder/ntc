@@ -272,6 +272,8 @@ impl Editor {
                         Mode::Gosc => self.handle_gosc_event(ev)?,
                         Mode::Query => self.handle_query_event(ev)?,
                         Mode::Hex => self.handle_hex_event(ev, stdout)?,
+                        Mode::Encoding => self.handle_encoding_event(ev)?,
+                        Mode::GitDiff => self.handle_git_diff_event(ev, stdout)?,
                     },
                 }
             }

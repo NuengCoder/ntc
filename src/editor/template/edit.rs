@@ -77,26 +77,31 @@ pub fn edit_file_with_session(
                 })
                 .unwrap_or(false);
         if is_recent && !snapshot.tabs.is_empty() {
-            let mut first_path = None;
+            // Rebuild tabs to mirror the snapshot (path-matched, so ordering and
+            // missing files can never shift state onto the wrong buffer).
+            let mut focus_tab: Option<usize> = None;
             for tab_snap in &snapshot.tabs {
-                if tab_snap.path.exists() {
-                    if first_path.is_none() {
-                        first_path = Some(tab_snap.path.clone());
-                    } else {
+                if !tab_snap.path.exists() {
+                    continue;
+                }
+                match editor.find_tab_by_path(&tab_snap.path) {
+                    Some(i) => editor.restore_tab_from_snapshot_path(i, tab_snap),
+                    None => {
                         editor.open_file(&tab_snap.path);
+                        if let Some(i) = editor.find_tab_by_path(&tab_snap.path) {
+                            editor.restore_tab_from_snapshot_path(i, tab_snap);
+                        }
                     }
                 }
-            }
-            if let Some(ref p) = first_path {
-                if *p != path {
-                    editor.open_file(path);
+                if tab_snap.path == path {
+                    focus_tab = editor.find_tab_by_path(path);
                 }
             }
-            for i in 0..snapshot.tabs.len().min(editor.tabs.len()) {
-                editor.restore_tab_from_snapshot(i, &snapshot);
-            }
-            if snapshot.active_tab < editor.tabs.len() {
-                editor.switch_tab(snapshot.active_tab);
+            // The requested file must always end up focused (it is tab 0 already
+            // if it wasn't part of the snapshot).
+            let focus = focus_tab.or_else(|| editor.find_tab_by_path(path));
+            if let Some(i) = focus {
+                editor.switch_tab(i);
             }
             editor.sidebar.open = snapshot.sidebar_open;
         }

@@ -57,6 +57,7 @@ const TEXT_EXTENSIONS: &[&str] = &[
     "zig",
     "m",
     "iss",
+    "ntc",
     "ntc.ral",
     "ntc.igcare",
     "ntc.math",

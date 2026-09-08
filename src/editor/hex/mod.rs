@@ -134,14 +134,16 @@ impl Editor {
                             hex.nibble = true;
                         } else {
                             let new_byte = hex.pending_byte | val;
-                            let old = hex.data[hex.cursor];
-                            if old != new_byte {
-                                hex.undo_stack.push(vec![(hex.cursor, old)]);
-                                hex.redo_stack.clear();
-                                hex.data[hex.cursor] = new_byte;
-                                hex.modified = true;
-                                if hex.undo_stack.len() > 100 {
-                                    hex.undo_stack.remove(0);
+                            if hex.cursor < hex.data.len() {
+                                let old = hex.data[hex.cursor];
+                                if old != new_byte {
+                                    hex.undo_stack.push(vec![(hex.cursor, old)]);
+                                    hex.redo_stack.clear();
+                                    hex.data[hex.cursor] = new_byte;
+                                    hex.modified = true;
+                                    if hex.undo_stack.len() > 100 {
+                                        hex.undo_stack.remove(0);
+                                    }
                                 }
                             }
                             hex.nibble = false;

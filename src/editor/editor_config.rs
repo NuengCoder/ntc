@@ -38,10 +38,6 @@ pub struct EditorConfig {
     /// Lower values feel more responsive but use more CPU.
     #[serde(default = "default_poll_rate_ms")]
     pub poll_rate_ms: u64,
-    /// Whether to use frame-buffer rendering (default: false).
-    /// When enabled, uses a cell grid to diff frames and reduce terminal I/O.
-    #[serde(default)]
-    pub frame_buffer_enabled: bool,
     /// Auto-save session interval in seconds (default: 30).
     #[serde(default = "default_session_auto_save_secs")]
     pub session_auto_save_secs: u64,
@@ -99,7 +95,6 @@ impl Default for EditorConfig {
             max_run_lines: default_max_run_lines(),
             pre_tokenize_lines: default_pre_tokenize_lines(),
             poll_rate_ms: default_poll_rate_ms(),
-            frame_buffer_enabled: false,
             session_auto_save_secs: default_session_auto_save_secs(),
             session_max_age_hours: default_session_max_age_hours(),
         }

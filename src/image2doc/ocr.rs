@@ -77,7 +77,12 @@ fn libs_cache_dir() -> Option<PathBuf> {
 /// Print localized guidance when tesseract is missing.
 fn print_missing_guidance() {
     print_warning(&t!("image2doc.ocr_missing"));
-    print_info(&t!("image2doc.ocr_install"));
+    if crate::ntpkg::manager::is_termux() {
+        print_info(&t!("ntpkg.termux_use_pkg"));
+        print_info(&t!("ntpkg.termux_cmd", "tesseract"));
+    } else {
+        print_info(&t!("image2doc.ocr_install"));
+    }
     #[cfg(windows)]
     {
         print_info(&t!("image2doc.ocr_path_win"));

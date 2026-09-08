@@ -131,21 +131,27 @@ pub fn run_classic_shell(mut nav: Navigator) -> Result<()> {
     println!("╚══════════════════════════════════════════════════════════════════╝");
     println!();
     println!("{}", t!("entry.startup_hint").dimmed());
-    show_tree(&nav, Some(1), false, false, false, false, false, false);
+    if NtcConfig::global_get_dir_view_enabled() {
+        show_tree(&nav, Some(1), false, false, false, false, false, false);
+    }
 
     loop {
         // Check if theme changed
         if crate::utils::theme::ThemeManager::take_theme_changed() {
             // Clear screen and redraw tree with new colors
             crate::navigator::clear_screen();
-            show_tree(&nav, Some(1), false, false, false, false, false, false);
+            if NtcConfig::global_get_dir_view_enabled() {
+                show_tree(&nav, Some(1), false, false, false, false, false, false);
+            }
         }
         if let Some(ref wh) = watcher_handle {
             if let Some(summary) = wh.poll() {
                 if !summary.is_empty() {
                     summary.print_change_box();
                 }
-                show_tree(&nav, Some(1), false, false, false, false, false, false);
+                if NtcConfig::global_get_dir_view_enabled() {
+                    show_tree(&nav, Some(1), false, false, false, false, false, false);
+                }
                 if !summary.is_empty() {
                     summary.print_refresh_box();
                 }
@@ -162,8 +168,18 @@ pub fn run_classic_shell(mut nav: Navigator) -> Result<()> {
             }
         }
 
-        let display_path = nav.display_path();
+        let display_path = nav.current_dir_name();
         let watcher_suffix = if watcher_handle.is_some() { " ~" } else { "" };
+        let git_suffix = if NtcConfig::global_get_git_integration_enabled() {
+            crate::utils::git::prompt_fragment(nav.current_path())
+        } else {
+            String::new()
+        };
+        let git_suffix = if git_suffix.is_empty() {
+            String::new()
+        } else {
+            format!(" {}", git_suffix)
+        };
 
         // NOTE: Prompt must stay plain text — colored prompts with ANSI codes
         // break rustyline's cursor positioning and line editing.
@@ -171,9 +187,12 @@ pub fn run_classic_shell(mut nav: Navigator) -> Result<()> {
 
         // Build the prompt
         let prompt = if venv_prefix.is_empty() {
-            format!("ntc [{}{}]> ", display_path, watcher_suffix)
+            format!("ntc [{}{}{}]> ", display_path, watcher_suffix, git_suffix)
         } else {
-            format!("{}ntc [{}{}]> ", venv_prefix, display_path, watcher_suffix)
+            format!(
+                "{}ntc [{}{}{}]> ",
+                venv_prefix, display_path, watcher_suffix, git_suffix
+            )
         };
 
         let line = match rl.readline(&prompt) {
@@ -212,6 +231,8 @@ pub fn run_classic_shell(mut nav: Navigator) -> Result<()> {
                     if let Some(ref wh) = watcher_handle {
                         let _ = wh.update_path(nav.current_path());
                     }
+                    // Refresh git status cache so prompt stays accurate
+                    crate::utils::git::invalidate();
                     if exit {
                         should_exit = true;
                         break;
@@ -231,7 +252,9 @@ pub fn run_classic_shell(mut nav: Navigator) -> Result<()> {
                     if !summary.is_empty() {
                         summary.print_change_box();
                     }
-                    show_tree(&nav, Some(1), false, false, false, false, false, false);
+                    if NtcConfig::global_get_dir_view_enabled() {
+                        show_tree(&nav, Some(1), false, false, false, false, false, false);
+                    }
                     if !summary.is_empty() {
                         summary.print_refresh_box();
                     }

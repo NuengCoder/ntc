@@ -21,7 +21,7 @@ pub fn fill(m: &mut HashMap<String, String>) {
     m.insert("alias.ral.export_select_cmd".into(), " ral export --select <name> ເລືອກ alias ເພື່ອສົ່ງອອກໄປຍັງ <name>.ntc.ral".into());
     m.insert("alias.ral.file_exists".into(), "ໄຟລ໌ມີຢູ່ແລ້ວ: {}".into());
     m.insert("alias.ral.import_cmd".into(), " ral import <file> ນຳເຂົ້າ alias ຈາກໄຟລ໌ .ntc.ral".into());
-    m.insert("alias.ral.info_cmd".into(), " ral info <name> ສະແດງລາຍລະອຽດ alias".into());
+    m.insert("alias.ral.info_cmd".into(), " ral info <name> [--edit] ສະແດງລາຍລະອຽດ alias (--edit ສຳເນົາຄຳສັ່ງແກ້ໄຂໃສ່ clipboard)".into());
     m.insert("alias.ral.info_command".into(), "ຄຳສັ່ງ".into());
     m.insert("alias.ral.info_name".into(), "ຊື່".into());
     m.insert("alias.ral.info_none".into(), "ບໍ່ມີ".into());
@@ -30,6 +30,8 @@ pub fn fill(m: &mut HashMap<String, String>) {
     m.insert("alias.ral.info_source_global".into(), "global".into());
     m.insert("alias.ral.info_source_local".into(), "local (ntconfig.toml)".into());
     m.insert("alias.ral.info_title".into(), "\u{1F4CC} ຂໍ້ມູນ Alias".into());
+    m.insert("alias.ral.info_edit_copied".into(), "ສຳເນົາຄຳສັ່ງແກ້ໄຂໃສ່ clipboard ແລ້ວ:".into());
+    m.insert("alias.ral.info_edit_hint".into(), "ວາງມັນ, ປັບຄຳສັ່ງ, ແລ້ວກົດ Enter.".into());
     m.insert("alias.ral.invalid_name".into(), "ຊື່ alias ບໍ່ຖືກຕ້ອງ: '{}'".into());
     m.insert("alias.ral.invalid_suffix".into(), "{} (ບໍ່ຖືກຕ້ອງ)".into());
     m.insert("alias.ral.list_cmd".into(), " ral list ສະແດງ alias ທັງໝົດ".into());
@@ -61,7 +63,7 @@ pub fn fill(m: &mut HashMap<String, String>) {
     m.insert("alias.ral.usage_export".into(), "ວິທີໃຊ້: ral export --all <name> | ral export --select <name>".into());
     m.insert("alias.ral.usage_hint".into(), "ວິທີໃຊ້: <alias> ຫຼື <alias>(<arg>) ສຳລັບ alias ແບບມີພາຣາມິເຕີ".into());
     m.insert("alias.ral.usage_import".into(), "ວິທີໃຊ້: ral import <file>".into());
-    m.insert("alias.ral.usage_info".into(), "ວິທີໃຊ້: ral info <alias>".into());
+    m.insert("alias.ral.usage_info".into(), "ວິທີໃຊ້: ral info <alias> [--edit]".into());
     m.insert("alias.ral.usage_rm".into(), "ວິທີໃຊ້: ral rm <name>[, <name>, ...]".into());
     m.insert("alias.ral.usage_rnm".into(), "ວິທີໃຊ້: ral rnm <old_name> to <new_name>".into());
     m.insert("alias.ral.usage_with_run".into(), "ວິທີໃຊ້ກັບ run:".into());

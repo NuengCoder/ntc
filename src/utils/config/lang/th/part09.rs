@@ -59,6 +59,8 @@ pub fn fill(m: &mut HashMap<String, String>) {
     m.insert("msg.showcg.label_output_path".into(), "เส้นทางผลลัพธ์:".into());
     m.insert("msg.showcg.label_threads".into(), "เธรด:".into());
     m.insert("msg.showcg.label_watcher".into(), "ตัวเฝ้าดูไฟล์:".into());
+
+    m.insert("msg.showcg.label_dir_view".into(), "Dir View:".into());
     m.insert("msg.showcg.title".into(), "การกำหนดค่าปัจจุบัน".into());
     m.insert("msg.size.bytes_label".into(), "ไบต์:".into());
     m.insert("msg.size.human_label".into(), "มนุษย์:".into());
@@ -166,6 +168,23 @@ pub fn fill(m: &mut HashMap<String, String>) {
     m.insert("ntpkg.npm_bin_in_path".into(), "npm global bin อยู่ใน PATH".into());
     m.insert("ntpkg.npm_detected".into(), "ตรวจพบ Node.js และ npm".into());
     m.insert("ntpkg.npm_not_detected".into(), "ไม่ตรวจพบ Node.js/npm.".into());
+    m.insert("ntpkg.npm_section_node_first".into(), "  ── ติดตั้ง Node.js ก่อน ──".into());
+    m.insert("ntpkg.npm_node_found_at".into(), "  ✓ พบ Node.js ที่: {}".into());
+    m.insert("ntpkg.npm_node_not_found".into(), "  ✗ ไม่พบ Node.js".into());
+    m.insert("ntpkg.npm_install_via_pkg".into(), "  ติดตั้งผ่าน pkg:".into());
+    m.insert("ntpkg.npm_install_via_ntpkg".into(), "  ติดตั้งผ่าน ntpkg:".into());
+    m.insert("ntpkg.npm_ntpkg_cmd".into(), "    ntpkg install {}".into());
+    m.insert("ntpkg.npm_cmd".into(), "    npm i -g {}".into());
+    m.insert("ntpkg.npm_or_download_nodejs".into(), "  หรือดาวน์โหลดจาก: https://nodejs.org".into());
+    m.insert("ntpkg.npm_or_fnm_nvm_volta".into(), "  หรือติดตั้งผ่าน fnm/nvm/volta".into());
+    m.insert("ntpkg.npm_found_at".into(), "  ✓ พบ npm ที่: {}".into());
+    m.insert("ntpkg.npm_not_found".into(), "  ✗ ไม่พบ npm".into());
+    m.insert("ntpkg.npm_then_run".into(), "  จากนั้นรัน:".into());
+    m.insert("ntpkg.npm_then_rerun".into(), "  จากนั้นรันอีกครั้ง:".into());
+    m.insert("ntpkg.npm_bin_not_in_path".into(), "npm global bin ไม่พบใน PATH ({})".into());
+    m.insert("ntpkg.path_add_label".into(), "  เพิ่มลง PATH:".into());
+    m.insert("ntpkg.npm_install_section".into(), "  ── ติดตั้ง {} ──".into());
+    m.insert("ntpkg.npm_run_cmd_label".into(), "  รันคำสั่งนี้:".into());
     m.insert("ntpkg.ntpx_usage".into(), "การใช้งาน: ntpx <package> [binary] [args...]".into());
     m.insert("ntpkg.package_count".into(), "{} แพ็กเกจ".into());
     m.insert("ntpkg.php_skip_register".into(), "ข้ามการลงทะเบียน PHP กับ ntpkg.".into());
@@ -173,7 +192,9 @@ pub fn fill(m: &mut HashMap<String, String>) {
     m.insert("ntpkg.select_jdk_version".into(), "เลือกเวอร์ชัน JDK {}".into());
     m.insert("ntpkg.select_version".into(), "เลือกเวอร์ชัน {}".into());
     m.insert("ntpkg.skip_register".into(), "ข้ามการลงทะเบียน {} กับ ntpkg.".into());
-    m.insert("ntpkg.termux_hint".into(), "บน Termux ควรติดตั้งผ่าน pkg (linux-aarch64 builds เชื่อมโยงกับ glibc): pkg install {}".into());
+    m.insert("ntpkg.termux_use_pkg".into(), "บน Termux ควรติดตั้งผ่าน pkg แทน ntpkg:".into());
+    m.insert("ntpkg.termux_cmd".into(), "    pkg install {}".into());
+    m.insert("ntpkg.termux_no_pkg".into(), "ไม่มีแพ็กเกจ pkg ของ Termux สำหรับ '{}'.".into());
     m.insert("ntpkg.src_act".into(), "act - เรียก GitHub Actions ในเครื่อง".into());
     m.insert("ntpkg.src_cloudflare".into(), "cloudflared - ไคลเอ็นต์ Cloudflare Tunnel".into());
     m.insert("ntpkg.src_devops_tool".into(), "เครื่องมือ CLI ของ Azure DevOps".into());

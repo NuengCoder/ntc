@@ -1,7 +1,7 @@
 use anyhow::Result;
 use crossterm::event::{Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 
-use crate::editor::{sel_range, Editor, Mode};
+use crate::editor::{ci_find, sel_range, Editor, Mode};
 use crate::t;
 
 impl Editor {
@@ -200,48 +200,53 @@ impl Editor {
             result = result.replace(&var, arg);
         }
 
-        // Second pass: handle ${N:-default} and ${N[]}
-        while let Some(start) = result.find("${") {
-            let rest = &result[start + 2..];
-            let close = match rest.find('}') {
+        // Second pass: handle ${N:-default} and ${N[]}. Guarantees progress:
+        // an unresolvable placeholder is kept literally and skipped past.
+        let mut rest: &str = &result;
+        let mut out = String::new();
+        while let Some(start) = rest.find("${") {
+            out.push_str(&rest[..start]);
+            let after = &rest[start + 2..];
+            let close = match after.find('}') {
                 Some(c) => c,
-                None => break,
+                None => {
+                    out.push_str(&rest[start..]);
+                    return out;
+                }
             };
-            let var_content = &rest[..close];
+            let var_content = &after[..close];
             let full_expr = format!("${{{}}}", var_content);
-            let replacement: String;
 
-            if let Some(dash_idx) = var_content.find(":-") {
+            let replacement: Option<String> = if let Some(dash_idx) = var_content.find(":-") {
                 let num_str = &var_content[..dash_idx];
                 let default = &var_content[dash_idx + 2..];
-                if let Ok(n) = num_str.parse::<usize>() {
-                    if n > 0 && n <= args.len() {
-                        replacement = args[n - 1].to_string();
-                    } else {
-                        replacement = default.to_string();
-                    }
-                } else {
-                    replacement = full_expr.clone();
+                match num_str.parse::<usize>() {
+                    Ok(n) if n > 0 && n <= args.len() => Some(args[n - 1].to_string()),
+                    Ok(_) => Some(default.to_string()),
+                    Err(_) => None,
                 }
             } else if let Some(bracket) = var_content.find("[]") {
                 let num_str = &var_content[..bracket];
-                if let Ok(n) = num_str.parse::<usize>() {
-                    if n > 0 && n <= args.len() {
-                        replacement = args[n - 1..].join(" ");
-                    } else {
-                        replacement = String::new();
-                    }
-                } else {
-                    replacement = full_expr.clone();
+                match num_str.parse::<usize>() {
+                    Ok(n) if n > 0 && n <= args.len() => Some(args[n - 1..].join(" ")),
+                    Ok(_) => Some(String::new()),
+                    Err(_) => None,
                 }
             } else {
-                replacement = full_expr.clone();
+                match var_content.parse::<usize>() {
+                    Ok(n) if n > 0 && n <= args.len() => Some(args[n - 1].to_string()),
+                    _ => None,
+                }
+            };
+
+            match replacement {
+                Some(value) => out.push_str(&value),
+                None => out.push_str(&full_expr),
             }
-
-            result = result.replacen(&full_expr, &replacement, 1);
+            rest = &after[close + 1..];
         }
-
-        result
+        out.push_str(rest);
+        out
     }
 
     fn cmd_select_lines(&mut self, args: &str) {
@@ -287,9 +292,7 @@ impl Editor {
 
         if let Some(ref pat) = filter_str {
             // Multi-cursor mode: select each occurrence of pattern
-            let pat_lower = pat.to_lowercase();
-            let pat_len = pat_lower.len();
-            let mut matches: Vec<(usize, usize)> = Vec::new();
+            let mut matches: Vec<(usize, usize, usize)> = Vec::new();
 
             let (search_s, search_e) = if let (Some(s), Some(e)) = (range_start, range_end) {
                 (
@@ -312,13 +315,12 @@ impl Editor {
             };
 
             for li in search_s..=search_e {
-                let lower = self.lines[li].to_lowercase();
+                let line = &self.lines[li];
                 let mut start = 0;
-                while let Some(pos) = lower[start..].find(&pat_lower) {
-                    let abs = start + pos;
-                    matches.push((li, abs));
-                    start = abs + 1;
-                    if start >= lower.len() {
+                while let Some((s, e)) = ci_find(line, pat, start) {
+                    matches.push((li, s, e));
+                    start = s + 1;
+                    if start >= line.len() {
                         break;
                     }
                 }
@@ -333,17 +335,17 @@ impl Editor {
             self.clear_extra_cursors();
 
             // Primary cursor at first match
-            let (first_y, first_b) = matches[0];
+            let (first_y, first_s, first_e) = matches[0];
             self.cursor.y = first_y;
-            self.cursor.byte = first_b + pat_len;
-            self.cursor.selection_anchor = Some((first_y, first_b));
+            self.cursor.byte = first_e;
+            self.cursor.selection_anchor = Some((first_y, first_s));
 
             // Extra cursors at rest
-            for &(my, mb) in &matches[1..] {
+            for &(my, ms, me) in &matches[1..] {
                 self.cursor.extra_cursors.push(crate::editor::CursorPos {
                     y: my,
-                    byte: mb + pat_len,
-                    anchor: Some((my, mb)),
+                    byte: me,
+                    anchor: Some((my, ms)),
                 });
             }
             self.status_msg = Some(t!("editor.query_selected_occurrences", matches.len(), pat));
@@ -398,10 +400,6 @@ impl Editor {
             return;
         }
 
-        let q_lower = find.to_lowercase();
-        let q_len = q_lower.len();
-
-        // Determine selection range
         let (row_start, row_end, col_start, col_end) = if self.has_selection() {
             let (ay, ab) = self.cursor.selection_anchor.unwrap();
             let ((sy, sb), (ey, eb)) = sel_range(self.cursor.y, self.cursor.byte, ay, ab);
@@ -414,38 +412,41 @@ impl Editor {
         let mut count = 0usize;
 
         for li in row_start..=row_end {
-            let line = &self.lines[li];
-            let lower = line.to_lowercase();
-            if !lower.contains(&q_lower) {
+            let line = self.lines[li].clone();
+            let line_start = if li == row_start {
+                col_start.min(line.len())
+            } else {
+                0
+            };
+            let line_end = if li == row_end && col_end != usize::MAX {
+                col_end.min(line.len())
+            } else {
+                line.len()
+            };
+            if line_start > line_end {
                 continue;
             }
-
-            let line_start = if li == row_start { col_start } else { 0 };
-            let line_end = if li == row_end { col_end } else { line.len() };
-
-            let searchable = &lower[line_start..line_end];
+            let searchable = &line[line_start..line_end];
 
             let mut result = String::new();
-            let mut src_pos = 0;
-            let mut search_pos = 0;
+            let mut pos = line_start;
             let mut found = false;
             loop {
-                let slice = &searchable[search_pos..];
-                match slice.find(&q_lower) {
-                    Some(offset) => {
-                        let match_abs = line_start + search_pos + offset;
-                        result.push_str(&line[src_pos..match_abs]);
+                match ci_find(searchable, find, pos - line_start) {
+                    Some((rel_s, rel_e)) => {
+                        let abs_s = line_start + rel_s;
+                        let abs_e = line_start + rel_e;
+                        result.push_str(&line[pos..abs_s]);
                         result.push_str(replace);
-                        src_pos = match_abs + q_len;
-                        search_pos = search_pos + offset + q_len;
+                        pos = abs_e;
                         count += 1;
                         found = true;
-                        if search_pos >= searchable.len() {
+                        if pos >= line_end {
                             break;
                         }
                     }
                     None => {
-                        result.push_str(&line[src_pos..]);
+                        result.push_str(&line[pos..]);
                         break;
                     }
                 }
@@ -771,5 +772,68 @@ impl Editor {
         } else {
             t!("editor.query_lowercased")
         });
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::editor::Editor;
+
+    fn test_editor(content: &[&str]) -> Editor {
+        let dir = std::env::temp_dir().join("ntc_editor_test");
+        let _ = std::fs::create_dir_all(&dir);
+        let path = dir.join("test_query.txt");
+        let lines: Vec<String> = content.iter().map(|s| s.to_string()).collect();
+        std::fs::write(&path, lines.join("\n")).unwrap();
+        let mut editor = Editor::new(&path).unwrap();
+        editor.lines = lines;
+        editor
+    }
+
+    #[test]
+    fn expand_alias_terminates_on_unresolved_placeholders() {
+        let editor = test_editor(&["hello"]);
+        // ${9} (out of range), ${0}, ${x} (non-numeric): previously infinite loop.
+        let out = editor.expand_alias("${9} ${0} ${x} ${1} ${2:-d} ${3[]}", "a");
+        assert_eq!(out, "${9} ${0} ${x} a d ");
+    }
+
+    #[test]
+    fn expand_alias_resolves_ranges_and_defaults() {
+        let editor = test_editor(&["hello"]);
+        // Only ${1} resolves in pass 1; ${2:-fallback} falls back to its default,
+        // and an out-of-range ${3[]} expands to empty.
+        let out = editor.expand_alias("${1} ${2:-fallback} ${3[]}", "x");
+        assert_eq!(out, "x fallback ");
+    }
+
+    #[test]
+    fn cmd_replace_last_line_no_selection_does_not_panic() {
+        let mut editor = test_editor(&["no match here", "foo bar foo"]);
+        editor.cmd_replace("foo to X");
+        assert_eq!(editor.lines[1], "X bar X");
+        assert_eq!(editor.lines[0], "no match here");
+    }
+
+    #[test]
+    fn cmd_replace_case_insensitive_with_multibyte() {
+        let mut editor = test_editor(&["aẞb ß x", "keep"]);
+        // `ẞ` (3 bytes) lowercases to `ß` (2 bytes) — offsets must not drift.
+        editor.cmd_replace("ß to S");
+        assert_eq!(editor.lines[0], "aSb S x");
+        assert_eq!(editor.lines[1], "keep");
+    }
+
+    #[test]
+    fn cmd_replace_respects_selection_bounds() {
+        let mut editor = test_editor(&["one", "two one", "one"]);
+        // Select "one" on line 1 only.
+        editor.cursor.y = 1;
+        editor.cursor.byte = 7;
+        editor.cursor.selection_anchor = Some((1, 0));
+        editor.cmd_replace("one to 1");
+        assert_eq!(editor.lines[0], "one");
+        assert_eq!(editor.lines[1], "two 1");
+        assert_eq!(editor.lines[2], "one");
     }
 }

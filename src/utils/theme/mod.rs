@@ -212,6 +212,20 @@ impl ThemeColor {
         }
     }
 
+    /// Paint a string with this theme color.
+    /// On non-Android: returns `colored::ColoredString`.
+    /// On Android: returns `String` with ANSI escapes.
+    #[cfg(not(target_os = "android"))]
+    pub fn paint(&self, s: &str) -> colored::ColoredString {
+        use colored::Colorize;
+        s.color(self.to_colored())
+    }
+
+    #[cfg(target_os = "android")]
+    pub fn paint(&self, s: &str) -> String {
+        format!("{}{}\x1b[0m", self.to_ansi_fg(), s)
+    }
+
     /// Convert to `crossterm::style::Color` for editor
     pub fn to_crossterm(&self) -> crossterm::style::Color {
         match self {
@@ -268,81 +282,21 @@ pub struct SyntaxTheme {
 impl Default for SyntaxTheme {
     fn default() -> Self {
         Self {
-            keyword: ThemeColor::Rgb {
-                r: 200,
-                g: 160,
-                b: 255,
-            },
-            string: ThemeColor::Rgb {
-                r: 103,
-                g: 228,
-                b: 128,
-            },
-            comment: ThemeColor::Rgb {
-                r: 108,
-                g: 108,
-                b: 128,
-            },
-            number: ThemeColor::Rgb {
-                r: 255,
-                g: 202,
-                b: 133,
-            },
-            r#type: ThemeColor::Rgb {
-                r: 120,
-                g: 220,
-                b: 232,
-            },
-            builtin: ThemeColor::Rgb {
-                r: 255,
-                g: 140,
-                b: 154,
-            },
-            function: ThemeColor::Rgb {
-                r: 130,
-                g: 226,
-                b: 255,
-            },
-            operator: ThemeColor::Rgb {
-                r: 200,
-                g: 200,
-                b: 208,
-            },
-            punctuation: ThemeColor::Rgb {
-                r: 132,
-                g: 132,
-                b: 154,
-            },
-            attribute: ThemeColor::Rgb {
-                r: 162,
-                g: 119,
-                b: 255,
-            },
-            macro_token: ThemeColor::Rgb {
-                r: 176,
-                g: 131,
-                b: 240,
-            },
-            regex: ThemeColor::Rgb {
-                r: 252,
-                g: 169,
-                b: 110,
-            },
-            tag: ThemeColor::Rgb {
-                r: 80,
-                g: 228,
-                b: 200,
-            },
-            constant: ThemeColor::Rgb {
-                r: 229,
-                g: 192,
-                b: 123,
-            },
-            normal: ThemeColor::Rgb {
-                r: 200,
-                g: 200,
-                b: 208,
-            },
+            keyword: ThemeColor::BrightCyan,
+            string: ThemeColor::BrightGreen,
+            comment: ThemeColor::BrightBlack,
+            number: ThemeColor::BrightGreen,
+            r#type: ThemeColor::Cyan,
+            builtin: ThemeColor::BrightRed,
+            function: ThemeColor::BrightYellow,
+            operator: ThemeColor::Yellow,
+            punctuation: ThemeColor::Yellow,
+            attribute: ThemeColor::BrightCyan,
+            macro_token: ThemeColor::BrightMagenta,
+            regex: ThemeColor::BrightRed,
+            tag: ThemeColor::BrightCyan,
+            constant: ThemeColor::Cyan,
+            normal: ThemeColor::BrightWhite,
         }
     }
 }
@@ -375,25 +329,35 @@ pub struct ShellTheme {
     pub teleport_name: ThemeColor,
     pub alias_name: ThemeColor,
     pub alias_command: ThemeColor,
+    pub git_branch: ThemeColor,
+    pub git_added: ThemeColor,
+    pub git_modified: ThemeColor,
+    pub git_deleted: ThemeColor,
+    pub git_untracked: ThemeColor,
+    pub git_conflict: ThemeColor,
 }
 
 impl Default for ShellTheme {
     fn default() -> Self {
         Self {
-            prompt_bracket: ThemeColor::Cyan,
-            prompt_path: ThemeColor::Blue,
+            prompt_bracket: ThemeColor::BrightCyan,
+            prompt_path: ThemeColor::Cyan,
             prompt_watcher: ThemeColor::Yellow,
             prompt_arrow: ThemeColor::Green,
             success: ThemeColor::Green,
             error: ThemeColor::Red,
             warning: ThemeColor::Yellow,
             info: ThemeColor::Cyan,
-            tree_branch: ThemeColor::Green,
-            tree_dir: ThemeColor::Blue,
-            tree_file: ThemeColor::White,
+            tree_branch: ThemeColor::Rgb {
+                r: 30,
+                g: 220,
+                b: 220,
+            },
+            tree_dir: ThemeColor::BrightMagenta,
+            tree_file: ThemeColor::Yellow,
             tree_ignored: ThemeColor::BrightBlack,
             tree_size: ThemeColor::Yellow,
-            command_output: ThemeColor::White,
+            command_output: ThemeColor::Yellow,
             separator: ThemeColor::Cyan,
             help_header: ThemeColor::Cyan,
             help_section: ThemeColor::Cyan,
@@ -401,6 +365,12 @@ impl Default for ShellTheme {
             teleport_name: ThemeColor::BrightBlue,
             alias_name: ThemeColor::Blue,
             alias_command: ThemeColor::BrightBlack,
+            git_branch: ThemeColor::BrightCyan,
+            git_added: ThemeColor::Green,
+            git_modified: ThemeColor::Yellow,
+            git_deleted: ThemeColor::Red,
+            git_untracked: ThemeColor::BrightBlack,
+            git_conflict: ThemeColor::BrightRed,
         }
     }
 }
@@ -445,50 +415,50 @@ impl Default for EditorTheme {
     fn default() -> Self {
         Self {
             editor_bg: ThemeColor::Rgb {
-                r: 13,
-                g: 13,
-                b: 21,
+                r: 21,
+                g: 19,
+                b: 26,
             },
             gutter_bg: ThemeColor::Rgb {
-                r: 13,
-                g: 13,
-                b: 21,
-            },
-            status_bg: ThemeColor::Rgb {
-                r: 162,
-                g: 119,
-                b: 255,
-            },
-            hint_bg: ThemeColor::Rgb {
-                r: 21,
-                g: 21,
-                b: 29,
-            },
-            sidebar_bg: ThemeColor::Rgb {
-                r: 13,
-                g: 13,
-                b: 21,
-            },
-            sidebar_selected_bg: ThemeColor::Rgb {
-                r: 44,
-                g: 44,
-                b: 58,
-            },
-            run_panel_bg: ThemeColor::Rgb {
-                r: 22,
+                r: 24,
                 g: 22,
                 b: 30,
             },
+            status_bg: ThemeColor::Rgb {
+                r: 130,
+                g: 100,
+                b: 210,
+            },
+            hint_bg: ThemeColor::Rgb {
+                r: 28,
+                g: 26,
+                b: 34,
+            },
+            sidebar_bg: ThemeColor::Rgb {
+                r: 21,
+                g: 19,
+                b: 26,
+            },
+            sidebar_selected_bg: ThemeColor::Rgb {
+                r: 50,
+                g: 45,
+                b: 65,
+            },
+            run_panel_bg: ThemeColor::Rgb {
+                r: 26,
+                g: 24,
+                b: 32,
+            },
             gutter_text: ThemeColor::Rgb {
-                r: 108,
-                g: 108,
-                b: 128,
+                r: 100,
+                g: 95,
+                b: 118,
             },
             status_text: ThemeColor::White,
             status_modified: ThemeColor::Yellow,
             hint_text: ThemeColor::Rgb {
-                r: 130,
-                g: 226,
+                r: 140,
+                g: 222,
                 b: 255,
             },
             cursor_bg: ThemeColor::White,
@@ -499,55 +469,55 @@ impl Default for EditorTheme {
                 b: 154,
             },
             selection_bg: ThemeColor::Rgb {
-                r: 54,
-                g: 51,
-                b: 84,
+                r: 58,
+                g: 50,
+                b: 85,
             },
             search_match_bg: ThemeColor::Rgb {
-                r: 44,
-                g: 44,
-                b: 58,
+                r: 48,
+                g: 43,
+                b: 63,
             },
             search_current_bg: ThemeColor::Rgb {
-                r: 162,
-                g: 119,
-                b: 255,
+                r: 130,
+                g: 100,
+                b: 210,
             },
             border: ThemeColor::Rgb {
-                r: 61,
-                g: 61,
-                b: 77,
+                r: 50,
+                g: 46,
+                b: 62,
             },
             scrollbar: ThemeColor::Rgb {
-                r: 61,
-                g: 61,
-                b: 77,
+                r: 38,
+                g: 35,
+                b: 48,
             },
             scrollbar_thumb: ThemeColor::Rgb {
-                r: 162,
-                g: 119,
-                b: 255,
+                r: 130,
+                g: 100,
+                b: 210,
             },
             sidebar_dir: ThemeColor::Rgb {
-                r: 120,
-                g: 220,
-                b: 232,
+                r: 134,
+                g: 215,
+                b: 235,
             },
             sidebar_file: ThemeColor::Rgb {
                 r: 200,
                 g: 200,
-                b: 208,
+                b: 215,
             },
             sidebar_current: ThemeColor::Rgb {
                 r: 255,
-                g: 202,
-                b: 133,
+                g: 208,
+                b: 145,
             },
             sidebar_selected: ThemeColor::White,
             run_header_fg: ThemeColor::Rgb {
-                r: 70,
-                g: 130,
-                b: 180,
+                r: 95,
+                g: 145,
+                b: 205,
             },
             run_header_unfocused_fg: ThemeColor::Rgb {
                 r: 45,
@@ -555,9 +525,9 @@ impl Default for EditorTheme {
                 b: 120,
             },
             run_output_fg: ThemeColor::Rgb {
-                r: 180,
-                g: 200,
-                b: 210,
+                r: 185,
+                g: 198,
+                b: 212,
             },
         }
     }
@@ -585,7 +555,7 @@ impl Theme {
         Self {
             name: "default".to_string(),
             author: Some("NuengCoder".to_string()),
-            description: Some("Default ntc theme".to_string()),
+            description: Some("Default ntc theme (VS Code Dark+ inspired)".to_string()),
             syntax: SyntaxTheme::default(),
             shell: ShellTheme::default(),
             editor: EditorTheme::default(),
@@ -703,6 +673,12 @@ impl Theme {
                 teleport_name: ThemeColor::Blue,
                 alias_name: ThemeColor::Blue,
                 alias_command: ThemeColor::BrightBlack,
+                git_branch: ThemeColor::Blue,
+                git_added: ThemeColor::Green,
+                git_modified: ThemeColor::Yellow,
+                git_deleted: ThemeColor::Red,
+                git_untracked: ThemeColor::BrightBlack,
+                git_conflict: ThemeColor::BrightRed,
             },
             editor: EditorTheme {
                 editor_bg: ThemeColor::Rgb {

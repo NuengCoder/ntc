@@ -19,7 +19,7 @@
 [vars]
 # CC = "gcc"
 # FLAGS = "-O2"
-ver = "2.4.2"
+ver = "2.4.3"
 lux = "ntc-v$(ver)-linux-x86_64.tar.gz"
 adb = "ntc-v$(ver)-aarch64-linux-android.tar.gz"
 win = "ntc-v$(ver)-windows-x86_64.zip"

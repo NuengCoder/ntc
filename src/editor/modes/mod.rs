@@ -1,5 +1,7 @@
 mod command;
+mod encoding;
 mod finder;
+mod git_diff;
 mod gosc;
 mod help;
 mod insert;

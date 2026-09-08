@@ -22,7 +22,10 @@ pub fn fill(m: &mut HashMap<String, String>) {
     m.insert("cmd.report.time_label".into(), "ເວລາ:".into());
     m.insert("cmd.report.title".into(), "report — ສ້າງບົດລາຍງານໂຄງການ".into());
     m.insert("cmd.report.unknown_option".into(), "ບໍ່ຮູ້ຈັກ view option: {}".into());
-    m.insert("cmd.report.view_usage".into(), "ວິທີໃຊ້: view [-s|--size] [-c|--cp] [--care] [-t|--time] [-d|--depth <n>]".into());
+    m.insert("cmd.report.view_usage".into(), "ວິທີໃຊ້: view [-s|--size] [-c|--cp] [--care] [-t|--time] [-d|--depth <n>] [-p|--path <path|@tp>]".into());
+    m.insert("cmd.target.not_dir".into(), "'{}' ບໍ່ແມ່ນໄດເຣັກທໍຣີ".into());
+    m.insert("cmd.target.not_found".into(), "ບໍ່ພົບເສັ້ນທາງ '{}'".into());
+    m.insert("cmd.target.tp_not_found".into(), "ບໍ່ພົບຈຸດບັນທຶກ '{}'".into());
     m.insert("cmd.serve.db_title".into(), "ຖານຂໍ້ມູນ:".into());
     m.insert("cmd.serve.example_default".into(), "  serve                  HTTP ຢູ່ port 8080".into());
     m.insert("cmd.serve.example_port".into(), "  serve 3000             HTTP ຢູ່ port 3000".into());
@@ -46,6 +49,8 @@ pub fn fill(m: &mut HashMap<String, String>) {
     m.insert("cmd.serve.stopped".into(), "ຢຸດ server ແລ້ວ.".into());
     m.insert("cmd.serve.unknown_option".into(), "ບໍ່ຮູ້ຈັກ: {}".into());
     m.insert("cmd.serve.usage_title".into(), "ວິທີໃຊ້:".into());
+    m.insert("cmd.serve.cloudflared_starting".into(), "ກຳລັງເລີ່ມ tunnel ຂອງ cloudflared (PID {})".into());
+    m.insert("cmd.serve.cloudflared_missing".into(), "ບໍ່ພົບ cloudflared: {}. ຕິດຕັ້ງ: {}".into());
     m.insert("cmd.smtp.build_fail".into(), "ສ້າງຂໍ້ຄວາມ email ບໍ່ສຳເລັດ".into());
     m.insert("cmd.smtp.create_one_hint".into(), "  ສ້າງອັນໜຶ່ງ: {} -i <server> -p <port> -u <user> -pwd <password>".into());
     m.insert("cmd.smtp.create_syntax".into(), "smtp -i <server> -p <port> -u <user> -pwd <password>".into());

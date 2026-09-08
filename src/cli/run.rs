@@ -1,6 +1,6 @@
 use crate::cli::helpers::{preprocess_args, print_help, print_logo};
 use crate::config::Config;
-use crate::filetype::{is_supported_format, FormatConfig};
+use crate::filetype::{is_supported_format, strip_unc_prefix, FormatConfig};
 use crate::navigator::Navigator;
 use crate::output::{cat_file, print_error, print_success, print_warning};
 use crate::report::{generate_report, generate_report_to, ReportFormat};
@@ -50,6 +50,26 @@ fn handle_teleport_at(raw_args: &[String]) -> Result<bool> {
         print_error(&t!("msg.teleport.not_found", tp_name));
         println!("{}", t!("msg.teleport.hint_list"));
         Ok(false)
+    }
+}
+
+/// Resolve the `--path` value for `--size` / `--view`.
+/// Returns `Ok(None)` when no path is given, `Ok(Some(p))` when resolved, and
+/// `Err` (error already printed) when resolution fails.
+fn resolve_cli_path(
+    matches: &clap::ArgMatches,
+    nav: &Navigator,
+) -> Result<Option<std::path::PathBuf>> {
+    let Some(spec) = matches.get_one::<String>("path") else {
+        return Ok(None);
+    };
+    let spec = spec.trim();
+    if spec.is_empty() {
+        return Ok(None);
+    }
+    match crate::shell::helpers::resolve_target_spec(spec, nav) {
+        Ok(p) => Ok(Some(p)),
+        Err(_) => Err(anyhow::anyhow!("target resolution failed")),
     }
 }
 
@@ -200,8 +220,12 @@ fn handle_simple_flags(matches: &clap::ArgMatches, known_flags: &[String]) -> Re
         let start = std::time::Instant::now();
         use crate::navigator::Navigator;
         let nav = Navigator::new()?;
-        let total = crate::explorer::calculate_dir_size(nav.current_path());
-        println!("{}", t!("msg.size.path_label", nav.display_path()));
+        let target = match resolve_cli_path(&matches, &nav) {
+            Ok(t) => t.unwrap_or_else(|| nav.current_path().to_path_buf()),
+            Err(_) => return Ok(false),
+        };
+        let total = crate::explorer::calculate_dir_size(&target);
+        println!("{}", t!("msg.size.path_label", strip_unc_prefix(&target)));
         println!("{}", "┌─────────────────────────────────────────┐");
         println!(
             "│ {} ",
@@ -229,7 +253,7 @@ fn handle_simple_flags(matches: &clap::ArgMatches, known_flags: &[String]) -> Re
         if show_view {
             println!();
             let mut tree = crate::explorer::generate_tree(
-                &nav.current_path().to_string_lossy(),
+                &target.to_string_lossy(),
                 Some(1),
                 true,
                 None,
@@ -247,8 +271,12 @@ fn handle_simple_flags(matches: &clap::ArgMatches, known_flags: &[String]) -> Re
         let start = std::time::Instant::now();
         use crate::navigator::Navigator;
         let nav = Navigator::new()?;
+        let target = match resolve_cli_path(&matches, &nav) {
+            Ok(t) => t.unwrap_or_else(|| nav.current_path().to_path_buf()),
+            Err(_) => return Ok(false),
+        };
         let tree = crate::explorer::generate_tree(
-            &nav.current_path().to_string_lossy(),
+            &target.to_string_lossy(),
             Some(1),
             true,
             None,
@@ -826,6 +854,7 @@ pub fn run_cli() -> Result<bool> {
         t!("cli.known_flag.say"),
         t!("cli.known_flag.size"),
         t!("cli.known_flag.view"),
+        t!("cli.known_flag.path"),
         t!("cli.known_flag.view_size"),
         t!("cli.known_flag.ignored"),
         t!("cli.known_flag.ignore"),
@@ -1034,6 +1063,14 @@ pub fn run_cli() -> Result<bool> {
                 .value_name("FILE")
                 .help(t!("cli.run.help_caren"))
                 .num_args(1..),
+        )
+        .arg(
+            Arg::new("path")
+                .short('p')
+                .long("path")
+                .value_name("PATH")
+                .help(t!("cli.run.help_path"))
+                .num_args(1),
         )
         .arg(
             Arg::new("size")

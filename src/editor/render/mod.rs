@@ -1,5 +1,4 @@
 mod bars;
-pub(crate) mod framebuffer;
 mod hex;
 mod panels;
 mod popups;
@@ -16,13 +15,7 @@ impl Editor {
     pub(crate) fn render(&mut self, stdout: &mut std::io::Stdout) -> std::io::Result<()> {
         let theme = crate::utils::theme::ThemeManager::current();
         let is_run = self.run_panel_open;
-        let is_terminal = self.terminal.is_some();
-        let total_editor_rows = if is_run || is_terminal {
-            self.run_split_row()
-        } else {
-            self.term_h.saturating_sub(4)
-        };
-        let rows = total_editor_rows.saturating_sub(1);
+        let rows = self.visible_text_rows();
         let tab_bar_y = 0;
         let content_y = 1;
 
@@ -32,15 +25,6 @@ impl Editor {
         let gw = gutter_width(self.lines.len());
         let sb_col = cols.saturating_sub(1);
         let text_cols = editor_cols.saturating_sub(gw + 2);
-
-        // Initialize or resize framebuffer if enabled
-        if self.editor_cfg.frame_buffer_enabled {
-            if self.framebuffer.is_none() {
-                self.framebuffer = Some(framebuffer::FrameBuffer::new(cols, self.term_h));
-            } else if let Some(ref mut fb) = self.framebuffer {
-                fb.resize(cols, self.term_h);
-            }
-        }
 
         if self.sidebar.open {
             self.render_sidebar(stdout)?;
@@ -412,6 +396,14 @@ impl Editor {
                 self.render_gosc(stdout)?;
             }
 
+            if matches!(self.mode, Mode::Encoding) {
+                self.render_encoding_picker(stdout)?;
+            }
+
+            if matches!(self.mode, Mode::GitDiff) {
+                self.render_git_diff(stdout)?;
+            }
+
             if self.completion_visible {
                 self.render_completion_popup(stdout)?;
             } else if self.hover_text.is_some() {
@@ -494,14 +486,9 @@ impl Editor {
             self.render_file_finder(stdout)?;
         }
 
-        // Use framebuffer diffing if enabled, otherwise just flush
-        if self.editor_cfg.frame_buffer_enabled {
-            if let Some(ref mut fb) = self.framebuffer {
-                fb.diff_and_flush(stdout)?;
-            }
-        } else {
-            stdout.flush()?;
-        }
+        // Overlays drawn on top of everything are painted above; flush all queued
+        // commands for this frame.
+        stdout.flush()?;
 
         self.dirty_start = 0;
         self.dirty_end = 0;

@@ -143,6 +143,11 @@ impl SyntaxHighlighter {
         } else {
             None
         };
+        let scr_first_non_ws = if matches!(lang, SyntaxLanguage::NtcScr) {
+            bytes.iter().position(|b| !b.is_ascii_whitespace())
+        } else {
+            None
+        };
 
         if self.in_xml_comment && has_xml_comments(lang) {
             let start = 0;
@@ -314,6 +319,53 @@ impl SyntaxHighlighter {
                                 break;
                             }
                         } else {
+                            i += 1;
+                        }
+                    }
+                    tokens.push(Token {
+                        start,
+                        end: i,
+                        token_type: TokenType::Builtin,
+                    });
+                    continue;
+                }
+            }
+
+            if matches!(lang, SyntaxLanguage::NtcScr) {
+                if scr_first_non_ws == Some(i)
+                    && i + 1 < len
+                    && bytes[i] == b'/'
+                    && bytes[i + 1] == b'/'
+                {
+                    tokens.push(Token {
+                        start: i,
+                        end: len,
+                        token_type: TokenType::Comment,
+                    });
+                    return tokens;
+                }
+                if bytes[i] == b'$' {
+                    let start = i;
+                    i += 1;
+                    if i < len && (bytes[i] == b'@' || bytes[i] == b'*') {
+                        i += 1;
+                    } else if i < len && bytes[i] == b'{' {
+                        let mut depth = 1;
+                        i += 1;
+                        while i < len && depth > 0 {
+                            if bytes[i] == b'{' {
+                                depth += 1;
+                            } else if bytes[i] == b'}' {
+                                depth -= 1;
+                            }
+                            i += 1;
+                        }
+                    } else if i < len && bytes[i].is_ascii_digit() {
+                        while i < len && bytes[i].is_ascii_digit() {
+                            i += 1;
+                        }
+                    } else if i < len && is_ident_start(bytes[i]) {
+                        while i < len && is_ident_continue(bytes[i]) {
                             i += 1;
                         }
                     }
@@ -810,6 +862,8 @@ impl SyntaxHighlighter {
 
                 let tt = if is_keyword(lang, word) {
                     TokenType::Keyword
+                } else if matches!(lang, SyntaxLanguage::NtcScr) && line[..start].trim() == "set" {
+                    TokenType::Attribute
                 } else if is_type_name(lang, word)
                     || (is_type_name_upper_heuristic(lang)
                         && word.starts_with(|c: char| c.is_uppercase()))
@@ -907,5 +961,81 @@ impl SyntaxHighlighter {
         }
 
         tokens
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::syntax::types::TokenType;
+
+    fn toks(line: &str) -> Vec<(usize, usize, TokenType)> {
+        let mut h = SyntaxHighlighter::new(Some("ntc"));
+        h.tokenize_line(0, line)
+            .iter()
+            .map(|t| (t.start, t.end, t.token_type))
+            .collect()
+    }
+
+    fn has_type(line: &str, needle: TokenType) -> bool {
+        toks(line).iter().any(|(_, _, tt)| *tt == needle)
+    }
+
+    #[test]
+    fn detects_ntc_language() {
+        assert_eq!(
+            SyntaxHighlighter::new(Some("ntc")).language,
+            Some(SyntaxLanguage::NtcScr)
+        );
+    }
+
+    #[test]
+    fn hash_comment_is_comment() {
+        let t = toks("# this is a comment");
+        assert_eq!(t.len(), 1);
+        assert_eq!(t[0].2, TokenType::Comment);
+    }
+
+    #[test]
+    fn slash_slash_comment_is_comment() {
+        let t = toks("// this is a comment");
+        assert_eq!(t.len(), 1);
+        assert_eq!(t[0].2, TokenType::Comment);
+    }
+
+    #[test]
+    fn inline_hash_comment_starts_comment() {
+        assert!(toks("say hi # trailing")
+            .iter()
+            .any(|(_, _, tt)| *tt == TokenType::Comment));
+    }
+
+    #[test]
+    fn set_statement_tokens() {
+        let t = toks("set name = \"hello\"");
+        assert_eq!(t[0], (0, 3, TokenType::Keyword));
+        assert!(t.iter().any(|(_, _, tt)| *tt == TokenType::Attribute));
+        assert!(t.iter().any(|(_, _, tt)| *tt == TokenType::String));
+    }
+
+    #[test]
+    fn force_at_is_attribute() {
+        assert!(has_type("@ git status", TokenType::Attribute));
+    }
+
+    #[test]
+    fn variable_interpolation_is_builtin() {
+        for line in &["$name", "${name}", "${name:-default}", "$1", "$12", "$@", "$*"] {
+            let t = toks(line);
+            assert_eq!(t.len(), 1, "line {:?}", line);
+            assert_eq!(t[0].2, TokenType::Builtin, "line {:?}", line);
+        }
+    }
+
+    #[test]
+    fn hash_inside_quotes_is_not_comment() {
+        let t = toks("say \"a # b\"");
+        assert!(!t.iter().any(|(_, _, tt)| *tt == TokenType::Comment));
+        assert!(t.iter().any(|(_, _, tt)| *tt == TokenType::String));
     }
 }

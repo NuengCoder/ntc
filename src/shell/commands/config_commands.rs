@@ -27,6 +27,8 @@ pub fn cmd_config(args: &str, _nav: &mut Navigator) -> Result<bool> {
         "threads" | "t" => config_threads(subargs),
         "history" | "h" => config_history(subargs),
         "watch" | "w" => config_watch(subargs),
+        "git" => config_git(subargs),
+        "dir_view" | "dv" => config_dir_view(subargs),
         "qsc" => config_qsc(subargs),
         "lang" | "language" => config_lang(subargs),
         _ => {
@@ -38,6 +40,8 @@ pub fn cmd_config(args: &str, _nav: &mut Navigator) -> Result<bool> {
             println!("  {}", t!("help.config.linenumbers"));
             println!("  {}", t!("help.config.color"));
             println!("  {}", t!("help.config.autosuggest"));
+            println!("  {}", t!("help.config.git"));
+            println!("  {}", t!("help.config.dir_view"));
             println!("  {}", t!("help.config.threads"));
             println!("  {}", t!("help.config.history"));
             println!("  {}", t!("help.config.watch"));
@@ -165,6 +169,56 @@ fn config_autosuggest(args: &str) -> Result<bool> {
                 print_warning(&t!("msg.setA.off"));
             }
             _ => print_error(&t!("msg.setA.error", args)),
+        }
+    }
+    Ok(false)
+}
+
+fn config_git(args: &str) -> Result<bool> {
+    if args.is_empty() {
+        let state = if Config::global_get_git_integration_enabled() {
+            "ON"
+        } else {
+            "OFF"
+        };
+        println!("{}", t!("msg.setGit.status", state));
+    } else {
+        let upper = args.to_uppercase();
+        match upper.as_str() {
+            "ON" => {
+                Config::global_set_git_integration_enabled(true);
+                print_success(&t!("msg.setGit.on"));
+            }
+            "OFF" => {
+                Config::global_set_git_integration_enabled(false);
+                print_warning(&t!("msg.setGit.off"));
+            }
+            _ => print_error(&t!("msg.setGit.error", args)),
+        }
+    }
+    Ok(false)
+}
+
+fn config_dir_view(args: &str) -> Result<bool> {
+    if args.is_empty() {
+        let state = if Config::global_get_dir_view_enabled() {
+            "ON"
+        } else {
+            "OFF"
+        };
+        println!("{}", t!("msg.setDV.status", state));
+    } else {
+        let upper = args.to_uppercase();
+        match upper.as_str() {
+            "ON" => {
+                Config::global_set_dir_view_enabled(true);
+                print_success(&t!("msg.setDV.on"));
+            }
+            "OFF" => {
+                Config::global_set_dir_view_enabled(false);
+                print_warning(&t!("msg.setDV.off"));
+            }
+            _ => print_error(&t!("msg.setDV.error")),
         }
     }
     Ok(false)
@@ -420,6 +474,15 @@ pub fn cmd_showcg(_args: &str, _nav: &mut Navigator) -> Result<bool> {
         "│ {:<20} {:<42} │",
         t!("msg.showcg.label_color"),
         if Config::global_get_color_enabled() {
+            t!("status.on").green()
+        } else {
+            t!("status.off").red()
+        }
+    );
+    println!(
+        "│ {:<20} {:<42} │",
+        t!("msg.showcg.label_dir_view"),
+        if Config::global_get_dir_view_enabled() {
             t!("status.on").green()
         } else {
             t!("status.off").red()

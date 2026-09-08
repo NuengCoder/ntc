@@ -177,6 +177,16 @@ impl Config {
         cfg.save();
     }
 
+    pub fn global_get_git_integration_enabled() -> bool {
+        Self::read_global().git_integration_enabled
+    }
+    pub fn global_set_git_integration_enabled(enabled: bool) {
+        let mut cfg = Self::write_global();
+        cfg.git_integration_enabled = enabled;
+        cfg.save();
+        crate::utils::git::invalidate();
+    }
+
     pub fn global_get_language() -> String {
         Self::read_global().language.clone()
     }
@@ -663,6 +673,16 @@ impl Config {
     pub fn global_set_openweather_default_city(city: Option<String>) {
         let mut cfg = Self::write_global();
         cfg.openweather_default_city = city;
+        cfg.save();
+    }
+
+    pub fn global_get_dir_view_enabled() -> bool {
+        Self::read_global().dir_view_enabled
+    }
+
+    pub fn global_set_dir_view_enabled(enabled: bool) {
+        let mut cfg = Self::write_global();
+        cfg.dir_view_enabled = enabled;
         cfg.save();
     }
 

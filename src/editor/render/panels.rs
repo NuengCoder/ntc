@@ -99,6 +99,11 @@ impl Editor {
     pub(crate) fn render_sidebar(&self, stdout: &mut std::io::Stdout) -> std::io::Result<()> {
         let theme = crate::utils::theme::ThemeManager::current();
         let use_color = self.editor_cfg.color_enabled;
+        let git_map = if crate::config::Config::global_get_git_integration_enabled() {
+            crate::utils::git::status_map(&self.sidebar.root)
+        } else {
+            std::collections::HashMap::new()
+        };
         let content_top = 0;
         let rows = self.term_h;
         let sw = self.sidebar.width;
@@ -200,6 +205,28 @@ impl Editor {
                             MoveTo(x as u16, sy as u16),
                             Print(&display),
                         )?;
+
+                        // Git status symbol after the name
+                        if !node.is_dir {
+                            if let Some(&code) = git_map.get(&node.path) {
+                                let gfg = match code {
+                                    'A' | 'C' => theme.shell.git_added.to_crossterm(),
+                                    'D' => theme.shell.git_deleted.to_crossterm(),
+                                    '?' => theme.shell.git_untracked.to_crossterm(),
+                                    'U' => theme.shell.git_conflict.to_crossterm(),
+                                    _ => theme.shell.git_modified.to_crossterm(),
+                                };
+                                let sx = x + display.chars().count() + 1;
+                                if sx < sw {
+                                    queue!(
+                                        stdout,
+                                        SetForegroundColor(gfg),
+                                        MoveTo(sx as u16, sy as u16),
+                                        Print(code),
+                                    )?;
+                                }
+                            }
+                        }
                     }
                 }
             }

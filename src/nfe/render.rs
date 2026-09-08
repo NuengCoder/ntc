@@ -163,6 +163,28 @@ impl NfeState {
                     Print(icon),
                     Print(&display_name),
                 )?;
+
+                // Git status symbol after the name
+                if !entry.is_dir {
+                    if let Some(&code) = self.git_status.get(&entry.name) {
+                        let theme = crate::utils::theme::ThemeManager::current();
+                        let color = match code {
+                            'A' | 'C' => theme.shell.git_added.to_crossterm(),
+                            'D' => theme.shell.git_deleted.to_crossterm(),
+                            '?' => theme.shell.git_untracked.to_crossterm(),
+                            'U' => theme.shell.git_conflict.to_crossterm(),
+                            _ => theme.shell.git_modified.to_crossterm(),
+                        };
+                        let x = name_x + 2 + display_name.chars().count();
+                        queue!(
+                            stdout,
+                            MoveTo(x as u16, row as u16),
+                            SetForegroundColor(color),
+                            Print(code),
+                            ResetColor,
+                        )?;
+                    }
+                }
             }
         }
 

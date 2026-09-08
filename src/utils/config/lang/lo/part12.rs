@@ -43,6 +43,7 @@ pub fn fill(m: &mut HashMap<String, String>) {
     m.insert("help.network.ping".into(), "ping <host> ## ICMP ping (-c count)".into());
     m.insert("help.network.serve".into(), "serve [port] ## HTTP file server (--https, --tunnel, --spa, --web-dir)".into());
     m.insert("help.network.smtp".into(), "smtp ## SMTP email client (--id, -i, -u, -pwd, -s, -b, -f, --to)".into());
+    m.insert("help.network.spec".into(), "spec ## ສະແດງສະເປັກຄອມພິວເຕີ/ລະບົບ (CPU, GPU, RAM, ບ່ອນເກັບຂໍ້ມູນ, OS, ເລກຊີຣຽວ)".into());
     m.insert("help.network.sys".into(), "sys, top ## ຕິດຕາມລະບົບແບບສົດ (CPU, memory, disk, processes)".into());
     m.insert("help.network.title".into(), "ຄຳສັ່ງ SYSTEM & NETWORK:".into());
     m.insert("help.network.up".into(), "up <file> <url> ## ອັບໂຫຼດໄຟລ໌ (--post, -H, -d)".into());
@@ -114,6 +115,15 @@ pub fn fill(m: &mut HashMap<String, String>) {
     m.insert("help.report.txtc".into(), "txtc <file> ## ສຳເນົາເນື້ອໃນໄຟລ໌ໃສ່ clipboard".into());
     m.insert("help.report.txtf".into(), "txtf <file> ## ສະແດງເນື້ອໃນໄຟລ໌".into());
     m.insert("help.report.xlsx".into(), "report xlsx [path] ## ສ້າງບົດລາຍງານ XLSX (ພ້ອມການວິເຄາະ dependency)".into());
+    m.insert("help.scr.continue".into(), "scr -c <file.ntc> [args...] ## ແລ່ນສະຄຣິບ ສືບຕໍ່ຫຼັງມີຂໍ້ຜິດພາດ".into());
+    m.insert("help.scr.example1".into(), "scr deploy.ntc ## ແລ່ນ deploy.ntc".into());
+    m.insert("help.scr.example2".into(), "scr build.ntc dev prod ## ສົ່ງ args $1=dev, $2=prod".into());
+    m.insert("help.scr.example3".into(), "scr -c setup.ntc ## ແລ່ນແລະສືບຕໍ່ຫຼັງຂໍ້ຜິດພາດ".into());
+    m.insert("help.scr.help".into(), "scr help ## ສະແດງການໃຊ້ງານ scr".into());
+    m.insert("help.scr.init".into(), "scr init [name] ## ສ້າງ template ສະຄຣິບ".into());
+    m.insert("help.scr.ls".into(), "scr ls ## ລາຍຊື່ *.ntc ໃນໄດເຣັກທໍຣີປັດຈຸບັນ".into());
+    m.insert("help.scr.run".into(), "scr <file.ntc> [args...] ## ແລ່ນສະຄຣິບອັດຕະໂນມັດ".into());
+    m.insert("help.scr.title".into(), "ຄຳສັ່ງ SCR / ສະຄຣິບອັດຕະໂນມັດ:".into());
     m.insert("help.search.ds".into(), "ds <pattern> [-d <n>] ## ຄົ້ນຫາໄດເຣັກທໍຣີຕາມຊື່".into());
     m.insert("help.search.fs".into(), "fs <pattern> [-d <n>] ## ຄົ້ນຫາໄຟລ໌ຕາມຊື່ (fuzzy fallback)".into());
     m.insert("help.search.fsc".into(), "fsc <pattern> [-d <n>] ## ຄົ້ນຫາໄຟລ໌, ເລືອກເພື່ອສະແດງ ແລະ ສຳເນົາໄດ້".into());
@@ -121,6 +131,11 @@ pub fn fill(m: &mut HashMap<String, String>) {
     m.insert("help.search.gs_interactive".into(), "gs -i <pattern> [-d <n>] ## grep interactive (ຄົ້ນຫາຜົນ, Enter ເພື່ອເປີດ)".into());
     m.insert("help.search.locate".into(), "locate <pattern> [-d <n>] ## ຄົ້ນຫາທັງໄຟລ໌ ແລະ ໄດເຣັກທໍຣີ".into());
     m.insert("help.search.title".into(), "ຄຳສັ່ງ SEARCH:".into());
+    m.insert("help.size.care".into(), "size --care ## ຄຳນວນຂະໜາດລວມທຸກຢ່າງ (ໂໝດ care)".into());
+    m.insert("help.size.path".into(), "size -p, --path <path|@tp> ## ສະແດງຂະໜາດຂອງ path ຫຼື teleport savepoint ທີ່ລະບຸ".into());
+    m.insert("help.size.size".into(), "size ## ສະແດງຂະໜາດໄດເຣັກທໍຣີປັດຈຸບັນ".into());
+    m.insert("help.size.time".into(), "size -t, --time ## ສະແດງເວລາທີ່ໃຊ້".into());
+    m.insert("help.size.title".into(), "ຄຳສັ່ງ SIZE:".into());
     m.insert("help.syscmd.any".into(), "<ຄຳສັ່ງໃດໆ> ## NTC ສົ່ງຄຳສັ່ງທີ່ບໍ່ຮູ້ຈັກໄປຍັງລະບົບຂອງທ່ານ".into());
     m.insert("help.syscmd.native".into(), "shell -- echo, git, dir/ls, ping, ອື່ນໆ.".into());
     m.insert("help.syscmd.native2".into(), "all ເຮັດວຽກ native ພ້ອມກັບຄຳສັ່ງ NTC.".into());

@@ -100,6 +100,38 @@ pub(crate) fn prev_word_byte(s: &str, byte: usize) -> usize {
     chars.get(i).map(|(b, _)| *b).unwrap_or(0)
 }
 
+/// Case-insensitive char equality (uses `to_lowercase`, safe across byte-length
+/// differences like `ẞ` -> `ß`).
+pub(crate) fn char_ci_eq(a: char, b: char) -> bool {
+    let al: String = a.to_lowercase().collect();
+    let bl: String = b.to_lowercase().collect();
+    al == bl
+}
+
+/// Case-insensitive substring search over the ORIGINAL `text`. Returns
+/// `(start_byte, end_byte)` of the first match at or after `start`. Byte
+/// offsets are valid for `text` (no lowercase-copy drift). Empty pattern => None.
+pub(crate) fn ci_find(text: &str, pat: &str, start: usize) -> Option<(usize, usize)> {
+    let pat_chars: Vec<char> = pat.chars().collect();
+    if pat_chars.is_empty() {
+        return None;
+    }
+    let chars: Vec<(usize, char)> = text.char_indices().collect();
+    let mut idx = chars.partition_point(|(b, _)| *b < start);
+    'outer: while idx + pat_chars.len() <= chars.len() {
+        for (k, &pc) in pat_chars.iter().enumerate() {
+            if !char_ci_eq(chars[idx + k].1, pc) {
+                idx += 1;
+                continue 'outer;
+            }
+        }
+        let (s, _) = chars[idx];
+        let (e, ec) = chars[idx + pat_chars.len() - 1];
+        return Some((s, e + ec.len_utf8()));
+    }
+    None
+}
+
 pub(crate) fn is_ctrl_char(c: char) -> bool {
     c.is_ascii_control() && c != '\t'
 }
@@ -111,5 +143,47 @@ pub(crate) fn auto_pair(c: char) -> Option<char> {
         '{' => Some('}'),
         '"' => Some('"'),
         _ => None,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn ci_find_ascii() {
+        let text = "Hello World";
+        assert_eq!(ci_find(text, "world", 0), Some((6, 11)));
+        assert_eq!(ci_find(text, "hello", 0), Some((0, 5)));
+        assert_eq!(ci_find(text, "xyz", 0), None);
+    }
+
+    #[test]
+    fn ci_find_offsets_valid_on_original() {
+        // `ẞ` (3 bytes) lowercases to `ß` (2 bytes): byte offsets must come
+        // from the ORIGINAL string, never the lowercased copy.
+        let text = "abc ẞ x";
+        assert_eq!(ci_find(text, "ß", 0), Some((4, 7)));
+        assert_eq!(ci_find(text, "ß", 7), None);
+        assert_eq!(ci_find(text, "ẞ", 0), Some((4, 7)));
+    }
+
+    #[test]
+    fn ci_find_after_byte_offset() {
+        let text = "foo bar foo";
+        assert_eq!(ci_find(text, "foo", 5), Some((8, 11)));
+        assert_eq!(ci_find(text, "foo", 8), Some((8, 11)));
+    }
+
+    #[test]
+    fn ci_find_empty_pattern() {
+        assert_eq!(ci_find("anything", "", 0), None);
+    }
+
+    #[test]
+    fn char_ci_eq_multibyte() {
+        assert!(char_ci_eq('ẞ', 'ß'));
+        assert!(char_ci_eq('a', 'A'));
+        assert!(!char_ci_eq('b', 'a'));
     }
 }

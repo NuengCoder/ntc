@@ -127,6 +127,7 @@ pub fn fill(m: &mut HashMap<String, String>) {
     m.insert("cli.known_flag.setT".into(), "--setT [threads] ສະແດງ ຫຼື ຕັ້ງຈຳນວນ threads".into());
     m.insert("cli.known_flag.showcg".into(), "--showcg ສະແດງພາບລວມການຕັ້ງຄ່າປັດຈຸບັນ".into());
     m.insert("cli.known_flag.size".into(), "--size ສະແດງຂະໜາດໄດເຣັກທໍຣີປັດຈຸບັນ".into());
+    m.insert("cli.known_flag.path".into(), "--path <path|@tp> ເສັ້ນທາງເປົ້າໝາຍ ຫຼື savepoint (ໃຊ້ກັບ --size ຫຼື --view)".into());
     m.insert("cli.known_flag.teleport_at".into(), "ntc @<name> ເປີດ ແລະ teleport ໄປທີ່ savepoint".into());
     m.insert("cli.known_flag.tp_add".into(), "--tp-add <name> ບັນທຶກໄດເຣັກທໍຣີປັດຈຸບັນເປັນ teleport point".into());
     m.insert("cli.known_flag.tp_list".into(), "--tp-list ລາຍຊື່ teleport points ທັງໝົດ".into());

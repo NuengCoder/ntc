@@ -90,7 +90,6 @@ pub fn fill(m: &mut HashMap<String, String>) {
     m.insert("clap.arg.caren.help".into(), "ໃສ່ໃຈກັບໄຟລ໌ສະເພາະອັນໜຶ່ງຂຶ້ນໄປ".into());
     m.insert("clap.arg.clear.help".into(), "ລ້າງໜ້າຈໍ terminal".into());
     m.insert("clap.arg.copy.help".into(), "ສຳເນົາບົດລາຍງານໄປໃສ່ clipboard ແທນການບັນທຶກເປັນໄຟລ໌".into());
-    m.insert("clap.arg.dino.help".into(), "ຫຼິ້ນເກມ dinosaur runner".into());
     m.insert("clap.arg.edit.help".into(), "ເປີດໄຟລ໌ໃນ text editor ໃນຕົວ".into());
     m.insert("clap.arg.explorer.help".into(), "ເປີດ NTC File Explorer TUI (path ເລີ່ມຕົ້ນທາງເລືອກ)".into());
     m.insert("clap.arg.format_cli.help".into(), "ຮູບແບບຜົນລັບ: txt, html, json, md".into());

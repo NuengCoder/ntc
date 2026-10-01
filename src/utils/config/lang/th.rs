@@ -10,6 +10,7 @@ pub(crate) mod part07;
 pub(crate) mod part08;
 pub(crate) mod part09;
 pub(crate) mod part10;
+pub(crate) mod part11;
 
 pub fn build_map() -> HashMap<String, String> {
     let mut m = HashMap::new();
@@ -23,5 +24,6 @@ pub fn build_map() -> HashMap<String, String> {
     part08::fill(&mut m);
     part09::fill(&mut m);
     part10::fill(&mut m);
+    part11::fill(&mut m);
     m
 }

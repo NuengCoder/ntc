@@ -97,19 +97,29 @@ pub fn edit_file_with_session(
                     focus_tab = editor.find_tab_by_path(path);
                 }
             }
-            // The requested file must always end up focused (it is tab 0 already
-            // if it wasn't part of the snapshot).
+            // The requested file must always end up open and focused, even
+            // when it is not part of the snapshot: the rebuild loop above
+            // leaves the buffer on the last snapshot file, so without this
+            // `ne <file>` would show stale cache instead of the request.
+            // `open_file` no-ops to a tab switch when already present.
             let focus = focus_tab.or_else(|| editor.find_tab_by_path(path));
-            if let Some(i) = focus {
-                editor.switch_tab(i);
+            match focus {
+                Some(i) => editor.switch_tab(i),
+                None => editor.open_file(path),
             }
             editor.sidebar.open = snapshot.sidebar_open;
         }
     }
 
     let goto = crate::editor::GOTO_LINE.swap(0, std::sync::atomic::Ordering::SeqCst);
+    let highlight = crate::editor::GOTO_HIGHLIGHT.swap(false, std::sync::atomic::Ordering::SeqCst);
+    let _jump_pattern = crate::editor::take_goto_pattern();
     if goto > 0 {
-        editor.goto_line(goto);
+        if highlight {
+            editor.goto_line_centered_highlight(goto);
+        } else {
+            editor.goto_line(goto);
+        }
     }
 
     let result = match editor.run() {

@@ -9,7 +9,7 @@ use crate::output::{cat_file, print_error, print_info, print_success, print_warn
 use crate::search;
 use crate::session::SessionState;
 use crate::shell::help::{print_interactive_help, print_tp_help};
-use crate::shell::helpers::{parse_target_arg, run_with_spinner, show_tree};
+use crate::shell::helpers::{parse_target_arg, resolve_file_operand, run_with_spinner, show_tree};
 use crate::shell::venv::clear_venv_environment;
 use crate::teleport::TeleportManager;
 use crate::watcher;
@@ -19,7 +19,7 @@ use anyhow::Result;
 use colored::*;
 use std::env;
 use std::io::{self, Write};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 pub fn cmd_clear(_args: &str, nav: &mut Navigator) -> Result<bool> {
@@ -77,11 +77,6 @@ pub fn cmd_clear(_args: &str, nav: &mut Navigator) -> Result<bool> {
     Ok(false)
 }
 
-pub fn cmd_dino(_args: &str, _nav: &mut Navigator) -> Result<bool> {
-    crate::game::run()?;
-    Ok(false)
-}
-
 pub fn cmd_math(args: &str, _nav: &mut Navigator) -> Result<bool> {
     crate::math::run(args)?;
     Ok(false)
@@ -106,8 +101,13 @@ pub fn cmd_version(_args: &str, _nav: &mut Navigator) -> Result<bool> {
     Ok(false)
 }
 
-pub fn cmd_help(_args: &str, _nav: &mut Navigator) -> Result<bool> {
-    print_interactive_help();
+pub fn cmd_help(args: &str, _nav: &mut Navigator) -> Result<bool> {
+    let topic = args.trim();
+    if topic.is_empty() {
+        print_interactive_help();
+    } else if !crate::shell::help::print_topic_help(topic) {
+        print_error(&t!("help.unknown_topic", topic));
+    }
     Ok(false)
 }
 
@@ -155,10 +155,7 @@ pub fn cmd_ne(args: &str, nav: &mut Navigator) -> Result<bool> {
     } else if args.is_empty() || args == "." {
         let cwd = nav.current_path();
         let welcome = cwd.join("welcome.ntcEditor");
-        if !welcome.exists() {
-            let content = crate::editor::generate_welcome_content();
-            let _ = std::fs::write(&welcome, content);
-        }
+        let _ = crate::editor::refresh_welcome_file(&welcome);
         print_info(&t!("misc.ne.opened_welcome", nav.current_path().display()));
         welcome
     } else {
@@ -182,10 +179,7 @@ pub fn cmd_ne(args: &str, nav: &mut Navigator) -> Result<bool> {
     };
     let path = if raw_path.is_dir() {
         let welcome = raw_path.join("welcome.ntcEditor");
-        if !welcome.exists() {
-            let content = crate::editor::generate_welcome_content();
-            let _ = std::fs::write(&welcome, content);
-        }
+        let _ = crate::editor::refresh_welcome_file(&welcome);
         welcome
     } else {
         raw_path
@@ -438,33 +432,47 @@ pub fn cmd_tp(args: &str, nav: &mut Navigator) -> Result<bool> {
 }
 
 pub fn cmd_gs(args: &str, nav: &mut Navigator) -> Result<bool> {
-    if args.is_empty() {
+    if args.trim().is_empty() {
         print_error(&t!("misc.gs.usage"));
         println!("{}", t!("misc.gs.example1"));
         println!("{}", t!("misc.gs.example2"));
         println!("{}", t!("misc.gs.example3"));
         println!("{}", t!("misc.gs.example4"));
+        println!("{}", t!("misc.gs.example5"));
         return Ok(false);
     }
-    let interactive = args.split_whitespace().any(|s| s == "-i");
-    let clean_args = if interactive {
-        args.split_whitespace()
-            .filter(|s| *s != "-i")
-            .collect::<Vec<_>>()
-            .join(" ")
-    } else {
-        args.to_string()
-    };
-    let (pattern, max_depth) = parse_search_args(&clean_args);
-    let mut results = crate::search::search_content(nav.current_path(), &pattern, max_depth);
+    let parsed = super::parse_gs_args(args);
+    if parsed.pattern.trim().is_empty() {
+        print_error(&t!("misc.gs.usage"));
+        return Ok(false);
+    }
+    let pattern = parsed.pattern;
+    let max_depth = parsed.max_depth;
+    let root = nav.current_path().to_path_buf();
+    // Spinner in background thread so broad `-d` searches show progress
+    // instead of looking crashed. Heavy-file guards live in search_content.
+    let results = run_with_spinner(&t!("misc.gs.searching"), || {
+        crate::search::search_content(&root, &pattern, max_depth)
+    });
+    let total_found = results.len();
+    let mut results = results;
     if results.len() > 20_000 {
         print_warning(&t!("misc.gs.many_results", results.len()));
         results.truncate(20_000);
     }
-    if interactive {
-        return super::gs_interactive::run_gs_interactive(results, nav.current_path());
+    // -l/--limit is non-interactive only (paged UI has its own 10/page).
+    if !parsed.interactive {
+        if let Some(lim) = parsed.limit {
+            if results.len() > lim {
+                results.truncate(lim);
+            }
+        }
     }
-    let output = crate::search::format_content_results(&results, &pattern, max_depth);
+    if parsed.interactive {
+        return super::gs_interactive::run_gs_interactive(results, &root, &pattern);
+    }
+    let output =
+        crate::search::format_content_results(&results, &pattern, max_depth, &root, total_found);
     print!("{}", output);
     Ok(false)
 }
@@ -719,6 +727,87 @@ pub fn cmd_rmd(args: &str, _nav: &mut Navigator) -> Result<bool> {
     Ok(false)
 }
 
+/// Expand one `rmf` operand containing `*` wildcards (`*.log`,
+/// `test*`, `dir/*.tmp`) into the matching files. Directories never
+/// match — `rmf` only removes files. Pure for testability.
+fn expand_rmf_pattern(item: &str, cwd: &Path) -> Vec<PathBuf> {
+    let raw = Path::new(item);
+    let (base, pat) = match raw.parent().filter(|p| !p.as_os_str().is_empty()) {
+        Some(dir) => {
+            let base = if dir.is_absolute() {
+                dir.to_path_buf()
+            } else {
+                cwd.join(dir)
+            };
+            let pat = raw
+                .file_name()
+                .and_then(|n| n.to_str())
+                .unwrap_or(item);
+            (base, pat.to_string())
+        }
+        None => (cwd.to_path_buf(), item.to_string()),
+    };
+    // End-anchored so `*.log` means "ends with .log", not "contains".
+    let anchored = format!("{}$", pat);
+    let mut out = Vec::new();
+    if let Ok(entries) = std::fs::read_dir(&base) {
+        for entry in entries.flatten() {
+            if !entry.file_type().map(|t| t.is_file()).unwrap_or(false) {
+                continue;
+            }
+            let name = match entry.file_name().into_string() {
+                Ok(n) => n,
+                Err(_) => continue,
+            };
+            if crate::search::matches_wildcard(&anchored, &name) {
+                out.push(base.join(name));
+            }
+        }
+    }
+    out.sort();
+    out
+}
+
+/// Delete the files matched by one `rmf` wildcard operand: single match
+/// goes directly, multiple matches list + confirm first.
+fn remove_rmf_pattern(item: &str) -> Result<()> {
+    let cwd = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
+    let matches = expand_rmf_pattern(item, &cwd);
+    if matches.is_empty() {
+        print_error(&t!("misc.rmf.no_match", item));
+        return Ok(());
+    }
+    if matches.len() > 1 {
+        println!();
+        println!(
+            "{}",
+            t!("misc.rmf.pattern_matches", matches.len(), item)
+                .yellow()
+                .bold()
+        );
+        for (i, p) in matches.iter().enumerate() {
+            println!("  {}. {}", (i + 1).to_string().yellow(), p.display());
+        }
+        println!();
+        let ok = crate::utils::interactive::prompt_yes_no(
+            &t!("misc.rmf.confirm_delete", matches.len()),
+            false,
+        )
+        .unwrap_or(false);
+        if !ok {
+            println!("{}", t!("misc.rmf.cancelled").dimmed());
+            return Ok(());
+        }
+    }
+    for path in &matches {
+        match std::fs::remove_file(path) {
+            Ok(()) => print_success(&t!("misc.rmf.removed", path.display())),
+            Err(e) => print_error(&t!("misc.rmf.error", path.display(), e)),
+        }
+    }
+    Ok(())
+}
+
 pub fn cmd_rmf(args: &str, _nav: &mut Navigator) -> Result<bool> {
     let items = split_args(args);
     if items.is_empty() {
@@ -726,6 +815,10 @@ pub fn cmd_rmf(args: &str, _nav: &mut Navigator) -> Result<bool> {
         return Ok(false);
     }
     for item in &items {
+        if item.contains('*') {
+            remove_rmf_pattern(item)?;
+            continue;
+        }
         let path = std::path::Path::new(item);
         if !path.exists() {
             print_error(&t!("misc.rmf.not_exist", item));
@@ -808,6 +901,226 @@ pub fn cmd_rnmd(args: &str, _nav: &mut Navigator) -> Result<bool> {
 pub fn cmd_ui(_args: &str, _nav: &mut Navigator) -> Result<bool> {
     println!("{}", t!("misc.ui.removed"));
     Ok(false)
+}
+
+/// `mv <src> <dst> [-f]` — move/rename files or directories.
+/// `dst` may be a teleport savepoint (`mv report.pdf @docs`).
+/// Quoted paths with spaces supported; `-f/--force` overwrites the target.
+/// Falls back to copy+delete when `rename` fails (e.g. cross-device).
+pub fn cmd_mv(args: &str, nav: &mut Navigator) -> Result<bool> {
+    let (operands, force) = parse_mv_args(args);
+    if operands.len() < 2 {
+        print_error(&t!("misc.mv.missing"));
+        println!("{}", t!("misc.mv.usage"));
+        return Ok(false);
+    }
+    let src = resolve_plain(&operands[0], nav);
+    let mut dst = match resolve_file_operand(&operands[1], nav) {
+        Ok(p) => p,
+        Err(_) => return Ok(false),
+    };
+
+    if !src.exists() {
+        print_error(&t!("misc.mv.not_exist", operands[0]));
+        return Ok(false);
+    }
+    // `mv file existing_dir/` moves inside the directory (never refuses).
+    if dst.is_dir() {
+        match src.file_name() {
+            Some(name) => dst.push(name),
+            None => {
+                print_error(&t!("misc.mv.error", "invalid source name"));
+                return Ok(false);
+            }
+        }
+    }
+    if dst.exists() && !force {
+        print_error(&t!("misc.mv.exists", operands[1]));
+        return Ok(false);
+    }
+    if force && dst.exists() {
+        let cleared = if dst.is_dir() && !src.is_dir() {
+            // Never replace a directory with a file.
+            print_error(&t!("misc.mv.error", "cannot overwrite directory with file"));
+            return Ok(false);
+        } else if dst.is_dir() {
+            std::fs::remove_dir_all(&dst).is_ok()
+        } else {
+            std::fs::remove_file(&dst).is_ok()
+        };
+        if !cleared {
+            print_error(&t!("misc.mv.error", "cannot clear existing target"));
+            return Ok(false);
+        }
+    }
+
+    match std::fs::rename(&src, &dst) {
+        Ok(()) => print_success(&t!("misc.mv.moved", operands[0], operands[1])),
+        Err(_) => match move_by_copy(&src, &dst) {
+            Ok(()) => print_success(&t!("misc.mv.moved", operands[0], operands[1])),
+            Err(e) => print_error(&t!("misc.mv.error", e)),
+        },
+    }
+    Ok(false)
+}
+
+/// `cp <src> <dst> [-f]` — copy files or directories.
+/// `dst` may be a teleport savepoint (`cp report.pdf @docs`).
+/// Quoted paths with spaces supported; `-f/--force` overwrites the target.
+pub fn cmd_cp(args: &str, nav: &mut Navigator) -> Result<bool> {
+    let (operands, force) = parse_mv_args(args);
+    if operands.len() < 2 {
+        print_error(&t!("misc.cp.missing"));
+        println!("{}", t!("misc.cp.usage"));
+        return Ok(false);
+    }
+    let src = resolve_plain(&operands[0], nav);
+    let mut dst = match resolve_file_operand(&operands[1], nav) {
+        Ok(p) => p,
+        Err(_) => return Ok(false),
+    };
+
+    if !src.exists() {
+        print_error(&t!("misc.cp.not_exist", operands[0]));
+        return Ok(false);
+    }
+    // `cp file existing_dir/` copies inside the directory (never refuses).
+    if dst.is_dir() {
+        match src.file_name() {
+            Some(name) => dst.push(name),
+            None => {
+                print_error(&t!("misc.cp.error", "invalid source name"));
+                return Ok(false);
+            }
+        }
+    }
+    if same_file(&src, &dst) {
+        print_error(&t!("misc.cp.same", operands[0]));
+        return Ok(false);
+    }
+    if dst.exists() && !force {
+        print_error(&t!("misc.cp.exists", operands[1]));
+        return Ok(false);
+    }
+    if force && dst.exists() {
+        let cleared = if dst.is_dir() && !src.is_dir() {
+            // Never replace a directory with a file.
+            print_error(&t!("misc.cp.error", "cannot overwrite directory with file"));
+            return Ok(false);
+        } else if dst.is_dir() {
+            std::fs::remove_dir_all(&dst).is_ok()
+        } else {
+            std::fs::remove_file(&dst).is_ok()
+        };
+        if !cleared {
+            print_error(&t!("misc.cp.error", "cannot clear existing target"));
+            return Ok(false);
+        }
+    }
+
+    match copy_path(&src, &dst) {
+        Ok(()) => print_success(&t!("misc.cp.copied", operands[0], operands[1])),
+        Err(e) => print_error(&t!("misc.cp.error", e)),
+    }
+    Ok(false)
+}
+
+/// Plain path operand: absolute or relative to the shell's directory.
+fn resolve_plain(spec: &str, nav: &Navigator) -> PathBuf {
+    let p = PathBuf::from(spec);
+    if p.is_absolute() {
+        p
+    } else {
+        nav.current_path().join(p)
+    }
+}
+
+/// True when both paths point at the same file (guards `cp` onto itself).
+fn same_file(a: &Path, b: &Path) -> bool {
+    if a == b {
+        return true;
+    }
+    match (std::fs::canonicalize(a), std::fs::canonicalize(b)) {
+        (Ok(x), Ok(y)) => x == y,
+        _ => false,
+    }
+}
+
+/// Copy `src` to `dst` then remove `src` (cross-device `mv` fallback).
+fn move_by_copy(src: &Path, dst: &Path) -> std::io::Result<()> {
+    copy_path(src, dst)?;
+    if src.is_dir() {
+        std::fs::remove_dir_all(src)?;
+    } else {
+        std::fs::remove_file(src)?;
+    }
+    Ok(())
+}
+
+/// Copy a file or directory tree to `dst` (no removal).
+fn copy_path(src: &Path, dst: &Path) -> std::io::Result<()> {
+    if src.is_dir() {
+        copy_dir_all(src, dst)?;
+    } else {
+        if let Some(parent) = dst.parent() {
+            if !parent.as_os_str().is_empty() {
+                std::fs::create_dir_all(parent)?;
+            }
+        }
+        std::fs::copy(src, dst)?;
+    }
+    Ok(())
+}
+
+fn copy_dir_all(src: &Path, dst: &Path) -> std::io::Result<()> {
+    std::fs::create_dir_all(dst)?;
+    for entry in walkdir::WalkDir::new(src).min_depth(1) {
+        let entry = entry.map_err(|e| {
+            std::io::Error::other(format!("walk {}: {}", src.display(), e))
+        })?;
+        let rel = entry.path().strip_prefix(src).map_err(std::io::Error::other)?;
+        let target = dst.join(rel);
+        if entry.file_type().is_dir() {
+            std::fs::create_dir_all(&target)?;
+        } else if entry.file_type().is_file() {
+            if let Some(parent) = target.parent() {
+                std::fs::create_dir_all(parent)?;
+            }
+            std::fs::copy(entry.path(), &target)?;
+        }
+    }
+    Ok(())
+}
+
+/// Split `mv` args into operands + force flag.
+/// Respects double quotes: `mv "my file.txt" sub/ -f`.
+fn parse_mv_args(args: &str) -> (Vec<String>, bool) {
+    let mut operands: Vec<String> = Vec::new();
+    let mut current = String::new();
+    let mut in_quotes = false;
+    let mut force = false;
+    let push_token = |tok: String, operands: &mut Vec<String>, force: &mut bool| {
+        if tok == "-f" || tok == "--force" {
+            *force = true;
+        } else if !tok.is_empty() {
+            operands.push(tok);
+        }
+    };
+    for ch in args.chars() {
+        match ch {
+            '"' => in_quotes = !in_quotes,
+            ' ' | '\t' if !in_quotes => {
+                if !current.is_empty() {
+                    push_token(std::mem::take(&mut current), &mut operands, &mut force);
+                }
+            }
+            _ => current.push(ch),
+        }
+    }
+    if !current.is_empty() {
+        push_token(current, &mut operands, &mut force);
+    }
+    (operands, force)
 }
 
 // In src/shell/commands/misc.rs - Replace the cmd_venva function:
@@ -1194,4 +1507,58 @@ pub fn cmd_fallback(
         }
     }
     Ok(false)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parse_mv_args_basic_and_force() {
+        let (ops, force) = parse_mv_args("a.txt b.txt");
+        assert_eq!(ops, vec!["a.txt", "b.txt"]);
+        assert!(!force);
+        let (ops, force) = parse_mv_args("a.txt sub/ -f");
+        assert_eq!(ops, vec!["a.txt", "sub/"]);
+        assert!(force);
+        let (ops, force) = parse_mv_args("--force \"my file.txt\" \"new name.txt\"");
+        assert_eq!(ops, vec!["my file.txt", "new name.txt"]);
+        assert!(force);
+    }
+
+    #[test]
+    fn parse_mv_args_needs_two_operands() {
+        let (ops, _) = parse_mv_args("only-one");
+        assert_eq!(ops.len(), 1);
+        let (ops, _) = parse_mv_args("");
+        assert!(ops.is_empty());
+    }
+
+    #[test]
+    fn rmf_pattern_expands_to_matching_files_only() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(dir.path().join("a.log"), "a").unwrap();
+        std::fs::write(dir.path().join("b.log"), "b").unwrap();
+        std::fs::write(dir.path().join("c.txt"), "c").unwrap();
+        std::fs::create_dir(dir.path().join("d.log")).unwrap();
+
+        // `*.log` matches files only — the `d.log` directory is skipped.
+        let got = expand_rmf_pattern("*.log", dir.path());
+        assert_eq!(
+            got,
+            vec![
+                dir.path().join("a.log"),
+                dir.path().join("b.log"),
+            ]
+        );
+        // Prefix form and no-match form.
+        assert_eq!(expand_rmf_pattern("a*", dir.path()).len(), 1);
+        assert!(expand_rmf_pattern("*.zzz", dir.path()).is_empty());
+
+        // `sub/*.log` scopes into a subdirectory.
+        std::fs::create_dir(dir.path().join("sub")).unwrap();
+        std::fs::write(dir.path().join("sub/e.log"), "e").unwrap();
+        let got = expand_rmf_pattern("sub/*.log", dir.path());
+        assert_eq!(got, vec![dir.path().join("sub/e.log")]);
+    }
 }

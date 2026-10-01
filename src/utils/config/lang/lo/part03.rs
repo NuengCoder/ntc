@@ -26,7 +26,6 @@ pub fn fill(m: &mut HashMap<String, String>) {
     m.insert("cli.flag.caren".into(), " --caren <file> ໃສ່ໃຈກັບໄຟລ໌ສະເພາະ\n".into());
     m.insert("cli.flag.clear".into(), " --clear ລ້າງໜ້າຈໍ terminal".into());
     m.insert("cli.flag.copy".into(), " --cp ສຳເນົາບົດລາຍງານໃສ່ clipboard ແທນການບັນທຶກເປັນໄຟລ໌".into());
-    m.insert("cli.flag.dino".into(), " --dino ຫຼິ້ນເກມ dinosaur runner".into());
     m.insert("cli.flag.edit".into(), " -e, --edit <file> ເປີດໄຟລ໌ໃນ text editor ໃນຕົວ".into());
     m.insert("cli.flag.explorer".into(), " -x, --explorer [PATH] ເປີດ NTC File Explorer TUI".into());
     m.insert("cli.flag.format".into(), " -f, --format <FORMAT> ຮູບແບບຜົນລັບ: txt, html, json, md, pdf, docx, xlsx (ເລີ່ມຕົ້ນ: txt)".into());
@@ -82,7 +81,7 @@ pub fn fill(m: &mut HashMap<String, String>) {
     m.insert("cli.helpers.ignore_header".into(), "ຕົວເລືອກ IGNORE/CARE:".into());
     m.insert("cli.helpers.interactive_note".into(), "ໃຊ້ໃນ INTERACTIVE ເທົ່ານັ້ນ (ແລ່ນ 'ntc' ໂດຍບໍ່ມີ args):\n ການນຳທາງ: cd, back, gos, gosc\n Teleport: tp jump, tp to, @name\n Tutorial: tutorial \u{2014} ເລີ່ມ tutorial ແບບຂັ້ນຕອນ interactive\n".into());
     m.insert("cli.helpers.other_header".into(), "ຕົວເລືອກອື່ນໆ:".into());
-    m.insert("cli.helpers.other_options".into(), " -say, -print <text> ພິມຂໍ້ຄວາມອອກ stdout\n -image <path> to <fmt> ແປງຮູບພາບເປັນເອກະສານສຳລັບ AI (json|md|html|txt)\n -x, --explorer [PATH] ເປີດ NTC File Explorer TUI\n --dino ຫຼິ້ນເກມ dinosaur runner\n --clear ລ້າງໜ້າຈໍ terminal\n --version ສະແດງຂໍ້ມູນເວີຊັນ\n --math <EXPR> ຄິດໄລ່ນິພົດຄະນິດສາດ (ຕ.ຢ. --math \"3+4*5\")\n --list, --fun ລາຍຊື່ຟັງຊັນ command-line ທັງໝົດ\n --help ສະແດງຂໍ້ຄວາມຊ່ວຍເຫຼືອນີ້\n --generate-completions <SHELL> ສ້າງ completions (bash|zsh|fish|powershell)\n".into());
+    m.insert("cli.helpers.other_options".into(), " -say, -print <text> ພິມຂໍ້ຄວາມອອກ stdout\n -image <path> to <fmt> ແປງຮູບພາບເປັນເອກະສານສຳລັບ AI (json|md|html|txt)\n -x, --explorer [PATH] ເປີດ NTC File Explorer TUI\n --clear ລ້າງໜ້າຈໍ terminal\n --version ສະແດງຂໍ້ມູນເວີຊັນ\n --math <EXPR> ຄິດໄລ່ນິພົດຄະນິດສາດ (ຕ.ຢ. --math \"3+4*5\")\n --list, --fun ລາຍຊື່ຟັງຊັນ command-line ທັງໝົດ\n --help ສະແດງຂໍ້ຄວາມຊ່ວຍເຫຼືອນີ້\n --generate-completions <SHELL> ສ້າງ completions (bash|zsh|fish|powershell)\n".into());
     m.insert("cli.helpers.report_header".into(), "ຕົວເລືອກບົດລາຍງານ:".into());
     m.insert("cli.helpers.report_options".into(), " -i, --input <path> ປະມວນຜົນໄຟລ໌ ຫຼື ໄດເຣັກທໍຣີ\n -o, --output <file> ບັນທຶກຜົນລັບໄປໃສ່ໄຟລ໌ທີ່ກຳນົດ\n -f, --format <FORMAT> ຮູບແບບຜົນລັບ: txt, html, json, md, pdf, docx, xlsx (ເລີ່ມຕົ້ນ: txt)\n --cp ສຳເນົາບົດລາຍງານໃສ່ clipboard ແທນການບັນທຶກເປັນໄຟລ໌\n --size ສະແດງຂະໜາດໄດເຣັກທໍຣີປັດຈຸບັນ\n --view ເບິ່ງຕົ້ນໄມ້ໄດເຣັກທໍຣີປັດຈຸບັນຢ່າງໄວ\n --view --size ເບິ່ງໄວພ້ອມຂະໜາດໄດເຣັກທໍຣີ\n".into());
     m.insert("cli.helpers.shell_commands".into(), " ntc pathcp ສຳເນົາ path ໃສ່ clipboard\n ntc say \"hello\" --loop 3 ພິມຂໍ້ຄວາມດ້ວຍ loop\n ntc tl dir . ນັບແຖວໃນໄດເຣັກທໍຣີ\n ntc ne ເປີດ text editor\n ntc size ສະແດງຂະໜາດໄດເຣັກທໍຣີ\n ntc view ສະແດງຕົ້ນໄມ້ໄດເຣັກທໍຣີ\n ntc serve 8080 ເລີ່ມ HTTP server ຢູ່ port 8080\n ntc dl https://example.com/file.zip --progress ດາວໂຫຼດພ້ອມ progress\n ntc encode b64 hello Base64 encode ສະຕຣິງ\n ntc qr \"text\" ສ້າງລະຫັດ QR ໃນ terminal\n ntc math 3+4*5 ຄິດໄລ່ນິພົດ\n ntc ral add btr \"cargo build --release\" ເພີ່ມ alias ຈາກ CLI\n".into());
@@ -99,7 +98,6 @@ pub fn fill(m: &mut HashMap<String, String>) {
     m.insert("cli.known_flag.caren".into(), "--caren <file> ໃສ່ໃຈກັບໄຟລ໌ສະເພາະ".into());
     m.insert("cli.known_flag.clear".into(), "--clear ລ້າງໜ້າຈໍ terminal".into());
     m.insert("cli.known_flag.cp".into(), "--cp ສຳເນົາບົດລາຍງານໃສ່ clipboard".into());
-    m.insert("cli.known_flag.dino".into(), "--dino ຫຼິ້ນເກມ dinosaur runner".into());
     m.insert("cli.known_flag.explorer".into(), "-x, --explorer [PATH] ເປີດ NTC File Explorer TUI".into());
     m.insert("cli.known_flag.generate_completions".into(), "--generate-completions <SHELL> ສ້າງ shell completions (bash|zsh|fish|powershell)".into());
     m.insert("cli.known_flag.help_flag".into(), "--help ສະແດງຄວາມຊ່ວຍເຫຼືອ".into());
@@ -152,7 +150,6 @@ pub fn fill(m: &mut HashMap<String, String>) {
     m.insert("cli.run.help_caren".into(), "caren".into());
     m.insert("cli.run.help_clear".into(), "ລ້າງໜ້າຈໍ terminal".into());
     m.insert("cli.run.help_copy".into(), "ສຳເນົາບົດລາຍງານໃສ່ clipboard ແທນການບັນທຶກເປັນໄຟລ໌".into());
-    m.insert("cli.run.help_dino".into(), "ຫຼິ້ນເກມ dinosaur runner".into());
     m.insert("cli.run.help_edit".into(), "ເປີດໄຟລ໌ໃນ text editor ໃນຕົວ".into());
     m.insert("cli.run.help_explorer".into(), "ເປີດ NTC File Explorer TUI (path ເລີ່ມຕົ້ນທາງເລືອກ)".into());
     m.insert("cli.run.help_format".into(), "ຮູບແບບຜົນລັບ: txt, html, json, md".into());

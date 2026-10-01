@@ -50,7 +50,8 @@ pub(super) fn contains_ampersands(s: &str) -> bool {
 /// Parse a call token like `py(hello)` into `("py", Some("hello"))`.
 /// Returns `(token, None)` if there are no parentheses.
 /// Strips trailing whitespace from the base name to handle `py (hello)`.
-pub(super) fn parse_call_syntax(token: &str) -> (&str, Option<&str>) {
+/// Shared with the `ndb` shell (`dbal run name(args)`).
+pub(crate) fn parse_call_syntax(token: &str) -> (&str, Option<&str>) {
     if let Some(paren_start) = token.find('(') {
         if token.ends_with(')') {
             let base = token[..paren_start].trim_end();
@@ -185,7 +186,8 @@ fn parse_var_ref(chars: &[char], mut i: usize) -> Option<VarRef> {
     }
 }
 
-fn substitute_params(template: &str, args: &[&str]) -> String {
+/// Shared with the `ndb` shell (`dbal` aliases reuse ral-style params).
+pub(crate) fn substitute_params(template: &str, args: &[&str]) -> String {
     // 1. Collect placeholder names in order of first appearance.
     let mut param_order: Vec<String> = Vec::new();
     let chars: Vec<char> = template.chars().collect();
@@ -285,7 +287,8 @@ fn substitute_params(template: &str, args: &[&str]) -> String {
 
 /// Extract parameter names from a command template (e.g. `$x`, `${x}`).
 /// Returns names in order of first appearance.
-pub(super) fn extract_param_names(template: &str) -> Vec<String> {
+/// Shared with the `ndb` shell (`dbal` usage hints).
+pub(crate) fn extract_param_names(template: &str) -> Vec<String> {
     let mut names: Vec<String> = Vec::new();
     let chars: Vec<char> = template.chars().collect();
     let mut i = 0;

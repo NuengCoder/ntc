@@ -44,6 +44,14 @@ pub struct EditorConfig {
     /// Maximum session age in hours before it's discarded (default: 24).
     #[serde(default = "default_session_max_age_hours")]
     pub session_max_age_hours: u64,
+    /// Mouse support in text field and terminal panel only
+    /// (tab bar, sidebar, scrollbars ignore mouse). Default: on.
+    #[serde(default = "default_true")]
+    pub mouse_enabled: bool,
+    /// Sidebar width as percent of terminal width (1-100).
+    /// None = legacy fixed 30 columns (`nfe:size def`).
+    #[serde(default)]
+    pub sidebar_width_pct: Option<u8>,
 }
 
 fn default_tab_size() -> usize {
@@ -97,6 +105,8 @@ impl Default for EditorConfig {
             poll_rate_ms: default_poll_rate_ms(),
             session_auto_save_secs: default_session_auto_save_secs(),
             session_max_age_hours: default_session_max_age_hours(),
+            mouse_enabled: default_true(),
+            sidebar_width_pct: None,
         }
     }
 }

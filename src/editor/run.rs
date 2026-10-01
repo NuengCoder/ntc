@@ -199,6 +199,24 @@ impl Editor {
                 })
             );
 
+            // Transient `gs -i` jump highlight: cleared by any key press or
+            // mouse click, but NOT by mouse scroll / move / resize.
+            if self.gs_jump_highlight.is_some() {
+                let should_clear = match &ev {
+                    Event::Key(_) => true,
+                    Event::Mouse(m) => matches!(
+                        m.kind,
+                        crossterm::event::MouseEventKind::Down(_)
+                            | crossterm::event::MouseEventKind::Up(_)
+                            | crossterm::event::MouseEventKind::Drag(_)
+                    ),
+                    _ => false,
+                };
+                if should_clear {
+                    self.clear_gs_jump_highlight();
+                }
+            }
+
             // Paste batching (Windows: rapid Char events in Insert mode)
             let mut handled = false;
             if matches!(self.mode, Mode::Insert | Mode::InsertMulti) {
@@ -270,8 +288,9 @@ impl Editor {
                         Mode::Normal => self.handle_normal_event(ev, stdout)?,
                         Mode::FileFinder => self.handle_file_finder_event(ev)?,
                         Mode::Gosc => self.handle_gosc_event(ev)?,
+                        Mode::Gmode => self.handle_gmode_event(ev, stdout)?,
+                        Mode::Nfe => self.handle_nfe_event(ev, stdout)?,
                         Mode::Query => self.handle_query_event(ev)?,
-                        Mode::Hex => self.handle_hex_event(ev, stdout)?,
                         Mode::Encoding => self.handle_encoding_event(ev)?,
                         Mode::GitDiff => self.handle_git_diff_event(ev, stdout)?,
                     },

@@ -50,7 +50,8 @@ pub fn fill(m: &mut HashMap<String, String>) {
     m.insert("cmd.config.watch.trigger_off_usage".into(), "config watch trigger off ປິດການ auto-run".into());
     m.insert("cmd.config.watch.trigger_set".into(), "ຕັ້ງ watch trigger ເປັນ alias: '{}'".into());
     m.insert("cmd.config.watch.trigger_usage".into(), "config watch trigger <alias> ເຮັດວຽກ alias ອັດຕະໂນມັດເມື່ອມີການປ່ຽນແປງ".into());
-    m.insert("cmd.config.watch.usage".into(), "ໃຊ້: config watch ON | config watch OFF | config watch trigger <alias> | config watch trigger off".into());
+    m.insert("cmd.config.watch.limit_usage".into(), "config watch limit <n> ຈຳນວນແຖວທີ່ສະແດງໃນກ່ອງ watch".into());
+    m.insert("cmd.config.watch.usage".into(), "ໃຊ້: config watch ON | config watch OFF | config watch trigger <alias> | config watch trigger off | config watch limit <n>".into());
     m.insert("cmd.config.watch.usage_line".into(), "ວິທີໃຊ້: config watch ON|OFF".into());
     m.insert("cmd.fmt.file_not_found".into(), "ບໍ່ພົບໄຟລ໌: {}".into());
     m.insert("cmd.fmt.invalid_json".into(), "JSON ບໍ່ຖືກຕ້ອງ: {}".into());

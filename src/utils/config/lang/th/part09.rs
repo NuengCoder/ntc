@@ -59,6 +59,7 @@ pub fn fill(m: &mut HashMap<String, String>) {
     m.insert("msg.showcg.label_output_path".into(), "เส้นทางผลลัพธ์:".into());
     m.insert("msg.showcg.label_threads".into(), "เธรด:".into());
     m.insert("msg.showcg.label_watcher".into(), "ตัวเฝ้าดูไฟล์:".into());
+    m.insert("msg.showcg.label_watch_limit".into(), "ขีดจำกัด watch:".into());
 
     m.insert("msg.showcg.label_dir_view".into(), "Dir View:".into());
     m.insert("msg.showcg.title".into(), "การกำหนดค่าปัจจุบัน".into());
@@ -76,6 +77,9 @@ pub fn fill(m: &mut HashMap<String, String>) {
     m.insert("msg.watch.off".into(), "ตัวเฝ้าดูไฟล์: OFF (รีสตาร์ท ntc เพื่อปิดใช้งาน)".into());
     m.insert("msg.watch.on".into(), "ตัวเฝ้าดูไฟล์: ON (รีสตาร์ท ntc เพื่อเปิดใช้งาน)".into());
     m.insert("msg.watch.status".into(), "ตัวเฝ้าดูไฟล์: {}".into());
+    m.insert("msg.watch.limit_status".into(), "ขีดจำกัดการแสดงผล watch: {}".into());
+    m.insert("msg.watch.limit_success".into(), "ตั้งขีดจำกัดการแสดงผล watch เป็น {}".into());
+    m.insert("msg.watch.limit_error".into(), "ขีดจำกัด watch ไม่ถูกต้อง: '{}' ใช้ตัวเลขที่เป็นบวก".into());
     m.insert("msg.where.current_dir".into(), "ไดเรกทอรีปัจจุบัน: {}".into());
     m.insert("msg.where.executable".into(), "ไฟล์ปฏิบัติการของ ntc: {}".into());
     m.insert("nav.available_drives".into(), "ไดรฟ์ที่มี:".into());

@@ -468,158 +468,6 @@ impl Editor {
         Ok(())
     }
 
-    pub(crate) fn render_completion_popup(
-        &self,
-        stdout: &mut std::io::Stdout,
-    ) -> std::io::Result<()> {
-        let theme = crate::utils::theme::ThemeManager::current();
-        if !self.completion_visible || self.completion_items.is_empty() {
-            return Ok(());
-        }
-
-        let rows = self.term_h.saturating_sub(4);
-        let content_y = 1;
-        let cols = self.term_w;
-        let eo = self.editor_offset();
-        let gw = gutter_width(self.lines.len());
-
-        let cursor_col = byte_to_col(self.current(), self.cursor.byte);
-        let screen_cursor_x = if cursor_col >= self.sv.x {
-            eo + gw + (cursor_col - self.sv.x)
-        } else {
-            eo + gw
-        };
-        let screen_cursor_y = content_y + self.cursor.y.saturating_sub(self.sv.offset);
-
-        let max_visible = 12usize.min(rows.saturating_sub(screen_cursor_y + 2).max(3));
-        let count = self.completion_items.len();
-        let visible = count.min(max_visible);
-
-        let mut max_label = 0;
-        let mut max_detail = 0;
-        for item in &self.completion_items {
-            let l = item.label.len();
-            let d = item.detail.len();
-            if l > max_label {
-                max_label = l;
-            }
-            if d > max_detail {
-                max_detail = d;
-            }
-        }
-        let popup_w =
-            (max_label + 2 + max_detail + 4).min(cols.saturating_sub(screen_cursor_x + 1));
-        let popup_x = screen_cursor_x.min(cols.saturating_sub(popup_w + 1));
-
-        let popup_y = if screen_cursor_y + 2 + visible < rows {
-            screen_cursor_y + 1
-        } else {
-            rows.saturating_sub(visible + 1)
-        };
-
-        let bg = theme.editor.sidebar_bg.to_crossterm();
-        let border_fg = theme.editor.border.to_crossterm();
-        for i in 0..visible + 2 {
-            let y = popup_y + i;
-            if y >= rows {
-                break;
-            }
-            queue!(
-                stdout,
-                MoveTo(popup_x as u16, y as u16),
-                SetBackgroundColor(bg),
-                SetForegroundColor(border_fg),
-                Print(" ".repeat(popup_w)),
-                ResetColor,
-            )?;
-        }
-
-        let title = format!(" {} ", t!("editor.completion_title"));
-        let remaining = popup_w.saturating_sub(1 + title.len());
-        queue!(
-            stdout,
-            MoveTo(popup_x as u16, popup_y as u16),
-            SetBackgroundColor(bg),
-            SetForegroundColor(border_fg),
-            Print("┌"),
-            SetForegroundColor(theme.editor.gutter_text.to_crossterm()),
-            Print(&title),
-            SetForegroundColor(border_fg),
-            Print("─".repeat(remaining)),
-            ResetColor,
-        )?;
-
-        for i in 0..visible {
-            let y = popup_y + 1 + i;
-            let item = &self.completion_items[i];
-            let is_sel = i == self.completion_idx;
-
-            let label_w = max_label.min(popup_w.saturating_sub(max_detail + 5));
-            let label = if item.label.len() > label_w {
-                let cut = item.label.floor_char_boundary(label_w.saturating_sub(1));
-                format!("{}…", &item.label[..cut])
-            } else {
-                item.label.clone()
-            };
-
-            let detail_w = max_detail.min(popup_w.saturating_sub(label_w + 4));
-            let detail = if item.detail.len() > detail_w {
-                let cut = item.detail.floor_char_boundary(detail_w.saturating_sub(1));
-                format!("{}…", &item.detail[..cut])
-            } else {
-                item.detail.clone()
-            };
-
-            if is_sel {
-                queue!(
-                    stdout,
-                    MoveTo(popup_x as u16, y as u16),
-                    SetBackgroundColor(theme.editor.selection_bg.to_crossterm()),
-                    SetForegroundColor(theme.editor.status_text.to_crossterm()),
-                    Print(" "),
-                    SetForegroundColor(theme.syntax.keyword.to_crossterm()),
-                    Print(&label),
-                    SetForegroundColor(theme.editor.gutter_text.to_crossterm()),
-                    Print("  "),
-                    SetForegroundColor(theme.syntax.normal.to_crossterm()),
-                    Print(&detail),
-                    ResetColor,
-                    Clear(ClearType::UntilNewLine),
-                )?;
-            } else {
-                queue!(
-                    stdout,
-                    MoveTo(popup_x as u16, y as u16),
-                    SetBackgroundColor(bg),
-                    SetForegroundColor(theme.editor.border.to_crossterm()),
-                    Print(" "),
-                    SetForegroundColor(theme.syntax.normal.to_crossterm()),
-                    Print(&label),
-                    SetForegroundColor(theme.editor.gutter_text.to_crossterm()),
-                    Print("  "),
-                    SetForegroundColor(theme.syntax.comment.to_crossterm()),
-                    Print(&detail),
-                    ResetColor,
-                    Clear(ClearType::UntilNewLine),
-                )?;
-            }
-        }
-
-        let bot_y = popup_y + 1 + visible;
-        if bot_y < rows {
-            queue!(
-                stdout,
-                MoveTo(popup_x as u16, bot_y as u16),
-                SetBackgroundColor(bg),
-                SetForegroundColor(border_fg),
-                Print("└"),
-                ResetColor,
-                Clear(ClearType::UntilNewLine),
-            )?;
-        }
-        Ok(())
-    }
-
     pub(crate) fn render_hover_popup(&self, stdout: &mut std::io::Stdout) -> std::io::Result<()> {
         let theme = crate::utils::theme::ThemeManager::current();
         let text = match &self.hover_text {
@@ -729,6 +577,377 @@ impl Editor {
                 Print("└"),
                 ResetColor,
                 Clear(ClearType::UntilNewLine),
+            )?;
+        }
+        Ok(())
+    }
+
+    /// VSCode-style completion: fixed Box1 (candidates) + Box2 (detail),
+    /// one line below the cursor, flipped above when space runs out.
+    pub(crate) fn render_completion(&self, stdout: &mut std::io::Stdout) -> std::io::Result<()> {
+        use crate::editor::complete::{BOX1_WIDTH, BOX2_WIDTH, COMPLETE_ROWS};
+
+        let st = match &self.completion {
+            Some(s) if !s.items.is_empty() => s,
+            _ => return Ok(()),
+        };
+        let theme = crate::utils::theme::ThemeManager::current();
+        let rows = self.term_h.saturating_sub(4);
+        let cols = self.term_w;
+        let eo = self.editor_offset();
+        let gw = gutter_width(self.lines.len());
+
+        let cursor_col = byte_to_col(self.current(), self.cursor.byte);
+        let sx = eo + gw + cursor_col.saturating_sub(self.sv.x);
+        let sy = 1 + self.cursor.y.saturating_sub(self.sv.offset);
+
+        let h = COMPLETE_ROWS + 2;
+        let gap = 1;
+        let total = BOX1_WIDTH + gap + BOX2_WIDTH;
+        // Below cursor + 1; flip above when it would overflow.
+        let mut y0 = sy + 1;
+        if y0 + h > rows {
+            y0 = sy.saturating_sub(h + 1);
+        }
+        let mut x0 = sx;
+        if x0 + total > cols {
+            x0 = cols.saturating_sub(total);
+        }
+
+        let bg = theme.editor.sidebar_bg.to_crossterm();
+        let border_fg = theme.editor.border.to_crossterm();
+        let text_fg = theme.editor.status_text.to_crossterm();
+        let tag_fg = theme.syntax.keyword.to_crossterm();
+        let sel_bg = theme.editor.selection_bg.to_crossterm();
+
+        // Page the window so the selection is visible.
+        let sel = st.selected.min(st.items.len() - 1);
+        let start = (sel / COMPLETE_ROWS) * COMPLETE_ROWS;
+
+        // Border titles: ` prefix (idx/total) `, data only, no new words.
+        let title = format!(" {} ({}/{}) ", st.prefix, sel + 1, st.items.len());
+        let title_w = BOX1_WIDTH.saturating_sub(2);
+        let title = if title.chars().count() > title_w {
+            let cut = title.floor_char_boundary(title_w.saturating_sub(1));
+            format!("{}…", &title[..cut])
+        } else {
+            title
+        };
+        let fill = title_w.saturating_sub(title.chars().count());
+        // Top borders.
+        queue!(
+            stdout,
+            MoveTo(x0 as u16, y0 as u16),
+            SetBackgroundColor(bg),
+            SetForegroundColor(border_fg),
+            Print("┌"),
+            SetForegroundColor(theme.editor.gutter_text.to_crossterm()),
+            Print(&title),
+            SetForegroundColor(border_fg),
+            Print(format!("{}┐", "─".repeat(fill))),
+            ResetColor,
+        )?;
+        let x1 = x0 + BOX1_WIDTH + gap;
+        queue!(
+            stdout,
+            MoveTo(x1 as u16, y0 as u16),
+            SetBackgroundColor(bg),
+            SetForegroundColor(border_fg),
+            Print(format!("┌{}┐", "─".repeat(BOX2_WIDTH - 2))),
+            ResetColor,
+        )?;
+
+        // Body rows.
+        let inner1 = BOX1_WIDTH - 2;
+        let label_w = inner1.saturating_sub(5); // ` ` + label + ` ` + `[F]`
+        for r in 0..COMPLETE_ROWS {
+            let y = y0 + 1 + r;
+            if y >= rows {
+                break;
+            }
+            match st.items.get(start + r) {
+                Some(item) => {
+                    let is_sel = start + r == sel;
+                    let label = if item.label.chars().count() > label_w {
+                        let cut = item.label.floor_char_boundary(label_w.saturating_sub(1));
+                        format!("{}…", &item.label[..cut])
+                    } else {
+                        item.label.clone()
+                    };
+                    let pad = label_w.saturating_sub(label.chars().count());
+                    let (row_bg, row_fg, kind_fg) = if is_sel {
+                        (sel_bg, text_fg, text_fg)
+                    } else {
+                        (bg, text_fg, tag_fg)
+                    };
+                    queue!(
+                        stdout,
+                        MoveTo(x0 as u16, y as u16),
+                        SetBackgroundColor(row_bg),
+                        SetForegroundColor(border_fg),
+                        Print("│"),
+                        SetForegroundColor(row_fg),
+                        Print(format!(" {}{} ", label, " ".repeat(pad))),
+                        SetForegroundColor(kind_fg),
+                        Print(item.kind.tag()),
+                        SetForegroundColor(border_fg),
+                        Print("│"),
+                        ResetColor,
+                    )?;
+                }
+                None => {
+                    queue!(
+                        stdout,
+                        MoveTo(x0 as u16, y as u16),
+                        SetBackgroundColor(bg),
+                        SetForegroundColor(border_fg),
+                        Print(format!("│{}│", " ".repeat(inner1))),
+                        ResetColor,
+                    )?;
+                }
+            }
+            // Box2 detail for the CURRENT selection on every row slot:
+            // functions show the full wrapped signature first, then doc;
+            // other kinds show the detail line, then doc lines.
+            use crate::editor::complete::{wrap_sig, Kind as CKind};
+            let inner2 = BOX2_WIDTH - 2;
+            let sel_item = &st.items[sel];
+            let sig_lines: Vec<String> = if sel_item.kind == CKind::Function
+                && !sel_item.sig_params.is_empty()
+            {
+                wrap_sig(&sel_item.name, &sel_item.return_type, &sel_item.sig_params, None, inner2, 5)
+                    .into_iter()
+                    .map(|row| {
+                        row.segments
+                            .into_iter()
+                            .map(|(s, _)| s)
+                            .collect::<String>()
+                    })
+                    .collect()
+            } else {
+                Vec::new()
+            };
+            let b2 = if !sig_lines.is_empty() {
+                sig_lines.get(r).cloned().or_else(|| {
+                    sel_item.doc.lines().nth(r.saturating_sub(sig_lines.len())).map(|s| s.to_string())
+                })
+            } else if r == 0 {
+                Some(sel_item.detail.clone())
+            } else {
+                sel_item.doc.lines().nth(r - 1).map(|s| s.to_string())
+            };
+            let text = match b2 {
+                Some(t) if t.chars().count() > inner2 => {
+                    let cut = t.floor_char_boundary(inner2.saturating_sub(1));
+                    format!("{}…", &t[..cut])
+                }
+                Some(t) => t,
+                None => String::new(),
+            };
+            let tpad = inner2.saturating_sub(text.chars().count());
+            queue!(
+                stdout,
+                MoveTo(x1 as u16, y as u16),
+                SetBackgroundColor(bg),
+                SetForegroundColor(border_fg),
+                Print("│"),
+                SetForegroundColor(text_fg),
+                Print(format!("{}{}", text, " ".repeat(tpad))),
+                SetForegroundColor(border_fg),
+                Print("│"),
+                ResetColor,
+            )?;
+        }
+        // Bottom borders.
+        let yb = y0 + h - 1;
+        if yb < rows {
+            queue!(
+                stdout,
+                MoveTo(x0 as u16, yb as u16),
+                SetBackgroundColor(bg),
+                SetForegroundColor(border_fg),
+                Print(format!("└{}┘", "─".repeat(BOX1_WIDTH - 2))),
+                ResetColor,
+            )?;
+            queue!(
+                stdout,
+                MoveTo(x1 as u16, yb as u16),
+                SetBackgroundColor(bg),
+                SetForegroundColor(border_fg),
+                Print(format!("└{}┘", "─".repeat(BOX2_WIDTH - 2))),
+                ResetColor,
+            )?;
+        }
+        Ok(())
+    }
+
+    /// Paint pre-wrapped signature rows into a box interior.
+    /// Returns the number of body rows consumed. The highlighted
+    /// parameter uses hardcoded Yellow (per spec) on any theme.
+    fn paint_sig_rows(
+        &self,
+        stdout: &mut std::io::Stdout,
+        x0: usize,
+        y0: usize,
+        inner: usize,
+        rows_sig: &[crate::editor::complete::SigRow],
+        max_rows: usize,
+    ) -> std::io::Result<usize> {
+        use crate::editor::complete::SigRow;
+        let theme = crate::utils::theme::ThemeManager::current();
+        let bg = theme.editor.sidebar_bg.to_crossterm();
+        let border_fg = theme.editor.border.to_crossterm();
+        let text_fg = theme.editor.status_text.to_crossterm();
+        let _ = inner;
+        let mut used = 0usize;
+        for row in rows_sig.iter().take(max_rows) {
+            let y = y0 + 1 + used;
+            if y >= self.term_h.saturating_sub(4) {
+                break;
+            }
+            queue!(
+                stdout,
+                MoveTo(x0 as u16, y as u16),
+                SetBackgroundColor(bg),
+                SetForegroundColor(border_fg),
+                Print("│"),
+                ResetColor,
+            )?;
+            let mut x = x0 + 1;
+            queue!(
+                stdout,
+                MoveTo(x as u16, y as u16),
+                SetBackgroundColor(bg),
+                SetForegroundColor(text_fg),
+                Print(" "),
+                ResetColor,
+            )?;
+            x += 1;
+            for (text, hi) in &row.segments {
+                if *hi {
+                    queue!(
+                        stdout,
+                        MoveTo(x as u16, y as u16),
+                        SetBackgroundColor(Color::Yellow),
+                        SetForegroundColor(Color::Black),
+                        Print(text),
+                        ResetColor,
+                    )?;
+                } else {
+                    queue!(
+                        stdout,
+                        MoveTo(x as u16, y as u16),
+                        SetBackgroundColor(bg),
+                        SetForegroundColor(text_fg),
+                        Print(text),
+                        ResetColor,
+                    )?;
+                }
+                x += text.chars().count();
+            }
+            // Pad + right border.
+            let end_x = x0 + inner + 1;
+            if x < end_x {
+                queue!(
+                    stdout,
+                    MoveTo(x as u16, y as u16),
+                    SetBackgroundColor(bg),
+                    Print(" ".repeat(end_x - x)),
+                    ResetColor,
+                )?;
+            }
+            queue!(
+                stdout,
+                MoveTo(end_x as u16, y as u16),
+                SetBackgroundColor(bg),
+                SetForegroundColor(border_fg),
+                Print("│"),
+                ResetColor,
+            )?;
+            used += 1;
+            let _ = SigRow { segments: vec![] };
+        }
+        Ok(used)
+    }
+
+    /// Signature help: Box2-sized box above the cursor, full wrapped
+    /// signature with the active parameter in Yellow.
+    pub(crate) fn render_sighelp(&self, stdout: &mut std::io::Stdout) -> std::io::Result<()> {
+        use crate::editor::complete::{wrap_sig, BOX2_WIDTH};
+
+        /// Fixed box height: borders + up to 4 signature rows + desc.
+        const SIG_H: usize = 7;
+        let sh = match &self.sighelp {
+            Some(s) if !s.label.is_empty() => s,
+            _ => return Ok(()),
+        };
+        let theme = crate::utils::theme::ThemeManager::current();
+        let rows = self.term_h.saturating_sub(4);
+        let cols = self.term_w;
+        let eo = self.editor_offset();
+        let gw = gutter_width(self.lines.len());
+
+        let cursor_col = byte_to_col(self.current(), self.cursor.byte);
+        let sx = eo + gw + cursor_col.saturating_sub(self.sv.x);
+        let sy = 1 + self.cursor.y.saturating_sub(self.sv.offset);
+
+        let y0 = sy.saturating_sub(SIG_H + 1);
+        let mut x0 = sx;
+        if x0 + BOX2_WIDTH > cols {
+            x0 = cols.saturating_sub(BOX2_WIDTH);
+        }
+        let inner = BOX2_WIDTH - 2;
+        let bg = theme.editor.sidebar_bg.to_crossterm();
+        let border_fg = theme.editor.border.to_crossterm();
+        let text_fg = theme.editor.status_text.to_crossterm();
+
+        queue!(
+            stdout,
+            MoveTo(x0 as u16, y0 as u16),
+            SetBackgroundColor(bg),
+            SetForegroundColor(border_fg),
+            Print(format!("┌{}┐", "─".repeat(inner))),
+            ResetColor,
+        )?;
+        let sig_rows = wrap_sig(&sh.label, &sh.ret, &sh.params, Some(sh.active), inner, 4);
+        let used = self.paint_sig_rows(stdout, x0, y0, inner, &sig_rows, 4)?;
+        // Description fills the rest (at least the last body row).
+        let desc: Vec<&str> = sh.desc.lines().collect();
+        for (di, r) in (used..(SIG_H - 2)).enumerate() {
+            let y = y0 + 1 + r;
+            if y >= rows {
+                break;
+            }
+            let text = desc.get(di).copied().unwrap_or("");
+            let text = if text.chars().count() > inner.saturating_sub(1) {
+                let cut = text.floor_char_boundary(inner.saturating_sub(2));
+                format!("{}…", &text[..cut])
+            } else {
+                text.to_string()
+            };
+            let pad = inner.saturating_sub(1 + text.chars().count());
+            queue!(
+                stdout,
+                MoveTo(x0 as u16, y as u16),
+                SetBackgroundColor(bg),
+                SetForegroundColor(border_fg),
+                Print("│"),
+                SetForegroundColor(text_fg),
+                Print(format!(" {}{}", text, " ".repeat(pad))),
+                SetForegroundColor(border_fg),
+                Print("│"),
+                ResetColor,
+            )?;
+        }
+        let yb = y0 + SIG_H - 1;
+        if yb < rows {
+            queue!(
+                stdout,
+                MoveTo(x0 as u16, yb as u16),
+                SetBackgroundColor(bg),
+                SetForegroundColor(border_fg),
+                Print(format!("└{}┘", "─".repeat(inner))),
+                ResetColor,
             )?;
         }
         Ok(())

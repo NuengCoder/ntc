@@ -393,7 +393,13 @@ fn python_source(version: &str) -> Option<PackageSource> {
 
     let url = format!("{base}{filename}");
     let mut urls = HashMap::new();
-    urls.insert(platform_key.to_string(), url);
+    urls.insert(platform_key.to_string(), url.clone());
+    // The Linux source tarball is arch-independent — register it for both
+    // arch keys so aarch64 Linux doesn't hit "No download URL for platform".
+    if platform_key.starts_with("linux-") {
+        urls.insert("linux-x86_64".to_string(), url.clone());
+        urls.insert("linux-aarch64".to_string(), url);
+    }
 
     Some(PackageSource {
         name: "python".to_string(),
@@ -408,14 +414,21 @@ fn python_source(version: &str) -> Option<PackageSource> {
 fn platform_python_archive(version: &str) -> Option<(&'static str, String, ArchiveType)> {
     #[cfg(target_os = "windows")]
     {
-        let f = format!("python-{version}-amd64.exe");
-        Some(("windows-x86_64", f, ArchiveType::Msi))
+        // ARM64 Windows has its own installer (verified on python.org FTP);
+        // x64 emulation works but the native build is the right default.
+        if cfg!(target_arch = "aarch64") {
+            let f = format!("python-{version}-arm64.exe");
+            Some(("windows-aarch64", f, ArchiveType::Msi))
+        } else {
+            let f = format!("python-{version}-amd64.exe");
+            Some(("windows-x86_64", f, ArchiveType::Msi))
+        }
     }
 
     #[cfg(any(target_os = "linux", target_os = "android"))]
     {
         let f = format!("Python-{version}.tar.xz");
-        Some(("linux-x86_64", f, ArchiveType::TarGz))
+        Some(("linux-x86_64", f, ArchiveType::TarXz))
     }
 
     #[cfg(target_os = "macos")]
@@ -3173,5 +3186,44 @@ fn fetch_latest_tesseract_version() -> String {
         FALLBACK.to_string()
     } else {
         stripped.to_string()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Regression test for `ntpkg install python 3.14.5` failing with
+    /// "Failed to write downloaded file": the source itself must resolve to
+    /// a real python.org URL with the matching archive type.
+    #[test]
+    fn python_source_matches_platform_archive() {
+        let src = python_source("3.14.5").expect("python source should resolve");
+        if cfg!(target_os = "windows") {
+            assert_eq!(src.archive_type, ArchiveType::Msi);
+            let (key, suffix) = if cfg!(target_arch = "aarch64") {
+                ("windows-aarch64", "python-3.14.5-arm64.exe")
+            } else {
+                ("windows-x86_64", "python-3.14.5-amd64.exe")
+            };
+            let url = src.urls.get(key).expect("windows python URL missing");
+            assert!(
+                url.ends_with(suffix),
+                "unexpected python URL for {key}: {url}"
+            );
+        } else if cfg!(any(target_os = "linux", target_os = "android")) {
+            // Source tarball is .tar.xz and must be extracted as TarXz
+            // (a TarGz decoder on xz data fails).
+            assert_eq!(src.archive_type, ArchiveType::TarXz);
+            for key in ["linux-x86_64", "linux-aarch64"] {
+                let url = src.urls.get(key).expect("linux python URL missing");
+                assert!(
+                    url.ends_with("Python-3.14.5.tar.xz"),
+                    "unexpected python URL for {key}: {url}"
+                );
+            }
+        } else if cfg!(target_os = "macos") {
+            assert_eq!(src.archive_type, ArchiveType::Pkg);
+        }
     }
 }

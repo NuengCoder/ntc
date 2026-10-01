@@ -23,7 +23,6 @@ _ntc_completions() {
         '--list[--fun][List all command-line functions]'
         '--help[Show detailed help]'
         '--math[Evaluate a math expression]:expression:'
-        '--dino[Play the dinosaur runner game]'
         '--edit[Open file in built-in text editor]:file:_files'
         '--init[Create starter file from template]:file:_files'
         '--ignored[Show ignored items]'

@@ -77,9 +77,13 @@ fn handle_simple_flags(matches: &clap::ArgMatches, known_flags: &[String]) -> Re
     if matches.get_flag("version") {
         println!(
             "{}",
-            t!("msg.version.format", env!("CARGO_PKG_VERSION"))
-                .green()
-                .bold()
+            format!(
+                "{} ({})",
+                t!("msg.version.format", env!("CARGO_PKG_VERSION")),
+                env!("BUILD_GIT_HASH")
+            )
+            .green()
+            .bold()
         );
         return Ok(false);
     }
@@ -300,11 +304,6 @@ fn handle_simple_flags(matches: &clap::ArgMatches, known_flags: &[String]) -> Re
 
     if let Some(text) = matches.get_one::<String>("say") {
         println!("{}", text.green());
-        return Ok(false);
-    }
-
-    if matches.get_flag("dino") {
-        crate::game::run()?;
         return Ok(false);
     }
 
@@ -874,7 +873,6 @@ pub fn run_cli() -> Result<bool> {
         t!("cli.known_flag.igcare_export_select"),
         t!("cli.known_flag.igcare_import"),
         t!("cli.known_flag.explorer"),
-        t!("cli.known_flag.dino"),
         t!("cli.known_flag.math"),
         t!("cli.known_flag.list"),
         t!("cli.known_flag.help_flag"),
@@ -1203,12 +1201,6 @@ pub fn run_cli() -> Result<bool> {
                 .value_name("FILE")
                 .help(t!("cli.run.help_igcare_import"))
                 .num_args(1),
-        )
-        .arg(
-            Arg::new("dino")
-                .long("dino")
-                .help(t!("cli.run.help_dino"))
-                .action(ArgAction::SetTrue),
         )
         .arg(
             Arg::new("math")

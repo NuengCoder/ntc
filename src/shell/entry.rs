@@ -17,6 +17,7 @@ use rustyline::hint::Hinter;
 use rustyline::history::FileHistory;
 use rustyline::validate::Validator;
 use rustyline::{Config as RlConfig, Context, Editor};
+use rustyline::{EventHandler, KeyCode, KeyEvent, Modifiers};
 use std::sync::Arc;
 
 /// Combined rustyline helper wrapping our custom hinter.
@@ -29,6 +30,10 @@ impl NtcHelper {
         NtcHelper {
             hinter: super::hinter::NtcHinter::new(),
         }
+    }
+
+    fn tab_handler(&self, delta: isize) -> super::hinter::TabCycleHandler {
+        self.hinter.tab_handler(delta)
     }
 }
 
@@ -102,7 +107,20 @@ pub fn run_classic_shell(mut nav: Navigator) -> Result<()> {
 
     let mut rl = Editor::<NtcHelper, FileHistory>::with_config(RlConfig::default())
         .map_err(|e| anyhow::anyhow!("Failed to create line editor: {}", e))?;
-    rl.set_helper(Some(NtcHelper::new()));
+    let helper = NtcHelper::new();
+    let tab_next = helper.tab_handler(1);
+    let tab_prev = helper.tab_handler(-1);
+    rl.set_helper(Some(helper));
+    // Tab / Shift-Tab cycle ghost-text candidates in place (no newline);
+    // Right-arrow (rustyline default) accepts the ghost.
+    rl.bind_sequence(
+        KeyEvent(KeyCode::Tab, Modifiers::NONE),
+        EventHandler::Conditional(Box::new(tab_next)),
+    );
+    rl.bind_sequence(
+        KeyEvent(KeyCode::BackTab, Modifiers::NONE),
+        EventHandler::Conditional(Box::new(tab_prev)),
+    );
 
     if let Some(history_path) = NtcConfig::read_global().resolve_history_path() {
         let _ = rl.load_history(&history_path);
@@ -121,14 +139,27 @@ pub fn run_classic_shell(mut nav: Navigator) -> Result<()> {
     }
 
     println!();
-    println!("╔══════════════════════════════════════════════════════════════════╗");
     println!(
-        "{:^66}",
-        t!("entry.welcome_fmt", env!("CARGO_PKG_VERSION"))
-            .cyan()
-            .bold()
+        "{}",
+        crate::utils::terminal::asciify(
+            "╔══════════════════════════════════════════════════════════════════╗"
+        )
     );
-    println!("╚══════════════════════════════════════════════════════════════════╝");
+    println!(
+        "{}",
+        format!(
+            "{:^66}",
+            t!("entry.welcome_fmt", env!("CARGO_PKG_VERSION"))
+        )
+        .cyan()
+        .bold()
+    );
+    println!(
+        "{}",
+        crate::utils::terminal::asciify(
+            "╚══════════════════════════════════════════════════════════════════╝"
+        )
+    );
     println!();
     println!("{}", t!("entry.startup_hint").dimmed());
     if NtcConfig::global_get_dir_view_enabled() {

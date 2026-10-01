@@ -22,6 +22,7 @@ mod narrative;
 mod ocr;
 
 // Re-export public types
+pub use ascii::image_to_ascii;
 pub use converter::ImageData;
 
 /// Supported output formats

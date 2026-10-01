@@ -15,10 +15,57 @@ pub fn fill(m: &mut HashMap<String, String>) {
     m.insert("help.todo.rm".into(), "todo rm <N> ## ລຶບວຽກ N".into());
     m.insert("help.todo.show".into(), "todo ## ສະແດງວຽກທັງໝົດ (ຈາກ future_todo.txt ໃນ CWD)".into());
     m.insert("help.todo.title".into(), "ຄຳສັ່ງ TODO:".into());
+    m.insert("help.todo.done".into(), "todo done <N> ## ໝາຍວຽກ N ວ່າສຳເລັດ".into());
+    m.insert("help.todo.undo".into(), "todo undo <N> ## ເປີດວຽກ N ໃໝ່".into());
+    m.insert("help.todo.edit".into(), "todo edit <N> \"name\" ## ປ່ຽນຊื่อວຽກ N".into());
+    m.insert("help.arc.title".into(), "ຄຳສັ່ງ ARCHIVE:".into());
+    m.insert("help.arc.create".into(), "arc create <out.zip|tar.gz|tar> <ໄຟລ໌...> ## ສ້າງໄຟລ໌ບີບอัด".into());
+    m.insert("help.arc.extract".into(), "arc extract <ໄຟລ໌> [ປາຍທາງ] ## ແຕກໄຟລ໌".into());
+    m.insert("help.arc.list".into(), "arc list <ໄຟລ໌> ## ສະແດງເນື້ອໃນ".into());
+    m.insert("help.arc.example1".into(), "arc create backup.zip src Cargo.toml ## ສ້າງ zip".into());
+    m.insert("help.arc.example2".into(), "arc list backup.zip ## ສະແດງເນື້ອໃນ".into());
+    m.insert("help.arc.example3".into(), "arc extract backup.zip restored ## ແຕກໄຟລ໌".into());
+    m.insert("help.scan.depth".into(), "scan ext <ນາມສະກຸນ...> -d, --depth <n> ## ຈຳກັດຄວາມເລິກສະແກນ".into());
+    m.insert("help.scan.example1".into(), "scan ext rs ## ສະແດງໄຟລ໌ .rs ທັງໝົດ".into());
+    m.insert("help.scan.example2".into(), "scan ext rs c -d 2 ## ສະແດງໄຟລ໌ .rs/.c ເຖິງຄວາມເລິກ 2".into());
+    m.insert("help.scan.example3".into(), "scan ext rs c -s ## ສະແດງພ້ອມຂະໜາດແລະຜົນລວມ".into());
+
+    m.insert("help.scan.example4".into(), "scan port 192.168.1.1 --top 10 ## ສະແກນ 10 ports ແລກ".into());
+
+    m.insert("help.scan.example5".into(), "scan ip 192.168.1.0/24 ## sweep ຫາ hosts ທີ່ alive".into());
+    m.insert("help.scan.ext".into(), "scan ext <ນາມສະກຸນ...> ## ສະແດງໄຟລ໌ຕາມນາມສະກຸນ (ບໍ່ນັບແຖວ)".into());
+
+    m.insert("help.scan.port".into(), "scan port [host] [--top N | --ports <spec> | --all] ## ສະແກນ TCP port".into());
+
+    m.insert("help.scan.ip".into(), "scan ip [cidr] [--top N | --ports <spec>] ## sweep ຫາ hosts + ARP".into());
+    m.insert("help.scan.size".into(), "scan ext <ນາມສະກຸນ...> -s, --size ## ສະແດງຂະໜາດແລະຜົນລວມ".into());
+    m.insert("help.scan.care".into(), "scan ext <ນາມສະກຸນ...> --care ## ລວມທຸກໄຟລ໌ (ໂໝດ care)".into());
+    m.insert("help.scan.title".into(), "ຄຳສັ່ງ SCAN:".into());
+    m.insert("help.nssh.title".into(), "ຄຳສັ່ງ NSSH:".into());
+    m.insert("help.nssh.add".into(), "nssh add <ຊື່> --host <ໂຮສ> ## ບັນທຶກໂປຣໄຟລ໌ SSH".into());
+    m.insert("help.nssh.ssh".into(), "nssh ssh [ຊື່] [--cmd \"ຄຳສັ່ງ\"] ## ເຊວຫຼືຄຳສັ່ງດຽວ".into());
+    m.insert("help.nssh.cp".into(), "nssh cp <ໂລຄອລ> <ຊື່>:<ຣີໂໝດ> ## ອັບໂຫຼດ/ດາວໂຫຼດ SFTP".into());
+    m.insert("help.nssh.scan".into(), "nssh scan <ໂຮສ> [--top N] ## ສະແກນພອດ TCP".into());
+    m.insert("help.nssh.manage".into(), "nssh ls|info|rm|edit ## ຈັດການໂປຣໄຟລ໌".into());
+    m.insert("help.nssh.keygen".into(), "nssh keygen ## ສ້າງຄີຜ່ານ ssh-keygen".into());
+    m.insert("help.nssh.example1".into(), "nssh add prod --host 203.0.113.10 --user root ## ບັນທຶກໂປຣໄຟລ໌".into());
+    m.insert("help.nssh.example2".into(), "nssh ssh prod --cmd \"uptime\" ## ຣັນຄຳສັ່ງຣີໂໝດ".into());
+    m.insert("help.nssh.example3".into(), "nssh cp ./app.tar.gz prod:/tmp/ ## ອັບໂຫຼດໄຟລ໌".into());
+    m.insert("help.nsheet.title".into(), "ຄຳສັ່ງ NSHEET:".into());
+    m.insert("help.nsheet.open".into(), "nsheet open <ໄຟລ໌> [ຕົວເລືອກ] ## ເບິ່ງຕາຕະລາງແບບເຕັມຈໍ (CSV/TSV/JSON)".into());
+    m.insert("help.nsheet.view".into(), "nsheet view <ໄຟລ໌> [ຕົວເລືອກ] ## ພິມຕາຕະລາງ (ເລີ່ມຕົ້ນ 50 ແຖວ)".into());
+    m.insert("help.nsheet.sort".into(), "nsheet view <ໄຟລ໌> --sort <ຖັນ> [--desc] ## ຮຽງຕາມຖັນ".into());
+    m.insert("help.nsheet.filter".into(), "nsheet view <ໄຟລ໌> --filter <ເງື່ອນໄຂ> ## ກອງແຖວ (col~ຂໍ້ຄວາມ, col=ຄ່າ, col>ເລກ)".into());
+    m.insert("help.nsheet.export".into(), "nsheet view <ໄຟລ໌> --export <json|md> [-o <ໄຟລ໌>] ## ສົ່ງອອກ".into());
+    m.insert("help.nsheet.tui".into(), "ປຸ່ມເຕັມຈໍ: ລูกສອນ/hjkl ເລື່ອນ · / ຄົ້ນຫາ · n ຖັດໄປ · s ຮຽງ · f ກອງ · e ສົ່ງອອກ · Enter ເບິ່ງ · q ອອກ".into());
+    m.insert("help.nsheet.example1".into(), "nsheet open users.csv ## ເປີດເບິ່ງຕາຕະລາງ".into());
+    m.insert("help.nsheet.example2".into(), "nsheet view data.json --filter \"age>30\" --sort age ## ກອງແລະຮຽງ".into());
+    m.insert("help.nsheet.example3".into(), "nsheet view a.csv --export md -o out.md ## ສົ່ງອອກ Markdown".into());
     m.insert("help.view.care".into(), "view --care ## ສະແດງ tree ກັບ care ທຸກຢ່າງ".into());
     m.insert("help.view.cp".into(), "view -c, --cp ## ສະແດງ tree ແລະ ສຳເນົາໃສ່ clipboard".into());
     m.insert("help.view.depth".into(), "view -d, --depth <n> ## ສະແດງ tree ດ້ວຍຄວາມເລິກທີ່ກຳນົດ".into());
     m.insert("help.view.dirsize".into(), "view -ds, --dirsize ## ສະແດງ tree ດ້ວຍຂະໜາດໄດເຣັກທໍຣີເທົ່ານັ້ນ".into());
+    m.insert("help.view.ext".into(), "view -ext, --ext <ນามສະກຸນ...> ## ສະແດງ tree ສະເພາະນามສະກຸນທີ່ກົງກັນ".into());
     m.insert("help.view.filesize".into(), "view -fs, --filesize ## ສະແດງ tree ດ້ວຍຂະໜາດໄຟລ໌ເທົ່ານັ້ນ".into());
     m.insert("help.view.path".into(), "view -p, --path <path|@tp> ## ສະແດງ tree ຂອງ path ຫຼື teleport savepoint ທີ່ລະບຸ".into());
     m.insert("help.view.size".into(), "view -s, --size ## ສະແດງ tree ດ້ວຍຂະໜາດ dir ແລະ file".into());

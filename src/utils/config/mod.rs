@@ -56,6 +56,11 @@ pub struct Config {
     #[serde(default)]
     pub file_watcher_enabled: bool,
 
+    /// Max change events shown in the watcher box before "… and N more".
+    /// Set via `config watch limit <n>`.
+    #[serde(default = "default_watch_limit")]
+    pub watch_limit: usize,
+
     /// Whether color output is enabled
     #[serde(default = "default_color_enabled")]
     pub color_enabled: bool,
@@ -65,6 +70,11 @@ pub struct Config {
 
     #[serde(default)]
     pub run_aliases: HashMap<String, String>,
+
+    /// Saved read-only SQL queries for the `ndb` shell (`dbal` dimension:
+    /// `qal` lives in the editor, `ral` in the ntc shell, `dbal` in ndb).
+    #[serde(default)]
+    pub db_aliases: HashMap<String, String>,
 
     #[serde(default)]
     pub math_functions: HashMap<String, String>,
@@ -162,7 +172,9 @@ pub fn validate_alias_name(name: &str) -> bool {
         "locate",
         "rnmf",
         "rnmd",
-        "dino",
+        "mv",
+        "move",
+        "cp",
         "math",
         "init",
         "deinit",
@@ -179,6 +191,9 @@ pub fn validate_alias_name(name: &str) -> bool {
         "qsc",
         "tmprt",
         "git",
+        "ndb",
+        "nsheet",
+        "nssh",
     ];
 
     if name.trim().is_empty() || name.contains(' ') {
@@ -204,6 +219,9 @@ fn default_max_depth() -> usize {
 }
 fn default_num_threads() -> usize {
     4
+}
+fn default_watch_limit() -> usize {
+    10
 }
 fn default_history_enabled() -> bool {
     false
@@ -260,11 +278,13 @@ impl Config {
             history_path: None,
             history_enabled: default_history_enabled(),
             file_watcher_enabled: false,
+            watch_limit: default_watch_limit(),
             color_enabled: default_color_enabled(),
             autosuggest_enabled: default_autosuggest_enabled(),
             git_integration_enabled: default_git_integration_enabled(),
             teleports: HashMap::new(),
             run_aliases: HashMap::new(),
+            db_aliases: HashMap::new(),
             math_functions: HashMap::new(),
             watch_trigger_alias: None,
             qsc: None,
@@ -312,10 +332,19 @@ impl Config {
             Self::new()
         };
 
-        // Auto-detect terminal capabilities
+        // Auto-detect terminal capabilities. Ensure VT was attempted first
+        // (matters when the lib is used without main()'s init call).
+        #[cfg(windows)]
+        {
+            crate::utils::terminal::init();
+        }
         let caps = crate::utils::terminal::detect();
 
-        // Auto-disable ANSI colors on Win7/8 (legacy conhost.exe renders codes as garbage)
+        // Auto-disable ANSI colors when VT is unavailable (Win7/8 legacy
+        // conhost, Admin legacy conhost) or when NO_COLOR/TERM=dumb is set.
+        // `detect()` already folds those into `caps.color`; `set_override`
+        // makes `colored` strip codes, and `SHOULD_COLORIZE` gates the
+        // raw-ANSI paths (logo, syntax highlight).
         let effective_color = cfg.color_enabled && caps.color;
         colored::control::set_override(effective_color);
 
@@ -600,7 +629,7 @@ impl Default for Config {
     }
 }
 
-/// Local config file (.ntconfig) - ONLY ignore/care and run_aliases
+/// Local config file (ntconfig.toml) - ONLY ignore/care, run_aliases and db_aliases
 /// All other settings are always global
 #[derive(Debug, Serialize, Deserialize, Default)]
 pub struct LocalConfig {
@@ -610,6 +639,7 @@ pub struct LocalConfig {
     pub ignored_files: Option<Vec<String>>,
     pub extra_supported_files: Option<Vec<String>>,
     pub run_aliases: Option<HashMap<String, String>>,
+    pub db_aliases: Option<HashMap<String, String>>,
 }
 
 #[cfg(test)]
@@ -619,7 +649,7 @@ mod tests {
     #[test]
     fn test_validate_alias_name_rejects_reserved() {
         for cmd in [
-            "go", "cd", "help", "exit", "quit", "run", "r", "ral", "dino", "math", "setc", "diff",
+            "go", "cd", "help", "exit", "quit", "run", "r", "ral", "math", "setc", "diff",
             "bkup", "view", "txt",
         ] {
             assert!(
@@ -664,8 +694,10 @@ mod tests {
         assert!(!cfg.color_enabled);
         assert!(!cfg.history_enabled);
         assert!(!cfg.file_watcher_enabled);
+        assert_eq!(cfg.watch_limit, 10);
         assert!(cfg.teleports.is_empty());
         assert!(cfg.run_aliases.is_empty());
+        assert!(cfg.db_aliases.is_empty());
         assert!(cfg.ignored_directory_names.contains("target"));
         assert!(cfg.ignored_directory_names.contains(".git"));
         assert!(cfg.ignored_directory_names.contains("node_modules"));

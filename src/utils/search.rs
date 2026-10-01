@@ -438,10 +438,19 @@ pub struct ContentMatch {
     pub line: String,
 }
 
+/// Max file size (bytes) scanned by content search. Larger files are skipped
+/// so a broad `gs -d <n>` waits on the spinner instead of OOM/crashing.
+pub const MAX_GS_FILE_BYTES: u64 = 8 * 1024 * 1024;
+/// Max matches kept per file so one huge generated file can't explode memory.
+const MAX_GS_MATCHES_PER_FILE: usize = 2_000;
+
 /// Search file contents for a pattern (case-insensitive).
 /// Only searches files that pass the ignore/care filters.
 /// Returns matches sorted by file path then line number.
 pub fn search_content(root: &Path, pattern: &str, max_depth: usize) -> Vec<ContentMatch> {
+    if pattern.is_empty() {
+        return Vec::new();
+    }
     let pattern_lower = pattern.to_lowercase();
     let ignored_dirs = Config::get_ignored_dirs_combined();
     let fmt_cfg = FormatConfig::from_both();
@@ -453,17 +462,30 @@ pub fn search_content(root: &Path, pattern: &str, max_depth: usize) -> Vec<Conte
     let mut results: Vec<ContentMatch> = paths
         .par_iter()
         .filter_map(|path| {
+            // Skip huge files before reading: prevents OOM on broad searches.
+            if let Ok(md) = std::fs::metadata(path) {
+                if md.len() > MAX_GS_FILE_BYTES {
+                    return None;
+                }
+            }
             let content = std::fs::read_to_string(path).ok()?;
-            let matches: Vec<ContentMatch> = content
-                .lines()
-                .enumerate()
-                .filter(|(_, line)| line.to_lowercase().contains(&pattern_lower))
-                .map(|(i, line)| ContentMatch {
-                    file_path: path.clone(),
-                    line_number: i + 1,
-                    line: line.to_string(),
-                })
-                .collect();
+            let mut matches: Vec<ContentMatch> = Vec::new();
+            for (i, line) in content.lines().enumerate() {
+                if matches.len() >= MAX_GS_MATCHES_PER_FILE {
+                    break;
+                }
+                // Cheap length pre-check before allocating lowercase string.
+                if line.len() < pattern.len() {
+                    continue;
+                }
+                if line.to_lowercase().contains(&pattern_lower) {
+                    matches.push(ContentMatch {
+                        file_path: path.clone(),
+                        line_number: i + 1,
+                        line: line.to_string(),
+                    });
+                }
+            }
             if matches.is_empty() {
                 None
             } else {
@@ -481,8 +503,90 @@ pub fn search_content(root: &Path, pattern: &str, max_depth: usize) -> Vec<Conte
     results
 }
 
+/// Display path for `gs` results: relative to the search root
+/// (`sub_dir/file.ext`), never the full path / CWD prefix.
+/// Falls back to file name when the path is not under `root`.
+pub fn display_content_path(path: &Path, root: &Path) -> String {
+    let rel = path
+        .strip_prefix(root)
+        .map(|p| p.to_path_buf())
+        .unwrap_or_else(|_| {
+            path.file_name()
+                .map(PathBuf::from)
+                .unwrap_or_else(|| path.to_path_buf())
+        });
+    let s = rel.to_string_lossy().replace('\\', "/");
+    let s = if s.is_empty() {
+        path.file_name()
+            .map(|n| n.to_string_lossy().to_string())
+            .unwrap_or_else(|| strip_unc_prefix(path))
+    } else {
+        s
+    };
+    // Strip any lingering UNC prefix (Windows) without re-adding absoluteness.
+    s.strip_prefix(r"\\?\")
+        .map(|x| x.to_string())
+        .unwrap_or(s)
+}
+
+/// Highlight every (case-insensitive) occurrence of `pattern` in `line` red.
+/// Uses explicit ANSI codes so output is red even when piped/redirected.
+pub fn highlight_pattern(line: &str, pattern: &str) -> String {
+    if pattern.is_empty() {
+        return line.to_string();
+    }
+    const RED: &str = "\x1b[31m";
+    const RESET: &str = "\x1b[0m";
+    let lower_line = line.to_lowercase();
+    let lower_pat = pattern.to_lowercase();
+    let mut out = String::with_capacity(line.len() + 16);
+    let mut i = 0usize;
+    while i < line.len() {
+        if lower_line[i..].starts_with(&lower_pat) {
+            let end = (i + pattern.len()).min(line.len());
+            // Keep char-boundary safety for non-ASCII text.
+            let mut e = end;
+            while e < line.len() && !line.is_char_boundary(e) {
+                e += 1;
+            }
+            let mut s = i;
+            while s < e && !line.is_char_boundary(s) {
+                s += 1;
+            }
+            out.push_str(RED);
+            out.push_str(&line[s..e]);
+            out.push_str(RESET);
+            i = e;
+        } else {
+            let ch = line[i..].chars().next().unwrap();
+            out.push(ch);
+            i += ch.len_utf8();
+        }
+    }
+    out
+}
+
+fn truncate_for_display(line: &str, max_chars: usize) -> String {
+    let t = line.trim();
+    if t.chars().count() > max_chars {
+        format!("{}…", t.chars().take(max_chars).collect::<String>())
+    } else {
+        t.to_string()
+    }
+}
+
 /// Format content search results for display.
-pub fn format_content_results(results: &[ContentMatch], pattern: &str, max_depth: usize) -> String {
+///
+/// `root` is used to render relative paths (`sub/file.ext:line:content`).
+/// `total_found` is the count before any `-l/--limit` truncation so the
+/// header can report `showing X of Y`.
+pub fn format_content_results(
+    results: &[ContentMatch],
+    pattern: &str,
+    max_depth: usize,
+    root: &Path,
+    total_found: usize,
+) -> String {
     let depth_label = if max_depth == usize::MAX {
         "unlimited".to_string()
     } else {
@@ -500,21 +604,25 @@ pub fn format_content_results(results: &[ContentMatch], pattern: &str, max_depth
         return output;
     }
 
-    output.push_str(&format!("  Content matches ({}):\n", results.len()));
+    if total_found > results.len() {
+        output.push_str(&format!(
+            "  Content matches (showing {} of {}):\n",
+            results.len(),
+            total_found
+        ));
+    } else {
+        output.push_str(&format!("  Content matches ({}):\n", total_found));
+    }
     for (i, m) in results.iter().enumerate() {
-        let path_str = display_search_path(&m.file_path);
-        let line = m.line.trim();
-        let truncated = if line.len() > 120 {
-            format!("{}…", &line[..120])
-        } else {
-            line.to_string()
-        };
+        let path_str = display_content_path(&m.file_path, root);
+        let truncated = truncate_for_display(&m.line, 120);
+        let highlighted = highlight_pattern(&truncated, pattern);
         output.push_str(&format!(
             "  {}. {}:{}: {}\n",
             i + 1,
             path_str,
             m.line_number,
-            truncated
+            highlighted
         ));
     }
 

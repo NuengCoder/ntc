@@ -93,11 +93,6 @@ impl Editor {
             }
         }
 
-        if cmd == "hex" || cmd == "hx" {
-            self.enter_hex_mode();
-            return Ok(false);
-        }
-
         if cmd == "git diff" || cmd == "gd" {
             if crate::config::Config::global_get_git_integration_enabled() {
                 let dir = self
@@ -153,20 +148,6 @@ impl Editor {
                 rest.parse::<usize>().ok()
             };
             match addr {
-                Some(a) if self.hex.is_some() => {
-                    let hex = self.hex.as_mut().unwrap();
-                    let target = a.min(hex.data.len().saturating_sub(1));
-                    hex.cursor = target;
-                    hex.offset = (target / 16) * 16;
-                    hex.nibble = false;
-                    hex.pending_byte = 0;
-                    self.status_msg = Some(format!(
-                        "{} 0x{:X}",
-                        t!("editor.cmd_jumped_to_offset"),
-                        target
-                    ));
-                    self.mode = Mode::Hex;
-                }
                 Some(a) => {
                     // Normal line jump for decimal
                     let target = a.saturating_sub(1).min(self.lines.len().saturating_sub(1));
@@ -182,12 +163,6 @@ impl Editor {
         }
 
         if cmd == "q!" || cmd == "quit!" {
-            if self.hex.is_some() {
-                self.hex = None;
-                self.mode = Mode::Normal;
-                self.status_msg = Some(t!("editor.cmd_exited_hex").into());
-                return Ok(false);
-            }
             return self.exit_flow(stdout);
         }
 
@@ -206,28 +181,22 @@ impl Editor {
         }
 
         if cmd == "w" || cmd == "write" {
-            if let Some(ref hex) = self.hex {
-                match std::fs::write(&hex.path, &hex.data) {
-                    Ok(()) => {
-                        if let Some(ref mut h) = self.hex {
-                            h.modified = false;
-                        }
-                        self.status_msg = Some(t!("editor.cmd_hex_saved").into());
-                    }
-                    Err(e) => {
-                        self.status_msg =
-                            Some(format!("{} {}", t!("editor.cmd_hex_save_failed"), e));
-                    }
+            match self.save() {
+                Ok(()) => {
+                    self.status_msg = Some(t!("editor.cmd_saved").into());
                 }
+                Err(e) => {
+                    self.status_msg = Some(format!("{} {}", t!("editor.cmd_save_failed"), e));
+                }
+            }
+            return Ok(false);
+        }
+
+        if cmd == "e!" || cmd == "reload!" || cmd == "reload" {
+            if self.reload_from_disk() {
+                self.status_msg = Some("Reloaded from disk".into());
             } else {
-                match self.save() {
-                    Ok(()) => {
-                        self.status_msg = Some(t!("editor.cmd_saved").into());
-                    }
-                    Err(e) => {
-                        self.status_msg = Some(format!("{} {}", t!("editor.cmd_save_failed"), e));
-                    }
-                }
+                self.status_msg = Some("Reload failed — file unreadable".into());
             }
             return Ok(false);
         }

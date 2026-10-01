@@ -57,6 +57,9 @@ impl Editor {
         self.modified = false;
         // A clean save means the on-disk file is newer than any crash snapshot.
         self.clear_recovery_snapshot();
+        // Buffer agrees with disk again: re-baseline the external-change
+        // fingerprint (also swallows our own save racing the watcher).
+        self.snapshot_disk_state();
         Ok(())
     }
 

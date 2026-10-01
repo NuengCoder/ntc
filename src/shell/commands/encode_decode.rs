@@ -146,6 +146,28 @@ fn decode_b2(input: &str) -> Result<Vec<u8>> {
         .collect()
 }
 
+fn encode_b10(input: &[u8]) -> String {
+    input
+        .iter()
+        .map(|b| b.to_string())
+        .collect::<Vec<_>>()
+        .join(" ")
+}
+
+fn decode_b10(input: &str) -> Result<Vec<u8>> {
+    let s = input.trim();
+    if s.is_empty() {
+        return Ok(Vec::new());
+    }
+    s.split_whitespace()
+        .map(|token| {
+            token
+                .parse::<u8>()
+                .map_err(|_| anyhow!("{}", t!("encode.invalid_b10", token)))
+        })
+        .collect()
+}
+
 fn decode_url(input: &str) -> Result<Vec<u8>> {
     let s = input.trim();
     let mut result = Vec::with_capacity(s.len());
@@ -176,6 +198,7 @@ fn decode_url(input: &str) -> Result<Vec<u8>> {
 fn print_usage_encode() {
     println!("{}", t!("encode.usage_title").cyan().bold());
     println!("{}", t!("encode.usage_encode_b2"));
+    println!("{}", t!("encode.usage_encode_b10"));
     println!("{}", t!("encode.usage_encode_b64"));
     println!("{}", t!("encode.usage_encode_hex"));
     println!("{}", t!("encode.usage_encode_url"));
@@ -184,6 +207,7 @@ fn print_usage_encode() {
     println!("  encode b64 hello");
     println!("  encode b64 image.png -o encoded.txt");
     println!("  encode b2  \"AB\"");
+    println!("  encode b10 \"AB\"");
     println!("  encode hex \"hello world\"");
     println!("  encode url \"foo bar\"");
 }
@@ -191,6 +215,7 @@ fn print_usage_encode() {
 fn print_usage_decode() {
     println!("{}", t!("encode.usage_title").cyan().bold());
     println!("{}", t!("decode.usage_decode_b2"));
+    println!("{}", t!("decode.usage_decode_b10"));
     println!("{}", t!("decode.usage_decode_b64"));
     println!("{}", t!("decode.usage_decode_hex"));
     println!("{}", t!("decode.usage_decode_url"));
@@ -199,6 +224,7 @@ fn print_usage_decode() {
     println!("  decode b64 SGVsbG8=");
     println!("  decode b64 encoded.txt -o image.png");
     println!("  decode b2  01000001 01000010");
+    println!("  decode b10 65 66");
     println!("  decode hex 68656c6c6f");
     println!("  decode url \"hello+world\"");
 }
@@ -214,6 +240,8 @@ fn print_usage_cvcode() {
     println!("  cvcode hex  68656c6c6f to b64");
     println!("  cvcode url  hello+world to b2");
     println!("  cvcode b2   \"01101000 01100101\" to url -o output.txt");
+    println!("  cvcode b2   00101100 to b10");
+    println!("  cvcode b10  35 to b2");
 }
 
 pub fn cmd_encode(args: &str, _nav: &mut Navigator) -> Result<bool> {
@@ -228,6 +256,7 @@ pub fn cmd_encode(args: &str, _nav: &mut Navigator) -> Result<bool> {
             Ok(false)
         }
         "b2" => cmd_encode_b2(rest, &cwd),
+        "b10" => cmd_encode_b10(rest, &cwd),
         "b64" | "base64" => cmd_encode_b64(rest, &cwd),
         "hex" => cmd_encode_hex(rest, &cwd),
         "url" => cmd_encode_url(rest, &cwd),
@@ -246,6 +275,18 @@ fn cmd_encode_b2(args: &str, cwd: &Path) -> Result<bool> {
     let (target, out) = parse_out_flag(args);
     let data = resolve_target(target, cwd);
     let encoded = encode_b2(&data);
+    handle_output(encoded.into_bytes(), out, cwd)?;
+    Ok(false)
+}
+
+fn cmd_encode_b10(args: &str, cwd: &Path) -> Result<bool> {
+    if args.is_empty() {
+        print_error(&t!("encode.usage_cmd", "b10"));
+        return Ok(false);
+    }
+    let (target, out) = parse_out_flag(args);
+    let data = resolve_target(target, cwd);
+    let encoded = encode_b10(&data);
     handle_output(encoded.into_bytes(), out, cwd)?;
     Ok(false)
 }
@@ -298,6 +339,7 @@ pub fn cmd_decode(args: &str, _nav: &mut Navigator) -> Result<bool> {
             Ok(false)
         }
         "b2" => cmd_decode_b2(rest, &cwd),
+        "b10" => cmd_decode_b10(rest, &cwd),
         "b64" | "base64" => cmd_decode_b64(rest, &cwd),
         "hex" => cmd_decode_hex(rest, &cwd),
         "url" => cmd_decode_url(rest, &cwd),
@@ -318,6 +360,20 @@ fn cmd_decode_b2(args: &str, cwd: &Path) -> Result<bool> {
     let input_str =
         String::from_utf8(raw).map_err(|_| anyhow!("{}", t!("encode.input_not_text", "Binary")))?;
     let decoded = decode_b2(&input_str)?;
+    handle_output(decoded, out, cwd)?;
+    Ok(false)
+}
+
+fn cmd_decode_b10(args: &str, cwd: &Path) -> Result<bool> {
+    if args.is_empty() {
+        print_error(&t!("decode.usage_cmd", "b10"));
+        return Ok(false);
+    }
+    let (target, out) = parse_out_flag(args);
+    let raw = resolve_target(target, cwd);
+    let input_str =
+        String::from_utf8(raw).map_err(|_| anyhow!("{}", t!("encode.input_not_text", "Decimal")))?;
+    let decoded = decode_b10(&input_str)?;
     handle_output(decoded, out, cwd)?;
     Ok(false)
 }
@@ -369,6 +425,7 @@ fn cmd_decode_url(args: &str, cwd: &Path) -> Result<bool> {
 fn decode_by_format(input: &str, fmt: &str) -> Result<Vec<u8>> {
     match fmt {
         "b2" => decode_b2(input),
+        "b10" => decode_b10(input),
         "b64" | "base64" => decode_b64(input),
         "hex" => decode_hex(input),
         "url" => decode_url(input),
@@ -379,6 +436,7 @@ fn decode_by_format(input: &str, fmt: &str) -> Result<Vec<u8>> {
 fn encode_by_format(input: &[u8], fmt: &str) -> String {
     match fmt {
         "b2" => encode_b2(input),
+        "b10" => encode_b10(input),
         "b64" | "base64" => encode_b64(input),
         "hex" => encode_hex(input),
         "url" => encode_url(input),

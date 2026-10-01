@@ -1,5 +1,4 @@
 mod bars;
-mod hex;
 mod panels;
 mod popups;
 
@@ -32,11 +31,7 @@ impl Editor {
 
         self.render_tab_bar(stdout, tab_bar_y, eo, editor_cols)?;
 
-        if self.mode == Mode::Hex {
-            self.render_hex_view(stdout)?;
-        }
-
-        if self.mode != Mode::Hex {
+        {
             let vscroll_thumb_start: Option<usize>;
             let vscroll_thumb_height: usize;
             let total_lines = self.lines.len();
@@ -198,6 +193,8 @@ impl Editor {
                             false
                         };
 
+                        let in_gs_jump = self.gs_jump_highlight == Some(idx);
+
                         queue!(stdout, MoveTo(abs_x as u16, sy as u16))?;
 
                         if in_search {
@@ -217,6 +214,14 @@ impl Editor {
                                 ResetColor
                             )?;
                         } else if in_sel {
+                            queue!(
+                                stdout,
+                                SetBackgroundColor(theme.editor.selection_bg.to_crossterm()),
+                                SetForegroundColor(theme.editor.status_text.to_crossterm()),
+                                Print(ch),
+                                ResetColor
+                            )?;
+                        } else if in_gs_jump {
                             queue!(
                                 stdout,
                                 SetBackgroundColor(theme.editor.selection_bg.to_crossterm()),
@@ -257,7 +262,8 @@ impl Editor {
                     let in_sel_mid = all_sel
                         .iter()
                         .any(|&((sy, _), (ey, _))| idx > sy && idx < ey);
-                    if in_sel_mid && last_x < cols {
+                    let in_gs_jump_line = self.gs_jump_highlight == Some(idx);
+                    if (in_sel_mid || in_gs_jump_line) && last_x < cols {
                         queue!(
                             stdout,
                             MoveTo(last_x as u16, sy as u16),
@@ -404,8 +410,10 @@ impl Editor {
                 self.render_git_diff(stdout)?;
             }
 
-            if self.completion_visible {
-                self.render_completion_popup(stdout)?;
+            if self.mode == Mode::Insert && self.completion.is_some() {
+                self.render_completion(stdout)?;
+            } else if self.mode == Mode::Insert && self.sighelp.is_some() {
+                self.render_sighelp(stdout)?;
             } else if self.hover_text.is_some() {
                 self.render_hover_popup(stdout)?;
             }
@@ -467,7 +475,7 @@ impl Editor {
                     )?;
                 }
             }
-        } // end if self.mode != Mode::Hex
+        } // end text render
 
         if is_run {
             self.render_run_panel(stdout)?;

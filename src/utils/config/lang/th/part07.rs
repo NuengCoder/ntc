@@ -33,8 +33,8 @@ pub fn fill(m: &mut HashMap<String, String>) {
     m.insert("help.search.ds".into(), "ds <pattern> [-d <n>] ## ค้นหาไดเรกทอรีตามชื่อ".into());
     m.insert("help.search.fs".into(), "fs <pattern> [-d <n>] ## ค้นหาไฟล์ตามชื่อ (สำรองแบบ fuzzy)".into());
     m.insert("help.search.fsc".into(), "fsc <pattern> [-d <n>] ## ค้นหาไฟล์ เลือกหนึ่งเพื่อแสดงและคัดลอกได้".into());
-    m.insert("help.search.gs".into(), "gs <pattern> [-d <n>] ## ค้นหาเนื้อหาไฟล์ (grep ง่าย ๆ)".into());
-    m.insert("help.search.gs_interactive".into(), "gs -i <pattern> [-d <n>] ## grep แบบโต้ตอบ (เรียกดูผลลัพธ์ Enter เพื่อเปิด)".into());
+    m.insert("help.search.gs".into(), "gs <pattern> [-d <n>] [-l <n>] ## ค้นหาเนื้อหาไฟล์ (grep ง่าย ๆ)".into());
+    m.insert("help.search.gs_interactive".into(), "gs -i <pattern> [-d <n>] ## grep แบบโต้ตอบ (10 รายการ/หน้า Enter เพื่อเปิด)".into());
     m.insert("help.search.locate".into(), "locate <pattern> [-d <n>] ## ค้นหาทั้งไฟล์และไดเรกทอรี".into());
     m.insert("help.search.title".into(), "คำสั่งค้นหา (SEARCH):".into());
     m.insert("help.size.care".into(), "size --care ## คำนวณขนาดรวมทุกอย่าง (โหมด care)".into());
@@ -88,10 +88,57 @@ pub fn fill(m: &mut HashMap<String, String>) {
     m.insert("help.todo.rm".into(), "todo rm <N> ## ลบงาน N".into());
     m.insert("help.todo.show".into(), "todo ## แสดงงานทั้งหมด (จาก future_todo.txt ใน CWD)".into());
     m.insert("help.todo.title".into(), "คำสั่ง TODO:".into());
+    m.insert("help.todo.done".into(), "todo done <N> ## ทำเครื่องหมายงาน N ว่าเสร็จ".into());
+    m.insert("help.todo.undo".into(), "todo undo <N> ## เปิดงาน N ใหม่".into());
+    m.insert("help.todo.edit".into(), "todo edit <N> \"ชื่อ\" ## เปลี่ยนชื่อ งาน N".into());
+    m.insert("help.arc.title".into(), "คำสั่ง ARCHIVE:".into());
+    m.insert("help.arc.create".into(), "arc create <out.zip|tar.gz|tar> <ไฟล์...> ## สร้างไฟล์บีบอัด".into());
+    m.insert("help.arc.extract".into(), "arc extract <ไฟล์> [ปลายทาง] ## แตกไฟล์".into());
+    m.insert("help.arc.list".into(), "arc list <ไฟล์> ## แสดงเนื้อหา".into());
+    m.insert("help.arc.example1".into(), "arc create backup.zip src Cargo.toml ## สร้าง zip".into());
+    m.insert("help.arc.example2".into(), "arc list backup.zip ## แสดงเนื้อหา".into());
+    m.insert("help.arc.example3".into(), "arc extract backup.zip restored ## แตกไฟล์".into());
+    m.insert("help.scan.depth".into(), "scan ext <นามสกุล...> -d, --depth <n> ## จำกัดความลึกการสแกน".into());
+    m.insert("help.scan.example1".into(), "scan ext rs ## แสดงไฟล์ .rs ทั้งหมด".into());
+    m.insert("help.scan.example2".into(), "scan ext rs c -d 2 ## แสดงไฟล์ .rs/.c ถึงความลึก 2".into());
+    m.insert("help.scan.example3".into(), "scan ext rs c -s ## แสดงพร้อมขนาดและผลรวม".into());
+
+    m.insert("help.scan.example4".into(), "scan port 192.168.1.1 --top 10 ## สแกน 10 พอร์ตแรก".into());
+
+    m.insert("help.scan.example5".into(), "scan ip 192.168.1.0/24 ## กวาดหาโฮสต์ที่ alive".into());
+    m.insert("help.scan.ext".into(), "scan ext <นามสกุล...> ## แสดงไฟล์ตามนามสกุล (ไม่นับบรรทัด)".into());
+
+    m.insert("help.scan.port".into(), "scan port [host] [--top N | --ports <spec> | --all] ## สแกนพอร์ต TCP".into());
+
+    m.insert("help.scan.ip".into(), "scan ip [cidr] [--top N | --ports <spec>] ## กวาดหาโฮสต์ + ARP".into());
+    m.insert("help.scan.size".into(), "scan ext <นามสกุล...> -s, --size ## แสดงขนาดและผลรวม".into());
+    m.insert("help.scan.care".into(), "scan ext <นามสกุล...> --care ## รวมทุกไฟล์ (โหมด care)".into());
+    m.insert("help.scan.title".into(), "คำสั่ง SCAN:".into());
+    m.insert("help.nssh.title".into(), "คำสั่ง NSSH:".into());
+    m.insert("help.nssh.add".into(), "nssh add <ชื่อ> --host <โฮสต์> ## บันทึกโปรไฟล์ SSH".into());
+    m.insert("help.nssh.ssh".into(), "nssh ssh [ชื่อ] [--cmd \"คำสั่ง\"] ## เชลล์หรือคำสั่งเดียว".into());
+    m.insert("help.nssh.cp".into(), "nssh cp <โลคอล> <ชื่อ>:<รีโมต> ## อัปโหลด/ดาวน์โหลด SFTP".into());
+    m.insert("help.nssh.scan".into(), "nssh scan <โฮสต์> [--top N] ## สแกนพอร์ต TCP".into());
+    m.insert("help.nssh.manage".into(), "nssh ls|info|rm|edit ## จัดการโปรไฟล์".into());
+    m.insert("help.nssh.keygen".into(), "nssh keygen ## สร้างคีย์ผ่าน ssh-keygen".into());
+    m.insert("help.nssh.example1".into(), "nssh add prod --host 203.0.113.10 --user root ## บันทึกโปรไฟล์".into());
+    m.insert("help.nssh.example2".into(), "nssh ssh prod --cmd \"uptime\" ## รันคำสั่งรีโมต".into());
+    m.insert("help.nssh.example3".into(), "nssh cp ./app.tar.gz prod:/tmp/ ## อัปโหลดไฟล์".into());
+    m.insert("help.nsheet.title".into(), "คำสั่ง NSHEET:".into());
+    m.insert("help.nsheet.open".into(), "nsheet open <ไฟล์> [ตัวเลือก] ## ดูตารางแบบเต็มจอ (CSV/TSV/JSON)".into());
+    m.insert("help.nsheet.view".into(), "nsheet view <ไฟล์> [ตัวเลือก] ## พิมพ์ตาราง (ค่าเริ่มต้น 50 แถว)".into());
+    m.insert("help.nsheet.sort".into(), "nsheet view <ไฟล์> --sort <คอลัมน์> [--desc] ## เรียงตามคอลัมน์".into());
+    m.insert("help.nsheet.filter".into(), "nsheet view <ไฟล์> --filter <เงื่อนไข> ## กรองแถว (col~ข้อความ, col=ค่า, col>ตัวเลข)".into());
+    m.insert("help.nsheet.export".into(), "nsheet view <ไฟล์> --export <json|md> [-o <ไฟล์>] ## ส่งออก".into());
+    m.insert("help.nsheet.tui".into(), "ปุ่มเต็มจอ: ลูกศร/hjkl เลื่อน · / ค้นหา · n ถัดไป · s เรียง · f กรอง · e ส่งออก · Enter ดู · q ออก".into());
+    m.insert("help.nsheet.example1".into(), "nsheet open users.csv ## เปิดดูตาราง".into());
+    m.insert("help.nsheet.example2".into(), "nsheet view data.json --filter \"age>30\" --sort age ## กรองและเรียง".into());
+    m.insert("help.nsheet.example3".into(), "nsheet view a.csv --export md -o out.md ## ส่งออก Markdown".into());
     m.insert("help.view.care".into(), "view --care ## แสดงต้นไม้พร้อม care ทุกอย่าง".into());
     m.insert("help.view.cp".into(), "view -c, --cp ## แสดงต้นไม้และคัดลอกไปยังคลิปบอร์ด".into());
     m.insert("help.view.depth".into(), "view -d, --depth <n> ## แสดงต้นไม้พร้อมความลึกกำหนดเอง".into());
     m.insert("help.view.dirsize".into(), "view -ds, --dirsize ## แสดงต้นไม้พร้อมเฉพาะขนาดไดเรกทอรี".into());
+    m.insert("help.view.ext".into(), "view -ext, --ext <นามสกุล...> ## แสดงต้นไม้เฉพาะนามสกุลที่ตรง".into());
     m.insert("help.view.filesize".into(), "view -fs, --filesize ## แสดงต้นไม้พร้อมเฉพาะขนาดไฟล์".into());
     m.insert("help.view.path".into(), "view -p, --path <path|@tp> ## แสดงต้นไม้ของเส้นทางหรือจุดเทเลพอร์ตที่ระบุ".into());
     m.insert("help.view.size".into(), "view -s, --size ## แสดงต้นไม้พร้อมขนาดไดเรกทอรีและไฟล์".into());

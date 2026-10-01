@@ -10,6 +10,8 @@ pub fn fill(m: &mut HashMap<String, String>) {
     m.insert("help.igcare.show".into(), "igcared ## ສະແດງການຕັ້ງຄ່າ ignore/care ທັງໝົດ".into());
     m.insert("help.igcare.title".into(), "ຄຳສັ່ງ IGNORE / CARE:".into());
     m.insert("help.image.convert".into(), "image <path> to <fmt> ## ແປງ ແລະ ສະແດງຜົນລັບ (json|md|html|txt|desc)".into());
+    m.insert("help.image.display".into(), "image display <path> ## ສະແດງຮູບໃນ terminal ໂດຍກົງ".into());
+    m.insert("help.image.show".into(), "image show <path> ## ສະແດງຮູບໃນ terminal ໂດຍກົງ".into());
     m.insert("help.image.interactive".into(), "image ## ເຄື່ອງມືແປງຮູບ interactive (ເລືອກຈາກໄດເຣັກທໍຣີປັດຈຸບັນ)".into());
     m.insert("help.image.layout".into(), "image <path> --layout ## ເປີດການກວດຈັບ UI layout".into());
     m.insert("help.image.ocr".into(), "image <path> --ocr ## ເປີດການສະກັດຂໍ້ຄວາມ OCR".into());
@@ -41,7 +43,8 @@ pub fn fill(m: &mut HashMap<String, String>) {
     m.insert("help.network.dns".into(), "dns <host> ## DNS lookup (-t ປະເພດ record: A, AAAA, ALL, MX, NS, ອື່ນໆ)".into());
     m.insert("help.network.http".into(), "http <method> <url> ## HTTP API client (-H, -d, --json, -q, -a, --bearer, -s, -o, -v, -t)".into());
     m.insert("help.network.ping".into(), "ping <host> ## ICMP ping (-c count)".into());
-    m.insert("help.network.serve".into(), "serve [port] ## HTTP file server (--https, --tunnel, --spa, --web-dir)".into());
+    m.insert("help.network.ipcfg".into(), "ipcfg [ຊື່] ## ສະແດງ adapters ແບບ ipconfig/ifconfig".into());
+    m.insert("help.network.serve".into(), "serve [port] ## HTTP file server (--auth, --tunnel, --share, --spa, --web-dir)".into());
     m.insert("help.network.smtp".into(), "smtp ## SMTP email client (--id, -i, -u, -pwd, -s, -b, -f, --to)".into());
     m.insert("help.network.spec".into(), "spec ## ສະແດງສະເປັກຄອມພິວເຕີ/ລະບົບ (CPU, GPU, RAM, ບ່ອນເກັບຂໍ້ມູນ, OS, ເລກຊີຣຽວ)".into());
     m.insert("help.network.sys".into(), "sys, top ## ຕິດຕາມລະບົບແບບສົດ (CPU, memory, disk, processes)".into());
@@ -67,6 +70,7 @@ pub fn fill(m: &mut HashMap<String, String>) {
     m.insert("help.other.say".into(), "say <text> [--loop N] [-n|-t] ## ພິມຂໍ້ຄວາມ (ບໍ່ redirect ໄຟລ໌)".into());
     m.insert("help.other.title".into(), "ຄຳສັ່ງ OTHER:".into());
     m.insert("help.other.tutorial".into(), "tutorial ## ເລີ່ມ tutorial ຂັ້ນຕອນ interactive".into());
+    m.insert("help.unknown_topic".into(), "ບໍ່ພົບຫົວຂໍ້ຊ່ວຍເຫຼືອ: '{}'. ໃຊ້ 'help' ເພື່ອເບິ່ງທັງໝົດ".into());
     m.insert("help.other.ui".into(), "ui ## ສະແດງໂໝດ UI ປັດຈຸບັນ".into());
     m.insert("help.other.version".into(), "version ## ສະແດງເວີຊັນ".into());
     m.insert("help.pathman.syspath_add".into(), "syspath add <path> ## ເພີ່ມໄດເຣັກທໍຣີໃສ່ system PATH".into());
@@ -127,8 +131,8 @@ pub fn fill(m: &mut HashMap<String, String>) {
     m.insert("help.search.ds".into(), "ds <pattern> [-d <n>] ## ຄົ້ນຫາໄດເຣັກທໍຣີຕາມຊື່".into());
     m.insert("help.search.fs".into(), "fs <pattern> [-d <n>] ## ຄົ້ນຫາໄຟລ໌ຕາມຊື່ (fuzzy fallback)".into());
     m.insert("help.search.fsc".into(), "fsc <pattern> [-d <n>] ## ຄົ້ນຫາໄຟລ໌, ເລືອກເພື່ອສະແດງ ແລະ ສຳເນົາໄດ້".into());
-    m.insert("help.search.gs".into(), "gs <pattern> [-d <n>] ## ຄົ້ນຫາເນື້ອໃນໄຟລ໌ (grep ງ່າຍໆ)".into());
-    m.insert("help.search.gs_interactive".into(), "gs -i <pattern> [-d <n>] ## grep interactive (ຄົ້ນຫາຜົນ, Enter ເພື່ອເປີດ)".into());
+    m.insert("help.search.gs".into(), "gs <pattern> [-d <n>] [-l <n>] ## ຄົ້ນຫາເນື້ອໃນໄຟລ໌ (grep ງ່າຍໆ)".into());
+    m.insert("help.search.gs_interactive".into(), "gs -i <pattern> [-d <n>] ## grep interactive (10 ລາຍການ/ໜ້າ, Enter ເພື່ອເປີດ)".into());
     m.insert("help.search.locate".into(), "locate <pattern> [-d <n>] ## ຄົ້ນຫາທັງໄຟລ໌ ແລະ ໄດເຣັກທໍຣີ".into());
     m.insert("help.search.title".into(), "ຄຳສັ່ງ SEARCH:".into());
     m.insert("help.size.care".into(), "size --care ## ຄຳນວນຂະໜາດລວມທຸກຢ່າງ (ໂໝດ care)".into());

@@ -191,7 +191,8 @@ impl Editor {
                 Mode::Gosc => t!("editor.mode_gosc"),
                 Mode::Jump => t!("editor.mode_jump"),
                 Mode::Query => t!("editor.mode_query"),
-                Mode::Hex => t!("editor.mode_hex"),
+                Mode::Gmode => t!("editor.mode_gmode"),
+                Mode::Nfe => t!("editor.mode_nfe"),
                 Mode::Encoding => t!("editor.mode_encoding"),
                 Mode::GitDiff => t!("editor.mode_git_diff"),
             },
@@ -208,35 +209,7 @@ impl Editor {
         let avail_w = self.term_w.saturating_sub(x_offset);
         let label = self.mode_label();
 
-        let (status, right) = if self.mode == Mode::Hex {
-            let hex = self.hex.as_ref().unwrap();
-            let tag = if hex.modified {
-                t!("editor.status_modified_tag")
-            } else {
-                t!("editor.status_saved_tag")
-            };
-            let cursor_str = format!(
-                "Off 0x{:X}/0x{:X}",
-                hex.cursor,
-                hex.data.len().saturating_sub(1)
-            );
-            let status = format!(
-                " {} {}{}   {}  ",
-                label,
-                self.path
-                    .file_name()
-                    .map(|n| n.to_string_lossy().into_owned())
-                    .unwrap_or_default(),
-                tag,
-                cursor_str,
-            );
-            let right = if hex.modified {
-                t!("editor.status_modified")
-            } else {
-                t!("editor.status_saved")
-            };
-            (status, right)
-        } else {
+        let (status, right) = {
             let tag = if self.modified {
                 t!("editor.status_modified_tag")
             } else {
@@ -512,28 +485,6 @@ impl Editor {
                     );
                     (String::new(), hint)
                 }
-                Mode::Hex => {
-                    let msg = if self.hex.as_ref().map(|h| h.modified).unwrap_or(false) {
-                        let hex = self.hex.as_ref().unwrap();
-                        format!(
-                            " ✦ Hex offset 0x{:X}  {}  │ {}  {}",
-                            hex.cursor,
-                            t!("editor.status_modified"),
-                            t!("editor.hint_hex_edit"),
-                            t!("editor.hint_hex_actions")
-                        )
-                    } else if let Some(ref hex) = self.hex {
-                        format!(
-                            " Hex offset 0x{:X}  │ {}  {}",
-                            hex.cursor,
-                            t!("editor.hint_hex_edit"),
-                            t!("editor.hint_hex_actions")
-                        )
-                    } else {
-                        String::new()
-                    };
-                    (msg, String::new())
-                }
                 Mode::GitDiff => {
                     if let Some(state) = &self.git_diff {
                         let total = state.lines.len();
@@ -566,8 +517,31 @@ impl Editor {
                             t!("editor.hint_query_actions")
                         )
                     };
+                    // Like Visual/Insert/Normal: surface the last command's
+                    // result (`status_msg`) on the message row — otherwise a
+                    // successful query shows no feedback while staying here.
+                    if let Some(ref msg) = self.status_msg {
+                        (format!(" ✦ {}  │", msg), hint)
+                    } else {
+                        (String::new(), hint)
+                    }
+                }
+                Mode::Gmode => {
+                    let hint = format!(
+                        " {} {}  {}",
+                        t!("editor.hint_gmode"),
+                        self.gmode_buf,
+                        t!("editor.hint_gmode_actions")
+                    );
                     (String::new(), hint)
                 }
+                Mode::Nfe => match &self.nfe_cmd {
+                    Some(buf) => (
+                        format!(" nfe:{} ", buf),
+                        t!("editor.hint_nfe_cmd_actions"),
+                    ),
+                    None => (String::new(), t!("editor.hint_nfe")),
+                },
             },
         };
 

@@ -7,7 +7,7 @@ _ntc_completions() {
         --setO --setD --setL --setC --setT --setH
         --showcg --watch --where --size --view
         --clear --version --list --fun --help
-        --math --dino --edit --init
+        --math --edit --init
         --ignored --ignore --cared --ignoref --caref --ignoren --caren
         --tp-add --tp-list --tp-rm
         --ral-export-all --ral-export-select --ral-import

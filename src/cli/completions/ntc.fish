@@ -27,7 +27,6 @@ complete -c ntc -l clear -d 'Clear the terminal screen'
 complete -c ntc -l size -d 'Show current directory size'
 complete -c ntc -l view -d 'Quick view of current directory tree'
 complete -c ntc -l math -d 'Evaluate a math expression' -r
-complete -c ntc -l dino -d 'Play the dinosaur runner game'
 complete -c ntc -l generate-completions -d 'Generate shell completions' -r -f -a 'bash zsh fish powershell'
 
 # Editor

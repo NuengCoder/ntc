@@ -23,7 +23,11 @@ pub fn cmd_git(args: &str, nav: &mut Navigator) -> Result<bool> {
 
     match subcmd {
         "" | "status" | "st" => cmd_status(nav),
-        "branch" | "b" => cmd_branch(nav),
+        // Bare `git branch` keeps the pretty list; anything with args
+        // (`-M main`, `-a`, `-d x`, …) must reach real git — otherwise
+        // the rename never executes and the prompt keeps showing `master`.
+        "branch" | "b" if subargs.is_empty() => cmd_branch(nav),
+        "branch" | "b" => passthrough(nav, &format!("git branch {subargs}")),
         "log" | "l" => cmd_log(nav),
         "diff" | "d" => passthrough(nav, &format!("git diff {subargs}")),
         "help" | "h" => print_git_help(),
@@ -272,6 +276,43 @@ fn cmd_log(nav: &Navigator) -> Result<bool> {
         }
     }
     Ok(false)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn branch_with_args_reaches_real_git() {
+        // Regression: `git branch -M main` used to hit the pretty-list
+        // branch and silently drop its args, so the rename never ran.
+        if !gitmod::git_available() {
+            return;
+        }
+        let dir = tempfile::tempdir().unwrap();
+        let run = |args: &[&str]| {
+            std::process::Command::new("git")
+                .args(args)
+                .current_dir(dir.path())
+                .status()
+                .map(|s| s.success())
+                .unwrap_or(false)
+        };
+        if !run(&["init", "-b", "master"]) {
+            return;
+        }
+        let mut nav = Navigator::new().unwrap();
+        nav.go_to(dir.path()).unwrap();
+        cmd_git("branch -M main", &mut nav).unwrap();
+        let head = gitmod::git_output(dir.path(), &["symbolic-ref", "--short", "HEAD"])
+            .unwrap_or_default();
+        assert_eq!(head.trim(), "main");
+        // Bare `git branch` still renders the list without side effects.
+        cmd_git("branch", &mut nav).unwrap();
+        let head = gitmod::git_output(dir.path(), &["symbolic-ref", "--short", "HEAD"])
+            .unwrap_or_default();
+        assert_eq!(head.trim(), "main");
+    }
 }
 
 fn print_git_help() -> Result<bool> {

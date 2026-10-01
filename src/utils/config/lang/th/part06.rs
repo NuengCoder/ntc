@@ -2,6 +2,7 @@ use std::collections::HashMap;
 
 pub fn fill(m: &mut HashMap<String, String>) {
     m.insert("help.examples_header".into(), "ตัวอย่าง:".into());
+    m.insert("help.context.cr".into(), "<cr> กด Enter เพื่อรันคำสั่ง".into());
     m.insert("help.alias.add".into(), "ral add <ชื่อ> \"<cmd>\" ## สร้าง alias".into());
     m.insert("help.alias.add_array".into(), "ral add <ชื่อ>(x[],y) \"<cmd>\" ## Alias พร้อมพารามิเตอร์แบบ array".into());
     m.insert("help.alias.add_defaults".into(), "ral add <ชื่อ>({x=a,e=txt}) \"<cmd>\" ## Alias พร้อมค่าเริ่มต้น".into());
@@ -71,9 +72,8 @@ pub fn fill(m: &mut HashMap<String, String>) {
     m.insert("help.config.watch".into(), "config watch ON|OFF ## เปิด/ปิดตัวเฝ้าดูไฟล์".into());
     m.insert("help.config.watch_trigger".into(), "config watch trigger <a> ## เรียก alias อัตโนมัติเมื่อ watch ตรวจจับ".into());
     m.insert("help.config.watch_trigger_off".into(), "config watch trigger off ## ปิดการทำงานอัตโนมัติ".into());
-    m.insert("help.dino.hint".into(), "Space/Up เพื่อกระโดด หลีกเลี่ยงสิ่งกีดขวาง".into());
-    m.insert("help.dino.play".into(), "dino ## เล่นเกมวิ่งไดโนเสาร์สไตล์ Chrome".into());
-    m.insert("help.dino.title".into(), "เกมไดโนเสาร์:".into());
+    m.insert("help.config.watch_limit".into(), "config watch limit <n> ## จำนวนแถวที่แสดงในกล่อง watch".into());
+    m.insert("help.config.wi".into(), "wi [path] ## ฟีดการเปลี่ยนแปลงไฟล์แบบสด (q=ออก)".into());
     m.insert("help.editor.ne".into(), "ne, ntceditor <file> ## เปิดไฟล์ในตัวแก้ไขข้อความในตัว".into());
     m.insert("help.editor.ne_hyper".into(), "ne --hyper <ชื่อ> --lang <l> ## สร้างโปรเจกต์ hyper C/C++".into());
     m.insert("help.editor.ne_init".into(), "ne --init <file> ## สร้างเทมเพลตไฟล์เปล่า".into());
@@ -83,10 +83,12 @@ pub fn fill(m: &mut HashMap<String, String>) {
     m.insert("help.editor.title".into(), "คำสั่งตัวแก้ไข (EDITOR):".into());
     m.insert("help.encdec.cvcode".into(), "cvcode <จาก> <ข้อมูล> to <ถึง> ## แปลงระหว่างรูปแบบ".into());
     m.insert("help.encdec.decode_b2".into(), "decode b2 <target> [-o <file>] ## ถอดรหัสไบนารี".into());
+    m.insert("help.encdec.decode_b10".into(), "decode b10 <target> [-o <file>] ## ถอดรหัสทศนิยม".into());
     m.insert("help.encdec.decode_b64".into(), "decode b64 <target> [-o <file>] ## ถอดรหัส Base64".into());
     m.insert("help.encdec.decode_hex".into(), "decode hex <target> [-o <file>] ## ถอดรหัส Hex".into());
     m.insert("help.encdec.decode_url".into(), "decode url <target> [-o <file>] ## ถอดรหัสเปอร์เซ็นต์ URL".into());
     m.insert("help.encdec.encode_b2".into(), "encode b2 <target> [-o <file>] ## เข้ารหัสไบนารี (0101...)".into());
+    m.insert("help.encdec.encode_b10".into(), "encode b10 <target> [-o <file>] ## เข้ารหัสทศนิยม (0-255...)".into());
     m.insert("help.encdec.encode_b64".into(), "encode b64 <target> [-o <file>] ## เข้ารหัส Base64 (ไฟล์หรือข้อความ)".into());
     m.insert("help.encdec.encode_hex".into(), "encode hex <target> [-o <file>] ## เข้ารหัส Hex".into());
     m.insert("help.encdec.encode_url".into(), "encode url <target> [-o <file>] ## เข้ารหัสเปอร์เซ็นต์ URL".into());
@@ -98,13 +100,14 @@ pub fn fill(m: &mut HashMap<String, String>) {
     m.insert("help.explorer.hint5".into(), "q/Esc=ออก, เมาส์=คลิก/เลื่อน".into());
     m.insert("help.explorer.launch".into(), "explorer, nfe [PATH] ## เปิดตัวสำรวจไฟล์แบบเต็มหน้าจอ".into());
     m.insert("help.explorer.title".into(), "ตัวสำรวจไฟล์ (NFE):".into());
-    m.insert("help.fileops.cp".into(), "cp <src> <dst> ## คัดลอกไฟล์".into());
+    m.insert("help.fileops.cp".into(), "cp <src> <dst|@tp> [-f] ## คัดลอกไฟล์หรือไดเรกทอรี".into());
     m.insert("help.fileops.mkd".into(), "mkd <dir>[, ...] ## สร้างไดเรกทอรีใหม่".into());
     m.insert("help.fileops.mkf".into(), "mkf <file>[, ...] ## สร้างไฟล์ใหม่".into());
     m.insert("help.fileops.rmd".into(), "rmd <dir>[, ...] ## ลบไดเรกทอรี (ถามยืนยัน)".into());
     m.insert("help.fileops.rmf".into(), "rmf <file>[, ...] ## ลบไฟล์ (ถามยืนยัน)".into());
     m.insert("help.fileops.rnmd".into(), "rnmd <old> <new> ## เปลี่ยนชื่อไดเรกทอรี".into());
     m.insert("help.fileops.rnmf".into(), "rnmf <old> <new> ## เปลี่ยนชื่อไฟล์".into());
+    m.insert("help.fileops.mv".into(), "mv <src> <dst|@tp> [-f] ## ย้าย/เปลี่ยนชื่อไฟล์หรือไดเรกทอรี".into());
     m.insert("help.fileops.title".into(), "การจัดการไฟล์ (FILE OPERATIONS):".into());
     m.insert("help.fmt.json".into(), "fmt json <file> [to yaml|toml] ## แปลง JSON เป็น YAML หรือ TOML".into());
     m.insert("help.fmt.output".into(), "(เพิ่ม -o <file> เพื่อบันทึกผลลัพธ์)".into());
@@ -124,6 +127,8 @@ pub fn fill(m: &mut HashMap<String, String>) {
     m.insert("help.igcare.show".into(), "igcared ## แสดงการตั้งค่า ignore/care ทั้งหมด".into());
     m.insert("help.igcare.title".into(), "คำสั่ง IGNORE / CARE:".into());
     m.insert("help.image.convert".into(), "image <path> to <fmt> ## แปลงและแสดงผลลัพธ์ (json|md|html|txt|desc)".into());
+    m.insert("help.image.display".into(), "image display <เส้นทาง> ## แสดงภาพในเทอร์มินัลโดยตรง".into());
+    m.insert("help.image.show".into(), "image show <เส้นทาง> ## แสดงภาพในเทอร์มินัลโดยตรง".into());
     m.insert("help.image.interactive".into(), "image ## ตัวแปลงภาพแบบโต้ตอบ (เลือกจากไดเรกทอรีปัจจุบัน)".into());
     m.insert("help.image.layout".into(), "image <path> --layout ## เปิดการตรวจจับเลย์เอาต์ UI".into());
     m.insert("help.image.ocr".into(), "image <path> --ocr ## เปิดการแยกข้อความ OCR".into());
@@ -155,7 +160,8 @@ pub fn fill(m: &mut HashMap<String, String>) {
     m.insert("help.network.dns".into(), "dns <host> ## DNS lookup (-t ประเภทระเบียน: A, AAAA, ALL, MX, NS เป็นต้น)".into());
     m.insert("help.network.http".into(), "http <method> <url> ## HTTP API client (-H, -d, --json, -q, -a, --bearer, -s, -o, -v, -t)".into());
     m.insert("help.network.ping".into(), "ping <host> ## ICMP ping (-c count)".into());
-    m.insert("help.network.serve".into(), "serve [port] ## เซิร์ฟเวอร์ไฟล์ HTTP (--https, --tunnel, --spa, --web-dir)".into());
+    m.insert("help.network.ipcfg".into(), "ipcfg [ชื่อ] ## แสดงอะแดปเตอร์เครือข่ายแบบ ipconfig/ifconfig".into());
+    m.insert("help.network.serve".into(), "serve [port] ## เซิร์ฟเวอร์ไฟล์ HTTP (--auth, --tunnel, --share, --spa, --web-dir)".into());
     m.insert("help.network.smtp".into(), "smtp ## SMTP email client (--id, -i, -u, -pwd, -s, -b, -f, --to)".into());
     m.insert("help.network.spec".into(), "spec ## แสดงสเปกคอมพิวเตอร์/ระบบ (CPU, GPU, RAM, พื้นที่เก็บ, OS, เลขซีเรียล)".into());
     m.insert("help.network.sys".into(), "sys, top ## ตัวตรวจสอบระบบแบบสด (CPU, หน่วยความจำ, ดิสก์, โพรเซส)".into());
@@ -181,6 +187,7 @@ pub fn fill(m: &mut HashMap<String, String>) {
     m.insert("help.other.say".into(), "say <text> [--loop N] [-n|-t] ## พิมพ์ข้อความ (ไม่จัดเส้นทางไฟล์ใหม่)".into());
     m.insert("help.other.title".into(), "คำสั่งอื่น ๆ (OTHER):".into());
     m.insert("help.other.tutorial".into(), "tutorial ## เริ่มบทเรียนแบบทีละขั้นตอนแบบโต้ตอบ".into());
+    m.insert("help.unknown_topic".into(), "ไม่พบหัวข้อช่วยเหลือ: '{}' เรียก 'help' เพื่อดูทั้งหมด".into());
     m.insert("help.other.ui".into(), "ui ## แสดงโหมด UI ปัจจุบัน".into());
     m.insert("help.other.version".into(), "version ## แสดงเวอร์ชัน".into());
     m.insert("help.pathman.syspath_add".into(), "syspath add <path> ## เพิ่มไดเรกทอรีไปยัง PATH ของระบบ".into());

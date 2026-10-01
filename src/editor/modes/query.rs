@@ -30,7 +30,7 @@ impl Editor {
                         }
                         self.mark_all_dirty();
                     }
-                    (true, KeyCode::Char('g')) => {
+                    (true, KeyCode::Char('j')) => {
                         self.prev_mode = Mode::Normal;
                         self.mode = Mode::Jump;
                         self.jump_buf.clear();
@@ -41,8 +41,12 @@ impl Editor {
                         self.mode = Mode::Normal;
                     }
                     _ => match code {
-                        KeyCode::Esc | KeyCode::Char('q') => {
+                        // Esc alone exits: plain `q` must stay typeable
+                        // (`qal …`, `/quit`). The result message goes away
+                        // too so Normal doesn't inherit a stale `✦`.
+                        KeyCode::Esc => {
                             self.query_buf.clear();
+                            self.status_msg = None;
                             self.mode = self.prev_mode.clone();
                             self.mark_all_dirty();
                         }
@@ -54,12 +58,17 @@ impl Editor {
                         }
                         KeyCode::Backspace => {
                             self.query_buf.pop();
+                            // Composing the next command retires the
+                            // previous result message.
+                            self.status_msg = None;
                         }
                         KeyCode::Up if !self.qal_aliases.is_empty() => {
                             self.query_buf.clear();
+                            self.status_msg = None;
                         }
                         KeyCode::Char(c) => {
                             self.query_buf.push(c);
+                            self.status_msg = None;
                         }
                         _ => {}
                     },
@@ -92,72 +101,144 @@ impl Editor {
         }
     }
 
+    /// Verbs that can never become qal aliases (case-insensitive).
+    /// Bare words matching these always dispatch as commands, so the
+    /// leading `/` is optional everywhere.
+    const RESERVED_VERBS: &[&str] = &[
+        "s", "l", "sa", "sal", "sl", "rp", "c", "cs", "add", "set", "upper", "lower",
+        "undo", "redo", "exit", "quit", "help", "qal",
+    ];
+
     fn exec_one(&mut self, cmd: &str) -> bool {
-        if let Some(rest) = cmd.strip_prefix('/') {
-            let parts: Vec<&str> = rest.splitn(2, ' ').collect();
-            let verb = parts[0];
-            let args = parts.get(1).unwrap_or(&"").trim();
-            match verb {
-                "s" | "sl" | "s/l" => {
-                    self.cmd_select_lines(args);
-                    true
-                }
-                "p" => {
-                    self.cmd_replace(args);
-                    true
-                }
-                "qal" => {
-                    self.cmd_qal(args);
-                    true
-                }
-                "q" | "qal/run" => {
-                    self.cmd_alias_invoke(args);
-                    true
-                }
-                "exit" | "quit" => {
-                    self.query_buf.clear();
-                    self.mode = self.prev_mode.clone();
-                    self.mark_all_dirty();
-                    false
-                }
-                "help" => {
-                    self.mode = Mode::Help;
-                    self.status_msg = None;
-                    false
-                }
-                "undo" => {
-                    self.undo();
-                    true
-                }
-                "redo" => {
-                    self.redo();
-                    true
-                }
-                "upper" => {
-                    self.cmd_upper_lower(true);
-                    true
-                }
-                "lower" => {
-                    self.cmd_upper_lower(false);
-                    true
-                }
-                "add" => {
-                    self.cmd_add(args);
-                    true
-                }
-                "set" => {
-                    self.cmd_set(args);
-                    true
-                }
-                _ => {
-                    // Try alias lookup with /name [args]
-                    self.try_alias_or_unknown(cmd);
-                    true
-                }
+        // The leading `/` is optional: `/s "hi"` and `s "hi"` are the same.
+        // Reserved verbs always dispatch as commands; anything else is a
+        // qal alias invocation (`name [args]`, `/name [args]`).
+        let stripped = cmd.strip_prefix('/').unwrap_or(cmd);
+        let parts: Vec<&str> = stripped.splitn(2, ' ').collect();
+        let verb = parts[0];
+        let args = parts.get(1).unwrap_or(&"").trim();
+        match verb {
+            "s" => {
+                self.cmd_select_next(args);
+                true
             }
+            "l" => {
+                self.cmd_goto_line(args);
+                true
+            }
+            "sa" => {
+                self.cmd_select_all_occ(args);
+                true
+            }
+            "sal" => {
+                self.clear_extra_cursors();
+                self.select_all();
+                self.status_msg = Some(t!("editor.query_selected_all_lines"));
+                true
+            }
+            "sl" => {
+                self.cmd_select_lines_new(args);
+                true
+            }
+            "rp" => {
+                self.cmd_replace_sel(args);
+                true
+            }
+            "c" | "cs" => {
+                self.clear_selection();
+                self.clear_extra_cursors();
+                self.status_msg = Some(t!("editor.query_selection_cleared"));
+                true
+            }
+            "qal" => {
+                self.cmd_qal(args);
+                true
+            }
+            "exit" | "quit" => {
+                self.query_buf.clear();
+                self.mode = self.prev_mode.clone();
+                self.mark_all_dirty();
+                false
+            }
+            "help" => {
+                self.mode = Mode::Help;
+                self.status_msg = None;
+                false
+            }
+            "undo" => {
+                self.undo();
+                true
+            }
+            "redo" => {
+                self.redo();
+                true
+            }
+            "upper" => {
+                self.cmd_upper_lower(true);
+                true
+            }
+            "lower" => {
+                self.cmd_upper_lower(false);
+                true
+            }
+            "add" => {
+                self.cmd_add(args);
+                true
+            }
+            "set" => {
+                self.cmd_set(args);
+                true
+            }
+            _ => {
+                self.try_alias_or_unknown(stripped);
+                true
+            }
+        }
+    }
+
+    /// True when `name` is reserved and can never become a qal alias.
+    fn is_reserved(name: &str) -> bool {
+        Self::RESERVED_VERBS
+            .iter()
+            .any(|v| v.eq_ignore_ascii_case(name))
+    }
+
+    /// Split `s` on whitespace, keeping `"quoted groups"` together
+    /// (quotes stripped). Used by `/rp` (`/rp "foo bar" "baz"`).
+    fn split_args(s: &str) -> Vec<String> {
+        let mut out = Vec::new();
+        let mut cur = String::new();
+        let mut in_quotes = false;
+        let mut has_token = false;
+        for ch in s.chars() {
+            if ch == '"' {
+                in_quotes = !in_quotes;
+                has_token = true;
+                continue;
+            }
+            if ch.is_whitespace() && !in_quotes {
+                if has_token {
+                    out.push(std::mem::take(&mut cur));
+                    has_token = false;
+                }
+                continue;
+            }
+            cur.push(ch);
+            has_token = true;
+        }
+        if has_token {
+            out.push(cur);
+        }
+        out
+    }
+
+    /// Strip one pair of surrounding double quotes, if present.
+    fn unquote(s: &str) -> String {
+        let t = s.trim();
+        if t.len() >= 2 && t.starts_with('"') && t.ends_with('"') {
+            t[1..t.len() - 1].to_string()
         } else {
-            self.try_alias_or_unknown(cmd);
-            true
+            t.to_string()
         }
     }
 
@@ -249,164 +330,235 @@ impl Editor {
         out
     }
 
-    fn cmd_select_lines(&mut self, args: &str) {
-        let args = args.trim();
-        if args.is_empty() {
-            self.clear_selection();
-            self.clear_extra_cursors();
-            self.status_msg = Some(t!("editor.query_selection_cleared"));
+    /// Place the primary selection on `(y, s)..(y, e)` after clearing
+    /// any existing selection and extra cursors.
+    fn select_match_at(&mut self, y: usize, s: usize, e: usize) {
+        self.clear_selection();
+        self.clear_extra_cursors();
+        self.cursor.y = y;
+        self.cursor.byte = e;
+        self.cursor.selection_anchor = Some((y, s));
+    }
+
+    /// `/s "text"`: select the next occurrence after the cursor,
+    /// wrapping to the top. Bare `/s` selects the word under the cursor.
+    fn cmd_select_next(&mut self, args: &str) {
+        let pat = Self::unquote(args);
+        if pat.is_empty() {
+            match self.select_word_under_cursor() {
+                Some(_) => {
+                    self.status_msg = Some(t!("editor.query_selected_word"));
+                    return;
+                }
+                None => {
+                    self.status_msg = Some(t!("editor.query_s_usage"));
+                    return;
+                }
+            }
+        }
+
+        if self.lines.is_empty() {
+            self.status_msg = Some(t!("editor.query_no_matches", pat));
             return;
         }
-
-        let mut do_all = false;
-        let mut range_start: Option<usize> = None;
-        let mut range_end: Option<usize> = None;
-        let mut filter_str: Option<String> = None;
-
-        let tokens: Vec<&str> = args.split_whitespace().collect();
-        let mut i = 0;
-        while i < tokens.len() {
-            match tokens[i] {
-                "/a" => {
-                    do_all = true;
-                }
-                "to" | "," => {}
-                "/e" => {
-                    i += 1;
-                    if i < tokens.len() {
-                        filter_str = Some(tokens[i].to_string());
-                    }
-                }
-                n if n.parse::<usize>().is_ok() => {
-                    let num: usize = n.parse().unwrap();
-                    if range_start.is_none() {
-                        range_start = Some(num);
-                    } else if range_end.is_none() {
-                        range_end = Some(num);
-                    }
-                }
-                _ => {}
-            }
-            i += 1;
-        }
-
-        if let Some(ref pat) = filter_str {
-            // Multi-cursor mode: select each occurrence of pattern
-            let mut matches: Vec<(usize, usize, usize)> = Vec::new();
-
-            let (search_s, search_e) = if let (Some(s), Some(e)) = (range_start, range_end) {
-                (
-                    s.max(1).saturating_sub(1),
-                    e.max(1)
-                        .saturating_sub(1)
-                        .min(self.lines.len().saturating_sub(1)),
-                )
-            } else if do_all || range_start.is_none() {
-                (0, self.lines.len().saturating_sub(1))
+        // Repeat invocations keep moving forward: start after the end of
+        // the current same-line selection, else at the cursor.
+        let (cy, start_b) = if self.has_selection() {
+            let (ay, ab) = self.cursor.selection_anchor.unwrap();
+            let ((sy, _), (ey, eb)) = sel_range(self.cursor.y, self.cursor.byte, ay, ab);
+            if sy == ey && sy == self.cursor.y {
+                (ey, eb.min(self.lines[ey].len()))
             } else {
-                let n = range_start
-                    .map(|n| {
-                        n.max(1)
-                            .saturating_sub(1)
-                            .min(self.lines.len().saturating_sub(1))
-                    })
-                    .unwrap_or(0);
-                (n, n)
-            };
+                (self.cursor.y, self.cursor.byte.min(self.lines[self.cursor.y].len()))
+            }
+        } else {
+            (self.cursor.y, self.cursor.byte.min(self.lines[self.cursor.y].len()))
+        };
 
-            for li in search_s..=search_e {
-                let line = &self.lines[li];
-                let mut start = 0;
-                while let Some((s, e)) = ci_find(line, pat, start) {
-                    matches.push((li, s, e));
-                    start = s + 1;
-                    if start >= line.len() {
-                        break;
-                    }
+        // Current line from start, then lines below, then wrap to the top.
+        let mut found: Option<(usize, usize, usize)> = None;
+        for li in cy..self.lines.len() {
+            let from = if li == cy { start_b } else { 0 };
+            if let Some((s, e)) = ci_find(&self.lines[li], &pat, from) {
+                found = Some((li, s, e));
+                break;
+            }
+        }
+        if found.is_none() {
+            for li in 0..cy {
+                if let Some((s, e)) = ci_find(&self.lines[li], &pat, 0) {
+                    found = Some((li, s, e));
+                    break;
                 }
             }
-
-            if matches.is_empty() {
-                self.status_msg = Some(t!("editor.query_no_matches", pat));
-                return;
-            }
-
-            self.clear_selection();
-            self.clear_extra_cursors();
-
-            // Primary cursor at first match
-            let (first_y, first_s, first_e) = matches[0];
-            self.cursor.y = first_y;
-            self.cursor.byte = first_e;
-            self.cursor.selection_anchor = Some((first_y, first_s));
-
-            // Extra cursors at rest
-            for &(my, ms, me) in &matches[1..] {
-                self.cursor.extra_cursors.push(crate::editor::CursorPos {
-                    y: my,
-                    byte: me,
-                    anchor: Some((my, ms)),
-                });
-            }
-            self.status_msg = Some(t!("editor.query_selected_occurrences", matches.len(), pat));
-            return;
         }
-
-        if do_all {
-            self.select_all();
-            self.status_msg = Some(t!("editor.query_selected_all_lines"));
-        } else if let (Some(s), Some(e)) = (range_start, range_end) {
-            let s = s.max(1).saturating_sub(1);
-            let e = e.max(1).saturating_sub(1);
-            let max_idx = self.lines.len().saturating_sub(1);
-            if s > max_idx {
-                self.status_msg = Some(t!("editor.query_start_out_of_range", s + 1, max_idx + 1));
-                return;
+        match found {
+            Some((y, s, e)) => {
+                self.select_match_at(y, s, e);
+                self.status_msg = Some(t!("editor.query_selected_next", pat));
             }
-            let ey = e.min(max_idx);
-            self.cursor.selection_anchor = Some((s, 0));
-            self.cursor.y = ey;
-            self.cursor.byte = self.lines[ey].len();
-            self.status_msg = Some(t!("editor.query_selected_lines_range", s + 1, ey + 1));
-        } else if let Some(n) = range_start {
-            let n = n
-                .max(1)
-                .saturating_sub(1)
-                .min(self.lines.len().saturating_sub(1));
-            self.cursor.selection_anchor = Some((n, 0));
-            self.cursor.byte = self.lines[n].len();
-            self.status_msg = Some(t!("editor.query_selected_line", n + 1));
+            None => {
+                self.status_msg = Some(t!("editor.query_no_matches", pat));
+            }
         }
     }
 
-    fn cmd_replace(&mut self, args: &str) {
-        let args = args.trim();
-        if args.is_empty() {
-            self.status_msg = Some(t!("editor.query_replace_usage"));
-            return;
-        }
-        let sep = " to ";
-        let pos = match args.rfind(sep) {
-            Some(p) => p,
-            None => {
-                self.status_msg = Some(t!("editor.query_replace_format"));
+    /// `/l 10`: move the cursor to the start of line 10 (1-based, clamped).
+    fn cmd_goto_line(&mut self, args: &str) {
+        let n: usize = match args.split_whitespace().next().map(|t| t.parse()) {
+            Some(Ok(n)) => n,
+            _ => {
+                self.status_msg = Some(t!("editor.query_l_usage"));
                 return;
             }
         };
-        let find = &args[..pos];
-        let replace = &args[pos + sep.len()..];
+        if self.lines.is_empty() {
+            return;
+        }
+        let y = n
+            .max(1)
+            .saturating_sub(1)
+            .min(self.lines.len().saturating_sub(1));
+        self.clear_selection();
+        self.clear_extra_cursors();
+        self.cursor.y = y;
+        self.cursor.byte = 0;
+        self.status_msg = Some(t!("editor.query_selected_line", y + 1));
+    }
+
+    /// `/sa "text"`: select every occurrence in the whole buffer as
+    /// multi-cursors (primary on the first).
+    fn cmd_select_all_occ(&mut self, args: &str) {
+        let pat = Self::unquote(args);
+        if pat.is_empty() {
+            self.status_msg = Some(t!("editor.query_sa_usage"));
+            return;
+        }
+        let mut matches: Vec<(usize, usize, usize)> = Vec::new();
+        for (li, line) in self.lines.iter().enumerate() {
+            let mut start = 0;
+            while let Some((s, e)) = ci_find(line, &pat, start) {
+                matches.push((li, s, e));
+                start = s + 1;
+                if start >= line.len() {
+                    break;
+                }
+            }
+        }
+        if matches.is_empty() {
+            self.status_msg = Some(t!("editor.query_no_matches", pat));
+            return;
+        }
+        let (first_y, first_s, first_e) = matches[0];
+        self.select_match_at(first_y, first_s, first_e);
+        for &(my, ms, me) in &matches[1..] {
+            self.cursor.extra_cursors.push(crate::editor::CursorPos {
+                y: my,
+                byte: me,
+                anchor: Some((my, ms)),
+            });
+        }
+        self.status_msg = Some(t!("editor.query_selected_occurrences", matches.len(), pat));
+    }
+
+    /// Select a whole line (anchor at col 0, cursor at EOL) without
+    /// disturbing other cursors. Caller sets the primary first.
+    fn push_line_cursor(&mut self, y: usize, primary: bool) {
+        let end = self.lines[y].len();
+        if primary {
+            self.cursor.y = y;
+            self.cursor.byte = end;
+            self.cursor.selection_anchor = Some((y, 0));
+        } else {
+            self.cursor.extra_cursors.push(crate::editor::CursorPos {
+                y,
+                byte: end,
+                anchor: Some((y, 0)),
+            });
+        }
+    }
+
+    /// `/sl 5` (one line), `/sl 5 10` or `/sl 10 5` (range, any order),
+    /// `/sl 1 , 3 , 5` (discrete lines, any count).
+    fn cmd_select_lines_new(&mut self, args: &str) {
+        // Space out commas so `5,10` and `5 , 10` parse identically.
+        let spaced = args.replace(',', " , ");
+        let tokens: Vec<&str> = spaced.split_whitespace().collect();
+        if tokens.is_empty() {
+            self.status_msg = Some(t!("editor.query_sl_usage"));
+            return;
+        }
+        let has_comma = tokens.iter().any(|t| *t == ",");
+        let nums: Option<Vec<usize>> = tokens
+            .iter()
+            .filter(|t| **t != ",")
+            .map(|t| t.parse::<usize>().ok())
+            .collect();
+        let Some(nums) = nums else {
+            self.status_msg = Some(t!("editor.query_sl_usage"));
+            return;
+        };
+        if nums.is_empty() || nums.iter().any(|n| *n == 0) {
+            self.status_msg = Some(t!("editor.query_sl_usage"));
+            return;
+        }
+        if self.lines.is_empty() {
+            return;
+        }
+        let max_idx = self.lines.len().saturating_sub(1);
+        let clamp = |n: usize| n.max(1).saturating_sub(1).min(max_idx);
+
+        self.clear_selection();
+        self.clear_extra_cursors();
+        if has_comma {
+            // Discrete lines: primary on the first, extras on the rest.
+            let mut ys: Vec<usize> = nums.iter().map(|n| clamp(*n)).collect();
+            ys.sort();
+            ys.dedup();
+            for (i, y) in ys.iter().enumerate() {
+                self.push_line_cursor(*y, i == 0);
+            }
+            self.status_msg = Some(t!("editor.query_selected_lines", ys.len()));
+        } else if nums.len() == 1 {
+            let y = clamp(nums[0]);
+            self.push_line_cursor(y, true);
+            self.status_msg = Some(t!("editor.query_selected_line", y + 1));
+        } else if nums.len() == 2 {
+            let (mut a, mut b) = (clamp(nums[0]), clamp(nums[1]));
+            if a > b {
+                std::mem::swap(&mut a, &mut b);
+            }
+            self.cursor.selection_anchor = Some((a, 0));
+            self.cursor.y = b;
+            self.cursor.byte = self.lines[b].len();
+            self.status_msg = Some(t!("editor.query_selected_lines_range", a + 1, b + 1));
+        } else {
+            self.status_msg = Some(t!("editor.query_sl_usage"));
+        }
+    }
+
+    /// `/rp <find> <replace>`: case-insensitive replace scoped to the
+    /// current selection (selection is required). Quote multi-word
+    /// patterns: `/rp "foo bar" "baz"`.
+    fn cmd_replace_sel(&mut self, args: &str) {
+        let parts = Self::split_args(args);
+        if parts.len() != 2 {
+            self.status_msg = Some(t!("editor.query_rp_usage"));
+            return;
+        }
+        let (find, replace) = (parts[0].as_str(), parts[1].as_str());
         if find.is_empty() {
             self.status_msg = Some(t!("editor.query_empty_pattern"));
             return;
         }
+        if !self.has_selection() {
+            self.status_msg = Some(t!("editor.query_selection_required"));
+            return;
+        }
 
-        let (row_start, row_end, col_start, col_end) = if self.has_selection() {
-            let (ay, ab) = self.cursor.selection_anchor.unwrap();
-            let ((sy, sb), (ey, eb)) = sel_range(self.cursor.y, self.cursor.byte, ay, ab);
-            (sy, ey, sb, eb)
-        } else {
-            (0, self.lines.len().saturating_sub(1), 0, usize::MAX)
-        };
+        let (ay, ab) = self.cursor.selection_anchor.unwrap();
+        let ((sy, sb), (ey, eb)) = sel_range(self.cursor.y, self.cursor.byte, ay, ab);
+        let (row_start, row_end, col_start, col_end) = (sy, ey, sb, eb);
 
         self.snapshot();
         let mut count = 0usize;
@@ -478,6 +630,14 @@ impl Editor {
                 }
                 let name = aparts[0];
                 let query = aparts[1];
+                if Self::is_reserved(name) {
+                    self.status_msg = Some(t!("editor.query_qal_reserved", name));
+                    return;
+                }
+                if self.qal_aliases.contains_key(name) {
+                    self.status_msg = Some(t!("editor.query_qal_exists", name));
+                    return;
+                }
                 self.qal_aliases.insert(name.to_string(), query.to_string());
                 self.status_msg = Some(t!("editor.query_qal_added", name));
             }
@@ -529,6 +689,14 @@ impl Editor {
                 }
                 let old = rparts[0];
                 let new = rparts[2];
+                if Self::is_reserved(new) {
+                    self.status_msg = Some(t!("editor.query_qal_reserved", new));
+                    return;
+                }
+                if self.qal_aliases.contains_key(new) {
+                    self.status_msg = Some(t!("editor.query_qal_exists", new));
+                    return;
+                }
                 if let Some(query) = self.qal_aliases.remove(old) {
                     self.qal_aliases.insert(new.to_string(), query);
                     self.status_msg = Some(t!("editor.query_qal_renamed", old, new));
@@ -586,16 +754,13 @@ impl Editor {
             return;
         }
 
-        let (row_start, row_end) = if self.has_selection() {
-            let (ay, ab) = self.cursor.selection_anchor.unwrap();
-            let ((sy, _), (ey, _)) = sel_range(self.cursor.y, self.cursor.byte, ay, ab);
-            (sy, ey)
-        } else {
-            if self.lines.is_empty() {
-                return;
-            }
-            (0, self.lines.len().saturating_sub(1))
-        };
+        if !self.has_selection() {
+            self.status_msg = Some(t!("editor.query_selection_required"));
+            return;
+        }
+        let (ay, ab) = self.cursor.selection_anchor.unwrap();
+        let ((sy, _), (ey, _)) = sel_range(self.cursor.y, self.cursor.byte, ay, ab);
+        let (row_start, row_end) = (sy, ey);
 
         self.snapshot();
         for li in row_start..=row_end {
@@ -640,16 +805,13 @@ impl Editor {
             return;
         }
 
-        let (row_start, row_end) = if self.has_selection() {
-            let (ay, ab) = self.cursor.selection_anchor.unwrap();
-            let ((sy, _), (ey, _)) = sel_range(self.cursor.y, self.cursor.byte, ay, ab);
-            (sy, ey)
-        } else {
-            if self.lines.is_empty() {
-                return;
-            }
-            (0, self.lines.len().saturating_sub(1))
-        };
+        if !self.has_selection() {
+            self.status_msg = Some(t!("editor.query_selection_required"));
+            return;
+        }
+        let (ay, ab) = self.cursor.selection_anchor.unwrap();
+        let ((sy, _), (ey, _)) = sel_range(self.cursor.y, self.cursor.byte, ay, ab);
+        let (row_start, row_end) = (sy, ey);
 
         // Collect (line_index, first_occurrence_byte) for all matching lines
         let pat_lower = pattern.to_lowercase();
@@ -777,7 +939,8 @@ impl Editor {
 
 #[cfg(test)]
 mod tests {
-    use crate::editor::Editor;
+    use crate::editor::{Editor, Mode};
+    use crossterm::event::{Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 
     fn test_editor(content: &[&str]) -> Editor {
         let dir = std::env::temp_dir().join("ntc_editor_test");
@@ -788,6 +951,66 @@ mod tests {
         let mut editor = Editor::new(&path).unwrap();
         editor.lines = lines;
         editor
+    }
+
+    fn press(code: KeyCode) -> Event {
+        Event::Key(KeyEvent {
+            code,
+            modifiers: KeyModifiers::empty(),
+            kind: KeyEventKind::Press,
+            state: crossterm::event::KeyEventState::empty(),
+        })
+    }
+
+    #[test]
+    fn typing_q_stays_in_query_mode() {
+        // Regression: plain `q` used to exit Query mode, making
+        // `qal …` and `/quit` impossible to type.
+        let mut editor = test_editor(&["hello"]);
+        editor.prev_mode = Mode::Normal;
+        editor.mode = Mode::Query;
+        for c in ['q', 'a', 'l'] {
+            editor.handle_query_event(press(KeyCode::Char(c))).unwrap();
+            assert_eq!(editor.mode, Mode::Query);
+        }
+        assert_eq!(editor.query_buf, "qal");
+        // `/quit` is typeable too (slash + q + rest).
+        editor.query_buf.clear();
+        for c in ['/', 'q', 'u', 'i', 't'] {
+            editor.handle_query_event(press(KeyCode::Char(c))).unwrap();
+            assert_eq!(editor.mode, Mode::Query);
+        }
+        assert_eq!(editor.query_buf, "/quit");
+        // Esc still exits and clears the buffer.
+        editor.handle_query_event(press(KeyCode::Esc)).unwrap();
+        assert_eq!(editor.mode, Mode::Normal);
+        assert!(editor.query_buf.is_empty());
+    }
+
+    #[test]
+    fn query_result_visible_until_next_keystroke() {
+        // State contract for the hint bar: a successful query leaves a
+        // `status_msg` behind (painted as `✦ …`); composing the next
+        // command or leaving the mode retires it.
+        let mut editor = test_editor(&["foo bar", "baz"]);
+        editor.prev_mode = Mode::Normal;
+        editor.mode = Mode::Query;
+        assert!(editor.exec_one("/s \"foo\""));
+        assert!(editor.status_msg.is_some());
+        // Typing the next command clears the previous result.
+        editor.handle_query_event(press(KeyCode::Char('/'))).unwrap();
+        assert!(editor.status_msg.is_none());
+        // ... as does Backspace.
+        assert!(editor.exec_one("/s \"foo\""));
+        assert!(editor.status_msg.is_some());
+        editor.handle_query_event(press(KeyCode::Backspace)).unwrap();
+        assert!(editor.status_msg.is_none());
+        // ... and Esc clears it so Normal inherits nothing stale.
+        assert!(editor.exec_one("/s \"foo\""));
+        assert!(editor.status_msg.is_some());
+        editor.handle_query_event(press(KeyCode::Esc)).unwrap();
+        assert_eq!(editor.mode, Mode::Normal);
+        assert!(editor.status_msg.is_none());
     }
 
     #[test]
@@ -807,33 +1030,239 @@ mod tests {
         assert_eq!(out, "x fallback ");
     }
 
-    #[test]
-    fn cmd_replace_last_line_no_selection_does_not_panic() {
-        let mut editor = test_editor(&["no match here", "foo bar foo"]);
-        editor.cmd_replace("foo to X");
-        assert_eq!(editor.lines[1], "X bar X");
-        assert_eq!(editor.lines[0], "no match here");
+    fn select_line(editor: &mut Editor, y: usize) {
+        editor.cursor.y = y;
+        editor.cursor.byte = editor.lines[y].len();
+        editor.cursor.selection_anchor = Some((y, 0));
     }
 
     #[test]
-    fn cmd_replace_case_insensitive_with_multibyte() {
+    fn rp_requires_selection() {
+        let mut editor = test_editor(&["foo foo"]);
+        editor.cmd_replace_sel("foo X");
+        assert_eq!(editor.lines[0], "foo foo");
+        assert!(editor.status_msg.is_some());
+    }
+
+    #[test]
+    fn rp_replaces_within_selection_only() {
+        let mut editor = test_editor(&["one", "two one", "one"]);
+        select_line(&mut editor, 1);
+        editor.cmd_replace_sel("one 1");
+        assert_eq!(editor.lines[0], "one");
+        assert_eq!(editor.lines[1], "two 1");
+        assert_eq!(editor.lines[2], "one");
+    }
+
+    #[test]
+    fn rp_quoted_multiword_patterns() {
+        let mut editor = test_editor(&["foo bar foo", "keep"]);
+        select_line(&mut editor, 0);
+        editor.cmd_replace_sel("\"foo bar\" X");
+        // split_args: ["foo bar", "X"]
+        assert_eq!(editor.lines[0], "X foo");
+        assert_eq!(editor.lines[1], "keep");
+    }
+
+    #[test]
+    fn rp_case_insensitive_with_multibyte() {
         let mut editor = test_editor(&["aẞb ß x", "keep"]);
         // `ẞ` (3 bytes) lowercases to `ß` (2 bytes) — offsets must not drift.
-        editor.cmd_replace("ß to S");
+        select_line(&mut editor, 0);
+        editor.cmd_replace_sel("ß S");
         assert_eq!(editor.lines[0], "aSb S x");
         assert_eq!(editor.lines[1], "keep");
     }
 
     #[test]
-    fn cmd_replace_respects_selection_bounds() {
-        let mut editor = test_editor(&["one", "two one", "one"]);
-        // Select "one" on line 1 only.
-        editor.cursor.y = 1;
-        editor.cursor.byte = 7;
-        editor.cursor.selection_anchor = Some((1, 0));
-        editor.cmd_replace("one to 1");
-        assert_eq!(editor.lines[0], "one");
-        assert_eq!(editor.lines[1], "two 1");
-        assert_eq!(editor.lines[2], "one");
+    fn s_selects_next_and_wraps() {
+        let mut editor = test_editor(&["foo bar", "baz foo", "qux"]);
+        editor.cursor.y = 0;
+        editor.cursor.byte = 0;
+        // First "foo" is at (0, 0..3) — cursor sits at its start, so the
+        // next occurrence after byte 0... ci_find from 0 finds (0,0..3).
+        editor.cmd_select_next("foo");
+        assert_eq!((editor.cursor.y, editor.cursor.byte), (0, 3));
+        assert_eq!(editor.cursor.selection_anchor, Some((0, 0)));
+        // Repeat: moves past the current selection to line 1.
+        editor.cmd_select_next("foo");
+        assert_eq!(editor.cursor.y, 1);
+        assert_eq!(editor.cursor.selection_anchor, Some((1, 4)));
+        // Repeat: wraps back to line 0.
+        editor.cmd_select_next("foo");
+        assert_eq!((editor.cursor.y, editor.cursor.byte), (0, 3));
+    }
+
+    #[test]
+    fn s_bare_selects_word_under_cursor() {
+        let mut editor = test_editor(&["hello world"]);
+        editor.cursor.y = 0;
+        editor.cursor.byte = 1;
+        editor.cmd_select_next("");
+        assert_eq!(editor.selected_text(), "hello");
+    }
+
+    #[test]
+    fn s_no_match_keeps_state() {
+        let mut editor = test_editor(&["hello"]);
+        editor.cursor.y = 0;
+        editor.cursor.byte = 0;
+        editor.cmd_select_next("zzz");
+        assert!(!editor.has_selection());
+        assert!(editor.status_msg.is_some());
+    }
+
+    #[test]
+    fn l_moves_cursor_to_line_start() {
+        let mut editor = test_editor(&["a", "bb", "ccc"]);
+        editor.cursor.y = 0;
+        editor.cursor.byte = 1;
+        editor.cursor.selection_anchor = Some((0, 0));
+        editor.cmd_goto_line("3");
+        assert_eq!((editor.cursor.y, editor.cursor.byte), (2, 0));
+        assert!(!editor.has_selection());
+        // Out of range clamps to the last line.
+        editor.cmd_goto_line("99");
+        assert_eq!(editor.cursor.y, 2);
+        // Garbage shows usage.
+        editor.cmd_goto_line("abc");
+        assert!(editor.status_msg.is_some());
+    }
+
+    #[test]
+    fn sa_selects_all_occurrences() {
+        let mut editor = test_editor(&["foo bar", "baz foo foo"]);
+        editor.cmd_select_all_occ("foo");
+        assert_eq!((editor.cursor.y, editor.cursor.byte), (0, 3));
+        assert_eq!(editor.cursor.selection_anchor, Some((0, 0)));
+        assert_eq!(editor.cursor.extra_cursors.len(), 2);
+        // Empty pattern shows usage, selects nothing.
+        let mut editor = test_editor(&["foo"]);
+        editor.cmd_select_all_occ("");
+        assert!(!editor.has_selection());
+    }
+
+    #[test]
+    fn sl_single_range_and_discrete() {
+        // Single line.
+        let mut editor = test_editor(&["a", "bb", "ccc", "dddd"]);
+        editor.cmd_select_lines_new("2");
+        assert_eq!(editor.cursor.selection_anchor, Some((1, 0)));
+        assert_eq!((editor.cursor.y, editor.cursor.byte), (1, 2));
+        // Range, either order.
+        editor.cmd_select_lines_new("2 4");
+        assert_eq!(editor.cursor.selection_anchor, Some((1, 0)));
+        assert_eq!(editor.cursor.y, 3);
+        editor.cmd_select_lines_new("4 2");
+        assert_eq!(editor.cursor.selection_anchor, Some((1, 0)));
+        assert_eq!(editor.cursor.y, 3);
+        // Discrete lines, any count.
+        editor.cmd_select_lines_new("1 , 3 , 4");
+        assert_eq!(editor.cursor.selection_anchor, Some((0, 0)));
+        assert_eq!(editor.cursor.extra_cursors.len(), 2);
+        // Attached commas parse identically.
+        let mut editor = test_editor(&["a", "bb", "ccc", "dddd"]);
+        editor.cmd_select_lines_new("1,3");
+        assert_eq!(editor.cursor.extra_cursors.len(), 1);
+        // Garbage shows usage.
+        editor.cmd_select_lines_new("x");
+        assert!(editor.status_msg.is_some());
+        editor.cmd_select_lines_new("");
+        assert!(editor.status_msg.is_some());
+    }
+
+    #[test]
+    fn c_clears_selection_and_cursors() {
+        let mut editor = test_editor(&["foo foo", "foo"]);
+        editor.cmd_select_all_occ("foo");
+        assert!(editor.has_selection());
+        assert!(editor.exec_one("/c"));
+        assert!(!editor.has_selection());
+        assert!(editor.cursor.extra_cursors.is_empty());
+        assert!(editor.exec_one("cs"));
+    }
+
+    #[test]
+    fn verbs_work_without_slash_and_old_verbs_retired() {
+        let mut editor = test_editor(&["foo", "bar"]);
+        // Bare verbs dispatch (no `/` needed).
+        assert!(editor.exec_one("l 2"));
+        assert_eq!(editor.cursor.y, 1);
+        assert!(editor.exec_one("sal"));
+        assert!(editor.has_selection());
+        assert!(editor.exec_one("c"));
+        assert!(!editor.has_selection());
+        // Retired verbs are unknown now (no alias named `p` either).
+        editor.exec_one("/p foo to X");
+        assert_eq!(editor.lines, vec!["foo".to_string(), "bar".to_string()]);
+        editor.exec_one("/q something");
+        assert!(editor.status_msg.is_some());
+    }
+
+    #[test]
+    fn qal_add_rejects_reserved_and_duplicates() {
+        let mut editor = test_editor(&["x"]);
+        // Reserved: the verb set + `qal` itself.
+        for name in ["qal", "s", "sl", "rp", "c", "add", "S"] {
+            editor.cmd_qal(&format!("add {} /sal", name));
+            assert!(
+                !editor.qal_aliases.contains_key(name),
+                "reserved name accepted: {}",
+                name
+            );
+        }
+        // Duplicates need `/qal edit`.
+        editor.cmd_qal("add mine /sal");
+        assert!(editor.qal_aliases.contains_key("mine"));
+        editor.cmd_qal("add mine /c");
+        assert_eq!(editor.qal_aliases["mine"], "/sal");
+        // Rename onto reserved/existing is blocked too.
+        editor.cmd_qal("add other /c");
+        editor.cmd_qal("rnm other to s");
+        assert!(editor.qal_aliases.contains_key("other"));
+        editor.cmd_qal("rnm other to mine");
+        assert!(editor.qal_aliases.contains_key("other"));
+        editor.cmd_qal("rnm other to fresh");
+        assert!(editor.qal_aliases.contains_key("fresh"));
+    }
+
+    #[test]
+    fn bare_alias_invokes_without_slash() {
+        let mut editor = test_editor(&["a", "bb"]);
+        editor.cmd_qal("add all /sal");
+        assert!(editor.exec_one("all"));
+        assert!(editor.has_selection());
+        assert!(editor.exec_one("/c"));
+        assert!(editor.exec_one("/all"));
+        assert!(editor.has_selection());
+    }
+
+    #[test]
+    fn split_args_respects_quotes() {
+        assert_eq!(
+            Editor::split_args("\"foo bar\" baz"),
+            vec!["foo bar".to_string(), "baz".to_string()]
+        );
+        assert_eq!(
+            Editor::split_args("a b c"),
+            vec!["a".to_string(), "b".to_string(), "c".to_string()]
+        );
+        assert!(Editor::split_args("").is_empty());
+        assert_eq!(Editor::unquote("\"hi\""), "hi");
+        assert_eq!(Editor::unquote("hi"), "hi");
+    }
+
+    #[test]
+    fn add_and_set_require_selection_now() {
+        let mut editor = test_editor(&["ab", "cd"]);
+        editor.cmd_add("X to #end");
+        assert_eq!(editor.lines, vec!["ab".to_string(), "cd".to_string()]);
+        editor.cmd_set("b to #end");
+        assert_eq!(editor.lines, vec!["ab".to_string(), "cd".to_string()]);
+        // With a selection both apply to the selected rows only.
+        select_line(&mut editor, 0);
+        editor.cmd_add("X to #end");
+        assert_eq!(editor.lines[0], "abX");
+        assert_eq!(editor.lines[1], "cd");
     }
 }

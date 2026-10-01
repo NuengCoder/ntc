@@ -1,10 +1,11 @@
-use crate::editor::{next_char_byte, prev_char_byte, Editor, Mode};
+use crate::editor::Editor;
 use anyhow::Result;
 use crossterm::event::{Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 
-use crate::t;
-
 impl Editor {
+    /// Vim-style Visual mode: plain hjkl/awsd/arrows move the cursor,
+    /// Shift+direction selects, single-letter verbs act on the selection.
+    /// `:`/Esc leave; quit is `:q` / `0` from Normal only.
     pub(crate) fn handle_visual_event(
         &mut self,
         ev: Event,
@@ -18,41 +19,64 @@ impl Editor {
                 ..
             }) => {
                 let ctrl = modifiers.contains(KeyModifiers::CONTROL);
-                match (ctrl, code) {
-                    (_, KeyCode::Esc) => {
+                let alt = modifiers.contains(KeyModifiers::ALT);
+                let shift = modifiers.contains(KeyModifiers::SHIFT);
+                let _ = stdout;
+                match (ctrl, alt, code) {
+                    // ── leave ──
+                    (false, false, KeyCode::Esc) => {
                         self.clear_selection();
-                        self.mode = Mode::Normal;
+                        self.mode = crate::editor::Mode::Normal;
                     }
-                    (true, KeyCode::Char('a')) => {
-                        self.select_all();
+                    // ── verbs ──
+                    (false, false, KeyCode::Char('a')) => {
+                        if self.has_selection()
+                            && self.cursor.selection_anchor == Some((0, 0))
+                            && self.cursor.y == self.lines.len().saturating_sub(1)
+                            && self.cursor.byte == self.current().len()
+                        {
+                            self.clear_selection();
+                        } else {
+                            self.select_all();
+                        }
                     }
-                    (true, KeyCode::Char('o')) => {
-                        self.mode = Mode::Insert;
-                        self.clear_selection();
-                        self.status_msg = None;
+                    (false, false, KeyCode::Char('c'))
+                    | (false, false, KeyCode::Char('C')) => {
+                        self.copy_selection();
                     }
-                    (true, KeyCode::Char('e')) => {
-                        self.mode = Mode::Command;
+                    (false, false, KeyCode::Char('x'))
+                    | (false, false, KeyCode::Char('X')) => {
+                        if self.has_selection() {
+                            self.snapshot();
+                            self.cut_selection();
+                        }
+                    }
+                    (false, false, KeyCode::Char('y'))
+                    | (false, false, KeyCode::Char('Y')) => {
+                        self.yank_line();
+                    }
+                    (false, false, KeyCode::Char('p'))
+                    | (false, false, KeyCode::Char('P')) => {
+                        self.snapshot();
+                        if self.has_selection() {
+                            self.delete_selection();
+                        }
+                        self.paste();
+                    }
+                    (false, _, KeyCode::Char(':')) => {
+                        self.mode = crate::editor::Mode::Command;
                         self.cmd_buf.clear();
                     }
-                    (true, KeyCode::Char('q')) if self.exit_flow(stdout)? => {
-                        return Err(anyhow::anyhow!("__exit__"));
+                    (false, false, KeyCode::Char('e'))
+                    | (false, false, KeyCode::Char('E')) => {
+                        self.prev_mode = crate::editor::Mode::Visual;
+                        self.enter_nfe();
                     }
-                    (true, KeyCode::Char('Q')) => {
-                        self.close_all_tabs();
-                        self.mode = Mode::Normal;
-                    }
-                    (true, KeyCode::Char('h')) => {
-                        self.mode = Mode::Help;
-                        self.status_msg = None;
-                    }
-                    (true, KeyCode::Char('b')) => {
-                        self.toggle_sidebar();
-                    }
-                    (true, KeyCode::Char('f')) => {
+                    (false, false, KeyCode::Char('f'))
+                    | (false, false, KeyCode::Char('F')) => {
                         let sel = self.selected_text();
                         self.clear_selection();
-                        self.mode = Mode::Search;
+                        self.mode = crate::editor::Mode::Search;
                         if !sel.is_empty() {
                             self.search.query = sel;
                         } else {
@@ -66,96 +90,98 @@ impl Editor {
                         }
                         self.mark_all_dirty();
                     }
-                    (true, KeyCode::Char('n')) => {
-                        self.mode = Mode::FileFinder;
-                        self.ff_query.clear();
-                        self.ff_results.clear();
-                        self.ff_idx = 0;
+                    (false, false, KeyCode::Char('g'))
+                    | (false, false, KeyCode::Char('G')) => {
+                        self.clear_selection();
+                        self.prev_mode = crate::editor::Mode::Visual;
+                        self.mode = crate::editor::Mode::Gmode;
+                        self.gmode_buf.clear();
+                        self.status_msg = None;
                         self.mark_all_dirty();
                     }
-                    (true, KeyCode::Char('g')) => {
+                    (true, false, KeyCode::Char('j')) => {
                         self.clear_selection();
-                        self.prev_mode = Mode::Normal;
-                        self.mode = Mode::Jump;
+                        self.prev_mode = crate::editor::Mode::Visual;
+                        self.mode = crate::editor::Mode::Jump;
                         self.jump_buf.clear();
                         self.status_msg = None;
                     }
-                    (false, KeyCode::Left) => {
+                    // ── Shift+arrows select (before plain: same codes) ──
+                    (false, false, KeyCode::Left) if shift => {
+                        self.extend_left();
+                    }
+                    (false, false, KeyCode::Right) if shift => {
+                        self.extend_right();
+                    }
+                    (false, false, KeyCode::Up) if shift => {
+                        self.extend_up();
+                    }
+                    (false, false, KeyCode::Down) if shift => {
+                        self.extend_down();
+                    }
+                    // ── plain motion: move only, never selects.
+                    // (`a` is the select-all toggle, so left = h/Left.) ──
+                    (false, false, KeyCode::Char('h'))
+                    | (false, false, KeyCode::Left) => {
+                        self.clear_selection();
+                        self.move_left_charwise();
+                    }
+                    (false, false, KeyCode::Char('l'))
+                    | (false, false, KeyCode::Char('d'))
+                    | (false, false, KeyCode::Right) => {
+                        self.clear_selection();
+                        self.move_right_charwise();
+                    }
+                    (false, false, KeyCode::Char('k'))
+                    | (false, false, KeyCode::Char('w'))
+                    | (false, false, KeyCode::Up) => {
+                        self.clear_selection();
+                        self.move_up_line();
+                    }
+                    (false, false, KeyCode::Char('j'))
+                    | (false, false, KeyCode::Char('s'))
+                    | (false, false, KeyCode::Down) => {
+                        self.clear_selection();
+                        self.move_down_line();
+                    }
+                    // ── Shift+letter arrives as uppercase: extend. ──
+                    (false, false, KeyCode::Char('H'))
+                    | (false, false, KeyCode::Char('A')) => {
+                        self.extend_left();
+                    }
+                    (false, false, KeyCode::Char('L'))
+                    | (false, false, KeyCode::Char('D')) => {
+                        self.extend_right();
+                    }
+                    (false, false, KeyCode::Char('K'))
+                    | (false, false, KeyCode::Char('W')) => {
+                        self.extend_up();
+                    }
+                    (false, false, KeyCode::Char('J'))
+                    | (false, false, KeyCode::Char('S')) => {
+                        self.extend_down();
+                    }
+                    (false, true, KeyCode::Left) => {
+                        self.sv.x = self.sv.x.saturating_sub(3);
+                    }
+                    (false, true, KeyCode::Right) => {
+                        self.sv.x = (self.sv.x + 3).min(self.max_scroll_x());
+                    }
+                    (false, _, KeyCode::Home) => {
+                        self.clear_selection();
+                        self.move_line_start_toggle();
+                    }
+                    (false, _, KeyCode::End) => {
+                        self.clear_selection();
+                        self.move_line_end();
+                    }
+                    (false, _, KeyCode::PageUp) => {
                         self.start_or_extend_selection();
-                        if self.cursor.byte > 0 {
-                            self.cursor.byte = prev_char_byte(self.current(), self.cursor.byte);
-                        } else if self.cursor.y > 0 {
-                            let mut prev = self.cursor.y - 1;
-                            loop {
-                                if !self.lines[prev].is_empty() {
-                                    self.cursor.y = prev;
-                                    self.cursor.byte = self.lines[prev].len();
-                                    break;
-                                }
-                                if prev == 0 {
-                                    break;
-                                }
-                                prev -= 1;
-                            }
-                        }
+                        self.page_up();
                     }
-                    (false, KeyCode::Right) => {
+                    (false, _, KeyCode::PageDown) => {
                         self.start_or_extend_selection();
-                        let line = self.current();
-                        if self.cursor.byte < line.len() {
-                            self.cursor.byte = next_char_byte(line, self.cursor.byte);
-                        } else {
-                            let mut next = self.cursor.y + 1;
-                            while next < self.lines.len() && self.lines[next].is_empty() {
-                                next += 1;
-                            }
-                            if next < self.lines.len() {
-                                self.cursor.y = next;
-                                self.cursor.byte = 0;
-                            }
-                        }
-                    }
-                    (false, KeyCode::Up) => {
-                        self.start_or_extend_selection();
-                        if self.cursor.y > 0 {
-                            self.cursor.y -= 1;
-                        }
-                    }
-                    (false, KeyCode::Down) => {
-                        self.start_or_extend_selection();
-                        if self.cursor.y + 1 < self.lines.len() {
-                            self.cursor.y += 1;
-                        }
-                    }
-                    (false, KeyCode::Home) => {
-                        self.start_or_extend_selection();
-                        let first_non_ws = self
-                            .current()
-                            .char_indices()
-                            .find(|(_, c)| !c.is_whitespace())
-                            .map(|(b, _)| b)
-                            .unwrap_or(0);
-                        self.cursor.byte = if self.cursor.byte != first_non_ws {
-                            first_non_ws
-                        } else {
-                            0
-                        };
-                        self.sv.x = 0;
-                    }
-                    (false, KeyCode::End) => {
-                        self.start_or_extend_selection();
-                        self.cursor.byte = self.current().len();
-                    }
-                    (true, KeyCode::Char('c')) => {
-                        self.copy_selection();
-                        self.mode = Mode::Normal;
-                    }
-                    (true, KeyCode::Char('x')) => {
-                        self.cut_selection();
-                        self.mode = Mode::Normal;
-                    }
-                    (true, KeyCode::Char('=')) | (true, KeyCode::Char('-')) => {
-                        self.status_msg = Some(t!("editor.mode_zoom_hint"));
+                        self.page_down();
                     }
                     _ => {}
                 }

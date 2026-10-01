@@ -40,7 +40,7 @@ impl Editor {
                         self.ff_idx = 0;
                         self.mark_all_dirty();
                     }
-                    (true, KeyCode::Char('g')) => {
+                    (true, KeyCode::Char('j')) => {
                         self.prev_mode = Mode::Normal;
                         self.mode = Mode::Jump;
                         self.jump_buf.clear();

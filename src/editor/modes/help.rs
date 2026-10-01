@@ -28,7 +28,7 @@ impl Editor {
                         self.ff_idx = 0;
                         self.mark_all_dirty();
                     }
-                    (true, KeyCode::Char('g')) => {
+                    (true, KeyCode::Char('j')) => {
                         self.prev_mode = Mode::Normal;
                         self.mode = Mode::Jump;
                         self.jump_buf.clear();
@@ -45,13 +45,36 @@ impl Editor {
                             self.mode = Mode::Normal;
                             self.status_msg = None;
                         }
+                        KeyCode::Char(':') | KeyCode::Char(';') => {
+                            self.mode = Mode::Command;
+                            self.cmd_buf.clear();
+                            self.mark_all_dirty();
+                        }
                         KeyCode::Char('b') => {
                             self.toggle_sidebar();
                         }
-                        KeyCode::Up => {
+                        KeyCode::Up
+                        | KeyCode::Char('k')
+                        | KeyCode::Char('K')
+                        | KeyCode::Char('w')
+                        | KeyCode::Char('W')
+                        | KeyCode::Char('h')
+                        | KeyCode::Char('H')
+                        | KeyCode::Char('a')
+                        | KeyCode::Char('A')
+                        | KeyCode::Left => {
                             self.sv.help = self.sv.help.saturating_sub(1);
                         }
-                        KeyCode::Down => {
+                        KeyCode::Down
+                        | KeyCode::Char('j')
+                        | KeyCode::Char('J')
+                        | KeyCode::Char('s')
+                        | KeyCode::Char('S')
+                        | KeyCode::Char('l')
+                        | KeyCode::Char('L')
+                        | KeyCode::Char('d')
+                        | KeyCode::Char('D')
+                        | KeyCode::Right => {
                             self.sv.help += 1;
                         }
                         _ => {}

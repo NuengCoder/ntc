@@ -153,6 +153,31 @@ pub(crate) fn parse_target_arg(args: &str, nav: &Navigator) -> Result<TargetArg>
     Ok(TargetArg { path, rest })
 }
 
+/// Resolve one file operand for `cp`/`mv`.
+/// `@name` strictly means a teleport savepoint (unknown → localized error).
+/// Anything else is an absolute path or relative to the shell's directory.
+/// Unlike `resolve_target_spec` there is no directory gate and no
+/// bare-name fallback — callers validate existence/type themselves.
+pub(crate) fn resolve_file_operand(spec: &str, nav: &Navigator) -> Result<PathBuf> {
+    if let Some(name) = spec.strip_prefix('@') {
+        if name.is_empty() {
+            print_error(&t!("cmd.target.tp_not_found", spec));
+            bail!(t!("cmd.target.tp_not_found", spec));
+        }
+        if let Some(p) = TeleportManager::get_path(name) {
+            return Ok(p);
+        }
+        print_error(&t!("cmd.target.tp_not_found", name));
+        bail!(t!("cmd.target.tp_not_found", name));
+    }
+    let p = Path::new(spec);
+    Ok(if p.is_absolute() {
+        p.to_path_buf()
+    } else {
+        nav.current_path().join(p)
+    })
+}
+
 // ============================================================================
 // Helper functions (gosc, show_tree, file menus, spinner, system command)
 // ============================================================================
@@ -176,11 +201,15 @@ pub(crate) fn show_tree(
         show_dirsize,
         copy_to_clipboard,
         care_sizes,
+        None,
     );
 }
 
 /// Same as `show_tree` but renders the tree for `target` instead of the
-/// navigator's current directory.
+/// navigator's current directory. When `ext_filter` is `Some`, only files
+/// matching those extensions are shown (empty dirs pruned) and directory
+/// sizes become the sum of the kept descendants. Returns the number of
+/// matched files (0 when no filter is active).
 pub(crate) fn show_tree_at(
     target: &Path,
     max_depth_override: Option<usize>,
@@ -190,7 +219,8 @@ pub(crate) fn show_tree_at(
     show_dirsize: bool,
     copy_to_clipboard: bool,
     care_sizes: bool,
-) {
+    ext_filter: Option<&[String]>,
+) -> usize {
     println!();
     print_separator("Current Directory");
     println!("Path: {}", strip_unc_prefix(target).cyan());
@@ -214,6 +244,12 @@ pub(crate) fn show_tree_at(
         )
     };
 
+    let matched = match ext_filter {
+        Some(exts) if !exts.is_empty() => crate::explorer::prune_tree_by_exts(&mut tree, exts),
+        _ => 0,
+    };
+    let filtered = matches!(ext_filter, Some(exts) if !exts.is_empty());
+
     let show_any_size = show_filesize || show_dirsize;
     // Annotate file entries with git status symbols when in a repo
     if crate::config::Config::global_get_git_integration_enabled()
@@ -225,7 +261,17 @@ pub(crate) fn show_tree_at(
         }
     }
     let tree_str = if show_any_size {
-        if show_progress {
+        if filtered {
+            // Filtered view: directory sizes are the sum of kept files,
+            // not the on-disk totals (which include filtered-out files).
+            if show_progress {
+                run_with_spinner(&t!("helpers.calculating_sizes"), || {
+                    crate::explorer::compute_filtered_sizes(&mut tree);
+                });
+            } else {
+                crate::explorer::compute_filtered_sizes(&mut tree);
+            }
+        } else if show_progress {
             run_with_spinner(&t!("helpers.calculating_sizes"), || {
                 crate::explorer::compute_tree_sizes(&mut tree, None, care_sizes);
             });
@@ -279,6 +325,8 @@ pub(crate) fn show_tree_at(
             }
         }
     }
+
+    matched
 }
 
 pub(super) fn gosc_loop(nav: &mut Navigator) -> Result<()> {
@@ -968,3 +1016,31 @@ pub(crate) fn igcare_import(path_str: &str) -> Result<()> {
     print_success(&t!("helpers.imported_igcare", path.display()));
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn resolve_file_operand_plain_paths() {
+        let nav = Navigator::new().unwrap();
+        let rel = resolve_file_operand("sub/file.txt", &nav).unwrap();
+        assert_eq!(rel, nav.current_path().join("sub/file.txt"));
+    }
+
+    #[test]
+    #[cfg(windows)]
+    fn resolve_file_operand_absolute_stays() {
+        let nav = Navigator::new().unwrap();
+        let abs = resolve_file_operand("C:/Windows", &nav).unwrap();
+        assert_eq!(abs, PathBuf::from("C:/Windows"));
+    }
+
+    #[test]
+    fn resolve_file_operand_unknown_savepoint_errors() {
+        let nav = Navigator::new().unwrap();
+        assert!(resolve_file_operand("@definitely-not-a-savepoint-xyz", &nav).is_err());
+        assert!(resolve_file_operand("@", &nav).is_err());
+    }
+}
+

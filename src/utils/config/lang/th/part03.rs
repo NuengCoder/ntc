@@ -132,7 +132,8 @@ pub fn fill(m: &mut HashMap<String, String>) {
     m.insert("cmd.config.watch.trigger_off_usage".into(), "config watch trigger off  ปิดการทำงานอัตโนมัติ".into());
     m.insert("cmd.config.watch.trigger_set".into(), "ตั้งตัวเรียกใช้ watch เป็น alias: '{}'".into());
     m.insert("cmd.config.watch.trigger_usage".into(), "config watch trigger <alias> เรียก alias อัตโนมัติเมื่อมีการเปลี่ยนแปลง".into());
-    m.insert("cmd.config.watch.usage".into(), "ใช้: config watch ON | config watch OFF | config watch trigger <alias> | config watch trigger off".into());
+    m.insert("cmd.config.watch.limit_usage".into(), "config watch limit <n> จำนวนแถวที่แสดงในกล่อง watch".into());
+    m.insert("cmd.config.watch.usage".into(), "ใช้: config watch ON | config watch OFF | config watch trigger <alias> | config watch trigger off | config watch limit <n>".into());
     m.insert("cmd.config.watch.usage_line".into(), "การใช้งาน: config watch ON|OFF".into());
     m.insert("cmd.fmt.file_not_found".into(), "ไม่พบไฟล์: {}".into());
     m.insert("cmd.fmt.invalid_json".into(), "JSON ไม่ถูกต้อง: {}".into());
@@ -261,7 +262,12 @@ pub fn fill(m: &mut HashMap<String, String>) {
     m.insert("cmd.image.missing_to_format".into(), "ไม่พบรูปแบบหลัง 'to'.".into());
     m.insert("cmd.image.no_files".into(), "ไม่พบไฟล์ภาพในไดเรกทอรีปัจจุบัน.".into());
     m.insert("cmd.image.select_image".into(), "เลือกภาพ:".into());
-    m.insert("cmd.image.usage".into(), "การใช้งาน: image <เส้นทาง> [to|out <รูปแบบ>] [--ocr] [--layout]".into());
+    m.insert("cmd.image.displaying".into(), "กำลังแสดง {} ({}x{}) ผ่าน {}".into());
+    m.insert("cmd.image.usage".into(), "การใช้งาน: image <เส้นทาง> [display|show|to|out <รูปแบบ>] [--ocr] [--layout]".into());
+    m.insert("cmd.ipcfg.dns_label".into(), "DNS ......... :".into());
+    m.insert("cmd.ipcfg.no_adapters".into(), "ไม่พบอะแดปเตอร์เครือข่าย".into());
+    m.insert("cmd.ipcfg.no_such_adapter".into(), "ไม่มีอะแดปเตอร์ชื่อ '{}'".into());
+    m.insert("cmd.ipcfg.title".into(), "อะแดปเตอร์เครือข่าย:".into());
     m.insert("cmd.image_disabled".into(), "ไม่สามารถแปลงภาพได้ (ปิดใช้งานคุณสมบัติ 'image2doc').".into());
     m.insert("cmd.mode.admin_relaunch".into(), "กำลังเปิด ntc ใหม่ในฐานะ Administrator...".into());
     m.insert("cmd.mode.elevate_fail".into(), "ไม่สามารถเปิดโพรเซสที่ยกระดับสิทธิ์: {}".into());

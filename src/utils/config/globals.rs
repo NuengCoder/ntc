@@ -157,6 +157,15 @@ impl Config {
         cfg.file_watcher_enabled = enabled;
         cfg.save();
     }
+    pub fn global_get_watch_limit() -> usize {
+        Self::read_global().watch_limit
+    }
+    /// No upper bound by design; only the lower bound is guarded.
+    pub fn global_set_watch_limit(n: usize) {
+        let mut cfg = Self::write_global();
+        cfg.watch_limit = n.max(1);
+        cfg.save();
+    }
 
     pub fn global_get_color_enabled() -> bool {
         Self::read_global().color_enabled
@@ -165,7 +174,10 @@ impl Config {
         let mut cfg = Self::write_global();
         cfg.color_enabled = enabled;
         cfg.save();
-        colored::control::set_override(enabled);
+        // Never force colors on when the console can't render them —
+        // otherwise `setc ON` on legacy conhost brings back `[91m` garbage.
+        let vt_ok = crate::utils::terminal::detect().color;
+        colored::control::set_override(enabled && vt_ok);
     }
 
     pub fn global_get_autosuggest_enabled() -> bool {
@@ -290,6 +302,168 @@ impl Config {
             true
         } else {
             false
+        }
+    }
+
+    // ---- Database aliases (`dbal` dimension for the ndb shell) ----
+    //
+    // Reads merge global + local (local wins); writes go to the local
+    // ntconfig.toml when one exists in the cwd, else to the global config.
+    // Unlike `ral`, these helpers never print — the `ndb` layer owns its
+    // localized messages.
+
+    /// Merged `dbal` map: global entries overlaid by local ones.
+    pub fn get_db_aliases() -> HashMap<String, String> {
+        let mut merged = Self::read_global().db_aliases.clone();
+        if let Ok(local) = Self::read_local_config() {
+            if let Some(map) = local.db_aliases {
+                merged.extend(map);
+            }
+        }
+        merged
+    }
+
+    /// Whether the cwd has a local ntconfig.toml (write routing target).
+    pub fn db_aliases_are_local() -> bool {
+        Self::get_local_config_path().is_some()
+    }
+
+    /// Insert or overwrite a `dbal` entry. Returns `true` when it landed in
+    /// the local config, `false` for the global config.
+    pub fn add_db_alias(
+        name: &str,
+        sql: &str,
+    ) -> std::result::Result<bool, Box<dyn std::error::Error>> {
+        let name_lower = name.to_lowercase();
+        if Self::get_local_config_path().is_some() {
+            let mut local = Self::read_local_config().unwrap_or_default();
+            if local.db_aliases.is_none() {
+                local.db_aliases = Some(HashMap::new());
+            }
+            if let Some(ref mut map) = local.db_aliases {
+                map.insert(name_lower, sql.to_string());
+            }
+            Self::write_local_config(&local)?;
+            Ok(true)
+        } else {
+            let mut cfg = Self::write_global();
+            cfg.db_aliases.insert(name_lower, sql.to_string());
+            cfg.save();
+            Ok(false)
+        }
+    }
+
+    /// Remove a `dbal` entry from the routed store. Returns `true` when an
+    /// entry was actually removed.
+    pub fn remove_db_alias(name: &str) -> std::result::Result<bool, Box<dyn std::error::Error>> {
+        let name_lower = name.to_lowercase();
+        if Self::get_local_config_path().is_some() {
+            let mut local = Self::read_local_config().unwrap_or_default();
+            match local.db_aliases.as_mut().and_then(|m| m.remove(&name_lower)) {
+                Some(_) => {
+                    if local.db_aliases.as_ref().is_some_and(|m| m.is_empty()) {
+                        local.db_aliases = None;
+                    }
+                    Self::write_local_config(&local)?;
+                    Ok(true)
+                }
+                None => Ok(false),
+            }
+        } else {
+            let mut cfg = Self::write_global();
+            let removed = cfg.db_aliases.remove(&name_lower).is_some();
+            cfg.save();
+            Ok(removed)
+        }
+    }
+
+    /// Replace the SQL of an existing `dbal` entry in the routed store.
+    /// Returns `true` when the entry existed and was updated.
+    pub fn update_db_alias(
+        name: &str,
+        sql: &str,
+    ) -> std::result::Result<bool, Box<dyn std::error::Error>> {
+        let name_lower = name.to_lowercase();
+        if Self::get_local_config_path().is_some() {
+            let mut local = Self::read_local_config().unwrap_or_default();
+            let entry = local
+                .db_aliases
+                .as_mut()
+                .and_then(|m| m.get_mut(&name_lower));
+            match entry {
+                Some(slot) => {
+                    *slot = sql.to_string();
+                    Self::write_local_config(&local)?;
+                    Ok(true)
+                }
+                None => Ok(false),
+            }
+        } else {
+            let mut cfg = Self::write_global();
+            if let std::collections::hash_map::Entry::Occupied(mut e) =
+                cfg.db_aliases.entry(name_lower)
+            {
+                e.insert(sql.to_string());
+                cfg.save();
+                Ok(true)
+            } else {
+                Ok(false)
+            }
+        }
+    }
+
+    /// Rename a `dbal` entry, keeping it in whichever store holds it.
+    /// Returns `false` when `old` is unknown or `new` is taken/invalid.
+    pub fn rename_db_alias(old_name: &str, new_name: &str) -> bool {
+        let old_lower = old_name.to_lowercase();
+        let new_lower = new_name.to_lowercase();
+        if !validate_alias_name(&new_lower) {
+            return false;
+        }
+        let merged = Self::get_db_aliases();
+        let Some(sql) = merged.get(&old_lower).cloned() else {
+            return false;
+        };
+        if merged.contains_key(&new_lower) {
+            return false;
+        }
+        // Remove from both stores, then re-add through the normal routing.
+        {
+            let mut cfg = Self::write_global();
+            cfg.db_aliases.remove(&old_lower);
+            cfg.save();
+        }
+        if Self::get_local_config_path().is_some() {
+            if let Ok(mut local) = Self::read_local_config() {
+                let mut touched = false;
+                if let Some(ref mut map) = local.db_aliases {
+                    touched = map.remove(&old_lower).is_some();
+                    if map.is_empty() {
+                        local.db_aliases = None;
+                    }
+                }
+                if touched {
+                    let _ = Self::write_local_config(&local);
+                }
+            }
+        }
+        Self::add_db_alias(&new_lower, &sql).is_ok()
+    }
+
+    /// Clear the routed store's `dbal` entries. Returns the count removed.
+    pub fn clear_db_aliases() -> std::result::Result<usize, Box<dyn std::error::Error>> {
+        if Self::get_local_config_path().is_some() {
+            let mut local = Self::read_local_config().unwrap_or_default();
+            let count = local.db_aliases.as_ref().map(|m| m.len()).unwrap_or(0);
+            local.db_aliases = None;
+            Self::write_local_config(&local)?;
+            Ok(count)
+        } else {
+            let mut cfg = Self::write_global();
+            let count = cfg.db_aliases.len();
+            cfg.db_aliases.clear();
+            cfg.save();
+            Ok(count)
         }
     }
 

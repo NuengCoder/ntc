@@ -290,9 +290,14 @@ fn config_watch(args: &str) -> Result<bool> {
                 t!("status.none").dimmed()
             ),
         }
+        println!(
+            "{}",
+            t!("msg.watch.limit_status", Config::global_get_watch_limit())
+        );
         println!("{}", t!("cmd.config.watch.usage_line"));
         println!("       {}", t!("cmd.config.watch.trigger_usage"));
         println!("       {}", t!("cmd.config.watch.trigger_off_usage"));
+        println!("       {}", t!("cmd.config.watch.limit_usage"));
     } else {
         let upper = args.to_uppercase();
         if upper == "ON" {
@@ -315,6 +320,25 @@ fn config_watch(args: &str) -> Result<bool> {
                         print_success(&t!("cmd.config.watch.trigger_set", target));
                     } else {
                         print_error(&t!("cmd.config.watch.alias_not_found", target));
+                    }
+                }
+            } else if parts[0].to_lowercase() == "limit" {
+                let value = parts.get(1).unwrap_or(&"").trim();
+                if value.is_empty() {
+                    println!(
+                        "{}",
+                        t!("msg.watch.limit_status", Config::global_get_watch_limit())
+                    );
+                } else {
+                    match value.parse::<usize>().ok().filter(|&n| n >= 1) {
+                        Some(n) => {
+                            Config::global_set_watch_limit(n);
+                            print_success(&t!(
+                                "msg.watch.limit_success",
+                                Config::global_get_watch_limit()
+                            ));
+                        }
+                        None => print_error(&t!("msg.watch.limit_error", value)),
                     }
                 }
             } else {
@@ -469,6 +493,11 @@ pub fn cmd_showcg(_args: &str, _nav: &mut Navigator) -> Result<bool> {
         } else {
             t!("status.off").red()
         }
+    );
+    println!(
+        "│ {:<20} {:<42} │",
+        t!("msg.showcg.label_watch_limit"),
+        Config::global_get_watch_limit().to_string().yellow()
     );
     println!(
         "│ {:<20} {:<42} │",

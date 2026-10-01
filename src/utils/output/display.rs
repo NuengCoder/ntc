@@ -65,12 +65,27 @@ pub fn cat_file(file_path: &Path, show_lines: bool) -> Result<()> {
     Ok(())
 }
 
+/// Whether raw ANSI codes may be emitted on this console.
+///
+/// Unlike `Config::global_get_color_enabled` (user preference) this also
+/// respects VT availability: on legacy conhost where `SetConsoleMode(VT)`
+/// fails, emitting `\x1b[...` prints `[91m` garbage, so we must stay plain
+/// even if the user has `setc ON`.
+pub fn raw_ansi_allowed() -> bool {
+    Config::global_get_color_enabled()
+        && colored::control::SHOULD_COLORIZE.should_colorize()
+}
+
 /// Convert a `crossterm::style::Color` to a raw ANSI foreground-color
 /// escape sequence (e.g. `\x1b[38;2;R;G;Bm` for 24-bit RGB). This
 /// intentionally bypasses the `colored` crate's `set_override` so that
 /// syntax colors can be emitted even when the user has `setc OFF` —
 /// the whole point of `cat_file_with_syntax` is to show colors.
+/// Returns "" when the console can't render ANSI (legacy conhost).
 fn crossterm_to_ansi(c: crossterm::style::Color) -> String {
+    if !colored::control::SHOULD_COLORIZE.should_colorize() {
+        return String::new();
+    }
     use crossterm::style::Color as Cc;
     match c {
         Cc::Reset => "\x1b[0m".to_string(),
@@ -105,6 +120,12 @@ pub fn cat_file_with_syntax(file_path: &Path, show_lines: bool) -> Result<()> {
     let content = read_file_as_string(file_path)?;
 
     let color_enabled = Config::global_get_color_enabled();
+    let _ = color_enabled;
+    // On legacy conhost (VT unavailable) raw ANSI prints as `[91m` garbage.
+    // Fall back to plain cat — readability beats broken colors.
+    if !raw_ansi_allowed() {
+        return cat_file(file_path, show_lines);
+    }
     let ext = file_path.extension().and_then(|e| e.to_str());
     let mut syntax = SyntaxHighlighter::new(ext);
     let lang_detected = syntax.language.is_some();
@@ -131,11 +152,6 @@ pub fn cat_file_with_syntax(file_path: &Path, show_lines: bool) -> Result<()> {
         reset
     );
     println!();
-
-    // Suppress the unused-variable warning for `color_enabled` — kept
-    // for documentation: this function intentionally ignores it because
-    // the whole point is to show syntax colors.
-    let _ = color_enabled;
 
     // The highlighter carries state (in_block_comment, in_xml_comment,
     // in_ps_comment) across lines, so we keep ONE instance alive for the

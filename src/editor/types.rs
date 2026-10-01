@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
-use std::time::Instant;
+use std::time::{Instant, SystemTime};
 
 use anyhow::{Context, Result};
 use std::sync::atomic::AtomicUsize;
@@ -14,11 +14,32 @@ use crate::syntax::SyntaxHighlighter;
 /// Set by cmd_ne when opening a file via `file:line`.
 /// Editor::init_tabs reads and clears it to jump to the target line.
 pub(crate) static GOTO_LINE: AtomicUsize = AtomicUsize::new(0);
+/// Set by `gs -i` Enter: transiently highlight the target line until the
+/// next key press or mouse click (mouse scroll does NOT clear it).
+pub static GOTO_HIGHLIGHT: std::sync::atomic::AtomicBool =
+    std::sync::atomic::AtomicBool::new(false);
+/// Pattern that produced the `gs -i` jump (reserved for substring emphasis).
+static GOTO_PATTERN: std::sync::Mutex<String> = std::sync::Mutex::new(String::new());
+
+/// Store the pattern for the pending `gs -i` jump highlight.
+pub fn set_goto_pattern(pat: &str) {
+    if let Ok(mut g) = GOTO_PATTERN.lock() {
+        g.clear();
+        g.push_str(pat);
+    }
+}
+
+/// Take (and clear) the pending `gs -i` jump pattern.
+pub(crate) fn take_goto_pattern() -> String {
+    GOTO_PATTERN
+        .lock()
+        .map(|mut g| std::mem::take(&mut *g))
+        .unwrap_or_default()
+}
 
 // ── constants ────────────────────────────────────────────────────────────────
 
-/// Minimum width of the left sidebar (file explorer) in characters.
-pub(crate) const MIN_SIDEBAR_WIDTH: usize = 15;
+// (Sidebar mouse drag retired with the nfe keyboard mode; width is fixed.)
 
 /// Default width of the left sidebar (file explorer) in characters.
 pub(crate) const DEFAULT_SIDEBAR_WIDTH: usize = 30;
@@ -47,9 +68,10 @@ pub(crate) enum Mode {
     Gosc,
     Jump,
     Query,
-    Hex,
     Encoding,
     GitDiff,
+    Gmode,
+    Nfe,
 }
 
 /// Which panel has keyboard focus.
@@ -186,7 +208,6 @@ pub(crate) struct Sidebar {
     pub(crate) selected: usize,
     pub(crate) nodes: Vec<FileNode>,
     pub(crate) root: std::path::PathBuf,
-    pub(crate) width: usize,
     pub(crate) dragging_border: bool,
     // File watcher for live reload (Windows only)
     #[cfg(windows)]
@@ -208,7 +229,6 @@ impl Sidebar {
             selected: 0,
             nodes: Vec::new(),
             root,
-            width: DEFAULT_SIDEBAR_WIDTH,
             dragging_border: false,
             #[cfg(windows)]
             watcher_rx: None,
@@ -544,6 +564,7 @@ define_tab! {
     buffer_stack: Vec<PathBuf>,
     buffer_idx: usize,
     jump_buf: String,
+    gmode_buf: String,
     prev_mode: Mode,
     cursor_visible: bool,
     last_blink: Instant,
@@ -653,6 +674,21 @@ impl GsResultList {
     }
 }
 
+/// Normalized key for tab path comparison: strips the Windows `\\?\`
+/// extended prefix (and separators/case on Windows) so snapshot-stored
+/// paths match freshly requested ones.
+pub(crate) fn tab_path_key(p: &Path) -> String {
+    let s = crate::filetype::strip_unc_prefix(p);
+    #[cfg(windows)]
+    {
+        s.replace('\\', "/").to_lowercase()
+    }
+    #[cfg(not(windows))]
+    {
+        s
+    }
+}
+
 pub(crate) struct GsSearchState {
     pub(crate) query: String,
     pub(crate) results: GsResultList,
@@ -753,12 +789,6 @@ pub(crate) struct Editor {
     pub(crate) buffer_stack: Vec<std::path::PathBuf>,
     pub(crate) buffer_idx: usize,
 
-    // Completion state
-    pub(crate) completion_items: Vec<super::CompletionItem>,
-    pub(crate) completion_idx: usize,
-    pub(crate) completion_visible: bool,
-    pub(crate) completion_prefix: String,
-
     // Hover popup (normal mode, word under cursor)
     pub(crate) hover_text: Option<String>,
     pub(crate) hover_sig_active: bool,
@@ -766,11 +796,20 @@ pub(crate) struct Editor {
     // Crash recovery: counter to periodically save recovery snapshots
     pub(crate) edit_count: usize,
 
-    // File watcher for live reload on external changes (Windows only)
+    // File watcher for live reload on external changes (Windows only).
+    // `disk_fingerprint` is the cross-platform fallback AND the primary
+    // change signal: (mtime, len) of the open file the last time the
+    // buffer agreed with disk. Polled every main-loop iteration, so it
+    // also catches atomic saves (write-temp + rename) that never emit a
+    // `Modify` notify event, and works where notify is unavailable.
     #[cfg(windows)]
     pub(crate) file_watcher_rx: Option<std::sync::mpsc::Receiver<()>>,
     #[cfg(windows)]
     pub(crate) _file_watcher: Option<notify::RecommendedWatcher>,
+    pub(crate) disk_fingerprint: Option<(SystemTime, u64)>,
+    /// Disk changed while the buffer has unsaved edits: warn instead of
+    /// clobbering; `:e!` force-reloads.
+    pub(crate) external_change_pending: bool,
 
     // ── Multi-tab support ─────────────────────────────────────────────────
     pub(crate) tabs: Vec<Tab>,
@@ -780,6 +819,12 @@ pub(crate) struct Editor {
 
     // Jump mode state
     pub(crate) jump_buf: String,
+    pub(crate) gmode_buf: String,
+    // Nfe command prompt input (None = navigating)
+    pub(crate) nfe_cmd: Option<String>,
+    // VSCode-style completion list + signature help (insert only)
+    pub(crate) completion: Option<super::complete::CompletionState>,
+    pub(crate) sighelp: Option<super::complete::SigHelpState>,
     pub(crate) prev_mode: Mode,
 
     // Cursor blinking
@@ -792,9 +837,6 @@ pub(crate) struct Editor {
     // Terminal state for embedded terminal
     pub(crate) terminal: Option<super::terminal::TerminalState>,
 
-    // Hex viewer/editor state
-    pub(crate) hex: Option<HexViewer>,
-
     // Text encoding of the active buffer
     pub(crate) encoding: EditorEncoding,
 
@@ -803,25 +845,16 @@ pub(crate) struct Editor {
 
     // Git diff overlay state
     pub(crate) git_diff: Option<GitDiffState>,
+
+    /// Transient `gs -i` jump highlight: whole-line bg on this 0-based row.
+    /// Cleared on any key press or mouse click (scroll excluded).
+    pub(crate) gs_jump_highlight: Option<usize>,
 }
 
 #[derive(Clone)]
 pub(crate) struct GitDiffState {
     pub(crate) lines: Vec<String>,
     pub(crate) scroll: usize,
-}
-
-#[derive(Clone)]
-pub(crate) struct HexViewer {
-    pub(crate) data: Vec<u8>,
-    pub(crate) path: std::path::PathBuf,
-    pub(crate) cursor: usize,
-    pub(crate) offset: usize,
-    pub(crate) modified: bool,
-    pub(crate) undo_stack: Vec<Vec<(usize, u8)>>,
-    pub(crate) redo_stack: Vec<Vec<(usize, u8)>>,
-    pub(crate) nibble: bool,     // false=high nibble, true=low nibble
-    pub(crate) pending_byte: u8, // accumulated high nibble value
 }
 
 impl Editor {
@@ -889,10 +922,6 @@ impl Editor {
             focus: Focus::Editor,
             buffer_stack: vec![path.to_path_buf()],
             buffer_idx: 0,
-            completion_items: Vec::new(),
-            completion_idx: 0,
-            completion_visible: false,
-            completion_prefix: String::new(),
             hover_text: None,
             hover_sig_active: false,
             edit_count: 0,
@@ -900,19 +929,25 @@ impl Editor {
             file_watcher_rx: None,
             #[cfg(windows)]
             _file_watcher: None,
+            disk_fingerprint: Self::fingerprint_static(path),
+            external_change_pending: false,
             tabs: Vec::new(),
             active_tab: 0,
             pending_quit: false,
             jump_buf: String::new(),
+            gmode_buf: String::new(),
+            nfe_cmd: None,
+            completion: None,
+            sighelp: None,
             prev_mode: Mode::Normal,
             cursor_visible: true,
             last_blink: Instant::now(),
             last_session_save: Instant::now(),
             terminal: None,
-            hex: None,
             encoding,
             encoding_sel: 0,
             git_diff: None,
+            gs_jump_highlight: None,
         })
     }
 
@@ -932,18 +967,74 @@ impl Editor {
         }
     }
 
+    /// Jump to `line` (1-based), center it vertically, and flag a transient
+    /// whole-line highlight (used by `gs -i` Enter).
+    pub(crate) fn goto_line_centered_highlight(&mut self, line: usize) {
+        if self.lines.is_empty() {
+            return;
+        }
+        let y = line
+            .saturating_sub(1)
+            .min(self.lines.len().saturating_sub(1));
+        self.cursor.y = y;
+        self.cursor.byte = 0;
+        self.sv.x = 0;
+        let rows = self.visible_text_rows().max(1);
+        let max_offset = self.lines.len().saturating_sub(rows);
+        self.sv.offset = y.saturating_sub(rows / 2).min(max_offset);
+        self.gs_jump_highlight = Some(y);
+        self.mark_all_dirty();
+    }
+
+    /// Clear the transient `gs -i` jump highlight (key press / mouse click).
+    pub(crate) fn clear_gs_jump_highlight(&mut self) {
+        if self.gs_jump_highlight.take().is_some() {
+            self.mark_all_dirty();
+        }
+    }
+
+    /// On-disk fingerprint (mtime, byte length) for `path`, or `None`
+    /// when the file does not exist (scratch / not yet created).
+    fn fingerprint_static(path: &Path) -> Option<(SystemTime, u64)> {
+        std::fs::metadata(path)
+            .ok()
+            .and_then(|m| m.modified().ok().map(|t| (t, m.len())))
+    }
+
+    /// Record the current on-disk state as "agreed with buffer". Call
+    /// after every load, save, and successful external reload.
+    pub(crate) fn snapshot_disk_state(&mut self) {
+        self.disk_fingerprint = Self::fingerprint_static(&self.path);
+        self.external_change_pending = false;
+    }
+
+    /// Re-arm the notify watcher for the current file (startup watches
+    /// only the first file; tab switches and `:ne` change `self.path`).
+    /// Also re-snapshots the disk fingerprint for the new file.
+    pub(crate) fn restart_file_watcher(&mut self) {
+        #[cfg(windows)]
+        {
+            self.file_watcher_rx = None;
+            self._file_watcher = None;
+            self.start_file_watcher();
+        }
+        self.snapshot_disk_state();
+    }
+
     /// Start watching the current file for external changes (Windows only).
+    /// Forwards every non-access event kind: atomic saves (vscode, vim,
+    /// MetaEditor) replace the file via temp + rename, which surfaces as
+    /// `Create`/`Remove`, never as `Modify`.
     #[cfg(windows)]
     pub(crate) fn start_file_watcher(&mut self) {
         use notify::{RecursiveMode, Watcher};
         use std::sync::mpsc;
 
         let (tx, rx) = mpsc::channel();
-        let path = self.path.clone();
 
         let mut watcher = notify::recommended_watcher(move |res: notify::Result<notify::Event>| {
             if let Ok(event) = res {
-                if matches!(event.kind, notify::EventKind::Modify(_)) {
+                if !matches!(event.kind, notify::EventKind::Access(_)) {
                     let _ = tx.send(());
                 }
             }
@@ -951,7 +1042,7 @@ impl Editor {
         .ok();
 
         if let Some(ref mut w) = watcher {
-            let _ = w.watch(&path, RecursiveMode::NonRecursive);
+            let _ = w.watch(&self.path, RecursiveMode::NonRecursive);
             self.file_watcher_rx = Some(rx);
             self._file_watcher = watcher.take();
         }
@@ -960,33 +1051,111 @@ impl Editor {
     #[cfg(not(windows))]
     pub(crate) fn start_file_watcher(&mut self) {}
 
-    /// Check for external file changes and reload if needed.
-    /// Returns true if the file was reloaded.
-    #[cfg(windows)]
-    pub(crate) fn check_file_changed(&mut self) -> bool {
-        if let Some(rx) = &self.file_watcher_rx {
-            if rx.try_recv().is_ok() {
-                // Reload file content
-                if let Ok(content) = std::fs::read_to_string(&self.path) {
-                    let new_lines: Vec<String> = content.lines().map(|l| l.to_string()).collect();
-                    let new_lines = if new_lines.is_empty() {
-                        vec![String::new()]
-                    } else {
-                        new_lines
-                    };
-                    self.lines = new_lines;
-                    self.syntax.resize_cache(self.lines.len());
-                    self.mark_all_dirty();
-                    self.status_msg = Some("File changed externally — reloaded".into());
-                    return true;
+    /// Load the on-disk version of the current file, discarding buffer
+    /// edits. Used by `:e!` and by the clean auto-reload path.
+    pub(crate) fn reload_from_disk(&mut self) -> bool {
+        let content = match std::fs::read(&self.path) {
+            Ok(bytes) => bytes,
+            Err(_) => return false,
+        };
+        // Decode like the file loader (BOM/UTF-16 aware), falling back
+        // to lossy UTF-8 for anything else.
+        let new_lines: Vec<String> =
+            match crate::editor::core::read_file_lines(&self.path) {
+                Ok((lines, enc)) => {
+                    self.encoding = enc;
+                    lines
                 }
-            }
-        }
-        false
+                Err(_) => String::from_utf8_lossy(&content)
+                    .lines()
+                    .map(|l| l.to_string())
+                    .collect(),
+            };
+        self.lines = if new_lines.is_empty() {
+            vec![String::new()]
+        } else {
+            new_lines
+        };
+        self.cursor.y = self.cursor.y.min(self.lines.len().saturating_sub(1));
+        self.cursor.byte = 0;
+        self.cursor.selection_anchor = None;
+        self.cursor.extra_cursors.clear();
+        self.undo_stack.clear();
+        self.redo_stack.clear();
+        self.modified = false;
+        self.dismiss_popups();
+        self.syntax.resize_cache(self.lines.len());
+        self.snapshot_disk_state();
+        self.mark_all_dirty();
+        true
     }
 
-    #[cfg(not(windows))]
+    /// Check for external file changes and reload if needed.
+    /// Polled every main-loop iteration. Detection is fingerprint-first
+    /// (mtime + length), so atomic saves and non-Windows platforms work
+    /// without notify events; the notify channel only hurries the poll.
+    /// Returns true if the file was reloaded.
+    ///
+    /// - Buffer clean   → silent reload, cursor kept when possible.
+    /// - Buffer dirty   → never clobber: warn in the status bar and set
+    ///   `external_change_pending` (`:e!` discards edits and reloads).
+    /// - Same content   → fingerprint refresh, no reload (covers our own
+    ///   saves racing the watcher).
     pub(crate) fn check_file_changed(&mut self) -> bool {
+        if self.is_scratch_path(&self.path) {
+            return false;
+        }
+        #[cfg(windows)]
+        let notified = match &self.file_watcher_rx {
+            Some(rx) => {
+                let mut n = false;
+                while rx.try_recv().is_ok() {
+                    n = true;
+                }
+                n
+            }
+            None => false,
+        };
+        #[cfg(not(windows))]
+        let notified = false;
+        let fp = Self::fingerprint_static(&self.path);
+        if !notified && fp == self.disk_fingerprint {
+            return false;
+        }
+        // The file vanished (deleted / moved away mid-rename): warn once
+        // per fingerprint change, keep the buffer.
+        if fp.is_none() && self.disk_fingerprint.is_some() {
+            self.disk_fingerprint = None;
+            self.status_msg = Some("File deleted externally — buffer kept".into());
+            self.mark_all_dirty();
+            return false;
+        }
+        let disk_lines: Vec<String> = match crate::editor::core::read_file_lines(&self.path) {
+            Ok((lines, _)) => lines,
+            Err(_) => {
+                // Unreadable (locked mid-save, permissions): retry later
+                // without updating the fingerprint.
+                return false;
+            }
+        };
+        if disk_lines == self.lines {
+            self.disk_fingerprint = fp;
+            self.external_change_pending = false;
+            return false;
+        }
+        if self.modified {
+            self.external_change_pending = true;
+            self.disk_fingerprint = fp;
+            self.status_msg = Some(
+                "File changed externally — buffer has unsaved edits (:e! to load disk version)".into(),
+            );
+            self.mark_all_dirty();
+            return false;
+        }
+        if self.reload_from_disk() {
+            self.status_msg = Some("File changed externally — reloaded".into());
+            return true;
+        }
         false
     }
 
@@ -1048,8 +1217,11 @@ impl Editor {
     }
 
     /// Find the tab index for a given path.
+    /// Compares UNC-normalized paths so `\\?\C:\x` (canonicalized on
+    /// Windows) matches plain `C:\x` request paths.
     pub(crate) fn find_tab_by_path(&self, path: &Path) -> Option<usize> {
-        self.tabs.iter().position(|t| t.path == path)
+        let want = tab_path_key(path);
+        self.tabs.iter().position(|t| tab_path_key(&t.path) == want)
     }
 
     /// Restore tab `idx`'s cursor/scroll/undo state from `tab_snap`. Cursor is
@@ -1074,101 +1246,23 @@ impl Editor {
         self.tabs[idx].redo_stack = tab_snap.redo_stack.clone();
     }
 
-    /// Update hover text for the word under the cursor (normal mode).
-    /// Only checks MQL files; other languages are left for future expansion.
+    /// Normal-mode cursor maintenance: Normal mode is always popup-free.
+    /// Clears any insert-mode leftovers (`sighelp`, hover line/flag) and
+    /// repaints when something was visible so no ghost box survives the
+    /// mode switch or cursor move. (Word-hover popups were removed; the
+    /// signature info lives in insert-mode sig-help only.)
     pub(crate) fn update_hover(&mut self) {
-        use crate::syntax::SyntaxLanguage;
-        let lang = self.syntax.language;
-        if !matches!(lang, Some(SyntaxLanguage::Mql)) {
-            self.hover_text = None;
-            return;
+        self.hover_sig_active = false;
+        let mut changed = false;
+        if self.hover_text.take().is_some() {
+            changed = true;
         }
-        let line = self.current();
-        if line.is_empty() || self.cursor.byte >= line.len() {
-            self.hover_text = None;
-            return;
+        if self.sighelp.is_some() {
+            self.sighelp = None;
+            changed = true;
         }
-        let prefix = &line[..self.cursor.byte];
-        let suffix = &line[self.cursor.byte..];
-        let start = prefix
-            .chars()
-            .rev()
-            .take_while(|c| c.is_alphanumeric() || *c == '_')
-            .map(|c| c.len_utf8())
-            .sum::<usize>();
-        let end = suffix
-            .chars()
-            .take_while(|c| c.is_alphanumeric() || *c == '_')
-            .map(|c| c.len_utf8())
-            .sum::<usize>();
-        let word_byte = self.cursor.byte.saturating_sub(start);
-        let word = &line[word_byte..word_byte + end + start];
-
-        if word.is_empty() {
-            self.hover_text = None;
-            return;
+        if changed {
+            self.mark_all_dirty();
         }
-
-        if let Some(doc) = crate::mql::hover_info_detailed(word) {
-            self.hover_text = Some(doc);
-            return;
-        }
-        if let Some(doc) = crate::mql::hover_info(word) {
-            self.hover_text = Some(doc.to_string());
-            return;
-        }
-
-        for func in crate::mql::extract_user_functions(&self.lines) {
-            if func.name == word {
-                let formatted = if func.params.is_empty() {
-                    format!("{} {}", func.return_type, func.name)
-                } else {
-                    let lines: Vec<String> = func
-                        .params
-                        .split(',')
-                        .map(|p| {
-                            let p = p.trim();
-                            let t: Vec<&str> = p.split_whitespace().collect();
-                            if t.len() >= 2 {
-                                format!("  {}: {}", t[t.len() - 1], t[..t.len() - 1].join(" "))
-                            } else {
-                                format!("  {}", p)
-                            }
-                        })
-                        .collect();
-                    format!("{}{}\n{}\n{}", func.name, "(", lines.join("\n"), ")")
-                };
-                let mut display = formatted;
-                if let Some(box_content) = crate::mql::extract_comment_box(&self.lines, func.line) {
-                    display.push_str(&format!("\n\n{}", box_content));
-                }
-                self.hover_text = Some(display);
-                return;
-            }
-        }
-
-        for (name, line) in crate::mql::extract_classes(&self.lines) {
-            if name == word {
-                if let Some(box_content) = crate::mql::extract_comment_box(&self.lines, line) {
-                    self.hover_text = Some(format!("[class] {}\n\n{}", name, box_content));
-                } else {
-                    self.hover_text = Some(format!("[class] {}", name));
-                }
-                return;
-            }
-        }
-
-        for (name, line) in crate::mql::extract_structs(&self.lines) {
-            if name == word {
-                if let Some(box_content) = crate::mql::extract_comment_box(&self.lines, line) {
-                    self.hover_text = Some(format!("[struct] {}\n\n{}", name, box_content));
-                } else {
-                    self.hover_text = Some(format!("[struct] {}", name));
-                }
-                return;
-            }
-        }
-
-        self.hover_text = None;
     }
 }

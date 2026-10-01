@@ -293,6 +293,50 @@ pub fn generate_tree(
     root_node
 }
 
+/// Prune a tree in place so only files matching `exts` (see
+/// `filetype::matches_any_extension`) remain. Directories survive only when
+/// they still contain at least one kept descendant, so empty dirs vanish
+/// from filtered views. The root itself is always kept. Returns the number
+/// of matched files.
+pub fn prune_tree_by_exts(root: &mut TreeNode, exts: &[String]) -> usize {
+    fn keep(node: &mut TreeNode, exts: &[String]) -> (bool, usize) {
+        if !node.is_dir {
+            let matched = crate::filetype::matches_any_extension(&node.name, exts);
+            return (matched, usize::from(matched));
+        }
+        let mut count = 0usize;
+        node.children.retain_mut(|child| {
+            let (keep_child, n) = keep(child, exts);
+            count += n;
+            keep_child
+        });
+        (!node.children.is_empty(), count)
+    }
+
+    // Apply to children only: the root is always kept even when empty.
+    let mut count = 0usize;
+    root.children.retain_mut(|child| {
+        let (keep_child, n) = keep(child, exts);
+        count += n;
+        keep_child
+    });
+    count
+}
+
+/// Size a pruned (extension-filtered) tree bottom-up: files from metadata,
+/// directories as the sum of their kept descendants (NOT the on-disk total,
+/// which would include filtered-out files).
+pub fn compute_filtered_sizes(node: &mut TreeNode) -> u64 {
+    if !node.is_dir {
+        let size = std::fs::metadata(&node.path).map(|m| m.len()).unwrap_or(0);
+        node.size = Some(size);
+        return size;
+    }
+    let total: u64 = node.children.iter_mut().map(compute_filtered_sizes).sum();
+    node.size = Some(total);
+    total
+}
+
 // =========================================================================
 // Pre-computed tree sizing (replaces repeated calculate_dir_size calls)
 // =========================================================================
@@ -554,5 +598,79 @@ pub fn annotate_git_status(node: &mut TreeNode, status: &HashMap<PathBuf, char>)
     }
     for child in &mut node.children {
         annotate_git_status(child, status);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn file(name: &str) -> TreeNode {
+        TreeNode {
+            name: name.to_string(),
+            path: format!("/root/{}", name),
+            is_dir: false,
+            is_ignored: false,
+            is_supported: None,
+            children: Vec::new(),
+            depth: 1,
+            size: None,
+        }
+    }
+
+    fn dir(name: &str, children: Vec<TreeNode>) -> TreeNode {
+        TreeNode {
+            name: name.to_string(),
+            path: format!("/root/{}", name),
+            is_dir: true,
+            is_ignored: false,
+            is_supported: None,
+            children,
+            depth: 1,
+            size: None,
+        }
+    }
+
+    #[test]
+    fn prune_keeps_matches_and_nonempty_dirs() {
+        let mut root = TreeNode {
+            name: "root".to_string(),
+            path: "/root".to_string(),
+            is_dir: true,
+            is_ignored: false,
+            is_supported: None,
+            children: vec![
+                dir("src", vec![file("main.rs"), file("notes.txt")]),
+                dir("empty", vec![file("photo.png")]),
+                file("top.c"),
+            ],
+            depth: 0,
+            size: None,
+        };
+        let n = prune_tree_by_exts(&mut root, &["rs".to_string(), "c".to_string()]);
+        assert_eq!(n, 2);
+        assert_eq!(root.children.len(), 2);
+        let src = root.children.iter().find(|c| c.name == "src").unwrap();
+        assert_eq!(src.children.len(), 1);
+        assert_eq!(src.children[0].name, "main.rs");
+        assert!(root.children.iter().any(|c| c.name == "top.c"));
+        assert!(!root.children.iter().any(|c| c.name == "empty"));
+    }
+
+    #[test]
+    fn prune_zero_matches_keeps_root_only() {
+        let mut root = TreeNode {
+            name: "root".to_string(),
+            path: "/root".to_string(),
+            is_dir: true,
+            is_ignored: false,
+            is_supported: None,
+            children: vec![file("a.txt")],
+            depth: 0,
+            size: None,
+        };
+        assert_eq!(prune_tree_by_exts(&mut root, &["zzz".to_string()]), 0);
+        assert!(root.children.is_empty());
+        assert_eq!(root.name, "root");
     }
 }

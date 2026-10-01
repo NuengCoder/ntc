@@ -1,12 +1,13 @@
 import { useState, useEffect, useCallback } from 'react'
 import type { FileItem } from './types'
-import { listFiles, deleteItem as apiDelete } from './api'
+import { listFiles, deleteItem as apiDelete, clearCredentials, hasCredentials } from './api'
 import { Breadcrumb } from './components/Breadcrumb'
 import { FileList } from './components/FileList'
 import { UploadArea } from './components/UploadArea'
 import { RenameDialog } from './components/RenameDialog'
 import { NewFolderDialog } from './components/NewFolderDialog'
 import { ConfirmDialog } from './components/ConfirmDialog'
+import { LoginDialog } from './components/LoginDialog'
 
 export default function App() {
   const [path, setPath] = useState('/')
@@ -17,6 +18,10 @@ export default function App() {
   const [showNewFolder, setShowNewFolder] = useState(false)
   const [deleting, setDeleting] = useState<FileItem | null>(null)
   const [refreshKey, setRefreshKey] = useState(0)
+  // True when the server answered 401 (`serve --auth`): block the UI
+  // behind the login dialog until valid credentials are stored.
+  const [locked, setLocked] = useState(false)
+  const [authed, setAuthed] = useState(() => hasCredentials())
 
   const load = useCallback(async () => {
     try {
@@ -25,7 +30,11 @@ export default function App() {
       const res = await listFiles(path)
       setItems(res.items)
     } catch (e: any) {
-      setError(e.message)
+      if (e.status === 401) {
+        setLocked(true)
+      } else {
+        setError(e.message)
+      }
     } finally {
       setLoading(false)
     }
@@ -33,7 +42,28 @@ export default function App() {
 
   useEffect(() => { load() }, [load, refreshKey])
 
+  // Any API call (upload/rename/delete/download) can surface a 401 when
+  // the session is missing or stale — `api.ts` broadcasts it globally.
+  useEffect(() => {
+    const onAuthFail = () => setLocked(true)
+    window.addEventListener('ntc:unauthorized', onAuthFail)
+    return () => window.removeEventListener('ntc:unauthorized', onAuthFail)
+  }, [])
+
   function refresh() { setRefreshKey(k => k + 1) }
+
+  function handleUnlock() {
+    setLocked(false)
+    setAuthed(hasCredentials())
+    refresh()
+  }
+
+  function handleLogout() {
+    clearCredentials()
+    setAuthed(false)
+    setItems([])
+    setLocked(true)
+  }
 
   const handleDelete = async () => {
     if (!deleting) return
@@ -52,6 +82,7 @@ export default function App() {
       <header className="top-bar">
         <h1>ntc serve</h1>
         <div className="top-actions">
+          {authed && <button className="top-btn" onClick={handleLogout} title="Log out">🔒 Logout</button>}
           <button className="top-btn" onClick={() => setShowNewFolder(true)}>+ Folder</button>
           <button className="top-btn" onClick={refresh}>↻</button>
         </div>
@@ -71,7 +102,10 @@ export default function App() {
         onRename={setRenaming}
         onDelete={setDeleting}
         onRefresh={refresh}
+        onError={setError}
       />
+
+      {locked && <LoginDialog onDone={handleUnlock} />}
 
       {renaming && (
         <RenameDialog
@@ -92,8 +126,8 @@ export default function App() {
 
       {deleting && (
         <ConfirmDialog
-          title="Delete"
-          body={`Delete "${deleting.name}"?`}
+          title={deleting.isDir ? 'Delete folder' : 'Delete'}
+          body={deleting.isDir ? `Delete folder "${deleting.name}" and all its contents?` : `Delete "${deleting.name}"?`}
           onConfirm={handleDelete}
           onCancel={() => setDeleting(null)}
         />

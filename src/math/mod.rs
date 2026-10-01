@@ -127,10 +127,8 @@ fn handle_timer(args: &str) -> Result<()> {
         let mut timer = TIMER_START.lock().unwrap_or_else(|e| e.into_inner());
         if let Some(start) = *timer {
             let elapsed = start.elapsed();
-            println!(
-                "{}",
-                t!("math.lap_time", elapsed.as_secs(), elapsed.subsec_millis())
-            );
+            let lap = format!("{}.{:03}", elapsed.as_secs(), elapsed.subsec_millis());
+            println!("{}", t!("math.lap_time", lap));
             *timer = None;
         } else {
             *timer = Some(Instant::now());

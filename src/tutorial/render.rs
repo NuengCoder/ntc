@@ -209,6 +209,7 @@ pub fn completion() {
         ("Hotkey", "config qsc, qsc listen"),
         ("Network", "sys/top, serve"),
         ("Editor", "ne — Normal/Insert/Command/Search modes"),
+        ("Database", "ndb — browse .db files, tables, SQL (read-only)"),
     ];
     for (feature, cmds) in &highlights {
         println!(

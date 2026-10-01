@@ -19,20 +19,34 @@
 [vars]
 # CC = "gcc"
 # FLAGS = "-O2"
-ver = "2.4.3"
+ver = "2.4.4"
 lux = "ntc-v$(ver)-linux-x86_64.tar.gz"
 adb = "ntc-v$(ver)-aarch64-linux-android.tar.gz"
 win = "ntc-v$(ver)-windows-x86_64.zip"
 deb = "ntc_$(ver)-1_amd64.deb"
 wini = "ntc-installer-$(ver).exe"
+wini7 = "ntc-installer-$(ver)-win7-x64.exe"
 win_arm = "ntc-v$(ver)-windows-arm64.zip"
+win7amd = "ntc-v$(ver)-windows7-x86_64.zip"
+win7arm = "ntc-v$(ver)-windows7-arm64.zip"
 
 lux_w = "target/release"
 adb_w = "target/aarch64-linux-android/release"
 win_w = "target/release/ntc.exe"
 deb_w = "target/debian/ntc_$(ver)-1_amd64.deb"
 wini_w = "installer/ntc-installer-$(ver).exe"
+wini7_w = "installer/ntc-installer-$(ver)-win7-x64.exe"
 win_arm_w = "target/aarch64-pc-windows-msvc/release/ntc.exe"
+win7amd_dir = "target/win7-amd64"
+win7amd_w = "target/win7-amd64/release/ntc.exe"
+win7arm_dir = "target/win7-arm64"
+win7arm_w = "target/win7-arm64/aarch64-win7-windows-msvc/release/ntc.exe"
+# NOTE: the Win7-x64 RUSTFLAGS live in packaging/build_win7amd.cmd (raw
+# quotes). The Win7-ARM64 build needs no RUSTFLAGS: it uses the custom
+# aarch64-win7-windows-msvc target whose win7 vendor switches std and
+# getrandom to the legacy backend automatically.
+# Do NOT inline them into a ran cmd: quotes get backslash-escaped on the
+# TOML -> ntc -> cmd /C path and rustc rejects them.
 
 # ── Targets ────────────────────────────────────────────────────────────
 # Each target can have:
@@ -79,6 +93,22 @@ cmd = "powershell Compress-Archive -Path $(win_w) -DestinationPath $(win)"
 deps = []
 cmd = "powershell Compress-Archive -Path $(win_arm_w) -DestinationPath $(win_arm)"
 
+[targets.win7amd]
+deps = []
+cmd = "packaging\\build_win7amd.cmd"
+
+[targets.zip_win7amd]
+deps = ["win7amd"]
+cmd = "powershell Compress-Archive -Path $(win7amd_w) -DestinationPath $(win7amd) -Force"
+
+[targets.win7arm]
+deps = []
+cmd = "packaging\\build_win7arm.cmd"
+
+[targets.zip_win7arm]
+deps = ["win7arm"]
+cmd = "powershell Compress-Archive -Path $(win7arm_w) -DestinationPath $(win7arm) -Force"
+
 [targets.cpdeb]
 deps = []
 cmd = "COPY $(deb_w) $(deb)"
@@ -87,13 +117,17 @@ cmd = "COPY $(deb_w) $(deb)"
 deps = []
 cmd = "COPY $(wini_w) $(wini)"
 
+[targets.cpwin7]
+deps = []
+cmd = "COPY $(wini7_w) $(wini7)"
+
 [targets.setpack]
-deps = ["tar","zip","zip_arm","cpdeb","cpwin"]
+deps = ["tar","zip","zip_arm","zip_win7amd","zip_win7arm","cpdeb","cpwin","cpwin7"]
 cmd = "echo pack setup completed!"
 
 [targets.rmpack]
 deps = []
-cmd = "rmf $(lux) && rmf $(adb) && rmf $(win) && rmf $(deb) && rmf $(wini) && rmf $(win_arm)"
+cmd = "rmf $(lux) && rmf $(adb) && rmf $(win) && rmf $(deb) && rmf $(wini) && rmf $(wini7) && rmf $(win_arm) && rmf $(win7amd) && rmf $(win7arm)"
 
 [targets.padb]
 deps = []

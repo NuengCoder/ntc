@@ -55,7 +55,19 @@ pub fn download_with_progress(url: &str, dest_path: &Path) -> Result<()> {
 
     pb.finish_and_clear();
 
-    fs::write(dest_path, &buf).context("Failed to write downloaded file")?;
+    // The caller may point at a not-yet-created directory (e.g. a fresh
+    // package version dir). Ensure parents exist so a missing dir can't
+    // surface as "Failed to write downloaded file".
+    if let Some(parent) = dest_path.parent() {
+        if !parent.as_os_str().is_empty() {
+            fs::create_dir_all(parent).with_context(|| {
+                format!("Failed to create download directory {}", parent.display())
+            })?;
+        }
+    }
+
+    fs::write(dest_path, &buf)
+        .with_context(|| format!("Failed to write downloaded file {}", dest_path.display()))?;
     Ok(())
 }
 

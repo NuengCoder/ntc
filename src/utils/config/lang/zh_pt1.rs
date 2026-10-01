@@ -75,7 +75,6 @@ pub fn build_map() -> HashMap<String, String> {
     m.insert("cli.flag.say".into(), "    -say, -print <文本>     打印文本到标准输出".into());
     m.insert("cli.flag.image".into(), "    -image <路径> to <格式>  转换图像为 AI 用文档（json|md|html|txt）".into());
     m.insert("cli.flag.explorer".into(), "    -x, --explorer [路径]   启动 NTC 文件浏览器 TUI".into());
-    m.insert("cli.flag.dino".into(), "    --dino                  玩恐龙跑步游戏".into());
     m.insert("cli.flag.clear".into(), "    --clear                 清除终端屏幕".into());
     m.insert("cli.flag.version".into(), "    --version               显示版本信息".into());
     m.insert("cli.flag.math".into(), "    --math <表达式>          计算数学表达式（例如：--math \"3+4*5\"）".into());

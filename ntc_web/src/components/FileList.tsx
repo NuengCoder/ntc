@@ -1,5 +1,6 @@
+import { useState } from 'react'
 import type { FileItem } from '../types'
-import { downloadUrl } from '../api'
+import { downloadFile } from '../api'
 
 interface Props {
   items: FileItem[]
@@ -9,6 +10,7 @@ interface Props {
   onRename: (item: FileItem) => void
   onDelete: (item: FileItem) => void
   onRefresh: () => void
+  onError: (msg: string) => void
 }
 
 const extIcons: Record<string, string> = {
@@ -30,9 +32,23 @@ function fileIcon(name: string, isDir: boolean): string {
   return extIcons[ext] || '📄'
 }
 
-export function FileList({ items, loading, path, onNavigate, onRename, onDelete }: Props) {
+export function FileList({ items, loading, path, onNavigate, onRename, onDelete, onError }: Props) {
   const dirs = items.filter(i => i.isDir)
   const files = items.filter(i => !i.isDir)
+  const [downloading, setDownloading] = useState<number | null>(null)
+
+  // Downloads go through fetch (not a plain <a href>) so the login
+  // header is attached when `serve --auth` is on.
+  async function handleDownload(item: FileItem) {
+    setDownloading(item.id)
+    try {
+      await downloadFile(item.id, item.name)
+    } catch (e: any) {
+      onError(e.message || 'Download failed')
+    } finally {
+      setDownloading(null)
+    }
+  }
 
   if (loading) {
     return <div className="loading">Loading…</div>
@@ -45,7 +61,7 @@ export function FileList({ items, loading, path, onNavigate, onRename, onDelete 
   return (
     <div className="file-list">
       {[...dirs, ...files].map(item => (
-        <div key={item.name} className="file-row">
+        <div key={item.id} className="file-row">
           <span className="file-icon">{fileIcon(item.name, item.isDir)}</span>
           <span
             className="file-name"
@@ -58,7 +74,14 @@ export function FileList({ items, loading, path, onNavigate, onRename, onDelete 
           </span>
           <span className="file-actions">
             {item.isDir ? null : (
-              <a className="act-btn" href={downloadUrl(item.id)} download title="Download">⬇</a>
+              <button
+                className="act-btn"
+                onClick={() => handleDownload(item)}
+                disabled={downloading === item.id}
+                title="Download"
+              >
+                {downloading === item.id ? '…' : '⬇'}
+              </button>
             )}
             <button className="act-btn" onClick={() => onRename(item)} title="Rename">✏</button>
             <button className="act-btn del" onClick={() => onDelete(item)} title="Delete">🗑</button>

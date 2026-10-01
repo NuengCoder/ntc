@@ -5,6 +5,8 @@ use ntc::shell;
 use ntc::utils;
 use ntc::Config;
 
+
+
 fn run() -> Result<bool> {
     utils::theme::ThemeManager::ensure_default_themes();
     let _ = Config::global();
@@ -22,9 +24,19 @@ const RAINBOW: [(u8, u8, u8); 7] = [
 ];
 
 fn rainbow(s: &str, offset: usize) -> String {
+    // Legacy conhost (Win7/8, Admin legacy mode) can't render even basic
+    // ANSI — emit plain text so users never see `[91m` garbage.
+    // Plain white logo fallback per user choice.
+    if !colored::control::SHOULD_COLORIZE.should_colorize() {
+        return s.to_string();
+    }
     s.chars()
         .enumerate()
         .map(|(i, c)| {
+            // Spaces carry no color codes: avoids width miscounts and bloat.
+            if c == ' ' {
+                return " ".to_string();
+            }
             format!(
                 "{}",
                 c.to_string().truecolor(
@@ -58,6 +70,13 @@ fn print_logo() {
 }
 
 fn main() -> Result<()> {
+    // Enable VT processing BEFORE any colored output. On Win11 Terminal this
+    // is a no-op; on Win10/Admin conhost it turns `[91m` garbage into real
+    // colors; on Win7/8 legacy it fails and Config::load() strips colors.
+    #[cfg(windows)]
+    {
+        ntc::utils::terminal::init();
+    }
     let launch_interactive = run()?;
     if launch_interactive {
         println!();

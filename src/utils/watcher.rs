@@ -91,6 +91,8 @@ impl WatchSummary {
     /// Print the summary box to stdout.
     pub fn print_change_box(&self) {
         const INNER: usize = 44;
+        // Display rows cap from `config watch limit <n>` (default 10).
+        let max_events = Config::global_get_watch_limit().max(1);
         let a = |s: &str| crate::utils::terminal::asciify(s);
         println!();
         println!("  {}", a("╔════════════════════════════════════════════════╗"));
@@ -99,7 +101,7 @@ impl WatchSummary {
             a(&format!("║{:^48}", t!("watcher.file_changed").cyan().bold()))
         );
         println!("  {}", a("╠════════════════════════════════════════════════╣"));
-        let display_events = &self.events[..self.events.len().min(MAX_DISPLAY_EVENTS)];
+        let display_events = &self.events[..self.events.len().min(max_events)];
         for ev in display_events {
             let plain = format!("[{}] {}  {}", ev.kind.label(), ev.name, ev.file_type);
             let pad = INNER.saturating_sub(plain.len());
@@ -114,8 +116,8 @@ impl WatchSummary {
             );
         }
 
-        if self.events.len() > MAX_DISPLAY_EVENTS {
-            let msg = t!("watcher.more_events", self.events.len() - MAX_DISPLAY_EVENTS);
+        if self.events.len() > max_events {
+            let msg = t!("watcher.more_events", self.events.len() - max_events);
             let pad = INNER.saturating_sub(msg.len());
             println!("  {}  {}{}  {}", a("║"), msg.dimmed(), " ".repeat(pad), a("║"));
         }
@@ -134,9 +136,6 @@ impl WatchSummary {
         println!("  {}", a("╚════════════════════════════════════════════════╝"));
     }
 }
-
-// Max events shown in the box before "… and N more"
-const MAX_DISPLAY_EVENTS: usize = 8;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Internal pending-event buffer (lives in the notify callback thread)

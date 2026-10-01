@@ -106,7 +106,7 @@ impl Editor {
         };
         let content_top = 0;
         let rows = self.term_h;
-        let sw = self.sidebar.width;
+        let sw = self.sidebar_cols();
         let nodes = &self.sidebar.nodes;
         let scroll = self.sidebar.scroll;
         let num_visible = rows.min(nodes.len().saturating_sub(scroll));

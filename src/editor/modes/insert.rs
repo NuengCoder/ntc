@@ -23,6 +23,18 @@ impl Editor {
             self.status_msg = None;
         }
 
+        // Completion/sig-help funnel: the arms below manage the popup
+        // explicitly (cycle/accept/trigger) and set `keep_popup`; any
+        // other cursor or buffer change dismisses the stale list, and
+        // signature help always refreshes from the cursor position.
+        // Popup pixels are only erased by a repaint, and text repaints
+        // only dirty rows — so any popup visibility transition must
+        // mark dirty, or the dismissed box lingers as ghost pixels.
+        let (oy, ob, olen) = (self.cursor.y, self.cursor.byte, self.lines.len());
+        let was_popup = self.completion.is_some()
+            || self.sighelp.is_some()
+            || self.hover_text.is_some();
+        let mut keep_popup = false;
         match ev {
             Event::Key(KeyEvent {
                 code,
@@ -33,36 +45,6 @@ impl Editor {
                 let shift = modifiers.contains(KeyModifiers::SHIFT);
                 let ctrl = modifiers.contains(KeyModifiers::CONTROL);
                 let alt = modifiers.contains(KeyModifiers::ALT);
-
-                if self.completion_visible {
-                    match (ctrl, code) {
-                        (false, KeyCode::Esc) => {
-                            self.dismiss_completion();
-                            return Ok(());
-                        }
-                        (false, KeyCode::Tab) => {
-                            self.select_next_completion();
-                            return Ok(());
-                        }
-                        (true, KeyCode::Char('n')) => {
-                            self.select_next_completion();
-                            return Ok(());
-                        }
-                        (true, KeyCode::Char('p')) => {
-                            self.select_prev_completion();
-                            return Ok(());
-                        }
-                        (false, KeyCode::Down) => {
-                            self.select_next_completion();
-                            return Ok(());
-                        }
-                        (false, KeyCode::Enter) => {
-                            self.apply_completion();
-                            return Ok(());
-                        }
-                        _ => {}
-                    }
-                }
 
                 match (ctrl, alt, shift, code) {
                     (true, _, _, KeyCode::Char('s')) => match self.save() {
@@ -89,20 +71,35 @@ impl Editor {
                         self.query_buf.clear();
                         self.mark_all_dirty();
                     }
-                    (true, _, _, KeyCode::Char('Q')) => {
-                        self.close_all_tabs();
-                        self.mode = Mode::Normal;
-                    }
-                    (true, _, _, KeyCode::Char('q')) if self.exit_flow(stdout)? => {
-                        return Err(anyhow::anyhow!("__exit__"));
+                    (true, _, _, KeyCode::Char('q')) => {
+                        if self.has_multiple_cursors() {
+                            self.clear_extra_cursors();
+                            self.mode = Mode::Insert;
+                        } else {
+                            self.clear_selection();
+                            self.clear_extra_cursors();
+                            self.mode = Mode::Normal;
+                            self.status_msg = None;
+                            self.hover_sig_active = false;
+                            self.hover_text = None;
+                        }
                     }
                     (false, false, false, KeyCode::Esc) => {
-                        self.clear_selection();
-                        self.clear_extra_cursors();
-                        self.mode = Mode::Normal;
-                        self.status_msg = None;
-                        self.hover_sig_active = false;
-                        self.hover_text = None;
+                        if self.completion.is_some() || self.sighelp.is_some() {
+                            self.dismiss_popups();
+                            self.mark_all_dirty();
+                            return Ok(());
+                        } else if self.has_multiple_cursors() {
+                            self.clear_extra_cursors();
+                            self.mode = Mode::Insert;
+                        } else {
+                            self.clear_selection();
+                            self.clear_extra_cursors();
+                            self.mode = Mode::Normal;
+                            self.status_msg = None;
+                            self.hover_sig_active = false;
+                            self.hover_text = None;
+                        }
                     }
                     (true, _, _, KeyCode::Char('t')) => {
                         if self.terminal.is_some() {
@@ -163,7 +160,7 @@ impl Editor {
                             self.mode = Mode::InsertMulti;
                         }
                     }
-                    (true, _, _, KeyCode::Char('g')) => {
+                    (true, _, _, KeyCode::Char('j')) => {
                         self.prev_mode = Mode::Insert;
                         self.mode = Mode::Jump;
                         self.jump_buf.clear();
@@ -207,20 +204,7 @@ impl Editor {
                         self.search_prev();
                     }
 
-                    (true, _, _, KeyCode::Char('w')) => {
-                        self.mode = Mode::Visual;
-                        self.clear_selection();
-                        self.status_msg = Some(t!("editor.mode_visual_start"));
-                    }
-                    (true, _, _, KeyCode::Char('h')) => {
-                        self.mode = Mode::Help;
-                        self.status_msg = None;
-                    }
                     (true, _, _, KeyCode::Char('y')) => self.yank_line(),
-
-                    (true, false, false, KeyCode::Char('b')) => self.toggle_sidebar(),
-                    (true, false, false, KeyCode::Tab) => self.next_buffer(),
-                    (true, false, true, KeyCode::Tab) => self.prev_buffer(),
 
                     (false, true, false, KeyCode::Left) => {
                         self.sv.x = self.sv.x.saturating_sub(3);
@@ -229,13 +213,37 @@ impl Editor {
                         self.sv.x = (self.sv.x + 3).min(self.max_scroll_x());
                     }
 
-                    (false, false, false, KeyCode::Up) if self.cursor.y > 0 => {
-                        self.cursor.y -= 1;
+                    // Up/Down cycle the completion list while visible.
+                    (false, false, false, KeyCode::Up) => {
+                        let cycling = match self.completion.as_mut() {
+                            Some(st) if !st.items.is_empty() => {
+                                st.selected =
+                                    (st.selected + st.items.len() - 1) % st.items.len();
+                                true
+                            }
+                            _ => false,
+                        };
+                        if cycling {
+                            self.mark_all_dirty();
+                            keep_popup = true;
+                        } else if self.cursor.y > 0 {
+                            self.cursor.y -= 1;
+                        }
                     }
-                    (false, false, false, KeyCode::Down)
-                        if self.cursor.y + 1 < self.lines.len() =>
-                    {
-                        self.cursor.y += 1;
+                    (false, false, false, KeyCode::Down) => {
+                        let cycling = match self.completion.as_mut() {
+                            Some(st) if !st.items.is_empty() => {
+                                st.selected = (st.selected + 1) % st.items.len();
+                                true
+                            }
+                            _ => false,
+                        };
+                        if cycling {
+                            self.mark_all_dirty();
+                            keep_popup = true;
+                        } else if self.cursor.y + 1 < self.lines.len() {
+                            self.cursor.y += 1;
+                        }
                     }
                     (false, false, false, KeyCode::Left) => {
                         if let Some((ay, ab)) = self.cursor.selection_anchor {
@@ -438,6 +446,39 @@ impl Editor {
                         });
                     }
 
+                    // PgUp/PgDn page the completion selection while visible.
+                    (false, false, false, KeyCode::PageUp) => {
+                        if let Some(st) = self.completion.as_mut() {
+                            if !st.items.is_empty() {
+                                let n = st.items.len();
+                                st.selected = (st.selected + n - (crate::editor::complete::COMPLETE_ROWS % n.max(1))) % n.max(1);
+                                self.mark_all_dirty();
+                                keep_popup = true;
+                            }
+                        }
+                        if !keep_popup {
+                            let rows = self.term_h.saturating_sub(4);
+                            self.move_cursors(|e| {
+                                e.cursor.y = e.cursor.y.saturating_sub(rows);
+                            });
+                        }
+                    }
+                    (false, false, false, KeyCode::PageDown) => {
+                        if let Some(st) = self.completion.as_mut() {
+                            if !st.items.is_empty() {
+                                let n = st.items.len();
+                                st.selected = (st.selected + crate::editor::complete::COMPLETE_ROWS) % n;
+                                self.mark_all_dirty();
+                                keep_popup = true;
+                            }
+                        }
+                        if !keep_popup {
+                            let rows = self.term_h.saturating_sub(4);
+                            self.move_cursors(|e| {
+                                e.cursor.y = (e.cursor.y + rows).min(e.lines.len().saturating_sub(1));
+                            });
+                        }
+                    }
                     (false, _, _, KeyCode::PageUp) => {
                         let rows = self.term_h.saturating_sub(4);
                         self.move_cursors(|e| {
@@ -451,11 +492,20 @@ impl Editor {
                         });
                     }
 
-                    (false, false, false, KeyCode::Tab) => self.indent_lines(),
+                    (false, false, false, KeyCode::Tab) => {
+                        self.indent_lines();
+                        self.maybe_trigger_completion();
+                        self.refresh_sighelp();
+                        keep_popup = true;
+                    }
                     (false, false, _, KeyCode::BackTab) => self.dedent_lines(),
 
+                    // Enter accepts the selection; Tab always indents.
                     (false, false, false, KeyCode::Enter) | (true, _, _, KeyCode::Enter) => {
-                        if self.has_multiple_cursors() {
+                        if self.completion.as_ref().is_some_and(|s| !s.items.is_empty()) {
+                            self.accept_completion();
+                            keep_popup = true;
+                        } else if self.has_multiple_cursors() {
                             self.multi_split_line();
                         } else {
                             if self.has_selection() {
@@ -473,8 +523,10 @@ impl Editor {
                         } else {
                             self.backspace();
                         }
-                        self.trigger_completion();
                         self.trigger_function_signature();
+                        self.maybe_trigger_completion();
+                        self.refresh_sighelp();
+                        keep_popup = true;
                     }
                     (false, false, _, KeyCode::Delete) => {
                         if self.has_multiple_cursors() {
@@ -482,13 +534,54 @@ impl Editor {
                         } else {
                             self.delete_forward();
                         }
-                        self.trigger_completion();
                         self.trigger_function_signature();
+                        self.maybe_trigger_completion();
+                        self.refresh_sighelp();
+                        keep_popup = true;
                     }
 
+                    // `(` is a commit character for functions: accept the
+                    // selected function (swallowing the paren), else type
+                    // it and let signature help take over.
+                    // (`.` needs no special arm: maybe_trigger routes
+                    // `obj.` prefixes to member completion by itself.)
+                    (false, false, false, KeyCode::Char('(')) => {
+                        let accept = matches!(
+                            &self.completion,
+                            Some(st) if !st.items.is_empty()
+                                && st.items[st.selected % st.items.len()].opens_paren
+                        );
+                        if accept {
+                            self.accept_completion();
+                        } else {
+                            self.handle_char_input('(');
+                            self.completion = None;
+                            self.refresh_sighelp();
+                        }
+                        keep_popup = true;
+                    }
+                    // `)` overtypes a `)` already under the cursor.
+                    (false, false, false, KeyCode::Char(')')) => {
+                        let over = self
+                            .current()
+                            .as_bytes()
+                            .get(self.cursor.byte)
+                            .is_some_and(|b| *b == b')');
+                        if over {
+                            self.cursor.byte += 1;
+                        } else {
+                            self.handle_char_input(')');
+                        }
+                        self.maybe_trigger_completion();
+                        self.refresh_sighelp();
+                        keep_popup = true;
+                    }
                     (false, false, false, KeyCode::Char(c))
                     | (false, false, true, KeyCode::Char(c)) => {
                         self.handle_char_input(c);
+                        self.maybe_trigger_completion();
+                        self.refresh_sighelp();
+                        keep_popup = true;
                     }
 
                     _ => {}
@@ -505,7 +598,25 @@ impl Editor {
             _ => {}
         }
 
+        // Funnel: stale lists die on any cursor/buffer change the arms
+        // above did not manage explicitly; sig-help always refreshes.
+        // A visibility transition in either direction repaints the whole
+        // field so dismissed boxes are actually erased from the screen.
+        if !keep_popup
+            && (self.cursor.y != oy
+                || self.cursor.byte != ob
+                || self.lines.len() != olen)
+        {
+            self.completion = None;
+        }
+        self.refresh_sighelp();
         self.trigger_function_signature();
+        let now_popup = self.completion.is_some()
+            || self.sighelp.is_some()
+            || self.hover_text.is_some();
+        if was_popup || now_popup {
+            self.mark_all_dirty();
+        }
         Ok(())
     }
 

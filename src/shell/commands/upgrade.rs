@@ -296,6 +296,23 @@ fn pick_binary_asset(assets: &[(String, String)], bin_key: &str) -> Option<Strin
         if !lower.contains(bin_key) || lower.contains("installer") || lower.ends_with(".deb") {
             continue;
         }
+        // Exclude binaries for other platforms
+        #[cfg(all(target_os = "linux", not(target_os = "android")))]
+        if lower.contains("android") || lower.contains("windows") || lower.contains("macos") {
+            continue;
+        }
+        #[cfg(target_os = "android")]
+        if !lower.contains("android") {
+            continue;
+        }
+        #[cfg(windows)]
+        if !lower.contains("windows") {
+            continue;
+        }
+        #[cfg(target_os = "macos")]
+        if !lower.contains("macos") {
+            continue;
+        }
         #[cfg(windows)]
         {
             if lower.ends_with(".zip") {
@@ -452,19 +469,40 @@ fn install_binary_impl(
         .ok_or_else(|| anyhow!("{}", t!("cmd.upgrade.exe_path_fail", dst_path.display())))?;
 
     if dir_is_writable(dst_dir) {
+        let tmp_dir = std::env::temp_dir().join("ntc_update");
+        let script_path = tmp_dir.join("upgrade.ps1");
+
         let ps_script = format!(
-            r#"Start-Sleep -Seconds 3; $maxRetries = 3; $retryCount = 0; while ($retryCount -lt $maxRetries) {{ try {{ Copy-Item -LiteralPath '{src}' -Destination '{dst}' -Force; Write-Host 'Update complete'; exit 0 }} catch {{ $retryCount++; if ($retryCount -ge $maxRetries) {{ Write-Host "Update failed after $maxRetries attempts: $_"; exit 1 }} Start-Sleep -Seconds 1 }} }}"#,
+            r#"Start-Sleep -Seconds 2
+$src = '{src}'
+$dst = '{dst}'
+$maxRetries = 5
+for ($i = 0; $i -lt $maxRetries; $i++) {{
+    try {{
+        $f = [System.IO.File]::Open($dst, 'Open', 'ReadWrite', 'None')
+        $f.Close()
+        break
+    }} catch {{
+        Start-Sleep -Seconds 2
+    }}
+}}
+try {{ Move-Item -LiteralPath $src -Destination $dst -Force }}
+catch {{ Copy-Item -LiteralPath $src -Destination $dst -Force }}
+Remove-Item -LiteralPath $src -ErrorAction SilentlyContinue"#,
             src = tmp_path.display(),
             dst = dst_path.display(),
         );
+
+        std::fs::write(&script_path, &ps_script)
+            .context(t!("cmd.upgrade.write_fail").to_string())?;
 
         let _ = std::process::Command::new("powershell")
             .args([
                 "-NoProfile",
                 "-WindowStyle",
                 "Hidden",
-                "-Command",
-                &ps_script,
+                "-File",
+                &script_path.to_string_lossy(),
             ])
             .spawn();
 
@@ -548,8 +586,31 @@ fn install_binary_impl(
     _assets: &[(String, String)],
     _version: &str,
 ) -> Result<bool> {
-    replace_binary_at(tmp_path, dst_path)
-        .context(t!("cmd.upgrade.copy_fail_android").to_string())?;
+    let backup = dst_path.with_extension("ntc_bak");
+    let had_backup = std::fs::copy(dst_path, &backup).is_ok();
+
+    let result = replace_binary_at(tmp_path, dst_path);
+
+    if let Err(e) = result {
+        if had_backup {
+            let _ = std::fs::copy(&backup, dst_path);
+            let _ = std::fs::remove_file(&backup);
+        }
+        return Err(e).context(t!("cmd.upgrade.copy_fail_android").to_string());
+    }
+
+    // Verify the new binary works
+    let ok = std::process::Command::new(dst_path)
+        .arg("--version")
+        .output()
+        .map(|o| o.status.success())
+        .unwrap_or(false);
+
+    if !ok && had_backup {
+        let _ = std::fs::copy(&backup, dst_path);
+    }
+    let _ = std::fs::remove_file(&backup);
+
     Ok(false)
 }
 
@@ -745,5 +806,82 @@ mod tests {
     fn is_newer_handles_different_component_counts() {
         assert!(is_newer("2.4.3.1", "2.4.3"));
         assert!(!is_newer("2.4.3", "2.4.3.1"));
+    }
+
+    #[test]
+    fn copy_fail_format_includes_error() {
+        let result = crate::t!("cmd.upgrade.copy_fail", "Permission denied (os error 5)");
+        assert!(
+            result.contains("Permission denied"),
+            "error message not included: {result}"
+        );
+        assert!(
+            !result.contains("{}"),
+            "unreplaced placeholder in output: {result}"
+        );
+    }
+
+    #[cfg(all(target_os = "linux", not(target_os = "android")))]
+    #[test]
+    fn linux_excludes_android_windows_macos_assets() {
+        let assets = vec![
+            (
+                "https://x/ntc-v2.4.3-aarch64-linux-android.tar.gz".to_string(),
+                "ntc-v2.4.3-aarch64-linux-android.tar.gz".to_string(),
+            ),
+            (
+                "https://x/ntc-v2.4.3-linux-x86_64.tar.gz".to_string(),
+                "ntc-v2.4.3-linux-x86_64.tar.gz".to_string(),
+            ),
+            (
+                "https://x/ntc-v2.4.3-linux-aarch64.tar.gz".to_string(),
+                "ntc-v2.4.3-linux-aarch64.tar.gz".to_string(),
+            ),
+            (
+                "https://x/ntc-v2.4.3-windows-x86_64.zip".to_string(),
+                "ntc-v2.4.3-windows-x86_64.zip".to_string(),
+            ),
+            (
+                "https://x/ntc-v2.4.3-macos-aarch64.tar.gz".to_string(),
+                "ntc-v2.4.3-macos-aarch64.tar.gz".to_string(),
+            ),
+        ];
+        // Should pick linux-x86_64, not android/windows/macos
+        assert_eq!(
+            pick_binary_asset(&assets, "linux-x86_64").as_deref(),
+            Some("https://x/ntc-v2.4.3-linux-x86_64.tar.gz")
+        );
+        // Should pick linux-aarch64, not android
+        assert_eq!(
+            pick_binary_asset(&assets, "linux-aarch64").as_deref(),
+            Some("https://x/ntc-v2.4.3-linux-aarch64.tar.gz")
+        );
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn windows_excludes_linux_android_macos_assets() {
+        let assets = vec![
+            (
+                "https://x/ntc-v2.4.3-windows-x86_64.zip".to_string(),
+                "ntc-v2.4.3-windows-x86_64.zip".to_string(),
+            ),
+            (
+                "https://x/ntc-v2.4.3-linux-x86_64.tar.gz".to_string(),
+                "ntc-v2.4.3-linux-x86_64.tar.gz".to_string(),
+            ),
+            (
+                "https://x/ntc-v2.4.3-aarch64-linux-android.tar.gz".to_string(),
+                "ntc-v2.4.3-aarch64-linux-android.tar.gz".to_string(),
+            ),
+            (
+                "https://x/ntc-v2.4.3-macos-aarch64.tar.gz".to_string(),
+                "ntc-v2.4.3-macos-aarch64.tar.gz".to_string(),
+            ),
+        ];
+        assert_eq!(
+            pick_binary_asset(&assets, "windows-x86_64").as_deref(),
+            Some("https://x/ntc-v2.4.3-windows-x86_64.zip")
+        );
     }
 }

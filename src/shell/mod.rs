@@ -1,10 +1,10 @@
 // src/shell/mod.rs
 // ntc shell module — split from the original single-file shell.rs
 
-mod alias;
+pub(crate) mod alias;
 pub(crate) mod commands;
 pub(crate) mod entry;
-mod help;
+pub(crate) mod help;
 pub(crate) mod helpers;
 mod hinter;
 pub(crate) mod venv;

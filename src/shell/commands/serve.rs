@@ -6,10 +6,11 @@ use colored::*;
 use rusqlite::params;
 use std::collections::HashMap;
 use std::io::{BufRead, BufReader, Read, Write};
-use std::net::{TcpListener, TcpStream};
+use std::net::{Ipv4Addr, SocketAddr, TcpListener, TcpStream, UdpSocket};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::AtomicBool;
 use std::sync::{Arc, Mutex};
+use std::time::Duration;
 
 #[derive(rust_embed::Embed)]
 #[folder = "ntc_web/dist"]
@@ -108,6 +109,11 @@ pub fn cmd_serve(args: &str, _nav: &mut Navigator) -> Result<bool> {
     let mut use_tunnel = false;
     let mut spa = false;
     let mut web_dir = String::new();
+    let mut auth: Option<(String, String)> = None;
+    let mut share_mode = false;
+    let mut share_path: Option<String> = None;
+    let mut no_qr = false;
+    let mut want_qr = false;
 
     let mut i = 0;
     while i < tokens.len() {
@@ -132,6 +138,30 @@ pub fn cmd_serve(args: &str, _nav: &mut Navigator) -> Result<bool> {
             }
             "--spa" => {
                 spa = true;
+            }
+            "--share" => {
+                share_mode = true;
+                // Optional path right after --share (must not look like a flag).
+                if let Some(next) = tokens.get(i + 1) {
+                    if !next.starts_with('-') {
+                        share_path = Some(next.clone());
+                        i += 1;
+                    }
+                }
+            }
+            "--qr" => {
+                want_qr = true;
+                share_mode = true;
+            }
+            "--no-qr" => {
+                no_qr = true;
+            }
+            "--auth" => {
+                i += 1;
+                let value = tokens
+                    .get(i)
+                    .ok_or_else(|| anyhow::anyhow!("{}", t!("cmd.serve.missing_auth")))?;
+                auth = Some(parse_auth(value)?);
             }
             "-w" | "--web-dir" => {
                 i += 1;
@@ -167,6 +197,13 @@ pub fn cmd_serve(args: &str, _nav: &mut Navigator) -> Result<bool> {
         "HTTP server on {}",
         format!("http://{}", addr).cyan()
     ));
+    if let Some((ref user, _)) = auth {
+        print_info(&t!("cmd.serve.auth_on", user));
+    }
+
+    if share_mode {
+        print_share_block(port, &bind, share_path.as_deref(), !no_qr || want_qr);
+    }
 
     if use_tunnel {
         spawn_cloudflared(port);
@@ -183,12 +220,14 @@ pub fn cmd_serve(args: &str, _nav: &mut Navigator) -> Result<bool> {
     };
     listener.set_nonblocking(true)?;
 
+    let auth = auth.map(|(u, p)| std::sync::Arc::new((u, p)));
     while !shutdown.load(std::sync::atomic::Ordering::Relaxed) {
         match listener.accept() {
             Ok((stream, _)) => {
                 let db = db.clone();
                 let web = web.clone();
-                std::thread::spawn(move || handle_connection(stream, db, spa, web));
+                let auth = auth.clone();
+                std::thread::spawn(move || handle_connection(stream, db, spa, web, auth));
             }
             Err(e) if e.kind() == std::io::ErrorKind::WouldBlock => {
                 std::thread::sleep(std::time::Duration::from_millis(200));
@@ -202,6 +241,164 @@ pub fn cmd_serve(args: &str, _nav: &mut Navigator) -> Result<bool> {
     Ok(false)
 }
 
+// ── Auth ────────────────────────────────────────────────────────────────────
+//
+// `serve --auth <user:pass>` protects every `/api/*` route with HTTP Basic.
+// The static frontend (`/`) stays public so the login page itself always
+// loads; the React app attaches the header and shows a login dialog on 401.
+
+/// Split `--auth <user:pass>` on the FIRST `:` (`@` and later `:` are
+/// literal, so `admin:555@ntcstorage` → `admin` / `555@ntcstorage`).
+fn parse_auth(value: &str) -> Result<(String, String)> {
+    match value.split_once(':') {
+        Some((user, pass)) if !user.is_empty() && !pass.is_empty() => {
+            Ok((user.to_string(), pass.to_string()))
+        }
+        _ => anyhow::bail!("{}", t!("cmd.serve.invalid_auth")),
+    }
+}
+
+/// Expected `Authorization` header value for these credentials.
+fn basic_expectation(user: &str, pass: &str) -> String {
+    let raw = format!("{}:{}", user, pass);
+    let encoded =
+        base64::Engine::encode(&base64::engine::general_purpose::STANDARD, raw.as_bytes());
+    format!("Basic {}", encoded)
+}
+
+/// Constant-time-ish equality so wrong passwords don't fail faster.
+fn auth_matches(given: &str, expected: &str) -> bool {
+    let a = given.trim().as_bytes();
+    let b = expected.as_bytes();
+    if a.len() != b.len() {
+        return false;
+    }
+    let mut diff = 0u8;
+    for i in 0..a.len() {
+        diff |= a[i] ^ b[i];
+    }
+    diff == 0
+}
+
+fn respond_unauthorized(stream: &mut TcpStream) {
+    let body = r#"{"error":"Unauthorized"}"#;
+    let resp = format!(
+        "HTTP/1.1 401 Unauthorized\r\nWWW-Authenticate: Basic realm=\"ntc serve\"\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\nAccess-Control-Allow-Origin: *\r\n\r\n{}",
+        body.len(),
+        body
+    );
+    let _ = write_all_retry(stream, resp.as_bytes());
+}
+
+// ── Share mode (internet-first, then LAN) ─────────────────────────────────
+//
+// `serve --share` is advertisement-only: it never changes auth or routing.
+// Step 1: quick TCP reachability probe (port 53/DNS, ~900ms each).
+// Step 2: only when online, discover the primary LAN IPv4 via the
+// default-route UDP trick and print it plus a terminal QR.
+
+/// Candidate endpoints for the internet reachability probe.
+const SHARE_PROBE_TARGETS: &[&str] = &["8.8.8.8:53", "1.1.1.1:53"];
+const SHARE_PROBE_TIMEOUT: Duration = Duration::from_millis(900);
+
+/// Step 1: true when at least one probe target answers a TCP connect.
+fn has_internet() -> bool {
+    for target in SHARE_PROBE_TARGETS {
+        if let Ok(addr) = target.parse::<SocketAddr>() {
+            if TcpStream::connect_timeout(&addr, SHARE_PROBE_TIMEOUT).is_ok() {
+                return true;
+            }
+        }
+    }
+    false
+}
+
+/// True for RFC1918 private ranges: 10/8, 172.16/12, 192.168/16.
+fn is_rfc1918(ip: Ipv4Addr) -> bool {
+    let o = ip.octets();
+    o[0] == 10 || o[0] == 192 && o[1] == 168 || o[0] == 172 && (16..=31).contains(&o[1])
+}
+
+/// Priority for QR selection: 192.168 > 10 > 172.16-31 > other unicast.
+fn lan_priority(ip: Ipv4Addr) -> u8 {
+    let o = ip.octets();
+    if o[0] == 192 && o[1] == 168 {
+        0
+    } else if o[0] == 10 {
+        1
+    } else if o[0] == 172 && (16..=31).contains(&o[1]) {
+        2
+    } else {
+        3
+    }
+}
+
+/// Step 2: primary LAN IPv4 via the default-route UDP trick (std-only,
+/// cross-platform incl. Termux). No packet is actually sent; `connect` on a
+/// UDP socket only selects the outbound interface, then `local_addr` reveals it.
+fn primary_lan_ip() -> Option<Ipv4Addr> {
+    let sock = UdpSocket::bind("0.0.0.0:0").ok()?;
+    // 8.8.8.8:80 never receives traffic here — connect() just picks the route.
+    sock.connect("8.8.8.8:80").ok()?;
+    match sock.local_addr().ok()?.ip() {
+        std::net::IpAddr::V4(v4) if !v4.is_loopback() && !v4.is_link_local() => Some(v4),
+        _ => None,
+    }
+}
+
+fn print_share_qr(url: &str) {
+    match qrcode::QrCode::new(url.as_bytes()) {
+        Ok(code) => {
+            let rendered = code
+                .render::<qrcode::render::unicode::Dense1x2>()
+                .module_dimensions(2, 1)
+                .build();
+            println!();
+            println!("{}", rendered);
+        }
+        Err(e) => print_warning(&t!("cmd.serve.share_qr_fail", e)),
+    }
+}
+
+/// Print the `--share` block: internet check first, LAN + QR only when online.
+fn print_share_block(port: u16, bind: &str, share_path: Option<&str>, show_qr: bool) {
+    println!("{}", t!("cmd.serve.share_checking").dimmed());
+    if !has_internet() {
+        print_warning(&t!("cmd.serve.share_offline"));
+        println!("  {}", format!("http://127.0.0.1:{}", port).cyan());
+        return;
+    }
+    print_info(&t!("cmd.serve.share_online"));
+
+    if bind == "127.0.0.1" || bind == "localhost" {
+        print_warning(&t!("cmd.serve.share_bound_loopback"));
+    }
+
+    match primary_lan_ip() {
+        Some(ip) => {
+            let prio = lan_priority(ip);
+            let url = format!("http://{}:{}", ip, port);
+            if prio == 3 {
+                print_warning(&t!("cmd.serve.share_not_private", ip));
+            }
+            println!("  {} {}", t!("cmd.serve.share_lan_title").cyan().bold(), url.cyan());
+            if !is_rfc1918(ip) {
+                print_warning(&t!("cmd.serve.share_not_private_hint"));
+            }
+            if let Some(p) = share_path {
+                println!("  {} {}", t!("cmd.serve.share_path_title").dimmed(), p);
+            }
+            if show_qr {
+                print_share_qr(&url);
+            }
+        }
+        None => {
+            print_warning(&t!("cmd.serve.share_no_lan"));
+            println!("  {}", format!("http://127.0.0.1:{}", port).cyan());
+        }
+    }
+}
+
 // ── Connection handler ────────────────────────────────────────────────────
 
 fn handle_connection(
@@ -209,6 +406,7 @@ fn handle_connection(
     db: Arc<Mutex<rusqlite::Connection>>,
     spa_mode: bool,
     web_dir: Option<PathBuf>,
+    auth: Option<std::sync::Arc<(String, String)>>,
 ) {
     // The accepted socket may inherit non-blocking mode from the listener;
     // restore blocking semantics so reads/writes behave predictably.
@@ -237,6 +435,7 @@ fn handle_connection(
     let mut content_length: u64 = 0;
     let mut boundary = String::new();
     let mut expect_continue = false;
+    let mut authorization = String::new();
     loop {
         let mut line = String::new();
         if reader.read_line(&mut line).is_err() {
@@ -259,6 +458,23 @@ fn handle_connection(
             }
             if key == "expect" && val.to_lowercase().contains("100-continue") {
                 expect_continue = true;
+            }
+            if key == "authorization" {
+                authorization = val;
+            }
+        }
+    }
+
+    // Auth gate: every `/api/*` route needs valid Basic credentials when
+    // `--auth` was given. Static files stay public so the login page loads;
+    // the check runs before any body is read so unauthenticated uploads
+    // can't burn bandwidth or disk.
+    if path.starts_with("/api/") {
+        if let Some(ref creds) = auth {
+            let expected = basic_expectation(&creds.0, &creds.1);
+            if !auth_matches(&authorization, &expected) {
+                respond_unauthorized(&mut stream);
+                return;
             }
         }
     }
@@ -644,24 +860,32 @@ fn parse_query(query: &str) -> HashMap<String, String> {
 }
 
 fn url_decode(s: &str) -> String {
-    let mut out = String::with_capacity(s.len());
-    let mut cs = s.chars();
-    while let Some(c) = cs.next() {
-        if c == '%' {
-            let h: String = cs.by_ref().take(2).collect();
-            if let Ok(b) = u8::from_str_radix(&h, 16) {
-                out.push(b as char);
-            } else {
-                out.push('%');
-                out.push_str(&h);
+    // Percent-decoded bytes are collected as raw bytes first so multi-byte
+    // UTF-8 sequences (e.g. `%C3%A9` for "é") decode correctly; decoding them
+    // byte-by-byte as chars would mangle non-ASCII folder/file names and make
+    // delete/download miss their rows.
+    let mut buf: Vec<u8> = Vec::with_capacity(s.len());
+    let bytes = s.as_bytes();
+    let mut i = 0;
+    while i < bytes.len() {
+        if bytes[i] == b'%' && i + 3 <= bytes.len() {
+            let h = std::str::from_utf8(&bytes[i + 1..i + 3]).unwrap_or("");
+            if let Ok(b) = u8::from_str_radix(h, 16) {
+                buf.push(b);
+                i += 3;
+                continue;
             }
-        } else if c == '+' {
-            out.push(' ');
+            buf.push(b'%');
+            i += 1;
+        } else if bytes[i] == b'+' {
+            buf.push(b' ');
+            i += 1;
         } else {
-            out.push(c);
+            buf.push(bytes[i]);
+            i += 1;
         }
     }
-    out
+    String::from_utf8_lossy(&buf).into_owned()
 }
 
 fn lock(db: &Arc<Mutex<rusqlite::Connection>>) -> std::sync::MutexGuard<'_, rusqlite::Connection> {
@@ -1320,7 +1544,11 @@ fn api_delete(query: &str, db: Arc<Mutex<rusqlite::Connection>>) -> Vec<u8> {
         .unwrap_or(false);
 
     if is_dir {
-        let prefix = format!("{}/{}", dir_path.trim_end_matches('/'), filename);
+        let prefix = if dir_path == "/" {
+            format!("/{}", filename)
+        } else {
+            format!("{}/{}", dir_path.trim_end_matches('/'), filename)
+        };
         if let Ok(mut s) = db.prepare("SELECT path FROM files WHERE path=?1 OR path LIKE ?2") {
             let paths: Vec<String> =
                 match s.query_map(params![&prefix, format!("{}/%", &prefix)], |r| r.get(0)) {
@@ -1343,6 +1571,13 @@ fn api_delete(query: &str, db: Arc<Mutex<rusqlite::Connection>>) -> Vec<u8> {
                 params![&prefix, format!("{}/%", &prefix)],
             );
         }
+        // Remove the folder row itself (its parent path is `dir_path`, so the
+        // children-only DELETE above never matches it — previously the empty
+        // folder was left behind).
+        let _ = db.execute(
+            "DELETE FROM files WHERE path=?1 AND filename=?2 AND is_dir=1",
+            params![dir_path, filename],
+        );
     } else {
         // Remove the disk file(s) for every matching row, not just the first,
         // so re-uploading the same name and deleting never leaves orphans.
@@ -1377,13 +1612,20 @@ fn api_rename(body: &[u8], db: Arc<Mutex<rusqlite::Connection>>) -> Vec<u8> {
         None => return json_error(400),
     };
     let new_name = match j["newName"].as_str() {
-        Some(n) => n,
+        Some(n) => n.trim().to_string(),
         None => return json_error(400),
     };
-    if new_name.is_empty() || new_name.contains('/') || new_name.contains('\\') {
+    if new_name.is_empty()
+        || new_name.contains('/')
+        || new_name.contains('\\')
+        || new_name == "."
+        || new_name == ".."
+    {
         return json_error(400);
     }
-    let (dir_path, old_name) = match split_path(old_path) {
+    // Normalize (handles trailing slashes) so folder renames resolve.
+    let old_path = clean_path(old_path);
+    let (dir_path, old_name) = match split_path(&old_path) {
         Ok(p) => p,
         Err(_) => return json_error(400),
     };
@@ -1544,7 +1786,11 @@ fn print_serve_help() {
     println!("{}", t!("cmd.serve.options_title").cyan().bold());
     println!("  {}", t!("cmd.serve.help_port"));
     println!("  {}", t!("cmd.serve.help_bind"));
+    println!("  {}", t!("cmd.serve.help_auth"));
     println!("  {}", t!("cmd.serve.help_tunnel"));
+    println!("  {}", t!("cmd.serve.help_share"));
+    println!("  {}", t!("cmd.serve.help_qr"));
+    println!("  {}", t!("cmd.serve.help_no_qr"));
     println!("  {}", t!("cmd.serve.help_spa"));
     println!("  {}", t!("cmd.serve.help_web_dir"));
     println!("  {}", t!("cmd.serve.help_help"));
@@ -1552,11 +1798,93 @@ fn print_serve_help() {
     println!("{}", t!("cmd.serve.examples_title").cyan().bold());
     println!("  {}", t!("cmd.serve.example_default"));
     println!("  {}", t!("cmd.serve.example_port"));
+    println!("  {}", t!("cmd.serve.example_auth"));
     println!("  {}", t!("cmd.serve.example_tunnel"));
+    println!("  {}", t!("cmd.serve.example_share"));
     println!("  {}", t!("cmd.serve.example_spa"));
     println!();
     println!("{}", t!("cmd.serve.files_stored_title").cyan().bold());
     println!("  {}", files_dir().to_string_lossy().dimmed());
     println!("{}", t!("cmd.serve.db_title").cyan().bold());
     println!("  {}", db_path().to_string_lossy().dimmed());
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn auth_splits_on_first_colon_only() {
+        // `@` and later `:` are literal password characters.
+        assert_eq!(
+            parse_auth("admin:555@ntcstorage").unwrap(),
+            ("admin".to_string(), "555@ntcstorage".to_string())
+        );
+        assert_eq!(
+            parse_auth("admin:p:a:ss").unwrap(),
+            ("admin".to_string(), "p:a:ss".to_string())
+        );
+        assert!(parse_auth("nouser").is_err());
+        assert!(parse_auth(":nopass").is_err());
+        assert!(parse_auth("nouser:").is_err());
+        assert!(parse_auth("").is_err());
+    }
+
+    #[test]
+    fn basic_header_roundtrip_matches() {
+        let expected = basic_expectation("admin", "555@ntcstorage");
+        assert!(expected.starts_with("Basic "));
+        // Decodes back to the exact user:pass pair.
+        let encoded = expected.strip_prefix("Basic ").unwrap();
+        let bytes = base64::Engine::decode(
+            &base64::engine::general_purpose::STANDARD,
+            encoded,
+        )
+        .unwrap();
+        assert_eq!(bytes, b"admin:555@ntcstorage");
+    }
+
+    #[test]
+    fn auth_matches_accepts_only_exact_header() {
+        let expected = basic_expectation("admin", "secret");
+        assert!(auth_matches(&expected, &expected));
+        // Whitespace padding is tolerated (header parsing trims already).
+        assert!(auth_matches(&format!("  {}  ", expected), &expected));
+        assert!(!auth_matches("Basic wrong", &expected));
+        assert!(!auth_matches("", &expected));
+        assert!(!auth_matches(
+            &basic_expectation("admin", "other"),
+            &expected
+        ));
+    }
+
+    #[test]
+    fn rfc1918_ranges_detected() {
+        assert!(is_rfc1918(Ipv4Addr::new(10, 0, 0, 5)));
+        assert!(is_rfc1918(Ipv4Addr::new(10, 255, 255, 255)));
+        assert!(is_rfc1918(Ipv4Addr::new(192, 168, 1, 10)));
+        assert!(is_rfc1918(Ipv4Addr::new(172, 16, 0, 1)));
+        assert!(is_rfc1918(Ipv4Addr::new(172, 31, 255, 254)));
+        assert!(!is_rfc1918(Ipv4Addr::new(172, 15, 0, 1)));
+        assert!(!is_rfc1918(Ipv4Addr::new(172, 32, 0, 1)));
+        assert!(!is_rfc1918(Ipv4Addr::new(8, 8, 8, 8)));
+        assert!(!is_rfc1918(Ipv4Addr::new(127, 0, 0, 1)));
+    }
+
+    #[test]
+    fn lan_priority_prefers_private_ranges() {
+        let lan192 = lan_priority(Ipv4Addr::new(192, 168, 0, 2));
+        let lan10 = lan_priority(Ipv4Addr::new(10, 1, 2, 3));
+        let lan172 = lan_priority(Ipv4Addr::new(172, 20, 0, 4));
+        let pub_ip = lan_priority(Ipv4Addr::new(8, 8, 8, 8));
+        assert!(lan192 < lan10);
+        assert!(lan10 < lan172);
+        assert!(lan172 < pub_ip);
+    }
+
+    #[test]
+    fn primary_lan_ip_never_panics() {
+        // Environment-dependent (CI may have no route); must not panic.
+        let _ = primary_lan_ip();
+    }
 }

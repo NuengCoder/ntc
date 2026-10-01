@@ -1,7 +1,8 @@
 #!/usr/bin/env node
-const { execSync } = require('child_process');
+// Pure-JS installer: no system `tar` / `unzip` required (Node built-ins only).
 const fs = require('fs');
 const path = require('path');
+const zlib = require('zlib');
 
 const pkg = require('../package.json');
 const VERSION = pkg.version;
@@ -35,7 +36,11 @@ async function download(url, destPath) {
     clearTimeout(timer);
   }
 
-  if (!response.ok) throw new Error(`HTTP ${response.status}`);
+  if (!response.ok) {
+    const err = new Error(`HTTP ${response.status} for ${url}`);
+    err.httpStatus = response.status;
+    throw err;
+  }
 
   const len = parseInt(response.headers.get('content-length') || '0', 10);
   let downloaded = 0;
@@ -55,6 +60,182 @@ async function download(url, destPath) {
   fs.writeFileSync(destPath, buffer);
 }
 
+// ---- Minimal tar parser (ustar, files + dirs) ----
+function parseOctal(buf, offset, length) {
+  const str = buf.subarray(offset, offset + length).toString('utf8').replace(/\0.*$/, '').trim();
+  if (str === '') return 0;
+  const n = parseInt(str, 8);
+  return Number.isNaN(n) ? 0 : n;
+}
+
+function readCString(buf, offset, length) {
+  const end = buf.indexOf(0, offset);
+  const stop = end === -1 || end > offset + length ? offset + length : end;
+  return buf.subarray(offset, stop).toString('utf8');
+}
+
+function safeJoin(destDir, name) {
+  // Defend against Zip-Slip / Tar-Slip.
+  const target = path.resolve(destDir, name);
+  const root = path.resolve(destDir) + path.sep;
+  if (target !== path.resolve(destDir) && !target.startsWith(root)) {
+    throw new Error(`archive entry escapes destination: ${name}`);
+  }
+  return target;
+}
+
+function extractTar(buffer, destDir) {
+  let offset = 0;
+  let longName = null;
+  let count = 0;
+
+  while (offset + 512 <= buffer.length) {
+    const header = buffer.subarray(offset, offset + 512);
+    const isZero = header.every(b => b === 0);
+    if (isZero) break;
+
+    const name = readCString(header, 0, 100);
+    const size = parseOctal(header, 124, 12);
+    const typeflag = String.fromCharCode(header[156]);
+    const prefix = readCString(header, 345, 155);
+    offset += 512;
+
+    if (typeflag === 'L' || typeflag === 'K') {
+      // GNU long name / long link extension.
+      longName = buffer.subarray(offset, offset + size).toString('utf8').replace(/\0.*$/, '');
+      offset += Math.ceil(size / 512) * 512;
+      continue;
+    }
+
+    let fullName = prefix ? `${prefix}/${name}` : name;
+    if (longName) { fullName = longName; longName = null; }
+    // Normalize ./ prefixes and backslashes from odd packagers.
+    fullName = fullName.replace(/^\.\//, '').replace(/\\/g, '/');
+
+    const target = safeJoin(destDir, fullName);
+
+    if (typeflag === '5' || fullName.endsWith('/')) {
+      fs.mkdirSync(target, { recursive: true });
+    } else if (typeflag === '0' || typeflag === '\0' || typeflag === '' || typeflag === ' ') {
+      fs.mkdirSync(path.dirname(target), { recursive: true });
+      const fileData = buffer.subarray(offset, offset + size);
+      fs.writeFileSync(target, fileData);
+      count++;
+    }
+    // Other types (symlink/hardlink/char/block) are skipped intentionally.
+
+    offset += Math.ceil(size / 512) * 512;
+  }
+
+  if (count === 0) throw new Error('no files found in tar archive');
+}
+
+// ---- Minimal zip parser (stored + deflated, via central directory) ----
+// Parses the central directory so entries using data descriptors
+// (flag 0x08, sizes zeroed in local headers — common in real-world zips)
+// still extract correctly. No system `unzip` needed.
+function findEOCD(buffer) {
+  // EOCD is at the end; comment can push it back up to 64KB + 22 bytes.
+  const minStart = Math.max(0, buffer.length - (65557 + 22));
+  for (let i = buffer.length - 22; i >= minStart; i--) {
+    if (buffer.readUInt32LE(i) === 0x06054b50) return i;
+  }
+  return -1;
+}
+
+function extractZip(buffer, destDir) {
+  const eocd = findEOCD(buffer);
+  if (eocd === -1) throw new Error('not a valid zip file (EOCD not found). The download may be corrupt — try again.');
+
+  const entryCount = buffer.readUInt16LE(eocd + 10);
+  const cdOffset = buffer.readUInt32LE(eocd + 16);
+
+  let ptr = cdOffset;
+  let count = 0;
+
+  for (let n = 0; n < entryCount; n++) {
+    if (ptr + 46 > buffer.length) throw new Error('truncated zip central directory');
+    if (buffer.readUInt32LE(ptr) !== 0x02014b50) throw new Error('corrupt zip central directory');
+    const method = buffer.readUInt16LE(ptr + 10);
+    const compSize = buffer.readUInt32LE(ptr + 24);
+    const fileNameLen = buffer.readUInt16LE(ptr + 28);
+    const extraLen = buffer.readUInt16LE(ptr + 30);
+    const commentLen = buffer.readUInt16LE(ptr + 32);
+    const localHeaderOffset = buffer.readUInt32LE(ptr + 42);
+    const rawName = buffer.subarray(ptr + 46, ptr + 46 + fileNameLen).toString('utf8').replace(/\\/g, '/');
+    ptr += 46 + fileNameLen + extraLen + commentLen;
+
+    const isDir = rawName.endsWith('/');
+    if (isDir) {
+      fs.mkdirSync(safeJoin(destDir, rawName.replace(/^\.\//, '')), { recursive: true });
+      continue;
+    }
+
+    // Local header: skip name + extra to find data start.
+    if (localHeaderOffset + 30 > buffer.length) throw new Error(`truncated zip header for ${rawName}`);
+    if (buffer.readUInt32LE(localHeaderOffset) !== 0x04034b50) throw new Error(`corrupt zip header for ${rawName}`);
+    const lhNameLen = buffer.readUInt16LE(localHeaderOffset + 26);
+    const lhExtraLen = buffer.readUInt16LE(localHeaderOffset + 28);
+    const dataStart = localHeaderOffset + 30 + lhNameLen + lhExtraLen;
+    const dataEnd = dataStart + compSize;
+    if (dataEnd > buffer.length) throw new Error(`truncated zip data for ${rawName}`);
+
+    const target = safeJoin(destDir, rawName.replace(/^\.\//, ''));
+    fs.mkdirSync(path.dirname(target), { recursive: true });
+    const compData = buffer.subarray(dataStart, dataEnd);
+    let out;
+    if (method === 0) out = Buffer.from(compData);
+    else if (method === 8) out = zlib.inflateRawSync(compData);
+    else throw new Error(`unsupported zip compression method ${method} for ${rawName}. Please report this version.`);
+    fs.writeFileSync(target, out);
+    count++;
+  }
+
+  if (count === 0) throw new Error('no files found in zip archive');
+}
+
+function extractArchive(archivePath, destDir) {
+  const buf = fs.readFileSync(archivePath);
+  if (archivePath.endsWith('.zip')) {
+    extractZip(buf, destDir);
+  } else if (archivePath.endsWith('.tar.gz') || archivePath.endsWith('.tgz')) {
+    let tarBuf;
+    try {
+      tarBuf = zlib.gunzipSync(buf);
+    } catch (e) {
+      throw new Error(`not a valid .tar.gz file (${e.message}). The download may be corrupt — try again.`);
+    }
+    extractTar(tarBuf, destDir);
+  } else {
+    throw new Error(`unknown archive format: ${path.basename(archivePath)}`);
+  }
+}
+
+function ensureExecutable(binaryPath) {
+  if (process.platform === 'win32') return;
+  try {
+    fs.chmodSync(binaryPath, 0o755);
+  } catch (err) {
+    console.error(`ntc: could not chmod +x ${binaryPath}: ${err.message}`);
+    console.error('ntc: fix with: chmod +x "' + binaryPath + '"');
+    throw err;
+  }
+  try {
+    fs.accessSync(binaryPath, fs.constants.X_OK);
+  } catch {
+    console.error(`ntc: binary at ${binaryPath} is not executable.`);
+    console.error(`ntc: run: chmod +x "${binaryPath}"`);
+    throw new Error('binary not executable after chmod');
+  }
+}
+
+function print404Help(info) {
+  console.log(`ntc: binary not found for v${VERSION} on ${process.platform}-${process.arch} (expected ${info.file}).`);
+  console.log(`ntc: CI builds macOS assets only; Linux/Windows/Android assets are uploaded manually.`);
+  console.log(`ntc: check https://github.com/${REPO}/releases/tag/v${VERSION} — if ${info.file} is missing,`);
+  console.log('ntc: install from source instead: cargo install ntc');
+}
+
 async function main() {
   const pkgDir = path.resolve(__dirname, '..');
   const info = getPlatformInfo();
@@ -68,27 +249,21 @@ async function main() {
   const binaryPath = path.join(pkgDir, info.bin);
 
   if (fs.existsSync(binaryPath)) {
+    // A previous install may have lost the exec bit (bad umask / copy).
+    try { ensureExecutable(binaryPath); } catch {}
     return;
   }
 
   const url = `https://github.com/${REPO}/releases/download/v${VERSION}/${info.file}`;
   console.log(`ntc: downloading ${info.file}...`);
+  console.log('ntc: (pure-JS extractor — no system tar/unzip required)');
 
   const tmpDir = fs.mkdtempSync(path.join(pkgDir, 'tmp-'));
   const archivePath = path.join(tmpDir, info.file);
 
   try {
     await download(url, archivePath);
-
-    if (info.file.endsWith('.zip')) {
-      if (process.platform === 'win32') {
-        execSync(`powershell -NoProfile -Command "Expand-Archive -LiteralPath '${archivePath}' -DestinationPath '${tmpDir}' -Force"`, { stdio: 'pipe' });
-      } else {
-        execSync(`unzip -o "${archivePath}" -d "${tmpDir}"`, { stdio: 'pipe' });
-      }
-    } else {
-      execSync(`tar -xzf "${archivePath}" -C "${tmpDir}"`, { stdio: 'pipe' });
-    }
+    extractArchive(archivePath, tmpDir);
 
     const walk = (dir) => {
       const entries = fs.readdirSync(dir, { withFileTypes: true });
@@ -106,22 +281,35 @@ async function main() {
     const extracted = walk(tmpDir);
     if (!extracted) throw new Error('binary not found in archive');
 
-    fs.copyFileSync(extracted, binaryPath);
-    fs.chmodSync(binaryPath, 0o755);
+    try {
+      fs.copyFileSync(extracted, binaryPath);
+    } catch (err) {
+      if (err.code === 'EACCES' || err.code === 'EPERM') {
+        console.error(`ntc: permission denied writing ${binaryPath}.`);
+        console.error(`ntc: global installs write to your npm prefix, not /usr/local/bin directly. Try:`);
+        console.error(`ntc:   sudo chown -R $(whoami) "$(npm config get prefix)/"{lib,bin}`);
+        console.error(`ntc: or reinstall with elevated rights, then chmod +x the binary.`);
+      }
+      throw err;
+    }
+    ensureExecutable(binaryPath);
 
     console.log(`ntc: installed to ${binaryPath}`);
   } catch (err) {
     const msg = err.message || String(err);
-    if (msg.includes('404') || msg.includes('Not Found')) {
-      console.log(`ntc: binary not found for v${VERSION} on ${process.platform}-${process.arch}.`);
-      console.log('Install from source: cargo install ntc');
+    const status = err.httpStatus;
+    if (status === 404 || msg.includes('404') || msg.includes('Not Found')) {
+      print404Help(info);
     } else {
       console.error(`ntc: install failed: ${msg}`);
     }
+    try { fs.rmSync(binaryPath, { force: true }); } catch {}
     process.exit(1);
   } finally {
     try { fs.rmSync(tmpDir, { recursive: true, force: true }); } catch {}
   }
 }
 
-main();
+if (require.main === module) {
+  main();
+}

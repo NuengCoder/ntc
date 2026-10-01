@@ -8,13 +8,87 @@ use crate::filetype::is_supported_format;
 use crate::navigator::Navigator;
 use crate::output::{cat_file_with_syntax, print_error, print_success, print_warning};
 use crate::report::{generate_report, ReportFormat};
-use crate::shell::helpers::{show_tree, show_tree_at};
+use crate::shell::helpers::show_tree_at;
 use crate::t;
 
 use colored::*;
 
 use anyhow::Result;
 use std::path::Path;
+
+/// Quote-aware tokenizer that also returns byte spans (which include any
+/// surrounding quotes, so spans can be blanked out of the original string).
+fn tokenize_spans(args: &str) -> Vec<(String, usize, usize)> {
+    let mut out = Vec::new();
+    let mut cur = String::new();
+    let mut start: Option<usize> = None;
+    let mut in_quotes = false;
+    for (idx, ch) in args.char_indices() {
+        match ch {
+            '"' => {
+                if start.is_none() {
+                    start = Some(idx);
+                }
+                in_quotes = !in_quotes;
+            }
+            c if c.is_whitespace() && !in_quotes => {
+                if let Some(s) = start.take() {
+                    out.push((std::mem::take(&mut cur), s, idx));
+                }
+            }
+            _ => {
+                if start.is_none() {
+                    start = Some(idx);
+                }
+                cur.push(ch);
+            }
+        }
+    }
+    if let Some(s) = start {
+        out.push((cur, s, args.len()));
+    }
+    out
+}
+
+/// Split `-ext`/`--ext <ext...>` out of raw view args before target parsing
+/// (which would otherwise mistake the first extension for a target path).
+/// Returns (extensions, ext-flag-seen, cleaned-args with ext tokens blanked).
+fn extract_ext_filter(args: &str, cwd: &Path) -> (Vec<String>, bool, String) {
+    let toks = tokenize_spans(args);
+    let mut exts: Vec<String> = Vec::new();
+    let mut seen = false;
+    let mut remove: Vec<(usize, usize)> = Vec::new();
+    let mut i = 0;
+    while i < toks.len() {
+        let lower = toks[i].0.to_lowercase();
+        if lower == "-d" || lower == "--depth" || lower == "-p" || lower == "--path" {
+            // Skip value-taking flags and their values (mirrors extract_target_spec).
+            i += 2;
+            continue;
+        }
+        if lower == "-ext" || lower == "--ext" {
+            seen = true;
+            remove.push((toks[i].1, toks[i].2));
+            i += 1;
+            while i < toks.len() && !crate::filetype::is_ext_value_stop(&toks[i].0, cwd) {
+                remove.push((toks[i].1, toks[i].2));
+                for e in crate::filetype::split_extensions(&toks[i].0) {
+                    if !exts.contains(&e) {
+                        exts.push(e);
+                    }
+                }
+                i += 1;
+            }
+            continue;
+        }
+        i += 1;
+    }
+    let mut cleaned = args.to_string();
+    for (s, e) in remove {
+        cleaned.replace_range(s..e, &" ".repeat(e - s));
+    }
+    (exts, seen, cleaned)
+}
 
 pub fn cmd_view(args: &str, nav: &mut Navigator) -> Result<bool> {
     let mut show_filesize = false;
@@ -24,7 +98,14 @@ pub fn cmd_view(args: &str, nav: &mut Navigator) -> Result<bool> {
     let mut care_sizes = false;
     let mut show_time = false;
 
-    let parsed = match crate::shell::helpers::parse_target_arg(args, nav) {
+    let cwd = nav.current_path().to_path_buf();
+    let (exts, ext_seen, cleaned) = extract_ext_filter(args, &cwd);
+    if ext_seen && exts.is_empty() {
+        print_error(&t!("cmd.report.ext_usage"));
+        return Ok(false);
+    }
+
+    let parsed = match crate::shell::helpers::parse_target_arg(&cleaned, nav) {
         Ok(p) => p,
         Err(_) => return Ok(false),
     };
@@ -62,7 +143,12 @@ pub fn cmd_view(args: &str, nav: &mut Navigator) -> Result<bool> {
 
     let max_depth = depth_override.unwrap_or(Config::global_get_max_depth());
     let start = std::time::Instant::now();
-    match &parsed.path {
+    let filter = if exts.is_empty() {
+        None
+    } else {
+        Some(exts.as_slice())
+    };
+    let matched = match &parsed.path {
         Some(target) => show_tree_at(
             target,
             Some(max_depth),
@@ -72,17 +158,31 @@ pub fn cmd_view(args: &str, nav: &mut Navigator) -> Result<bool> {
             show_dirsize,
             copy_to_clipboard,
             care_sizes,
+            filter,
         ),
-        None => show_tree(
-            nav,
-            Some(max_depth),
-            true,
-            true,
-            show_filesize,
-            show_dirsize,
-            copy_to_clipboard,
-            care_sizes,
-        ),
+        None => {
+            let target = nav.current_path().to_path_buf();
+            show_tree_at(
+                &target,
+                Some(max_depth),
+                true,
+                true,
+                show_filesize,
+                show_dirsize,
+                copy_to_clipboard,
+                care_sizes,
+                filter,
+            )
+        }
+    };
+    if filter.is_some() && matched == 0 {
+        println!(
+            "{}",
+            t!(
+                "cmd.scan.no_files",
+                crate::filetype::format_ext_list(&exts)
+            )
+        );
     }
     if show_time {
         let elapsed = crate::explorer::format_duration(start.elapsed());
@@ -240,4 +340,49 @@ pub fn cmd_txtf(args: &str, nav: &mut Navigator) -> Result<bool> {
         }
     }
     Ok(false)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::path::PathBuf;
+
+    #[test]
+    fn ext_filter_splits_exts_and_keeps_path() {
+        let cwd = PathBuf::from("/tmp/ntc_ext_test");
+        let (exts, seen, cleaned) = extract_ext_filter("-ext rs c", &cwd);
+        assert_eq!(exts, vec!["rs", "c"]);
+        assert!(seen);
+        assert!(!cleaned.contains("-ext"));
+
+        let (exts, seen, cleaned) = extract_ext_filter("src -ext rs --dirsize", &cwd);
+        assert_eq!(exts, vec!["rs"]);
+        assert!(seen);
+        assert!(cleaned.contains("src"));
+        assert!(cleaned.contains("--dirsize"));
+    }
+
+    #[test]
+    fn ext_filter_stops_at_existing_dir() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::create_dir(dir.path().join("src")).unwrap();
+        let (exts, _, cleaned) = extract_ext_filter("-ext rs src", dir.path());
+        assert_eq!(exts, vec!["rs"]);
+        assert!(cleaned.contains("src"));
+    }
+
+    #[test]
+    fn ext_filter_flags_value_flags_are_skipped() {
+        let cwd = PathBuf::from("/tmp/ntc_ext_test");
+        let (exts, seen, cleaned) = extract_ext_filter("-d 2 -ext rs -p somewhere", &cwd);
+        assert_eq!(exts, vec!["rs"]);
+        assert!(seen);
+        assert!(cleaned.contains("-d"));
+        assert!(cleaned.contains("-p"));
+
+        // Bare `-ext` with no extensions is reported via the seen flag.
+        let (exts, seen, _) = extract_ext_filter("-ext -ds", &cwd);
+        assert!(seen);
+        assert!(exts.is_empty());
+    }
 }

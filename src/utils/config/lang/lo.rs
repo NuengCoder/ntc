@@ -18,6 +18,7 @@ pub(crate) mod part15;
 pub(crate) mod part16;
 pub(crate) mod part17;
 pub(crate) mod part18;
+pub(crate) mod part19;
 
 pub fn build_map() -> HashMap<String, String> {
     let mut m = HashMap::new();
@@ -39,5 +40,6 @@ pub fn build_map() -> HashMap<String, String> {
     part16::fill(&mut m);
     part17::fill(&mut m);
     part18::fill(&mut m);
+    part19::fill(&mut m);
     m
 }

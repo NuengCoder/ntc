@@ -1,13 +1,15 @@
 use crate::navigator::Navigator;
 use crate::output::print_info;
-use crate::search::ContentMatch;
+use crate::search::{display_content_path, ContentMatch};
 use crate::t;
 use anyhow::Result;
 use crossterm::cursor::{Hide, MoveTo, Show};
 use crossterm::event::{
     self, DisableMouseCapture, EnableMouseCapture, Event, KeyCode, KeyEventKind,
 };
-use crossterm::style::{Print, ResetColor, SetBackgroundColor, SetForegroundColor};
+use crossterm::style::{
+    Color as CxColor, Print, ResetColor, SetBackgroundColor, SetForegroundColor,
+};
 use crossterm::terminal::{self, Clear, ClearType, EnterAlternateScreen, LeaveAlternateScreen};
 use crossterm::{execute, queue};
 use std::collections::HashMap;
@@ -17,15 +19,18 @@ use std::path::{Path, PathBuf};
 
 const PREVIEW_LINES: usize = 4;
 const MAX_CACHED_FILE_LINES: usize = 50_000;
+/// Each interactive page holds exactly 10 matches.
+pub const GS_PAGE_SIZE: usize = 10;
 
 struct GsInteractive {
     matches: Vec<ContentMatch>,
     filtered: Vec<usize>,
     selected: usize,
-    scroll_offset: usize,
     term_h: usize,
     term_w: usize,
     file_cache: HashMap<PathBuf, Vec<String>>,
+    root: PathBuf,
+    pattern: String,
 }
 
 impl GsInteractive {
@@ -33,9 +38,29 @@ impl GsInteractive {
         self.filtered.len()
     }
 
+    fn page_count(&self) -> usize {
+        (self.total() + GS_PAGE_SIZE - 1) / GS_PAGE_SIZE.max(1)
+    }
+
+    fn page(&self) -> usize {
+        if self.total() == 0 {
+            0
+        } else {
+            self.selected / GS_PAGE_SIZE
+        }
+    }
+
+    fn page_range(&self) -> (usize, usize) {
+        let start = self.page() * GS_PAGE_SIZE;
+        let end = (start + GS_PAGE_SIZE).min(self.total());
+        (start, end)
+    }
+
     fn result_h(&self) -> usize {
-        let preview_h = (PREVIEW_LINES + 2).min(self.term_h.saturating_sub(4));
-        self.term_h.saturating_sub(4).saturating_sub(preview_h)
+        // Reserve header(2) + separators/preview; list area capped at page size.
+        let preview_h = (PREVIEW_LINES * 2 + 2).min(self.term_h.saturating_sub(4));
+        let avail = self.term_h.saturating_sub(4).saturating_sub(preview_h);
+        avail.clamp(1, GS_PAGE_SIZE).max(1)
     }
 
     fn selected_match(&self) -> Option<&ContentMatch> {
@@ -59,13 +84,135 @@ impl GsInteractive {
         self.file_cache.get(path).cloned().unwrap_or_default()
     }
 
-    fn ensure_visible(&mut self) {
-        let rh = self.result_h().max(1);
-        if self.selected < self.scroll_offset {
-            self.scroll_offset = self.selected;
-        } else if self.selected >= self.scroll_offset + rh {
-            self.scroll_offset = self.selected.saturating_add(1).saturating_sub(rh);
+    fn goto_page(&mut self, page: usize) {
+        let pc = self.page_count();
+        if pc == 0 {
+            self.selected = 0;
+            return;
         }
+        let p = page.min(pc - 1);
+        self.selected = (p * GS_PAGE_SIZE).min(self.total().saturating_sub(1));
+    }
+
+    fn next_page(&mut self) {
+        self.goto_page(self.page() + 1);
+    }
+
+    fn prev_page(&mut self) {
+        self.goto_page(self.page().saturating_sub(1));
+    }
+
+    fn ensure_visible(&mut self) {
+        // Selection drives the page; nothing else to sync.
+        if self.total() == 0 {
+            self.selected = 0;
+            return;
+        }
+        self.selected = self.selected.min(self.total() - 1);
+    }
+
+    /// Split `text` into (segment, is_match) for red pattern highlight.
+    fn match_segments<'a>(&self, text: &'a str) -> Vec<(&'a str, bool)> {
+        if self.pattern.is_empty() {
+            return vec![(text, false)];
+        }
+        let lower = text.to_lowercase();
+        let pat = self.pattern.to_lowercase();
+        let mut segs = Vec::new();
+        let mut i = 0usize;
+        while i < text.len() {
+            if lower[i..].starts_with(pat.as_str()) {
+                let mut e = (i + self.pattern.len()).min(text.len());
+                while e < text.len() && !text.is_char_boundary(e) {
+                    e += 1;
+                }
+                let mut s = i;
+                while s < e && !text.is_char_boundary(s) {
+                    s += 1;
+                }
+                segs.push((&text[s..e], true));
+                i = e;
+            } else {
+                // Extend current non-match run by one char.
+                let ch_len = text[i..].chars().next().map(|c| c.len_utf8()).unwrap_or(1);
+                if let Some((_, true)) = segs.last() {
+                    segs.push((&text[i..i + ch_len], false));
+                } else if let Some(last) = segs.last_mut() {
+                    let start = text.as_ptr() as usize;
+                    let cur_end = last.0.as_ptr() as usize + last.0.len() - start;
+                    last.0 = &text[cur_end - last.0.len()..i + ch_len];
+                } else {
+                    segs.push((&text[i..i + ch_len], false));
+                }
+                i += ch_len;
+            }
+        }
+        segs
+    }
+
+    fn truncate_chars(s: &str, max: usize) -> &str {
+        if s.len() <= max {
+            return s;
+        }
+        let mut end = max.min(s.len());
+        while end > 0 && !s.is_char_boundary(end) {
+            end -= 1;
+        }
+        &s[..end]
+    }
+
+    fn render_row_highlighted(
+        &self,
+        stdout: &mut std::io::Stdout,
+        row: usize,
+        prefix: &str,
+        content: &str,
+        is_selected: bool,
+    ) -> std::io::Result<()> {
+        let theme = crate::utils::theme::ThemeManager::current();
+        let cols = self.term_w;
+        queue!(stdout, MoveTo(0, row as u16))?;
+        if is_selected {
+            queue!(
+                stdout,
+                SetForegroundColor(theme.editor.selection_bg.to_crossterm()),
+                SetBackgroundColor(theme.editor.selection_bg.to_crossterm()),
+            )?;
+            queue!(stdout, Print(prefix))?;
+            for (seg, is_hit) in self.match_segments(content) {
+                if is_hit {
+                    queue!(
+                        stdout,
+                        SetForegroundColor(CxColor::Red),
+                        SetBackgroundColor(theme.editor.selection_bg.to_crossterm()),
+                        Print(seg),
+                        SetForegroundColor(theme.editor.selection_bg.to_crossterm()),
+                    )?;
+                } else {
+                    queue!(stdout, Print(seg))?;
+                }
+            }
+            queue!(stdout, ResetColor)?;
+        } else {
+            queue!(stdout, Print(prefix))?;
+            for (seg, is_hit) in self.match_segments(content) {
+                if is_hit {
+                    queue!(
+                        stdout,
+                        SetForegroundColor(CxColor::Red),
+                        Print(seg),
+                        ResetColor,
+                    )?;
+                } else {
+                    queue!(stdout, Print(seg))?;
+                }
+            }
+            queue!(stdout, ResetColor)?;
+        }
+        // Clear rest of line without counting ANSI widths precisely.
+        queue!(stdout, Clear(ClearType::UntilNewLine))?;
+        let _ = cols;
+        Ok(())
     }
 
     fn render(&mut self, stdout: &mut std::io::Stdout) -> std::io::Result<()> {
@@ -73,23 +220,21 @@ impl GsInteractive {
         let cols = self.term_w;
         let rh = self.result_h().max(1);
         let total = self.total();
-        let display_idx = self.filtered.get(self.selected).copied().unwrap_or(0);
         let global_total = self.matches.len();
+        let (page_start, page_end) = self.page_range();
+        let pc = self.page_count();
 
         queue!(stdout, terminal::Clear(ClearType::All))?;
 
         // ── Header ──
         let header = format!(
-            " gs: {} of {} matches (in {} files)  |  j/k ↑↓ navigate  |  Enter=open  |  q=quit ",
-            display_idx + 1,
+            " gs: {} of {} matches | page {}/{} (10/page)  |  j/k navigate  |  n/p page  |  Enter=open  |  q=quit ",
+            if total == 0 { 0 } else { self.selected + 1 },
             global_total,
-            total,
+            if pc == 0 { 0 } else { self.page() + 1 },
+            pc.max(1),
         );
-        let truncated = if header.len() > cols {
-            &header[..cols]
-        } else {
-            &header
-        };
+        let truncated = Self::truncate_chars(&header, cols);
         queue!(
             stdout,
             MoveTo(0, 0),
@@ -103,15 +248,15 @@ impl GsInteractive {
         let sep = "\u{2500}".repeat(cols);
         queue!(stdout, MoveTo(0, 1), Print(&sep), ResetColor)?;
 
-        // ── Results list ──
-        let preview_top = 2 + rh;
+        // ── Results list (current page only) ──
+        let preview_top = 2 + rh.max(page_end.saturating_sub(page_start).max(1));
         for i in 0..rh {
-            let idx = self.scroll_offset + i;
+            let idx = page_start + i;
             let row = 2 + i;
             if row >= self.term_h {
                 break;
             }
-            if idx >= total {
+            if idx >= page_end {
                 queue!(
                     stdout,
                     MoveTo(0, row as u16),
@@ -120,36 +265,28 @@ impl GsInteractive {
                 continue;
             }
             let m = &self.matches[self.filtered[idx]];
-            let line = m.line.trim();
-            let display = format!(
-                "{}:{}: {}",
-                m.file_path.display(),
-                m.line_number,
-                if line.len() > cols.saturating_sub(20) {
-                    &line[..cols.saturating_sub(23)]
-                } else {
-                    line
-                }
-            );
-            let truncated = if display.len() > cols {
-                &display[..cols]
-            } else {
-                &display
-            };
-
+            let rel = display_content_path(&m.file_path, &self.root);
+            let prefix = format!("{}:{}: ", rel, m.line_number);
+            let content = m.line.trim();
+            let avail = cols.saturating_sub(prefix.len() + 1);
+            let shown = Self::truncate_chars(content, avail.max(10));
             let is_selected = idx == self.selected;
-            if is_selected {
-                queue!(
-                    stdout,
-                    MoveTo(0, row as u16),
-                    SetForegroundColor(theme.editor.selection_bg.to_crossterm()),
-                    SetBackgroundColor(theme.editor.selection_bg.to_crossterm()),
-                    Print(truncated),
-                    ResetColor,
-                )?;
-            } else {
-                queue!(stdout, MoveTo(0, row as u16), Print(truncated), ResetColor,)?;
-            }
+            self.render_row_highlighted(stdout, row, &prefix, shown, is_selected)?;
+        }
+
+        // ── Footer / page bar ──
+        let footer_row = 2 + rh;
+        if footer_row < self.term_h {
+            let footer = format!(
+                " ── page {}/{} · showing {}–{} of {} · n/p or PgUp/PgDn ── ",
+                if pc == 0 { 0 } else { self.page() + 1 },
+                pc.max(1),
+                if total == 0 { 0 } else { page_start + 1 },
+                page_end,
+                total,
+            );
+            let ft = Self::truncate_chars(&footer, cols);
+            queue!(stdout, MoveTo(0, footer_row as u16), Print(ft), ResetColor)?;
         }
 
         // ── Preview separator ──
@@ -181,21 +318,13 @@ impl GsInteractive {
             let display = if src_line >= 1 && src_line <= lines.len() {
                 let text = &lines[src_line - 1];
                 let available = cols.saturating_sub(7);
-                let text = if text.len() > available {
-                    &text[..available]
-                } else {
-                    text
-                };
+                let text = Self::truncate_chars(text, available);
                 format!("{}{}", prefix, text)
             } else {
                 format!("{}~", prefix)
             };
 
-            let truncated = if display.len() > cols {
-                &display[..cols]
-            } else {
-                &display
-            };
+            let truncated = Self::truncate_chars(&display, cols);
 
             if src_line == line_num {
                 queue!(
@@ -235,7 +364,11 @@ impl Drop for TerminalGuard {
     }
 }
 
-pub fn run_gs_interactive(matches: Vec<ContentMatch>, _root: &Path) -> Result<bool> {
+pub fn run_gs_interactive(
+    matches: Vec<ContentMatch>,
+    root: &Path,
+    pattern: &str,
+) -> Result<bool> {
     if matches.is_empty() {
         print_info(&t!("cmd.gs.no_matches"));
         return Ok(false);
@@ -261,10 +394,11 @@ pub fn run_gs_interactive(matches: Vec<ContentMatch>, _root: &Path) -> Result<bo
         matches,
         filtered: all,
         selected: 0,
-        scroll_offset: 0,
         term_h: h,
         term_w: w,
         file_cache: HashMap::new(),
+        root: root.to_path_buf(),
+        pattern: pattern.to_string(),
     };
 
     gs.ensure_visible();
@@ -286,7 +420,11 @@ pub fn run_gs_interactive(matches: Vec<ContentMatch>, _root: &Path) -> Result<bo
                         if let Some(m) = gs.selected_match() {
                             let path = m.file_path.clone();
                             let line = m.line_number;
+                            let pat = gs.pattern.clone();
                             drop(_guard);
+                            // Flag editor to center + transiently highlight target line.
+                            crate::editor::GOTO_HIGHLIGHT.store(true, std::sync::atomic::Ordering::SeqCst);
+                            crate::editor::set_goto_pattern(&pat);
                             // Open ntcEditor at the file and line
                             crate::shell::commands::misc::cmd_ne(
                                 &format!("{}:{}", path.display(), line),
@@ -310,20 +448,28 @@ pub fn run_gs_interactive(matches: Vec<ContentMatch>, _root: &Path) -> Result<bo
                         gs.render(&mut stdout)?;
                     }
                     KeyCode::PageUp => {
-                        let page = gs.result_h().max(1);
-                        gs.selected = gs.selected.saturating_sub(page);
+                        gs.prev_page();
                         gs.ensure_visible();
                         gs.render(&mut stdout)?;
                     }
-                    KeyCode::PageDown => {
-                        let page = gs.result_h().max(1);
-                        gs.selected = (gs.selected + page).min(gs.total().saturating_sub(1));
+                    KeyCode::PageDown | KeyCode::Char(' ') => {
+                        gs.next_page();
+                        gs.ensure_visible();
+                        gs.render(&mut stdout)?;
+                    }
+                    KeyCode::Char('n') | KeyCode::Right => {
+                        gs.next_page();
+                        gs.ensure_visible();
+                        gs.render(&mut stdout)?;
+                    }
+                    KeyCode::Char('p') | KeyCode::Left => {
+                        gs.prev_page();
                         gs.ensure_visible();
                         gs.render(&mut stdout)?;
                     }
                     KeyCode::Home => {
                         gs.selected = 0;
-                        gs.scroll_offset = 0;
+                        gs.ensure_visible();
                         gs.render(&mut stdout)?;
                     }
                     KeyCode::End => {

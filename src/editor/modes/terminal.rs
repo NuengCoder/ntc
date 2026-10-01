@@ -122,7 +122,9 @@ impl Editor {
                 let shift = modifiers.contains(KeyModifiers::SHIFT);
                 let alt = modifiers.contains(KeyModifiers::ALT);
                 match (ctrl, shift, code) {
-                    (false, false, KeyCode::Esc) => {
+                    // Esc / Ctrl+Q fully hide the panel (not just unfocus).
+                    (false, false, KeyCode::Esc) | (true, false, KeyCode::Char('q')) => {
+                        self.terminal = None;
                         self.focus = Focus::Editor;
                         self.mark_all_dirty();
                     }

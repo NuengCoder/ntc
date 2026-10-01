@@ -6,6 +6,186 @@ pub fn build_map() -> HashMap<String, String> {
 
     let mut m = HashMap::new();
 
+    // ========== ndb (database shell) ==========
+    m.insert("ndb.banner".into(), "ndb {} - NTC Database shell".into());
+    m.insert("ndb.cwd_line".into(), "cwd: {}".into());
+    m.insert("ndb.no_db_files".into(), "No .db files found in the current directory.".into());
+    m.insert("ndb.no_db_files_hint".into(), "Add a database file here, or cd into a folder that has one.".into());
+    m.insert("ndb.db_files_header".into(), "Available databases ({}):".into());
+    m.insert("ndb.tables_count".into(), "{} tables".into());
+    m.insert("ndb.not_a_db".into(), "not a database".into());
+    m.insert("ndb.pick_db".into(), "Select a database to OPEN".into());
+    m.insert("ndb.pick_table".into(), "Select a table to DISPLAY".into());
+    m.insert("ndb.pick_prompt".into(), "Enter number (1-{}) or 0: ".into());
+    m.insert("ndb.open_failed".into(), "Failed to open '{}': {}".into());
+    m.insert("ndb.opened".into(), "Opened database: {} (read-only)".into());
+    m.insert("ndb.hint_next".into(), "Use 'tables', 'viewf', 'tablef <table>', 'schema <table>', 'sql <query>', 'exit'.".into());
+    m.insert("ndb.no_tables".into(), "This database has no tables.".into());
+    m.insert("ndb.query_failed".into(), "Query failed: {}".into());
+    m.insert("ndb.unknown_cmd".into(), "Unknown ndb command: '{}'".into());
+    m.insert("ndb.hint_help".into(), "Type 'help' to list every ndb command.".into());
+    m.insert("ndb.interface_usage".into(), "Usage: interface <file.db>  (or 'view' to list databases)".into());
+    m.insert("ndb.sql_needs_db".into(), "Open a database first: interface <file.db>".into());
+    m.insert("ndb.sql_usage".into(), "Usage: sql <query>   e.g. sql SELECT * FROM users".into());
+    m.insert("ndb.sql_blocked".into(), "ndb is read-only: only SELECT, PRAGMA, EXPLAIN, WITH and VALUES are allowed.".into());
+    m.insert("ndb.sql_error".into(), "SQL error: {}".into());
+    m.insert("ndb.table_not_found".into(), "Table not found: {}".into());
+    m.insert("ndb.schema_header".into(), "Schema for '{}':".into());
+    m.insert("ndb.schema_usage".into(), "Usage: schema <table>".into());
+    m.insert("ndb.showing_table".into(), "Table: {} (read-only)".into());
+    m.insert("ndb.editor_fail".into(), "Failed to create line editor: {}".into());
+    m.insert("ndb.start_hint".into(), "Type 'help' for commands, 'exit' to return to the ntc shell.".into());
+    m.insert("ndb.closed_db".into(), "Database closed.".into());
+    m.insert("ndb.bye".into(), "Left ndb shell.".into());
+    m.insert("ndb.no_args".into(), "Usage: ndb   (opens the ndb database shell)".into());
+    m.insert("ndb.null".into(), "NULL".into());
+    m.insert("ndb.kind_view".into(), "view".into());
+    m.insert("ndb.kind_table".into(), "table".into());
+    m.insert("ndb.columns_count".into(), "{} columns".into());
+    m.insert("ndb.rows_count".into(), "{} rows".into());
+    m.insert("ndb.rows_empty".into(), "0 rows".into());
+    m.insert("ndb.rows_shown".into(), "{} row(s) shown".into());
+    m.insert("ndb.rows_truncated".into(), "Showing the first {} row(s) - use --all or -l <n> for more.".into());
+    m.insert("ndb.no_columns".into(), "Statement returned no columns.".into());
+    m.insert("ndb.col_name".into(), "NAME".into());
+    m.insert("ndb.col_kind".into(), "KIND".into());
+    m.insert("ndb.col_columns".into(), "COLUMNS".into());
+    m.insert("ndb.col_rows".into(), "ROWS".into());
+    m.insert("ndb.col_type".into(), "TYPE".into());
+    m.insert("ndb.col_constraints".into(), "CONSTRAINTS".into());
+
+    // ========== ndb in-shell help ==========
+    m.insert("ndb.help_root_title".into(), "NDB - DATABASE SHELL (no database open):".into());
+    m.insert("ndb.help_root_help".into(), "help | h | ?               Show this command list".into());
+    m.insert("ndb.help_root_view".into(), "view | ls                  List .db files in the current directory".into());
+    m.insert("ndb.help_root_interface".into(), "interface <file.db>       Open a database (prompt becomes ndb [file.db]>)".into());
+    m.insert("ndb.help_root_sql".into(), "sql                        Run queries once a database is open (interface first)".into());
+    m.insert("ndb.help_root_clear".into(), "clear | cls                Clear screen and re-show databases".into());
+    m.insert("ndb.help_root_exit".into(), "exit | q                   Return to the ntc shell".into());
+    m.insert("ndb.help_db_title".into(), "NDB - DATABASE SHELL (read-only):".into());
+    m.insert("ndb.help_db_help".into(), "help | h | ?               Show this command list".into());
+    m.insert("ndb.help_db_viewf".into(), "viewf | v                  Show the schema tree (tables + columns)".into());
+    m.insert("ndb.help_db_tables".into(), "tables [pattern]          List table and view names (optional filter)".into());
+    m.insert("ndb.help_db_tablef".into(), "tablef <table>             Display rows of a table (like txtf)".into());
+    m.insert("ndb.help_db_schema".into(), "schema <table>             Show CREATE SQL, columns, indexes, keys".into());
+    m.insert("ndb.help_db_sql".into(), "sql <query>                Run a read-only query (-l N, --all)".into());
+    m.insert("ndb.help_db_write".into(), "write YES <stmt>           Run one write (INSERT/UPDATE/DELETE, needs edit on)".into());
+    m.insert("ndb.help_db_edit".into(), "edit on|off               Allow or block writes for this database".into());
+    m.insert("ndb.help_db_backup".into(), "backup                     Copy the .db file next to itself".into());
+    m.insert("ndb.help_db_more".into(), "more | next              Show the next page of the last query".into());
+    m.insert("ndb.help_db_indexes".into(), "indexes [table]          List indexes (all, or for one table)".into());
+    m.insert("ndb.help_db_info".into(), "info                     Show file, engine and object counts".into());
+    m.insert("ndb.help_db_interface".into(), "interface <file.db>       Switch to another database".into());
+    m.insert("ndb.info_title".into(), "Database info: {}".into());
+    m.insert("ndb.col_property".into(), "PROPERTY".into());
+    m.insert("ndb.col_value".into(), "VALUE".into());
+    m.insert("ndb.info_file".into(), "File".into());
+    m.insert("ndb.info_size".into(), "Size".into());
+    m.insert("ndb.info_sqlite".into(), "SQLite".into());
+    m.insert("ndb.info_page".into(), "Page size".into());
+    m.insert("ndb.info_pages".into(), "Pages".into());
+    m.insert("ndb.info_tables".into(), "Tables".into());
+    m.insert("ndb.info_views".into(), "Views".into());
+    m.insert("ndb.info_indexes".into(), "Indexes".into());
+    m.insert("ndb.info_triggers".into(), "Triggers".into());
+    m.insert("ndb.indexes_title".into(), "Indexes ({}):".into());
+    m.insert("ndb.no_indexes".into(), "No indexes found.".into());
+    m.insert("ndb.col_table".into(), "TABLE".into());
+    m.insert("ndb.col_unique".into(), "UNIQUE".into());
+    m.insert("ndb.col_from".into(), "FROM".into());
+    m.insert("ndb.col_to".into(), "TO".into());
+    m.insert("ndb.fkeys_title".into(), "Foreign keys:".into());
+    m.insert("ndb.triggers_title".into(), "Triggers:".into());
+    m.insert("ndb.query_time".into(), "query took {} ms".into());
+    m.insert("ndb.more_empty".into(), "No more rows.".into());
+    m.insert("ndb.no_query_yet".into(), "Run 'sql <query>' or 'tablef <table>' first, then 'more'.".into());
+    m.insert("ndb.multiline_hint".into(), "Enter SQL ending with ';' (Ctrl-C aborts):".into());
+    m.insert("ndb.yes".into(), "yes".into());
+    m.insert("ndb.no".into(), "no".into());
+    m.insert("ndb.help_db_clear".into(), "clear | cls                Clear screen and re-show tables".into());
+    m.insert("ndb.help_db_exit".into(), "exit | q                   Close the database, back to ndb [cwd]>".into());
+    m.insert("ndb.help_dbal".into(), "dbal                          Manage saved queries (db aliases)".into());
+    m.insert("ndb.dbal_title".into(), "DBAL - DATABASE ALIASES (saved read-only queries):".into());
+    m.insert("ndb.dbal_add".into(), "dbal add <name> \"<SELECT ...>\"   Save a query".into());
+    m.insert("ndb.dbal_edit".into(), "dbal edit <name> \"<SELECT ...>\"  Update a saved query".into());
+    m.insert("ndb.dbal_rnm".into(), "dbal rnm <old> to <new>          Rename an alias".into());
+    m.insert("ndb.dbal_rm".into(), "dbal rm <name>                  Remove an alias".into());
+    m.insert("ndb.dbal_info".into(), "dbal info <name>                Show an alias body".into());
+    m.insert("ndb.dbal_list".into(), "dbal list                     List saved queries".into());
+    m.insert("ndb.dbal_run".into(), "dbal run <name> [args] [-l N|--all]  Run a saved query ($params)".into());
+    m.insert("ndb.dbal_cls".into(), "dbal cls --force               Remove ALL aliases".into());
+    m.insert("ndb.dbal_exec".into(), "<name>                          Run a saved query directly".into());
+    m.insert("ndb.dbal_note".into(), "Aliases store read-only queries only; writes are rejected. Type an alias name to run it. Values substitute literally — quote strings yourself: dbal run q \"'2026-01-01'\".".into());
+    m.insert("ndb.dbal_params".into(), "params: {}".into());
+    m.insert("ndb.dbal_missing_args".into(), "Missing value for parameter(s): {}".into());
+    m.insert("ndb.dbal_single_only".into(), "dbal aliases hold a single statement — use && to run several.".into());
+    m.insert("ndb.dbal_add_usage".into(), "Usage: dbal add <name> \"<SELECT ...>\"".into());
+    m.insert("ndb.dbal_edit_usage".into(), "Usage: dbal edit <name> \"<SELECT ...>\"".into());
+    m.insert("ndb.dbal_rnm_usage".into(), "Usage: dbal rnm <old> to <new>".into());
+    m.insert("ndb.dbal_rm_usage".into(), "Usage: dbal rm <name>".into());
+    m.insert("ndb.dbal_info_usage".into(), "Usage: dbal info <name>".into());
+    m.insert("ndb.dbal_run_usage".into(), "Usage: dbal run <name> [-l N | --all]".into());
+    m.insert("ndb.dbal_cls_usage".into(), "Usage: dbal cls --force   (removes ALL db aliases)".into());
+    m.insert("ndb.dbal_added".into(), "Alias '{}' added ({})".into());
+    m.insert("ndb.dbal_updated".into(), "Alias '{}' updated".into());
+    m.insert("ndb.dbal_removed".into(), "Alias '{}' removed".into());
+    m.insert("ndb.dbal_renamed".into(), "Renamed '{}' to '{}'".into());
+    m.insert("ndb.dbal_cleared".into(), "Cleared {} db alias(es) ({})".into());
+    m.insert("ndb.dbal_not_found".into(), "Alias '{}' not found".into());
+    m.insert("ndb.dbal_invalid_name".into(), "Invalid alias name: '{}'".into());
+    m.insert("ndb.dbal_name_rules".into(), "Names must not be ndb commands and must not contain spaces or quotes.".into());
+    m.insert("ndb.dbal_blocked".into(), "dbal stores read-only queries only: only SELECT, PRAGMA, EXPLAIN, WITH and VALUES are allowed.".into());
+    m.insert("ndb.dbal_unknown_sub".into(), "Unknown dbal command: '{}'".into());
+    m.insert("ndb.dbal_no_aliases".into(), "No database aliases yet. Add one: dbal add <name> \"<SELECT ...>\"".into());
+    m.insert("ndb.dbal_scope_local".into(), "local".into());
+    m.insert("ndb.dbal_scope_global".into(), "global".into());
+    m.insert("ndb.col_sql".into(), "SQL".into());
+    m.insert("ndb.help_note".into(), "Every database is opened read-only; ndb never modifies your files.".into());
+    m.insert("ndb.help_readonly".into(), "Read-only: only SELECT, PRAGMA, EXPLAIN, WITH and VALUES are executed.".into());
+    m.insert("ndb.help_limit".into(), "Row limit: 50 by default (-l <n> to change, --all for every row).".into());
+    m.insert("ndb.edit_on".into(), "Edit mode ON for {} (writes enabled)".into());
+    m.insert("ndb.edit_warn".into(), "Writes need explicit confirm: write YES <INSERT|UPDATE|DELETE|REPLACE ...>".into());
+    m.insert("ndb.edit_failed".into(), "Failed to enable edit mode: {}".into());
+    m.insert("ndb.edit_off".into(), "Edit mode OFF (read-only)".into());
+    m.insert("ndb.edit_status".into(), "Edit mode: {}".into());
+    m.insert("ndb.edit_state_on".into(), "ON".into());
+    m.insert("ndb.edit_state_off".into(), "OFF".into());
+    m.insert("ndb.edit_usage".into(), "Usage: edit on|off".into());
+    m.insert("ndb.write_needs_edit".into(), "Writes are disabled: run `edit on` first".into());
+    m.insert("ndb.write_usage".into(), "Usage: write YES <INSERT|UPDATE|DELETE|REPLACE ...>".into());
+    m.insert("ndb.write_blocked".into(), "Only INSERT, UPDATE, DELETE and REPLACE are allowed via `write`".into());
+    m.insert("ndb.write_confirm".into(), "About to run: {}".into());
+    m.insert("ndb.write_confirm_hint".into(), "Re-run with YES to confirm: write YES <statement>".into());
+    m.insert("ndb.write_done".into(), "Write applied: {} row(s) affected".into());
+    m.insert("ndb.write_failed".into(), "Write failed: {}".into());
+    m.insert("ndb.backup_done".into(), "Backup saved: {}".into());
+    m.insert("ndb.backup_failed".into(), "Backup failed: {}".into());
+
+    // ========== help.ndb (ntc shell help section) ==========
+    m.insert("help.ndb.title".into(), "NDB (DATABASE) COMMANDS:".into());
+    m.insert("help.ndb.launch".into(), "ndb ## Open the ndb database shell (.db browser) in the current directory".into());
+    m.insert("help.ndb.root_help".into(), "help ## Show every ndb command (inside ndb)".into());
+    m.insert("help.ndb.root_view".into(), "view | ls ## List available .db files (inside ndb)".into());
+    m.insert("help.ndb.root_interface".into(), "interface <file.db> ## Open a database: prompt becomes ndb [file.db]>".into());
+    m.insert("help.ndb.root_sql".into(), "sql <query> ## Run a read-only query once a database is open".into());
+    m.insert("help.ndb.root_exit".into(), "exit ## Close the database, then leave ndb".into());
+    m.insert("help.ndb.db_viewf".into(), "viewf | v ## Show the schema tree of tables and columns".into());
+    m.insert("help.ndb.db_tables".into(), "tables | t ## List table and view names".into());
+    m.insert("help.ndb.db_tablef".into(), "tablef <table> ## Display a table's rows (like txtf)".into());
+    m.insert("help.ndb.db_schema".into(), "schema <table> ## Show CREATE TABLE SQL and column details".into());
+    m.insert("help.ndb.db_sql".into(), "sql <query> ## Run a read-only query (-l N rows, --all)".into());
+    m.insert("help.ndb.db_write".into(), "write YES <stmt> ## Run one write, needs edit on (inside ndb)".into());
+    m.insert("help.ndb.db_edit".into(), "edit on|off ## Allow or block writes (inside ndb)".into());
+    m.insert("help.ndb.db_backup".into(), "backup ## Copy the .db file next to itself (inside ndb)".into());
+    m.insert("help.ndb.more".into(), "more ## Show the next page of the last query (inside ndb)".into());
+    m.insert("help.ndb.indexes".into(), "indexes [table] ## List indexes (inside ndb)".into());
+    m.insert("help.ndb.info".into(), "info ## Show database file, engine and object counts (inside ndb)".into());
+    m.insert("help.ndb.dbal".into(), "dbal ## Manage saved read-only queries: add|run|list|rm (inside ndb)".into());
+    m.insert("help.ndb.db_exit".into(), "exit ## Close the database and return to ndb [cwd]>".into());
+    m.insert("help.ndb.readonly".into(), "read-only ## writes are blocked".into());
+    m.insert("help.ndb.example1".into(), "ndb ## then: interface users.db".into());
+    m.insert("help.ndb.example2".into(), "ndb ## then: tablef users --all".into());
+
     m.insert("alias.ral.add_cmd".into(), " ral add <name> <command> Create a new run alias".into());
 
     m.insert("alias.ral.alias_count".into(), "You have {} alias(es) defined:".into());
@@ -492,7 +672,6 @@ pub fn build_map() -> HashMap<String, String> {
 
     m.insert("clap.arg.copy.help".into(), "Copy report to clipboard instead of saving to file".into());
 
-    m.insert("clap.arg.dino.help".into(), "Play the dinosaur runner game".into());
 
     m.insert("clap.arg.edit.help".into(), "Open file in built-in text editor".into());
 
@@ -664,7 +843,6 @@ pub fn build_map() -> HashMap<String, String> {
 
     m.insert("cli.flag.copy".into(), " --cp Copy report to clipboard instead of saving to file".into());
 
-    m.insert("cli.flag.dino".into(), " --dino Play the dinosaur runner game".into());
 
     m.insert("cli.flag.edit".into(), " -e, --edit <file> Open file in built-in text editor".into());
 
@@ -776,7 +954,7 @@ pub fn build_map() -> HashMap<String, String> {
 
     m.insert("cli.helpers.other_header".into(), "OTHER OPTIONS:".into());
 
-    m.insert("cli.helpers.other_options".into(), " -say, -print <text> Print text to stdout\n -image <path> to <fmt> Convert image to document for AI (json|md|html|txt)\n -x, --explorer [PATH] Launch NTC File Explorer TUI\n --dino Play the dinosaur runner game\n --clear Clear the terminal screen\n --version Show version information\n --math <EXPR> Evaluate a math expression (e.g. --math \"3+4*5\")\n --list, --fun List all command-line functions\n --help Show this help message\n --generate-completions <SHELL> Generate completions (bash|zsh|fish|powershell)\n".into());
+    m.insert("cli.helpers.other_options".into(), " -say, -print <text> Print text to stdout\n -image <path> to <fmt> Convert image to document for AI (json|md|html|txt)\n -x, --explorer [PATH] Launch NTC File Explorer TUI\n --clear Clear the terminal screen\n --version Show version information\n --math <EXPR> Evaluate a math expression (e.g. --math \"3+4*5\")\n --list, --fun List all command-line functions\n --help Show this help message\n --generate-completions <SHELL> Generate completions (bash|zsh|fish|powershell)\n".into());
 
     m.insert("cli.helpers.report_header".into(), "REPORT OPTIONS:".into());
 
@@ -810,7 +988,6 @@ pub fn build_map() -> HashMap<String, String> {
 
     m.insert("cli.known_flag.cp".into(), "--cp Copy report to clipboard".into());
 
-    m.insert("cli.known_flag.dino".into(), "--dino Play the dinosaur runner game".into());
 
     m.insert("cli.known_flag.explorer".into(), "-x, --explorer [PATH] Launch NTC File Explorer TUI".into());
 
@@ -922,7 +1099,6 @@ pub fn build_map() -> HashMap<String, String> {
 
     m.insert("cli.run.help_copy".into(), "Copy report to clipboard instead of saving to file".into());
 
-    m.insert("cli.run.help_dino".into(), "Play the dinosaur runner game".into());
 
     m.insert("cli.run.help_edit".into(), "Open file in built-in text editor".into());
 
@@ -1346,7 +1522,9 @@ pub fn build_map() -> HashMap<String, String> {
 
     m.insert("cmd.config.watch.trigger_usage".into(), "config watch trigger <alias> Auto-run alias on change".into());
 
-    m.insert("cmd.config.watch.usage".into(), "Use: config watch ON | config watch OFF | config watch trigger <alias> | config watch trigger off".into());
+    m.insert("cmd.config.watch.limit_usage".into(), "config watch limit <n> Rows shown in change box".into());
+
+    m.insert("cmd.config.watch.usage".into(), "Use: config watch ON | config watch OFF | config watch trigger <alias> | config watch trigger off | config watch limit <n>".into());
 
     m.insert("cmd.config.watch.usage_line".into(), "Usage: config watch ON|OFF".into());
 
@@ -1700,11 +1878,21 @@ pub fn build_map() -> HashMap<String, String> {
 
     m.insert("cmd.image.no_files".into(), "No image files found in current directory.".into());
 
-    m.insert("cmd.image.select_image".into(), "Select image:".into());
+    m.insert("cmd.image.displaying".into(), "Displaying {} ({}x{}) via {}".into());
 
     m.insert("cmd.image.select_image".into(), "Select image:".into());
 
-    m.insert("cmd.image.usage".into(), "Usage: image <path> [to|out <format>] [--ocr] [--layout]".into());
+    m.insert("cmd.image.select_image".into(), "Select image:".into());
+
+    m.insert("cmd.image.usage".into(), "Usage: image <path> [display|show|to|out <format>] [--ocr] [--layout]".into());
+
+    m.insert("cmd.ipcfg.dns_label".into(), "DNS ......... :".into());
+
+    m.insert("cmd.ipcfg.no_adapters".into(), "No network adapters found.".into());
+
+    m.insert("cmd.ipcfg.no_such_adapter".into(), "No such adapter: '{}'.".into());
+
+    m.insert("cmd.ipcfg.title".into(), "Network adapters:".into());
 
     m.insert("cmd.image_disabled".into(), "Image conversion not available (feature 'image2doc' disabled).".into());
 
@@ -2016,13 +2204,64 @@ pub fn build_map() -> HashMap<String, String> {
 
     m.insert("cmd.report.skipped_unsupported".into(), "Skipped (not support format): {}".into());
 
+    m.insert("cmd.report.ext_usage".into(), "Usage: view -ext <ext...>  (e.g. view -ext rs c)".into());
+
     m.insert("cmd.report.time_label".into(), "Time:".into());
 
     m.insert("cmd.report.title".into(), "report — Generate project reports".into());
 
     m.insert("cmd.report.unknown_option".into(), "Unknown view option: {}".into());
 
-    m.insert("cmd.report.view_usage".into(), "Usage: view [-s|--size] [-c|--cp] [--care] [-t|--time] [-d|--depth <n>] [-p|--path <path|@tp>]".into());
+    m.insert("cmd.scan.depth_usage".into(), "Usage: scan ext <ext...> [-d|--depth <n>] [-s|--size] [--care]".into());
+    m.insert("cmd.scan.examples_title".into(), "Examples:".into());
+    m.insert("cmd.scan.ext_usage".into(), "Usage: scan ext <ext...> [-d|--depth <n>] [-s|--size] [--care]".into());
+    m.insert("cmd.scan.help_ext".into(), "  scan ext <ext...> [-d|--depth <n>] [-s|--size] [--care]  List files by extension (no line counts)".into());
+
+    m.insert("cmd.scan.help_port".into(), "  scan port [host] [--top N | --ports <spec> | --all] [--timeout MS]  TCP port scan (default host 127.0.0.1, top 20)".into());
+
+    m.insert("cmd.scan.help_ip".into(), "  scan ip [cidr] [--top N | --ports <spec>] [--timeout MS]  Live-host sweep (default auto local /24)".into());
+
+    m.insert("cmd.scan.ip_arp_only".into(), "(arp)".into());
+
+    m.insert("cmd.scan.ip_done".into(), "Live: {} of {} swept.".into());
+
+    m.insert("cmd.scan.ip_none".into(), "No live hosts in {}.".into());
+
+    m.insert("cmd.scan.ip_start".into(), "Sweeping {} ({} ports/host)...".into());
+
+    m.insert("cmd.scan.ip_title".into(), "Live hosts in {}:".into());
+
+    m.insert("cmd.scan.missing_ports".into(), "Missing value after '--ports'.".into());
+
+    m.insert("cmd.scan.missing_timeout".into(), "Missing value after '--timeout'.".into());
+
+    m.insert("cmd.scan.missing_top".into(), "Missing value after '--top'.".into());
+    m.insert("cmd.scan.invalid_depth".into(), "Invalid depth: {}".into());
+
+    m.insert("cmd.scan.invalid_timeout".into(), "Invalid --timeout value: '{}'.".into());
+
+    m.insert("cmd.scan.invalid_top".into(), "Invalid --top value: '{}'.".into());
+    m.insert("cmd.scan.list_title".into(), "SCAN: {}".into());
+    m.insert("cmd.scan.no_files".into(), "No {} files found".into());
+
+    m.insert("cmd.scan.port_done".into(), "Open: {} of {} scanned.".into());
+
+    m.insert("cmd.scan.port_none".into(), "No open ports on {}.".into());
+
+    m.insert("cmd.scan.port_start".into(), "Scanning {} ({} ports)...".into());
+
+    m.insert("cmd.scan.port_title".into(), "Open ports on {}:".into());
+
+    m.insert("cmd.scan.progress".into(), "Scanning {} … {}/{} ({}%) · {} open".into());
+    m.insert("cmd.scan.total_files".into(), "Total: {} files".into());
+    m.insert("cmd.scan.total_files_size".into(), "Total: {} files ({})".into());
+    m.insert("cmd.scan.unknown_option".into(), "Unknown scan option: {}".into());
+    m.insert("cmd.scan.unknown_sub".into(), "Unknown scan subcommand: '{}'".into());
+
+    m.insert("cmd.scan.unexpected_arg".into(), "Unexpected argument: '{}'.".into());
+    m.insert("cmd.scan.usage_title".into(), "Usage:".into());
+
+    m.insert("cmd.report.view_usage".into(), "Usage: view [-s|--size] [-c|--cp] [--care] [-t|--time] [-d|--depth <n>] [-p|--path <path|@tp>] [-ext|--ext <ext...>]".into());
 
     m.insert("cmd.serve.db_title".into(), "Database:".into());
 
@@ -2082,6 +2321,34 @@ pub fn build_map() -> HashMap<String, String> {
 
     m.insert("cmd.serve.help_tunnel".into(), "  --tunnel, -t          Expose via cloudflared tunnel".into());
 
+    m.insert("cmd.serve.help_share".into(), "  --share [path]        Check internet, show LAN URL + QR for phones".into());
+
+    m.insert("cmd.serve.help_qr".into(), "  --qr                  Force QR display (implies --share)".into());
+
+    m.insert("cmd.serve.help_no_qr".into(), "  --no-qr               Suppress QR display".into());
+
+    m.insert("cmd.serve.example_share".into(), "  serve 8080 --share      Check internet, print LAN URL + QR".into());
+
+    m.insert("cmd.serve.share_checking".into(), "Checking internet connection...".into());
+
+    m.insert("cmd.serve.share_online".into(), "Internet OK — share mode".into());
+
+    m.insert("cmd.serve.share_offline".into(), "No internet connection — showing localhost only.".into());
+
+    m.insert("cmd.serve.share_lan_title".into(), "LAN:".into());
+
+    m.insert("cmd.serve.share_path_title".into(), "Share:".into());
+
+    m.insert("cmd.serve.share_no_lan".into(), "No LAN address found — showing localhost only.".into());
+
+    m.insert("cmd.serve.share_bound_loopback".into(), "Bound to loopback: LAN devices cannot reach this server (use default 0.0.0.0).".into());
+
+    m.insert("cmd.serve.share_not_private".into(), "Detected address {} is not a private LAN range.".into());
+
+    m.insert("cmd.serve.share_not_private_hint".into(), "Expected 10.x.x.x, 172.16-31.x.x or 192.168.x.x for phone sharing.".into());
+
+    m.insert("cmd.serve.share_qr_fail".into(), "QR render failed: {}".into());
+
     m.insert("cmd.serve.help_usage".into(), "serve [port] [options]".into());
 
     m.insert("cmd.serve.help_usage".into(), "serve [port] [options]".into());
@@ -2089,6 +2356,150 @@ pub fn build_map() -> HashMap<String, String> {
     m.insert("cmd.serve.help_web_dir".into(), "  --web-dir, -w <dir>   Serve custom frontend directory".into());
 
     m.insert("cmd.serve.help_web_dir".into(), "  --web-dir, -w <dir>   Serve custom frontend directory".into());
+
+    m.insert("cmd.serve.help_auth".into(), "  --auth <user:pass>    Require login for /api/* (e.g. --auth admin:secret)".into());
+
+    m.insert("cmd.serve.example_auth".into(), "  serve 8080 --auth admin:secret   HTTP on 8080, API needs login".into());
+
+    m.insert("cmd.serve.invalid_auth".into(), "Invalid --auth (use --auth <user:pass>)".into());
+
+    m.insert("cmd.serve.missing_auth".into(), "Missing value for --auth".into());
+
+    m.insert("cmd.serve.auth_on".into(), "API auth enabled for user '{}'".into());
+
+    m.insert("cmd.nssh.usage_title".into(), "Usage:".into());
+    m.insert("cmd.nssh.help_add".into(), "nssh add <name> --host <h> [--user u] [--port p] [--key path] [--pass-env VAR]".into());
+    m.insert("cmd.nssh.help_ssh".into(), "nssh ssh [name] [--cmd \"...\"] [--trust] [--ask-pass] [--timeout s]".into());
+    m.insert("cmd.nssh.help_cp".into(), "nssh cp <local> <name>:<remote> | <name>:<remote> <local>".into());
+    m.insert("cmd.nssh.help_scan".into(), "nssh scan <host> [--ports 22,80,8000-8010 | --top N] [--timeout ms]".into());
+    m.insert("cmd.nssh.help_manage".into(), "nssh ls | nssh info <name> | nssh rm <name> | nssh edit <name> [flags]".into());
+    m.insert("cmd.nssh.help_keygen".into(), "nssh keygen [args...]   Generate keys via ssh-keygen".into());
+    m.insert("cmd.nssh.help_help".into(), "nssh help   Show this help (bare nssh picks a profile)".into());
+    m.insert("cmd.nssh.options_title".into(), "Options:".into());
+    m.insert("cmd.nssh.help_host".into(), "  --host <h>            Server hostname or IP (required for add)".into());
+    m.insert("cmd.nssh.help_user".into(), "  --user, -u <u>        Login user (default: current user)".into());
+    m.insert("cmd.nssh.help_port".into(), "  --port, -p <p>        SSH port (default: 22)".into());
+    m.insert("cmd.nssh.help_key".into(), "  --key <path>          Private key file (default: ~/.ssh/id_ed25519, id_rsa)".into());
+    m.insert("cmd.nssh.help_pass_env".into(), "  --pass-env <VAR>      Read the password from env var VAR (never stored)".into());
+    m.insert("cmd.nssh.help_cmd".into(), "  --cmd \"...\"           Run one command instead of an interactive shell".into());
+    m.insert("cmd.nssh.help_trust".into(), "  --trust               Accept + record unknown host keys (default: fail closed)".into());
+    m.insert("cmd.nssh.help_ask_pass".into(), "  --ask-pass            Prompt for the password (hidden input)".into());
+    m.insert("cmd.nssh.help_timeout".into(), "  --timeout <n>         Connect timeout in seconds (ssh/cp) or ms (scan)".into());
+    m.insert("cmd.nssh.help_top".into(), "  --top <n>             Scan the top-N common ports (default: 20)".into());
+    m.insert("cmd.nssh.help_scan_ports".into(), "  --ports <spec>        Ports like 22,80,8000-8010 (max 2000 per range)".into());
+    m.insert("cmd.nssh.help_yes".into(), "  --yes, -y             Skip the delete confirmation".into());
+    m.insert("cmd.nssh.examples_title".into(), "Examples:".into());
+    m.insert("cmd.nssh.example_add".into(), "nssh add prod --host 203.0.113.10 --user root --key ~/.ssh/id_rsa".into());
+    m.insert("cmd.nssh.example_ssh".into(), "nssh ssh prod --cmd \"uptime\"".into());
+    m.insert("cmd.nssh.example_cp".into(), "nssh cp ./app.tar.gz prod:/tmp/".into());
+    m.insert("cmd.nssh.example_scan".into(), "nssh scan example.com --top 20".into());
+    m.insert("cmd.nssh.missing_host".into(), "Missing value for --host".into());
+    m.insert("cmd.nssh.missing_user".into(), "Missing value for --user".into());
+    m.insert("cmd.nssh.missing_port".into(), "Missing value for --port".into());
+    m.insert("cmd.nssh.missing_key".into(), "Missing value for --key".into());
+    m.insert("cmd.nssh.missing_pass_env".into(), "Missing value for --pass-env".into());
+    m.insert("cmd.nssh.missing_cmd".into(), "Missing value for --cmd".into());
+    m.insert("cmd.nssh.missing_timeout".into(), "Missing value for --timeout".into());
+    m.insert("cmd.nssh.missing_ports".into(), "Missing value for --ports".into());
+    m.insert("cmd.nssh.missing_top".into(), "Missing value for --top".into());
+    m.insert("cmd.nssh.invalid_port".into(), "Invalid port: '{}'".into());
+    m.insert("cmd.nssh.invalid_timeout".into(), "Invalid timeout: '{}'".into());
+    m.insert("cmd.nssh.invalid_top".into(), "Invalid --top value: '{}'".into());
+    m.insert("cmd.nssh.invalid_name".into(), "Invalid profile name '{}' (letters, digits, _ - . only)".into());
+    m.insert("cmd.nssh.unknown_option".into(), "Unknown: {}".into());
+    m.insert("cmd.nssh.add_usage".into(), "Usage: nssh add <name> --host <h> [--user u] [--port p] [--key path] [--pass-env VAR]".into());
+    m.insert("cmd.nssh.profile_exists".into(), "Profile '{}' exists (use nssh edit to change it)".into());
+    m.insert("cmd.nssh.profile_saved".into(), "Profile saved: {}".into());
+    m.insert("cmd.nssh.profile_not_found".into(), "Profile '{}' not found".into());
+    m.insert("cmd.nssh.key_not_found".into(), "Key file '{}' does not exist (stored anyway)".into());
+    m.insert("cmd.nssh.pass_env_missing".into(), "Env var '{}' is not set (stored anyway)".into());
+    m.insert("cmd.nssh.ls_empty".into(), "No profiles yet. Add one: nssh add <name> --host <h>".into());
+    m.insert("cmd.nssh.ls_title".into(), "SSH profiles:".into());
+    m.insert("cmd.nssh.info_title".into(), "Profile '{}':".into());
+    m.insert("cmd.nssh.info_usage".into(), "Usage: nssh info <name>".into());
+    m.insert("cmd.nssh.info_host".into(), "host:".into());
+    m.insert("cmd.nssh.info_user".into(), "user:".into());
+    m.insert("cmd.nssh.info_port".into(), "port:".into());
+    m.insert("cmd.nssh.info_key".into(), "key:".into());
+    m.insert("cmd.nssh.info_pass".into(), "pass_env:".into());
+    m.insert("cmd.nssh.rm_usage".into(), "Usage: nssh rm <name> [--yes]".into());
+    m.insert("cmd.nssh.rm_confirm".into(), "Delete profile '{}'?".into());
+    m.insert("cmd.nssh.rm_deleted".into(), "Deleted profile: {}".into());
+    m.insert("cmd.nssh.rm_cancelled".into(), "Cancelled.".into());
+    m.insert("cmd.nssh.edit_usage".into(), "Usage: nssh edit <name> [--host h] [--user u] [--port p] [--key path|--no-key] [--pass-env VAR|--no-pass-env]".into());
+    m.insert("cmd.nssh.edit_saved".into(), "Profile updated: {}".into());
+    m.insert("cmd.nssh.pick_profile".into(), "Pick an SSH profile".into());
+    m.insert("cmd.nssh.ask_pass".into(), "Password for {}@{}: ".into());
+    m.insert("cmd.nssh.pass_env_unset".into(), "Env var '{}' is empty or unset — will prompt if --ask-pass".into());
+    m.insert("cmd.nssh.ssh_connecting".into(), "Connecting to {}@{}:{}...".into());
+    m.insert("cmd.nssh.cmd_exit".into(), "Remote command exited with code {}".into());
+    m.insert("cmd.nssh.cp_usage".into(), "Usage: nssh cp <local> <name>:<remote> | nssh cp <name>:<remote> <local>".into());
+    m.insert("cmd.nssh.cp_no_remote".into(), "Exactly one side must be <profile>:<path>".into());
+    m.insert("cmd.nssh.cp_two_sides".into(), "Both sides are remote — copy one side at a time".into());
+    m.insert("cmd.nssh.cp_local_missing".into(), "Local file '{}' not found".into());
+    m.insert("cmd.nssh.cp_read_fail".into(), "Cannot read local file: {}".into());
+    m.insert("cmd.nssh.cp_too_large".into(), "File exceeds the 256MB v1 transfer guard".into());
+    m.insert("cmd.nssh.cp_uploading".into(), "Uploading {} to {}:{}...".into());
+    m.insert("cmd.nssh.cp_downloading".into(), "Downloading {}:{} to {}...".into());
+    m.insert("cmd.nssh.cp_done".into(), "Done ({} bytes)".into());
+    m.insert("cmd.nssh.scan_usage".into(), "Usage: nssh scan <host> [--ports <spec> | --top <n>] [--timeout <ms>]".into());
+    m.insert("cmd.nssh.scan_start".into(), "Scanning {} ({} ports)...".into());
+    m.insert("cmd.nssh.scan_title".into(), "Open ports on {}:".into());
+    m.insert("cmd.nssh.scan_none".into(), "No open ports on {}".into());
+    m.insert("cmd.nssh.scan_done".into(), "{} open of {} probed".into());
+    m.insert("cmd.nssh.keygen_missing".into(), "ssh-keygen not found: {}".into());
+    m.insert("cmd.nssh.keygen_exit".into(), "ssh-keygen exited with code {}".into());
+    m.insert("cmd.nssh.shell_hint".into(), "Interactive shell — Enter ~ . force-disconnects".into());
+    m.insert("cmd.nssh.shell_back".into(), "Back in ntc shell".into());
+    m.insert("cmd.nssh.shell_forced".into(), "Force-disconnected (~.)".into());
+
+    m.insert("cmd.nsheet.usage_title".into(), "Usage:".into());
+    m.insert("cmd.nsheet.help_open".into(), "nsheet open <file> [options]   Fullscreen viewer (CSV/TSV/JSON/JSONL)".into());
+    m.insert("cmd.nsheet.help_view".into(), "nsheet view <file> [options]   Print table (default 50 rows, --all for all)".into());
+    m.insert("cmd.nsheet.options_title".into(), "Options:".into());
+    m.insert("cmd.nsheet.help_delimiter".into(), "  -d, --delimiter <c|auto>  Field separator (default: auto-detect , ; tab |)".into());
+    m.insert("cmd.nsheet.help_header".into(), "  --header / --no-header      Force header row on/off (default: auto-detect)".into());
+    m.insert("cmd.nsheet.help_limit".into(), "  -l, --limit <n> / --all      Rows to print in view mode".into());
+    m.insert("cmd.nsheet.help_sort".into(), "  --sort <col> [--desc]         Sort by column name or 1-based index".into());
+    m.insert("cmd.nsheet.help_filter".into(), "  --filter <expr>              e.g. age>30, city~york, name=bob (!=,>=,<=,&&,||)".into());
+    m.insert("cmd.nsheet.help_export".into(), "  --export <json|md>           Export instead of printing".into());
+    m.insert("cmd.nsheet.help_output".into(), "  -o, --output <file>          Export destination (default: stdout)".into());
+    m.insert("cmd.nsheet.help_help".into(), "  --help, -h                   Show this help".into());
+    m.insert("cmd.nsheet.examples_title".into(), "Examples:".into());
+    m.insert("cmd.nsheet.example_open".into(), "nsheet open users.csv".into());
+    m.insert("cmd.nsheet.example_view".into(), "nsheet view users.csv -l 20 --sort age --desc".into());
+    m.insert("cmd.nsheet.example_filter".into(), "nsheet view data.json --filter \"age>30 && city~york\"".into());
+    m.insert("cmd.nsheet.example_export".into(), "nsheet view a.csv --export json -o out.json".into());
+    m.insert("cmd.nsheet.missing_file".into(), "Missing file. Usage: nsheet open <file> | nsheet view <file>".into());
+    m.insert("cmd.nsheet.file_not_found".into(), "File '{}' not found".into());
+    m.insert("cmd.nsheet.load_fail".into(), "Cannot load sheet: {}".into());
+    m.insert("cmd.nsheet.empty_sheet".into(), "Empty sheet (no columns found)".into());
+    m.insert("cmd.nsheet.no_rows".into(), "No rows match.".into());
+    m.insert("cmd.nsheet.unknown_option".into(), "Unknown: {}".into());
+    m.insert("cmd.nsheet.unknown_column".into(), "Unknown column: '{}'".into());
+    m.insert("cmd.nsheet.invalid_limit".into(), "Invalid limit: '{}'".into());
+    m.insert("cmd.nsheet.invalid_delimiter".into(), "Invalid delimiter: '{}' (use a single char or auto)".into());
+    m.insert("cmd.nsheet.invalid_export".into(), "Invalid export format: '{}' (use json or md)".into());
+    m.insert("cmd.nsheet.delimiter_usage".into(), "Usage: --delimiter <char|auto>".into());
+    m.insert("cmd.nsheet.limit_usage".into(), "Usage: --limit <n>".into());
+    m.insert("cmd.nsheet.sort_usage".into(), "Usage: --sort <column>".into());
+    m.insert("cmd.nsheet.filter_usage".into(), "Usage: --filter <expr> (e.g. age>30)".into());
+    m.insert("cmd.nsheet.export_usage".into(), "Usage: --export <json|md>".into());
+    m.insert("cmd.nsheet.output_usage".into(), "Usage: --output <file>".into());
+    m.insert("cmd.nsheet.filter_fail".into(), "Bad filter: {}".into());
+    m.insert("cmd.nsheet.export_fail".into(), "Export failed: {}".into());
+    m.insert("cmd.nsheet.exported".into(), "Exported: {}".into());
+    m.insert("cmd.nsheet.rows_shown".into(), "Showing {} of {} rows ({} cols)".into());
+    m.insert("cmd.nsheet.rows_truncated".into(), "Truncated to {} rows (use --all or -l <n>)".into());
+    m.insert("cmd.nsheet.tui_hint".into(), "arrows/hjkl move · / search · n next · s sort · f filter · c clear · e export · Enter view · q quit".into());
+    m.insert("cmd.nsheet.tui_search_prompt".into(), "search (empty clears)".into());
+    m.insert("cmd.nsheet.tui_sort_prompt".into(), "sort by col (! suffix = desc, empty clears)".into());
+    m.insert("cmd.nsheet.tui_filter_prompt".into(), "filter (empty clears)".into());
+    m.insert("cmd.nsheet.tui_export_prompt".into(), "export to (.json/.md path)".into());
+    m.insert("cmd.nsheet.tui_cell_title".into(), "Cell (any key to close)".into());
+    m.insert("cmd.nsheet.tui_popup_hint".into(), "any key to close".into());
+    m.insert("cmd.nsheet.tui_no_matches".into(), "No matches".into());
+    m.insert("cmd.nsheet.tui_large".into(), "Large sheet ({} rows) — navigation may be slow".into());
 
     m.insert("cmd.serve.invalid_port".into(), "Invalid port".into());
 
@@ -2428,6 +2839,35 @@ pub fn build_map() -> HashMap<String, String> {
 
     m.insert("cmd.todo.usage_title".into(), "Usage:".into());
 
+    m.insert("cmd.todo.help_done".into(), "  todo done <N>           Mark task N as done".into());
+    m.insert("cmd.todo.help_undo".into(), "  todo undo <N>           Mark task N as not done".into());
+    m.insert("cmd.todo.help_edit".into(), "  todo edit <N> \"name\"    Rename task N".into());
+    m.insert("cmd.todo.done_usage".into(), "Usage: todo done <N>".into());
+    m.insert("cmd.todo.undo_usage".into(), "Usage: todo undo <N>".into());
+    m.insert("cmd.todo.edit_usage".into(), "Usage: todo edit <N> \"new name\"".into());
+    m.insert("cmd.todo.task_done".into(), "Task done: {}".into());
+    m.insert("cmd.todo.task_undone".into(), "Task reopened: {}".into());
+    m.insert("cmd.todo.task_edited".into(), "Task updated: {}".into());
+    m.insert("cmd.todo.already_done".into(), "Task #{} is already done".into());
+    m.insert("cmd.todo.already_open".into(), "Task #{} is already open".into());
+
+    m.insert("cmd.arc.create_usage".into(), "Usage: arc create <out.zip|tar.gz|tgz|tar> <files...>".into());
+    m.insert("cmd.arc.extract_usage".into(), "Usage: arc extract <archive> [dest]".into());
+    m.insert("cmd.arc.list_usage".into(), "Usage: arc list <archive>".into());
+    m.insert("cmd.arc.bad_ext".into(), "Unsupported archive type (use .zip, .tar.gz/.tgz, .tar)".into());
+    m.insert("cmd.arc.not_found".into(), "Not found: {}".into());
+    m.insert("cmd.arc.no_inputs".into(), "No input files to archive.".into());
+    m.insert("cmd.arc.created".into(), "Archive created: {} ({} entries)".into());
+    m.insert("cmd.arc.extracted".into(), "Extracted {} files to {}".into());
+    m.insert("cmd.arc.list_title".into(), "ARCHIVE: {}".into());
+    m.insert("cmd.arc.total".into(), "Total: {} entries".into());
+    m.insert("cmd.arc.unknown_sub".into(), "Unknown arc subcommand: '{}'".into());
+    m.insert("cmd.arc.usage_title".into(), "Usage:".into());
+    m.insert("cmd.arc.help_create".into(), "  arc create <out> <files...>  Create archive (.zip, .tar.gz, .tar)".into());
+    m.insert("cmd.arc.help_extract".into(), "  arc extract <file> [dest]   Extract archive".into());
+    m.insert("cmd.arc.help_list".into(), "  arc list <file>              List archive contents".into());
+    m.insert("cmd.arc.examples_title".into(), "Examples:".into());
+
     m.insert("cmd.upgrade.after_restart".into(), "The new version will be ready after restart.".into());
 
     m.insert("cmd.upgrade.ahead".into(), "Local version ({}) is ahead of latest release ({}).".into());
@@ -2540,7 +2980,7 @@ pub fn build_map() -> HashMap<String, String> {
 
     m.insert("config.lang.set".into(), "Language set to: {}".into());
 
-    m.insert("cvcode.formats".into(), "Formats: b2, b64 (base64), hex, url".into());
+    m.insert("cvcode.formats".into(), "Formats: b2, b10, b64 (base64), hex, url".into());
 
     m.insert("cvcode.missing_data".into(), "Missing data to convert".into());
 
@@ -2550,11 +2990,13 @@ pub fn build_map() -> HashMap<String, String> {
 
     m.insert("cvcode.usage_detailed".into(), "Usage: cvcode <from> <data> to <to> [-o <file>]".into());
 
-    m.insert("decode.unknown_format".into(), "Unknown decode format: '{}'. Use b2, b64, hex, or url.".into());
+    m.insert("decode.unknown_format".into(), "Unknown decode format: '{}'. Use b2, b10, b64, hex, or url.".into());
 
     m.insert("decode.usage_cmd".into(), "Usage: decode {} <target> [-o <file>]".into());
 
     m.insert("decode.usage_decode_b2".into(), " decode b2 <target> [-o <file>] Binary decode".into());
+
+    m.insert("decode.usage_decode_b10".into(), " decode b10 <target> [-o <file>] Decimal decode".into());
 
     m.insert("decode.usage_decode_b64".into(), " decode b64 <target> [-o <file>] Base64 decode".into());
 
@@ -3004,7 +3446,7 @@ pub fn build_map() -> HashMap<String, String> {
 
     m.insert("editor.gs_loading".into(), " finding... {} pls wait".into());
 
-    m.insert("editor.help_screen".into(), " NORMAL MODE (read-only)\n ^O enter Insert mode\n ^W enter Visual mode\n ^G jump to line number (Jump mode)\n : open command line\n ^E open command line (alt)\n :auto on enable auto-save on exit\n :auto off disable auto-save on exit\n ^H open this help screen\n ^Q close current tab / quit (if last tab)\n ^Q+Shift close all tabs\n ^PgDn next tab\n ^PgUp previous tab\n ^N open file in new tab\n ^F find / search in file\n ^D add cursor at next occurrence\n ^Alt+D split primary cursor\n mouse click tab bar, scroll wheel to navigate\n arrows move primary cursor\n Sh+arrows word-level movement\n\n INSERT MODE (editing)\n ^C copy selection\n ^F find / search\n ^N open file in new tab\n ^G jump to line (returns to Insert)\n ^Z undo\n ^R redo\n ^Y yank (copy) current line\n ^A select all\n ^L select current line\n ^D find next occurrence\n ^Alt+D split cursor at selection\n ^X cut selection\n ^S save\n ^W enter Visual mode\n ^E open command line\n Esc return to Normal mode\n ^Q quit (with save prompt)\n ^H help\n Home start of line\n End end of line\n ^D auto enters Insert* (multi-cursor)\n Esc returns to Insert\n\n VISUAL MODE (selection)\n arrows extend selection\n ^F find / search\n ^N open file in new tab\n ^G jump to line (returns to Visual)\n ^O enter Insert mode\n ^E open command line\n ^C copy + exit\n ^X cut + exit\n ^Q quit (with save prompt)\n ^H help\n Esc exit visual mode\n mouse click & drag to select\n\n COMMAND MODE\n :<number> go to line number\n :l N or :line N go to line N\n :q or :quit quit editor (with save prompt)\n :wq save and quit\n :w or :write save file\n :auto on enable auto-save\n :auto off disable auto-save\n :syntax on enable syntax highlighting\n :syntax off disable syntax highlighting\n :cd <path> change directory (Navigator)\n :back [N] go to parent directory (N levels)\n :gos <N> navigate to Nth subdirectory\n :gosc list numbered subdirectories\n :mkdir <dir> create directory\n :mkd <dir> create directory (alias for :mkdir)\n :touch <file> create new file\n :mkf <file> create new file (alias for :touch)\n :rmd <target> recursively delete directory\n :rmf <target> force delete file or directory\n :rnmf <src> <dst> rename file\n :rnmd <src> <dst> rename directory\n :ne <file> navigate & edit (create if missing)\n :ne . show CWD in sidebar\n :theme <name> switch to theme by name\n :theme list list available themes\n :theme show current theme\n :git diff or :gd show git diff of current file\n :git blame or :blame show blame of current line\n :tp <name> jump to teleport savepoint\n :tp-add <name> save CWD as teleport\n :gs <pattern> search file contents across project\n :run <command> execute command in persistent run panel\n Esc cancel\n\n QUERY MODE (Ctrl+Alt+Q in Insert, :x in Command)\n /s /l clear selection\n /s /l /a select all lines\n /s /l N to M select lines N..M (1-indexed)\n /s /l N to M /e str filter selected lines containing str\n /p old to new replace all 'old' with 'new' in selection\n /upper uppercase selection (selection required)\n /lower lowercase selection (selection required)\n /add <text> to #end append text to each selected line\n /add <text> to #start prepend text to each selected line\n /set <pat> to #end right-align first occurrence of pat\n /set <pat> to #start left-align first occurrence of pat\n /qal add <n> <q> add query alias (e.g. /qal sw /p ${1} to ${2})\n /qal rm <n> remove alias\n /qal info <n> show alias\n /qal edit <n> <q> update alias\n /qal rnm <a> to <b> rename alias\n /qal list list aliases\n /q <name> [args] run alias\n <name> [args] run alias directly (no /)\n /undo undo\n /redo redo\n /exit /quit /Esc exit Query Mode\n ; chain multiple commands\n ${1} ${2} alias positional params\n ${1:-default} alias param with default\n ${1[]} alias array param (all remaining args)\n\n TERMINAL / RUN PANEL\n Ctrl+T toggle terminal panel\n :run <command> execute command, opens persistent run panel\n mouse click panel to focus, click editor to return\n Esc (in panel) run: close | terminal: return to editor\n drag \u{2500}\u{2500}\u{2500} row resize panel height".into());
+    m.insert("editor.help_screen".into(), " NORMAL MODE (vim-style verbs + motion)\n i=insert v=visual q=query n=save c=copy e=nfe f=find b=files t=term u=encoding g=gmode :=cmd ?=help 0=exit(dirty-checked)\n hjkl/awsd/arrows move \u{B7} Home/End line \u{B7} PgUp/PgDn page \u{B7} ^J=jump\n\n GMODE (press g, type, Enter)\n t/T=next/prev tab qt=close tab aqt=close all N=goto line q=exit Esc=cancel\n\n NFE SIDEBAR (press e)\n hjkl/arrows/wasd move \u{B7} Enter=dir-cd/file-open(stay) \u{B7} Esc=back\n\n INSERT MODE (editing)\n type to insert \u{B7} arrows move \u{B7} Esc=normal ^S=save ^Z=undo ^R=redo ^D=multi ^F=find ^N=files ^P=paste ^T=term ^J=jump ^E=cmd \u{B7} Home/End line \u{B7} PgUp/PgDn page \u{B7} F3/Sh+F3 find next/prev\n\n VISUAL MODE (selection)\n hjkl/arrows move (Shift selects) \u{B7} a=select-all toggle c=copy x=cut y=yank p=paste :=cmd e=nfe f=find g=gmode \u{B7} Esc=exit\n\n COMMAND MODE\n :<number> go to line number\n :l N or :line N go to line N\n :q or :quit quit editor (with save prompt)\n :wq save and quit\n :w or :write save file\n :auto on enable auto-save\n :auto off disable auto-save\n :syntax on enable syntax highlighting\n :syntax off disable syntax highlighting\n :color on|off toggle color output\n :cd <path> change directory (Navigator)\n :back [N] go to parent directory (N levels)\n :gos <N> navigate to Nth subdirectory\n :gosc list numbered subdirectories\n :mkdir <dir> create directory\n :mkd <dir> create directory (alias for :mkdir)\n :touch <file> create new file\n :mkf <file> create new file (alias for :touch)\n :rmd <target> recursively delete directory\n :rmf <target> force delete file or directory\n :rnmf <src> <dst> rename file\n :rnmd <src> <dst> rename directory\n :ne <file> navigate & edit (create if missing)\n :ne . show CWD in sidebar\n :theme <name> switch to theme by name\n :theme list list available themes\n :theme show current theme\n :git diff or :gd show git diff of current file\n :git blame or :blame show blame of current line\n :tp <name> jump to teleport savepoint\n :tp-add <name> save CWD as teleport\n :gs <pattern> search file contents across project\n :run <command> execute command in persistent run panel\n Esc cancel\n\n QUERY MODE (q in Normal, Ctrl+Alt+Q in Insert, :x in Command — leading / optional)\n /s 'text' select next occurrence after cursor (wraps); bare /s selects word under cursor\n /l N go to line N (cursor to line start)\n /sa 'text' select all occurrences in buffer\n /sal select all lines\n /sl N select line N; /sl A B range A..B (any order); /sl A , B , … discrete lines\n /rp <find> <replace> replace in selection (selection required; quote multi-word: /rp 'a b' 'c')\n /add <text> to #end|#start|#hm append/prepend on selected lines (selection required)\n /set <pat> to #end|#start|#hm align first occurrence of pat (selection required)\n /c | /cs clear selection\n /upper uppercase selection (selection required)\n /lower lowercase selection (selection required)\n /qal add <n> <q> add query alias (e.g. /qal sw /rp ${1} ${2})\n /qal rm <n> remove alias\n /qal info <n> show alias\n /qal edit <n> <q> update alias\n /qal rnm <a> to <b> rename alias\n /qal list list aliases\n <name> [args] run alias directly (no / needed)\n /undo undo\n /redo redo\n /exit /quit /Esc exit Query Mode\n ; chain multiple commands\n ${1} ${2} alias positional params\n ${1:-default} alias param with default\n ${1[]} alias array param (all remaining args)\n\n TERMINAL / RUN PANEL\n Ctrl+T toggle terminal panel\n :run <command> execute command, opens persistent run panel\n mouse click panel to focus, click editor to return\n Esc (in panel) run: close | terminal: return to editor\n drag \u{2500}\u{2500}\u{2500} row resize panel height".into());
 
     m.insert("editor.hex_cannot_read".into(), "hex: cannot read file: {}".into());
 
@@ -3062,9 +3504,9 @@ pub fn build_map() -> HashMap<String, String> {
 
     m.insert("editor.hint_hex_edit".into(), "Hex edit — type hex bytes".into());
 
-    m.insert("editor.hint_insert".into(), " Insert mode \u{2014} Esc=normal ^W=visual ^P=paste ^C=copy ^F=find ^Z=undo ^R=redo ^Y=yank ^A=selAll ^L=selLine ^D=nextOcc ^H=help".into());
+    m.insert("editor.hint_insert".into(), " Insert mode \u{2014} Esc=normal ^S=save ^Z=undo ^R=redo ^D=multi ^F=find ^N=files ^P=paste ^T=term ^J=jump".into());
 
-    m.insert("editor.hint_insert_msg".into(), " Esc=normal ^W=visual ^P=paste ^H=help".into());
+    m.insert("editor.hint_insert_msg".into(), " Esc=normal".into());
 
     m.insert("editor.hint_insert_multi".into(), " Insert* \u{2014} Esc=exit multi-cursor ^D=nextOcc".into());
 
@@ -3074,17 +3516,23 @@ pub fn build_map() -> HashMap<String, String> {
 
     m.insert("editor.hint_jump_actions".into(), "Enter=jump Esc=cancel".into());
 
-    m.insert("editor.hint_normal".into(), " ^O=insert ^W=visual ^B=sidebar ^P=files :command ^H=help ^Q=closeTab/quit ^PgDn/PgUp=tabs ^N=files".into());
+    m.insert("editor.hint_gmode".into(), "g".into());
 
-    m.insert("editor.hint_normal_msg".into(), " ^O=insert ^W=visual :command ^H=help ^Q=closeTab/quit".into());
+    m.insert("editor.hint_gmode_actions".into(), "t/T=tabs qt/aqt=close N=goto q=exit Enter=run Esc=cancel".into());
+
+    m.insert("editor.gmode_unknown".into(), "Unknown gmode command: '{}'".into());
+
+    m.insert("editor.hint_normal".into(), " i=insert v=visual f=find b=files e=nfe t=term g=gmode n=save c=copy Sh=select :cmd ?=help 0=exit".into());
+
+    m.insert("editor.hint_normal_msg".into(), " i=insert v=visual :cmd ?=help 0=exit".into());
 
     m.insert("editor.hint_query".into(), "Query: {}".into());
 
     m.insert("editor.hint_query".into(), "Query: {}".into());
 
-    m.insert("editor.hint_query_actions".into(), "Actions: /p replace, /add, /set, /upper, /lower, /qal".into());
+    m.insert("editor.hint_query_actions".into(), "Actions: /s next, /l goto, /sa all, /sal lines, /sl line, /rp replace, /add, /set, /upper, /lower, /qal, /c clear".into());
 
-    m.insert("editor.hint_query_actions".into(), "Actions: /p replace, /add, /set, /upper, /lower, /qal".into());
+    m.insert("editor.hint_query_actions".into(), "Actions: /s next, /l goto, /sa all, /sal lines, /sl line, /rp replace, /add, /set, /upper, /lower, /qal, /c clear".into());
 
     m.insert("editor.hint_query_prefix".into(), "/{} — {}".into());
 
@@ -3122,9 +3570,9 @@ pub fn build_map() -> HashMap<String, String> {
 
     m.insert("editor.hint_terminal".into(), "Terminal — {} — {}".into());
 
-    m.insert("editor.hint_visual".into(), " ^O=insert ^C=copy ^X=cut ^H=help Esc=exit".into());
+    m.insert("editor.hint_visual".into(), " hjkl=move Sh=select a=all c=copy x=cut y=yank p=paste Esc=exit".into());
 
-    m.insert("editor.hint_visual_no_msg".into(), " Visual mode \u{2014} arrows=select ^O=insert ^C=copy ^X=cut ^H=help Esc=exit".into());
+    m.insert("editor.hint_visual_no_msg".into(), " Visual mode \u{2014} hjkl/arrows move \u{00B7} Shift selects \u{00B7} a=all c=copy x=cut y=yank p=paste".into());
 
     m.insert("editor.hover_title".into(), " info ".into());
 
@@ -3227,6 +3675,24 @@ pub fn build_map() -> HashMap<String, String> {
     m.insert("editor.mode_jump_range".into(), "Line {} out of range (1-{})".into());
 
     m.insert("editor.mode_normal".into(), "[Normal]".into());
+
+    m.insert("editor.mode_gmode".into(), "[Gmode]".into());
+
+    m.insert("editor.mode_nfe".into(), "[Nfe]".into());
+
+    m.insert("editor.hint_nfe".into(), " hjkl/wasd/arrows move · Enter open · :=size · Esc back".into());
+
+    m.insert("editor.hint_nfe_cmd_actions".into(), "Enter=apply Esc=cancel".into());
+
+    m.insert("editor.nfe_unknown".into(), "Unknown nfe command: '{}' (try size full|def|N%)".into());
+
+    m.insert("editor.nfe_size_usage".into(), "Usage: size full|def|N% (got '{}')".into());
+
+    m.insert("editor.nfe_size_set".into(), "Sidebar width: {}".into());
+
+    m.insert("editor.nfe_size_default".into(), "default (30 cols)".into());
+
+    m.insert("editor.nfe_size_full".into(), "full".into());
 
     m.insert("editor.mode_query".into(), "[Query]".into());
 
@@ -3388,9 +3854,57 @@ pub fn build_map() -> HashMap<String, String> {
 
     m.insert("editor.query_qal_updated".into(), "Alias '{}' updated".into());
 
+    m.insert("editor.query_l_usage".into(), "/l <line> — go to line".into());
+
+    m.insert("editor.query_l_usage".into(), "/l <line> — go to line".into());
+
+    m.insert("editor.query_qal_exists".into(), "Alias '{}' already exists (use /qal edit)".into());
+
+    m.insert("editor.query_qal_exists".into(), "Alias '{}' already exists (use /qal edit)".into());
+
+    m.insert("editor.query_qal_reserved".into(), "Reserved name: '{}'".into());
+
+    m.insert("editor.query_qal_reserved".into(), "Reserved name: '{}'".into());
+
     m.insert("editor.query_replace_format".into(), "Format: /p <find> to <replace>".into());
 
     m.insert("editor.query_replace_format".into(), "Format: /p <find> to <replace>".into());
+
+    m.insert("editor.query_rp_usage".into(), "/rp <find> <replace> — replace in selection".into());
+
+    m.insert("editor.query_rp_usage".into(), "/rp <find> <replace> — replace in selection".into());
+
+    m.insert("editor.query_s_usage".into(), "/s \"text\" — select next occurrence (bare /s = word under cursor)".into());
+
+    m.insert("editor.query_s_usage".into(), "/s \"text\" — select next occurrence (bare /s = word under cursor)".into());
+
+    m.insert("editor.query_sa_usage".into(), "/sa \"text\" — select all occurrences".into());
+
+    m.insert("editor.query_sa_usage".into(), "/sa \"text\" — select all occurrences".into());
+
+    m.insert("editor.query_selected_lines".into(), "Selected {} line(s)".into());
+
+    m.insert("editor.query_selected_lines".into(), "Selected {} line(s)".into());
+
+    m.insert("editor.query_selected_next".into(), "Selected next '{}'".into());
+
+    m.insert("editor.query_selected_next".into(), "Selected next '{}'".into());
+
+    m.insert("editor.query_selected_occurrences".into(), "Selected {} occurrence(s) of '{}'".into());
+
+    m.insert("editor.query_selected_occurrences".into(), "Selected {} occurrence(s) of '{}'".into());
+
+    m.insert("editor.query_selected_word".into(), "Selected word".into());
+
+    m.insert("editor.query_selected_word".into(), "Selected word".into());
+
+    m.insert("editor.query_selection_required".into(), "Selection required (select with /s, /sa, /sl or /sal first)".into());
+
+    m.insert("editor.query_selection_required".into(), "Selection required (select with /s, /sa, /sl or /sal first)".into());
+
+    m.insert("editor.query_sl_usage".into(), "/sl <line> [line] | <line> , ... — select lines".into());
+
+    m.insert("editor.query_sl_usage".into(), "/sl <line> [line] | <line> , ... — select lines".into());
 
     m.insert("editor.query_replace_usage".into(), "/p <find> to <replace>".into());
 
@@ -3569,6 +4083,8 @@ pub fn build_map() -> HashMap<String, String> {
 
     m.insert("encode.invalid_b2".into(), "Invalid binary string: '{}'".into());
 
+    m.insert("encode.invalid_b10".into(), "Invalid decimal byte: '{}'".into());
+
     m.insert("encode.invalid_b64".into(), "Invalid base64 input: {}".into());
 
     m.insert("encode.invalid_hex_pct".into(), "Invalid hex in percent-encoding: %{}".into());
@@ -3579,15 +4095,17 @@ pub fn build_map() -> HashMap<String, String> {
 
     m.insert("encode.truncated_pct".into(), "Truncated percent-encoding".into());
 
-    m.insert("encode.unknown_format".into(), "Unknown encode format: '{}'. Use b2, b64, hex, or url.".into());
+    m.insert("encode.unknown_format".into(), "Unknown encode format: '{}'. Use b2, b10, b64, hex, or url.".into());
 
     m.insert("encode.unknown_format_fmt".into(), "(unknown format: {})".into());
 
-    m.insert("encode.unknown_format_generic".into(), "Unknown format: '{}'. Use b2, b64, hex, or url.".into());
+    m.insert("encode.unknown_format_generic".into(), "Unknown format: '{}'. Use b2, b10, b64, hex, or url.".into());
 
     m.insert("encode.usage_cmd".into(), "Usage: encode {} <target> [-o <file>]".into());
 
     m.insert("encode.usage_encode_b2".into(), " encode b2 <target> [-o <file>] Binary encode (0101...)".into());
+
+    m.insert("encode.usage_encode_b10".into(), " encode b10 <target> [-o <file>] Decimal encode (0-255...)".into());
 
     m.insert("encode.usage_encode_b64".into(), " encode b64 <target> [-o <file>] Base64 encode".into());
 
@@ -3643,27 +4161,16 @@ pub fn build_map() -> HashMap<String, String> {
 
     m.insert("fmt.help_yaml_line".into(), "  fmt yaml <file> [to json|toml] [-o <file>]    Convert YAML to JSON or TOML".into());
 
-    m.insert("game.crashed".into(), "Game crashed — terminal state restored".into());
 
-    m.insert("game.dino_header".into(), "╔═══ Dino Run ═══╗".into());
 
-    m.insert("game.dino_header".into(), "╔═══ Dino Run ═══╗".into());
 
-    m.insert("game.final_score".into(), "Score: {}".into());
 
-    m.insert("game.final_score".into(), "Score: {}".into());
 
-    m.insert("game.jump_hint".into(), "SPACE to jump, Esc to exit".into());
 
-    m.insert("game.jump_hint".into(), "SPACE to jump, Esc to exit".into());
 
-    m.insert("game.over_msg".into(), "Game Over!".into());
 
-    m.insert("game.over_msg".into(), "Game Over!".into());
 
-    m.insert("game.restart_hint".into(), "Press R to restart or Esc to exit".into());
 
-    m.insert("game.restart_hint".into(), "Press R to restart or Esc to exit".into());
 
     m.insert("gosc.calculating_size".into(), "Calculating directory size...".into());
 
@@ -3702,6 +4209,8 @@ pub fn build_map() -> HashMap<String, String> {
     m.insert("gosc.size_title".into(), "Current Directory Size".into());
 
     m.insert("help.examples_header".into(), "Examples:".into());
+
+    m.insert("help.context.cr".into(), "<cr> press enter to run it".into());
 
     m.insert("help.alias.add".into(), "ral add <name> \"<cmd>\" ## Create alias".into());
 
@@ -3841,11 +4350,12 @@ pub fn build_map() -> HashMap<String, String> {
 
     m.insert("help.config.watch_trigger_off".into(), "config watch trigger off ## Disable auto-run".into());
 
-    m.insert("help.dino.hint".into(), "Space/Up to jump, avoid obstacles".into());
+    m.insert("help.config.watch_limit".into(), "config watch limit <n> ## Rows shown in watcher change box".into());
 
-    m.insert("help.dino.play".into(), "dino ## Play Chrome-style dinosaur runner game".into());
+    m.insert("help.config.wi".into(), "wi [path] ## Live file-change feed (q=quit)".into());
 
-    m.insert("help.dino.title".into(), "DINOSAUR GAME:".into());
+
+
 
     m.insert("help.editor.ne".into(), "ne, ntceditor <file> ## Open file in built-in text editor".into());
 
@@ -3865,6 +4375,8 @@ pub fn build_map() -> HashMap<String, String> {
 
     m.insert("help.encdec.decode_b2".into(), "decode b2 <target> [-o <file>] ## Binary decode".into());
 
+    m.insert("help.encdec.decode_b10".into(), "decode b10 <target> [-o <file>] ## Decimal decode".into());
+
     m.insert("help.encdec.decode_b64".into(), "decode b64 <target> [-o <file>] ## Base64 decode".into());
 
     m.insert("help.encdec.decode_hex".into(), "decode hex <target> [-o <file>] ## Hex decode".into());
@@ -3872,6 +4384,8 @@ pub fn build_map() -> HashMap<String, String> {
     m.insert("help.encdec.decode_url".into(), "decode url <target> [-o <file>] ## URL percent-decode".into());
 
     m.insert("help.encdec.encode_b2".into(), "encode b2 <target> [-o <file>] ## Binary encode (0101...)".into());
+
+    m.insert("help.encdec.encode_b10".into(), "encode b10 <target> [-o <file>] ## Decimal encode (0-255...)".into());
 
     m.insert("help.encdec.encode_b64".into(), "encode b64 <target> [-o <file>] ## Base64 encode (file or raw text)".into());
 
@@ -3895,7 +4409,7 @@ pub fn build_map() -> HashMap<String, String> {
 
     m.insert("help.explorer.title".into(), "FILE EXPLORER (NFE):".into());
 
-    m.insert("help.fileops.cp".into(), "cp <src> <dst> ## Copy a file".into());
+    m.insert("help.fileops.cp".into(), "cp <src> <dst|@tp> [-f] ## Copy file or dir".into());
 
     m.insert("help.fileops.mkd".into(), "mkd <dir>[, ...] ## Create a new directory".into());
 
@@ -3908,6 +4422,8 @@ pub fn build_map() -> HashMap<String, String> {
     m.insert("help.fileops.rnmd".into(), "rnmd <old> <new> ## Rename a directory".into());
 
     m.insert("help.fileops.rnmf".into(), "rnmf <old> <new> ## Rename a file".into());
+
+    m.insert("help.fileops.mv".into(), "mv <src> <dst|@tp> [-f] ## Move/rename file or dir".into());
 
     m.insert("help.fileops.title".into(), "FILE OPERATIONS:".into());
 
@@ -3946,6 +4462,10 @@ pub fn build_map() -> HashMap<String, String> {
     m.insert("help.igcare.title".into(), "IGNORE / CARE COMMANDS:".into());
 
     m.insert("help.image.convert".into(), "image <path> to <fmt> ## Convert and display output (json|md|html|txt|desc)".into());
+
+    m.insert("help.image.display".into(), "image display <path> ## Render image inline in the terminal".into());
+
+    m.insert("help.image.show".into(), "image show <path> ## Render image inline in the terminal".into());
 
     m.insert("help.image.interactive".into(), "image ## Interactive image converter (pick from current dir)".into());
 
@@ -4009,7 +4529,9 @@ pub fn build_map() -> HashMap<String, String> {
 
     m.insert("help.network.ping".into(), "ping <host> ## ICMP ping (-c count)".into());
 
-    m.insert("help.network.serve".into(), "serve [port] ## HTTP file server (--https, --tunnel, --spa, --web-dir)".into());
+    m.insert("help.network.ipcfg".into(), "ipcfg [name] ## Show adapters like ipconfig/ifconfig".into());
+
+    m.insert("help.network.serve".into(), "serve [port] ## HTTP file server (--auth, --tunnel, --share, --spa, --web-dir)".into());
 
     m.insert("help.network.smtp".into(), "smtp ## SMTP email client (--id, -i, -u, -pwd, -s, -b, -f, --to)".into());
 
@@ -4060,6 +4582,7 @@ pub fn build_map() -> HashMap<String, String> {
     m.insert("help.other.title".into(), "OTHER COMMANDS:".into());
 
     m.insert("help.other.tutorial".into(), "tutorial ## Start the interactive step-by-step tutorial".into());
+    m.insert("help.unknown_topic".into(), "Unknown help topic: '{}'. Run 'help' for all topics.".into());
 
     m.insert("help.other.ui".into(), "ui ## Show current UI mode".into());
 
@@ -4181,9 +4704,9 @@ pub fn build_map() -> HashMap<String, String> {
 
     m.insert("help.search.fsc".into(), "fsc <pattern> [-d <n>] ## Search files, pick one to display & optionally copy".into());
 
-    m.insert("help.search.gs".into(), "gs <pattern> [-d <n>] ## Search file contents (simple grep)".into());
+    m.insert("help.search.gs".into(), "gs <pattern> [-d <n>] [-l <n>] ## Search file contents (simple grep)".into());
 
-    m.insert("help.search.gs_interactive".into(), "gs -i <pattern> [-d <n>] ## Interactive grep (browse results, Enter to open)".into());
+    m.insert("help.search.gs_interactive".into(), "gs -i <pattern> [-d <n>] ## Interactive grep (10/page, Enter to open)".into());
 
     m.insert("help.search.locate".into(), "locate <pattern> [-d <n>] ## Search both files and directories".into());
 
@@ -4290,6 +4813,56 @@ pub fn build_map() -> HashMap<String, String> {
     m.insert("help.todo.show".into(), "todo ## Show all tasks (from future_todo.txt in CWD)".into());
 
     m.insert("help.todo.title".into(), "TODO COMMANDS:".into());
+    m.insert("help.todo.done".into(), "todo done <N> ## Mark task N as done".into());
+    m.insert("help.todo.undo".into(), "todo undo <N> ## Reopen task N".into());
+    m.insert("help.todo.edit".into(), "todo edit <N> \"name\" ## Rename task N".into());
+
+    m.insert("help.arc.title".into(), "ARCHIVE COMMANDS:".into());
+    m.insert("help.arc.create".into(), "arc create <out.zip|tar.gz|tar> <files...> ## Create archive".into());
+    m.insert("help.arc.extract".into(), "arc extract <file> [dest] ## Extract archive".into());
+    m.insert("help.arc.list".into(), "arc list <file> ## List archive contents".into());
+    m.insert("help.arc.example1".into(), "arc create backup.zip src Cargo.toml ## Create zip".into());
+    m.insert("help.arc.example2".into(), "arc list backup.zip ## List contents".into());
+    m.insert("help.arc.example3".into(), "arc extract backup.zip restored ## Extract".into());
+
+    m.insert("help.scan.depth".into(), "scan ext <ext...> -d, --depth <n> ## Limit scan depth".into());
+    m.insert("help.scan.example1".into(), "scan ext rs ## List all .rs files".into());
+    m.insert("help.scan.example2".into(), "scan ext rs c -d 2 ## List .rs/.c files up to depth 2".into());
+    m.insert("help.scan.example3".into(), "scan ext rs c -s ## List with sizes + total".into());
+
+    m.insert("help.scan.example4".into(), "scan port 192.168.1.1 --top 10 ## Scan top 10 ports".into());
+
+    m.insert("help.scan.example5".into(), "scan ip 192.168.1.0/24 ## Sweep for live hosts".into());
+    m.insert("help.scan.ext".into(), "scan ext <ext...> ## List files by extension (no line counts)".into());
+
+    m.insert("help.scan.port".into(), "scan port [host] [--top N | --ports <spec> | --all] ## TCP port scan".into());
+
+    m.insert("help.scan.ip".into(), "scan ip [cidr] [--top N | --ports <spec>] ## Live-host sweep + ARP".into());
+    m.insert("help.scan.size".into(), "scan ext <ext...> -s, --size ## Show sizes + total".into());
+    m.insert("help.scan.care".into(), "scan ext <ext...> --care ## Include everything (care mode)".into());
+    m.insert("help.scan.title".into(), "SCAN COMMANDS:".into());
+
+    m.insert("help.nssh.title".into(), "NSSH COMMANDS:".into());
+    m.insert("help.nssh.add".into(), "nssh add <name> --host <h> ## Save an SSH profile".into());
+    m.insert("help.nssh.ssh".into(), "nssh ssh [name] [--cmd \"...\"] ## Shell or one remote command".into());
+    m.insert("help.nssh.cp".into(), "nssh cp <local> <name>:<remote> ## SFTP upload/download".into());
+    m.insert("help.nssh.scan".into(), "nssh scan <host> [--top N] ## TCP port scan".into());
+    m.insert("help.nssh.manage".into(), "nssh ls|info|rm|edit ## Manage profiles".into());
+    m.insert("help.nssh.keygen".into(), "nssh keygen ## Generate keys via ssh-keygen".into());
+    m.insert("help.nssh.example1".into(), "nssh add prod --host 203.0.113.10 --user root ## Save profile".into());
+    m.insert("help.nssh.example2".into(), "nssh ssh prod --cmd \"uptime\" ## Run remote command".into());
+    m.insert("help.nssh.example3".into(), "nssh cp ./app.tar.gz prod:/tmp/ ## Upload file".into());
+
+    m.insert("help.nsheet.title".into(), "NSHEET COMMANDS:".into());
+    m.insert("help.nsheet.open".into(), "nsheet open <file> [options] ## Fullscreen sheet viewer (CSV/TSV/JSON)".into());
+    m.insert("help.nsheet.view".into(), "nsheet view <file> [options] ## Print sheet as a table (default 50 rows)".into());
+    m.insert("help.nsheet.sort".into(), "nsheet view <file> --sort <col> [--desc] ## Sort by column".into());
+    m.insert("help.nsheet.filter".into(), "nsheet view <file> --filter <expr> ## Filter rows (col~text, col=n, col>n)".into());
+    m.insert("help.nsheet.export".into(), "nsheet view <file> --export <json|md> [-o <file>] ## Export rows".into());
+    m.insert("help.nsheet.tui".into(), "TUI keys: arrows/hjkl move · / search · n next · s sort · f filter · e export · Enter view · q quit".into());
+    m.insert("help.nsheet.example1".into(), "nsheet open users.csv ## Browse the sheet".into());
+    m.insert("help.nsheet.example2".into(), "nsheet view data.json --filter \"age>30\" --sort age ## Filter + sort".into());
+    m.insert("help.nsheet.example3".into(), "nsheet view a.csv --export md -o out.md ## Export Markdown".into());
 
     m.insert("help.view.care".into(), "view --care ## Show tree with care everything".into());
 
@@ -4298,6 +4871,8 @@ pub fn build_map() -> HashMap<String, String> {
     m.insert("help.view.depth".into(), "view -d, --depth <n> ## Show tree with custom depth".into());
 
     m.insert("help.view.dirsize".into(), "view -ds, --dirsize ## Show tree with directory sizes only".into());
+
+    m.insert("help.view.ext".into(), "view -ext, --ext <ext...> ## Show tree with only matching extensions".into());
 
     m.insert("help.view.filesize".into(), "view -fs, --filesize ## Show tree with file sizes only".into());
 
@@ -4727,18 +5302,13 @@ pub fn build_map() -> HashMap<String, String> {
 
     m.insert("math.is_directory".into(), "'{}' is a directory, not a file".into());
 
-    m.insert("math.lap_time".into(), "Lap: {:>8.2}".into());
+    m.insert("math.lap_time".into(), "Lap: {} seconds".into());
 
-    m.insert("math.lap_time".into(), "Lap: {:>8.2}".into());
-
-    m.insert("math.time_remaining".into(), "Time remaining: {:.2}".into());
-
-    m.insert("math.time_remaining".into(), "Time remaining: {:.2}".into());
+    m.insert("math.time_remaining".into(), "Time remaining: {}".into());
 
     m.insert("math.timer_started".into(), "Timer started...".into());
 
     m.insert("math.timer_usage".into(), "Usage: math timer <seconds>".into());
-
     m.insert("math.times_up".into(), "Time's up!".into());
 
     m.insert("misc.clear.type_help".into(), "Type 'help' for available commands, 'exit' to quit.".into());
@@ -4795,9 +5365,19 @@ pub fn build_map() -> HashMap<String, String> {
 
     m.insert("misc.gs.example4".into(), " gs -i main -d 3 # interactive mode with depth limit".into());
 
+    m.insert("misc.gs.example5".into(), " gs main -d 5 -l 10 # show only first 10 matches".into());
+
+    m.insert("misc.gs.searching".into(), "Searching contents...".into());
+
     m.insert("misc.gs.many_results".into(), "gs: {} matches found, showing first 20,000. Narrow your search.".into());
 
-    m.insert("misc.gs.usage".into(), "Usage: gs <pattern> [-d <depth>] [-i]".into());
+    m.insert("misc.gs.usage".into(), "Usage: gs <pattern> [-d <depth>] [-l <limit>] [-i]".into());
+
+    m.insert("misc.wi.not_dir".into(), "wi: not a directory: '{}'".into());
+
+    m.insert("misc.wi.start_error".into(), "wi: cannot watch: {}".into());
+
+    m.insert("misc.wi.usage".into(), "Usage: wi [path]".into());
 
     m.insert("misc.locate.example1".into(), " locate main.c # search files and dirs (config depth)".into());
 
@@ -4869,6 +5449,14 @@ pub fn build_map() -> HashMap<String, String> {
 
     m.insert("misc.rmf.not_exist".into(), "rmf: '{}' does not exist".into());
 
+    m.insert("misc.rmf.no_match".into(), "rmf: no files match '{}'".into());
+
+    m.insert("misc.rmf.pattern_matches".into(), "{} file(s) match '{}':".into());
+
+    m.insert("misc.rmf.confirm_delete".into(), "Delete {} file(s)?".into());
+
+    m.insert("misc.rmf.cancelled".into(), "Cancelled.".into());
+
     m.insert("misc.rmf.removed".into(), "Removed: {}".into());
 
     m.insert("misc.rnmd.error".into(), "rnmd: {}".into());
@@ -4898,6 +5486,32 @@ pub fn build_map() -> HashMap<String, String> {
     m.insert("misc.rnmf.renamed".into(), "Renamed '{}' -> '{}'".into());
 
     m.insert("misc.rnmf.usage".into(), " Usage: rnmf <old_name> <new_name>".into());
+
+    m.insert("misc.mv.error".into(), "mv: {}".into());
+
+    m.insert("misc.mv.exists".into(), "mv: target exists: '{}' (use -f to overwrite)".into());
+
+    m.insert("misc.mv.missing".into(), "mv: missing operand".into());
+
+    m.insert("misc.mv.moved".into(), "Moved '{}' -> '{}'".into());
+
+    m.insert("misc.mv.not_exist".into(), "mv: source not found: '{}'".into());
+
+    m.insert("misc.mv.usage".into(), "Usage: mv <src> <dst|@tp> [-f]".into());
+
+    m.insert("misc.cp.error".into(), "cp: {}".into());
+
+    m.insert("misc.cp.exists".into(), "cp: target exists: '{}' (use -f to overwrite)".into());
+
+    m.insert("misc.cp.missing".into(), "cp: missing operand".into());
+
+    m.insert("misc.cp.copied".into(), "Copied '{}' -> '{}'".into());
+
+    m.insert("misc.cp.not_exist".into(), "cp: source not found: '{}'".into());
+
+    m.insert("misc.cp.same".into(), "cp: source and target are the same file: '{}'".into());
+
+    m.insert("misc.cp.usage".into(), "Usage: cp <src> <dst|@tp> [-f]".into());
 
     m.insert("misc.say.example1".into(), " say \"hello world\" --loop 5 -n # 5 lines".into());
 
@@ -5156,6 +5770,7 @@ pub fn build_map() -> HashMap<String, String> {
     m.insert("msg.showcg.label_threads".into(), "Threads:".into());
 
     m.insert("msg.showcg.label_watcher".into(), "Watcher:".into());
+    m.insert("msg.showcg.label_watch_limit".into(), "Watch limit:".into());
 
     m.insert("msg.showcg.label_dir_view".into(), "Dir View:".into());
 
@@ -5188,6 +5803,12 @@ pub fn build_map() -> HashMap<String, String> {
     m.insert("msg.watch.on".into(), "File watcher: ON (restart ntc to activate)".into());
 
     m.insert("msg.watch.status".into(), "File watcher: {}".into());
+
+    m.insert("msg.watch.limit_status".into(), "Watch display limit: {}".into());
+
+    m.insert("msg.watch.limit_success".into(), "Watch display limit set to {}".into());
+
+    m.insert("msg.watch.limit_error".into(), "Invalid watch limit: '{}'. Use a positive number.".into());
 
     m.insert("msg.where.current_dir".into(), "Current directory: {}".into());
 

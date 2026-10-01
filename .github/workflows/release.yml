@@ -5,6 +5,26 @@ on:
     tags:
       - 'v*'
   workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to publish (e.g. v2.4.4). Only used for manual runs.'
+        required: false
+        default: ''
+
+# NOTE (manual-upload contract, macOS-only CI):
+# CI builds ONLY macOS assets. Linux / Windows / Android assets are built and
+# uploaded by the maintainer by hand. Filenames MUST match exactly what
+# packaging/npm/scripts/install.js expects, otherwise `npm install` 404s:
+#   ntc-v<NO_V>-macos-x86_64.tar.gz        (CI: x86_64-apple-darwin,  contains top-level `ntc`)
+#   ntc-v<NO_V>-macos-aarch64.tar.gz       (CI: aarch64-apple-darwin, contains top-level `ntc`)
+#   ntc-v<NO_V>-linux-x86_64.tar.gz        (manual: contains top-level `ntc`)
+#   ntc-v<NO_V>-linux-aarch64.tar.gz       (manual: contains top-level `ntc`)
+#   ntc-v<NO_V>-windows-x86_64.zip         (manual: contains top-level `ntc.exe`)
+#   ntc-v<NO_V>-windows-arm64.zip          (manual: contains top-level `ntc.exe`)
+#   ntc-v<NO_V>-aarch64-linux-android.tar.gz (manual Termux: contains top-level `ntc`)
+# Build manually with e.g.:
+#   cargo build --release                      # then: tar -czvf ntc-vX.Y.Z-linux-x86_64.tar.gz -C target/release ntc
+#   cargo build --release --target aarch64-unknown-linux-gnu  # rename accordingly
 
 jobs:
   build-macos:
@@ -16,19 +36,39 @@ jobs:
           - x86_64-apple-darwin
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: ntc_web/package-lock.json
+      - name: Build frontend (required by build.rs)
+        run: |
+          cd ntc_web && npm ci && npm run build
+          ls dist/index.html
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: ${{ matrix.target }}
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: ${{ matrix.target }}
       - run: cargo build --release --target ${{ matrix.target }}
       - name: Create archive
         run: |
-          VERSION="${{ github.ref_name }}"
+          set -euo pipefail
+          VERSION="${{ github.ref_name }}${{ inputs.version }}"
+          if [ -z "$VERSION" ] || [ "$VERSION" = "v" ]; then
+            echo "::error::No version found. Push a v* tag or pass version input on manual dispatch."
+            exit 1
+          fi
           VERSION_NO_V="${VERSION#v}"
-          ARCH=${{ matrix.target == 'aarch64-apple-darwin' && 'aarch64' || 'x86_64' }}
+          if [ "${{ matrix.target }}" = "aarch64-apple-darwin" ]; then ARCH="aarch64"; else ARCH="x86_64"; fi
           ARCHIVE_NAME="ntc-v${VERSION_NO_V}-macos-${ARCH}.tar.gz"
           mkdir -p release-artifacts
-          cp "target/${{ matrix.target }}/release/ntc" .
+          cp "target/${{ matrix.target }}/release/ntc" ./ntc
+          chmod +x ./ntc
           tar -czvf "release-artifacts/${ARCHIVE_NAME}" ntc
+          rm -f ./ntc
+          ls -la release-artifacts/
       - uses: actions/upload-artifact@v4
         with:
           name: macos-${{ matrix.target }}
@@ -45,8 +85,11 @@ jobs:
           path: artifacts
       - name: Collect assets
         run: |
+          set -euo pipefail
           mkdir -p release-assets
           find artifacts -name '*.tar.gz' -exec cp {} release-assets/ \;
+          ls -la release-assets/
+          test -n "$(ls release-assets/*.tar.gz 2>/dev/null)" || { echo "::error::No release assets collected"; exit 1; }
       - uses: softprops/action-gh-release@v2
         if: startsWith(github.ref, 'refs/tags/')
         with:
@@ -56,6 +99,8 @@ jobs:
 
   publish-npm:
     needs: [release]
+    # Only auto-publish on tag pushes; manual dispatches still build/test above.
+    if: startsWith(github.ref, 'refs/tags/')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -63,12 +108,21 @@ jobs:
         with:
           node-version: 20
           registry-url: https://registry.npmjs.org
-      - run: |
+      - name: Prepare npm package with release version
+        run: |
+          set -euo pipefail
           VERSION="${{ github.ref_name }}"
+          if [ -z "$VERSION" ]; then echo "::error::github.ref_name is empty, cannot version npm package"; exit 1; fi
           VERSION_NO_V="${VERSION#v}"
+          if [ -z "$VERSION_NO_V" ]; then echo "::error::Could not strip v prefix from $VERSION"; exit 1; fi
           mkdir -p npm-package
           cp -r packaging/npm/* npm-package/
-          sed -i "s/\"version\": \".*\"/\"version\": \"$VERSION_NO_V\"/" npm-package/package.json
+          node -e "const fs=require('fs');const p='npm-package/package.json';const j=JSON.parse(fs.readFileSync(p,'utf8'));j.version=process.argv[1];fs.writeFileSync(p,JSON.stringify(j,null,2)+'\n');" "$VERSION_NO_V"
+          echo "npm package version:"
+          node -p "require('./npm-package/package.json').version"
+          test "$(node -p "require('./npm-package/package.json').version")" = "$VERSION_NO_V"
+          node --check npm-package/scripts/install.js
+          node --check npm-package/bin/ntc.js
       - run: npm publish ./npm-package --access public
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

@@ -1,5 +1,98 @@
 # Changelog
 
+## [Unreleased]
+
+### New Features
+
+#### 📝 ne — VSCode-Style MQL Completion
+- Two-box popup for `.mq4/.mq5/.mqh` (insert mode): Box1 candidates (12 rows, kind tags) + Box2 detail, one line below the cursor, flipped above when space runs out
+- Kinds `[F]`unction `[V]`ar/type `[A]`rray `[K]`eyword/constant `[O]`bject `[S]`truct `[E]`num(+members) `[M]`acro; priority F>V>A>K>O>S>E>M with round-robin fill; user symbols first; case-insensitive prefix filter
+- Per-dialect builtins (`.mq4` vs `.mq5`, `.mqh` shows the union); user functions show signature + `//` doc comments; rich builtin docs where available
+- Enter accepts (`name()` lands the cursor inside), Up/Down cycle, Esc dismisses, Tab always indents; `(`/`)` overtype-aware with signature help
+- Signature help (Box2-sized, above cursor): opens on `(` and follows the cursor inside `(…)` (nesting/string/comment aware), active parameter highlighted and updated on `,`
+- Zero new theme keys or language strings (all popup text is code/data)
+- Pure priority sort over the full match list with a 12-row scrolling window (no cap); `o.` member completion (methods + vars with access filtering, private excluded); full wrapped signatures everywhere with Yellow active param; ghost-box repaints via dirty discipline; PgUp/PgDn page the selection
+
+#### ⌨️ ne — Vim-Style Keymap Redesign
+- Single-letter verbs in Normal: `i` insert, `v` visual, `q` query, `n` save, `c` fast copy, `e` nfe explorer, `f` search, `b` file finder, `t` terminal (Esc/`Ctrl+Q` hides it), `u` encoding picker, `g` gmode, `:` command, `?` help, `0` exit (dirty-checked like `:q`)
+- Motion everywhere: `hjkl` + `awsd` + arrows (arrows-only in Insert so typing still works); Shift+direction selects in Visual; `Ctrl+J` enters Jump from all text modes
+- New `gmode` prompt (`g`, type, Enter): `t`/`T` next/prev tab, `qt`/`aqt` close tab/all, `<number>` goto line, `q` exit
+- New `nfe` keyboard sidebar (`e` to enter): `hjkl`/arrows/`wasd` move, Enter opens dirs/files in place, Esc back
+- Nfe `:` size prompt (`size full|def|N%`, persisted percent width); tab-bar ✕/close-all mouse zones restored (switching stays keyboard); Shift+direction selects in Normal; `H` opens Help; terminal/run panels take keyboard focus on open
+- Visual: `a` select-all toggle, `c`/`x` copy/cut, `y` yank line, `p` paste-over-selection; quit is `:q`/`0`/gmode-`q` only
+- Mouse is now optional (`mouse_enabled` in `editor.toml`, default on) and limited to the text field + terminal panel
+- Removed for redesign: hex editor (`:hex`), completion popup UI, `Ctrl+O/W/B/N/G/H`, `Ctrl+Tab` buffers, `Ctrl+PgUp/PgDn` tabs
+- Refreshed welcome screen, in-editor hint bars, help screen and tutorial for the new map (all four languages)
+
+#### 🔐 nssh — Native SSH Profiles, Shell, SFTP & Port Scan
+- `nssh add <name> --host <h> [--user u] [--port p] [--key path] [--pass-env VAR]` — profiles in `~/.config/ntc/nssh.toml` (0600 on Unix); passwords never stored, only env-var references
+- `nssh ssh [name] [--cmd "..."] [--trust] [--ask-pass] [--timeout s]` — pure-Rust `russh` transport (`ring` backend, no C/OpenSSL toolchain): default + explicit key auth, hidden password prompt, OpenSSH `known_hosts` verification (changed keys always fail, unknown keys need `--trust`), one-shot exec with exit-code footer or interactive PTY shell; bare `nssh` / `nssh <name>` picks/opens directly
+- `nssh cp <local> <name>:<remote>` / `nssh cp <name>:<remote> <local>` — SFTP upload (chunked, progress bar) / download; remote side detected only for known profile names (Windows `C:\…` stays local); 256MB v1 guard
+- `nssh scan <host> [--ports 22,80,8000-8010 | --top N] [--timeout ms]` — parallel TCP connect scan (rayon) with service labels
+- `nssh ls|info|rm|edit`, `nssh keygen` passthrough, profile-name + flag completion, `help nssh` topic; fully localized in all four languages
+- Interactive shell input layer: local crossterm events translated to canonical xterm bytes (arrows/modifiers, Home/End, PgUp/PgDn, Ins/Del, F-keys, Enter, Esc, Backspace=DEL, Ctrl+Z=0x1A, Alt combos, SGR mouse, bracketed paste) — identical on every Windows terminal; `~.` force-disconnect escape with hint + back-in-ntc banner; local `$TERM` propagated and standard PTY modes sent
+
+#### 📊 nsheet — Terminal Sheet Viewer (CSV/TSV/JSON/JSONL)
+- `nsheet open <file>` — fullscreen TUI: cell cursor (`arrows`/`hjkl`, `PgUp`/`PgDn`, `g`/`G`), `/` search + `n`/`N` jump, `s` sort prompt (`!` suffix = desc), `f` filter prompt, `c` clear, `e` export to `.json`/`.md`, `Enter` full-cell popup, `q`/`Esc` quit
+- `nsheet view <file> [-l <n>|--all] [--sort <col> [--desc]] [--filter <expr>] [--export <json|md> [-o <file>]]` — non-interactive box-table print (reuses `ndb` renderer, default 50 rows)
+- Dependency-free parsing: RFC-4180-style quoting, delimiter auto-detect (`, ; tab |`) with `-d` override, header auto-detect with `--header/--no-header`, ragged-row normalization; JSON arrays + JSONL with first-seen key order
+- Filters: `col~text`, `col=text`, `col!=text`, `col>n`, `col<n`, `col>=n`, `col<=n` joined by `&&`/`||`; numeric-aware sorting; column by name (case-insensitive) or 1-based index
+- Shell completion: `open`/`view` + all flags, sheet-extension file filter (`.csv/.tsv/.json/.jsonl/.ndjson/.txt`); `help nsheet` topic; fully localized in all four languages
+
+#### 🔗 serve --share — Internet-First LAN Sharing with QR
+- `serve [port] --share [path] [--qr|--no-qr]` — advertisement-only; auth/routing unchanged
+- Step 1 checks internet via quick TCP probes (`8.8.8.8:53`, `1.1.1.1:53`, ~900ms each); offline prints localhost only with a localized warning (no LAN, no QR)
+- Step 2 (online only) discovers the primary LAN IPv4 via the default-route UDP trick (std-only, Termux-safe), prioritizes `192.168.x.x` > `10.x.x.x` > `172.16-31.x.x`, prints `http://<lan>:<port>` plus a terminal QR (reuse of `qr` renderer); `--bind 127.0.0.1` warns LAN peers can't reach it
+- Fully localized in all four languages; hinter completion for `--share/--qr/--no-qr`
+
+#### 🔍 scan — Extension-Filtered File Listing
+- `scan ext <ext...> [-d|--depth <n>] [-s|--size]` — list files by extension (space- and/or comma-separated, dots optional, case-insensitive); no line counting
+- Bare output is paths only; `-s` adds human sizes plus a total footer; `-d` limits walk depth (default: config depth)
+- Respects ignore/care like `tl`; results sorted alphabetically; fully localized in all four languages
+
+#### 🌳 view -ext — Filtered Tree
+- `view -ext rs c` / `view --ext rs c` — tree shows only matching files, in any flag position (`view -ext rs -ds -d 2`, `view src -ext rs`)
+- Empty directories are pruned; `-ds`/`-fs` sizes become sums of kept files; zero matches prints a localized "No .rs, .c files found"
+- Extension hinter for `scan ext`, `tl ext` and `view -ext` (comma-aware: `rs,c` completes after the comma)
+
+#### 📦 arc — Archive Manager
+- `arc create <out.zip|tar.gz|tgz|tar> <files...>` — create archives (dirs recursed, quote-aware paths)
+- `arc list <file>` — list contents with human sizes + total count
+- `arc extract <file> [dest]` — extract with zip-slip guard (`enclosed_name` / `unpack_in`); default dest strips extension next to the archive
+- Shell completion: `arc create <out>` output slot stays hint-free, deeper positions complete files+dirs; `arc list`/`extract` filter to `.zip`/`.tar`/`.tar.gz`/`.tgz` (+dirs for traversal), extract dest completes dirs only; `arc create --help` shows usage + example
+- `view` flag ghosts: `view -d` → `-ds`, `view --d` → `--depth`/`--dirsize`; path completion now works after flags (`view -ds <path>`)
+- Fully localized (`cmd.arc.*` / `help.arc.*`) in English, Chinese, Thai and Lao
+
+#### ✅ todo v2-lite
+- Tasks stored as `- [ ]` / `- [x]` lines in per-CWD `future_todo.txt`; legacy bare lines auto-migrate on next save
+- `todo done <N>` / `todo undo <N>` — toggle with already-done/open hints
+- `todo edit <N> "new name"` — rename + reprioritize in place
+- Priority suffix `!` / `!!` (e.g. `todo add "Ship !!"`) — red/yellow tags in list view
+- New localized help (`help.todo.done/undo/edit`) in all four languages
+
+#### ️ ndb — NTC Database Shell
+- `ndb` — nested interactive shell to "crack" open `.db` files (SQLite)
+- On launch it auto-lists every `.db`/`.sqlite`/`.sqlite3` file in the current directory with its size and table count
+- `interface <file.db>` (or a list number) opens a database: the prompt switches from `ndb [<cwd>]>` to `ndb [<file.db>]>` and the table tree is shown immediately
+- Database-level commands: `help`, `viewf` (schema tree of tables + columns), `tables`, `tablef <table>` (rows, like `txtf`), `schema <table>`, `sql <query>`, `interface`, `exit`
+- All databases open **read-only**: `SELECT`, `PRAGMA`, `EXPLAIN`, `WITH` and `VALUES` are allowed, writes are blocked at the keyword check and again by SQLite (`SQLITE_OPEN_READ_ONLY`)
+- Row output is a width-aware box table (50 rows by default, `-l <n>` / `--all` to change), with `NULL`, BLOB and truncation indicators
+- `exit` closes the file (back to `ndb [<cwd>]>`), a second `exit` returns to the ntc shell; `Ctrl-D` does the same
+- Ghost-text hints + `Tab`/`Shift-Tab` completion (commands, `.db` files, table names, `FROM`/`JOIN` tables); `clear`/`cls` re-shows the current context
+- Schema insight: `info` (file/engine/object counts), `schema <table>` shows indexes + foreign keys + triggers, `indexes [table]`, `tables [pattern]` filter
+- Query UX: `more`/`next` pagination, per-query timing footer, multi-line `sql` mode (end with `;`)
+- `dbal` — third alias dimension (`qal` editor / `ral` shell / `dbal` ndb): save named read-only queries (`add|edit|rnm|rm|info|list|run|cls`), run via `dbal run <name>` or the bare name; stored global + local `ntconfig.toml`
+- `dbal` params (`$x`, `${x}`, `${x:-default}`, ral-style): `dbal run q 2026-01-01`, `q('2026-01-01')`; missing values error, `;`-smuggled statements rejected before execution
+- `&&` sequencing in `ndb`: `interface app.db && tables && top_users -l 5` (quote-aware for `'` and `"`; state updates apply between segments, `exit` short-circuits)
+- Safe writes (opt-in, additive): `edit on|off|status` reopens the handle read-write in place (default stays `edit off`, fresh `interface` opens always start locked); `write YES <INSERT|UPDATE|DELETE|REPLACE ...>` runs one row-level statement in a transaction (unconfirmed `write` only previews, `sql`/`dbal` stay read-only forever, DDL stays blocked); auto-backup `app.db.bak.<timestamp>` before the first write per session + manual `backup`/`bak`
+- Fully localized (`ndb.*` / `help.ndb.*`) in English, Chinese, Thai and Lao
+
+#### 🔐 serve --auth — Login for the file server
+- `serve 8080 --auth admin:555@ntcstorage` — every `/api/*` route requires HTTP Basic login (split on the first `:`, so `@` and later `:` stay literal); static `/` stays public so the login page always loads
+- Wrong/missing credentials get `401 {"error":"Unauthorized"}` + `WWW-Authenticate: Basic realm="ntc serve"`; the check runs before any body is read, so unauthenticated uploads can't burn bandwidth or disk
+- Web UI: login dialog (`🔒 Login required` → username + password → `Unlock`), credentials kept in `sessionStorage` (cleared on tab close + `🔒 Logout` button), every fetch/XHR carries the header, downloads go through authenticated fetch-blob, any `401` re-opens the login overlay
+- No `--auth` = exactly the old behavior (additive-only); localized (`cmd.serve.*`) in English, Chinese, Thai and Lao
+
 ## [2.4.0] - 2026-07-22
 
 ### Major Features

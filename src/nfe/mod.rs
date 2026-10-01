@@ -1,6 +1,9 @@
 pub(crate) mod events;
 pub(crate) mod fileops;
+pub(crate) mod image;
+pub(crate) mod kitty;
 pub(crate) mod render;
+pub(crate) mod sixel;
 pub(crate) mod state;
 
 use crate::nfe::events::{handle_event, Action};

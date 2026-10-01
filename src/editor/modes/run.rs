@@ -130,7 +130,7 @@ impl Editor {
                     KeyCode::Char('n') => {
                         return Ok(());
                     }
-                    KeyCode::Char('g') => {
+                    KeyCode::Char('j') => {
                         self.focus = Focus::Editor;
                         self.prev_mode = Mode::Normal;
                         self.mode = Mode::Jump;
@@ -352,7 +352,7 @@ impl Editor {
                 self.sv.run = 0;
                 self.run_panel_open = true;
                 self.terminal = None;
-                self.focus = Focus::Editor;
+                self.focus = Focus::Run;
                 self.status_msg = None;
                 self.mark_all_dirty();
             }

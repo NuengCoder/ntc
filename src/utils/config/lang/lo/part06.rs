@@ -27,7 +27,12 @@ pub fn fill(m: &mut HashMap<String, String>) {
     m.insert("cmd.image.missing_to_format".into(), "ຂາດຮູບແບບຫຼັງ 'to'.".into());
     m.insert("cmd.image.no_files".into(), "ບໍ່ພົບໄຟລ໌ຮູບພາບໃນໄດເຣັກທໍຣີປັດຈຸບັນ.".into());
     m.insert("cmd.image.select_image".into(), "ເລືອກຮູບພາບ:".into());
-    m.insert("cmd.image.usage".into(), "ວິທີໃຊ້: image <path> [to|out <format>] [--ocr] [--layout]".into());
+    m.insert("cmd.image.displaying".into(), "ກຳລັງສະແດງ {} ({}x{}) ຜ່ານ {}".into());
+    m.insert("cmd.image.usage".into(), "ວິທີໃຊ້: image <path> [display|show|to|out <format>] [--ocr] [--layout]".into());
+    m.insert("cmd.ipcfg.dns_label".into(), "DNS ......... :".into());
+    m.insert("cmd.ipcfg.no_adapters".into(), "ບໍ່ພົບ network adapters.".into());
+    m.insert("cmd.ipcfg.no_such_adapter".into(), "ບໍ່ມີ adapter ຊື່ '{}'.".into());
+    m.insert("cmd.ipcfg.title".into(), "Network adapters:".into());
     m.insert("cmd.image_disabled".into(), "ການແປງຮູບພາບບໍ່ມີ (feature 'image2doc' ຖືກປິດ).".into());
     m.insert("cmd.mode.admin_relaunch".into(), "ກຳລັງຣີເລົ່ນ ntc ເປັນ Administrator...".into());
     m.insert("cmd.mode.elevate_fail".into(), "ລົ້ມເຫຼວໃນການເປີດ process ທີ່ elevate: {}".into());

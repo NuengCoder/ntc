@@ -3,7 +3,6 @@ use crate::nfe::state::{NfeState, PanelFocus};
 
 use anyhow::Result;
 use crossterm::event::{self, Event, KeyCode, KeyEventKind, MouseEvent, MouseEventKind};
-use std::path::Path;
 use std::time::Duration;
 
 pub enum Action {
@@ -13,6 +12,23 @@ pub enum Action {
 }
 
 pub fn handle_event(state: &mut NfeState, ev: Event) -> Result<Action> {
+    // Fullscreen image viewer captures everything first: Esc/q leave
+    // the viewer (never the app), the rest drives zoom/pan.
+    if state.viewer_active {
+        match ev {
+            Event::Key(key) if key.kind == KeyEventKind::Press => {
+                return Ok(handle_viewer_key(state, key));
+            }
+            Event::Resize(w, h) => {
+                state.term_w = w as usize;
+                state.term_h = h as usize;
+                state.regrid_viewer();
+            }
+            _ => {}
+        }
+        return Ok(Action::Continue);
+    }
+
     // If help is visible, any key dismisses it
     if state.help_visible {
         if let Event::Key(key) = &ev {
@@ -181,6 +197,12 @@ fn handle_key(state: &mut NfeState, key: crossterm::event::KeyEvent) -> Result<A
             Ok(Action::Continue)
         }
 
+        // ── V: fullscreen image viewer ──
+        KeyCode::Char('V') => {
+            state.open_viewer();
+            Ok(Action::Continue)
+        }
+
         // ── h: Help overlay ──
         KeyCode::Char('h') => {
             state.toggle_help();
@@ -201,6 +223,12 @@ fn handle_key(state: &mut NfeState, key: crossterm::event::KeyEvent) -> Result<A
 
         KeyCode::Char('i') => {
             state.toggle_hidden();
+            Ok(Action::Continue)
+        }
+
+        // ── v: cycle image preview density (sextant/half) ──
+        KeyCode::Char('v') => {
+            state.toggle_preview_mode();
             Ok(Action::Continue)
         }
 
@@ -235,6 +263,18 @@ fn handle_key(state: &mut NfeState, key: crossterm::event::KeyEvent) -> Result<A
                         return Ok(Action::OpenEditor);
                     }
                 }
+            }
+            Ok(Action::Continue)
+        }
+
+        // ── o: open image in OS viewer · W: relaunch in WT ──
+        KeyCode::Char('o') => {
+            state.open_external();
+            Ok(Action::Continue)
+        }
+        KeyCode::Char('W') => {
+            if state.relaunch_in_wt() {
+                return Ok(Action::Quit);
             }
             Ok(Action::Continue)
         }
@@ -324,10 +364,79 @@ fn handle_find_mode(state: &mut NfeState, key: crossterm::event::KeyEvent) -> Re
     Ok(())
 }
 
+// ── Fullscreen image viewer keys ──
+
+fn handle_viewer_key(state: &mut NfeState, key: crossterm::event::KeyEvent) -> Action {
+    match key.code {
+        KeyCode::Esc | KeyCode::Char('q') => {
+            state.close_viewer();
+        }
+        // V/+/- step zoom, 0 resets to fit (stops: 0.25-8x).
+        KeyCode::Char('V') | KeyCode::Char('+') | KeyCode::Char('=') => {
+            state.step_viewer_zoom(1);
+        }
+        KeyCode::Char('-') | KeyCode::Char('_') => {
+            state.step_viewer_zoom(-1);
+        }
+        KeyCode::Char('0') => {
+            state.reset_viewer_zoom();
+        }
+        // o: OS viewer (real pixels on every terminal).
+        // W: relaunch in Windows Terminal (conhost escape hatch).
+        KeyCode::Char('o') => {
+            state.open_external();
+        }
+        KeyCode::Char('W') => {
+            if state.relaunch_in_wt() {
+                return Action::Quit;
+            }
+        }
+        KeyCode::Char('v') => {
+            state.toggle_preview_mode();
+            state.regrid_viewer();
+        }
+        KeyCode::Left | KeyCode::Char('h') => {
+            state.pan_viewer(-4, 0);
+            state.regrid_viewer();
+        }
+        KeyCode::Right | KeyCode::Char('l') => {
+            state.pan_viewer(4, 0);
+            state.regrid_viewer();
+        }
+        KeyCode::Up | KeyCode::Char('k') => {
+            state.pan_viewer(0, -4);
+            state.regrid_viewer();
+        }
+        KeyCode::Down | KeyCode::Char('j') => {
+            state.pan_viewer(0, 4);
+            state.regrid_viewer();
+        }
+        KeyCode::PageUp => {
+            state.pan_viewer(0, -(state.viewer_dims().1 as i32 / 2));
+            state.regrid_viewer();
+        }
+        KeyCode::PageDown => {
+            state.pan_viewer(0, state.viewer_dims().1 as i32 / 2);
+            state.regrid_viewer();
+        }
+        KeyCode::Home => {
+            state.viewer_ox = 0;
+            state.viewer_oy = 0;
+            state.regrid_viewer();
+        }
+        _ => {}
+    }
+    Action::Continue
+}
+
 // ── Mouse handler ──
 
 fn handle_mouse(state: &mut NfeState, mouse: MouseEvent) {
-    if state.help_visible || state.line_prompt_active || state.find_active {
+    if state.help_visible
+        || state.line_prompt_active
+        || state.find_active
+        || state.viewer_active
+    {
         return;
     }
 
@@ -410,13 +519,18 @@ fn enter_goto_mode(state: &mut NfeState) -> Result<()> {
 
         match event::read()? {
             Event::Key(key) if key.kind == KeyEventKind::Press => match key.code {
-                KeyCode::Esc | KeyCode::Enter => {
+                KeyCode::Esc => {
+                    break;
+                }
+                KeyCode::Enter => {
                     if !buf.is_empty() {
-                        let path = Path::new(&buf);
-                        if path.exists() && path.is_dir() {
-                            state.go_to_dir(path);
+                        let target = state.resolve_goto(&buf);
+                        if target.exists() && target.is_dir() {
+                            state.go_to_dir(&target);
+                        } else if go_to_teleport(state, buf.trim()).unwrap_or(false) {
+                            // Teleport bookmark matched.
                         } else {
-                            let _ = go_to_teleport(state, &buf.trim());
+                            state.set_status(format!("No such directory: {}", buf.trim()));
                         }
                     }
                     break;
@@ -428,32 +542,39 @@ fn enter_goto_mode(state: &mut NfeState) -> Result<()> {
                     buf.pop();
                 }
                 KeyCode::Tab => {
-                    if let Some(pos) = buf.rfind(|c| c == '\\' || c == '/') {
-                        let prefix = &buf[..=pos];
-                        let partial = &buf[pos + 1..];
-                        if let Ok(entries) = std::fs::read_dir(prefix) {
-                            let matches: Vec<String> = entries
-                                .filter_map(|e| e.ok())
-                                .map(|e| e.file_name().to_string_lossy().to_string())
-                                .filter(|n| n.to_lowercase().starts_with(&partial.to_lowercase()))
-                                .collect();
-                            if matches.len() == 1 {
-                                buf = format!("{}{}", prefix, matches[0]);
-                            }
+                    // Complete against the current directory (never the
+                    // process CWD): split the buffer into a base dir +
+                    // partial name, both resolved against current_dir.
+                    let (base, partial) = match buf.rfind(['/', '\\']) {
+                        Some(pos) => {
+                            let base = state.resolve_goto(&buf[..=pos]);
+                            (base, buf[pos + 1..].to_string())
                         }
-                    } else {
-                        if let Ok(entries) = std::fs::read_dir(".") {
-                            let matches: Vec<String> = entries
-                                .filter_map(|e| e.ok())
-                                .map(|e| e.file_name().to_string_lossy().to_string())
-                                .filter(|n| {
-                                    n.to_lowercase().starts_with(&buf.to_lowercase())
-                                        && Path::new(n).is_dir()
-                                })
-                                .collect();
-                            if matches.len() == 1 {
-                                buf = matches[0].clone();
-                            }
+                        None => (state.current_dir.clone(), buf.clone()),
+                    };
+                    if let Ok(entries) = std::fs::read_dir(&base) {
+                        let lower = partial.to_lowercase();
+                        let mut matches: Vec<String> = entries
+                            .filter_map(|e| e.ok())
+                            .map(|e| e.file_name().to_string_lossy().to_string())
+                            .filter(|n| n.to_lowercase().starts_with(&lower))
+                            .collect();
+                        matches.sort();
+                        if matches.len() == 1 {
+                            let completed = if base == state.current_dir {
+                                matches[0].clone()
+                            } else {
+                                let mut s = buf[..buf.len() - partial.len()].to_string();
+                                s.push_str(&matches[0]);
+                                s
+                            };
+                            buf = completed;
+                        } else if matches.len() > 1 {
+                            state.set_status(format!(
+                                "{} matches: {}",
+                                matches.len(),
+                                matches.iter().take(5).cloned().collect::<Vec<_>>().join(", ")
+                            ));
                         }
                     }
                 }

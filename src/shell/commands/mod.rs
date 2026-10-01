@@ -13,7 +13,9 @@ use std::sync::{Arc, Mutex};
 
 // ── submodules ──────────────────────────────────────────────────────────
 mod alias_commands;
+mod arc;
 mod autoup;
+mod scan;
 mod backup;
 pub(crate) mod clipboard;
 mod config_commands;
@@ -24,9 +26,13 @@ mod git;
 mod gs_interactive;
 mod http_client;
 mod ignore;
+mod ipcfg;
 mod misc;
 mod mode;
 mod nav;
+mod ndb;
+mod nsheet;
+mod nssh;
 mod pathman;
 mod qr;
 mod qsc;
@@ -41,7 +47,7 @@ mod theme;
 mod tl;
 mod tmprt;
 mod todo;
-
+mod wi;
 pub(crate) mod upgrade;
 
 #[cfg(feature = "image2doc")]
@@ -61,6 +67,57 @@ pub(crate) fn execute_command(
     let cmd = parts[0].to_lowercase();
     let args = parts.get(1).unwrap_or(&"").trim();
 
+    // Cisco-style contextual `<prefix> --help` at any depth (concise
+    // next-step hints, `<cr>` when complete). Runs before dispatch so
+    // `ignore dir --help` never creates a dir named `--help`.
+    // `-h` is only intercepted here when it is NOT a data flag for the
+    // command; flag-heavy commands keep their own `-h` handling.
+    {
+        let trimmed = input.trim();
+        if let Some(last) = trimmed.split_whitespace().last() {
+            let last_lower = last.to_lowercase();
+            if last_lower == "--help" || last_lower == "-h" {
+                let is_long = last_lower == "--help";
+                if let Some(prefix) = crate::shell::help::strip_help_suffix(input) {
+                    let prefix_trimmed = prefix.trim();
+                    let root_of_prefix = prefix_trimmed
+                        .split_whitespace()
+                        .next()
+                        .unwrap_or("")
+                        .to_lowercase();
+                    let prefix_len = if prefix_trimmed.is_empty() {
+                        0
+                    } else {
+                        prefix_trimmed.split_whitespace().count()
+                    };
+                    // Bare `<flag-heavy-cmd> --help/-h` keeps its detailed
+                    // built-in help; deeper `<cmd> <sub> --help` uses concise.
+                    let flag_heavy = matches!(
+                        root_of_prefix.as_str(),
+                        "http" | "dl" | "up" | "ping" | "dns" | "smtp" | "serve"
+                    );
+                    let keep_native = flag_heavy && prefix_len <= 1;
+                    // Short `-h` for flag-heavy commands is data/flag: never intercept.
+                    let short_blocked = !is_long && flag_heavy;
+                    if !short_blocked && !keep_native {
+                        if crate::shell::help::print_contextual_help(&prefix) {
+                            return Ok(false);
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // Legacy sole-arg `<cmd> -h | --help` full-topic fallback (only when
+    // contextual help did not handle it).
+    if args == "-h" || args == "--help" {
+        if let Some(topic) = help_topic_for_command(&cmd) {
+            crate::shell::help::print_topic_help(topic);
+            return Ok(false);
+        }
+    }
+
     match cmd.as_str() {
         "cd" => nav::cmd_cd(args, nav),
         "godrive" | "god" => nav::cmd_godrive(args, nav),
@@ -71,7 +128,6 @@ pub(crate) fn execute_command(
         "txtf" => report::cmd_txtf(args, nav),
         "config" => config_commands::cmd_config(args, nav),
         "clear" => misc::cmd_clear(args, nav),
-        "dino" => misc::cmd_dino(args, nav),
         "encode" => encode_decode::cmd_encode(args, nav),
         "decode" => encode_decode::cmd_decode(args, nav),
         "fmt" => fmt::cmd_fmt(args, nav),
@@ -112,6 +168,7 @@ pub(crate) fn execute_command(
         "dns" => downloader::cmd_dns(args, nav),
         "ds" => misc::cmd_ds(args, nav),
         "gs" => misc::cmd_gs(args, nav),
+        "wi" => wi::cmd_wi(args, nav),
         "fgo" => nav::cmd_fgo(args, nav),
         "fsc" => misc::cmd_fsc(args, nav),
         "locate" => misc::cmd_locate(args, nav),
@@ -121,6 +178,8 @@ pub(crate) fn execute_command(
         "rmf" => misc::cmd_rmf(args, nav),
         "rnmf" => misc::cmd_rnmf(args, nav),
         "rnmd" => misc::cmd_rnmd(args, nav),
+        "mv" | "move" => misc::cmd_mv(args, nav),
+        "cp" => misc::cmd_cp(args, nav),
         "sys" | "top" => sysmon::cmd_sys(args, nav),
         "spec" => spec::cmd_spec(args, nav),
         "theme" => theme::cmd_theme(args, nav),
@@ -157,10 +216,16 @@ pub(crate) fn execute_command(
             Ok(false)
         }
         "todo" | "td" => todo::cmd_todo(args, nav),
+        "arc" => arc::cmd_arc(args, nav),
+        "scan" => scan::cmd_scan(args, nav),
+        "ipcfg" => ipcfg::cmd_ipcfg(args, nav),
         "say" | "print" => misc::cmd_say(args, nav),
         "pathcp" => misc::cmd_pathcp(args, nav),
         "tmprt" => tmprt::cmd_tmprt(args, nav),
         "git" => git::cmd_git(args, nav),
+        "ndb" => ndb::cmd_ndb(args, nav),
+        "nsheet" => nsheet::cmd_nsheet(args, nav),
+        "nssh" => nssh::cmd_nssh(args, nav),
         _ => misc::cmd_fallback(input, nav, watcher_handle),
     }
 }
@@ -276,6 +341,38 @@ fn run_system_command(args: &str, cwd: &Path) -> Result<std::process::ExitStatus
     }
 }
 
+/// Opt-in registry for universal `<cmd> -h | --help` (sole-arg only).
+/// Returns the help topic for commands that treat bare `-h/--help` as
+/// "show help". Commands where `-h` is data (gs search text, http header
+/// flag, …) or that already handle it themselves (dl/up/serve/…) are
+/// deliberately absent so their own handling is preserved.
+fn help_topic_for_command(cmd: &str) -> Option<&'static str> {
+    Some(match cmd {
+        "mv" | "move" | "mkf" | "mkd" | "rmf" | "rmd" | "rnmf" | "rnmd" | "cp" => "fileops",
+        "gs" | "fs" | "ds" | "locate" | "fsc" => "search",
+        "config" | "wi" => "config",
+        "ne" | "ntceditor" => "editor",
+        "size" => "size",
+        "view" | "txtc" | "txtf" => "view",
+        "report" => "report",
+        "tp" | "tpb" => "teleport",
+        "theme" => "theme",
+        "backup" => "backup",
+        "todo" | "td" => "todo",
+        "arc" => "arc",
+        "scan" => "scan",
+        "tl" => "tl",
+        "qr" => "qr",
+        "math" => "math",
+        "fmt" => "fmt",
+        "ndb" => "ndb",
+        "nsheet" => "nsheet",
+        "nssh" => "nssh",
+        "cd" | "back" | "b" | "where" | "gos" | "gosc" | "fgo" => "nav",
+        _ => return None,
+    })
+}
+
 /// ── shared arg parser for fs / ds ─────────────────────────────────────────
 /// Accepts:  <pattern> [-d <depth>]   (depth flag must be at the end)
 /// Returns:  (pattern, max_depth)
@@ -312,6 +409,91 @@ fn parse_search_args(args: &str) -> (String, usize) {
     }
 
     (args.to_string(), default_depth)
+}
+
+/// Parsed arguments for `gs`.
+pub(crate) struct GsArgs {
+    pub pattern: String,
+    pub max_depth: usize,
+    pub limit: Option<usize>,
+    pub interactive: bool,
+}
+
+fn tokenize_gs_args(args: &str) -> Vec<String> {
+    let mut parts: Vec<String> = Vec::new();
+    let mut current = String::new();
+    let mut in_quotes = false;
+    for ch in args.chars() {
+        match ch {
+            '"' => in_quotes = !in_quotes,
+            ' ' | '\t' if !in_quotes => {
+                if !current.is_empty() {
+                    parts.push(std::mem::take(&mut current));
+                }
+            }
+            _ => current.push(ch),
+        }
+    }
+    if !current.is_empty() {
+        parts.push(current);
+    }
+    parts
+}
+
+/// Parse `gs` args in any flag order:
+/// `gs <pattern> [-d <n>] [-l <n> | --limit <n> | --limit=<n>] [-i]`
+pub(crate) fn parse_gs_args(args: &str) -> GsArgs {
+    let default_depth = Config::global_get_max_depth();
+    let parts = tokenize_gs_args(args);
+    let mut pattern_parts: Vec<String> = Vec::new();
+    let mut max_depth = default_depth;
+    let mut limit: Option<usize> = None;
+    let mut interactive = false;
+
+    let mut i = 0;
+    while i < parts.len() {
+        match parts[i].as_str() {
+            "-i" => {
+                interactive = true;
+            }
+            "-d" => {
+                if let Some(v) = parts.get(i + 1).and_then(|s| s.parse::<usize>().ok()) {
+                    max_depth = v;
+                    i += 1;
+                } else {
+                    pattern_parts.push(parts[i].clone());
+                }
+            }
+            "-l" | "--limit" => {
+                if let Some(v) = parts.get(i + 1).and_then(|s| s.parse::<usize>().ok()) {
+                    if v > 0 {
+                        limit = Some(v);
+                    }
+                    i += 1;
+                } else {
+                    pattern_parts.push(parts[i].clone());
+                }
+            }
+            s if s.starts_with("--limit=") => {
+                if let Some(v) = s["--limit=".len()..].parse::<usize>().ok() {
+                    if v > 0 {
+                        limit = Some(v);
+                    }
+                } else {
+                    pattern_parts.push(parts[i].clone());
+                }
+            }
+            other => pattern_parts.push(other.to_string()),
+        }
+        i += 1;
+    }
+
+    GsArgs {
+        pattern: pattern_parts.join(" "),
+        max_depth,
+        limit,
+        interactive,
+    }
 }
 
 fn list_supported_files(nav: &Navigator) -> Result<Vec<(String, PathBuf)>> {
@@ -384,5 +566,42 @@ fn get_file_size(path: &Path) -> String {
         }
     } else {
         String::new()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn help_registry_covers_safe_commands() {
+        assert_eq!(help_topic_for_command("mv"), Some("fileops"));
+        assert_eq!(help_topic_for_command("move"), Some("fileops"));
+        assert_eq!(help_topic_for_command("cp"), Some("fileops"));
+        assert_eq!(help_topic_for_command("gs"), Some("search"));
+        assert_eq!(help_topic_for_command("wi"), Some("config"));
+        assert_eq!(help_topic_for_command("ne"), Some("editor"));
+    }
+
+    #[test]
+    fn help_registry_skips_data_flag_commands() {
+        // `-h` is data or self-handled here: must NOT be intercepted.
+        assert_eq!(help_topic_for_command("http"), None);
+        assert_eq!(help_topic_for_command("serve"), None);
+        assert_eq!(help_topic_for_command("dl"), None);
+        assert_eq!(help_topic_for_command("tmprt"), None);
+        assert_eq!(help_topic_for_command("nope"), None);
+    }
+
+    #[test]
+    fn parse_gs_args_accepts_limit_flags() {
+        let a = parse_gs_args("main -d 5 -l 10");
+        assert_eq!(a.pattern, "main");
+        assert_eq!(a.max_depth, 5);
+        assert_eq!(a.limit, Some(10));
+        let b = parse_gs_args("--limit=7 main -i");
+        assert_eq!(b.pattern, "main");
+        assert_eq!(b.limit, Some(7));
+        assert!(b.interactive);
     }
 }

@@ -201,6 +201,82 @@ pub fn is_supported_format(path: &Path) -> bool {
     is_supported_format_with_config(path, &cfg)
 }
 
+/// Every extension the hinter can complete: built-in text extensions plus
+/// known-unsupported ones plus user-configured extra extensions
+/// (global + local). Sorted and deduplicated, all lowercase.
+pub(crate) fn all_known_extensions() -> Vec<String> {
+    let mut out: Vec<String> = Vec::with_capacity(TEXT_EXTENSIONS.len() + 64);
+    out.extend(TEXT_EXTENSIONS.iter().map(|s| s.to_string()));
+    out.extend(KNOWN_UNSUPPORTED_EXTENSIONS.iter().map(|s| s.to_string()));
+    out.extend(Config::get_extra_supported_extensions_combined());
+    out.sort();
+    out.dedup();
+    out
+}
+
+/// Normalize one user-typed extension: trim whitespace, strip leading dots,
+/// lowercase. Returns `None` when nothing usable remains.
+pub(crate) fn normalize_extension(raw: &str) -> Option<String> {
+    let cleaned = raw.trim().trim_start_matches('.').trim().to_lowercase();
+    if cleaned.is_empty() {
+        None
+    } else {
+        Some(cleaned)
+    }
+}
+
+/// Split a raw extension argument into normalized extensions.
+/// Accepts space- and/or comma-separated values: `rs,c`, `rs c`, `rs, c`,
+/// `.RS`. Deduplicated, order-preserving.
+pub(crate) fn split_extensions(raw: &str) -> Vec<String> {
+    let mut out = Vec::new();
+    for part in raw.split([',', ' ', '\t']) {
+        if let Some(ext) = normalize_extension(part) {
+            if !out.contains(&ext) {
+                out.push(ext);
+            }
+        }
+    }
+    out
+}
+
+/// True when `file_name` ends with one of `exts` (`.rs` suffix match,
+/// case-insensitive). Multi-dot filters like `ntc.ral` work naturally, and
+/// extension-less names match themselves (`Dockerfile` matches `dockerfile`).
+pub(crate) fn matches_any_extension(file_name: &str, exts: &[String]) -> bool {
+    let lower = file_name.to_lowercase();
+    exts.iter()
+        .any(|e| lower == *e || lower.ends_with(&format!(".{}", e)))
+}
+
+/// Display an extension list as `.rs, .c` for messages and footers.
+pub(crate) fn format_ext_list(exts: &[String]) -> String {
+    exts.iter()
+        .map(|e| format!(".{}", e))
+        .collect::<Vec<_>>()
+        .join(", ")
+}
+
+/// True when `tok` ends an `-ext` value run: flags, `@tp`, anything with a
+/// path separator, or a token resolving to an existing directory under `cwd`
+/// (existing files don't stop it — `view` targets must be directories, so
+/// `view -ext rs c` keeps working even if a file named `c` exists).
+pub(crate) fn is_ext_value_stop(tok: &str, cwd: &Path) -> bool {
+    if tok.is_empty() || tok.starts_with('-') || tok.starts_with('@') {
+        return true;
+    }
+    if tok.contains('/') || tok.contains('\\') {
+        return true;
+    }
+    let p = Path::new(tok);
+    let full = if p.is_absolute() {
+        p.to_path_buf()
+    } else {
+        cwd.join(p)
+    };
+    full.is_dir()
+}
+
 /// Check if a file has a known-unsupported extension (images, audio, documents, etc.)
 pub fn is_known_unsupported_format(path: &Path) -> bool {
     if let Some(ext) = path.extension().and_then(|e| e.to_str()) {
@@ -209,6 +285,18 @@ pub fn is_known_unsupported_format(path: &Path) -> bool {
     } else {
         false
     }
+}
+
+/// True when a bare `file_name` (no directory check — the caller decides
+/// about directories) ends with a known-unsupported extension, e.g.
+/// `setup.exe`, `backup.zip`, `photo.png`. Multi-dot filters match
+/// naturally (`data.tar.gz` matches `gz`… and `tar.gz`-style entries).
+/// Used by the shell hinter so `txtc`/`txtf` only suggest readable files.
+pub(crate) fn is_known_unsupported_file_name(file_name: &str) -> bool {
+    let lower = file_name.to_lowercase();
+    KNOWN_UNSUPPORTED_EXTENSIONS
+        .iter()
+        .any(|e| lower.ends_with(&format!(".{}", e)))
 }
 
 /// Create a WalkDir `filter_entry` closure that filters out ignored directories.
@@ -318,5 +406,67 @@ mod tests {
         let cfg = FormatConfig::from_global();
         assert!(cfg.ignored_files.is_empty() || !cfg.ignored_files.is_empty());
         assert!(!cfg.extra_extensions.contains("rs"));
+    }
+
+    #[test]
+    fn test_split_extensions_accepts_commas_spaces_dots() {
+        assert_eq!(split_extensions("rs"), vec!["rs"]);
+        assert_eq!(split_extensions("rs,c"), vec!["rs", "c"]);
+        assert_eq!(split_extensions("rs c"), vec!["rs", "c"]);
+        assert_eq!(split_extensions("rs, c"), vec!["rs", "c"]);
+        assert_eq!(split_extensions(".RS, .C"), vec!["rs", "c"]);
+        assert_eq!(split_extensions("rs rs c"), vec!["rs", "c"]);
+        assert!(split_extensions("  , ").is_empty());
+    }
+
+    #[test]
+    fn test_matches_any_extension_suffix_and_bare() {
+        let exts = vec!["rs".to_string(), "ntc.ral".to_string()];
+        assert!(matches_any_extension("main.rs", &exts));
+        assert!(matches_any_extension("LIB.RS", &exts));
+        assert!(matches_any_extension("a.ntc.ral", &exts));
+        assert!(!matches_any_extension("main.rs.bak", &exts));
+        assert!(!matches_any_extension("main.py", &exts));
+        assert!(matches_any_extension("Dockerfile", &["dockerfile".to_string()]));
+    }
+
+    #[test]
+    fn test_unsupported_file_name_blocklist() {
+        // Binaries/archives/media are suppressed for txtc/txtf hints.
+        for name in [
+            "setup.exe",
+            "SETUP.EXE",
+            "backup.zip",
+            "data.tar.gz",
+            "photo.png",
+            "movie.mkv",
+            "app.apk",
+            "lib.dll",
+        ] {
+            assert!(is_known_unsupported_file_name(name), "{}", name);
+        }
+        // Text sources, extensionless names and bare words pass through.
+        for name in ["main.rs", "Makefile", "Cargo.toml", "notes", "img", "a.txt"] {
+            assert!(!is_known_unsupported_file_name(name), "{}", name);
+        }
+    }
+
+    #[test]
+    fn test_all_known_extensions_sorted_unique() {
+        let all = all_known_extensions();
+        assert!(all.contains(&"rs".to_string()));
+        assert!(all.contains(&"zip".to_string()));
+        let mut sorted = all.clone();
+        sorted.sort();
+        sorted.dedup();
+        assert_eq!(all, sorted);
+    }
+
+    #[test]
+    fn test_format_ext_list() {
+        assert_eq!(
+            format_ext_list(&["rs".to_string(), "c".to_string()]),
+            ".rs, .c"
+        );
     }
 }

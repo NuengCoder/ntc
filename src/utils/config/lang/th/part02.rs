@@ -6,7 +6,6 @@ pub fn fill(m: &mut HashMap<String, String>) {
     m.insert("clap.arg.caren.help".into(), "สนใจไฟล์เฉพาะหนึ่งรายการขึ้นไป".into());
     m.insert("clap.arg.clear.help".into(), "ล้างหน้าจอเทอร์มินัล".into());
     m.insert("clap.arg.copy.help".into(), "คัดลอกรายงานไปยังคลิปบอร์ดแทนการบันทึกเป็นไฟล์".into());
-    m.insert("clap.arg.dino.help".into(), "เล่นเกมไดโนเสาร์วิ่ง".into());
     m.insert("clap.arg.edit.help".into(), "เปิดไฟล์ในตัวแก้ไขข้อความในตัว".into());
     m.insert("clap.arg.explorer.help".into(), "เปิดตัวสำรวจไฟล์ NTC (เส้นทางเริ่มต้นไม่บังคับ)".into());
     m.insert("clap.arg.format_cli.help".into(), "รูปแบบผลลัพธ์: txt, html, json, md".into());
@@ -92,7 +91,6 @@ pub fn fill(m: &mut HashMap<String, String>) {
     m.insert("cli.flag.caren".into(), " --caren <file> สนใจไฟล์เฉพาะ\n".into());
     m.insert("cli.flag.clear".into(), " --clear ล้างหน้าจอเทอร์มินัล".into());
     m.insert("cli.flag.copy".into(), " --cp คัดลอกรายงานไปยังคลิปบอร์ดแทนการบันทึกเป็นไฟล์".into());
-    m.insert("cli.flag.dino".into(), " --dino เล่นเกมไดโนเสาร์วิ่ง".into());
     m.insert("cli.flag.edit".into(), " -e, --edit <file> เปิดไฟล์ในตัวแก้ไขข้อความในตัว".into());
     m.insert("cli.flag.explorer".into(), " -x, --explorer [PATH] เปิดตัวสำรวจไฟล์ NTC".into());
     m.insert("cli.flag.format".into(), " -f, --format <FORMAT> รูปแบบผลลัพธ์: txt, html, json, md, pdf, docx, xlsx (ค่าเริ่มต้น: txt)".into());
@@ -148,7 +146,7 @@ pub fn fill(m: &mut HashMap<String, String>) {
     m.insert("cli.helpers.ignore_header".into(), "ตัวเลือก IGNORE/CARE:".into());
     m.insert("cli.helpers.interactive_note".into(), "เฉพาะแบบโต้ตอบ (รัน 'ntc' โดยไม่มีอาร์กิวเมนต์):\n การนำทาง: cd, back, gos, gosc\n เทเลพอร์ต: tp jump, tp to, @name\n บทเรียน: tutorial \u{2014} เริ่มบทเรียนแบบทีละขั้นตอน\n".into());
     m.insert("cli.helpers.other_header".into(), "ตัวเลือกอื่นๆ:".into());
-    m.insert("cli.helpers.other_options".into(), " -say, -print <text> พิมพ์ข้อความไปยัง stdout\n -image <path> to <fmt> แปลงภาพเป็นเอกสารสำหรับ AI (json|md|html|txt)\n -x, --explorer [PATH] เปิดตัวสำรวจไฟล์ NTC\n --dino เล่นเกมไดโนเสาร์วิ่ง\n --clear ล้างหน้าจอเทอร์มินัล\n --version แสดงข้อมูลเวอร์ชัน\n --math <EXPR> ประเมินนิพจน์คณิตศาสตร์ (เช่น --math \"3+4*5\")\n --list, --fun แสดงรายการฟังก์ชันบรรทัดคำสั่งทั้งหมด\n --help แสดงข้อความช่วยเหลือนี้\n --generate-completions <SHELL> สร้างความสมบูรณ์ (bash|zsh|fish|powershell)\n".into());
+    m.insert("cli.helpers.other_options".into(), " -say, -print <text> พิมพ์ข้อความไปยัง stdout\n -image <path> to <fmt> แปลงภาพเป็นเอกสารสำหรับ AI (json|md|html|txt)\n -x, --explorer [PATH] เปิดตัวสำรวจไฟล์ NTC\n --clear ล้างหน้าจอเทอร์มินัล\n --version แสดงข้อมูลเวอร์ชัน\n --math <EXPR> ประเมินนิพจน์คณิตศาสตร์ (เช่น --math \"3+4*5\")\n --list, --fun แสดงรายการฟังก์ชันบรรทัดคำสั่งทั้งหมด\n --help แสดงข้อความช่วยเหลือนี้\n --generate-completions <SHELL> สร้างความสมบูรณ์ (bash|zsh|fish|powershell)\n".into());
     m.insert("cli.helpers.report_header".into(), "ตัวเลือกรายงาน:".into());
     m.insert("cli.helpers.report_options".into(), " -i, --input <path> ประมวลผลไฟล์หรือไดเรกทอรี\n -o, --output <file> บันทึกผลลัพธ์ไปยังไฟล์ที่ระบุ\n -f, --format <FORMAT> รูปแบบผลลัพธ์: txt, html, json, md, pdf, docx, xlsx (ค่าเริ่มต้น: txt)\n --cp คัดลอกรายงานไปยังคลิปบอร์ดแทนการบันทึกเป็นไฟล์\n --size แสดงขนาดไดเรกทอรีปัจจุบัน\n --view ดูโครงสร้างไดเรกทอรีปัจจุบันอย่างรวดเร็ว\n --view --size ดูโครงสร้างอย่างรวดเร็วพร้อมขนาดไดเรกทอรี\n".into());
     m.insert("cli.helpers.shell_commands".into(), " ntc pathcp คัดลอกเส้นทางไปยังคลิปบอร์ด\n ntc say \"hello\" --loop 3 พิมพ์ข้อความพร้อมลูป\n ntc tl dir . นับบรรทัดในไดเรกทอรี\n ntc ne เปิดตัวแก้ไขข้อความ\n ntc size แสดงขนาดไดเรกทอรี\n ntc view แสดงโครงสร้างไดเรกทอรี\n ntc serve 8080 เริ่มเซิร์ฟเวอร์ HTTP บนพอร์ต 8080\n ntc dl https://example.com/file.zip --progress ดาวน์โหลดพร้อมความคืบหน้า\n ntc encode b64 hello เข้ารหัส Base64 สตริง\n ntc qr \"text\" สร้างรหัส QR ในเทอร์มินัล\n ntc math 3+4*5 ประเมินนิพจน์\n ntc ral add btr \"cargo build --release\" เพิ่ม alias จาก CLI\n".into());
@@ -165,7 +163,6 @@ pub fn fill(m: &mut HashMap<String, String>) {
     m.insert("cli.known_flag.caren".into(), "--caren <file> สนใจไฟล์เฉพาะ".into());
     m.insert("cli.known_flag.clear".into(), "--clear ล้างหน้าจอเทอร์มินัล".into());
     m.insert("cli.known_flag.cp".into(), "--cp คัดลอกรายงานไปยังคลิปบอร์ด".into());
-    m.insert("cli.known_flag.dino".into(), "--dino เล่นเกมไดโนเสาร์วิ่ง".into());
     m.insert("cli.known_flag.explorer".into(), "-x, --explorer [PATH] เปิดตัวสำรวจไฟล์ NTC".into());
     m.insert("cli.known_flag.generate_completions".into(), "--generate-completions <SHELL> สร้างความสมบูรณ์ของเชลล์ (bash|zsh|fish|powershell)".into());
     m.insert("cli.known_flag.help_flag".into(), "--help แสดงความช่วยเหลือ".into());
@@ -218,7 +215,6 @@ pub fn fill(m: &mut HashMap<String, String>) {
     m.insert("cli.run.help_caren".into(), "caren".into());
     m.insert("cli.run.help_clear".into(), "ล้างหน้าจอเทอร์มินัล".into());
     m.insert("cli.run.help_copy".into(), "คัดลอกรายงานไปยังคลิปบอร์ดแทนการบันทึกเป็นไฟล์".into());
-    m.insert("cli.run.help_dino".into(), "เล่นเกมไดโนเสาร์วิ่ง".into());
     m.insert("cli.run.help_edit".into(), "เปิดไฟล์ในตัวแก้ไขข้อความในตัว".into());
     m.insert("cli.run.help_explorer".into(), "เปิดตัวสำรวจไฟล์ NTC (เส้นทางเริ่มต้นไม่บังคับ)".into());
     m.insert("cli.run.help_format".into(), "รูปแบบผลลัพธ์: txt, html, json, md".into());

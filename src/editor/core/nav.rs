@@ -1,5 +1,8 @@
-use crate::editor::{byte_to_col, gutter_width, sel_range, Editor};
+use crate::editor::{
+    byte_to_col, gutter_width, next_char_byte, prev_char_byte, sel_range, set_status_bar, Editor,
+};
 use crate::t;
+use crossterm::style::Color;
 
 impl Editor {
     pub(crate) fn clamp(&mut self) {
@@ -206,8 +209,7 @@ impl Editor {
         self.status_msg = Some(t!("editor.nav_line_selected"));
     }
 
-    pub(crate) fn select_word_under_cursor(&mut self) -> Option<String> {
-        let line = self.current();
+    pub(crate) fn select_word_under_cursor(&mut self) -> Option<String> {        let line = self.current();
         let byte = self.cursor.byte;
         if byte >= line.len() || line.is_empty() {
             return None;
@@ -232,5 +234,189 @@ impl Editor {
         self.cursor.byte = end;
         self.cursor.selection_anchor = Some((self.cursor.y, start));
         Some(word)
+    }
+
+    /// Single-step cursor motion shared by Normal/Visual (vim-style verbs).
+    pub(crate) fn move_left_charwise(&mut self) {
+        if self.cursor.byte > 0 {
+            self.cursor.byte = prev_char_byte(self.current(), self.cursor.byte);
+        } else if self.cursor.y > 0 {
+            let mut prev = self.cursor.y - 1;
+            loop {
+                if !self.lines[prev].is_empty() {
+                    self.cursor.y = prev;
+                    self.cursor.byte = self.lines[prev].len();
+                    break;
+                }
+                if prev == 0 {
+                    break;
+                }
+                prev -= 1;
+            }
+        }
+    }
+
+    pub(crate) fn move_right_charwise(&mut self) {
+        let line = self.current();
+        if self.cursor.byte < line.len() {
+            self.cursor.byte = next_char_byte(line, self.cursor.byte);
+        } else {
+            let mut next = self.cursor.y + 1;
+            while next < self.lines.len() && self.lines[next].is_empty() {
+                next += 1;
+            }
+            if next < self.lines.len() {
+                self.cursor.y = next;
+                self.cursor.byte = 0;
+            }
+        }
+    }
+
+    pub(crate) fn move_up_line(&mut self) {
+        if self.cursor.y > 0 {
+            self.cursor.y -= 1;
+        }
+    }
+
+    pub(crate) fn move_down_line(&mut self) {
+        if self.cursor.y + 1 < self.lines.len() {
+            self.cursor.y += 1;
+        }
+    }
+
+    pub(crate) fn extend_left(&mut self) {
+        self.start_or_extend_selection();
+        self.move_left_charwise();
+    }
+
+    pub(crate) fn extend_right(&mut self) {
+        self.start_or_extend_selection();
+        self.move_right_charwise();
+    }
+
+    pub(crate) fn extend_up(&mut self) {
+        self.start_or_extend_selection();
+        self.move_up_line();
+    }
+
+    pub(crate) fn extend_down(&mut self) {
+        self.start_or_extend_selection();
+        self.move_down_line();
+    }
+
+    /// Toggle the integrated terminal panel (shared by Normal/Insert `t`).
+    /// Opening focuses the terminal so keys reach the shell for sure;
+    /// closing returns focus to the editor.
+    pub(crate) fn toggle_terminal(&mut self) {
+        if self.terminal.is_some() {
+            self.terminal = None;
+            self.focus = crate::editor::Focus::Editor;
+            self.mark_all_dirty();
+        } else {
+            let (tw, th) = crate::editor::helpers::term_size();
+            let term_h = (th as f64 * 0.4) as u16;
+            let cwd =
+                std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from("."));
+            let shell = if cfg!(windows) { "powershell" } else { "sh" };
+            match crate::editor::terminal::TerminalState::spawn(shell, tw as u16, term_h, &cwd) {
+                Ok(term) => {
+                    self.terminal = Some(term);
+                    self.run_panel_open = false;
+                    self.focus = crate::editor::Focus::Terminal;
+                    self.mark_all_dirty();
+                }
+                Err(e) => {
+                    self.status_msg = Some(t!("editor.mode_terminal_err", e));
+                }
+            }
+        }
+    }
+
+    /// Save with a green/red status-bar report (shared by Normal `s`).
+    pub(crate) fn save_with_status(&mut self, stdout: &mut std::io::Stdout) {
+        match self.save() {
+            Ok(()) => {
+                let _ = set_status_bar(
+                    stdout,
+                    Color::Green,
+                    Color::White,
+                    &t!("editor.saved_full"),
+                );
+            }
+            Err(e) => {
+                let _ = set_status_bar(
+                    stdout,
+                    Color::Red,
+                    Color::White,
+                    &t!("editor.cmd_save_failed", e),
+                );
+            }
+        }
+    }
+
+    /// Multicursor-aware Home: toggle first-non-ws / column 0.
+    pub(crate) fn move_line_start_toggle(&mut self) {
+        if self.has_multiple_cursors() {
+            self.for_each_cursor(false, |e| {
+                let first_non_ws = e
+                    .current()
+                    .char_indices()
+                    .find(|(_, c)| !c.is_whitespace())
+                    .map(|(b, _)| b)
+                    .unwrap_or(0);
+                e.cursor.byte = if e.cursor.byte != first_non_ws {
+                    first_non_ws
+                } else {
+                    0
+                };
+                e.sv.x = 0;
+            });
+        } else {
+            let first_non_ws = self
+                .current()
+                .char_indices()
+                .find(|(_, c)| !c.is_whitespace())
+                .map(|(b, _)| b)
+                .unwrap_or(0);
+            self.cursor.byte = if self.cursor.byte != first_non_ws {
+                first_non_ws
+            } else {
+                0
+            };
+            self.sv.x = 0;
+        }
+    }
+
+    /// Multicursor-aware End: jump to line end.
+    pub(crate) fn move_line_end(&mut self) {
+        if self.has_multiple_cursors() {
+            self.for_each_cursor(false, |e| {
+                e.cursor.byte = e.current().len();
+            });
+        } else {
+            self.cursor.byte = self.current().len();
+        }
+    }
+
+    pub(crate) fn page_up(&mut self) {
+        let rows = self.term_h.saturating_sub(4);
+        if self.has_multiple_cursors() {
+            self.for_each_cursor(false, |e| {
+                e.cursor.y = e.cursor.y.saturating_sub(rows);
+            });
+        } else {
+            self.cursor.y = self.cursor.y.saturating_sub(rows);
+        }
+    }
+
+    pub(crate) fn page_down(&mut self) {
+        let rows = self.term_h.saturating_sub(4);
+        if self.has_multiple_cursors() {
+            self.for_each_cursor(false, |e| {
+                e.cursor.y = (e.cursor.y + rows).min(e.lines.len().saturating_sub(1));
+            });
+        } else {
+            self.cursor.y = (self.cursor.y + rows).min(self.lines.len().saturating_sub(1));
+        }
     }
 }

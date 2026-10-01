@@ -73,8 +73,8 @@ pub fn fill(m: &mut HashMap<String, String>) {
     m.insert("math.help_timer".into(), "  math timer [seconds]    lap timer ຫຼື ນັບຖອຍຫຼັງພ້ອມສຽງ".into());
     m.insert("math.help_title".into(), "Math Module - ການໃຊ້ງານ:".into());
     m.insert("math.is_directory".into(), "'{}' ເປັນໄດເຣັກທໍຣີ, ບໍ່ແມ່ນໄຟລ໌".into());
-    m.insert("math.lap_time".into(), "Lap: {:>8.2}".into());
-    m.insert("math.time_remaining".into(), "ເວລາທີ່ຍັງເຫຼືອ: {:.2}".into());
+    m.insert("math.lap_time".into(), "Lap: {} seconds".into());
+    m.insert("math.time_remaining".into(), "ເວລາທີ່ຍັງເຫຼືອ: {}".into());
     m.insert("math.timer_started".into(), "ເລີ່ມ timer...".into());
     m.insert("math.timer_usage".into(), "Usage: math timer <seconds>".into());
     m.insert("math.times_up".into(), "ໝົດເວລາແລ້ວ!".into());
@@ -105,8 +105,13 @@ pub fn fill(m: &mut HashMap<String, String>) {
     m.insert("misc.gs.example2".into(), " gs main -d 5 # ຄົ້ນຫາສູງເຖິງ 5 ລະດັບ".into());
     m.insert("misc.gs.example3".into(), " gs -i main # interactive mode (ຊອກຫາຜົນ, Enter ເພື່ອເປີດ)".into());
     m.insert("misc.gs.example4".into(), " gs -i main -d 3 # interactive mode ດ້ວຍຂອບເຂດ depth".into());
+    m.insert("misc.gs.example5".into(), " gs main -d 5 -l 10 # ສະແດງພຽງ 10 ລາຍການທຳອິດ".into());
+    m.insert("misc.gs.searching".into(), "ກຳລັງຄົ້ນຫາເນື້ອໃນ...".into());
     m.insert("misc.gs.many_results".into(), "gs: ພົບ {} ລາຍການ, ສະແດງ 20,000 ທຳອິດ. ຈຳກັດການຄົ້ນຫາໃຫ້ແຄບລົງ.".into());
-    m.insert("misc.gs.usage".into(), "Usage: gs <pattern> [-d <depth>] [-i]".into());
+    m.insert("misc.gs.usage".into(), "Usage: gs <pattern> [-d <depth>] [-l <limit>] [-i]".into());
+    m.insert("misc.wi.not_dir".into(), "wi: ບໍ່ແມ່ນໄດເຣັກທໍຣີ: '{}'".into());
+    m.insert("misc.wi.start_error".into(), "wi: ເຝົ້າລະວັງບໍ່ໄດ້: {}".into());
+    m.insert("misc.wi.usage".into(), "Usage: wi [path]".into());
     m.insert("misc.locate.example1".into(), " locate main.c # ຄົ້ນຫາໄຟລ໌ ແລະ dirs (config depth)".into());
     m.insert("misc.locate.example2".into(), " locate main.c -d 5 # ຄົ້ນຫາສູງເຖິງ 5 ລະດັບ".into());
     m.insert("misc.locate.example3".into(), " locate main # ກົງບາງສ່ວນ: ຊອກເຫັນ main.c, main_helper/ ອື່ນໆ.".into());
@@ -142,6 +147,10 @@ pub fn fill(m: &mut HashMap<String, String>) {
     m.insert("misc.rmf.is_dir".into(), "rmf: '{}' ເປັນໄດເຣັກທໍຣີ (ໃຊ້ rmd ແທນ)".into());
     m.insert("misc.rmf.missing".into(), "rmf: ຂາດ operand".into());
     m.insert("misc.rmf.not_exist".into(), "rmf: '{}' ບໍ່ມີຢູ່".into());
+    m.insert("misc.rmf.no_match".into(), "rmf: ບໍ່ມີໄຟລ໌ກົງກັບ '{}'".into());
+    m.insert("misc.rmf.pattern_matches".into(), "ມີ {} ໄຟລ໌ກົງກັບ '{}':".into());
+    m.insert("misc.rmf.confirm_delete".into(), "ລຶບ {} ໄຟລ໌ບໍ?".into());
+    m.insert("misc.rmf.cancelled".into(), "ຍົກເລີກແລ້ວ".into());
     m.insert("misc.rmf.removed".into(), "ລຶບແລ້ວ: {}".into());
     m.insert("misc.rnmd.error".into(), "rnmd: {}".into());
     m.insert("misc.rnmd.exists".into(), "rnmd: '{}' ມີຢູ່ແລ້ວ".into());

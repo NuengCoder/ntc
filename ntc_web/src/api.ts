@@ -2,13 +2,54 @@ import type { FilesResponse } from './types'
 
 const API = ''
 
+// Stored as base64(user:pass) in sessionStorage (cleared when the tab
+// closes). Attached as an HTTP Basic header when `serve --auth` is on;
+// when the server has no auth configured the header is simply absent.
+const CRED_KEY = 'ntc.serve.auth'
+
+export class ApiError extends Error {
+  status: number
+  constructor(message: string, status: number) {
+    super(message)
+    this.name = 'ApiError'
+    this.status = status
+  }
+}
+
+function notifyUnauthorized() {
+  window.dispatchEvent(new CustomEvent('ntc:unauthorized'))
+}
+
+export function setCredentials(user: string, pass: string) {
+  const raw = `${user}:${pass}`
+  const encoded = btoa(unescape(encodeURIComponent(raw)))
+  sessionStorage.setItem(CRED_KEY, encoded)
+}
+
+export function clearCredentials() {
+  sessionStorage.removeItem(CRED_KEY)
+}
+
+export function hasCredentials(): boolean {
+  return sessionStorage.getItem(CRED_KEY) !== null
+}
+
+function authHeaders(): Record<string, string> {
+  const c = sessionStorage.getItem(CRED_KEY)
+  return c ? { Authorization: `Basic ${c}` } : {}
+}
+
 async function api<T>(url: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(API + url, init)
+  const res = await fetch(API + url, {
+    ...init,
+    headers: { ...authHeaders(), ...(init?.headers || {}) },
+  })
   if (!res.ok) {
     const body = await res.text()
     let msg = body
     try { const j = JSON.parse(body); msg = j.error || body } catch {}
-    throw new Error(msg || `HTTP ${res.status}`)
+    if (res.status === 401) notifyUnauthorized()
+    throw new ApiError(msg || `HTTP ${res.status}`, res.status)
   }
   return res.json()
 }
@@ -18,8 +59,24 @@ export function listFiles(path: string): Promise<FilesResponse> {
   return api(`/api/files?path=${encodeURIComponent(p)}`)
 }
 
-export function downloadUrl(id: number): string {
-  return `/api/download?id=${id}`
+export async function downloadFile(id: number, filename: string): Promise<void> {
+  // Fetched (not a plain <a href>) so the Basic header is attached when
+  // the server requires login.
+  const res = await fetch(API + `/api/download?id=${id}`, { headers: authHeaders() })
+  if (!res.ok) {
+    const text = await res.text()
+    if (res.status === 401) notifyUnauthorized()
+    throw new ApiError(parseErr(text, res.status), res.status)
+  }
+  const blob = await res.blob()
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = filename
+  document.body.appendChild(a)
+  a.click()
+  a.remove()
+  setTimeout(() => URL.revokeObjectURL(url), 5000)
 }
 
 const CHUNK_SIZE = 80 * 1024 * 1024 // 80 MB, keeps each request under the tunnel's ~100 MB cap
@@ -34,12 +91,15 @@ function xhrUpload(url: string, form: FormData, onUploadProgress?: (loaded: numb
   return new Promise((resolve, reject) => {
     const xhr = new XMLHttpRequest()
     xhr.open('POST', API + url)
+    const creds = sessionStorage.getItem(CRED_KEY)
+    if (creds) xhr.setRequestHeader('Authorization', `Basic ${creds}`)
     xhr.upload.onprogress = (e) => {
       if (e.lengthComputable && onUploadProgress) onUploadProgress(e.loaded)
     }
     xhr.onload = () => {
+      if (xhr.status === 401) notifyUnauthorized()
       if (xhr.status < 200 || xhr.status >= 300) {
-        reject(new Error(parseErr(xhr.responseText, xhr.status)))
+        reject(new ApiError(parseErr(xhr.responseText, xhr.status), xhr.status))
         return
       }
       resolve()
@@ -74,20 +134,21 @@ async function uploadChunked(path: string, file: File, onProgress?: (pct: number
         if (onProgress) onProgress(Math.round(((start + loaded) / totalSize) * 100))
       })
     } catch (err) {
-      try { await fetch(API + '/api/upload-cancel?uploadId=' + encodeURIComponent(uploadId), { method: 'DELETE' }) } catch {}
+      try { await fetch(API + '/api/upload-cancel?uploadId=' + encodeURIComponent(uploadId), { method: 'DELETE', headers: authHeaders() }) } catch {}
       throw err
     }
   }
 
   const res = await fetch(API + '/api/upload-finalize', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', ...authHeaders() },
     body: JSON.stringify({ uploadId, path, filename: file.name, size: totalSize }),
   })
   if (!res.ok) {
     const text = await res.text()
-    try { await fetch(API + '/api/upload-cancel?uploadId=' + encodeURIComponent(uploadId), { method: 'DELETE' }) } catch {}
-    throw new Error(parseErr(text, res.status))
+    if (res.status === 401) notifyUnauthorized()
+    try { await fetch(API + '/api/upload-cancel?uploadId=' + encodeURIComponent(uploadId), { method: 'DELETE', headers: authHeaders() }) } catch {}
+    throw new ApiError(parseErr(text, res.status), res.status)
   }
 }
 
@@ -103,6 +164,8 @@ export function uploadFile(path: string, file: File, onProgress?: (pct: number) 
   return new Promise((resolve, reject) => {
     const xhr = new XMLHttpRequest()
     xhr.open('POST', API + '/api/upload')
+    const creds = sessionStorage.getItem(CRED_KEY)
+    if (creds) xhr.setRequestHeader('Authorization', `Basic ${creds}`)
     xhr.upload.onprogress = (e) => {
       if (e.lengthComputable && onProgress) {
         onProgress(Math.round((e.loaded / e.total) * 100))
@@ -110,8 +173,9 @@ export function uploadFile(path: string, file: File, onProgress?: (pct: number) 
     }
     xhr.onload = () => {
       const res = new Response(xhr.responseText, { status: xhr.status, statusText: xhr.statusText })
+      if (xhr.status === 401) notifyUnauthorized()
       if (!res.ok) {
-        reject(new Error(parseErr(xhr.responseText, xhr.status)))
+        reject(new ApiError(parseErr(xhr.responseText, xhr.status), xhr.status))
         return
       }
       resolve(res)

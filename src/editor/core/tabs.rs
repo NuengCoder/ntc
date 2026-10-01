@@ -115,9 +115,21 @@ impl Editor {
 
     pub(crate) fn editor_offset(&self) -> usize {
         if self.sidebar.open {
-            self.sidebar.width + 1
+            self.sidebar_cols() + 1
         } else {
             0
+        }
+    }
+
+    /// Effective sidebar width in columns: percent of terminal width
+    /// when configured (`nfe:size N%`), else the legacy 30 columns.
+    pub(crate) fn sidebar_cols(&self) -> usize {
+        match self.editor_cfg.sidebar_width_pct {
+            Some(p) => {
+                let cols = self.term_w * p.clamp(1, 100) as usize / 100;
+                cols.clamp(8, self.term_w.saturating_sub(20).max(8))
+            }
+            None => crate::editor::DEFAULT_SIDEBAR_WIDTH,
         }
     }
 
@@ -150,6 +162,11 @@ impl Editor {
         self.save_active_tab();
         self.active_tab = idx;
         self.restore_tab(idx);
+        // Different file on screen: re-arm watcher + fingerprint, then
+        // pick up any disk changes that landed while this tab was in
+        // the background.
+        self.restart_file_watcher();
+        self.check_file_changed();
         self.mark_all_dirty();
     }
 
@@ -183,10 +200,9 @@ impl Editor {
     pub(crate) fn open_scratch_tab(&mut self) {
         let cwd = std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from("."));
         let welcome_path = cwd.join("welcome.ntcEditor");
-        if !welcome_path.exists() {
-            let content = crate::editor::template::generate_welcome_content();
-            let _ = std::fs::write(&welcome_path, content);
-        }
+        // Create when missing, refresh when generated-but-stale; a
+        // user-edited copy never matches and is left alone.
+        let _ = crate::editor::template::refresh_welcome_file(&welcome_path);
         for (i, tab) in self.tabs.iter().enumerate() {
             if self.is_scratch_path(&tab.path) {
                 self.switch_tab(i);
@@ -300,15 +316,16 @@ impl Editor {
         }
         self.mark_all_dirty();
         self.status_msg = Some(format!("{} {}", t!("editor.tab_opened"), path.display()));
+        // The open file changed: re-arm the external-change watcher and
+        // baseline the on-disk fingerprint for the new file.
+        self.restart_file_watcher();
         true
     }
 
     pub(crate) fn open_file(&mut self, path: &Path) {
-        for (i, tab) in self.tabs.iter().enumerate() {
-            if tab.path == path {
-                self.switch_tab(i);
-                return;
-            }
+        if let Some(i) = self.find_tab_by_path(path) {
+            self.switch_tab(i);
+            return;
         }
 
         self.save_active_tab();
@@ -336,34 +353,6 @@ impl Editor {
         } else {
             self.tabs.push(Tab::from_editor(self));
             self.active_tab = self.tabs.len() - 1;
-        }
-    }
-
-    pub(crate) fn next_buffer(&mut self) {
-        if self.buffer_stack.len() <= 1 {
-            return;
-        }
-        let next = (self.buffer_idx + 1) % self.buffer_stack.len();
-        let path = self.buffer_stack[next].clone();
-        self.save_active_tab();
-        if self.load_file(&path) {
-            self.buffer_idx = next;
-        }
-    }
-
-    pub(crate) fn prev_buffer(&mut self) {
-        if self.buffer_stack.len() <= 1 {
-            return;
-        }
-        let prev = if self.buffer_idx == 0 {
-            self.buffer_stack.len() - 1
-        } else {
-            self.buffer_idx - 1
-        };
-        let path = self.buffer_stack[prev].clone();
-        self.save_active_tab();
-        if self.load_file(&path) {
-            self.buffer_idx = prev;
         }
     }
 

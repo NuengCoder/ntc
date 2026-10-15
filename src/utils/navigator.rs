@@ -25,6 +25,17 @@ impl Navigator {
         self.venv_name = venv_name;
     }
 
+    /// Test-only constructor pointing at `dir` without touching the
+    /// process-global CWD (unlike `go_to`, which chdirs). Prevents parallel
+    /// tests from observing each other's working directory.
+    #[cfg(test)]
+    pub(crate) fn for_test(dir: &Path) -> Self {
+        Self {
+            current_dir: dir.to_path_buf(),
+            venv_name: detect_active_venv(),
+        }
+    }
+
     /// Get the current directory path (internal, may contain extended prefix)
     pub fn current_path(&self) -> &Path {
         &self.current_dir
@@ -45,8 +56,7 @@ impl Navigator {
     }
 
     /// Get the venv prefix for display
-    pub fn get_venv_prefix(&self) -> String {
-        match &self.venv_name {
+    pub fn get_venv_prefix(&self) -> String {        match &self.venv_name {
             Some(name) => format!("({}) ", name),
             None => String::new(),
         }

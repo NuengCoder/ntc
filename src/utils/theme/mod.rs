@@ -156,8 +156,8 @@ impl<'de> Deserialize<'de> for ThemeColor {
 }
 
 impl ThemeColor {
-    /// Convert to `colored::Color` for shell output (non-Android)
-    #[cfg(not(target_os = "android"))]
+    /// Convert to `colored::Color` for shell output.
+    /// Available on every OS so desktop and Termux share one code path.
     pub fn to_colored(&self) -> colored::Color {
         match self {
             ThemeColor::Black => colored::Color::Black,
@@ -187,8 +187,10 @@ impl ThemeColor {
         }
     }
 
-    /// Convert to ANSI foreground color escape code (Android/Termux)
-    #[cfg(target_os = "android")]
+    /// Convert to ANSI foreground color escape code.
+    /// Identical on every OS (Linux/Win/macOS/Termux) so `setc ON`
+    /// shows the exact same hue everywhere. Termux renders these
+    /// natively (same as `txtf` syntax highlighting does).
     pub fn to_ansi_fg(&self) -> String {
         match self {
             ThemeColor::Black => "\x1b[30m".to_string(),
@@ -215,6 +217,8 @@ impl ThemeColor {
     /// Paint a string with this theme color.
     /// On non-Android: returns `colored::ColoredString`.
     /// On Android: returns `String` with ANSI escapes.
+    /// Prefer `paint_ansi()` below for startup/tree output so every OS
+    /// emits byte-identical escapes.
     #[cfg(not(target_os = "android"))]
     pub fn paint(&self, s: &str) -> colored::ColoredString {
         use colored::Colorize;
@@ -224,6 +228,24 @@ impl ThemeColor {
     #[cfg(target_os = "android")]
     pub fn paint(&self, s: &str) -> String {
         format!("{}{}\x1b[0m", self.to_ansi_fg(), s)
+    }
+
+    /// Raw-ANSI paint shared by every OS (welcome, Current Directory,
+    /// show_tree). Returns plain text when colors are disabled so
+    /// `setc OFF` / `NO_COLOR` / `TERM=dumb` stay plain everywhere.
+    pub fn paint_ansi(&self, s: &str) -> String {
+        if !ansi_enabled() {
+            return s.to_string();
+        }
+        format!("{}{}\x1b[0m", self.to_ansi_fg(), s)
+    }
+
+    /// Raw-ANSI bold paint (matches `.color().bold()` on desktop).
+    pub fn paint_ansi_bold(&self, s: &str) -> String {
+        if !ansi_enabled() {
+            return s.to_string();
+        }
+        format!("\x1b[1m{}{}\x1b[0m", self.to_ansi_fg(), s)
     }
 
     /// Convert to `crossterm::style::Color` for editor
@@ -836,6 +858,42 @@ pub fn shell_paint(s: &str, accessor: fn(&ShellTheme) -> &ThemeColor) -> String 
     let theme = ThemeManager::current();
     let color = accessor(&theme.shell);
     format!("{}{}\x1b[0m", color.to_ansi_fg(), s)
+}
+
+/// Whether raw-ANSI startup/tree colors may be emitted.
+/// Single gate for every OS: user preference (`setc ON`) AND terminal
+/// capability (`NO_COLOR` / `TERM=dumb` disable). Bypasses the `colored`
+/// crate's auto-detect so Termux behaves exactly like desktop — Termux
+/// renders raw `\x1b[...m` natively (proven by `txtf` highlighting).
+pub fn ansi_enabled() -> bool {
+    if !crate::config::Config::global_get_color_enabled() {
+        return false;
+    }
+    // Explicit opt-outs always win, on every platform.
+    if std::env::var_os("NO_COLOR").is_some() {
+        return false;
+    }
+    if let Ok(t) = std::env::var("TERM") {
+        if t == "dumb" || t.is_empty() {
+            return false;
+        }
+    }
+    true
+}
+
+/// Unified shell painter: identical escapes on Linux/Win/macOS/Termux.
+/// Returns plain text when `ansi_enabled()` is false.
+pub fn shell_paint_ansi(s: &str, accessor: fn(&ShellTheme) -> &ThemeColor) -> String {
+    let theme = ThemeManager::current();
+    let color = accessor(&theme.shell).clone();
+    color.paint_ansi(s)
+}
+
+/// Unified bold painter for headers (welcome, separator titles).
+pub fn shell_paint_ansi_bold(s: &str, accessor: fn(&ShellTheme) -> &ThemeColor) -> String {
+    let theme = ThemeManager::current();
+    let color = accessor(&theme.shell).clone();
+    color.paint_ansi_bold(s)
 }
 
 pub mod manager;

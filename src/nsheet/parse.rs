@@ -158,7 +158,11 @@ pub fn parse_delimited(
         let headers: Vec<String> = (1..=width).map(|i| format!("col{}", i)).collect();
         (headers, rows)
     };
-    Ok(Sheet { headers, rows: data, source })
+    Ok(Sheet {
+        headers,
+        rows: data,
+        source,
+    })
 }
 
 fn json_value_to_string(v: &serde_json::Value) -> String {
@@ -204,7 +208,10 @@ pub fn parse_json(text: &str, source: String) -> Result<Sheet, String> {
     if objects.iter().all(|v| !v.is_object()) {
         return Ok(Sheet {
             headers: vec!["value".to_string()],
-            rows: objects.into_iter().map(|v| vec![json_value_to_string(&v)]).collect(),
+            rows: objects
+                .into_iter()
+                .map(|v| vec![json_value_to_string(&v)])
+                .collect(),
             source,
         });
     }
@@ -233,7 +240,11 @@ pub fn parse_json(text: &str, source: String) -> Result<Sheet, String> {
         }
         rows.push(row);
     }
-    Ok(Sheet { headers, rows, source })
+    Ok(Sheet {
+        headers,
+        rows,
+        source,
+    })
 }
 
 fn ext_of(path: &Path) -> String {
@@ -302,12 +313,10 @@ mod tests {
 
     #[test]
     fn header_heuristic() {
-        let sheet =
-            parse_delimited("name,age\nnueng,30\nmeli,25", None, None, "t".into()).unwrap();
+        let sheet = parse_delimited("name,age\nnueng,30\nmeli,25", None, None, "t".into()).unwrap();
         assert_eq!(sheet.headers, vec!["name", "age"]);
         assert_eq!(sheet.rows.len(), 2);
-        let no_header =
-            parse_delimited("1,2\n3,4", None, None, "t".into()).unwrap();
+        let no_header = parse_delimited("1,2\n3,4", None, None, "t".into()).unwrap();
         assert_eq!(no_header.headers, vec!["col1", "col2"]);
         assert_eq!(no_header.rows.len(), 2);
     }
@@ -320,11 +329,7 @@ mod tests {
 
     #[test]
     fn json_array_of_objects() {
-        let sheet = parse_json(
-            r#"[{"a":1,"b":"x"},{"b":"y","c":true}]"#,
-            "t".into(),
-        )
-        .unwrap();
+        let sheet = parse_json(r#"[{"a":1,"b":"x"},{"b":"y","c":true}]"#, "t".into()).unwrap();
         assert_eq!(sheet.headers, vec!["a", "b", "c"]);
         assert_eq!(sheet.rows[0], vec!["1", "x", ""]);
         assert_eq!(sheet.rows[1], vec!["", "y", "true"]);
@@ -332,8 +337,7 @@ mod tests {
 
     #[test]
     fn jsonl_and_scalars() {
-        let sheet =
-            parse_json("{\"a\":1}\n{\"a\":2}\n", "t".into()).unwrap();
+        let sheet = parse_json("{\"a\":1}\n{\"a\":2}\n", "t".into()).unwrap();
         assert_eq!(sheet.rows.len(), 2);
         let scalars = parse_json("[1,2,3]", "t".into()).unwrap();
         assert_eq!(scalars.headers, vec!["value"]);

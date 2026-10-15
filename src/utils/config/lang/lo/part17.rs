@@ -3,6 +3,7 @@ use std::collections::HashMap;
 pub fn fill(m: &mut HashMap<String, String>) {
     m.insert("output.filename_header".into(), "{}:".into());
     m.insert("output.line_prefix".into(), "LINE {}>>".into());
+    m.insert("output.range_past_eof".into(), "(range ເກີນທ້າຍໄຟລ໌ — ບໍ່ມີຫຍັງສະແດງ)".into());
     m.insert("output.mkdir_failed".into(), "ສ້າງໄດເຣັກທໍຣີບໍ່ສຳເລັດ: {}".into());
     m.insert("output.mkfile_failed".into(), "ສ້າງໄຟລ໌ບໍ່ສຳເລັດ: {}".into());
     m.insert("output.print_error".into(), "\u{2717} {}".into());

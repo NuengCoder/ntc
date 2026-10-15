@@ -1,7 +1,7 @@
 use super::{execute_system_command, parse_search_args};
 use crate::config::Config;
 use crate::explorer::{
-    calculate_dir_size, calculate_total_size, format_duration, human_readable_size,
+    calculate_target_size, format_duration, human_readable_size,
 };
 use crate::filetype::{is_supported_format, strip_unc_prefix};
 use crate::navigator::{clear_screen, Navigator};
@@ -9,7 +9,7 @@ use crate::output::{cat_file, print_error, print_info, print_success, print_warn
 use crate::search;
 use crate::session::SessionState;
 use crate::shell::help::{print_interactive_help, print_tp_help};
-use crate::shell::helpers::{parse_target_arg, resolve_file_operand, run_with_spinner, show_tree};
+use crate::shell::helpers::{parse_target_arg_allow_file, resolve_file_operand, run_with_spinner, show_tree};
 use crate::shell::venv::clear_venv_environment;
 use crate::teleport::TeleportManager;
 use crate::watcher;
@@ -121,6 +121,12 @@ pub fn cmd_exit(_args: &str, _nav: &mut Navigator) -> Result<bool> {
 }
 
 pub fn cmd_ne(args: &str, nav: &mut Navigator) -> Result<bool> {
+    // Refuse nested editors inside the editor's embedded ntc shell
+    // (spawned with `NTC_IN_EDITOR=1`).
+    if std::env::var("NTC_IN_EDITOR").is_ok() {
+        print_error(&t!("misc.ne.already_in_editor"));
+        return Ok(false);
+    }
     let args = args.trim();
     let raw_path = if let Some(hyper_args) = args.strip_prefix("--hyper ") {
         let mut parts = hyper_args.trim().splitn(3, ' ');
@@ -196,7 +202,7 @@ pub fn cmd_ne(args: &str, nav: &mut Navigator) -> Result<bool> {
 }
 
 pub fn cmd_size(args: &str, nav: &mut Navigator) -> Result<bool> {
-    let parsed = match parse_target_arg(args, nav) {
+    let parsed = match parse_target_arg_allow_file(args, nav) {
         Ok(p) => p,
         Err(_) => return Ok(false),
     };
@@ -215,14 +221,25 @@ pub fn cmd_size(args: &str, nav: &mut Navigator) -> Result<bool> {
         }
     }
     let start = std::time::Instant::now();
+    // Files skip the directory walk (and spinner): a single metadata call.
+    if target.is_file() {
+        let total = calculate_target_size(&target, care);
+        let elapsed = start.elapsed();
+        let human_str = human_readable_size(total);
+        let display = strip_unc_prefix(&target);
+        if show_time {
+            println!("{} {} ({})", display, human_str, format_duration(elapsed));
+        } else {
+            println!("{} {}", display, human_str);
+        }
+        return Ok(false);
+    }
     let total = if care {
         run_with_spinner(&t!("misc.size.calculating"), || {
-            calculate_total_size(&target)
+            calculate_target_size(&target, true)
         })
     } else {
-        run_with_spinner(&t!("misc.size.calculating"), || {
-            calculate_dir_size(&target)
-        })
+        run_with_spinner(&t!("misc.size.calculating"), || calculate_target_size(&target, false))
     };
     let elapsed = start.elapsed();
     let bytes_str = format!("{}", total);
@@ -739,10 +756,7 @@ fn expand_rmf_pattern(item: &str, cwd: &Path) -> Vec<PathBuf> {
             } else {
                 cwd.join(dir)
             };
-            let pat = raw
-                .file_name()
-                .and_then(|n| n.to_str())
-                .unwrap_or(item);
+            let pat = raw.file_name().and_then(|n| n.to_str()).unwrap_or(item);
             (base, pat.to_string())
         }
         None => (cwd.to_path_buf(), item.to_string()),
@@ -904,7 +918,9 @@ pub fn cmd_ui(_args: &str, _nav: &mut Navigator) -> Result<bool> {
 }
 
 /// `mv <src> <dst> [-f]` — move/rename files or directories.
-/// `dst` may be a teleport savepoint (`mv report.pdf @docs`).
+/// Both operands accept teleport savepoints (`mv @tp1/report.pdf @docs`,
+/// `mv @tp1 ./here`); `dst` inside an existing directory keeps the source
+/// file name (`mv report.pdf @docs`).
 /// Quoted paths with spaces supported; `-f/--force` overwrites the target.
 /// Falls back to copy+delete when `rename` fails (e.g. cross-device).
 pub fn cmd_mv(args: &str, nav: &mut Navigator) -> Result<bool> {
@@ -914,7 +930,10 @@ pub fn cmd_mv(args: &str, nav: &mut Navigator) -> Result<bool> {
         println!("{}", t!("misc.mv.usage"));
         return Ok(false);
     }
-    let src = resolve_plain(&operands[0], nav);
+    let src = match resolve_file_operand(&operands[0], nav) {
+        Ok(p) => p,
+        Err(_) => return Ok(false),
+    };
     let mut dst = match resolve_file_operand(&operands[1], nav) {
         Ok(p) => p,
         Err(_) => return Ok(false),
@@ -965,7 +984,9 @@ pub fn cmd_mv(args: &str, nav: &mut Navigator) -> Result<bool> {
 }
 
 /// `cp <src> <dst> [-f]` — copy files or directories.
-/// `dst` may be a teleport savepoint (`cp report.pdf @docs`).
+/// Both operands accept teleport savepoints (`cp @tp1/report.pdf @docs`,
+/// `cp @tp1 ./here`); `dst` inside an existing directory keeps the source
+/// file name (`cp report.pdf @docs`).
 /// Quoted paths with spaces supported; `-f/--force` overwrites the target.
 pub fn cmd_cp(args: &str, nav: &mut Navigator) -> Result<bool> {
     let (operands, force) = parse_mv_args(args);
@@ -974,7 +995,10 @@ pub fn cmd_cp(args: &str, nav: &mut Navigator) -> Result<bool> {
         println!("{}", t!("misc.cp.usage"));
         return Ok(false);
     }
-    let src = resolve_plain(&operands[0], nav);
+    let src = match resolve_file_operand(&operands[0], nav) {
+        Ok(p) => p,
+        Err(_) => return Ok(false),
+    };
     let mut dst = match resolve_file_operand(&operands[1], nav) {
         Ok(p) => p,
         Err(_) => return Ok(false),
@@ -1025,16 +1049,6 @@ pub fn cmd_cp(args: &str, nav: &mut Navigator) -> Result<bool> {
     Ok(false)
 }
 
-/// Plain path operand: absolute or relative to the shell's directory.
-fn resolve_plain(spec: &str, nav: &Navigator) -> PathBuf {
-    let p = PathBuf::from(spec);
-    if p.is_absolute() {
-        p
-    } else {
-        nav.current_path().join(p)
-    }
-}
-
 /// True when both paths point at the same file (guards `cp` onto itself).
 fn same_file(a: &Path, b: &Path) -> bool {
     if a == b {
@@ -1075,10 +1089,12 @@ fn copy_path(src: &Path, dst: &Path) -> std::io::Result<()> {
 fn copy_dir_all(src: &Path, dst: &Path) -> std::io::Result<()> {
     std::fs::create_dir_all(dst)?;
     for entry in walkdir::WalkDir::new(src).min_depth(1) {
-        let entry = entry.map_err(|e| {
-            std::io::Error::other(format!("walk {}: {}", src.display(), e))
-        })?;
-        let rel = entry.path().strip_prefix(src).map_err(std::io::Error::other)?;
+        let entry =
+            entry.map_err(|e| std::io::Error::other(format!("walk {}: {}", src.display(), e)))?;
+        let rel = entry
+            .path()
+            .strip_prefix(src)
+            .map_err(std::io::Error::other)?;
         let target = dst.join(rel);
         if entry.file_type().is_dir() {
             std::fs::create_dir_all(&target)?;
@@ -1534,6 +1550,121 @@ mod tests {
         assert!(ops.is_empty());
     }
 
+    /// Fixture with two savepoints (`tp1` holding files, empty `tp2`) in a
+    /// temp cwd. Returns the fixture root; the caller seeds `cfg.teleports`.
+    fn tp_pair_fixture() -> (
+        crate::utils::test_support::TempCwd,
+        std::path::PathBuf,
+    ) {
+        let cwd = crate::utils::test_support::TempCwd::with_fixture(
+            &[("tp1/file.txt", "hello"), ("tp1/sub/deep.txt", "deep")],
+            &["tp1", "tp1/sub", "tp2"],
+        );
+        let root = std::env::current_dir().unwrap();
+        (cwd, root)
+    }
+
+    fn tp_pair_config(root: &std::path::Path) -> crate::config::Config {
+        let mut cfg = crate::config::Config::default();
+        cfg.teleports
+            .insert("tp1".to_string(), root.join("tp1"));
+        cfg.teleports
+            .insert("tp2".to_string(), root.join("tp2"));
+        cfg
+    }
+
+    #[test]
+    fn mv_cp_tp_file_into_tp_dir() {
+        let (_cwd, root) = tp_pair_fixture();
+        crate::config::Config::with_test_config(tp_pair_config(&root), || {
+            let mut nav = Navigator::new().unwrap();
+            // cp @tp1/file.txt @tp2 -f (src stays).
+            assert!(cmd_cp("@tp1/file.txt @tp2 -f", &mut nav).is_ok());
+            assert_eq!(
+                std::fs::read(root.join("tp2").join("file.txt")).unwrap(),
+                b"hello"
+            );
+            assert!(root.join("tp1").join("file.txt").exists());
+            // mv @tp1/file.txt @tp2 -f with a fresh src (mv consumes).
+            std::fs::write(root.join("tp1").join("move.txt"), "bye").unwrap();
+            assert!(cmd_mv("@tp1/move.txt @tp2 -f", &mut nav).is_ok());
+            assert!(!root.join("tp1").join("move.txt").exists());
+            assert_eq!(
+                std::fs::read(root.join("tp2").join("move.txt")).unwrap(),
+                b"bye"
+            );
+        });
+    }
+
+    #[test]
+    fn mv_cp_tp_dir_onto_new() {
+        let (_cwd, root) = tp_pair_fixture();
+        crate::config::Config::with_test_config(tp_pair_config(&root), || {
+            let mut nav = Navigator::new().unwrap();
+            // cp @tp1 @tp2/new copies the whole tree.
+            assert!(cmd_cp("@tp1 @tp2/new", &mut nav).is_ok());
+            assert_eq!(
+                std::fs::read(root.join("tp2").join("new").join("file.txt")).unwrap(),
+                b"hello"
+            );
+            assert_eq!(
+                std::fs::read(root.join("tp2").join("new").join("sub").join("deep.txt"))
+                    .unwrap(),
+                b"deep"
+            );
+            assert!(root.join("tp1").exists());
+            // mv @tp1 @tp2/new2 relocates the savepoint dir itself.
+            assert!(cmd_mv("@tp1 @tp2/new2", &mut nav).is_ok());
+            assert!(!root.join("tp1").exists());
+            assert!(root.join("tp2").join("new2").join("file.txt").exists());
+        });
+    }
+
+    #[test]
+    fn mv_cp_tp_file_onto_file() {
+        let (_cwd, root) = tp_pair_fixture();
+        crate::config::Config::with_test_config(tp_pair_config(&root), || {
+            let mut nav = Navigator::new().unwrap();
+            std::fs::write(root.join("tp2").join("file.txt"), "old").unwrap();
+            // cp -f overwrites.
+            assert!(cmd_cp("@tp1/file.txt @tp2/file.txt -f", &mut nav).is_ok());
+            assert_eq!(
+                std::fs::read(root.join("tp2").join("file.txt")).unwrap(),
+                b"hello"
+            );
+            // mv -f overwrites with a fresh src.
+            std::fs::write(root.join("tp1").join("move.txt"), "bye").unwrap();
+            std::fs::write(root.join("tp2").join("move.txt"), "old").unwrap();
+            assert!(cmd_mv("@tp1/move.txt @tp2/move.txt -f", &mut nav).is_ok());
+            assert_eq!(
+                std::fs::read(root.join("tp2").join("move.txt")).unwrap(),
+                b"bye"
+            );
+            assert!(!root.join("tp1").join("move.txt").exists());
+        });
+    }
+
+    #[test]
+    fn mv_cp_tp_dir_onto_relative() {
+        let (_cwd, root) = tp_pair_fixture();
+        crate::config::Config::with_test_config(tp_pair_config(&root), || {
+            let mut nav = Navigator::new().unwrap();
+            // cp @tp1 test — dir onto a bare relative name.
+            assert!(cmd_cp("@tp1 test", &mut nav).is_ok());
+            assert_eq!(
+                std::fs::read(root.join("test").join("file.txt")).unwrap(),
+                b"hello"
+            );
+            // cp @tp1 ./test2 — same with an explicit `./` prefix.
+            assert!(cmd_cp("@tp1 ./test2", &mut nav).is_ok());
+            assert_eq!(
+                std::fs::read(root.join("test2").join("sub").join("deep.txt")).unwrap(),
+                b"deep"
+            );
+            assert!(root.join("tp1").exists());
+        });
+    }
+
     #[test]
     fn rmf_pattern_expands_to_matching_files_only() {
         let dir = tempfile::tempdir().unwrap();
@@ -1546,10 +1677,7 @@ mod tests {
         let got = expand_rmf_pattern("*.log", dir.path());
         assert_eq!(
             got,
-            vec![
-                dir.path().join("a.log"),
-                dir.path().join("b.log"),
-            ]
+            vec![dir.path().join("a.log"), dir.path().join("b.log"),]
         );
         // Prefix form and no-match form.
         assert_eq!(expand_rmf_pattern("a*", dir.path()).len(), 1);
@@ -1560,5 +1688,16 @@ mod tests {
         std::fs::write(dir.path().join("sub/e.log"), "e").unwrap();
         let got = expand_rmf_pattern("sub/*.log", dir.path());
         assert_eq!(got, vec![dir.path().join("sub/e.log")]);
+    }
+
+    #[test]
+    fn ne_refuses_nested_editor_when_embedded() {
+        // Guard must trigger before any editor launch is attempted.
+        std::env::set_var("NTC_IN_EDITOR", "1");
+        let mut nav = Navigator::new().expect("nav");
+        let result = cmd_ne("some_file.txt", &mut nav);
+        std::env::remove_var("NTC_IN_EDITOR");
+        assert!(result.is_ok());
+        assert!(!result.unwrap());
     }
 }

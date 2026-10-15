@@ -54,7 +54,10 @@ pub fn resolve_col(spec: &str, headers: &[String]) -> Option<usize> {
 
 /// Display name for a column index (used in footers and the TUI title).
 pub fn col_name(headers: &[String], idx: usize) -> String {
-    headers.get(idx).cloned().unwrap_or_else(|| format!("col{}", idx + 1))
+    headers
+        .get(idx)
+        .cloned()
+        .unwrap_or_else(|| format!("col{}", idx + 1))
 }
 
 /// Split a filter expression into conditions plus combining logic.
@@ -96,7 +99,9 @@ pub fn parse_filter(expr: &str, headers: &[String]) -> Result<(Vec<Condition>, L
                 let col = resolve_col(left, headers)
                     .ok_or_else(|| format!("unknown column '{}'", left))?;
                 let value = strip_quotes(right);
-                if value.is_empty() && !matches!(found.as_ref().unwrap().1, CmpOp::Eq | CmpOp::NotEq) {
+                if value.is_empty()
+                    && !matches!(found.as_ref().unwrap().1, CmpOp::Eq | CmpOp::NotEq)
+                {
                     return Err(format!("missing value in '{}'", part));
                 }
                 conds.push(Condition { col, op, value });
@@ -152,9 +157,7 @@ fn cmp_values(cell: &str, op: &CmpOp, value: &str) -> bool {
 
 /// True when `row` satisfies the conditions under `logic`.
 pub fn row_matches(row: &[String], conds: &[Condition], logic: Logic) -> bool {
-    let cell = |c: &Condition| {
-        row.get(c.col).map(|s| s.as_str()).unwrap_or("")
-    };
+    let cell = |c: &Condition| row.get(c.col).map(|s| s.as_str()).unwrap_or("");
     match logic {
         Logic::And => conds.iter().all(|c| cmp_values(cell(c), &c.op, &c.value)),
         Logic::Or => conds.iter().any(|c| cmp_values(cell(c), &c.op, &c.value)),
@@ -170,7 +173,11 @@ pub fn sort_rows(rows: &mut [Vec<String>], col: usize, desc: bool) {
             (Ok(x), Ok(y)) => x.partial_cmp(&y).unwrap_or(std::cmp::Ordering::Equal),
             _ => av.cmp(bv),
         };
-        if desc { ord.reverse() } else { ord }
+        if desc {
+            ord.reverse()
+        } else {
+            ord
+        }
     });
 }
 
@@ -181,7 +188,11 @@ pub fn to_opt_rows(rows: &[Vec<String>], width: usize) -> Vec<Vec<Option<String>
             (0..width)
                 .map(|i| {
                     let s = r.get(i).map(|s| s.as_str()).unwrap_or("");
-                    if s.is_empty() { None } else { Some(s.to_string()) }
+                    if s.is_empty() {
+                        None
+                    } else {
+                        Some(s.to_string())
+                    }
                 })
                 .collect()
         })
@@ -232,9 +243,16 @@ pub fn to_markdown(headers: &[String], rows: &[Vec<String>]) -> String {
     let mut out = String::new();
     out.push_str(&format!(
         "| {} |\n",
-        headers.iter().map(|h| cell(h)).collect::<Vec<_>>().join(" | ")
+        headers
+            .iter()
+            .map(|h| cell(h))
+            .collect::<Vec<_>>()
+            .join(" | ")
     ));
-    out.push_str(&format!("|{}|\n", headers.iter().map(|_| "---").collect::<Vec<_>>().join("|")));
+    out.push_str(&format!(
+        "|{}|\n",
+        headers.iter().map(|_| "---").collect::<Vec<_>>().join("|")
+    ));
     for row in rows {
         let line: Vec<String> = (0..headers.len())
             .map(|i| cell(row.get(i).map(|s| s.as_str()).unwrap_or("")))
@@ -267,11 +285,23 @@ mod tests {
         let h = headers();
         let (conds, logic) = parse_filter("age>30 && city~york", &h).unwrap();
         assert_eq!(logic, Logic::And);
-        assert!(row_matches(&["a".into(), "35".into(), "New York".into()], &conds, logic));
-        assert!(!row_matches(&["a".into(), "25".into(), "New York".into()], &conds, logic));
+        assert!(row_matches(
+            &["a".into(), "35".into(), "New York".into()],
+            &conds,
+            logic
+        ));
+        assert!(!row_matches(
+            &["a".into(), "25".into(), "New York".into()],
+            &conds,
+            logic
+        ));
         let (or_conds, or_logic) = parse_filter("age<20 || name=bob", &h).unwrap();
         assert_eq!(or_logic, Logic::Or);
-        assert!(row_matches(&["bob".into(), "50".into(), "x".into()], &or_conds, or_logic));
+        assert!(row_matches(
+            &["bob".into(), "50".into(), "x".into()],
+            &or_conds,
+            or_logic
+        ));
         assert!(parse_filter("age>1 && name~a || city=x", &h).is_err());
         assert!(parse_filter("zzz=1", &h).is_err());
     }

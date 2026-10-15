@@ -19,13 +19,15 @@
 [vars]
 # CC = "gcc"
 # FLAGS = "-O2"
-ver = "2.4.4"
+ver = "2.4.5"
 lux = "ntc-v$(ver)-linux-x86_64.tar.gz"
 adb = "ntc-v$(ver)-aarch64-linux-android.tar.gz"
 win = "ntc-v$(ver)-windows-x86_64.zip"
 deb = "ntc_$(ver)-1_amd64.deb"
 wini = "ntc-installer-$(ver).exe"
 wini7 = "ntc-installer-$(ver)-win7-x64.exe"
+winiz = "ntc-installer-$(ver).zip"
+winiz7 = "ntc-installer-$(ver)-win7-x64.zip"
 win_arm = "ntc-v$(ver)-windows-arm64.zip"
 win7amd = "ntc-v$(ver)-windows7-x86_64.zip"
 win7arm = "ntc-v$(ver)-windows7-arm64.zip"
@@ -38,11 +40,14 @@ wini_w = "installer/ntc-installer-$(ver).exe"
 wini7_w = "installer/ntc-installer-$(ver)-win7-x64.exe"
 win_arm_w = "target/aarch64-pc-windows-msvc/release/ntc.exe"
 win7amd_dir = "target/win7-amd64"
-win7amd_w = "target/win7-amd64/release/ntc.exe"
+win7amd_w = "target/win7-amd64/x86_64-win7-windows-msvc/release/ntc.exe"
 win7arm_dir = "target/win7-arm64"
 win7arm_w = "target/win7-arm64/aarch64-win7-windows-msvc/release/ntc.exe"
-# NOTE: the Win7-x64 RUSTFLAGS live in packaging/build_win7amd.cmd (raw
-# quotes). The Win7-ARM64 build needs no RUSTFLAGS: it uses the custom
+# NOTE: the Win7-x64 build uses the official x86_64-win7-windows-msvc
+# target (see packaging/build_win7amd.cmd): vendor="win7" switches std
+# (GetSystemTimeAsFileTime, not Win8+ Precise) and getrandom to legacy.
+# The RUSTFLAGS getrandom_backend cfg lives in that .cmd (raw quotes).
+# The Win7-ARM64 build needs no RUSTFLAGS: it uses the custom
 # aarch64-win7-windows-msvc target whose win7 vendor switches std and
 # getrandom to the legacy backend automatically.
 # Do NOT inline them into a ran cmd: quotes get backslash-escaped on the
@@ -81,17 +86,25 @@ cmd = "cargo ndk --target aarch64-linux-android --platform 23 build --release"
 deps = []
 cmd = "cargo deb"
 
+[targets.all1]
+deps = ["reset","android","win32","win7amd","win7arm"]
+cmd = "echo all done!"
+
+[targets.all2]
+deps = ["debian"]
+cmd = "cargo build --release"
+
 [targets.tar]
 deps = []
-cmd = "tar -czvf $(lux) -C $(lux_w) ntc && tar -czvf $(adb) -C $(adb_w) ntc"
+cmd = "arc create $(lux) $(lux_w)/ntc && arc create $(adb) $(adb_w)/ntc"
 
 [targets.zip]
 deps = []
-cmd = "powershell Compress-Archive -Path $(win_w) -DestinationPath $(win)"
+cmd = "arc create $(win) $(win_w)"
 
 [targets.zip_arm]
 deps = []
-cmd = "powershell Compress-Archive -Path $(win_arm_w) -DestinationPath $(win_arm)"
+cmd = "arc create $(win_arm) $(win_arm_w)"
 
 [targets.win7amd]
 deps = []
@@ -99,7 +112,7 @@ cmd = "packaging\\build_win7amd.cmd"
 
 [targets.zip_win7amd]
 deps = ["win7amd"]
-cmd = "powershell Compress-Archive -Path $(win7amd_w) -DestinationPath $(win7amd) -Force"
+cmd = "arc create $(win7amd) $(win7amd_w)"
 
 [targets.win7arm]
 deps = []
@@ -107,19 +120,19 @@ cmd = "packaging\\build_win7arm.cmd"
 
 [targets.zip_win7arm]
 deps = ["win7arm"]
-cmd = "powershell Compress-Archive -Path $(win7arm_w) -DestinationPath $(win7arm) -Force"
+cmd = "arc create $(win7arm) $(win7arm_w)"
 
 [targets.cpdeb]
 deps = []
-cmd = "COPY $(deb_w) $(deb)"
+cmd = "cp $(deb_w) ."
 
 [targets.cpwin]
 deps = []
-cmd = "COPY $(wini_w) $(wini)"
+cmd = "cp $(wini_w) . && arc create $(winiz) $(wini)"
 
 [targets.cpwin7]
 deps = []
-cmd = "COPY $(wini7_w) $(wini7)"
+cmd = "cp $(wini7_w) . && arc create $(winiz7) $(wini7)"
 
 [targets.setpack]
 deps = ["tar","zip","zip_arm","zip_win7amd","zip_win7arm","cpdeb","cpwin","cpwin7"]
@@ -127,15 +140,11 @@ cmd = "echo pack setup completed!"
 
 [targets.rmpack]
 deps = []
-cmd = "rmf $(lux) && rmf $(adb) && rmf $(win) && rmf $(deb) && rmf $(wini) && rmf $(wini7) && rmf $(win_arm) && rmf $(win7amd) && rmf $(win7arm)"
+cmd = "rmf $(lux) ,  $(adb) ,  $(win) ,  $(deb) ,  $(wini) ,  $(wini7) ,  $(win_arm) ,  $(win7amd) , $(win7arm) , $(winiz) , $(winiz7)"
 
 [targets.padb]
 deps = []
 cmd = "adb push ntc-v$(ver)-aarch64-linux-android.tar.gz /sdcard/Download/"
-
-[targets.deploy]
-deps = []
-cmd = "C:\\Users\\Trivico\\cloudflared.exe tunnel --url http://localhost:8080"
 
 [targets.push]
 deps = []

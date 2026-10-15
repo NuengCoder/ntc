@@ -45,8 +45,89 @@ fn read_file_as_string(path: &Path) -> Result<String> {
     Ok(content)
 }
 
+/// Line range for partial file display (`txtf` / `view <file>`).
+/// All bounds are 1-based and inclusive. Precedence when combined:
+/// `Between` wins over `Head`, which wins over `Tail`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum FileLineRange {
+    Head(usize),
+    Tail(usize),
+    Between(usize, usize),
+}
+
+/// Parse `--betw n:m` (1-based inclusive, `n <= m`, both > 0).
+/// Surrounding whitespace (including around the colon) is allowed.
+pub fn parse_betw(raw: &str) -> Option<(usize, usize)> {
+    let (a, b) = raw.split_once(':')?;
+    let a: usize = a.trim().parse().ok()?;
+    let b: usize = b.trim().parse().ok()?;
+    if a == 0 || b == 0 || a > b {
+        return None;
+    }
+    Some((a, b))
+}
+
+/// Combine optional `--head`/`--tail`/`--betw` values into one range.
+/// `betw_raw` is the raw `--betw` argument when present; `Err(())`
+/// means the `--betw` value was malformed.
+pub fn parse_file_range(
+    head: Option<usize>,
+    tail: Option<usize>,
+    betw_raw: Option<&str>,
+) -> Result<Option<FileLineRange>, ()> {
+    if let Some(raw) = betw_raw {
+        match parse_betw(raw) {
+            Some((a, b)) => return Ok(Some(FileLineRange::Between(a, b))),
+            None => return Err(()),
+        }
+    }
+    if let Some(n) = head {
+        return Ok(Some(FileLineRange::Head(n)));
+    }
+    if let Some(n) = tail {
+        return Ok(Some(FileLineRange::Tail(n)));
+    }
+    Ok(None)
+}
+
+/// Slice content lines by `range`, tagging each with its original
+/// 1-based line number. Out-of-range bounds clamp to the file; a range
+/// fully past EOF yields an empty vec.
+pub fn slice_numbered_lines<'a>(
+    lines: &[&'a str],
+    range: Option<FileLineRange>,
+) -> Vec<(usize, &'a str)> {
+    let total = lines.len();
+    let (from, to) = match range {
+        None => (1, total),
+        Some(FileLineRange::Head(n)) => (1, n.min(total)),
+        Some(FileLineRange::Tail(n)) => (total.saturating_sub(n) + 1, total),
+        Some(FileLineRange::Between(a, b)) => (a, b.min(total)),
+    };
+    if from > to || from > total {
+        return Vec::new();
+    }
+    lines
+        .iter()
+        .enumerate()
+        .skip(from - 1)
+        .take(to - from + 1)
+        .map(|(i, l)| (i + 1, *l))
+        .collect()
+}
+
 /// Display file contents to stdout with optional line numbers.
 pub fn cat_file(file_path: &Path, show_lines: bool) -> Result<()> {
+    cat_file_range(file_path, show_lines, None)
+}
+
+/// Display a line range of a file (original numbers kept).
+/// `None` prints the whole file, like [`cat_file`].
+pub fn cat_file_range(
+    file_path: &Path,
+    show_lines: bool,
+    range: Option<FileLineRange>,
+) -> Result<()> {
     let content = read_file_as_string(file_path)?;
 
     println!(
@@ -54,12 +135,21 @@ pub fn cat_file(file_path: &Path, show_lines: bool) -> Result<()> {
         t!("output.filename_header", file_path.file_name().unwrap_or_default().to_string_lossy()).cyan().bold()
     );
 
+    let lines: Vec<&str> = content.lines().collect();
+    let selected = slice_numbered_lines(&lines, range);
+    if range.is_some() && selected.is_empty() {
+        println!("{}", t!("output.range_past_eof").dimmed());
+        return Ok(());
+    }
+
     if show_lines {
-        for (i, line) in content.lines().enumerate() {
-            println!("{} {}", t!("output.line_prefix", i + 1).yellow().bold(), line);
+        for (no, line) in &selected {
+            println!("{} {}", t!("output.line_prefix", no).yellow().bold(), line);
         }
     } else {
-        println!("{}", content);
+        for (_, line) in &selected {
+            println!("{}", line);
+        }
     }
 
     Ok(())
@@ -117,6 +207,18 @@ fn crossterm_to_ansi(c: crossterm::style::Color) -> String {
 /// `setc OFF` — that's the whole point of this function. Falls back
 /// to the plain `cat_file` behavior when the extension is unknown.
 pub fn cat_file_with_syntax(file_path: &Path, show_lines: bool) -> Result<()> {
+    cat_file_with_syntax_range(file_path, show_lines, None)
+}
+
+/// Display a line range of a file with syntax highlighting, keeping
+/// original line numbers. The highlighter still walks every line from
+/// the top so multi-line constructs colorize correctly; only the
+/// selected lines are printed.
+pub fn cat_file_with_syntax_range(
+    file_path: &Path,
+    show_lines: bool,
+    range: Option<FileLineRange>,
+) -> Result<()> {
     let content = read_file_as_string(file_path)?;
 
     let color_enabled = Config::global_get_color_enabled();
@@ -124,7 +226,7 @@ pub fn cat_file_with_syntax(file_path: &Path, show_lines: bool) -> Result<()> {
     // On legacy conhost (VT unavailable) raw ANSI prints as `[91m` garbage.
     // Fall back to plain cat — readability beats broken colors.
     if !raw_ansi_allowed() {
-        return cat_file(file_path, show_lines);
+        return cat_file_range(file_path, show_lines, range);
     }
     let ext = file_path.extension().and_then(|e| e.to_str());
     let mut syntax = SyntaxHighlighter::new(ext);
@@ -157,14 +259,27 @@ pub fn cat_file_with_syntax(file_path: &Path, show_lines: bool) -> Result<()> {
     // in_ps_comment) across lines, so we keep ONE instance alive for the
     // whole file. That way multi-line /* ... */, <!-- ... -->, and <# ... #>
     // regions colorize correctly from start to finish.
-    for (i, line) in content.lines().enumerate() {
+    let lines: Vec<&str> = content.lines().collect();
+    let selected = slice_numbered_lines(&lines, range);
+    if range.is_some() && selected.is_empty() {
+        println!("{}", t!("output.range_past_eof").dimmed());
+        return Ok(());
+    }
+    let wanted: std::collections::HashSet<usize> =
+        selected.iter().map(|(no, _)| *no).collect();
+    for (i, line) in lines.iter().enumerate() {
         let tokens = syntax.tokenize_line(i, line);
+        // Original file line number, even for partial ranges.
+        let no = i + 1;
+        if !wanted.contains(&no) {
+            continue;
+        }
 
         if show_lines {
             print!(
                 "{}{} {}",
                 line_num_color,
-                t!("output.line_prefix", i + 1),
+                t!("output.line_prefix", no),
                 reset,
             );
             // Stay in the yellow-bold prefix style for the gap.
@@ -209,6 +324,71 @@ pub fn cat_file_with_syntax(file_path: &Path, show_lines: bool) -> Result<()> {
     }
 
     Ok(())
+}
+
+#[cfg(test)]
+mod range_tests {
+    use super::*;
+
+    #[test]
+    fn betw_parses_and_rejects() {
+        assert_eq!(parse_betw("10:20"), Some((10, 20)));
+        assert_eq!(parse_betw(" 3 : 5 "), Some((3, 5)));
+        assert_eq!(parse_betw("5:5"), Some((5, 5)));
+        assert_eq!(parse_betw("0:5"), None);
+        assert_eq!(parse_betw("5:0"), None);
+        assert_eq!(parse_betw("20:10"), None);
+        assert_eq!(parse_betw("10"), None);
+        assert_eq!(parse_betw("a:b"), None);
+        assert_eq!(parse_betw(""), None);
+        assert_eq!(parse_betw("10:20:30"), None);
+    }
+
+    #[test]
+    fn file_range_precedence_is_betw_head_tail() {
+        assert_eq!(
+            parse_file_range(Some(5), Some(3), Some("2:4")).unwrap(),
+            Some(FileLineRange::Between(2, 4))
+        );
+        assert_eq!(
+            parse_file_range(Some(5), Some(3), None).unwrap(),
+            Some(FileLineRange::Head(5))
+        );
+        assert_eq!(
+            parse_file_range(None, Some(3), None).unwrap(),
+            Some(FileLineRange::Tail(3))
+        );
+        assert_eq!(parse_file_range(None, None, None).unwrap(), None);
+        assert!(parse_file_range(None, None, Some("9:2")).is_err());
+    }
+
+    #[test]
+    fn slice_keeps_original_numbers_and_clamps() {
+        let lines = vec!["a", "b", "c", "d", "e"];
+        assert_eq!(
+            slice_numbered_lines(&lines, None),
+            vec![(1, "a"), (2, "b"), (3, "c"), (4, "d"), (5, "e")]
+        );
+        assert_eq!(
+            slice_numbered_lines(&lines, Some(FileLineRange::Head(2))),
+            vec![(1, "a"), (2, "b")]
+        );
+        assert_eq!(
+            slice_numbered_lines(&lines, Some(FileLineRange::Tail(2))),
+            vec![(4, "d"), (5, "e")]
+        );
+        assert_eq!(
+            slice_numbered_lines(&lines, Some(FileLineRange::Between(2, 4))),
+            vec![(2, "b"), (3, "c"), (4, "d")]
+        );
+        // Clamp + past-EOF.
+        assert_eq!(
+            slice_numbered_lines(&lines, Some(FileLineRange::Between(4, 99))),
+            vec![(4, "d"), (5, "e")]
+        );
+        assert!(slice_numbered_lines(&lines, Some(FileLineRange::Between(9, 99))).is_empty());
+        assert!(slice_numbered_lines(&[], Some(FileLineRange::Head(5))).is_empty());
+    }
 }
 
 /// Read file contents and return as string with optional line numbers.

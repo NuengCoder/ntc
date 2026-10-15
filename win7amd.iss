@@ -2,9 +2,11 @@
 ; Same install identity as installer.iss (same AppName, install dir, PATH
 ; entries) so it installs/upgrades in place with the regular installer.
 ; Differences from installer.iss:
-;   - bundles target\win7-amd64\release\ntc.exe (getrandom windows_legacy
-;     backend: RtlGenRandom via advapi32, works on Win7 SP1+; the regular
-;     build imports ProcessPrng from bcryptprimitives.dll, Win10+ only).
+;   - bundles target\win7-amd64\x86_64-win7-windows-msvc\ntc.exe (official
+;     win7-vendor target: std uses GetSystemTimeAsFileTime, not the Win8+
+;     GetSystemTimePreciseAsFileTime; getrandom legacy RtlGenRandom via
+;     advapi32, works on Win7 SP1+; the regular build imports ProcessPrng
+;     from bcryptprimitives.dll, Win10+ only).
 ;     Build it first with: ran win7amd
 ;   - OutputBaseFilename carries the -win7-x64 suffix.
 ;   - MinVersion documents the Win7 SP1 floor.
@@ -12,13 +14,13 @@
 
 [Setup]
 AppName=ntc
-AppVersion=2.4.4
+AppVersion=2.4.5
 AppPublisher=NuengCoder
 AppPublisherURL=https://github.com/NuengCoder/ntc
 DefaultDirName={autopf}\ntc
 DefaultGroupName=ntc
 OutputDir=.\installer
-OutputBaseFilename=ntc-installer-2.4.4-win7-x64
+OutputBaseFilename=ntc-installer-2.4.5-win7-x64
 SetupIconFile=assets\ntc_image.ico
 Compression=lzma
 SolidCompression=yes
@@ -28,10 +30,10 @@ PrivilegesRequired=admin
 PrivilegesRequiredOverridesAllowed=dialog
 
 [Files]
-Source: "target\win7-amd64\release\ntc.exe"; DestDir: "{app}"; Flags: ignoreversion
-Source: "target\win7-amd64\release\*.dll"; DestDir: "{app}"; Flags: ignoreversion skipifsourcedoesntexist
-Source: "target\win7-amd64\release\*.dll"; DestDir: "{app}\dll"; Flags: ignoreversion skipifsourcedoesntexist
-Source: "target\win7-amd64\release\deps\*.dll"; DestDir: "{app}\dll"; Flags: ignoreversion skipifsourcedoesntexist
+Source: "target\win7-amd64\x86_64-win7-windows-msvc\release\ntc.exe"; DestDir: "{app}"; Flags: ignoreversion
+Source: "target\win7-amd64\x86_64-win7-windows-msvc\release\*.dll"; DestDir: "{app}"; Flags: ignoreversion skipifsourcedoesntexist
+Source: "target\win7-amd64\x86_64-win7-windows-msvc\release\*.dll"; DestDir: "{app}\dll"; Flags: ignoreversion skipifsourcedoesntexist
+Source: "target\win7-amd64\x86_64-win7-windows-msvc\release\deps\*.dll"; DestDir: "{app}\dll"; Flags: ignoreversion skipifsourcedoesntexist
 
 [Dirs]
 Name: "{app}\dll"

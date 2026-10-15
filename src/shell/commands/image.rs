@@ -1,6 +1,6 @@
 use crate::config::Config;
 use crate::navigator::Navigator;
-use crate::output::{print_error, print_info, print_success, raw_ansi_allowed};
+use crate::output::{print_error, print_info, print_success, print_warning, raw_ansi_allowed};
 use crate::t;
 
 use anyhow::Result;
@@ -229,7 +229,7 @@ fn paint_sextant_row(cells: &[crate::nfe::image::ImageCell]) -> String {
 /// interactive shell runs stdin cooked, where a DA1/cell-size
 /// round-trip could block, so no terminal queries happen here.
 #[cfg(feature = "image2doc")]
-fn display_image(path: &std::path::Path) -> Result<()> {
+fn display_image(path: &std::path::Path, force_sixel: bool) -> Result<()> {
     use crate::nfe::sixel::PixelBackend;
 
     let (term_w, term_h) = crossterm::terminal::size().unwrap_or((80, 24));
@@ -244,7 +244,10 @@ fn display_image(path: &std::path::Path) -> Result<()> {
 
     if !raw_ansi_allowed() {
         // Black & white: plain grayscale ASCII, no escapes at all.
-        println!("{}", t!("cmd.image.displaying", name, ow, oh, "ascii-bw").dimmed());
+        println!(
+            "{}",
+            t!("cmd.image.displaying", name, ow, oh, "ascii-bw").dimmed()
+        );
         let img = image::open(path)
             .map_err(|e| anyhow::anyhow!("Cannot decode '{}': {}", path.display(), e))?;
         let art = crate::image2doc::image_to_ascii(&img, vw, Some(vh))?;
@@ -252,16 +255,31 @@ fn display_image(path: &std::path::Path) -> Result<()> {
         return Ok(());
     }
 
-    let (backend, _) =
-        crate::nfe::sixel::detect_backend(&crate::nfe::sixel::snapshot_env(), None);
+    let (detected, _) = crate::nfe::sixel::detect_backend(&crate::nfe::sixel::snapshot_env(), None);
+    if force_sixel && detected != PixelBackend::Sixel {
+        let label = match detected {
+            PixelBackend::Kitty => "kitty",
+            PixelBackend::Sixel => "sixel",
+            PixelBackend::Sextant => "sextants",
+        };
+        print_warning(&t!("cmd.image.sixel_forced_warn", label));
+    }
+    let backend = if force_sixel {
+        PixelBackend::Sixel
+    } else {
+        detected
+    };
     match backend {
         PixelBackend::Kitty => {
-            println!("{}", t!("cmd.image.displaying", name, ow, oh, "kitty").dimmed());
+            println!(
+                "{}",
+                t!("cmd.image.displaying", name, ow, oh, "kitty").dimmed()
+            );
             // PNG at viewport device pixels (conservative 8x16 cells:
             // no CSI 14 t query in cooked shell — sizing stays
             // aspect-correct regardless).
-            let scale = ((vw as f32 * 8.0) / ow.max(1) as f32)
-                .min((vh as f32 * 16.0) / oh.max(1) as f32);
+            let scale =
+                ((vw as f32 * 8.0) / ow.max(1) as f32).min((vh as f32 * 16.0) / oh.max(1) as f32);
             let dw = ((ow as f32 * scale) as u32).clamp(1, vw as u32 * 8);
             let dh = ((oh as f32 * scale) as u32).clamp(1, vh as u32 * 16);
             let img = image::open(path)
@@ -281,9 +299,12 @@ fn display_image(path: &std::path::Path) -> Result<()> {
             io::stdout().flush()?;
         }
         PixelBackend::Sixel => {
-            println!("{}", t!("cmd.image.displaying", name, ow, oh, "sixel").dimmed());
-            let scale = ((vw as f32 * 8.0) / ow.max(1) as f32)
-                .min((vh as f32 * 16.0) / oh.max(1) as f32);
+            println!(
+                "{}",
+                t!("cmd.image.displaying", name, ow, oh, "sixel").dimmed()
+            );
+            let scale =
+                ((vw as f32 * 8.0) / ow.max(1) as f32).min((vh as f32 * 16.0) / oh.max(1) as f32);
             let dw = ((ow as f32 * scale) as u32).clamp(1, vw as u32 * 8);
             let dh = ((oh as f32 * scale) as u32).clamp(1, vh as u32 * 16);
             let img = image::open(path)
@@ -291,23 +312,20 @@ fn display_image(path: &std::path::Path) -> Result<()> {
             let small = img
                 .resize_exact(dw, dh, image::imageops::FilterType::Lanczos3)
                 .to_rgb8();
-            let px: Vec<(u8, u8, u8)> =
-                small.pixels().map(|p| (p[0], p[1], p[2])).collect();
+            let px: Vec<(u8, u8, u8)> = small.pixels().map(|p| (p[0], p[1], p[2])).collect();
             let pal = crate::nfe::sixel::median_cut(&px, 255);
             let idx = crate::nfe::sixel::map_to_palette(&px, &pal);
-            let seq = crate::nfe::sixel::encode_sixel(
-                &idx,
-                dw as usize,
-                dh as usize,
-                &pal,
-                (0, 0, 0),
-            );
+            let seq =
+                crate::nfe::sixel::encode_sixel(&idx, dw as usize, dh as usize, &pal, (0, 0, 0));
             print!("{}", seq);
             println!();
             io::stdout().flush()?;
         }
         PixelBackend::Sextant => {
-            println!("{}", t!("cmd.image.displaying", name, ow, oh, "sextants").dimmed());
+            println!(
+                "{}",
+                t!("cmd.image.displaying", name, ow, oh, "sextants").dimmed()
+            );
             let (cols, rows) = fit_cells(ow, oh, vw, vh, 2, 3);
             let grid = crate::nfe::image::load_sextants(path, cols, rows)
                 .map_err(|e| anyhow::anyhow!("Cannot preview '{}': {}", path.display(), e))?;
@@ -375,6 +393,27 @@ fn prompt_pick_image(nav: &Navigator) -> Result<Option<(String, std::path::PathB
     Ok(Some(files[idx].clone()))
 }
 
+/// Split an `image display|show ...` tail into `(force_sixel, path)`.
+/// `--sixel` may sit before or after the path; at most one path token.
+/// No path → `None` (caller runs the interactive picker).
+/// Pure for testability — `Err` carries the exact message to print.
+fn parse_display_tail(tail: &[&str]) -> Result<(bool, Option<String>), String> {
+    let mut force_sixel = false;
+    let mut path: Option<String> = None;
+    for tok in tail {
+        if tok.eq_ignore_ascii_case("--sixel") {
+            force_sixel = true;
+        } else if tok.starts_with('-') {
+            return Err(format!("Unknown option: {}", tok));
+        } else if path.is_none() {
+            path = Some(tok.to_string());
+        } else {
+            return Err(format!("Unknown option: {}", tok));
+        }
+    }
+    Ok((force_sixel, path))
+}
+
 pub fn cmd_image(args: &str, nav: &mut Navigator) -> Result<bool> {
     let trimmed = args.trim();
 
@@ -384,17 +423,20 @@ pub fn cmd_image(args: &str, nav: &mut Navigator) -> Result<bool> {
         let head: Vec<&str> = trimmed.split_whitespace().collect();
         if let Some(first) = head.first() {
             if first.eq_ignore_ascii_case("display") || first.eq_ignore_ascii_case("show") {
-                let path = if head.len() >= 2 {
-                    if head.len() > 2 {
-                        print_error(&format!("Unknown option: {}", head[2]));
+                let (force_sixel, picked_path) = match parse_display_tail(&head[1..]) {
+                    Ok(v) => v,
+                    Err(msg) => {
+                        print_error(&msg);
                         println!("{}", t!("cmd.image.usage"));
                         return Ok(false);
                     }
-                    let p = Path::new(head[1]);
+                };
+                let path = if let Some(p) = picked_path {
+                    let p = Path::new(&p);
                     if p.is_absolute() {
                         p.to_path_buf()
                     } else {
-                        nav.current_path().join(head[1])
+                        nav.current_path().join(p)
                     }
                 } else if let Some((_, picked)) = prompt_pick_image(nav)? {
                     picked
@@ -409,7 +451,7 @@ pub fn cmd_image(args: &str, nav: &mut Navigator) -> Result<bool> {
                     print_error(&format!("Not a displayable image: {}", path.display()));
                     return Ok(false);
                 }
-                display_image(&path)?;
+                display_image(&path, force_sixel)?;
                 return Ok(false);
             }
         }
@@ -584,22 +626,51 @@ mod tests {
     }
 
     #[test]
+    fn display_tail_parses_sixel_in_any_position() {
+        assert_eq!(
+            parse_display_tail(&["a.png", "--sixel"]),
+            Ok((true, Some("a.png".to_string())))
+        );
+        assert_eq!(
+            parse_display_tail(&["--sixel", "a.png"]),
+            Ok((true, Some("a.png".to_string())))
+        );
+        assert_eq!(
+            parse_display_tail(&["--SIXEL"]),
+            Ok((true, None))
+        );
+        assert_eq!(
+            parse_display_tail(&["a.png"]),
+            Ok((false, Some("a.png".to_string())))
+        );
+        assert_eq!(parse_display_tail(&[]), Ok((false, None)));
+        // Two paths still error exactly like before.
+        assert_eq!(
+            parse_display_tail(&["a.png", "b.png"]),
+            Err("Unknown option: b.png".to_string())
+        );
+        // Any other flag still errors.
+        assert_eq!(
+            parse_display_tail(&["a.png", "--ocr"]),
+            Err("Unknown option: --ocr".to_string())
+        );
+    }
+
+    #[test]
     fn shell_detection_is_env_only_no_probe() {
         // Mirrors the display_image contract: detect_backend with
         // da1=None (cooked stdin must never be queried).
         use std::collections::HashMap;
-        let env: HashMap<String, String> =
-            [("KITTY_WINDOW_ID".to_string(), "1".to_string())]
-                .into_iter()
-                .collect();
+        let env: HashMap<String, String> = [("KITTY_WINDOW_ID".to_string(), "1".to_string())]
+            .into_iter()
+            .collect();
         assert_eq!(
             crate::nfe::sixel::detect_backend(&env, None).0,
             crate::nfe::sixel::PixelBackend::Kitty
         );
-        let env: HashMap<String, String> =
-            [("WT_SESSION".to_string(), "x".to_string())]
-                .into_iter()
-                .collect();
+        let env: HashMap<String, String> = [("WT_SESSION".to_string(), "x".to_string())]
+            .into_iter()
+            .collect();
         assert_eq!(
             crate::nfe::sixel::detect_backend(&env, None).0,
             crate::nfe::sixel::PixelBackend::Sixel

@@ -1,150 +1,134 @@
 use crate::t;
+use anyhow::Result;
 use colored::*;
-use std::io::{self, Write};
 
-/// Pre‑process raw args to accept `-say`, `-print`, `-image` as long options,
-/// and convert `image <path> to <format>` syntax into structured args.
-pub(super) fn preprocess_args(args: Vec<String>) -> Vec<String> {
-    let mut out = Vec::new();
-    let mut i = 0;
-    while i < args.len() {
-        let arg = &args[i];
-        match arg.as_str() {
-            "-say" | "-print" => out.push("--say".to_string()),
-            "-image" => {
-                out.push("--image".to_string());
-                // Check if the next tokens follow: <path> to <format>
-                if i + 3 < args.len() && args[i + 2] == "to" {
-                    // image <path> to <format>
-                    out.push(args[i + 1].clone()); // <path>
-                    out.push("--image-to".to_string()); // our internal flag
-                    out.push(args[i + 3].clone()); // <format>
-                    i += 4;
-                    continue;
-                } else if i + 1 < args.len() {
-                    // image <path> (no to/format, just eat the path)
-                    out.push(args[i + 1].clone());
-                    i += 2;
-                    continue;
-                }
-            }
-            "-o" => out.push("--output".to_string()),
-            _ => out.push(arg.clone()),
-        }
-        i += 1;
-    }
-    out
-}
-
-pub(super) fn print_logo() {
-    println!();
-    println!(
-        "  {}  {}  {}",
-        "N".blue().bold(),
-        "T".blue().bold(),
-        "C".blue().bold()
-    );
-    println!(
-        "  {} {} {}",
-        "Navigate".red(),
-        "Toolkit".green(),
-        "Center".blue()
-    );
-    println!();
-}
-
-/// Print detailed help
 pub(super) fn print_help() {
-    println!(
-        "{}",
-        "ntc <version> — Navigate, Toolkit, Center".green().bold()
-    );
-    println!("{}\n", t!("cli.helpers.tagline"));
-
-    print_basic_usage();
-    print_report_flags();
-    print_config_flags();
-    print_editor_flags();
-    print_igcare_flags();
-    print_teleport_flags();
-    print_alias_export_flags();
-    print_misc_flags();
-    print_cli_examples();
-    print_shell_cli_commands();
-    print_interactive_only_note();
+    println!("{}", "ntc — Navigate, Toolkit, Center".green().bold());
+    println!();
+    println!("{}", t!("cli.new.usage_header"));
+    println!("{}", t!("cli.new.usage_shell"));
+    println!("{}", t!("cli.new.usage_cmd"));
+    println!("{}", t!("cli.new.usage_new"));
+    println!("{}", t!("cli.new.usage_upgrade"));
+    println!("{}", t!("cli.new.usage_version"));
+    println!("{}", t!("cli.new.usage_help"));
+    println!();
+    println!("{}", t!("cli.new.examples_header"));
+    println!("{}", t!("cli.new.ex_help"));
+    println!("{}", t!("cli.new.ex_version"));
+    println!("{}", t!("cli.new.ex_alias"));
+    println!("{}", t!("cli.new.ex_new"));
+    println!("{}", t!("cli.new.ex_new_cmd"));
 }
 
-fn print_basic_usage() {
-    println!("{}", t!("cli.helpers.usage_header").cyan().bold());
-    println!("{}", t!("cli.helpers.basic_usage"));
-}
+/// Spawn a detached new terminal running this ntc binary with `child_args`.
+///
+/// When `stay` is true the child gets `NTC_STAY=1` so it stays interactive
+/// after running the command (macOS embeds it via `env` since
+/// `do script` starts a fresh login shell that drops inherited env).
+pub(super) fn spawn_new_terminal(child_args: &[String], stay: bool) -> Result<()> {
+    let exe = std::env::current_exe()?;
 
-fn print_report_flags() {
-    println!("{}", t!("cli.helpers.report_header").cyan().bold());
-    println!("{}", t!("cli.helpers.report_options"));
-}
-
-fn print_config_flags() {
-    println!("{}", t!("cli.helpers.config_header").cyan().bold());
-    println!("{}", t!("cli.helpers.config_options"));
-}
-
-fn print_editor_flags() {
-    println!("{}", t!("cli.helpers.editor_header").cyan().bold());
-    println!("{}", t!("cli.helpers.editor_options"));
-}
-
-fn print_igcare_flags() {
-    println!("{}", t!("cli.helpers.ignore_header").cyan().bold());
-    println!("{}", t!("cli.helpers.igcare_options"));
-}
-
-fn print_teleport_flags() {
-    println!("{}", t!("cli.helpers.tp_header").cyan().bold());
-    println!("{}", t!("cli.helpers.tp_options"));
-}
-
-fn print_alias_export_flags() {
-    println!("{}", t!("cli.helpers.export_header").cyan().bold());
-    println!("{}", t!("cli.helpers.export_options"));
-}
-
-fn print_misc_flags() {
-    println!("{}", t!("cli.helpers.other_header").cyan().bold());
-    println!("{}", t!("cli.helpers.other_options"));
-}
-
-fn print_cli_examples() {
-    println!("{}", t!("cli.helpers.examples_header").cyan().bold());
-    println!("{}", t!("cli.helpers.cli_examples"));
-}
-
-fn print_shell_cli_commands() {
-    println!("{}", t!("cli.helpers.shell_header").cyan().bold());
-    println!("{}", t!("cli.helpers.shell_commands"));
-}
-
-fn print_interactive_only_note() {
-    println!("{}", t!("cli.helpers.interactive_note").yellow().bold());
-}
-
-/// Generate shell completion script for the given shell type.
-pub(super) fn generate_completions(shell: &str) {
-    let script = match shell.to_lowercase().as_str() {
-        "bash" => include_str!("completions/ntc.bash"),
-        "zsh" => include_str!("completions/ntc.zsh"),
-        "fish" => include_str!("completions/ntc.fish"),
-        "powershell" => include_str!("completions/ntc.ps1"),
-        _ => {
-            eprintln!(
-                "Unsupported shell: {}. Use: bash, zsh, fish, powershell",
-                shell
-            );
-            return;
+    #[cfg(windows)]
+    {
+        let mut cmd = std::process::Command::new("cmd");
+        cmd.args(["/c", "start", ""]);
+        cmd.arg(&exe);
+        for a in child_args {
+            cmd.arg(a);
         }
-    };
-    if let Err(e) = io::stdout().write_all(script.as_bytes()) {
-        eprintln!("Failed to write completions: {}", e);
+        if stay {
+            cmd.env(crate::cli::run::STAY_ENV, "1");
+        }
+        cmd.stdin(std::process::Stdio::null())
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null());
+        cmd.spawn()?;
+        Ok(())
     }
-    let _ = io::stdout().flush();
+
+    #[cfg(target_os = "linux")]
+    {
+        let mut tried: Vec<String> = Vec::new();
+        // (terminal binary, prefix args before the ntc exe)
+        let mut candidates: Vec<(String, Vec<String>)> = Vec::new();
+        if let Ok(term) = std::env::var("TERMINAL") {
+            if !term.trim().is_empty() {
+                candidates.push((term, vec!["-e".to_string()]));
+            }
+        }
+        for (bin, pre) in [
+            ("x-terminal-emulator", "-e"),
+            ("gnome-terminal", "--"),
+            ("konsole", "-e"),
+            ("xfce4-terminal", "-e"),
+            ("xterm", "-e"),
+        ] {
+            candidates.push((bin.to_string(), vec![pre.to_string()]));
+        }
+        for (bin, pre) in &candidates {
+            let mut cmd = std::process::Command::new(bin);
+            for p in pre {
+                cmd.arg(p);
+            }
+            cmd.arg(&exe);
+            for a in child_args {
+                cmd.arg(a);
+            }
+            if stay {
+                cmd.env(crate::cli::run::STAY_ENV, "1");
+            }
+            cmd.stdin(std::process::Stdio::null())
+                .stdout(std::process::Stdio::null())
+                .stderr(std::process::Stdio::null());
+            match cmd.spawn() {
+                Ok(_) => return Ok(()),
+                Err(_) => tried.push(bin.clone()),
+            }
+        }
+        anyhow::bail!("{}", t!("cli.new.no_terminal", tried.join(", ")))
+    }
+
+    #[cfg(target_os = "macos")]
+    {
+        fn sh_quote(s: &str) -> String {
+            format!("'{}'", s.replace('\'', "'\\''"))
+        }
+        fn applescript_escape(s: &str) -> String {
+            s.replace('\\', "\\\\").replace('"', "\\\"")
+        }
+        let exe_str = exe.to_string_lossy().to_string();
+        let mut parts: Vec<String> = Vec::new();
+        if stay {
+            parts.push(format!(
+                "env {}=1 {}",
+                crate::cli::run::STAY_ENV,
+                sh_quote(&exe_str)
+            ));
+        } else {
+            parts.push(sh_quote(&exe_str));
+        }
+        for a in child_args {
+            parts.push(sh_quote(a));
+        }
+        let shell_cmd = parts.join(" ");
+        let do_script = format!(
+            "tell application \"Terminal\" to do script \"{}\"",
+            applescript_escape(&shell_cmd)
+        );
+        std::process::Command::new("osascript")
+            .args(["-e", do_script.as_str(), "-e"])
+            .arg("tell application \"Terminal\" to activate")
+            .stdin(std::process::Stdio::null())
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null())
+            .spawn()?;
+        Ok(())
+    }
+
+    #[cfg(not(any(windows, target_os = "linux", target_os = "macos")))]
+    {
+        let _ = (&exe, child_args, stay);
+        anyhow::bail!("{}", t!("cli.new.unsupported"))
+    }
 }

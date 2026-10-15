@@ -54,9 +54,7 @@ fn validate_dbal_name(name: &str) -> bool {
 
 /// Look up an alias body by name (case-insensitive), if one is saved.
 pub(crate) fn lookup(name: &str) -> Option<String> {
-    Config::get_db_aliases()
-        .get(&name.to_lowercase())
-        .cloned()
+    Config::get_db_aliases().get(&name.to_lowercase()).cloned()
 }
 
 /// Split SQL on `;` outside single/double quotes (`''` is an escaped quote).
@@ -73,10 +71,7 @@ fn split_statements(sql: &str) -> Vec<&str> {
         match ch {
             '\'' if !in_double => {
                 // `''` inside a string is an escaped quote, not a boundary.
-                if in_single
-                    && i + 1 < chars.len()
-                    && chars[i + 1].1 == '\''
-                {
+                if in_single && i + 1 < chars.len() && chars[i + 1].1 == '\'' {
                     i += 1;
                 } else {
                     in_single = !in_single;
@@ -337,8 +332,7 @@ pub(crate) fn handle_dbal(
             Action::Stay
         }
         "list" | "ls" => {
-            let mut aliases: Vec<(String, String)> =
-                Config::get_db_aliases().into_iter().collect();
+            let mut aliases: Vec<(String, String)> = Config::get_db_aliases().into_iter().collect();
             aliases.sort_by(|a, b| a.0.cmp(&b.0));
             println!();
             if aliases.is_empty() {
@@ -371,8 +365,7 @@ pub(crate) fn handle_dbal(
                         Some(c) => split_call_args(c),
                         None => rest[1..].to_vec(),
                     };
-                    let args: Vec<&str> =
-                        owned.iter().map(|s| s.as_str()).collect();
+                    let args: Vec<&str> = owned.iter().map(|s| s.as_str()).collect();
                     run_template(&template, &args, db, command.row_limit(), page)
                 }
                 None => {
@@ -382,9 +375,7 @@ pub(crate) fn handle_dbal(
             }
         }
         "cls" | "clear" => {
-            let force = rest
-                .iter()
-                .any(|a| a == "--force" || a == "-f");
+            let force = rest.iter().any(|a| a == "--force" || a == "-f");
             if !force {
                 print_error(&t!("ndb.dbal_cls_usage"));
                 return Action::Stay;
@@ -432,10 +423,7 @@ mod tests {
     fn params_fill_positionally_with_defaults() {
         // Plain scalar + braced forms.
         let out = resolve_body("SELECT * FROM t WHERE a = $a AND b = ${b}", &["1", "2"]);
-        assert_eq!(
-            out,
-            Ok("SELECT * FROM t WHERE a = 1 AND b = 2".to_string())
-        );
+        assert_eq!(out, Ok("SELECT * FROM t WHERE a = 1 AND b = 2".to_string()));
         // Defaults apply when no value is given ...
         let out = resolve_body("SELECT * FROM ${t:-users}", &[]);
         assert_eq!(out, Ok("SELECT * FROM users".to_string()));

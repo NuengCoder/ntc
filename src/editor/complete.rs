@@ -10,11 +10,10 @@
 //! > `S`truct > `E`num > `M`acro. User symbols sort before builtins.
 
 use crate::mql::{
-    builtin_function_names, constant_names, dialect_for_ext, extract_class_ranges,
-    extract_classes, extract_classes_full, extract_comment_box, extract_custom_typed_variables,
-    extract_defines, extract_enums, extract_structs, extract_user_functions, extract_variables,
-    hover_info, hover_info_detailed, in_class_body, keyword_names, type_names, visible_in_dialect,
-    Dialect,
+    builtin_function_names, constant_names, dialect_for_ext, extract_class_ranges, extract_classes,
+    extract_classes_full, extract_comment_box, extract_custom_typed_variables, extract_defines,
+    extract_enums, extract_structs, extract_user_functions, extract_variables, hover_info,
+    hover_info_detailed, in_class_body, keyword_names, type_names, visible_in_dialect, Dialect,
 };
 use crate::syntax::SyntaxLanguage;
 
@@ -149,9 +148,7 @@ pub fn wrap_sig(
     macro_rules! place {
         ($text:expr, $hi:expr, $brk:expr) => {{
             let text: String = $text;
-            let row_empty = rows
-                .last()
-                .is_none_or(|r: &SigRow| r.segments.is_empty());
+            let row_empty = rows.last().is_none_or(|r: &SigRow| r.segments.is_empty());
             if !row_empty && cur_w + width(&text) > inner_w {
                 if !$brk || rows.len() >= max_rows {
                     if let Some(last) = rows.last_mut() {
@@ -202,9 +199,7 @@ pub fn wrap_sig(
             }
             continue;
         }
-        let row_empty = rows
-            .last()
-            .is_none_or(|r: &SigRow| r.segments.is_empty());
+        let row_empty = rows.last().is_none_or(|r: &SigRow| r.segments.is_empty());
         if !row_empty && cur_w + 2 + width(&p) > inner_w {
             if rows.len() >= max_rows {
                 place!(", ".to_string(), false, true);
@@ -352,7 +347,17 @@ pub fn build_items(lines: &[String], prefix: &str, dialect: Option<Dialect>) -> 
             ),
             None => (format!("{}()", name), String::new(), Vec::new()),
         };
-        push(Kind::Function, name, format!("{}()", name), detail, doc, sigp, String::new(), true, false);
+        push(
+            Kind::Function,
+            name,
+            format!("{}()", name),
+            detail,
+            doc,
+            sigp,
+            String::new(),
+            true,
+            false,
+        );
     }
     // Variables, arrays, types (outside class bodies).
     for v in extract_variables(lines) {
@@ -416,27 +421,87 @@ pub fn build_items(lines: &[String], prefix: &str, dialect: Option<Dialect>) -> 
         }
     }
     for t in type_names() {
-        push(Kind::Var, t, t.to_string(), format!("type {}", t), String::new(), Vec::new(), String::new(), false, false);
+        push(
+            Kind::Var,
+            t,
+            t.to_string(),
+            format!("type {}", t),
+            String::new(),
+            Vec::new(),
+            String::new(),
+            false,
+            false,
+        );
     }
     // Keywords + named constants share [K] (per spec).
     for k in keyword_names() {
-        push(Kind::Keyword, k, k.to_string(), format!("keyword {}", k), String::new(), Vec::new(), String::new(), false, false);
+        push(
+            Kind::Keyword,
+            k,
+            k.to_string(),
+            format!("keyword {}", k),
+            String::new(),
+            Vec::new(),
+            String::new(),
+            false,
+            false,
+        );
     }
     for c in constant_names() {
-        push(Kind::Keyword, c, c.to_string(), format!("{} · constant", c), String::new(), Vec::new(), String::new(), false, false);
+        push(
+            Kind::Keyword,
+            c,
+            c.to_string(),
+            format!("{} · constant", c),
+            String::new(),
+            Vec::new(),
+            String::new(),
+            false,
+            false,
+        );
     }
     // Classes, structs, enums (+members), defines.
     for (name, line) in extract_classes(lines) {
         let doc = user_doc(lines, line);
-        push(Kind::Object, &name, name.clone(), format!("class {}", name), doc, Vec::new(), String::new(), false, true);
+        push(
+            Kind::Object,
+            &name,
+            name.clone(),
+            format!("class {}", name),
+            doc,
+            Vec::new(),
+            String::new(),
+            false,
+            true,
+        );
     }
     for (name, line) in extract_structs(lines) {
         let doc = user_doc(lines, line);
-        push(Kind::Struct, &name, name.clone(), format!("struct {}", name), doc, Vec::new(), String::new(), false, true);
+        push(
+            Kind::Struct,
+            &name,
+            name.clone(),
+            format!("struct {}", name),
+            doc,
+            Vec::new(),
+            String::new(),
+            false,
+            true,
+        );
     }
     for e in extract_enums(lines) {
         if !e.name.is_empty() {
-            push(Kind::Enum, &e.name, e.name.clone(), format!("enum {}", e.name), String::new(), Vec::new(), String::new(), false, true);
+            push(
+                Kind::Enum,
+                &e.name,
+                e.name.clone(),
+                format!("enum {}", e.name),
+                String::new(),
+                Vec::new(),
+                String::new(),
+                false,
+                true,
+            );
         }
         for m in &e.members {
             push(
@@ -462,7 +527,17 @@ pub fn build_items(lines: &[String], prefix: &str, dialect: Option<Dialect>) -> 
         } else {
             format!("#define {} {}", d.name, d.value)
         };
-        push(Kind::Macro, &d.name, d.name.clone(), detail, String::new(), Vec::new(), String::new(), false, true);
+        push(
+            Kind::Macro,
+            &d.name,
+            d.name.clone(),
+            detail,
+            String::new(),
+            Vec::new(),
+            String::new(),
+            false,
+            true,
+        );
     }
 
     // Pure priority sort: kind order, user symbols first, alphabetical.
@@ -480,11 +555,7 @@ pub fn build_items(lines: &[String], prefix: &str, dialect: Option<Dialect>) -> 
 /// Build the member list for `obj.` where `obj` has user type `class_name`.
 /// Methods first (constructors included, private/protected excluded),
 /// then member variables. Empty prefix shows everything.
-pub fn build_member_items(
-    lines: &[String],
-    class_name: &str,
-    prefix: &str,
-) -> Vec<Item> {
+pub fn build_member_items(lines: &[String], class_name: &str, prefix: &str) -> Vec<Item> {
     let mut out = Vec::new();
     for info in extract_classes_full(lines) {
         if info.name != class_name {
@@ -590,7 +661,11 @@ pub fn word_before(lines: &[String], y: usize, byte: usize) -> String {
 
 /// Resolve signature (return type, params, description) for `name`:
 /// user functions, then class/struct methods, then builtins.
-pub fn signature_for(name: &str, lines: &[String], dialect: Option<Dialect>) -> Option<(String, Vec<String>, String)> {
+pub fn signature_for(
+    name: &str,
+    lines: &[String],
+    dialect: Option<Dialect>,
+) -> Option<(String, Vec<String>, String)> {
     let lower = name.to_lowercase();
     for f in extract_user_functions(lines) {
         if f.name.eq_ignore_ascii_case(&lower) {
@@ -604,7 +679,11 @@ pub fn signature_for(name: &str, lines: &[String], dialect: Option<Dialect>) -> 
         }
     }
     for info in extract_classes_full(lines) {
-        for m in info.methods.iter().filter(|m| !m.is_private || m.name == info.name) {
+        for m in info
+            .methods
+            .iter()
+            .filter(|m| !m.is_private || m.name == info.name)
+        {
             if m.name.eq_ignore_ascii_case(&lower) {
                 let doc = user_doc(lines, m.line);
                 return Some((m.return_type.clone(), split_params(&m.params), doc));
@@ -687,7 +766,11 @@ pub fn enclosing_call(lines: &[String], y: usize, byte: usize) -> Option<CallSit
     let mut dead = false;
     for (li, line) in lines.iter().enumerate().take(y + 1).skip(start_line) {
         let masked = mask_line(line);
-        let end = if li == y { byte.min(masked.len()) } else { masked.len() };
+        let end = if li == y {
+            byte.min(masked.len())
+        } else {
+            masked.len()
+        };
         // Byte-safe walk over the masked prefix.
         let mut bi = 0usize;
         for ch in masked[..end].chars() {
@@ -831,7 +914,10 @@ impl Editor {
         if !self.mql_active() {
             return;
         }
-        let was_visible = self.completion.as_ref().is_some_and(|s| !s.items.is_empty());
+        let was_visible = self
+            .completion
+            .as_ref()
+            .is_some_and(|s| !s.items.is_empty());
         if let Some((class, _)) = member_context(&self.lines, self.cursor.y, self.cursor.byte) {
             let word = word_before(&self.lines, self.cursor.y, self.cursor.byte);
             let items = build_member_items(&self.lines, &class, &word);
@@ -853,7 +939,12 @@ impl Editor {
                     prefix: word,
                 });
             }
-            if self.completion.as_ref().is_some_and(|s| !s.items.is_empty()) || was_visible {
+            if self
+                .completion
+                .as_ref()
+                .is_some_and(|s| !s.items.is_empty())
+                || was_visible
+            {
                 self.mark_all_dirty();
             }
             return;
@@ -882,7 +973,10 @@ impl Editor {
                 });
             }
         }
-        let now_visible = self.completion.as_ref().is_some_and(|s| !s.items.is_empty());
+        let now_visible = self
+            .completion
+            .as_ref()
+            .is_some_and(|s| !s.items.is_empty());
         if now_visible || was_visible {
             self.mark_all_dirty();
         }
@@ -996,7 +1090,8 @@ mod tests {
     }
 
     #[test]
-    fn pure_sort_groups_kinds() {        // Same-initial names across kinds: F block, then V, A, O, S, E, M.
+    fn pure_sort_groups_kinds() {
+        // Same-initial names across kinds: F block, then V, A, O, S, E, M.
         let lines = sl(&[
             "void afun(){ }",
             "int avar;",
@@ -1038,7 +1133,11 @@ mod tests {
         let fun = items.iter().find(|i| i.name == "fun").unwrap();
         assert_eq!(fun.kind, Kind::Function);
         assert_eq!(fun.label, "fun()");
-        assert!(fun.detail.contains("void fun(int a , int b)"), "{}", fun.detail);
+        assert!(
+            fun.detail.contains("void fun(int a , int b)"),
+            "{}",
+            fun.detail
+        );
         assert!(fun.doc.contains("it's so fun here"), "{}", fun.doc);
         assert!(fun.opens_paren);
         let cls = build_items(&fixture(), "func", None)

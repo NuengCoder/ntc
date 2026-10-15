@@ -305,6 +305,168 @@ impl Config {
         }
     }
 
+    // ---- Run alias completion hints (`#param --hint-*` specs) ----
+    //
+    // Mirrors the `run_aliases` map one-to-one (same local-or-global
+    // routing, same lowercased keys). Values are serialized hint specs
+    // (`#x --hint-dir …`) produced by `serialize_hint_spec`.
+
+    pub fn global_get_run_alias_hints() -> HashMap<String, String> {
+        Self::read_global().run_alias_hints.clone()
+    }
+
+    pub fn global_add_run_alias_hint(name: &str, spec: &str) {
+        let mut cfg = Self::write_global();
+        cfg.run_alias_hints
+            .insert(name.to_lowercase(), spec.to_string());
+        cfg.save();
+    }
+
+    pub fn global_remove_run_alias_hint(name: &str) {
+        let mut cfg = Self::write_global();
+        cfg.run_alias_hints.remove(&name.to_lowercase());
+        cfg.save();
+    }
+
+    pub fn global_update_run_alias_hint(name: &str, spec: &str) -> bool {
+        let mut cfg = Self::write_global();
+        if let std::collections::hash_map::Entry::Occupied(mut e) =
+            cfg.run_alias_hints.entry(name.to_lowercase())
+        {
+            e.insert(spec.to_string());
+            cfg.save();
+            true
+        } else {
+            false
+        }
+    }
+
+    pub fn global_rename_run_alias_hint(old_name: &str, new_name: &str) {
+        let mut cfg = Self::write_global();
+        if let Some(spec) = cfg.run_alias_hints.remove(&old_name.to_lowercase()) {
+            cfg.run_alias_hints.insert(new_name.to_lowercase(), spec);
+            cfg.save();
+        }
+    }
+
+    pub fn global_clear_run_alias_hints() {
+        let mut cfg = Self::write_global();
+        cfg.run_alias_hints.clear();
+        cfg.save();
+    }
+
+    // ---- Named hint value lists (`ral hintn` dimension) ----
+    //
+    // Values for `#param --hint-n <name>` / `--select-n <name>`, keyed by
+    // lowercased list name. Same local-or-global routing as `run_aliases`:
+    // writes land in ntconfig.toml when one exists in the cwd, reads merge
+    // global + local (local wins, like `db_aliases`).
+
+    /// Merged hint lists: global entries overlaid by local ones.
+    pub fn get_run_hint_lists_merged() -> HashMap<String, Vec<String>> {
+        let mut merged = Self::read_global().run_hint_lists.clone();
+        if let Ok(local) = Self::read_local_config() {
+            if let Some(map) = local.run_hint_lists {
+                merged.extend(map);
+            }
+        }
+        merged
+    }
+
+    /// Merged hint lists plus whether the cwd has a local ntconfig.toml.
+    pub fn get_run_hint_lists_with_source() -> (HashMap<String, Vec<String>>, bool) {
+        let is_local = Self::get_local_config_path().is_some();
+        (Self::get_run_hint_lists_merged(), is_local)
+    }
+
+    pub fn global_get_run_hint_lists() -> HashMap<String, Vec<String>> {
+        Self::read_global().run_hint_lists.clone()
+    }
+
+    pub fn global_add_run_hint_list(name: &str, values: &[String]) {
+        let mut cfg = Self::write_global();
+        cfg.run_hint_lists
+            .insert(name.to_lowercase(), values.to_vec());
+        cfg.save();
+    }
+
+    /// Remove a hint list from the global config. Returns true when removed.
+    pub fn global_remove_run_hint_list(name: &str) -> bool {
+        let mut cfg = Self::write_global();
+        let removed = cfg.run_hint_lists.remove(&name.to_lowercase()).is_some();
+        cfg.save();
+        removed
+    }
+
+    pub fn global_rename_run_hint_list(old_name: &str, new_name: &str) {
+        let mut cfg = Self::write_global();
+        if let Some(values) = cfg.run_hint_lists.remove(&old_name.to_lowercase()) {
+            cfg.run_hint_lists.insert(new_name.to_lowercase(), values);
+            cfg.save();
+        }
+    }
+
+    /// Add a hint list to local config (or global if no local config).
+    pub fn local_add_run_hint_list(
+        name: &str,
+        values: &[String],
+    ) -> std::result::Result<(), Box<dyn std::error::Error>> {
+        let name_lower = name.to_lowercase();
+        if Self::get_local_config_path().is_some() {
+            let mut local = Self::read_local_config().unwrap_or_default();
+            if local.run_hint_lists.is_none() {
+                local.run_hint_lists = Some(std::collections::HashMap::new());
+            }
+            if let Some(ref mut map) = local.run_hint_lists {
+                map.insert(name_lower, values.to_vec());
+            }
+            Self::write_local_config(&local)?;
+        } else {
+            Config::global_add_run_hint_list(name, values);
+        }
+        Ok(())
+    }
+
+    /// Remove a hint list from local config (or global if no local config).
+    /// Returns true when an entry was actually removed.
+    pub fn local_remove_run_hint_list(
+        name: &str,
+    ) -> std::result::Result<bool, Box<dyn std::error::Error>> {
+        let name_lower = name.to_lowercase();
+        if Self::get_local_config_path().is_some() {
+            let mut local = Self::read_local_config().unwrap_or_default();
+            let removed = match local.run_hint_lists.as_mut() {
+                Some(map) => {
+                    let removed = map.remove(&name_lower).is_some();
+                    if map.is_empty() {
+                        local.run_hint_lists = None;
+                    }
+                    removed
+                }
+                None => false,
+            };
+            Self::write_local_config(&local)?;
+            Ok(removed)
+        } else {
+            Ok(Config::global_remove_run_hint_list(name))
+        }
+    }
+
+    /// Move a hint list from old name to new name (for `ral hintn rnm`).
+    pub fn local_rename_run_hint_list(old_name: &str, new_name: &str) {
+        if Self::get_local_config_path().is_some() {
+            let mut local = Self::read_local_config().unwrap_or_default();
+            if let Some(ref mut map) = local.run_hint_lists {
+                if let Some(values) = map.remove(&old_name.to_lowercase()) {
+                    map.insert(new_name.to_lowercase(), values);
+                    let _ = Self::write_local_config(&local);
+                }
+            }
+        } else {
+            Config::global_rename_run_hint_list(old_name, new_name);
+        }
+    }
+
     // ---- Database aliases (`dbal` dimension for the ndb shell) ----
     //
     // Reads merge global + local (local wins); writes go to the local
@@ -359,7 +521,11 @@ impl Config {
         let name_lower = name.to_lowercase();
         if Self::get_local_config_path().is_some() {
             let mut local = Self::read_local_config().unwrap_or_default();
-            match local.db_aliases.as_mut().and_then(|m| m.remove(&name_lower)) {
+            match local
+                .db_aliases
+                .as_mut()
+                .and_then(|m| m.remove(&name_lower))
+            {
                 Some(_) => {
                     if local.db_aliases.as_ref().is_some_and(|m| m.is_empty()) {
                         local.db_aliases = None;
@@ -770,6 +936,62 @@ impl Config {
         }
     }
 
+    /// Add run alias hint spec to local config (or global if no local config).
+    /// Pass `None` as spec to just remove any existing hint (used on plain edits).
+    pub fn local_add_run_alias_hint(
+        name: &str,
+        spec: &str,
+    ) -> std::result::Result<(), Box<dyn std::error::Error>> {
+        let name_lower = name.to_lowercase();
+        if Self::get_local_config_path().is_some() {
+            let mut local = Self::read_local_config().unwrap_or_default();
+            if local.run_alias_hints.is_none() {
+                local.run_alias_hints = Some(std::collections::HashMap::new());
+            }
+            if let Some(ref mut map) = local.run_alias_hints {
+                map.insert(name_lower, spec.to_string());
+            }
+            Self::write_local_config(&local)?;
+        } else {
+            Config::global_add_run_alias_hint(name, spec);
+        }
+        Ok(())
+    }
+
+    /// Remove a run alias hint spec from local config (or global if no local config).
+    pub fn local_remove_run_alias_hint(
+        name: &str,
+    ) -> std::result::Result<(), Box<dyn std::error::Error>> {
+        let name_lower = name.to_lowercase();
+        if Self::get_local_config_path().is_some() {
+            let mut local = Self::read_local_config().unwrap_or_default();
+            if let Some(ref mut map) = local.run_alias_hints {
+                if map.remove(&name_lower).is_some() && map.is_empty() {
+                    local.run_alias_hints = None;
+                }
+                Self::write_local_config(&local)?;
+            }
+        } else {
+            Config::global_remove_run_alias_hint(name);
+        }
+        Ok(())
+    }
+
+    /// Move a hint spec from old name to new name (for `ral rnm`).
+    pub fn local_rename_run_alias_hint(old_name: &str, new_name: &str) {
+        if Self::get_local_config_path().is_some() {
+            let mut local = Self::read_local_config().unwrap_or_default();
+            if let Some(ref mut map) = local.run_alias_hints {
+                if let Some(spec) = map.remove(&old_name.to_lowercase()) {
+                    map.insert(new_name.to_lowercase(), spec);
+                    let _ = Self::write_local_config(&local);
+                }
+            }
+        } else {
+            Config::global_rename_run_alias_hint(old_name, new_name);
+        }
+    }
+
     /// Get all run aliases (already handled by global_get_run_aliases which merges)
     /// But for display, we might want to show source
     pub fn get_run_aliases_with_source() -> (HashMap<String, String>, bool) {
@@ -788,16 +1010,24 @@ impl Config {
                 0
             };
             local.run_aliases = None;
+            local.run_alias_hints = None;
             Self::write_local_config(&local)?;
             print_success(&format!(
                 "Cleared {} run alias(es) from local config.",
                 count
             ));
         } else {
-            let mut cfg = Config::write_global();
-            let count = cfg.run_aliases.len();
-            cfg.run_aliases.clear();
-            cfg.save();
+            // Drop WRITE guard before printing: print_success() re-reads
+            // Config (via ansi_enabled) and would deadlock on same-thread
+            // WRITE->READ re-acquire.
+            let count = {
+                let mut cfg = Config::write_global();
+                let count = cfg.run_aliases.len();
+                cfg.run_aliases.clear();
+                cfg.run_alias_hints.clear();
+                cfg.save();
+                count
+            };
             print_success(&format!(
                 "Cleared {} run alias(es) from global config.",
                 count
@@ -870,6 +1100,26 @@ impl Config {
         cfg.save();
     }
 
+    pub fn global_get_serve_port(svc: crate::config::ServeService) -> u16 {
+        Self::read_global().serve.for_service(svc).port
+    }
+
+    pub fn global_set_serve_port(svc: crate::config::ServeService, port: u16) {
+        let mut cfg = Self::write_global();
+        cfg.serve.for_service_mut(svc).port = port;
+        cfg.save();
+    }
+
+    pub fn global_get_serve_bind(svc: crate::config::ServeService) -> String {
+        Self::read_global().serve.for_service(svc).bind.clone()
+    }
+
+    pub fn global_set_serve_bind(svc: crate::config::ServeService, bind: &str) {
+        let mut cfg = Self::write_global();
+        cfg.serve.for_service_mut(svc).bind = bind.to_string();
+        cfg.save();
+    }
+
     /// Parse a QSC hotkey string like `"#c #s #a 0"` or `"#c a"` or `"off"`.
     /// Returns None for "off", Some(hotkey) on success.
     pub fn parse_qsc(input: &str) -> Option<crate::config::QscHotkey> {
@@ -934,12 +1184,16 @@ impl Config {
         #[derive(Deserialize)]
         struct RalFile {
             run_aliases: Option<std::collections::HashMap<String, String>>,
+            run_alias_hints: Option<std::collections::HashMap<String, String>>,
+            run_hint_lists: Option<std::collections::HashMap<String, Vec<String>>>,
         }
         let ral: RalFile = toml::from_str(&content)?;
         let aliases = match ral.run_aliases {
             Some(a) => a,
             None => return Ok(()),
         };
+        let hints = ral.run_alias_hints.unwrap_or_default();
+        let lists = ral.run_hint_lists.unwrap_or_default();
 
         if Self::get_local_config_path().is_some() {
             // Batch into local config: read once, apply all, write once
@@ -950,6 +1204,22 @@ impl Config {
             for (name, cmd) in &aliases {
                 map.insert(name.to_lowercase(), cmd.clone());
             }
+            if !hints.is_empty() {
+                let hmap = local
+                    .run_alias_hints
+                    .get_or_insert_with(std::collections::HashMap::new);
+                for (name, spec) in &hints {
+                    hmap.insert(name.to_lowercase(), spec.clone());
+                }
+            }
+            if !lists.is_empty() {
+                let lmap = local
+                    .run_hint_lists
+                    .get_or_insert_with(std::collections::HashMap::new);
+                for (name, values) in &lists {
+                    lmap.insert(name.to_lowercase(), values.clone());
+                }
+            }
             Self::write_local_config(&local)?;
         } else {
             // Batch into global config: write lock once, apply all, save once
@@ -957,9 +1227,25 @@ impl Config {
             for (name, cmd) in &aliases {
                 cfg.run_aliases.insert(name.to_lowercase(), cmd.clone());
             }
+            for (name, spec) in &hints {
+                cfg.run_alias_hints
+                    .insert(name.to_lowercase(), spec.clone());
+            }
+            for (name, values) in &lists {
+                cfg.run_hint_lists
+                    .insert(name.to_lowercase(), values.clone());
+            }
             cfg.save();
         }
-        print_success(&format!("Imported {} alias(es).", aliases.len()));
+        if lists.is_empty() {
+            print_success(&format!("Imported {} alias(es).", aliases.len()));
+        } else {
+            print_success(&format!(
+                "Imported {} alias(es) and {} hint list(s).",
+                aliases.len(),
+                lists.len()
+            ));
+        }
         Ok(())
     }
 
@@ -1056,5 +1342,125 @@ impl Config {
         }
         print_success(&format!("Imported {} ignore/care setting(s).", total));
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::utils::test_support::TempCwd;
+
+    fn local_ntconfig() -> TempCwd {
+        TempCwd::with_fixture(&[("ntconfig.toml", "")], &[])
+    }
+
+    fn local_hints() -> HashMap<String, String> {
+        Config::read_local_config()
+            .unwrap_or_default()
+            .run_alias_hints
+            .unwrap_or_default()
+    }
+
+    #[test]
+    fn hint_specs_follow_alias_lifecycle_locally() {
+        let _cwd = local_ntconfig();
+        // add
+        Config::local_add_run_alias_hint("tld", "#x --hint-dir").unwrap();
+        assert_eq!(
+            local_hints().get("tld").map(String::as_str),
+            Some("#x --hint-dir")
+        );
+        // rename moves the spec
+        Config::local_rename_run_alias_hint("tld", "tlx");
+        let hints = local_hints();
+        assert!(!hints.contains_key("tld"));
+        assert_eq!(hints.get("tlx").map(String::as_str), Some("#x --hint-dir"));
+        // remove deletes it
+        Config::local_remove_run_alias_hint("tlx").unwrap();
+        assert!(!local_hints().contains_key("tlx"));
+    }
+
+    #[test]
+    fn ral_import_brings_hint_section() {
+        let _cwd = local_ntconfig();
+        let dir = std::env::current_dir().unwrap();
+        let path = dir.join("hints_test.ntc.ral");
+        std::fs::write(
+            &path,
+            "[run_aliases]\ntld = \"tl dir ${x:-.}\"\n\n[run_alias_hints]\ntld = \"#x --hint-dir\"\n",
+        )
+        .unwrap();
+        Config::import_run_aliases_from_file(&path).unwrap();
+        let local = Config::read_local_config().unwrap_or_default();
+        assert_eq!(
+            local
+                .run_aliases
+                .unwrap_or_default()
+                .get("tld")
+                .map(String::as_str),
+            Some("tl dir ${x:-.}")
+        );
+        assert_eq!(
+            local_hints().get("tld").map(String::as_str),
+            Some("#x --hint-dir")
+        );
+        let _ = std::fs::remove_file(&path);
+    }
+
+    #[test]
+    fn ral_import_without_hints_section_still_works() {
+        let _cwd = local_ntconfig();
+        let dir = std::env::current_dir().unwrap();
+        let path = dir.join("nohints_test.ntc.ral");
+        std::fs::write(&path, "[run_aliases]\nbtr = \"cargo build\"\n").unwrap();
+        Config::import_run_aliases_from_file(&path).unwrap();
+        assert!(local_hints().is_empty());
+        let _ = std::fs::remove_file(&path);
+    }
+
+    fn local_lists() -> HashMap<String, Vec<String>> {
+        Config::read_local_config()
+            .unwrap_or_default()
+            .run_hint_lists
+            .unwrap_or_default()
+    }
+
+    #[test]
+    fn ral_import_brings_hint_lists_section() {
+        let _cwd = local_ntconfig();
+        let dir = std::env::current_dir().unwrap();
+        let path = dir.join("lists_test.ntc.ral");
+        std::fs::write(
+            &path,
+            "[run_aliases]\nsrv = \"ssh $p\"\n\n[run_alias_hints]\nsrv = \"#p --hint-n port\"\n\n[run_hint_lists]\nport = [\"8080\", \"5050\"]\n",
+        )
+        .unwrap();
+        Config::import_run_aliases_from_file(&path).unwrap();
+        assert_eq!(
+            local_lists().get("port"),
+            Some(&vec!["8080".to_string(), "5050".to_string()])
+        );
+        let _ = std::fs::remove_file(&path);
+    }
+
+    #[test]
+    fn hint_lists_follow_routed_lifecycle() {
+        let _cwd = local_ntconfig();
+        Config::local_add_run_hint_list(
+            "port",
+            &["8080".to_string(), "5050".to_string()],
+        )
+        .unwrap();
+        assert_eq!(
+            local_lists().get("port"),
+            Some(&vec!["8080".to_string(), "5050".to_string()])
+        );
+        Config::local_rename_run_hint_list("port", "ports");
+        let lists = local_lists();
+        assert!(!lists.contains_key("port"));
+        assert!(lists.contains_key("ports"));
+        assert!(Config::local_remove_run_hint_list("ports").unwrap());
+        assert!(!local_lists().contains_key("ports"));
+        assert!(!Config::local_remove_run_hint_list("ports").unwrap());
     }
 }

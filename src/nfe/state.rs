@@ -199,9 +199,7 @@ impl NfeState {
             preview_content: Vec::new(),
             preview_file: None,
             preview_image: None,
-            preview_mode: crate::nfe::sixel::default_image_mode(
-                &crate::nfe::sixel::snapshot_env(),
-            ),
+            preview_mode: crate::nfe::sixel::default_image_mode(&crate::nfe::sixel::snapshot_env()),
             viewer_active: false,
             viewer_path: None,
             viewer_grid: None,
@@ -539,9 +537,7 @@ impl NfeState {
                     // Legacy console gets an actionable hint, not just a
                     // backend name: pixels need WT (W) or the OS viewer (o).
                     if backend == crate::nfe::sixel::PixelBackend::Sextant
-                        && crate::nfe::sixel::is_legacy_console(
-                            &crate::nfe::sixel::snapshot_env(),
-                        )
+                        && crate::nfe::sixel::is_legacy_console(&crate::nfe::sixel::snapshot_env())
                     {
                         self.set_status(format!(
                             "Image view: {} ({}) — legacy console: W reopens in Windows Terminal, o uses the OS viewer",
@@ -631,10 +627,7 @@ impl NfeState {
         }
         #[cfg(target_os = "macos")]
         {
-            (
-                "open".to_string(),
-                vec![path.to_string_lossy().to_string()],
-            )
+            ("open".to_string(), vec![path.to_string_lossy().to_string()])
         }
         #[cfg(all(not(windows), not(target_os = "macos")))]
         {
@@ -814,12 +807,8 @@ impl NfeState {
         let s = (tw as f32 / cw_px as f32).min(th as f32 / ch_px as f32);
         let dw = ((cw_px as f32 * s) as u32).clamp(1, tw);
         let dh = ((ch_px as f32 * s) as u32).clamp(1, th);
-        let small = image::imageops::resize(
-            &cropped,
-            dw,
-            dh,
-            image::imageops::FilterType::Lanczos3,
-        );
+        let small =
+            image::imageops::resize(&cropped, dw, dh, image::imageops::FilterType::Lanczos3);
         Some((small, dw, dh))
     }
 
@@ -852,7 +841,8 @@ impl NfeState {
         cw: u32,
         ch: u32,
         bg: (u8, u8, u8),
-    ) -> Option<(String, crate::nfe::image::BlitGeom)> {        let path = self.viewer_path.clone()?;
+    ) -> Option<(String, crate::nfe::image::BlitGeom)> {
+        let path = self.viewer_path.clone()?;
         let _ = self.viewer_src.as_ref()?;
         let key = SixelBlitKey {
             path,
@@ -877,12 +867,7 @@ impl NfeState {
         let tscale = (256.0 / dw.max(dh) as f32).min(1.0);
         let tw = ((dw as f32 * tscale) as u32).max(1);
         let th = ((dh as f32 * tscale) as u32).max(1);
-        let thumb = image::imageops::resize(
-            &small,
-            tw,
-            th,
-            image::imageops::FilterType::Lanczos3,
-        );
+        let thumb = image::imageops::resize(&small, tw, th, image::imageops::FilterType::Lanczos3);
         let tpx: Vec<(u8, u8, u8)> = thumb.pixels().map(|p| (p[0], p[1], p[2])).collect();
         let pal = crate::nfe::sixel::median_cut(&tpx, 255);
         let idx = crate::nfe::sixel::map_to_palette(&px, &pal);
@@ -1013,10 +998,7 @@ impl NfeState {
                     Ok(b) => b,
                     Err(_) => return,
                 };
-                let b64 = base64::Engine::encode(
-                    &base64::engine::general_purpose::STANDARD,
-                    &png,
-                );
+                let b64 = base64::Engine::encode(&base64::engine::general_purpose::STANDARD, &png);
                 Some(PanelBlit::Kitty(crate::nfe::kitty::transmit_chunks(
                     &b64, w, h,
                 )))
@@ -1026,19 +1008,13 @@ impl NfeState {
                     Some(v) => v,
                     None => return,
                 };
-                let px: Vec<(u8, u8, u8)> =
-                    small.pixels().map(|p| (p[0], p[1], p[2])).collect();
+                let px: Vec<(u8, u8, u8)> = small.pixels().map(|p| (p[0], p[1], p[2])).collect();
                 let tscale = (256.0 / dw.max(dh) as f32).min(1.0);
                 let tw = ((dw as f32 * tscale) as u32).max(1);
                 let th = ((dh as f32 * tscale) as u32).max(1);
-                let thumb = image::imageops::resize(
-                    &small,
-                    tw,
-                    th,
-                    image::imageops::FilterType::Lanczos3,
-                );
-                let tpx: Vec<(u8, u8, u8)> =
-                    thumb.pixels().map(|p| (p[0], p[1], p[2])).collect();
+                let thumb =
+                    image::imageops::resize(&small, tw, th, image::imageops::FilterType::Lanczos3);
+                let tpx: Vec<(u8, u8, u8)> = thumb.pixels().map(|p| (p[0], p[1], p[2])).collect();
                 let pal = crate::nfe::sixel::median_cut(&tpx, 255);
                 let idx = crate::nfe::sixel::map_to_palette(&px, &pal);
                 Some(PanelBlit::Sixel(crate::nfe::sixel::encode_sixel(
@@ -1270,10 +1246,10 @@ impl NfeState {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::utils::test_support as tsupport;
 
     fn tree(tag: &str) -> PathBuf {
-        let root =
-            std::env::temp_dir().join(format!("ntc_nfe_{}_{}", tag, std::process::id()));
+        let root = std::env::temp_dir().join(format!("ntc_nfe_{}_{}", tag, std::process::id()));
         std::fs::create_dir_all(root.join("src")).unwrap();
         std::fs::create_dir_all(root.join("docs")).unwrap();
         root
@@ -1327,14 +1303,13 @@ mod tests {
     fn parent_of_relative_path_recovers() {
         // Simulates a legacy relative current_dir: `b` must recover to
         // a readable directory instead of sticking at `""`.
+        // Locks process globals: the recovery reads process CWD, which a
+        // parallel CWD-moving test could otherwise yank away on CI.
+        let _g = tsupport::lock_globals();
         let mut s = NfeState::new(None);
         s.current_dir = PathBuf::from("src");
         s.go_to_parent();
-        assert!(
-            !s.current_dir.as_os_str().is_empty(),
-            "{:?}",
-            s.current_dir
-        );
+        assert!(!s.current_dir.as_os_str().is_empty(), "{:?}", s.current_dir);
         assert!(s.current_dir.is_dir(), "{:?}", s.current_dir);
         assert!(!s.entries.is_empty() || s.status_msg.is_some());
     }
@@ -1393,9 +1368,11 @@ mod tests {
         s.load_preview_content();
         let img = s.preview_image.as_ref().expect("image preview loads");
         // A gradient must produce real sextant glyphs, not just ▀/space.
-        assert!(img.rows.iter().flatten().any(|c| {
-            c.ch != '▀' && c.ch != ' ' && c.ch != '█'
-        }));
+        assert!(img
+            .rows
+            .iter()
+            .flatten()
+            .any(|c| { c.ch != '▀' && c.ch != ' ' && c.ch != '█' }));
         // Toggle to half blocks: only ▀/space remain.
         s.toggle_preview_mode();
         assert_eq!(s.preview_mode, crate::nfe::image::ImageMode::Half);
@@ -1498,7 +1475,8 @@ mod tests {
 
     #[cfg(feature = "image2doc")]
     #[test]
-    fn zoom_stops_step_and_clamp() {        let root = tree("zoomstops");
+    fn zoom_stops_step_and_clamp() {
+        let root = tree("zoomstops");
         write_gradient(&root.join("g.png"), 120, 90);
         let mut s = NfeState::new(Some(&root));
         s.backend_override = Some(crate::nfe::sixel::PixelBackend::Sextant);

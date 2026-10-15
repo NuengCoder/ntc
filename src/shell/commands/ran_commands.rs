@@ -2,7 +2,7 @@ use crate::navigator::Navigator;
 use crate::output::{print_error, print_success};
 use crate::ranfile::parser::{self, RANFILE_NAME, RANFILE_TEMPLATE};
 use crate::ranfile::runner::run_target;
-use crate::shell::alias::expand_command_line;
+use crate::shell::alias::expand_command_line_interactive;
 use crate::t;
 
 use anyhow::Result;
@@ -19,8 +19,11 @@ pub(crate) fn cmd_ran(args: &str, nav: &mut Navigator) -> Result<bool> {
         if let Some(rest) = trimmed.strip_prefix("run ") {
             return Ok(run_target_cmd(rest, path));
         }
-        // No "run " prefix → full ntc pipeline
-        let expanded = expand_command_line(cmd);
+        // No "run " prefix → full ntc pipeline (interactive selects allowed)
+        let expanded = match expand_command_line_interactive(cmd, nav)? {
+            None => return Ok(false),
+            Some(cmds) => cmds,
+        };
         for part in expanded {
             let lower = part.trim().to_lowercase();
             if lower.starts_with("ran ") || lower == "ran" {

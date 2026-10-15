@@ -8,9 +8,23 @@ const pkg = require('../package.json');
 const VERSION = pkg.version;
 const REPO = 'NuengCoder/ntc';
 
+function isAndroidTermux() {
+  // Node on Termux reports process.platform === 'linux', never 'android',
+  // so detect Android via release string, PREFIX env, or install path.
+  try {
+    const os = require('os');
+    if (/android/i.test(os.release() || '')) return true;
+  } catch {}
+  const prefix = process.env.PREFIX || '';
+  if (/termux|android/i.test(prefix)) return true;
+  if (/termux|android/i.test(__dirname)) return true;
+  return false;
+}
+
 function getPlatformInfo() {
   const platform = process.platform;
   const arch = process.arch;
+  const android = isAndroidTermux();
 
   const map = {
     'darwin-x64':     { file: `ntc-v${VERSION}-macos-x86_64.tar.gz`,    bin: 'ntc' },
@@ -19,13 +33,20 @@ function getPlatformInfo() {
     'win32-arm64':    { file: `ntc-v${VERSION}-windows-arm64.zip`,      bin: 'ntc.exe' },
     'linux-x64':      { file: `ntc-v${VERSION}-linux-x86_64.tar.gz`,    bin: 'ntc' },
     'linux-arm64':    { file: `ntc-v${VERSION}-linux-aarch64.tar.gz`,   bin: 'ntc' },
-    'android-arm64':  { file: `ntc-v${VERSION}-aarch64-linux-android.tar.gz`, bin: 'ntc' },
   };
+
+  // Termux (Android) uses its own asset; arch names follow Rust targets.
+  if (android && platform === 'linux') {
+    if (arch === 'arm64') return { file: `ntc-v${VERSION}-aarch64-linux-android.tar.gz`, bin: 'ntc' };
+    if (arch === 'x64')   return { file: `ntc-v${VERSION}-x86_64-linux-android.tar.gz`, bin: 'ntc' };
+    if (arch === 'arm')   return { file: `ntc-v${VERSION}-armv7-linux-androideabi.tar.gz`, bin: 'ntc' };
+    // Fall through to linux mapping so the 404 helper can explain.
+  }
 
   return map[`${platform}-${arch}`] || null;
 }
 
-async function download(url, destPath) {
+async function downloadOnce(url, destPath) {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), 120_000);
 
@@ -57,7 +78,32 @@ async function download(url, destPath) {
   if (len > 0) process.stdout.write('\n');
 
   const buffer = Buffer.concat(chunks.map(c => Buffer.from(c)));
+  if (len > 0 && buffer.length !== len) {
+    throw new Error(
+      `incomplete download for ${path.basename(destPath)} (got ${buffer.length} of ${len} bytes). ` +
+      `The connection may have dropped — retrying usually fixes this.`
+    );
+  }
   fs.writeFileSync(destPath, buffer);
+}
+
+async function download(url, destPath, retries = 3) {
+  let lastErr;
+  for (let attempt = 1; attempt <= retries; attempt++) {
+    try {
+      await downloadOnce(url, destPath);
+      return;
+    } catch (err) {
+      lastErr = err;
+      try { fs.rmSync(destPath, { force: true }); } catch {}
+      if (attempt < retries) {
+        const waitMs = attempt * 1500;
+        console.log(`ntc: download attempt ${attempt} failed (${err.message}), retrying in ${waitMs}ms...`);
+        await new Promise(r => setTimeout(r, waitMs));
+      }
+    }
+  }
+  throw lastErr;
 }
 
 // ---- Minimal tar parser (ustar, files + dirs) ----
@@ -149,6 +195,13 @@ function extractZip(buffer, destDir) {
 
   const entryCount = buffer.readUInt16LE(eocd + 10);
   const cdOffset = buffer.readUInt32LE(eocd + 16);
+  if (entryCount === 0xFFFF || cdOffset === 0xFFFFFFFF) {
+    throw new Error(
+      'this zip uses Zip64 (large-archive extension) which the pure-JS extractor does not support. ' +
+      'The release asset needs re-uploading without Zip64 (zip -X -9, no Zip64). ' +
+      'Workaround: install from source with `cargo install ntc`.'
+    );
+  }
 
   let ptr = cdOffset;
   let count = 0;
@@ -157,11 +210,22 @@ function extractZip(buffer, destDir) {
     if (ptr + 46 > buffer.length) throw new Error('truncated zip central directory');
     if (buffer.readUInt32LE(ptr) !== 0x02014b50) throw new Error('corrupt zip central directory');
     const method = buffer.readUInt16LE(ptr + 10);
-    const compSize = buffer.readUInt32LE(ptr + 24);
+    // Central-directory layout: comp size @ +20, uncomp size @ +24
+    // (see APPNOTE.TXT 4.3.12/13). A previous revision read +24 as the
+    // compressed size, overshooting dataEnd on deflated entries and
+    // producing bogus `truncated zip data` failures.
+    const compSize = buffer.readUInt32LE(ptr + 20);
+    const uncompSize = buffer.readUInt32LE(ptr + 24);
     const fileNameLen = buffer.readUInt16LE(ptr + 28);
     const extraLen = buffer.readUInt16LE(ptr + 30);
     const commentLen = buffer.readUInt16LE(ptr + 32);
     const localHeaderOffset = buffer.readUInt32LE(ptr + 42);
+    if (compSize === 0xFFFFFFFF || localHeaderOffset === 0xFFFFFFFF || uncompSize === 0xFFFFFFFF) {
+      throw new Error(
+        `Zip64 entry for ${ptr} is not supported by the pure-JS extractor. ` +
+        `The release asset needs re-uploading without Zip64.`
+      );
+    }
     const rawName = buffer.subarray(ptr + 46, ptr + 46 + fileNameLen).toString('utf8').replace(/\\/g, '/');
     ptr += 46 + fileNameLen + extraLen + commentLen;
 
@@ -178,7 +242,14 @@ function extractZip(buffer, destDir) {
     const lhExtraLen = buffer.readUInt16LE(localHeaderOffset + 28);
     const dataStart = localHeaderOffset + 30 + lhNameLen + lhExtraLen;
     const dataEnd = dataStart + compSize;
-    if (dataEnd > buffer.length) throw new Error(`truncated zip data for ${rawName}`);
+    if (dataEnd > buffer.length) {
+      throw new Error(
+        `truncated zip data for ${rawName} ` +
+        `(need bytes ${dataStart}..${dataEnd}, archive is ${buffer.length} bytes; ` +
+        `compSize=${compSize} uncompSize=${uncompSize}). ` +
+        `The download was likely cut short — try again, or install from source: cargo install ntc`
+      );
+    }
 
     const target = safeJoin(destDir, rawName.replace(/^\.\//, ''));
     fs.mkdirSync(path.dirname(target), { recursive: true });
@@ -227,6 +298,32 @@ function ensureExecutable(binaryPath) {
     console.error(`ntc: run: chmod +x "${binaryPath}"`);
     throw new Error('binary not executable after chmod');
   }
+}
+
+function printPathHint() {
+  // Print-only (never mutate shell rc from postinstall): tell the user how
+  // to put the npm global bin dir on PATH when `ntc` is not found.
+  try {
+    const { execSync } = require('child_process');
+    const prefix = execSync('npm prefix -g', { encoding: 'utf8' }).trim();
+    if (!prefix) return;
+    const binDir = process.platform === 'win32'
+      ? prefix
+      : path.join(prefix, 'bin');
+    const pathVar = process.env.PATH || '';
+    const needle = binDir.toLowerCase();
+    const onPath = pathVar.split(path.delimiter).some(p => p.toLowerCase() === needle);
+    if (onPath) return;
+    console.log(`ntc: the npm global bin dir is not on your PATH:`);
+    console.log(`ntc:   ${binDir}`);
+    if (process.platform === 'win32') {
+      console.log(`ntc: add it via Settings > System > About > Advanced system settings > Environment Variables,`);
+      console.log(`ntc: or in this shell: $env:Path += ";${binDir}"`);
+    } else {
+      console.log(`ntc: add it with: export PATH="${binDir}:$PATH"`);
+      console.log(`ntc: (append that line to ~/.bashrc or ~/.profile, then restart your shell)`);
+    }
+  } catch {}
 }
 
 function print404Help(info) {
@@ -295,6 +392,7 @@ async function main() {
     ensureExecutable(binaryPath);
 
     console.log(`ntc: installed to ${binaryPath}`);
+    printPathHint();
   } catch (err) {
     const msg = err.message || String(err);
     const status = err.httpStatus;
@@ -313,3 +411,14 @@ async function main() {
 if (require.main === module) {
   main();
 }
+
+// Exported for scripts/selftest.js (packager <-> extractor round-trip
+// regression tests). main() still only runs on direct execution.
+module.exports = {
+  downloadOnce,
+  download,
+  extractTar,
+  extractZip,
+  extractArchive,
+  getPlatformInfo,
+};

@@ -193,21 +193,40 @@ impl Editor {
                 } else {
                     0
                 };
+                // Duplicate file names get a `../rel/dir` suffix so same
+                // names from different directories are distinguishable.
+                // Unique names render bare as before.
+                let mut name_counts: std::collections::HashMap<String, usize> =
+                    std::collections::HashMap::new();
+                for (name, _, _, _) in &self.ff_results {
+                    *name_counts.entry(name.to_lowercase()).or_insert(0) += 1;
+                }
+                let root =
+                    std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from("."));
                 let end_idx = (start_idx + max_vis).min(self.ff_results.len());
                 for i in start_idx..end_idx {
                     let ri = content_top + 2 + (i - start_idx);
                     if ri >= content_top + rows {
                         break;
                     }
-                    let (ref name, _, _, _) = self.ff_results[i];
+                    let (ref name, ref path, _, _) = self.ff_results[i];
                     let is_selected = i == self.ff_idx;
-                    let display = if name.chars().count() > editor_cols.saturating_sub(4) {
-                        name.chars()
+                    let duplicated =
+                        name_counts.get(&name.to_lowercase()).copied().unwrap_or(0) > 1;
+                    let suffix =
+                        crate::editor::modes::finder::finder_dup_suffix(path, &root, duplicated);
+                    let full = if suffix.is_empty() {
+                        name.clone()
+                    } else {
+                        format!("{}  {}", name, suffix)
+                    };
+                    let display = if full.chars().count() > editor_cols.saturating_sub(4) {
+                        full.chars()
                             .take(editor_cols.saturating_sub(5))
                             .collect::<String>()
                             + "…"
                     } else {
-                        name.clone()
+                        full
                     };
                     if is_selected {
                         queue!(
@@ -336,7 +355,10 @@ impl Editor {
         Ok(())
     }
 
-    pub(crate) fn render_encoding_picker(&self, stdout: &mut std::io::Stdout) -> std::io::Result<()> {
+    pub(crate) fn render_encoding_picker(
+        &self,
+        stdout: &mut std::io::Stdout,
+    ) -> std::io::Result<()> {
         let theme = crate::utils::theme::ThemeManager::current();
         let content_top = 1;
         let cols = self.term_w;
@@ -383,7 +405,12 @@ impl Editor {
             let is_sel = i == self.encoding_sel;
             let is_current = *enc == current;
             let mark = if is_current { "●" } else { " " };
-            let line = format!(" {}  {}  {}", if is_sel { "▶" } else { " " }, mark, enc.label());
+            let line = format!(
+                " {}  {}  {}",
+                if is_sel { "▶" } else { " " },
+                mark,
+                enc.label()
+            );
             let fg = if is_sel {
                 theme.editor.sidebar_selected.to_crossterm()
             } else if is_current {
@@ -428,7 +455,11 @@ impl Editor {
             let content_y = 1;
             for i in 0..rows {
                 let idx = state.scroll + i;
-                queue!(stdout, MoveTo(0, (content_y + i) as u16), Clear(ClearType::UntilNewLine))?;
+                queue!(
+                    stdout,
+                    MoveTo(0, (content_y + i) as u16),
+                    Clear(ClearType::UntilNewLine)
+                )?;
                 if let Some(line) = state.lines.get(idx) {
                     let fg = if use_color && !line.is_empty() {
                         match line.as_bytes()[0] {
@@ -442,19 +473,17 @@ impl Editor {
                     };
                     let print_len = line.chars().count().min(cols);
                     let clipped: String = line.chars().take(print_len).collect();
-                    queue!(
-                        stdout,
-                        SetForegroundColor(fg),
-                        Print(&clipped),
-                        ResetColor,
-                    )?;
+                    queue!(stdout, SetForegroundColor(fg), Print(&clipped), ResetColor,)?;
                 }
             }
             let hint = format!(
                 "{} ({} lines) — {}",
                 t!("editor.git_quit_hint"),
                 state.lines.len(),
-                self.path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default(),
+                self.path
+                    .file_name()
+                    .map(|n| n.to_string_lossy().into_owned())
+                    .unwrap_or_default(),
             );
             queue!(
                 stdout,
@@ -712,24 +741,29 @@ impl Editor {
             use crate::editor::complete::{wrap_sig, Kind as CKind};
             let inner2 = BOX2_WIDTH - 2;
             let sel_item = &st.items[sel];
-            let sig_lines: Vec<String> = if sel_item.kind == CKind::Function
-                && !sel_item.sig_params.is_empty()
-            {
-                wrap_sig(&sel_item.name, &sel_item.return_type, &sel_item.sig_params, None, inner2, 5)
+            let sig_lines: Vec<String> =
+                if sel_item.kind == CKind::Function && !sel_item.sig_params.is_empty() {
+                    wrap_sig(
+                        &sel_item.name,
+                        &sel_item.return_type,
+                        &sel_item.sig_params,
+                        None,
+                        inner2,
+                        5,
+                    )
                     .into_iter()
-                    .map(|row| {
-                        row.segments
-                            .into_iter()
-                            .map(|(s, _)| s)
-                            .collect::<String>()
-                    })
+                    .map(|row| row.segments.into_iter().map(|(s, _)| s).collect::<String>())
                     .collect()
-            } else {
-                Vec::new()
-            };
+                } else {
+                    Vec::new()
+                };
             let b2 = if !sig_lines.is_empty() {
                 sig_lines.get(r).cloned().or_else(|| {
-                    sel_item.doc.lines().nth(r.saturating_sub(sig_lines.len())).map(|s| s.to_string())
+                    sel_item
+                        .doc
+                        .lines()
+                        .nth(r.saturating_sub(sig_lines.len()))
+                        .map(|s| s.to_string())
                 })
             } else if r == 0 {
                 Some(sel_item.detail.clone())

@@ -10,14 +10,14 @@ pub fn fill(m: &mut HashMap<String, String>) {
     m.insert("misc.mv.missing".into(), "mv: ຂາດ operand".into());
     m.insert("misc.mv.moved".into(), "ຍ້າຍ '{}' -> '{}' ແລ້ວ".into());
     m.insert("misc.mv.not_exist".into(), "mv: ບໍ່ພົບຕົ້ນທາງ: '{}'".into());
-    m.insert("misc.mv.usage".into(), "Usage: mv <src> <dst|@tp> [-f]".into());
+    m.insert("misc.mv.usage".into(), "Usage: mv <src|@tp> <dst|@tp> [-f]".into());
     m.insert("misc.cp.error".into(), "cp: {}".into());
     m.insert("misc.cp.exists".into(), "cp: ເປົ້າໝາຍມີຢູ່ແລ້ວ: '{}' (ໃຊ້ -f ເພື່ອຂຽນທັບ)".into());
     m.insert("misc.cp.missing".into(), "cp: ຂາດ operand".into());
     m.insert("misc.cp.copied".into(), "ສຳເນົາ '{}' -> '{}' ແລ້ວ".into());
     m.insert("misc.cp.not_exist".into(), "cp: ບໍ່ພົບຕົ້ນທາງ: '{}'".into());
     m.insert("misc.cp.same".into(), "cp: ຕົ້ນທາງແລະປາຍທາງແມ່ນໄຟລ໌ດຽວກັນ: '{}'".into());
-    m.insert("misc.cp.usage".into(), "Usage: cp <src> <dst|@tp> [-f]".into());
+    m.insert("misc.cp.usage".into(), "Usage: cp <src|@tp> <dst|@tp> [-f]".into());
     m.insert("misc.say.example1".into(), " say \"hello world\" --loop 5 -n # 5 ແຖວ".into());
     m.insert("misc.say.example2".into(), " say \"hello world\" --loop 3 -t # 1 ແຖວ, 3 ຄັ້ງ".into());
     m.insert("misc.say.loop_exceed".into(), "ຄ່າ --loop ເກີນສູງສຸດ ({}), ກຳລັງຈຳກັດ".into());
@@ -146,6 +146,9 @@ pub fn fill(m: &mut HashMap<String, String>) {
     m.insert("msg.showcg.label_watch_limit".into(), "Watch limit:".into());
 
     m.insert("msg.showcg.label_dir_view".into(), "Dir View:".into());
+    m.insert("msg.showcg.label_serve_files".into(), "Serve files:".into());
+    m.insert("msg.showcg.label_serve_http".into(), "Serve http:".into());
+    m.insert("msg.showcg.label_serve_chess".into(), "Serve chess:".into());
     m.insert("msg.showcg.title".into(), "ການຕັ້ງຄ່າປັດຈຸບັນ".into());
     m.insert("msg.size.bytes_label".into(), "Bytes:".into());
     m.insert("msg.size.human_label".into(), "Human:".into());

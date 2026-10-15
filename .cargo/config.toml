@@ -6,6 +6,9 @@ strip = true
 [target.x86_64-pc-windows-msvc]
 rustflags = ["-Ctarget-feature=+crt-static"]
 
+[target.x86_64-win7-windows-msvc]
+rustflags = ["-Ctarget-feature=+crt-static"]
+
 [target.'cfg(all(target_arch = "aarch64", target_env = "msvc"))']
 # Portable: linker only, no paths. Covers both aarch64-pc-windows-msvc
 # (packaging/build_win32.cmd) and the custom aarch64-win7-windows-msvc

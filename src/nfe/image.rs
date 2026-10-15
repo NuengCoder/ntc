@@ -52,7 +52,7 @@ pub enum ImageMode {
 /// U+258C/U+2590, {123456} is U+2588, so all three are reused here.
 /// Table generated from UnicodeData 16.0 — do not hand-edit.
 pub const SEXTANT_GLYPHS: [char; 64] = [
-    ' ', // 0b000000 blank
+    ' ',         // 0b000000 blank
     '\u{1fb00}', // 0b000001 1
     '\u{1fb01}', // 0b000010 2
     '\u{1fb02}', // 0b000011 12
@@ -73,7 +73,7 @@ pub const SEXTANT_GLYPHS: [char; 64] = [
     '\u{1fb11}', // 0b010010 25
     '\u{1fb12}', // 0b010011 125
     '\u{1fb13}', // 0b010100 35
-    '\u{258c}', // 0b010101 left half block (no SEXTANT-135)
+    '\u{258c}',  // 0b010101 left half block (no SEXTANT-135)
     '\u{1fb14}', // 0b010110 235
     '\u{1fb15}', // 0b010111 1235
     '\u{1fb16}', // 0b011000 45
@@ -94,7 +94,7 @@ pub const SEXTANT_GLYPHS: [char; 64] = [
     '\u{1fb25}', // 0b100111 1236
     '\u{1fb26}', // 0b101000 46
     '\u{1fb27}', // 0b101001 146
-    '\u{2590}', // 0b101010 right half block (no SEXTANT-246)
+    '\u{2590}',  // 0b101010 right half block (no SEXTANT-246)
     '\u{1fb28}', // 0b101011 1246
     '\u{1fb29}', // 0b101100 346
     '\u{1fb2a}', // 0b101101 1346
@@ -115,7 +115,7 @@ pub const SEXTANT_GLYPHS: [char; 64] = [
     '\u{1fb39}', // 0b111100 3456
     '\u{1fb3a}', // 0b111101 13456
     '\u{1fb3b}', // 0b111110 23456
-    '\u{2588}', // 0b111111 full block (no all-on sextant)
+    '\u{2588}',  // 0b111111 full block (no all-on sextant)
 ];
 
 /// A decoded preview grid plus the source dimensions for the header line.
@@ -265,11 +265,7 @@ pub fn sextant_cell(samples: [(u8, u8, u8); 6], ax: u32, ay: u32) -> ImageCell {
     // Dither can split an exactly-solid fill into a patterned mask;
     // collapse it back to a space cell (identical pixels, less noise).
     if fg == bg {
-        return ImageCell {
-            ch: ' ',
-            fg,
-            bg,
-        };
+        return ImageCell { ch: ' ', fg, bg };
     }
     ImageCell {
         ch: SEXTANT_GLYPHS[mask as usize],
@@ -283,11 +279,7 @@ pub fn sextant_cell(samples: [(u8, u8, u8); 6], ax: u32, ay: u32) -> ImageCell {
 #[cfg(feature = "image2doc")]
 pub fn load_sextants(path: &Path, cols: usize, rows: usize) -> anyhow::Result<ImagePreview> {
     let (gw, gh) = grid_for_panel(cols, rows);
-    if gw
-        .saturating_mul(2)
-        .saturating_mul(gh.saturating_mul(3))
-        > MAX_SAMPLE_PIXELS
-    {
+    if gw.saturating_mul(2).saturating_mul(gh.saturating_mul(3)) > MAX_SAMPLE_PIXELS {
         anyhow::bail!("image preview too large for panel");
     }
     let rgb = decode_rgb(path)?;
@@ -466,18 +458,10 @@ mod tests {
     #[test]
     fn ext_detection() {
         for ext in ["jpg", "JPG", "jpeg", "png", "bmp", "ico", "gif", "webp"] {
-            assert!(
-                is_image_file(Path::new(&format!("a.{}", ext))),
-                "{}",
-                ext
-            );
+            assert!(is_image_file(Path::new(&format!("a.{}", ext))), "{}", ext);
         }
         for ext in ["txt", "rs", "mq5", "mp3", "svg", ""] {
-            assert!(
-                !is_image_file(Path::new(&format!("a.{}", ext))),
-                "{}",
-                ext
-            );
+            assert!(!is_image_file(Path::new(&format!("a.{}", ext))), "{}", ext);
         }
         assert!(!is_image_file(Path::new("noext")));
     }

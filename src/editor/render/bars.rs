@@ -237,7 +237,8 @@ impl Editor {
             let total = self.lines.len();
             let git_frag = if crate::config::Config::global_get_git_integration_enabled() {
                 crate::utils::git::prompt_fragment(
-                    &self.path
+                    &self
+                        .path
                         .parent()
                         .map(|p| p.to_path_buf())
                         .unwrap_or_else(|| std::path::PathBuf::from(".")),
@@ -413,7 +414,17 @@ impl Editor {
                     }
                 }
                 Mode::Normal => {
-                    if let Some(ref msg) = self.status_msg {
+                    if let Some(kind) = self.create_kind {
+                        (
+                            String::new(),
+                            format!(
+                                " {} {}  {}",
+                                kind.prompt_label(),
+                                self.create_buf,
+                                t!("editor.hint_create_actions")
+                            ),
+                        )
+                    } else if let Some(ref msg) = self.status_msg {
                         (format!(" ✦ {}  │", msg), t!("editor.hint_normal_msg"))
                     } else {
                         (String::new(), t!("editor.hint_normal"))
@@ -536,10 +547,7 @@ impl Editor {
                     (String::new(), hint)
                 }
                 Mode::Nfe => match &self.nfe_cmd {
-                    Some(buf) => (
-                        format!(" nfe:{} ", buf),
-                        t!("editor.hint_nfe_cmd_actions"),
-                    ),
+                    Some(buf) => (format!(" nfe:{} ", buf), t!("editor.hint_nfe_cmd_actions")),
                     None => (String::new(), t!("editor.hint_nfe")),
                 },
             },

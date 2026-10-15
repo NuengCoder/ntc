@@ -364,11 +364,7 @@ impl Drop for TerminalGuard {
     }
 }
 
-pub fn run_gs_interactive(
-    matches: Vec<ContentMatch>,
-    root: &Path,
-    pattern: &str,
-) -> Result<bool> {
+pub fn run_gs_interactive(matches: Vec<ContentMatch>, root: &Path, pattern: &str) -> Result<bool> {
     if matches.is_empty() {
         print_info(&t!("cmd.gs.no_matches"));
         return Ok(false);
@@ -423,7 +419,8 @@ pub fn run_gs_interactive(
                             let pat = gs.pattern.clone();
                             drop(_guard);
                             // Flag editor to center + transiently highlight target line.
-                            crate::editor::GOTO_HIGHLIGHT.store(true, std::sync::atomic::Ordering::SeqCst);
+                            crate::editor::GOTO_HIGHLIGHT
+                                .store(true, std::sync::atomic::Ordering::SeqCst);
                             crate::editor::set_goto_pattern(&pat);
                             // Open ntcEditor at the file and line
                             crate::shell::commands::misc::cmd_ne(

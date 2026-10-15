@@ -136,9 +136,15 @@ impl ThemeManager {
             *current = theme.clone();
             Self::save_current(name);
             THEME_CHANGED.store(true, Ordering::Release);
-            #[cfg(not(target_os = "android"))]
+            // Must run on every OS (including Android/Termux) so the
+            // `colored` crate paths (welcome, Path:, gosc panels) stay
+            // in sync with `setc`. The raw-ANSI tree path uses
+            // `ansi_enabled()` and does not depend on this, but keeping
+            // both in sync avoids half-colored output.
             {
-                colored::control::set_override(crate::config::Config::global_get_color_enabled());
+                let enabled = crate::config::Config::global_get_color_enabled()
+                    && crate::utils::terminal::detect().color;
+                colored::control::set_override(enabled);
             }
             true
         } else {
@@ -565,40 +571,27 @@ struct ThemeConfig {
 // Convenience macro for shell coloring
 // ============================================================================
 
-/// Apply shell theme color to a string using the colored crate.
-/// Example: `ntc_shell_color!("hello", shell.success)`
+/// Apply shell theme color (unified raw-ANSI: identical on every OS,
+/// plain when `setc OFF` / `NO_COLOR` / `TERM=dumb`).
+/// Example: `ntc_shell_color!("hello", success)`
 #[macro_export]
 macro_rules! ntc_shell_color {
     ($str:expr, $field:ident) => {{
-        #[cfg(not(target_os = "android"))]
-        {
-            use colored::Colorize;
-            let _theme = $crate::utils::theme::ThemeManager::current();
-            $str.color(_theme.shell.$field.to_colored())
-        }
-        #[cfg(target_os = "android")]
-        {
-            let _theme = $crate::utils::theme::ThemeManager::current();
-            format!("{}{}\x1b[0m", _theme.shell.$field.to_ansi_fg(), $str)
-        }
+        let _theme = $crate::utils::theme::ThemeManager::current();
+        let _c = _theme.shell.$field.clone();
+        drop(_theme);
+        _c.paint_ansi($str)
     }};
 }
 
-// Legacy themed! macro, kept for compatibility
+// Legacy themed! macro, kept for compatibility (now unified raw-ANSI).
 #[macro_export]
 macro_rules! themed {
     ($str:expr, $color:expr) => {{
         let _theme = $crate::utils::theme::ThemeManager::current();
-        let _color = $color(&_theme.shell);
-        #[cfg(not(target_os = "android"))]
-        {
-            use colored::Colorize;
-            $str.color(_color.to_colored())
-        }
-        #[cfg(target_os = "android")]
-        {
-            format!("{}{}\x1b[0m", _color.to_ansi_fg(), $str)
-        }
+        let _c = $color(&_theme.shell).clone();
+        drop(_theme);
+        _c.paint_ansi($str)
     }};
 }
 

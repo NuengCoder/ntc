@@ -105,8 +105,8 @@ impl Editor {
     /// Bare words matching these always dispatch as commands, so the
     /// leading `/` is optional everywhere.
     const RESERVED_VERBS: &[&str] = &[
-        "s", "l", "sa", "sal", "sl", "rp", "c", "cs", "add", "set", "upper", "lower",
-        "undo", "redo", "exit", "quit", "help", "qal",
+        "s", "l", "sa", "sal", "sl", "rp", "c", "cs", "add", "rm", "set", "z", "upper", "up",
+        "lower", "low", "undo", "redo", "exit", "quit", "help", "qal",
     ];
 
     fn exec_one(&mut self, cmd: &str) -> bool {
@@ -173,16 +173,24 @@ impl Editor {
                 self.redo();
                 true
             }
-            "upper" => {
+            "upper" | "up" => {
                 self.cmd_upper_lower(true);
                 true
             }
-            "lower" => {
+            "lower" | "low" => {
                 self.cmd_upper_lower(false);
+                true
+            }
+            "z" => {
+                self.cmd_add_cursors(args);
                 true
             }
             "add" => {
                 self.cmd_add(args);
+                true
+            }
+            "rm" => {
+                self.cmd_rm(args);
                 true
             }
             "set" => {
@@ -369,10 +377,16 @@ impl Editor {
             if sy == ey && sy == self.cursor.y {
                 (ey, eb.min(self.lines[ey].len()))
             } else {
-                (self.cursor.y, self.cursor.byte.min(self.lines[self.cursor.y].len()))
+                (
+                    self.cursor.y,
+                    self.cursor.byte.min(self.lines[self.cursor.y].len()),
+                )
             }
         } else {
-            (self.cursor.y, self.cursor.byte.min(self.lines[self.cursor.y].len()))
+            (
+                self.cursor.y,
+                self.cursor.byte.min(self.lines[self.cursor.y].len()),
+            )
         };
 
         // Current line from start, then lines below, then wrap to the top.
@@ -777,6 +791,67 @@ impl Editor {
         self.status_msg = Some(t!("editor.query_added_text", row_end - row_start + 1));
     }
 
+    /// `/rm <text> from #start|#hm` / `/rm <text> from #end`: exact inverse
+    /// of `/add`. Strips one anchored occurrence per selected line (prefix
+    /// for #start/#hm, suffix for #end); non-matching lines are skipped.
+    /// Case-sensitive and literal. Selection is required; undo-able.
+    fn cmd_rm(&mut self, args: &str) {
+        let args = args.trim();
+        if args.is_empty() {
+            self.status_msg = Some(t!("editor.query_rm_usage"));
+            return;
+        }
+        let sep = " from ";
+        let pos = match args.rfind(sep) {
+            Some(p) => p,
+            None => {
+                self.status_msg = Some(t!("editor.query_rm_format"));
+                return;
+            }
+        };
+        let text = &args[..pos];
+        let target = args[pos + sep.len()..].trim();
+        if text.is_empty() || target.is_empty() {
+            self.status_msg = Some(t!("editor.query_rm_format"));
+            return;
+        }
+
+        let is_end = target.eq_ignore_ascii_case("#end");
+        let is_start = target.eq_ignore_ascii_case("#start") || target.eq_ignore_ascii_case("#hm");
+        if !is_end && !is_start {
+            self.status_msg = Some(t!("editor.query_add_position"));
+            return;
+        }
+
+        if !self.has_selection() {
+            self.status_msg = Some(t!("editor.query_selection_required"));
+            return;
+        }
+        let (ay, ab) = self.cursor.selection_anchor.unwrap();
+        let ((sy, _), (ey, _)) = sel_range(self.cursor.y, self.cursor.byte, ay, ab);
+        let (row_start, row_end) = (sy, ey);
+
+        self.snapshot();
+        let mut removed = 0usize;
+        for li in row_start..=row_end {
+            let stripped: Option<String> = if is_end {
+                self.lines[li].strip_suffix(text).map(|s| s.to_string())
+            } else {
+                self.lines[li].strip_prefix(text).map(|s| s.to_string())
+            };
+            if let Some(next) = stripped {
+                self.lines[li] = next;
+                self.syntax.invalidate_line(li);
+                self.mark_dirty(li);
+                removed += 1;
+            }
+        }
+        self.modified = true;
+        self.search.mark_dirty();
+        let skipped = (row_end - row_start + 1).saturating_sub(removed);
+        self.status_msg = Some(t!("editor.query_removed_text", removed, skipped));
+    }
+
     fn cmd_set(&mut self, args: &str) {
         let args = args.trim();
         if args.is_empty() {
@@ -867,6 +942,71 @@ impl Editor {
         self.modified = true;
         self.search.mark_dirty();
         self.status_msg = Some(t!("editor.query_set_alignment", matches.len()));
+    }
+
+    /// `/z [#hm|#end|#start]`: add one cursor per selected line at the
+    /// given column (#hm = first non-blank = default, #end = EOL,
+    /// #start = col 0), then enter Insert mode so typing hits every
+    /// cursor. Without a selection, adds a cursor at #hm of the current
+    /// line. Cursor-only: no undo entry.
+    fn cmd_add_cursors(&mut self, args: &str) {
+        let target = args.trim().to_lowercase();
+        enum Pos {
+            Hm,
+            End,
+            Start,
+        }
+        let pos = match target.as_str() {
+            "" | "#hm" => Pos::Hm,
+            "#end" => Pos::End,
+            "#start" => Pos::Start,
+            _ => {
+                self.status_msg = Some(t!("editor.query_z_usage"));
+                return;
+            }
+        };
+        let rows: Vec<usize> = if self.has_selection() {
+            let (ay, ab) = self.cursor.selection_anchor.unwrap();
+            let ((sy, _), (ey, _)) = sel_range(self.cursor.y, self.cursor.byte, ay, ab);
+            (sy..=ey).collect()
+        } else {
+            vec![self.cursor.y]
+        };
+        let cols: Vec<usize> = rows
+            .iter()
+            .map(|&row| {
+                let line = &self.lines[row];
+                let c = match pos {
+                    Pos::Start => 0,
+                    Pos::End => line.len(),
+                    Pos::Hm => line
+                        .char_indices()
+                        .find(|(_, c)| !c.is_whitespace())
+                        .map(|(b, _)| b)
+                        .unwrap_or(0),
+                };
+                c.min(line.len())
+            })
+            .collect();
+        self.clear_extra_cursors();
+        let first = rows[0];
+        self.cursor.y = first;
+        self.cursor.byte = cols[0];
+        self.cursor.selection_anchor = Some((first, cols[0]));
+        for (i, &row) in rows.iter().enumerate().skip(1) {
+            let c = cols[i];
+            self.cursor.extra_cursors.push(crate::editor::CursorPos {
+                y: row,
+                byte: c,
+                anchor: Some((row, c)),
+            });
+        }
+        self.mark_all_dirty();
+        self.status_msg = Some(t!("editor.query_cursors_added", rows.len()));
+        // Land in Insert with the fresh cursors so typing makes sense.
+        self.mode = Mode::Insert;
+        self.completion = None;
+        self.sighelp = None;
     }
 
     fn cmd_upper_lower(&mut self, is_upper: bool) {
@@ -998,12 +1138,16 @@ mod tests {
         assert!(editor.exec_one("/s \"foo\""));
         assert!(editor.status_msg.is_some());
         // Typing the next command clears the previous result.
-        editor.handle_query_event(press(KeyCode::Char('/'))).unwrap();
+        editor
+            .handle_query_event(press(KeyCode::Char('/')))
+            .unwrap();
         assert!(editor.status_msg.is_none());
         // ... as does Backspace.
         assert!(editor.exec_one("/s \"foo\""));
         assert!(editor.status_msg.is_some());
-        editor.handle_query_event(press(KeyCode::Backspace)).unwrap();
+        editor
+            .handle_query_event(press(KeyCode::Backspace))
+            .unwrap();
         assert!(editor.status_msg.is_none());
         // ... and Esc clears it so Normal inherits nothing stale.
         assert!(editor.exec_one("/s \"foo\""));
@@ -1203,7 +1347,7 @@ mod tests {
     fn qal_add_rejects_reserved_and_duplicates() {
         let mut editor = test_editor(&["x"]);
         // Reserved: the verb set + `qal` itself.
-        for name in ["qal", "s", "sl", "rp", "c", "add", "S"] {
+        for name in ["qal", "s", "sl", "rp", "c", "add", "rm", "S"] {
             editor.cmd_qal(&format!("add {} /sal", name));
             assert!(
                 !editor.qal_aliases.contains_key(name),
@@ -1250,6 +1394,142 @@ mod tests {
         assert!(Editor::split_args("").is_empty());
         assert_eq!(Editor::unquote("\"hi\""), "hi");
         assert_eq!(Editor::unquote("hi"), "hi");
+    }
+
+    #[test]
+    fn rm_requires_selection() {
+        let mut editor = test_editor(&["# ab", "# cd"]);
+        editor.cmd_rm("#  from #hm");
+        assert_eq!(editor.lines, vec!["# ab".to_string(), "# cd".to_string()]);
+        assert!(editor.status_msg.is_some());
+    }
+
+    #[test]
+    fn rm_strips_prefix_and_hm_alias() {
+        let mut editor = test_editor(&["# def foo(a):", "#     do_something()", "plain"]);
+        // Select rows 0..=1 only (multi-line range like /sl 1 2).
+        editor.cmd_select_lines_new("1 2");
+        editor.cmd_rm("#  from #hm");
+        assert_eq!(editor.lines[0], "def foo(a):");
+        assert_eq!(editor.lines[1], "    do_something()");
+        assert_eq!(editor.lines[2], "plain");
+        // #start behaves the same as #hm.
+        let mut editor = test_editor(&["# x", "y"]);
+        editor.cmd_select_lines_new("1 2");
+        editor.cmd_rm("#  from #start");
+        assert_eq!(editor.lines[0], "x");
+        assert_eq!(editor.lines[1], "y");
+    }
+
+    #[test]
+    fn rm_strips_suffix_once_and_skips_nonmatching() {
+        let mut editor = test_editor(&["x;;", "y", "z;;extra"]);
+        editor.cmd_select_lines_new("1 3");
+        editor.cmd_rm(";; from #end");
+        assert_eq!(editor.lines[0], "x");
+        assert_eq!(editor.lines[1], "y");
+        assert_eq!(editor.lines[2], "z;;extra");
+        assert!(editor.status_msg.is_some());
+    }
+
+    #[test]
+    fn rm_roundtrips_add_and_undo_restores() {
+        let mut editor = test_editor(&["def foo(a):", "    do_something()"]);
+        editor.cmd_select_lines_new("1 2");
+        editor.cmd_add("#  to #hm");
+        assert_eq!(editor.lines[0], "# def foo(a):");
+        editor.cmd_rm("#  from #hm");
+        assert_eq!(editor.lines[0], "def foo(a):");
+        assert_eq!(editor.lines[1], "    do_something()");
+        editor.undo();
+        assert_eq!(editor.lines[0], "# def foo(a):");
+    }
+
+    #[test]
+    fn rm_usage_errors() {
+        let mut editor = test_editor(&["# ab"]);
+        editor.cmd_select_lines_new("1");
+        editor.cmd_rm("");
+        assert_eq!(editor.lines[0], "# ab");
+        editor.cmd_rm("#  to #hm");
+        assert_eq!(editor.lines[0], "# ab");
+        editor.cmd_rm(" from #hm");
+        assert_eq!(editor.lines[0], "# ab");
+        editor.cmd_rm("#  from #mid");
+        assert_eq!(editor.lines[0], "# ab");
+        // Case-sensitive: lowercase prefix does not match uppercase line.
+        let mut editor = test_editor(&["# AB"]);
+        editor.cmd_select_lines_new("1");
+        editor.cmd_rm("# ab from #hm");
+        assert_eq!(editor.lines[0], "# AB");
+    }
+
+    #[test]
+    fn z_adds_cursor_per_selected_line() {
+        let mut editor = test_editor(&["  ab", "    cd", "ef"]);
+        editor.cmd_select_lines_new("1 3");
+        editor.cmd_add_cursors("#hm");
+        assert_eq!(editor.cursor.extra_cursors.len(), 2);
+        assert_eq!(editor.mode, Mode::Insert);
+        // #hm = first non-blank: row 0 col 2, row 1 col 4, row 2 col 0.
+        assert_eq!((editor.cursor.y, editor.cursor.byte), (0, 2));
+        let extras = &editor.cursor.extra_cursors;
+        assert_eq!((extras[0].y, extras[0].byte), (1, 4));
+        assert_eq!((extras[1].y, extras[1].byte), (2, 0));
+    }
+
+    #[test]
+    fn z_positions_end_start_and_default() {
+        let mut editor = test_editor(&["  ab", "cd"]);
+        editor.cmd_select_lines_new("1 2");
+        editor.cmd_add_cursors("#end");
+        assert_eq!((editor.cursor.y, editor.cursor.byte), (0, 4));
+        assert_eq!(editor.cursor.extra_cursors[0].byte, 2);
+        editor.cmd_select_lines_new("1 2");
+        editor.cmd_add_cursors("#start");
+        assert_eq!(editor.cursor.byte, 0);
+        assert_eq!(editor.cursor.extra_cursors[0].byte, 0);
+        // Bare /z defaults to #hm.
+        editor.cmd_select_lines_new("1");
+        editor.cmd_add_cursors("");
+        assert_eq!((editor.cursor.y, editor.cursor.byte), (0, 2));
+        // Bad position shows usage and adds nothing.
+        let mut editor = test_editor(&["ab"]);
+        editor.cmd_select_lines_new("1");
+        editor.cmd_add_cursors("#mid");
+        assert!(editor.cursor.extra_cursors.is_empty());
+        assert!(editor.status_msg.is_some());
+    }
+
+    #[test]
+    fn z_standalone_uses_current_line() {
+        let mut editor = test_editor(&["  ab", "cd"]);
+        editor.cursor.y = 1;
+        editor.cursor.byte = 0;
+        assert!(editor.exec_one("/z"));
+        assert_eq!((editor.cursor.y, editor.cursor.byte), (1, 0));
+        assert!(editor.cursor.extra_cursors.is_empty());
+    }
+
+    #[test]
+    fn up_low_alias_upper_lower() {
+        let mut editor = test_editor(&["ab"]);
+        select_line(&mut editor, 0);
+        assert!(editor.exec_one("/up"));
+        assert_eq!(editor.lines[0], "AB");
+        assert!(editor.exec_one("/low"));
+        assert_eq!(editor.lines[0], "ab");
+        assert!(editor.exec_one("/upper"));
+        assert_eq!(editor.lines[0], "AB");
+        assert!(editor.exec_one("/lower"));
+        assert_eq!(editor.lines[0], "ab");
+        // Reserved: cannot become qal aliases.
+        editor.cmd_qal("add up /sal");
+        assert!(!editor.qal_aliases.contains_key("up"));
+        editor.cmd_qal("add low /sal");
+        assert!(!editor.qal_aliases.contains_key("low"));
+        editor.cmd_qal("add z /sal");
+        assert!(!editor.qal_aliases.contains_key("z"));
     }
 
     #[test]

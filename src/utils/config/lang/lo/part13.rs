@@ -33,7 +33,11 @@ pub fn fill(m: &mut HashMap<String, String>) {
     m.insert("help.scan.example4".into(), "scan port 192.168.1.1 --top 10 ## ສະແກນ 10 ports ແລກ".into());
 
     m.insert("help.scan.example5".into(), "scan ip 192.168.1.0/24 ## sweep ຫາ hosts ທີ່ alive".into());
+    m.insert("help.scan.example6".into(), "scan files *.rs ## ສະແດງໄຟລ໌ຕາມຊື່".into());
+    m.insert("help.scan.example7".into(), "scan dir k* ## ສະແດງໄດເຣັກທໍຣີຕາມຊື່".into());
     m.insert("help.scan.ext".into(), "scan ext <ນາມສະກຸນ...> ## ສະແດງໄຟລ໌ຕາມນາມສະກຸນ (ບໍ່ນັບແຖວ)".into());
+    m.insert("help.scan.files".into(), "scan files [ແບບ] ## ສະແດງໄຟລ໌ຕາມຊື່ (* = ທັງໝົດ)".into());
+    m.insert("help.scan.dir".into(), "scan dir [ແບບ] ## ສະແດງໄດເຣັກທໍຣີຕາມຊື່ (* = ທັງໝົດ)".into());
 
     m.insert("help.scan.port".into(), "scan port [host] [--top N | --ports <spec> | --all] ## ສະແກນ TCP port".into());
 
@@ -64,11 +68,16 @@ pub fn fill(m: &mut HashMap<String, String>) {
     m.insert("help.view.care".into(), "view --care ## ສະແດງ tree ກັບ care ທຸກຢ່າງ".into());
     m.insert("help.view.cp".into(), "view -c, --cp ## ສະແດງ tree ແລະ ສຳເນົາໃສ່ clipboard".into());
     m.insert("help.view.depth".into(), "view -d, --depth <n> ## ສະແດງ tree ດ້ວຍຄວາມເລິກທີ່ກຳນົດ".into());
-    m.insert("help.view.dirsize".into(), "view -ds, --dirsize ## ສະແດງ tree ດ້ວຍຂະໜາດໄດເຣັກທໍຣີເທົ່ານັ້ນ".into());
+    m.insert("help.view.dirsize".into(), "view -ds, --dirsize [ຂະໜາດຂັ້ນຕ່ຳ] ## ສະແດງຂະໜາດ dir; ໃສ່ຄ່າຈະຊ່ອນທີ່ນ້ອຍກວ່າ".into());
+    m.insert("help.view.head".into(), "view --head <n> ## ສະແດງພຽງ n ແຖວທຳອິດຂອງ tree".into());
+    m.insert("help.view.tail".into(), "view --tail <n> ## ສະແດງພຽງ n ແຖວສຸດທ້າຍຂອງ tree".into());
+    m.insert("help.view.sort".into(), "view --sort size|char|ext ## ຮຽງລູກ (dir ຢູ່ກ່ອນ)".into());
+    m.insert("cmd.report.invalid_sort".into(), "Invalid sort key: '{}' (size|char|ext)".into());
+    m.insert("cmd.report.invalid_count".into(), "Invalid line count: '{}' (must be > 0)".into());
     m.insert("help.view.ext".into(), "view -ext, --ext <ນามສະກຸນ...> ## ສະແດງ tree ສະເພາະນามສະກຸນທີ່ກົງກັນ".into());
-    m.insert("help.view.filesize".into(), "view -fs, --filesize ## ສະແດງ tree ດ້ວຍຂະໜາດໄຟລ໌ເທົ່ານັ້ນ".into());
+    m.insert("help.view.filesize".into(), "view -fs, --filesize [ຂະໜາດຂັ້ນຕ່ຳ] ## ສະແດງຂະໜາດໄຟລ໌; ໃສ່ຄ່າຈະຊ່ອນທີ່ນ້ອຍກວ່າ".into());
     m.insert("help.view.path".into(), "view -p, --path <path|@tp> ## ສະແດງ tree ຂອງ path ຫຼື teleport savepoint ທີ່ລະບຸ".into());
-    m.insert("help.view.size".into(), "view -s, --size ## ສະແດງ tree ດ້ວຍຂະໜາດ dir ແລະ file".into());
+    m.insert("help.view.size".into(), "view -s, --size [ຂະໜາດຂັ້ນຕ່ຳ] ## ສະແດງຂະໜາດ; ໃສ່ຄ່າເຊັ່ນ 10KB ຈະຊ່ອນທີ່ນ້ອຍກວ່າ".into());
     m.insert("help.view.time".into(), "view --time, -t ## ສະແດງ tree ພ້ອມເວລາປະຕິບັດງານ".into());
     m.insert("help.view.title".into(), "ຄຳສັ່ງ VIEW:".into());
     m.insert("help.view.tree".into(), "view ## ສະແດງ directory tree (ໃຊ້ config depth)".into());
@@ -95,10 +104,11 @@ pub fn fill(m: &mut HashMap<String, String>) {
     m.insert("help.ran.example3".into(), "ran list ## ລາຍຊື່ targets ທັງໝົດ".into());
     m.insert("help.alias.example1".into(), "ral add build \"cargo build\" ## ສ້າງ alias ງ່າຍໆ".into());
     m.insert("help.alias.example2".into(), "ral add greet(x) \"echo Hello $x\" ## alias ແບບ parameterised".into());
-    m.insert("help.alias.example3".into(), "ral add copy(x) \"cp $x ${{x}}.bak\" ## alias ພ້ອມຄ່າເລີ່ມຕົ້ນ".into());
+    m.insert("help.alias.example3".into(), "ral add v \"view --care -t -d ${x:-1}\" ## alias ພ້ອມຄ່າເລີ່ມຕົ້ນ".into());
     m.insert("help.alias.example4".into(), "ral list ## ສະແດງ aliases ທັງໝົດ".into());
     m.insert("help.alias.example5".into(), "ral export --all myaliases ## ສົ່ງອອກ aliases".into());
     m.insert("help.alias.example6".into(), "build ## ເຮັດວຽກ alias ໂດຍກົງ".into());
+    m.insert("help.alias.example7".into(), "ral hintn add port [8080,5050] ## ລາຍການທີ່ຕັ້ງຊື່ໄວ້".into());
     m.insert("help.view.example1".into(), "view ## ສະແດງ directory tree".into());
     m.insert("help.view.example2".into(), "view --size ## ສະແດງ tree ພ້ອມຂະໜາດ".into());
     m.insert("help.view.example3".into(), "view -d 2 ## ສະແດງ tree ດ້ວຍຄວາມເລິກ 2".into());
@@ -106,9 +116,11 @@ pub fn fill(m: &mut HashMap<String, String>) {
     m.insert("help.view.example5".into(), "view --time ## ສະແດງ tree ພ້ອມເວລາປະຕິບັດງານ".into());
     m.insert("help.view.example6".into(), "view -p C:\\code\\project ## ສະແດງ tree ຂອງ path ທີ່ລະບຸ".into());
     m.insert("help.view.example7".into(), "view @web ## ສະແດງ tree ຂອງ teleport savepoint".into());
+    m.insert("help.view.example8".into(), "view -s 10MB ## ສະແດງສະເພາະໄຟລ໌/dir ຢ່າງໜ້ອຍ 10MB".into());
+    m.insert("help.view.example9".into(), "view --sort size --head 20 ## ຮຽງຕາມຂະໜາດສະແດງ 20 ແຖວທຳອິດ".into());
     m.insert("help.size.example1".into(), "size ## ສະແດງຂະໜາດໄດເຣັກທໍຣີປັດຈຸບັນ".into());
     m.insert("help.size.example2".into(), "size ../src ## ສະແດງຂະໜາດຂອງໄດເຣັກທໍຣີອື່ນ".into());
-    m.insert("help.size.example3".into(), "size -p C:\\code\\project ## ສະແດງຂະໜາດຂອງ path ທີ່ລະບຸ".into());
+    m.insert("help.size.example3".into(), "size Cargo.toml ## ສະແດງຂະໜາດຂອງໄຟລ໌".into());
     m.insert("help.size.example4".into(), "size @web --care -t ## ໂໝດ care ພ້ອມເວລາທີ່ໃຊ້ສຳລັບ savepoint".into());
     m.insert("help.report.example1".into(), "report txt ## ສ້າງບົດລາຍງານ TXT".into());
     m.insert("help.report.example2".into(), "report html --cp ## ສຳເນົາບົດລາຍງານ HTML ໃສ່ clipboard".into());
@@ -132,7 +144,7 @@ pub fn fill(m: &mut HashMap<String, String>) {
     m.insert("help.network.example3".into(), "dl https://example.com/file.zip --progress ## ດາວໂຫຼດພ້ອມ progress".into());
     m.insert("help.network.example4".into(), "ping google.com ## Ping google.com".into());
     m.insert("help.network.example5".into(), "dns example.com -t MX ## DNS MX record lookup".into());
-    m.insert("help.network.example6".into(), "serve 8080 ## ເລີ່ມ HTTP server ເທິງ port 8080".into());
+    m.insert("help.network.example6".into(), "serve files --port 8080 ## ເລີ່ມ file-drive server ເທິງ port 8080".into());
     m.insert("help.clipboard.example1".into(), "clip ## ສະແດງ clipboard history".into());
     m.insert("help.clipboard.example2".into(), "clip select 1 ## ສຳເນົາ entry #1 ກັບໃສ່ clipboard".into());
     m.insert("help.clipboard.example3".into(), "pathcp ## ສຳເນົາ path ໄດເຣັກທໍຣີປັດຈຸບັນ".into());

@@ -146,8 +146,7 @@ fn cmd_create(args: &[String], nav: &mut Navigator) -> Result<bool> {
     }
     let cwd = nav.current_path().to_path_buf();
     let out_arg = &args[0];
-    let kind = detect_kind(out_arg)
-        .ok_or_else(|| anyhow!("{}", t!("cmd.arc.bad_ext")))?;
+    let kind = detect_kind(out_arg).ok_or_else(|| anyhow!("{}", t!("cmd.arc.bad_ext")))?;
     let out = if Path::new(out_arg).is_absolute() {
         PathBuf::from(out_arg)
     } else {
@@ -168,7 +167,11 @@ fn cmd_create(args: &[String], nav: &mut Navigator) -> Result<bool> {
         ArcKind::TarGz => create_tar(&out, &files, &cwd, true)?,
         ArcKind::Tar => create_tar(&out, &files, &cwd, false)?,
     }
-    print_success(&t!("cmd.arc.created", out.display().to_string(), files.len()));
+    print_success(&t!(
+        "cmd.arc.created",
+        out.display().to_string(),
+        files.len()
+    ));
     Ok(false)
 }
 
@@ -389,7 +392,11 @@ mod tests {
         let mut archive = zip::ZipArchive::new(f).unwrap();
         assert_eq!(archive.len(), 1);
         let mut content = String::new();
-        archive.by_index(0).unwrap().read_to_string(&mut content).unwrap();
+        archive
+            .by_index(0)
+            .unwrap()
+            .read_to_string(&mut content)
+            .unwrap();
         assert_eq!(content, "hello arc");
     }
 

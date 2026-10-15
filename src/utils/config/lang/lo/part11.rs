@@ -47,6 +47,7 @@ pub fn fill(m: &mut HashMap<String, String>) {
     m.insert("help.alias.info".into(), "ral info <name> [--edit] ## ສະແດງລາຍລະອຽດ alias (--edit: ສຳເນົາຄຳສັ່ງແກ້ໄຂໃສ່ clipboard)".into());
     m.insert("help.alias.list".into(), "ral list ## ສະແດງ aliases ທັງໝົດ".into());
     m.insert("help.alias.make".into(), "ral make [name] ## ສ້າງ alias template ໃນ CWD".into());
+    m.insert("help.alias.hintn".into(), "ral hintn add|rm|rnm|info|ls ## ຈັດການລາຍການຄ່າທີ່ຕັ້ງຊື່ໄວ້".into());
     m.insert("help.alias.rm".into(), "ral rm <name>[, ...] ## ລຶບ alias".into());
     m.insert("help.alias.rnm".into(), "ral rnm <old> to <new> ## ປ່ຽນຊື່ alias".into());
     m.insert("help.alias.run".into(), "run <alias> ## ເຮັດວຽກ alias ດ້ວຍ 'run'".into());
@@ -132,14 +133,14 @@ pub fn fill(m: &mut HashMap<String, String>) {
     m.insert("help.explorer.hint5".into(), "q/Esc=quit, mouse=click/scroll".into());
     m.insert("help.explorer.launch".into(), "explorer, nfe [PATH] ## ເປີດ terminal file explorer ເຕັມຈໍ".into());
     m.insert("help.explorer.title".into(), "FILE EXPLORER (NFE):".into());
-    m.insert("help.fileops.cp".into(), "cp <src> <dst|@tp> [-f] ## ສຳເນົາໄຟລ໌ຫຼືໄດເຣັກທໍຣີ".into());
+    m.insert("help.fileops.cp".into(), "cp <src|@tp> <dst|@tp> [-f] ## ສຳເນົາໄຟລ໌ຫຼືໄດເຣັກທໍຣີ".into());
     m.insert("help.fileops.mkd".into(), "mkd <dir>[, ...] ## ສ້າງໄດເຣັກທໍຣີໃໝ່".into());
     m.insert("help.fileops.mkf".into(), "mkf <file>[, ...] ## ສ້າງໄຟລ໌ໃໝ່".into());
     m.insert("help.fileops.rmd".into(), "rmd <dir>[, ...] ## ລຶບໄດເຣັກທໍຣີ (ພ້ອມຢືນຢັນ)".into());
     m.insert("help.fileops.rmf".into(), "rmf <file>[, ...] ## ລຶບໄຟລ໌ (ພ້ອມຢືນຢັນ)".into());
     m.insert("help.fileops.rnmd".into(), "rnmd <old> <new> ## ປ່ຽນຊື່ໄດເຣັກທໍຣີ".into());
     m.insert("help.fileops.rnmf".into(), "rnmf <old> <new> ## ປ່ຽນຊື່ໄຟລ໌".into());
-    m.insert("help.fileops.mv".into(), "mv <src> <dst|@tp> [-f] ## ຍ້າຍ/ປ່ຽນຊື່ໄຟລ໌ຫຼືໄດເຣັກທໍຣີ".into());
+    m.insert("help.fileops.mv".into(), "mv <src|@tp> <dst|@tp> [-f] ## ຍ້າຍ/ປ່ຽນຊື່ໄຟລ໌ຫຼືໄດເຣັກທໍຣີ".into());
     m.insert("help.fileops.title".into(), "ການດຳເນີນການ FILE:".into());
     m.insert("help.fmt.json".into(), "fmt json <file> [to yaml|toml] ## ແປງ JSON ເປັນ YAML ຫຼື TOML".into());
     m.insert("help.fmt.output".into(), "(ເພີ່ມ -o <file> ເພື່ອບັນທຶກຜົນລັບ)".into());

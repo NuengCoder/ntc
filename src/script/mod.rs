@@ -59,9 +59,7 @@ pub(crate) fn list_scripts(cwd: &Path) -> Result<Vec<std::path::PathBuf>> {
     if let Ok(entries) = std::fs::read_dir(cwd) {
         for entry in entries.flatten() {
             let path = entry.path();
-            if path.is_file()
-                && path.extension().is_some_and(|e| e == SCRIPT_EXT)
-            {
+            if path.is_file() && path.extension().is_some_and(|e| e == SCRIPT_EXT) {
                 scripts.push(path);
             }
         }

@@ -1,6 +1,6 @@
 [package]
 name = "ntc"
-version = "2.4.4"
+version = "2.4.5"
 edition = "2021"
 description = "Navigate, Toolkit, Center - A Combine of Navigation , Project Toolkit Center hub"
 authors = ["NuengCoder"]
@@ -20,7 +20,6 @@ image2doc = ["dep:image"]
 ocr = []
 
 [dependencies]
-clap = { version = "4.5", features = ["derive"] }
 walkdir = "2.5"
 rustyline = "15.0"
 anyhow = "1.0"

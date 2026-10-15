@@ -17,6 +17,25 @@ mod tests {
     }
 
     #[test]
+    fn terminal_box_geometry() {
+        let mut editor = test_editor(&["one"]);
+        editor.term_h = 40;
+        editor.term_w = 100;
+        editor.sidebar.open = false;
+        let split = editor.run_split_row();
+        assert_eq!(split, 20);
+        let (top, left, right, bottom) = editor.terminal_box();
+        assert_eq!((top, left), (20, 0));
+        assert_eq!(right, 98);
+        // Box bottom stays above the cwd/status/hint bars.
+        assert!(bottom <= 40 - 4);
+        let (cols, rows) = editor.terminal_content_size();
+        assert_eq!(rows, editor.run_panel_height() - 1);
+        assert_eq!(cols, 100 - 0 - 3);
+        assert_eq!((cols, rows), (97, 15));
+    }
+
+    #[test]
     fn close_background_modified_tab_saves_file() {
         let dir = std::env::temp_dir().join("ntc_editor_test");
         let _ = std::fs::create_dir_all(&dir);
@@ -369,8 +388,7 @@ mod tests {
         assert_eq!(editor.find_tab_by_path(&p), Some(0));
         #[cfg(windows)]
         {
-            let prefixed =
-                std::path::PathBuf::from(format!(r"\\?\{}", p.display()));
+            let prefixed = std::path::PathBuf::from(format!(r"\\?\{}", p.display()));
             assert_eq!(editor.find_tab_by_path(&prefixed), Some(0));
         }
     }
@@ -433,31 +451,49 @@ mod tests {
         let mut editor = test_editor(&["one", "two"]);
         let mut out = stdout_sink();
         assert_eq!(editor.mode, Mode::Normal);
-        editor.handle_normal_event(press(KeyCode::Char('i')), &mut out).unwrap();
+        editor
+            .handle_normal_event(press(KeyCode::Char('i')), &mut out)
+            .unwrap();
         assert_eq!(editor.mode, Mode::Insert);
         editor.mode = Mode::Normal;
-        editor.handle_normal_event(press(KeyCode::Char('v')), &mut out).unwrap();
+        editor
+            .handle_normal_event(press(KeyCode::Char('v')), &mut out)
+            .unwrap();
         assert_eq!(editor.mode, Mode::Visual);
         editor.mode = Mode::Normal;
-        editor.handle_normal_event(press(KeyCode::Char(':')), &mut out).unwrap();
+        editor
+            .handle_normal_event(press(KeyCode::Char(':')), &mut out)
+            .unwrap();
         assert_eq!(editor.mode, Mode::Command);
         editor.mode = Mode::Normal;
-        editor.handle_normal_event(press(KeyCode::Char('?')), &mut out).unwrap();
+        editor
+            .handle_normal_event(press(KeyCode::Char('?')), &mut out)
+            .unwrap();
         assert_eq!(editor.mode, Mode::Help);
         editor.mode = Mode::Normal;
-        editor.handle_normal_event(press(KeyCode::Char('q')), &mut out).unwrap();
+        editor
+            .handle_normal_event(press(KeyCode::Char('q')), &mut out)
+            .unwrap();
         assert_eq!(editor.mode, Mode::Query);
         editor.mode = Mode::Normal;
-        editor.handle_normal_event(press(KeyCode::Char('f')), &mut out).unwrap();
+        editor
+            .handle_normal_event(press(KeyCode::Char('f')), &mut out)
+            .unwrap();
         assert_eq!(editor.mode, Mode::Search);
         editor.mode = Mode::Normal;
-        editor.handle_normal_event(press(KeyCode::Char('b')), &mut out).unwrap();
+        editor
+            .handle_normal_event(press(KeyCode::Char('b')), &mut out)
+            .unwrap();
         assert_eq!(editor.mode, Mode::FileFinder);
         editor.mode = Mode::Normal;
-        editor.handle_normal_event(press(KeyCode::Char('g')), &mut out).unwrap();
+        editor
+            .handle_normal_event(press(KeyCode::Char('g')), &mut out)
+            .unwrap();
         assert_eq!(editor.mode, Mode::Gmode);
         editor.mode = Mode::Normal;
-        editor.handle_normal_event(press(KeyCode::Char('u')), &mut out).unwrap();
+        editor
+            .handle_normal_event(press(KeyCode::Char('u')), &mut out)
+            .unwrap();
         assert_eq!(editor.mode, Mode::Encoding);
     }
 
@@ -466,47 +502,33 @@ mod tests {
         let mut editor = test_editor(&["ab", "cde", "f"]);
         let mut out = stdout_sink();
         // down: j/J/Down (s is save in Normal); up: k/w/Up
-        for code in [
-            KeyCode::Char('j'),
-            KeyCode::Char('J'),
-            KeyCode::Down,
-        ] {
+        for code in [KeyCode::Char('j'), KeyCode::Char('J'), KeyCode::Down] {
             editor.cursor.y = 0;
             editor.handle_normal_event(press(code), &mut out).unwrap();
             assert_eq!(editor.cursor.y, 1);
         }
-        for code in [
-            KeyCode::Char('k'),
-            KeyCode::Char('w'),
-            KeyCode::Up,
-        ] {
+        for code in [KeyCode::Char('k'), KeyCode::Char('w'), KeyCode::Up] {
             editor.cursor.y = 1;
             editor.handle_normal_event(press(code), &mut out).unwrap();
             assert_eq!(editor.cursor.y, 0);
         }
         editor.cursor.byte = 0;
-        for code in [
-            KeyCode::Char('l'),
-            KeyCode::Char('d'),
-            KeyCode::Right,
-        ] {
+        for code in [KeyCode::Char('l'), KeyCode::Char('d'), KeyCode::Right] {
             editor.cursor.byte = 0;
             editor.handle_normal_event(press(code), &mut out).unwrap();
             assert_eq!(editor.cursor.byte, 1);
         }
         editor.cursor.byte = 1;
-        for code in [
-            KeyCode::Char('h'),
-            KeyCode::Char('a'),
-            KeyCode::Left,
-        ] {
+        for code in [KeyCode::Char('h'), KeyCode::Char('a'), KeyCode::Left] {
             editor.cursor.byte = 1;
             editor.handle_normal_event(press(code), &mut out).unwrap();
             assert_eq!(editor.cursor.byte, 0);
         }
         // typing-position keys never insert in Normal
         let before = editor.lines.clone();
-        editor.handle_normal_event(press(KeyCode::Char('z')), &mut out).unwrap();
+        editor
+            .handle_normal_event(press(KeyCode::Char('z')), &mut out)
+            .unwrap();
         assert_eq!(editor.lines, before);
         assert_eq!(editor.mode, Mode::Normal);
     }
@@ -525,7 +547,109 @@ mod tests {
     }
 
     #[test]
-    fn normal_n_saves_and_s_moves() {
+    fn insert_ctrl_remap() {
+        let mut editor = test_editor(&["one"]);
+        let mut out = stdout_sink();
+        // ctrl+e enters nfe (sidebar opens).
+        editor.mode = Mode::Insert;
+        editor
+            .handle_insert_event(
+                press_mod(KeyCode::Char('e'), KeyModifiers::CONTROL),
+                &mut out,
+            )
+            .unwrap();
+        assert_eq!(editor.mode, Mode::Nfe);
+        assert!(editor.sidebar.open);
+        // ctrl+g enters gmode.
+        editor.mode = Mode::Insert;
+        editor.sidebar.open = false;
+        editor
+            .handle_insert_event(
+                press_mod(KeyCode::Char('g'), KeyModifiers::CONTROL),
+                &mut out,
+            )
+            .unwrap();
+        assert_eq!(editor.mode, Mode::Gmode);
+        // ctrl+w enters visual.
+        editor.mode = Mode::Insert;
+        editor
+            .handle_insert_event(
+                press_mod(KeyCode::Char('w'), KeyModifiers::CONTROL),
+                &mut out,
+            )
+            .unwrap();
+        assert_eq!(editor.mode, Mode::Visual);
+        // ctrl+: and ctrl+; enter command mode.
+        for code in [KeyCode::Char(':'), KeyCode::Char(';')] {
+            editor.mode = Mode::Insert;
+            editor
+                .handle_insert_event(press_mod(code, KeyModifiers::CONTROL), &mut out)
+                .unwrap();
+            assert_eq!(editor.mode, Mode::Command);
+        }
+        // ctrl+j is a no-op in insert (Jump stays via Normal/Command).
+        editor.mode = Mode::Insert;
+        editor
+            .handle_insert_event(
+                press_mod(KeyCode::Char('j'), KeyModifiers::CONTROL),
+                &mut out,
+            )
+            .unwrap();
+        assert_eq!(editor.mode, Mode::Insert);
+    }
+
+    #[test]
+    fn gmode_i_v_e_switch_modes() {
+        let mut editor = test_editor(&["one"]);
+        let mut out = stdout_sink();
+        for (keys, want) in [
+            (vec!['i'], Mode::Insert),
+            (vec!['v'], Mode::Visual),
+        ] {
+            editor.mode = Mode::Gmode;
+            editor.prev_mode = Mode::Normal;
+            editor.gmode_buf.clear();
+            for c in keys {
+                editor
+                    .handle_gmode_event(press(KeyCode::Char(c)), &mut out)
+                    .unwrap();
+            }
+            editor
+                .handle_gmode_event(press(KeyCode::Enter), &mut out)
+                .unwrap();
+            assert_eq!(editor.mode, want);
+        }
+        // ge opens the sidebar explorer.
+        editor.mode = Mode::Gmode;
+        editor.prev_mode = Mode::Normal;
+        editor.sidebar.open = false;
+        editor.gmode_buf.clear();
+        editor
+            .handle_gmode_event(press(KeyCode::Char('e')), &mut out)
+            .unwrap();
+        editor
+            .handle_gmode_event(press(KeyCode::Enter), &mut out)
+            .unwrap();
+        assert_eq!(editor.mode, Mode::Nfe);
+        assert!(editor.sidebar.open);
+    }
+
+    #[test]
+    fn command_e_opens_nfe() {
+        let mut editor = test_editor(&["one"]);
+        let mut out = stdout_sink();
+        editor.mode = Mode::Command;
+        editor.sidebar.open = false;
+        editor.cmd_buf = "e".to_string();
+        editor
+            .handle_command_event(press(KeyCode::Enter), &mut out)
+            .unwrap();
+        assert_eq!(editor.mode, Mode::Nfe);
+        assert!(editor.sidebar.open);
+    }
+
+    #[test]
+    fn normal_x_saves_and_s_moves() {
         let dir = std::env::temp_dir().join("ntc_editor_test");
         let _ = std::fs::create_dir_all(&dir);
         let path = dir.join("nsave_test.txt");
@@ -534,28 +658,146 @@ mod tests {
         editor.lines = vec!["one".to_string(), "two".to_string()];
         editor.modified = true;
         let mut out = stdout_sink();
-        editor.handle_normal_event(press(KeyCode::Char('n')), &mut out).unwrap();
+        editor
+            .handle_normal_event(press(KeyCode::Char('x')), &mut out)
+            .unwrap();
         assert!(!editor.modified);
         assert_eq!(editor.mode, Mode::Normal);
         // s is motion now, not save
         editor.cursor.y = 0;
-        editor.handle_normal_event(press(KeyCode::Char('s')), &mut out).unwrap();
+        editor
+            .handle_normal_event(press(KeyCode::Char('s')), &mut out)
+            .unwrap();
         assert_eq!(editor.cursor.y, 1);
         assert_eq!(editor.mode, Mode::Normal);
         let _ = std::fs::remove_file(&path);
     }
 
     #[test]
+    fn normal_n_opens_create_prompt_and_esc_cancels() {
+        let mut editor = test_editor(&["one"]);
+        let mut out = stdout_sink();
+        editor.mode = Mode::Normal;
+        editor
+            .handle_normal_event(press(KeyCode::Char('n')), &mut out)
+            .unwrap();
+        assert_eq!(editor.create_kind, Some(crate::editor::CreateKind::File));
+        for c in "hi".chars() {
+            editor
+                .handle_normal_event(press(KeyCode::Char(c)), &mut out)
+                .unwrap();
+        }
+        assert_eq!(editor.create_buf, "hi");
+        editor
+            .handle_normal_event(press(KeyCode::Esc), &mut out)
+            .unwrap();
+        assert!(editor.create_kind.is_none());
+        assert!(editor.create_buf.is_empty());
+        assert_eq!(editor.mode, Mode::Normal);
+    }
+
+    #[test]
+    fn normal_m_opens_dir_prompt() {
+        let mut editor = test_editor(&["one"]);
+        let mut out = stdout_sink();
+        editor.mode = Mode::Normal;
+        editor
+            .handle_normal_event(press(KeyCode::Char('m')), &mut out)
+            .unwrap();
+        assert_eq!(editor.create_kind, Some(crate::editor::CreateKind::Dir));
+    }
+
+    #[test]
+    fn normal_ctrl_word_motion_jumps_words() {
+        let mut editor = test_editor(&["foo bar baz"]);
+        let mut out = stdout_sink();
+        editor.mode = Mode::Normal;
+        editor.cursor.byte = 0;
+        editor
+            .handle_normal_event(
+                press_mod(KeyCode::Char('l'), KeyModifiers::CONTROL),
+                &mut out,
+            )
+            .unwrap();
+        assert!(editor.cursor.byte > 0);
+        let after_l = editor.cursor.byte;
+        editor
+            .handle_normal_event(press_mod(KeyCode::Right, KeyModifiers::CONTROL), &mut out)
+            .unwrap();
+        assert!(editor.cursor.byte >= after_l);
+        editor
+            .handle_normal_event(
+                press_mod(KeyCode::Char('h'), KeyModifiers::CONTROL),
+                &mut out,
+            )
+            .unwrap();
+        assert!(editor.cursor.byte < after_l + 10);
+    }
+
+    #[test]
+    fn visual_i_enters_insert_keeping_selection() {
+        let mut editor = test_editor(&["ab", "cd"]);
+        let mut out = stdout_sink();
+        editor.mode = Mode::Visual;
+        editor.cursor.y = 1;
+        editor.cursor.byte = 2;
+        editor.cursor.selection_anchor = Some((0, 0));
+        editor
+            .handle_visual_event(press(KeyCode::Char('i')), &mut out)
+            .unwrap();
+        assert_eq!(editor.mode, Mode::Insert);
+        assert!(editor.cursor.selection_anchor.is_some());
+    }
+
+    #[test]
+    fn visual_u_r_undo_redo_stays_visual() {
+        let mut editor = test_editor(&["ab", "cd"]);
+        let mut out = stdout_sink();
+        editor.mode = Mode::Visual;
+        editor.snapshot();
+        editor.lines[0] = "AB".to_string();
+        editor
+            .handle_visual_event(press(KeyCode::Char('u')), &mut out)
+            .unwrap();
+        assert_eq!(editor.mode, Mode::Visual);
+        assert_eq!(editor.lines[0], "ab");
+        editor
+            .handle_visual_event(press(KeyCode::Char('r')), &mut out)
+            .unwrap();
+        assert_eq!(editor.mode, Mode::Visual);
+        assert_eq!(editor.lines[0], "AB");
+    }
+
+    #[test]
+    fn visual_ctrl_word_motion_moves_and_clears() {
+        let mut editor = test_editor(&["foo bar"]);
+        let mut out = stdout_sink();
+        editor.mode = Mode::Visual;
+        editor.cursor.byte = 0;
+        editor.cursor.selection_anchor = Some((0, 0));
+        editor.cursor.byte = 3;
+        editor
+            .handle_visual_event(
+                press_mod(KeyCode::Char('l'), KeyModifiers::CONTROL),
+                &mut out,
+            )
+            .unwrap();
+        assert!(!editor.has_selection());
+        assert!(editor.cursor.byte >= 3);
+    }
+
+    #[test]
     fn normal_shift_arrow_extends_and_c_copies() {
         let mut editor = test_editor(&["abcdef"]);
         let mut out = stdout_sink();
-        editor.handle_normal_event(
-            press_mod(KeyCode::Right, KeyModifiers::SHIFT),
-            &mut out,
-        ).unwrap();
+        editor
+            .handle_normal_event(press_mod(KeyCode::Right, KeyModifiers::SHIFT), &mut out)
+            .unwrap();
         assert!(editor.has_selection());
         assert_eq!(editor.mode, Mode::Normal);
-        editor.handle_normal_event(press(KeyCode::Char('c')), &mut out).unwrap();
+        editor
+            .handle_normal_event(press(KeyCode::Char('c')), &mut out)
+            .unwrap();
         assert_eq!(editor.mode, Mode::Normal);
     }
 
@@ -568,7 +810,9 @@ mod tests {
             return; // no PTY here; nothing to close
         }
         assert_eq!(editor.focus, crate::editor::Focus::Terminal);
-        editor.handle_terminal_event(press(KeyCode::Esc), &mut out).unwrap();
+        editor
+            .handle_terminal_event(press(KeyCode::Esc), &mut out)
+            .unwrap();
         assert!(editor.terminal.is_none());
         assert_eq!(editor.focus, crate::editor::Focus::Editor);
     }
@@ -609,29 +853,214 @@ mod tests {
         let mut out = stdout_sink();
         editor.mode = Mode::Visual;
         // Shift+arrows extend the selection; plain motion does not
-        editor.handle_visual_event(
-            press_mod(KeyCode::Right, KeyModifiers::SHIFT),
-            &mut out,
-        ).unwrap();
+        editor
+            .handle_visual_event(press_mod(KeyCode::Right, KeyModifiers::SHIFT), &mut out)
+            .unwrap();
         assert!(editor.has_selection());
-        editor.handle_visual_event(press(KeyCode::Char('l')), &mut out).unwrap();
+        editor
+            .handle_visual_event(press(KeyCode::Char('l')), &mut out)
+            .unwrap();
         assert!(!editor.has_selection());
         assert_eq!(editor.cursor.byte, 2);
         // a toggles select-all
-        editor.handle_visual_event(press(KeyCode::Char('a')), &mut out).unwrap();
+        editor
+            .handle_visual_event(press(KeyCode::Char('a')), &mut out)
+            .unwrap();
         assert_eq!(editor.cursor.y, 1);
         assert_eq!(editor.cursor.byte, 2);
         // : enters command
-        editor.handle_visual_event(press(KeyCode::Char(':')), &mut out).unwrap();
+        editor
+            .handle_visual_event(press(KeyCode::Char(':')), &mut out)
+            .unwrap();
         assert_eq!(editor.mode, Mode::Command);
         // g enters gmode
         editor.mode = Mode::Visual;
-        editor.handle_visual_event(press(KeyCode::Char('g')), &mut out).unwrap();
+        editor
+            .handle_visual_event(press(KeyCode::Char('g')), &mut out)
+            .unwrap();
         assert_eq!(editor.mode, Mode::Gmode);
         // Esc exits to normal
         editor.mode = Mode::Visual;
-        editor.handle_visual_event(press(KeyCode::Esc), &mut out).unwrap();
+        editor
+            .handle_visual_event(press(KeyCode::Esc), &mut out)
+            .unwrap();
         assert_eq!(editor.mode, Mode::Normal);
+    }
+
+    fn select_rows(editor: &mut crate::editor::Editor, sy: usize, ey: usize) {
+        editor.cursor.y = ey;
+        editor.cursor.byte = editor.lines[ey].len();
+        editor.cursor.selection_anchor = Some((sy, 0));
+    }
+
+    #[test]
+    fn visual_alt_moves_selected_block_and_follows() {
+        let mut editor = test_editor(&["a", "b", "c", "d"]);
+        let mut out = stdout_sink();
+        editor.mode = Mode::Visual;
+        select_rows(&mut editor, 0, 1);
+        let undo_before = editor.undo_stack.len();
+        editor
+            .handle_visual_event(press_mod(KeyCode::Char('j'), KeyModifiers::ALT), &mut out)
+            .unwrap();
+        assert_eq!(editor.lines, vec!["c", "a", "b", "d"]);
+        assert_eq!(editor.undo_stack.len(), undo_before + 1);
+        // Selection followed the block (rows 1..=2).
+        let (ay, _) = editor.cursor.selection_anchor.unwrap();
+        assert_eq!((editor.cursor.y.min(ay), editor.cursor.y.max(ay)), (1, 2));
+        assert_eq!(editor.mode, Mode::Visual);
+        // Move back up with Alt+k.
+        editor
+            .handle_visual_event(press_mod(KeyCode::Char('k'), KeyModifiers::ALT), &mut out)
+            .unwrap();
+        assert_eq!(editor.lines, vec!["a", "b", "c", "d"]);
+        // Undo restores the moved state step by step.
+        editor.undo();
+        assert_eq!(editor.lines, vec!["c", "a", "b", "d"]);
+    }
+
+    #[test]
+    fn visual_alt_block_edges_are_noops() {
+        let mut editor = test_editor(&["a", "b", "c"]);
+        let mut out = stdout_sink();
+        editor.mode = Mode::Visual;
+        // Top edge stays a no-op (no snapshot).
+        select_rows(&mut editor, 0, 1);
+        let undo_before = editor.undo_stack.len();
+        editor
+            .handle_visual_event(press_mod(KeyCode::Char('k'), KeyModifiers::ALT), &mut out)
+            .unwrap();
+        assert_eq!(editor.lines, vec!["a", "b", "c"]);
+        assert_eq!(editor.undo_stack.len(), undo_before);
+        // Bottom edge now creates a line and moves (see
+        // visual_alt_j_block_at_bottom_creates_one_line).
+    }
+
+    #[test]
+    fn visual_alt_arrows_match_hjkl() {
+        let mut editor = test_editor(&["a", "b", "c"]);
+        let mut out = stdout_sink();
+        editor.mode = Mode::Visual;
+        select_rows(&mut editor, 0, 0);
+        editor
+            .handle_visual_event(press_mod(KeyCode::Down, KeyModifiers::ALT), &mut out)
+            .unwrap();
+        assert_eq!(editor.lines, vec!["b", "a", "c"]);
+        editor
+            .handle_visual_event(press_mod(KeyCode::Up, KeyModifiers::ALT), &mut out)
+            .unwrap();
+        assert_eq!(editor.lines, vec!["a", "b", "c"]);
+    }
+
+    #[test]
+    fn visual_alt_indent_dedent_roundtrip() {
+        let mut editor = test_editor(&["ab", "cd"]);
+        let mut out = stdout_sink();
+        editor.mode = Mode::Visual;
+        select_rows(&mut editor, 0, 1);
+        let tab = " ".repeat(editor.editor_cfg.tab_size);
+        editor
+            .handle_visual_event(press_mod(KeyCode::Char('l'), KeyModifiers::ALT), &mut out)
+            .unwrap();
+        assert_eq!(editor.lines[0], format!("{tab}ab"));
+        assert_eq!(editor.lines[1], format!("{tab}cd"));
+        assert!(editor.has_selection());
+        editor
+            .handle_visual_event(press_mod(KeyCode::Left, KeyModifiers::ALT), &mut out)
+            .unwrap();
+        assert_eq!(editor.lines, vec!["ab", "cd"]);
+    }
+
+    #[test]
+    fn visual_alt_h_aborts_when_line_has_no_indent() {
+        let mut editor = test_editor(&["  ab", "cd"]);
+        let mut out = stdout_sink();
+        editor.mode = Mode::Visual;
+        select_rows(&mut editor, 0, 1);
+        let undo_before = editor.undo_stack.len();
+        editor
+            .handle_visual_event(press_mod(KeyCode::Char('h'), KeyModifiers::ALT), &mut out)
+            .unwrap();
+        // Whole block untouched: no snapshot, lines identical, hint shown.
+        assert_eq!(editor.lines, vec!["  ab", "cd"]);
+        assert_eq!(editor.undo_stack.len(), undo_before);
+        assert!(editor.status_msg.is_some());
+        assert!(editor.has_selection());
+        assert_eq!(editor.mode, Mode::Visual);
+    }
+
+    #[test]
+    fn visual_alt_h_empty_lines_dont_block() {
+        let mut editor = test_editor(&["  ab", "", "  cd"]);
+        let mut out = stdout_sink();
+        editor.mode = Mode::Visual;
+        select_rows(&mut editor, 0, 2);
+        editor
+            .handle_visual_event(press_mod(KeyCode::Left, KeyModifiers::ALT), &mut out)
+            .unwrap();
+        assert_eq!(editor.lines, vec!["ab", "", "cd"]);
+    }
+
+    #[test]
+    fn visual_alt_j_at_bottom_creates_line_and_follows() {
+        let mut editor = test_editor(&["a", "b"]);
+        let mut out = stdout_sink();
+        editor.mode = Mode::Visual;
+        select_rows(&mut editor, 1, 1);
+        let undo_before = editor.undo_stack.len();
+        editor
+            .handle_visual_event(press_mod(KeyCode::Char('j'), KeyModifiers::ALT), &mut out)
+            .unwrap();
+        // Empty line created, block moved into it, selection follows.
+        assert_eq!(editor.lines, vec!["a", "", "b"]);
+        assert_eq!(editor.undo_stack.len(), undo_before + 1);
+        let (ay, _) = editor.cursor.selection_anchor.unwrap();
+        assert_eq!((editor.cursor.y.min(ay), editor.cursor.y.max(ay)), (2, 2));
+        // Undo removes the created line too.
+        editor.undo();
+        assert_eq!(editor.lines, vec!["a", "b"]);
+    }
+
+    #[test]
+    fn visual_alt_j_block_at_bottom_creates_one_line() {
+        let mut editor = test_editor(&["a", "b", "c"]);
+        let mut out = stdout_sink();
+        editor.mode = Mode::Visual;
+        select_rows(&mut editor, 1, 2);
+        editor
+            .handle_visual_event(press_mod(KeyCode::Down, KeyModifiers::ALT), &mut out)
+            .unwrap();
+        assert_eq!(editor.lines, vec!["a", "", "b", "c"]);
+        let (ay, _) = editor.cursor.selection_anchor.unwrap();
+        assert_eq!((editor.cursor.y.min(ay), editor.cursor.y.max(ay)), (2, 3));
+        editor.undo();
+        assert_eq!(editor.lines, vec!["a", "b", "c"]);
+    }
+
+    #[test]
+    fn visual_alt_without_selection_is_noop() {
+        let mut editor = test_editor(&["ab", "cd"]);
+        let mut out = stdout_sink();
+        editor.mode = Mode::Visual;
+        assert!(!editor.has_selection());
+        let undo_before = editor.undo_stack.len();
+        for code in [
+            KeyCode::Char('j'),
+            KeyCode::Char('k'),
+            KeyCode::Char('h'),
+            KeyCode::Char('l'),
+            KeyCode::Up,
+            KeyCode::Down,
+            KeyCode::Left,
+            KeyCode::Right,
+        ] {
+            editor
+                .handle_visual_event(press_mod(code, KeyModifiers::ALT), &mut out)
+                .unwrap();
+        }
+        assert_eq!(editor.lines, vec!["ab", "cd"]);
+        assert_eq!(editor.undo_stack.len(), undo_before);
+        assert_eq!(editor.mode, Mode::Visual);
     }
 
     #[test]
@@ -646,24 +1075,138 @@ mod tests {
                 .handle_gmode_event(press(KeyCode::Char(c)), &mut out)
                 .unwrap();
         }
-        editor.handle_gmode_event(press(KeyCode::Enter), &mut out).unwrap();
+        editor
+            .handle_gmode_event(press(KeyCode::Enter), &mut out)
+            .unwrap();
         assert_eq!(editor.mode, Mode::Normal);
         assert_eq!(editor.cursor.y, 2);
         // next tab
         editor.mode = Mode::Gmode;
-        editor.handle_gmode_event(press(KeyCode::Char('t')), &mut out).unwrap();
-        editor.handle_gmode_event(press(KeyCode::Enter), &mut out).unwrap();
+        editor
+            .handle_gmode_event(press(KeyCode::Char('t')), &mut out)
+            .unwrap();
+        editor
+            .handle_gmode_event(press(KeyCode::Enter), &mut out)
+            .unwrap();
         assert_eq!(editor.mode, Mode::Normal);
         // unknown word stays in gmode with a message
         editor.mode = Mode::Gmode;
-        editor.handle_gmode_event(press(KeyCode::Char('z')), &mut out).unwrap();
-        editor.handle_gmode_event(press(KeyCode::Char('z')), &mut out).unwrap();
-        editor.handle_gmode_event(press(KeyCode::Enter), &mut out).unwrap();
+        editor
+            .handle_gmode_event(press(KeyCode::Char('z')), &mut out)
+            .unwrap();
+        editor
+            .handle_gmode_event(press(KeyCode::Char('z')), &mut out)
+            .unwrap();
+        editor
+            .handle_gmode_event(press(KeyCode::Enter), &mut out)
+            .unwrap();
         assert_eq!(editor.mode, Mode::Gmode);
         assert!(editor.status_msg.is_some());
         // Esc restores the invoker
-        editor.handle_gmode_event(press(KeyCode::Esc), &mut out).unwrap();
+        editor
+            .handle_gmode_event(press(KeyCode::Esc), &mut out)
+            .unwrap();
         assert_eq!(editor.mode, Mode::Normal);
+    }
+
+    #[test]
+    fn gmode_u_r_undo_redo() {
+        let mut editor = test_editor(&["one", "two"]);
+        let mut out = stdout_sink();
+        editor.snapshot();
+        editor.lines[0] = "CHANGED".to_string();
+        editor.mode = Mode::Gmode;
+        editor.prev_mode = Mode::Normal;
+        editor
+            .handle_gmode_event(press(KeyCode::Char('u')), &mut out)
+            .unwrap();
+        editor
+            .handle_gmode_event(press(KeyCode::Enter), &mut out)
+            .unwrap();
+        assert_eq!(editor.lines[0], "one");
+        assert_eq!(editor.mode, Mode::Normal);
+        editor.mode = Mode::Gmode;
+        editor.prev_mode = Mode::Normal;
+        editor
+            .handle_gmode_event(press(KeyCode::Char('r')), &mut out)
+            .unwrap();
+        editor
+            .handle_gmode_event(press(KeyCode::Enter), &mut out)
+            .unwrap();
+        assert_eq!(editor.lines[0], "CHANGED");
+    }
+
+    #[test]
+    fn gmode_n_m_create_file_and_dir() {
+        let dir = std::env::temp_dir().join("ntc_gmode_create_test");
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let probe = dir.join("probe.txt");
+        std::fs::write(&probe, "x").unwrap();
+        // Run creation with CWD pointed at the temp dir.
+        let old_cwd = std::env::current_dir().unwrap();
+        std::env::set_current_dir(&dir).unwrap();
+        let mut editor = Editor::new(&probe).unwrap();
+        let mut out = stdout_sink();
+        editor.mode = Mode::Gmode;
+        editor.prev_mode = Mode::Normal;
+        for c in "n fresh.txt".chars() {
+            editor
+                .handle_gmode_event(press(KeyCode::Char(c)), &mut out)
+                .unwrap();
+        }
+        editor
+            .handle_gmode_event(press(KeyCode::Enter), &mut out)
+            .unwrap();
+        assert!(dir.join("fresh.txt").is_file());
+        assert_eq!(editor.mode, Mode::Normal);
+        editor.mode = Mode::Gmode;
+        editor.prev_mode = Mode::Normal;
+        for c in "m subdir".chars() {
+            editor
+                .handle_gmode_event(press(KeyCode::Char(c)), &mut out)
+                .unwrap();
+        }
+        editor
+            .handle_gmode_event(press(KeyCode::Enter), &mut out)
+            .unwrap();
+        assert!(dir.join("subdir").is_dir());
+        // Bare n stays open with usage.
+        editor.mode = Mode::Gmode;
+        editor.prev_mode = Mode::Normal;
+        editor
+            .handle_gmode_event(press(KeyCode::Char('n')), &mut out)
+            .unwrap();
+        editor
+            .handle_gmode_event(press(KeyCode::Enter), &mut out)
+            .unwrap();
+        assert_eq!(editor.mode, Mode::Gmode);
+        std::env::set_current_dir(&old_cwd).unwrap();
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn command_u_r_undo_redo() {
+        let mut editor = test_editor(&["one"]);
+        let mut out = stdout_sink();
+        editor.snapshot();
+        editor.lines[0] = "CHANGED".to_string();
+        editor.execute_command("u", &mut out).unwrap();
+        assert_eq!(editor.lines[0], "one");
+        editor.execute_command("r", &mut out).unwrap();
+        assert_eq!(editor.lines[0], "CHANGED");
+    }
+
+    #[test]
+    fn command_bang_runs_in_terminal_without_panic() {
+        let mut editor = test_editor(&["one"]);
+        let mut out = stdout_sink();
+        editor.execute_command("! echo hi", &mut out).unwrap();
+        // Headless CI may lack a PTY: either the terminal opened with
+        // focus, or a status error was reported. Never a panic.
+        assert!(editor.terminal.is_some() || editor.status_msg.is_some());
+        editor.execute_command("!", &mut out).unwrap();
+        assert!(editor.status_msg.is_some());
     }
 
     #[test]
@@ -675,9 +1218,13 @@ mod tests {
         assert_eq!(editor.mode, Mode::Nfe);
         assert!(editor.sidebar.open);
         let first = editor.sidebar.selected;
-        editor.handle_nfe_event(press(KeyCode::Down), &mut out).unwrap();
+        editor
+            .handle_nfe_event(press(KeyCode::Down), &mut out)
+            .unwrap();
         assert!(editor.sidebar.selected >= first);
-        editor.handle_nfe_event(press(KeyCode::Esc), &mut out).unwrap();
+        editor
+            .handle_nfe_event(press(KeyCode::Esc), &mut out)
+            .unwrap();
         assert_eq!(editor.mode, Mode::Normal);
     }
 
@@ -689,7 +1236,9 @@ mod tests {
         editor.prev_mode = Mode::Normal;
         editor.enter_nfe();
         assert!(editor.sidebar.open);
-        editor.handle_nfe_event(press(KeyCode::Char('e')), &mut out).unwrap();
+        editor
+            .handle_nfe_event(press(KeyCode::Char('e')), &mut out)
+            .unwrap();
         assert_eq!(editor.mode, Mode::Normal);
         assert!(!editor.sidebar.open);
         // Ctrl+Q also exits and hides
@@ -713,29 +1262,27 @@ mod tests {
         let mut editor = test_editor(&["abcdef"]);
         let mut out = stdout_sink();
         editor.cursor.byte = 2;
-        editor.handle_normal_event(press(KeyCode::Char('H')), &mut out).unwrap();
+        editor
+            .handle_normal_event(press(KeyCode::Char('H')), &mut out)
+            .unwrap();
         assert_eq!(editor.mode, Mode::Normal);
         assert_eq!(editor.cursor.byte, 1);
         assert!(!editor.has_selection());
         editor.cursor.byte = 2;
         editor
-            .handle_normal_event(
-                press_mod(KeyCode::Char('H'), KeyModifiers::SHIFT),
-                &mut out,
-            )
+            .handle_normal_event(press_mod(KeyCode::Char('H'), KeyModifiers::SHIFT), &mut out)
             .unwrap();
         assert!(editor.has_selection());
         assert_eq!(editor.mode, Mode::Normal);
         editor.clear_selection();
-        editor.handle_normal_event(press(KeyCode::Char('?')), &mut out).unwrap();
+        editor
+            .handle_normal_event(press(KeyCode::Char('?')), &mut out)
+            .unwrap();
         assert_eq!(editor.mode, Mode::Help);
         editor.mode = Mode::Normal;
         // unfolded Shift+; still reaches command mode
         editor
-            .handle_normal_event(
-                press_mod(KeyCode::Char(';'), KeyModifiers::SHIFT),
-                &mut out,
-            )
+            .handle_normal_event(press_mod(KeyCode::Char(';'), KeyModifiers::SHIFT), &mut out)
             .unwrap();
         assert_eq!(editor.mode, Mode::Command);
     }
@@ -770,17 +1317,16 @@ mod tests {
         // kitty-style Shift+H (flagged uppercase) selects left
         editor.cursor.byte = 2;
         editor
-            .handle_normal_event(
-                press_mod(KeyCode::Char('H'), KeyModifiers::SHIFT),
-                &mut out,
-            )
+            .handle_normal_event(press_mod(KeyCode::Char('H'), KeyModifiers::SHIFT), &mut out)
             .unwrap();
         assert!(editor.has_selection());
         assert_eq!(editor.mode, Mode::Normal);
         // bare H moves left again (? owns Help)
         editor.clear_selection();
         editor.cursor.byte = 2;
-        editor.handle_normal_event(press(KeyCode::Char('H')), &mut out).unwrap();
+        editor
+            .handle_normal_event(press(KeyCode::Char('H')), &mut out)
+            .unwrap();
         assert_eq!(editor.mode, Mode::Normal);
         assert_eq!(editor.cursor.byte, 1);
         assert!(!editor.has_selection());
@@ -795,29 +1341,47 @@ mod tests {
         editor.prev_mode = Mode::Normal;
         editor.enter_nfe();
         // : opens the prompt
-        editor.handle_nfe_event(press(KeyCode::Char(':')), &mut out).unwrap();
+        editor
+            .handle_nfe_event(press(KeyCode::Char(':')), &mut out)
+            .unwrap();
         assert_eq!(editor.nfe_cmd, Some(String::new()));
         // type an invalid command -> error status, prompt closes, value kept
         for c in "size huge".chars() {
-            editor.handle_nfe_event(press(KeyCode::Char(c)), &mut out).unwrap();
+            editor
+                .handle_nfe_event(press(KeyCode::Char(c)), &mut out)
+                .unwrap();
         }
         assert_eq!(editor.nfe_cmd, Some("size huge".to_string()));
-        editor.handle_nfe_event(press(KeyCode::Enter), &mut out).unwrap();
+        editor
+            .handle_nfe_event(press(KeyCode::Enter), &mut out)
+            .unwrap();
         assert_eq!(editor.nfe_cmd, Some("size huge".to_string()));
         assert!(editor.status_msg.is_some());
         assert_eq!(editor.editor_cfg.sidebar_width_pct, pct_before);
         // Esc cancels, then a valid command applies + persists
-        editor.handle_nfe_event(press(KeyCode::Esc), &mut out).unwrap();
+        editor
+            .handle_nfe_event(press(KeyCode::Esc), &mut out)
+            .unwrap();
         assert_eq!(editor.nfe_cmd, None);
-        editor.handle_nfe_event(press(KeyCode::Char(':')), &mut out).unwrap();
+        editor
+            .handle_nfe_event(press(KeyCode::Char(':')), &mut out)
+            .unwrap();
         for c in "size 50%".chars() {
-            editor.handle_nfe_event(press(KeyCode::Char(c)), &mut out).unwrap();
+            editor
+                .handle_nfe_event(press(KeyCode::Char(c)), &mut out)
+                .unwrap();
         }
-        editor.handle_nfe_event(press(KeyCode::Enter), &mut out).unwrap();
+        editor
+            .handle_nfe_event(press(KeyCode::Enter), &mut out)
+            .unwrap();
         assert_eq!(editor.editor_cfg.sidebar_width_pct, Some(50));
         // Esc cancels an open prompt
-        editor.handle_nfe_event(press(KeyCode::Char(':')), &mut out).unwrap();
-        editor.handle_nfe_event(press(KeyCode::Esc), &mut out).unwrap();
+        editor
+            .handle_nfe_event(press(KeyCode::Char(':')), &mut out)
+            .unwrap();
+        editor
+            .handle_nfe_event(press(KeyCode::Esc), &mut out)
+            .unwrap();
         assert_eq!(editor.nfe_cmd, None);
         assert_eq!(editor.mode, Mode::Nfe);
         // restore the user's real config
@@ -849,7 +1413,9 @@ mod tests {
         let mut out = stdout_sink();
         editor.cursor.y = 1;
         editor.cursor.byte = 0;
-        editor.handle_insert_event(press(KeyCode::Char('f')), &mut out).unwrap();
+        editor
+            .handle_insert_event(press(KeyCode::Char('f')), &mut out)
+            .unwrap();
         let st = editor.completion.as_ref().expect("list should show");
         assert_eq!(st.prefix, "f");
         assert_eq!(st.items[0].name, "fun");
@@ -857,12 +1423,18 @@ mod tests {
         // Down cycles, wraps at the end
         let n = st.items.len();
         assert!(n > 1);
-        editor.handle_insert_event(press(KeyCode::Down), &mut out).unwrap();
+        editor
+            .handle_insert_event(press(KeyCode::Down), &mut out)
+            .unwrap();
         assert_eq!(editor.completion.as_ref().unwrap().selected, 1 % n);
-        editor.handle_insert_event(press(KeyCode::Up), &mut out).unwrap();
+        editor
+            .handle_insert_event(press(KeyCode::Up), &mut out)
+            .unwrap();
         assert_eq!(editor.completion.as_ref().unwrap().selected, 0);
         // Enter accepts: fun() with cursor inside + sig-help open
-        editor.handle_insert_event(press(KeyCode::Enter), &mut out).unwrap();
+        editor
+            .handle_insert_event(press(KeyCode::Enter), &mut out)
+            .unwrap();
         assert_eq!(editor.lines[1], "fun()");
         assert_eq!(editor.cursor.byte, 4);
         assert!(editor.completion.is_none());
@@ -881,18 +1453,24 @@ mod tests {
         editor.cursor.byte = 4;
         editor.maybe_trigger_completion();
         assert!(editor.completion.is_some());
-        editor.handle_insert_event(press(KeyCode::Esc), &mut out).unwrap();
+        editor
+            .handle_insert_event(press(KeyCode::Esc), &mut out)
+            .unwrap();
         assert!(editor.completion.is_none());
         assert_eq!(editor.mode, Mode::Insert);
         // ( commits the selected function + opens sig-help
         editor.maybe_trigger_completion();
-        editor.handle_insert_event(press(KeyCode::Char('(')), &mut out).unwrap();
+        editor
+            .handle_insert_event(press(KeyCode::Char('(')), &mut out)
+            .unwrap();
         assert_eq!(editor.lines[1], "myfun()");
         assert_eq!(editor.cursor.byte, 6);
         let sig = editor.sighelp.as_ref().expect("sig-help should open");
         assert_eq!(sig.label, "myfun");
         // ) closes past the call: sig-help dismisses
-        editor.handle_insert_event(press(KeyCode::Char(')')), &mut out).unwrap();
+        editor
+            .handle_insert_event(press(KeyCode::Char(')')), &mut out)
+            .unwrap();
         assert_eq!(editor.lines[1], "myfun()");
         assert!(editor.sighelp.is_none());
     }
@@ -905,7 +1483,9 @@ mod tests {
         editor.mode = Mode::Insert;
         editor.cursor.y = 0;
         editor.cursor.byte = 5;
-        editor.handle_insert_event(press(KeyCode::Char('x')), &mut out).unwrap();
+        editor
+            .handle_insert_event(press(KeyCode::Char('x')), &mut out)
+            .unwrap();
         assert!(editor.completion.is_none());
         // MQL file, no word under cursor: nothing shows.
         let mut editor = mql_editor(&["int foo;"]);
@@ -916,12 +1496,15 @@ mod tests {
     }
 
     #[test]
-    fn sighelp_follows_cursor_into_parens() {        let mut editor = mql_editor(&["OrderSend(symbol, cmd);"]);
+    fn sighelp_follows_cursor_into_parens() {
+        let mut editor = mql_editor(&["OrderSend(symbol, cmd);"]);
         let mut out = stdout_sink();
         // Move into the parens: sig-help appears with active index.
         editor.cursor.y = 0;
         editor.cursor.byte = 0;
-        editor.handle_insert_event(press(KeyCode::Right), &mut out).unwrap();
+        editor
+            .handle_insert_event(press(KeyCode::Right), &mut out)
+            .unwrap();
         assert!(editor.sighelp.is_none());
         editor.cursor.byte = 12; // after "OrderSend(sy"
         editor.refresh_sighelp();
@@ -970,7 +1553,9 @@ mod tests {
         editor.dirty_start = 0;
         editor.dirty_end = 0;
         for _ in 0..3 {
-            editor.handle_insert_event(press(KeyCode::Left), &mut out).unwrap();
+            editor
+                .handle_insert_event(press(KeyCode::Left), &mut out)
+                .unwrap();
         }
         assert_eq!(editor.cursor.byte, 2); // `fu|n(a, b)`
         assert!(editor.sighelp.is_none());
@@ -980,7 +1565,8 @@ mod tests {
     }
 
     #[test]
-    fn sighelp_inside_parens_shows_full_user_signature() {        // `fun(|` — full `void fun(int a, int b)` signature, first
+    fn sighelp_inside_parens_shows_full_user_signature() {
+        // `fun(|` — full `void fun(int a, int b)` signature, first
         // param active in both the sig-help box and the hover line.
         let mut editor = mql_editor(&["void fun(int a, int b){}", "fun("]);
         editor.cursor.y = 1;
@@ -1056,14 +1642,24 @@ mod tests {
         assert!(names.contains(&"count"));
         assert_eq!(st.items[0].kind, crate::editor::complete::Kind::Function);
         // Filter by typing + accept the method: sig-help opens.
-        editor.handle_insert_event(press(KeyCode::Char('r')), &mut out).unwrap();
+        editor
+            .handle_insert_event(press(KeyCode::Char('r')), &mut out)
+            .unwrap();
         {
             let st = editor.completion.as_ref().expect("filtered member list");
-            assert!(st.items.iter().all(|i| i.name.to_lowercase().starts_with('r')));
+            assert!(st
+                .items
+                .iter()
+                .all(|i| i.name.to_lowercase().starts_with('r')));
         }
-        editor.handle_insert_event(press(KeyCode::Enter), &mut out).unwrap();
+        editor
+            .handle_insert_event(press(KeyCode::Enter), &mut out)
+            .unwrap();
         assert_eq!(editor.lines[7], "o.run()");
-        let sig = editor.sighelp.as_ref().expect("method sig-help should open");
+        let sig = editor
+            .sighelp
+            .as_ref()
+            .expect("method sig-help should open");
         assert_eq!(sig.label, "run");
         assert_eq!(sig.params, vec!["int x"]);
     }
@@ -1077,12 +1673,16 @@ mod tests {
         editor.maybe_trigger_completion();
         let n = editor.completion.as_ref().unwrap().items.len();
         assert!(n > 0);
-        editor.handle_insert_event(press(KeyCode::PageDown), &mut out).unwrap();
+        editor
+            .handle_insert_event(press(KeyCode::PageDown), &mut out)
+            .unwrap();
         assert_eq!(
             editor.completion.as_ref().unwrap().selected,
             (0 + crate::editor::complete::COMPLETE_ROWS) % n
         );
-        editor.handle_insert_event(press(KeyCode::PageUp), &mut out).unwrap();
+        editor
+            .handle_insert_event(press(KeyCode::PageUp), &mut out)
+            .unwrap();
         assert_eq!(editor.completion.as_ref().unwrap().selected, 0);
         // Cursor never moved: still on the trigger line.
         assert_eq!((editor.cursor.y, editor.cursor.byte), (0, 1));

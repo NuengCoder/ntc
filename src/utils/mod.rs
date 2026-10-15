@@ -17,5 +17,7 @@ pub mod search;
 pub mod session;
 pub mod terminal;
 pub mod teleport;
+#[cfg(test)]
+pub mod test_support;
 pub mod theme;
 pub mod watcher;

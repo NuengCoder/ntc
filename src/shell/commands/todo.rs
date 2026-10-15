@@ -43,7 +43,11 @@ fn parse_line(line: &str) -> Option<Task> {
         if text.is_empty() {
             return None;
         }
-        return Some(Task { done: false, priority, text });
+        return Some(Task {
+            done: false,
+            priority,
+            text,
+        });
     }
     if let Some(rest) = trimmed
         .strip_prefix("- [x]")
@@ -53,14 +57,22 @@ fn parse_line(line: &str) -> Option<Task> {
         if text.is_empty() {
             return None;
         }
-        return Some(Task { done: true, priority, text });
+        return Some(Task {
+            done: true,
+            priority,
+            text,
+        });
     }
     // Legacy bare line: treat as an open normal-priority task.
     let (text, priority) = strip_priority_suffix(trimmed);
     if text.is_empty() {
         return None;
     }
-    Some(Task { done: false, priority, text })
+    Some(Task {
+        done: false,
+        priority,
+        text,
+    })
 }
 
 fn format_line(task: &Task) -> String {
@@ -92,12 +104,7 @@ fn save_tasks(cwd: &Path, tasks: &[Task]) -> Result<()> {
         std::fs::write(&path, "")?;
         return Ok(());
     }
-    let content = tasks
-        .iter()
-        .map(format_line)
-        .collect::<Vec<_>>()
-        .join("\n")
-        + "\n";
+    let content = tasks.iter().map(format_line).collect::<Vec<_>>().join("\n") + "\n";
     std::fs::write(&path, content)?;
     Ok(())
 }
@@ -165,7 +172,11 @@ fn parse_add_args(args: &str) -> Result<(Task, Option<usize>)> {
     if text.is_empty() {
         bail!("{}", t!("cmd.todo.empty_name"));
     }
-    let task = Task { done: false, priority, text };
+    let task = Task {
+        done: false,
+        priority,
+        text,
+    };
     let rest = args[end_quote + 1..].trim();
     if rest.is_empty() {
         return Ok((task, None));
@@ -191,9 +202,7 @@ fn parse_index(args: &str, usage_key: &str) -> Result<usize> {
     if args.is_empty() {
         bail!("{}", t!(usage_key));
     }
-    let n: usize = args
-        .parse()
-        .map_err(|_| anyhow!("{}", t!(usage_key)))?;
+    let n: usize = args.parse().map_err(|_| anyhow!("{}", t!(usage_key)))?;
     if n == 0 {
         bail!("{}", t!("cmd.todo.one_based"));
     }
@@ -466,21 +475,30 @@ mod tests {
     fn parse_checkbox_and_priority() {
         assert_eq!(
             parse_line("- [ ] Write docs !!").unwrap(),
-            Task { done: false, priority: 2, text: "Write docs".into() }
+            Task {
+                done: false,
+                priority: 2,
+                text: "Write docs".into()
+            }
         );
         assert_eq!(
             parse_line("- [x] Old !").unwrap(),
-            Task { done: true, priority: 1, text: "Old".into() }
+            Task {
+                done: true,
+                priority: 1,
+                text: "Old".into()
+            }
         );
-        assert_eq!(
-            parse_line("- [X] Caps").unwrap().done,
-            true
-        );
+        assert_eq!(parse_line("- [X] Caps").unwrap().done, true);
     }
 
     #[test]
     fn format_roundtrip() {
-        let task = Task { done: false, priority: 2, text: "Ship".into() };
+        let task = Task {
+            done: false,
+            priority: 2,
+            text: "Ship".into(),
+        };
         assert_eq!(format_line(&task), "- [ ] Ship !!");
         assert_eq!(parse_line(&format_line(&task)).unwrap(), task);
     }
@@ -499,7 +517,15 @@ mod tests {
     #[test]
     fn done_undo_toggle() {
         let dir = tempfile::tempdir().unwrap();
-        save_tasks(dir.path(), &[Task { done: false, priority: 0, text: "A".into() }]).unwrap();
+        save_tasks(
+            dir.path(),
+            &[Task {
+                done: false,
+                priority: 0,
+                text: "A".into(),
+            }],
+        )
+        .unwrap();
         cmd_done("1", dir.path()).unwrap();
         let tasks = load_tasks(dir.path()).unwrap();
         assert!(tasks[0].done);
@@ -511,7 +537,15 @@ mod tests {
     #[test]
     fn edit_renames_and_reprioritizes() {
         let dir = tempfile::tempdir().unwrap();
-        save_tasks(dir.path(), &[Task { done: false, priority: 0, text: "Old".into() }]).unwrap();
+        save_tasks(
+            dir.path(),
+            &[Task {
+                done: false,
+                priority: 0,
+                text: "Old".into(),
+            }],
+        )
+        .unwrap();
         cmd_edit("1 \"New !!\"", dir.path()).unwrap();
         let tasks = load_tasks(dir.path()).unwrap();
         assert_eq!(tasks[0].text, "New");

@@ -236,6 +236,74 @@ pub fn build_map() -> HashMap<String, String> {
 
     m.insert("alias.ral.info_params".into(), "参数".into());
 
+    m.insert("alias.ral.info_hints".into(), "补全提示".into());
+
+    m.insert("alias.ral.hints_saved".into(), "补全提示：{}".into());
+
+    m.insert("alias.ral.hint_error".into(), "补全提示有误（{}）：别名未保存。".into());
+
+    m.insert("alias.ral.hint_usage".into(), "提示形如：#x --hint-dir  #y --hint-tp --hint-dir（--hint-tp|--hint-ext [列表]|--hint-spf|--hint-file|--hint-dir|--hint-fd|--hint-all） 选择形如：#x --select-dir  #x --select-ext rs,txt（--select-dir|--select-ext [列表]|--select-file|--select-fd|--select-tp） 内联值：#x --hint [8080,5000]  命名列表：#x --hint-n port（见 ral hintn）".into());
+
+    m.insert("alias.ral.hint_cmd".into(), " ral add <名称> <命令> #x --hint-dir  将参数 x 按目录补全".into());
+
+    m.insert("alias.ral.select_cmd".into(), " ral add <名称> <命令> #x --select-dir  缺参数时交互选择 x".into());
+
+    m.insert("alias.ral.hintn_cmd".into(), " ral hintn add|rm|rnm|info|ls  管理命名值列表，供 #x --hint-n <列表> 使用".into());
+
+    m.insert("alias.ral.usage_hintn".into(), "用法：ral hintn add <名称> [值] | ral hintn rm <名称>[, ...] [--force] | ral hintn rnm <旧> to <新> | ral hintn info <名称> | ral hintn ls".into());
+
+    m.insert("alias.ral.usage_hintn_add".into(), "用法：ral hintn add <名称> [值, ...]（含空格的值加引号：[\"what is this\", ok]）".into());
+
+    m.insert("alias.ral.usage_hintn_rm".into(), "用法：ral hintn rm <名称>[, ...] [--force]".into());
+
+    m.insert("alias.ral.usage_hintn_rnm".into(), "用法：ral hintn rnm <旧名称> to <新名称>".into());
+
+    m.insert("alias.ral.usage_hintn_info".into(), "用法：ral hintn info <名称>".into());
+
+    m.insert("alias.ral.hintn_added".into(), "提示列表 '{}' 已保存（{} 个值）：{}".into());
+
+    m.insert("alias.ral.hintn_removed".into(), "提示列表 '{}' 已删除。".into());
+
+    m.insert("alias.ral.hintn_not_found".into(), "找不到提示列表 '{}'。".into());
+
+    m.insert("alias.ral.hintn_renamed".into(), "提示列表 '{}' 已重命名为 '{}'。".into());
+
+    m.insert("alias.ral.hintn_empty".into(), "暂无提示列表。使用 'ral hintn add <名称> [值]' 创建。".into());
+
+    m.insert("alias.ral.hintn_referenced".into(), "提示列表 '{}' 正被使用：{}。加 --force 仍要删除。".into());
+
+    m.insert("alias.ral.hintn_info_title".into(), "📌 提示列表信息".into());
+
+    m.insert("alias.ral.hintn_info_name".into(), "名称".into());
+
+    m.insert("alias.ral.hintn_info_values".into(), "值".into());
+
+    m.insert("alias.ral.hintn_info_used_by".into(), "被引用".into());
+
+    m.insert("alias.ral.hintn_list_title_global".into(), "📌 提示列表（全局）".into());
+
+    m.insert("alias.ral.hintn_list_title_local".into(), "📌 提示列表（本地 ntconfig.toml）".into());
+
+    m.insert("alias.ral.hintn_value_count".into(), "{} 个值".into());
+
+    m.insert("alias.ral.unknown_hint_list".into(), "未知的提示列表：'{}'。".into());
+
+    m.insert("alias.ral.hintn_create_hint".into(), "请先创建：ral hintn add {} [值]".into());
+
+    m.insert("alias.ral.arr_sep_error".into(), "错误：{} 有 {} 个字符在数组 {} 中，请用 $x[,] 或 $x[c]".into());
+
+    m.insert("alias.ral.example_hint_ext".into(), "ral add opimg \"image display ${x}\" #x --hint-ext png,jpeg,jpg,ico,bmp".into());
+
+    m.insert("alias.ral.example_hint_array".into(), "ral add runc \"gcc -o ${o}.exe $x[] && .\\${o}.exe && rmf ${o}.exe\" #x[] --hint-ext c".into());
+
+    m.insert("alias.ral.example_select_dir".into(), "ral add tldsel \"tl dir ${x:-.}\" #x --select-dir".into());
+
+    m.insert("alias.ral.example_hint_values".into(), "ral add srv \"ssh $p\" #p --hint [8080,5050,5000]".into());
+
+    m.insert("alias.ral.example_hintn".into(), "ral hintn add port [8080,5050,5000] + ral add srvn \"ssh $p\" #p --hint-n port".into());
+
+    m.insert("alias.ral.example_hint_sep".into(), "数组连接：[a,b] 上的 $x[,] 得出 \"a , b\"（$x[,].c 则每项加后缀）".into());
+
     m.insert("alias.ral.info_source".into(), "来源".into());
 
     m.insert("alias.ral.info_source_global".into(), "全局".into());
@@ -324,7 +392,7 @@ pub fn build_map() -> HashMap<String, String> {
 
     m.insert("alias.ral.run_example3".into(), "  run_file(hello)      # 执行：python hello.py".into());
 
-    m.insert("alias.ral.run_example4".into(), "  runc [add,minus,mul] math  # 执行：cls && gcc -o math.exe add.c minus.c mul.c && ...".into());
+    m.insert("alias.ral.run_example4".into(), "  runc [add , minus , mul] math  # 执行：cls && gcc -o math.exe add.c minus.c mul.c && ...".into());
 
     m.insert("alias.ral.export_example1".into(), "  ral export --all myaliases       # 创建 myaliases.ntc.ral".into());
 
@@ -960,7 +1028,7 @@ pub fn build_map() -> HashMap<String, String> {
 
     m.insert("cli.helpers.report_options".into(), " -i, --input <路径> 处理文件或目录\n -o, --output <文件> 保存输出到指定文件\n -f, --format <格式> 输出格式：txt, html, json, md, pdf, docx, xlsx（默认：txt）\n --cp 复制报告到剪贴板而非保存到文件\n --size 显示当前目录大小\n --view 快速查看当前目录树\n --view --size 快速查看带目录大小\n".into());
 
-    m.insert("cli.helpers.shell_commands".into(), " ntc pathcp 复制路径到剪贴板\n ntc say \"hello\" --loop 3 循环打印文本\n ntc tl dir . 统计目录中的行数\n ntc ne 打开文本编辑器\n ntc size 显示目录大小\n ntc view 显示目录树\n ntc serve 8080 在端口 8080 启动 HTTP 服务器\n ntc dl https://example.com/file.zip --progress 带进度下载\n ntc encode b64 hello 对字符串进行 Base64 编码\n ntc qr \"text\" 在终端生成二维码\n ntc math 3+4*5 计算表达式\n ntc ral add btr \"cargo build --release\" 从 CLI 添加别名\n".into());
+    m.insert("cli.helpers.shell_commands".into(), " ntc pathcp 复制路径到剪贴板\n ntc say \"hello\" --loop 3 循环打印文本\n ntc tl dir . 统计目录中的行数\n ntc ne 打开文本编辑器\n ntc size 显示目录大小\n ntc view 显示目录树\n ntc serve files --port 8080 在端口 8080 启动文件网盘服务器\n ntc dl https://example.com/file.zip --progress 带进度下载\n ntc encode b64 hello 对字符串进行 Base64 编码\n ntc qr \"text\" 在终端生成二维码\n ntc math 3+4*5 计算表达式\n ntc ral add btr \"cargo build --release\" 从 CLI 添加别名\n".into());
 
     m.insert("cli.helpers.shell_header".into(), "Shell 命令（也可从 CLI 使用）：".into());
 
@@ -971,6 +1039,38 @@ pub fn build_map() -> HashMap<String, String> {
     m.insert("cli.helpers.tp_options".into(), " --tp-add <名称> 将当前目录保存为传送点\n --tp-list 列出所有传送点\n --tp-rm <名称> 删除一个传送点\n".into());
 
     m.insert("cli.helpers.usage_header".into(), "用法：".into());
+
+    m.insert("cli.new.usage_header".into(), "用法：".into());
+
+    m.insert("cli.new.usage_shell".into(), "  ntc                       启动交互式 shell".into());
+
+    m.insert("cli.new.usage_cmd".into(), "  ntc <command> [args...]   非交互运行 shell 命令".into());
+
+    m.insert("cli.new.usage_new".into(), "  ntc -n, --new [command]   打开新终端（在其中运行命令并保持交互）".into());
+
+    m.insert("cli.new.usage_upgrade".into(), "  ntc --upgrade             升级 ntc 到最新版本".into());
+
+    m.insert("cli.new.usage_version".into(), "  ntc --version, -v         显示版本信息".into());
+
+    m.insert("cli.new.usage_help".into(), "  ntc --help, -h            显示此帮助信息".into());
+
+    m.insert("cli.new.examples_header".into(), "示例：".into());
+
+    m.insert("cli.new.ex_help".into(), "  ntc help                  显示 shell 帮助".into());
+
+    m.insert("cli.new.ex_version".into(), "  ntc version               通过 shell 显示版本".into());
+
+    m.insert("cli.new.ex_alias".into(), "  ntc t                     运行 ral 别名 't'（例如 taskmgr）".into());
+
+    m.insert("cli.new.ex_new".into(), "  ntc -n                    打开新的交互式终端".into());
+
+    m.insert("cli.new.ex_new_cmd".into(), "  ntc -n t                  打开新终端，运行 't' 并保持交互".into());
+
+    m.insert("cli.new.opened".into(), "已打开新终端。".into());
+
+    m.insert("cli.new.no_terminal".into(), "未找到终端（已尝试：{}）".into());
+
+    m.insert("cli.new.unsupported".into(), "ntc -n/--new 仅支持 Windows、Linux 和 macOS".into());
 
     m.insert("cli.interactive.navigation".into(), " 导航：cd, back, gos, gosc".into());
 
@@ -1182,7 +1282,7 @@ pub fn build_map() -> HashMap<String, String> {
 
     m.insert("cli.run.help_showcg".into(), "显示当前配置总览".into());
 
-    m.insert("cli.run.help_size".into(), "显示当前目录大小".into());
+    m.insert("cli.run.help_size".into(), "显示文件或目录大小".into());
 
     m.insert("cli.run.help_path".into(), "目标路径或传送点（与 --size 或 --view 配合使用）".into());
 
@@ -1240,7 +1340,7 @@ pub fn build_map() -> HashMap<String, String> {
 
     m.insert("cli.shell_cmd.say_loop".into(), " ntc say \"hello\" --loop 3 带循环打印文本".into());
 
-    m.insert("cli.shell_cmd.serve".into(), " ntc serve 8080 在8080端口启动HTTP服务器".into());
+    m.insert("cli.shell_cmd.serve".into(), " ntc serve files --port 8080 在8080端口启动文件网盘服务器".into());
 
     m.insert("cli.shell_cmd.size".into(), " ntc size 显示目录大小".into());
 
@@ -1882,7 +1982,7 @@ pub fn build_map() -> HashMap<String, String> {
 
     m.insert("cmd.image.displaying".into(), "显示 {} ({}x{}) · {}".into());
 
-    m.insert("cmd.image.usage".into(), "用法：image <路径> [display|show|to|out <格式>] [--ocr] [--layout]".into());
+    m.insert("cmd.image.usage".into(), "用法：image <路径> [display|show [--sixel]|to|out <格式>] [--ocr] [--layout]".into());
 
     m.insert("cmd.ipcfg.dns_label".into(), "DNS ......... :".into());
 
@@ -2210,12 +2310,20 @@ pub fn build_map() -> HashMap<String, String> {
 
     m.insert("cmd.report.unknown_option".into(), "未知的 view 选项：{}".into());
 
-    m.insert("cmd.report.view_usage".into(), "用法：view [-s|--size] [-c|--cp] [--care] [-t|--time] [-d|--depth <n>] [-p|--path <路径|@tp>] [-ext|--ext <扩展名...>]".into());
+    m.insert("cmd.report.view_usage".into(), "用法：view [-s|--size [最小值]] [-fs|--filesize [最小值]] [-ds|--dirsize [最小值]] [--sort size|char|ext] [--head <n>|--tail <n>] [-c|--cp] [--care] [-t|--time] [-d|--depth <n>] [-p|--path <路径|@tp>] [-ext|--ext <扩展名...>]".into());
+
+    m.insert("cmd.report.invalid_sort".into(), "无效的排序键：'{}'（size|char|ext）".into());
+
+    m.insert("cmd.report.invalid_count".into(), "无效的行数：'{}'（必须大于 0）".into());
 
     m.insert("cmd.scan.depth_usage".into(), "用法：scan ext <扩展名...> [-d|--depth <n>] [-s|--size] [--care]".into());
     m.insert("cmd.scan.examples_title".into(), "示例：".into());
     m.insert("cmd.scan.ext_usage".into(), "用法：scan ext <扩展名...> [-d|--depth <n>] [-s|--size] [--care]".into());
     m.insert("cmd.scan.help_ext".into(), "  scan ext <扩展名...> [-d|--depth <n>] [-s|--size] [--care]  按扩展名列出文件（不统计行数）".into());
+
+    m.insert("cmd.scan.help_files".into(), "  scan files [匹配] [-d|--depth <n>] [-s|--size] [--care]  按名称匹配列出文件（* 匹配全部）".into());
+
+    m.insert("cmd.scan.help_dir".into(), "  scan dir [匹配] [-d|--depth <n>] [-s|--size] [--care]  按名称匹配列出目录（* 匹配全部）".into());
 
     m.insert("cmd.scan.help_port".into(), "  scan port [主机] [--top N | --ports <范围> | --all] [--timeout MS]  TCP 端口扫描（默认本机，前 20 个端口）".into());
 
@@ -2246,6 +2354,16 @@ pub fn build_map() -> HashMap<String, String> {
 
     m.insert("cmd.scan.port_done".into(), "开放：{} / 已扫 {}".into());
 
+    m.insert("cmd.scan.files_usage".into(), "用法：scan files [匹配] [-d|--depth <n>] [-s|--size] [--care]".into());
+
+    m.insert("cmd.scan.dir_usage".into(), "用法：scan dir [匹配] [-d|--depth <n>] [-s|--size] [--care]".into());
+
+    m.insert("cmd.scan.no_dirs".into(), "未找到 {} 目录".into());
+
+    m.insert("cmd.scan.total_dirs".into(), "总计：{} 个目录".into());
+
+    m.insert("cmd.scan.total_dirs_size".into(), "总计：{} 个目录（{}）".into());
+
     m.insert("cmd.scan.port_none".into(), "{} 上没有开放端口".into());
 
     m.insert("cmd.scan.port_start".into(), "正在扫描 {}（{} 个端口）...".into());
@@ -2271,21 +2389,21 @@ pub fn build_map() -> HashMap<String, String> {
 
     m.insert("cmd.serve.db_title".into(), "数据库：".into());
 
-    m.insert("cmd.serve.example_default".into(), "  serve                 HTTP 运行于 8080 端口".into());
+    m.insert("cmd.serve.example_default".into(), "  serve files           HTTP 运行于 8080 端口".into());
 
-    m.insert("cmd.serve.example_default".into(), "  serve                 HTTP 运行于 8080 端口".into());
+    m.insert("cmd.serve.example_default".into(), "  serve files           HTTP 运行于 8080 端口".into());
 
-    m.insert("cmd.serve.example_port".into(), "  serve 3000            HTTP 运行于 3000 端口".into());
+    m.insert("cmd.serve.example_port".into(), "  serve files 3000       HTTP 运行于 3000 端口".into());
 
-    m.insert("cmd.serve.example_port".into(), "  serve 3000            HTTP 运行于 3000 端口".into());
+    m.insert("cmd.serve.example_port".into(), "  serve files 3000       HTTP 运行于 3000 端口".into());
 
-    m.insert("cmd.serve.example_spa".into(), "  serve --spa           SPA 模式（React Router 回退）".into());
+    m.insert("cmd.serve.example_spa".into(), "  serve files --spa      SPA 模式（React Router 回退）".into());
 
-    m.insert("cmd.serve.example_spa".into(), "  serve --spa           SPA 模式（React Router 回退）".into());
+    m.insert("cmd.serve.example_spa".into(), "  serve files --spa      SPA 模式（React Router 回退）".into());
 
-    m.insert("cmd.serve.example_tunnel".into(), "  serve --tunnel        HTTP + cloudflared 隧道".into());
+    m.insert("cmd.serve.example_tunnel".into(), "  serve files --tunnel   HTTP + cloudflared 隧道".into());
 
-    m.insert("cmd.serve.example_tunnel".into(), "  serve --tunnel        HTTP + cloudflared 隧道".into());
+    m.insert("cmd.serve.example_tunnel".into(), "  serve files --tunnel   HTTP + cloudflared 隧道".into());
 
     m.insert("cmd.serve.examples_title".into(), "示例：".into());
 
@@ -2325,7 +2443,7 @@ pub fn build_map() -> HashMap<String, String> {
 
     m.insert("cmd.serve.help_no_qr".into(), "  --no-qr               不显示二维码".into());
 
-    m.insert("cmd.serve.example_share".into(), "  serve 8080 --share      检查网络并打印局域网 URL + 二维码".into());
+    m.insert("cmd.serve.example_share".into(), "  serve files 8080 --share  检查网络并打印局域网 URL + 二维码".into());
 
     m.insert("cmd.serve.share_checking".into(), "正在检查网络连接……".into());
 
@@ -2347,13 +2465,13 @@ pub fn build_map() -> HashMap<String, String> {
 
     m.insert("cmd.serve.share_qr_fail".into(), "二维码渲染失败：{}".into());
 
-    m.insert("cmd.serve.help_usage".into(), "serve [端口] [选项]".into());
+    m.insert("cmd.serve.help_usage".into(), "serve files [端口] [选项]".into());
 
-    m.insert("cmd.serve.help_usage".into(), "serve [端口] [选项]".into());
+    m.insert("cmd.serve.help_usage".into(), "serve files [端口] [选项]".into());
 
     m.insert("cmd.serve.help_web_dir".into(), "  --web-dir, -w <目录> 使用自定义前端目录".into());
     m.insert("cmd.serve.help_auth".into(), "  --auth <用户名:密码>  访问 /api/* 需要登录（例如 --auth admin:secret）".into());
-    m.insert("cmd.serve.example_auth".into(), "  serve 8080 --auth admin:secret   8080 端口 HTTP，API 需要登录".into());
+    m.insert("cmd.serve.example_auth".into(), "  serve files 8080 --auth admin:secret   8080 端口 HTTP，API 需要登录".into());
     m.insert("cmd.serve.invalid_auth".into(), "无效的 --auth（用法：--auth <用户名:密码>）".into());
     m.insert("cmd.serve.missing_auth".into(), "缺少 --auth 的值".into());
     m.insert("cmd.serve.auth_on".into(), "已为用户 '{}' 启用 API 登录验证".into());
@@ -2527,6 +2645,26 @@ pub fn build_map() -> HashMap<String, String> {
     m.insert("cmd.serve.cloudflared_starting".into(), "cloudflared 隧道正在启动（PID {}）".into());
 
     m.insert("cmd.serve.cloudflared_missing".into(), "未找到 cloudflared：{}。安装：{}".into());
+
+    m.insert("cmd.serve.chess_soon".into(), "`serve chess` 即将推出（在线多人）".into());
+    m.insert("cmd.serve.services_title".into(), "Serve — 请选择服务".into());
+    m.insert("cmd.serve.services_usage".into(), "serve <服务> [选项]（裸 `serve` 不运行任何服务）".into());
+    m.insert("cmd.serve.services_header".into(), "服务：".into());
+    m.insert("cmd.serve.services_row_files".into(), "  files         文件网盘 Web 界面（浏览器上传/下载）".into());
+    m.insert("cmd.serve.services_row_http".into(), "  http-server   当前目录的静态服务器".into());
+    m.insert("cmd.serve.services_row_chess".into(), "  chess         双人热座象棋（浏览器对弈）".into());
+    m.insert("cmd.serve.services_row_config".into(), "  config        查看/设置各服务默认值（端口、绑定）".into());
+    m.insert("cmd.serve.services_example_files".into(), "  serve files --port 9000".into());
+    m.insert("cmd.serve.services_example_http".into(), "  serve http-server ./dist".into());
+    m.insert("cmd.serve.services_example_config".into(), "  serve config files --port-default 9000".into());
+    m.insert("cmd.serve.http_title".into(), "HTTP 静态服务器（当前目录）".into());
+    m.insert("cmd.serve.http_usage".into(), "serve http-server [目录] [--port 8000] [选项]".into());
+    m.insert("cmd.serve.example_http_default".into(), "  serve http-server            在 8080 上托管当前目录".into());
+    m.insert("cmd.serve.example_http_dir".into(), "  serve http-server ./dist --port 8001   在 8001 上托管 ./dist".into());
+    m.insert("cmd.serve.example_http_auth".into(), "  serve http-server --auth admin:secret  需要登录".into());
+    m.insert("cmd.serve.help_auth_http".into(), "  --auth <user:pass>     所有路由都需要登录（例如 --auth admin:secret）".into());
+    m.insert("cmd.serve.http_serving".into(), "正在托管".into());
+    m.insert("cmd.serve.http_no_dir".into(), "目录 '{}' 不存在".into());
 
     m.insert("cmd.smtp.build_fail".into(), "构建电子邮件消息失败".into());
 
@@ -3201,7 +3339,9 @@ pub fn build_map() -> HashMap<String, String> {
 
     m.insert("editor.cmd_unknown".into(), "未知命令：".into());
 
-    m.insert("editor.cmd_visual_hint".into(), "可视模式 方向键选择，Esc 退出".into());
+    m.insert("editor.cmd_visual_hint".into(), "可视模式 方向键选择，Alt+hjkl/方向键移动所选，Esc 退出".into());
+
+    m.insert("editor.visual_dedent_blocked".into(), "Alt+h 需要所选每行都有缩进".into());
 
     m.insert("editor.color_off".into(), "颜色：关".into());
 
@@ -3389,7 +3529,7 @@ pub fn build_map() -> HashMap<String, String> {
 
     m.insert("editor.gs_loading".into(), " 正在查找... {} 请稍候".into());
 
-    m.insert("editor.help_screen".into(), " 普通模式（vim 风格）\n i=插入 v=可视 q=查询 n=保存 c=复制 e=导航 f=查找 b=文件 t=终端 u=编码 g=命令 :=命令 ?=帮助 0=退出（未保存会提示）\n hjkl/awsd/方向键移动 \u{B7} Home/End 行首尾 \u{B7} PgUp/PgDn 翻页 \u{B7} ^J=跳转\n\n GMODE（按 g，输入，Enter）\n t/T=上下标签 qt=关闭标签 aqt=关闭全部 数字=跳转 q=退出 Esc=取消\n\n NFE 侧栏（按 e）\n hjkl/方向键/wasd 移动 \u{B7} Enter=目录进入/文件打开（停留） \u{B7} Esc=返回\n\n 插入模式（编辑）\n 输入即插入 \u{B7} 方向键移动 \u{B7} Esc=普通 ^S=保存 ^Z=撤销 ^R=重做 ^D=多光标 ^F=查找 ^N=文件 ^P=粘贴 ^T=终端 ^J=跳转 ^E=命令 \u{B7} Home/End 行首尾 \u{B7} PgUp/PgDn 翻页 \u{B7} F3/Sh+F3 查找上下\n\n 可视模式（选择）\n hjkl/方向键移动（Shift 选择） \u{B7} a=全选切换 c=复制 x=剪切 y=复制行 p=粘贴 :=命令 e=导航 f=查找 g=命令 \u{B7} Esc=退出\n\n 命令模式\n :<number> 跳转到行号\n :l N 或 :line N 跳转到第 N 行\n :q 或 :quit 退出编辑器（带保存提示）\n :wq 保存并退出\n :w 或 :write 保存文件\n :auto on 启用自动保存\n :auto off 禁用自动保存\n :syntax on 启用语法高亮\n :syntax off 禁用语法高亮\n :color on|off 切换彩色输出\n :cd <路径> 更改目录（导航器）\n :back [N] 返回父目录（N 级）\n :gos <N> 导航到第 N 个子目录\n :gosc 列出编号的子目录\n :mkdir <目录> 创建目录\n :mkd <目录> 创建目录（:mkdir 别名）\n :touch <文件> 创建新文件\n :mkf <文件> 创建新文件（:touch 别名）\n :rmd <目标> 递归删除目录\n :rmf <目标> 强制删除文件或目录\n :rnmf <源> <目标> 重命名文件\n :rnmd <源> <目标> 重命名目录\n :ne <文件> 导航并编辑（不存在则创建）\n :ne . 在侧边栏显示当前目录\n :theme <名称> 按名称切换主题\n :theme list 列出可用主题\n :theme 显示当前主题\n :git diff 或 :gd 显示当前文件的 git 差异\n :git blame 或 :blame 显示当前行的 blame 信息\n :tp <名称> 跳转到传送点\n :tp-add <名称> 将当前目录保存为传送点\n :gs <模式> 在项目中搜索文件内容\n :run <命令> 在持久运行面板中执行命令\n Esc 取消\n\n 查询模式（普通模式 q，插入模式 Ctrl+Alt+Q，命令模式 :x — 开头 / 可省略）\n /s '文本' 选中光标后下一个匹配（循环）；空 /s 选中光标处单词\n /l N 跳转到第 N 行（光标到行首）\n /sa '文本' 选中全文所有匹配\n /sal 全选所有行\n /sl N 选中第 N 行；/sl A B 选中 A..B 行（顺序不限）；/sl A , B , … 选中离散行\n /rp <查找> <替换> 在选区内替换（需选择；多词加引号：/rp 'a b' 'c'）\n /add <文本> to #end|#start|#hm 在选中行追加/前插（需选择）\n /set <模式> to #end|#start|#hm 对齐首处匹配（需选择）\n /c | /cs 清除选择\n /upper 选择转大写（需选择）\n /lower 选择转小写（需选择）\n /qal add <n> <q> 添加查询别名（如 /qal sw /rp ${1} ${2}；s/l/sa/sal/sl/rp/c 等为保留名）\n /qal rm <n> 删除别名\n /qal info <n> 显示别名\n /qal edit <n> <q> 更新别名\n /qal rnm <a> to <b> 重命名别名\n /qal list 列出别名\n <名称> [参数] 直接运行别名（无需 /）\n /undo 撤销\n /redo 重做\n /exit /quit /Esc 退出查询模式\n ; 链式执行多个命令\n ${1} ${2} 别名位置参数\n ${1:-默认值} 带默认值的别名参数\n ${1[]} 别名数组参数（所有剩余参数）\n\n 终端 / 运行面板\n Ctrl+T 切换终端面板\n :run <命令> 执行命令，打开持久运行面板\n mouse 单击面板聚焦，单击编辑器返回\n Esc（面板内） 运行：关闭 | 终端：返回编辑器\n drag \u{2500}\u{2500}\u{2500} row 调整面板高度".into());
+    m.insert("editor.help_screen".into(), " 普通模式（vim 风格）\n i=插入 v=可视 q=查询 x=保存 n=文件 m=目录 c=复制 e=导航 f=查找 b=文件 t=终端 u=编码 g=命令 :=命令 ?=帮助 0=退出（未保存会提示）\n hjkl/awsd/方向键移动 \u{B7} Home/End 行首尾 \u{B7} PgUp/PgDn 翻页 \u{B7} ^J=跳转\n\n GMODE（按 g，输入，Enter）\n t/T=上下标签 qt=关闭标签 aqt=关闭全部 数字=跳转 q=退出 u=撤销 r=重做 n=文件 m=目录 i=插入 v=可视 e=导航 Esc=取消\n\n NFE 侧栏（按 e）\n hjkl/方向键/wasd 移动 \u{B7} Enter=目录进入/文件打开（停留） \u{B7} i=插入 v=可视 \u{B7} Esc=返回\n\n 插入模式（编辑）\n 输入即插入 \u{B7} 方向键移动 \u{B7} Esc=普通 ^S=保存 ^Z=撤销 ^R=重做 ^D=多光标 ^F=查找 ^N=文件 ^P=粘贴 ^T=终端 ^G=命令 ^E=导航 ^W=可视 ^:=命令 \u{B7} Home/End 行首尾 \u{B7} PgUp/PgDn 翻页 \u{B7} F3/Sh+F3 查找上下\n\n 可视模式（选择）\n hjkl/方向键移动（Shift 选择） \u{B7} Alt+hjkl/方向键移动所选（j/k）或缩进（h/l） \u{B7} a=全选切换 c=复制 x=剪切 y=复制行 p=粘贴 :=命令 e=导航 f=查找 g=命令 \u{B7} Esc=退出\n\n 命令模式\n :<number> 跳转到行号\n :l N 或 :line N 跳转到第 N 行\n :q 或 :quit 退出编辑器（带保存提示）\n :wq 保存并退出\n :w 或 :write 保存文件\n :auto on 启用自动保存\n :auto off 禁用自动保存\n :syntax on 启用语法高亮\n :syntax off 禁用语法高亮\n :color on|off 切换彩色输出\n :cd <路径> 更改目录（导航器）\n :back [N] 返回父目录（N 级）\n :gos <N> 导航到第 N 个子目录\n :gosc 列出编号的子目录\n :mkdir <目录> 创建目录\n :mkd <目录> 创建目录（:mkdir 别名）\n :touch <文件> 创建新文件\n :mkf <文件> 创建新文件（:touch 别名）\n :rmd <目标> 递归删除目录\n :rmf <目标> 强制删除文件或目录\n :rnmf <源> <目标> 重命名文件\n :rnmd <源> <目标> 重命名目录\n :ne <文件> 导航并编辑（不存在则创建）\n :ne . 在侧边栏显示当前目录\n :e 打开文件浏览器（nfe）\n :theme <名称> 按名称切换主题\n :theme list 列出可用主题\n :theme 显示当前主题\n :git diff 或 :gd 显示当前文件的 git 差异\n :git blame 或 :blame 显示当前行的 blame 信息\n :tp <名称> 跳转到传送点\n :tp-add <名称> 将当前目录保存为传送点\n :gs <模式> 在项目中搜索文件内容\n :run <命令> 在持久运行面板中执行命令\n Esc 取消\n\n 查询模式（普通模式 q，插入模式 Ctrl+Alt+Q，命令模式 :x — 开头 / 可省略）\n /s '文本' 选中光标后下一个匹配（循环）；空 /s 选中光标处单词\n /l N 跳转到第 N 行（光标到行首）\n /sa '文本' 选中全文所有匹配\n /sal 全选所有行\n /sl N 选中第 N 行；/sl A B 选中 A..B 行（顺序不限）；/sl A , B , … 选中离散行\n /rp <查找> <替换> 在选区内替换（需选择；多词加引号：/rp 'a b' 'c'）\n /add <文本> to #end|#start|#hm 在选中行追加/前插（需选择）\n /rm <文本> from #end|#start|#hm 在选中行移除前后缀（需选择）\n /set <模式> to #end|#start|#hm 对齐首处匹配（需选择）\n /c | /cs 清除选择\n /z [#hm|#end|#start] 在选中行添加光标（默认 #hm）\n /up 选择转大写（/upper 别名，需选择）\n /low 选择转小写（/lower 别名，需选择）\n /qal add <n> <q> 添加查询别名（如 /qal sw /rp ${1} ${2}；s/l/sa/sal/sl/rp/c 等为保留名）\n /qal rm <n> 删除别名\n /qal info <n> 显示别名\n /qal edit <n> <q> 更新别名\n /qal rnm <a> to <b> 重命名别名\n /qal list 列出别名\n <名称> [参数] 直接运行别名（无需 /）\n /undo 撤销\n /redo 重做\n /exit /quit /Esc 退出查询模式\n ; 链式执行多个命令\n ${1} ${2} 别名位置参数\n ${1:-默认值} 带默认值的别名参数\n ${1[]} 别名数组参数（所有剩余参数）\n\n 终端 / 运行面板\n Ctrl+T 切换终端面板\n :run <命令> 执行命令，打开持久运行面板\n mouse 单击面板聚焦，单击编辑器返回\n Esc（面板内） 运行：关闭 | 终端：返回编辑器\n drag \u{2500}\u{2500}\u{2500} row 调整面板高度".into());
 
     m.insert("editor.hex_cannot_read".into(), "hex：无法读取文件：{}".into());
 
@@ -3447,7 +3587,7 @@ pub fn build_map() -> HashMap<String, String> {
 
     m.insert("editor.hint_hex_edit".into(), "Hex 编辑 - 输入十六进制字节".into());
 
-    m.insert("editor.hint_insert".into(), " 插入模式 — Esc=普通 ^S=保存 ^Z=撤销 ^R=重做 ^D=多光标 ^F=查找 ^N=文件 ^P=粘贴 ^T=终端 ^J=跳转".into());
+    m.insert("editor.hint_insert".into(), " 插入模式 — Esc=普通 ^S=保存 ^Z=撤销 ^R=重做 ^D=多光标 ^F=查找 ^N=文件 ^P=粘贴 ^T=终端 ^G=命令 ^E=导航 ^W=可视 ^:=命令".into());
 
     m.insert("editor.hint_insert_msg".into(), " Esc=普通".into());
 
@@ -3461,11 +3601,17 @@ pub fn build_map() -> HashMap<String, String> {
 
     m.insert("editor.hint_gmode".into(), "g".into());
 
-    m.insert("editor.hint_gmode_actions".into(), "t/T=标签 qt/aqt=关闭 数字=跳转 q=退出 Enter=运行 Esc=取消".into());
+    m.insert("editor.hint_gmode_actions".into(), "t/T=标签 qt/aqt=关闭 数字=跳转 q=退出 u=撤销 r=重做 n=文件 m=目录 i=插入 v=可视 e=导航 Enter=运行 Esc=取消".into());
+
+    m.insert("editor.hint_create_actions".into(), "Enter=创建 Esc=取消".into());
 
     m.insert("editor.gmode_unknown".into(), "未知 gmode 命令：'{}'".into());
 
-    m.insert("editor.hint_normal".into(), " i=插入 v=可视 f=查找 b=文件 e=导航 t=终端 g=命令 n=保存 c=复制 Sh=选择 :命令 ?=帮助 0=退出".into());
+    m.insert("editor.hint_normal".into(), " i=插入 v=可视 f=查找 b=文件 e=导航 t=终端 g=命令 x=保存 n=文件 m=目录 c=复制 Sh=选择 :命令 ?=帮助 0=退出".into());
+
+    m.insert("editor.hint_create_actions".into(), "Enter=创建 Esc=取消".into());
+
+    m.insert("editor.term_run_usage".into(), "用法：! <命令>（在终端运行）".into());
 
     m.insert("editor.hint_normal_msg".into(), " i=插入 v=可视 :命令 ?=帮助 0=退出".into());
 
@@ -3473,9 +3619,17 @@ pub fn build_map() -> HashMap<String, String> {
 
     m.insert("editor.hint_query".into(), "查询：{}".into());
 
-    m.insert("editor.hint_query_actions".into(), "操作：/s 下一个, /l 跳转, /sa 全部, /sal 所有行, /sl 行, /rp 替换, /add, /set, /upper, /lower, /qal, /c 清除".into());
+    m.insert("editor.hint_query_actions".into(), "操作：/s 下一个, /l 跳转, /sa 全部, /sal 所有行, /sl 行, /rp 替换, /add, /rm, /set, /z 光标, /up, /low, /qal, /c 清除".into());
 
-    m.insert("editor.hint_query_actions".into(), "操作：/s 下一个, /l 跳转, /sa 全部, /sal 所有行, /sl 行, /rp 替换, /add, /set, /upper, /lower, /qal, /c 清除".into());
+    m.insert("editor.query_z_usage".into(), "/z [#hm|#end|#start]（默认 #hm）".into());
+
+    m.insert("editor.query_cursors_added".into(), "已添加 {} 个光标".into());
+
+    m.insert("editor.hint_query_actions".into(), "操作：/s 下一个, /l 跳转, /sa 全部, /sal 所有行, /sl 行, /rp 替换, /add, /rm, /set, /z 光标, /up, /low, /qal, /c 清除".into());
+
+    m.insert("editor.query_z_usage".into(), "/z [#hm|#end|#start]（默认 #hm）".into());
+
+    m.insert("editor.query_cursors_added".into(), "已添加 {} 个光标".into());
 
     m.insert("editor.hint_query_prefix".into(), "/{} — {}".into());
 
@@ -3513,7 +3667,7 @@ pub fn build_map() -> HashMap<String, String> {
 
     m.insert("editor.hint_terminal".into(), "终端 - {} — {}".into());
 
-    m.insert("editor.hint_visual".into(), " hjkl=移动 Sh=选择 a=全选 c=复制 x=剪切 y=复制行 p=粘贴 Esc=退出".into());
+    m.insert("editor.hint_visual".into(), " hjkl=移动 Sh=选择 i=插入 u=撤销 r=重做 a=全选 c=复制 x=剪切 p=粘贴 Esc=退出".into());
 
     m.insert("editor.hint_visual_no_msg".into(), " 可视模式 — hjkl/方向键移动 · Shift 选择 · a=全选 c=复制 x=剪切 y=复制行 p=粘贴".into());
 
@@ -3623,11 +3777,35 @@ pub fn build_map() -> HashMap<String, String> {
 
     m.insert("editor.mode_nfe".into(), "[Nfe]".into());
 
-    m.insert("editor.hint_nfe".into(), " hjkl/wasd/方向键移动 · Enter 打开 · :=宽度 · Esc 返回".into());
+    m.insert("editor.hint_nfe".into(), " hjkl/wasd/方向键移动 · Enter 打开 · i/v 编辑 · :=宽度 · Esc 返回".into());
 
-    m.insert("editor.hint_nfe_cmd_actions".into(), "Enter=应用 Esc=取消".into());
+    m.insert("editor.hint_nfe_cmd_actions".into(), "Enter=应用 Esc=取消 · :i/:v 编辑".into());
 
-    m.insert("editor.nfe_unknown".into(), "未知 nfe 命令：'{}'（试试 size full|def|N%）".into());
+    m.insert("editor.nfe_unknown".into(), "未知 nfe 命令：'{}'（试试 size full|def|N% | n <文件> | m <目录> | rmd <目录> | rmf <文件> | i | v）".into());
+
+    m.insert("editor.nfe_rm_usage".into(), "用法：rmd <目录> | rmf <文件>（相对侧栏根目录）".into());
+
+    m.insert("editor.nfe_rmd_not_dir".into(), "不是目录：{}".into());
+
+    m.insert("editor.nfe_rmf_is_dir".into(), "是目录（请用 rmd）：{}".into());
+
+    m.insert("editor.nfe_rm_not_exist".into(), "未找到：{}".into());
+
+    m.insert("editor.nfe_removed".into(), "已删除：{}".into());
+
+    m.insert("editor.nfe_rm_failed".into(), "删除失败：{}".into());
+
+    m.insert("editor.nfe_rm_has_unsaved".into(), "'{}' 有未保存的修改 — 请先保存".into());
+
+    m.insert("editor.nfe_new_usage".into(), "用法：n <文件> | m <目录>（相对侧栏根目录）".into());
+
+    m.insert("editor.nfe_created_file".into(), "已创建文件：{}".into());
+
+    m.insert("editor.nfe_created_dir".into(), "已创建目录：{}".into());
+
+    m.insert("editor.nfe_create_exists".into(), "已存在：{}".into());
+
+    m.insert("editor.nfe_create_failed".into(), "创建失败：{}".into());
 
     m.insert("editor.nfe_size_usage".into(), "用法：size full|def|N%（收到 '{}'）".into());
 
@@ -3724,6 +3902,18 @@ pub fn build_map() -> HashMap<String, String> {
     m.insert("editor.query_added_text".into(), "已向 {} 行添加文本".into());
 
     m.insert("editor.query_added_text".into(), "已向 {} 行添加文本".into());
+
+    m.insert("editor.query_rm_usage".into(), "/rm <文本> from #end|#start|#hm".into());
+
+    m.insert("editor.query_rm_usage".into(), "/rm <文本> from #end|#start|#hm".into());
+
+    m.insert("editor.query_rm_format".into(), "格式：/rm <文本> from #end|#start|#hm".into());
+
+    m.insert("editor.query_rm_format".into(), "格式：/rm <文本> from #end|#start|#hm".into());
+
+    m.insert("editor.query_removed_text".into(), "已从 {} 行移除文本，跳过 {}".into());
+
+    m.insert("editor.query_removed_text".into(), "已从 {} 行移除文本，跳过 {}".into());
 
     m.insert("editor.query_alias_not_found".into(), "未找到别名：{}".into());
 
@@ -4168,6 +4358,8 @@ pub fn build_map() -> HashMap<String, String> {
 
     m.insert("help.alias.make".into(), "ral make [名称] ## 在当前目录创建别名模板".into());
 
+    m.insert("help.alias.hintn".into(), "ral hintn add|rm|rnm|info|ls ## 管理命名值列表（--hint-n/--select-n 用）".into());
+
     m.insert("help.alias.rm".into(), "ral rm <名称>[, ...] ## 删除别名".into());
 
     m.insert("help.alias.rnm".into(), "ral rnm <旧名称> to <新名称> ## 重命名别名".into());
@@ -4338,7 +4530,7 @@ pub fn build_map() -> HashMap<String, String> {
 
     m.insert("help.explorer.title".into(), "文件浏览器（NFE）：".into());
 
-    m.insert("help.fileops.cp".into(), "cp <源> <目标|@tp> [-f] ## 复制文件或目录".into());
+    m.insert("help.fileops.cp".into(), "cp <源|@tp> <目标|@tp> [-f] ## 复制文件或目录".into());
 
     m.insert("help.fileops.mkd".into(), "mkd <目录>[, ...] ## 创建新目录".into());
 
@@ -4352,7 +4544,7 @@ pub fn build_map() -> HashMap<String, String> {
 
     m.insert("help.fileops.rnmf".into(), "rnmf <旧名称> <新名称> ## 重命名文件".into());
 
-    m.insert("help.fileops.mv".into(), "mv <源> <目标|@tp> [-f] ## 移动/重命名文件或目录".into());
+    m.insert("help.fileops.mv".into(), "mv <源|@tp> <目标|@tp> [-f] ## 移动/重命名文件或目录".into());
 
     m.insert("help.fileops.title".into(), "文件操作：".into());
 
@@ -4395,6 +4587,10 @@ pub fn build_map() -> HashMap<String, String> {
     m.insert("help.image.display".into(), "image display <路径> ## 在终端内直接渲染图像".into());
 
     m.insert("help.image.show".into(), "image show <路径> ## 在终端内直接渲染图像".into());
+
+    m.insert("help.image.sixel".into(), "image display <路径> --sixel ## 强制使用 sixel 渲染".into());
+
+    m.insert("cmd.image.sixel_forced_warn".into(), "正在强制 sixel 输出（检测到：{}）——该终端可能显示乱码。".into());
 
     m.insert("help.image.interactive".into(), "image ## 交互式图像转换器（从当前目录选取）".into());
 
@@ -4460,7 +4656,7 @@ pub fn build_map() -> HashMap<String, String> {
 
     m.insert("help.network.ipcfg".into(), "ipcfg [名称] ## 显示网卡信息（类似 ipconfig/ifconfig）".into());
 
-    m.insert("help.network.serve".into(), "serve [端口] ## HTTP文件服务器（--auth, --tunnel, --share, --spa, --web-dir）".into());
+    m.insert("help.network.serve".into(), "serve files|http-server|config ## 服务：文件网盘、静态目录服务器、各服务默认值".into());
 
     m.insert("help.network.smtp".into(), "smtp ## SMTP邮件客户端（--id, -i, -u, -pwd, -s, -b, -f, --to）".into());
 
@@ -4605,7 +4801,19 @@ pub fn build_map() -> HashMap<String, String> {
 
     m.insert("help.report.txtc".into(), "txtc <文件> ## 将文件内容复制到剪贴板".into());
 
-    m.insert("help.report.txtf".into(), "txtf <文件> ## 显示文件内容".into());
+    m.insert("help.report.txtf".into(), "txtf [--head N|--tail N|--betw A:B] [文件] ## 显示文件内容（保留原始行号）".into());
+
+    m.insert("cmd.report.invalid_range".into(), "无效的范围：'{}'（应为 n:m，如 --betw 10:20）".into());
+
+    m.insert("help.view.file_usage".into(), "view <文件> [--head N|--tail N|--betw A:B] ## 显示文件内容（同 txtf）".into());
+
+    m.insert("help.view.example10".into(), "view main.rs --tail 30 ## 显示 main.rs 最后 30 行".into());
+
+    m.insert("help.view.example11".into(), "view main.rs --betw 10:20 ## 显示 main.rs 第 10-20 行".into());
+
+    m.insert("help.report.txtf_example1".into(), "txtf main.rs --head 30 ## 显示 main.rs 前 30 行".into());
+
+    m.insert("help.report.txtf_example2".into(), "txtf --betw 10:20 main.rs ## 显示 main.rs 第 10-20 行".into());
 
     m.insert("help.report.xlsx".into(), "report xlsx [路径] ## 生成XLSX报告（含依赖分析）".into());
 
@@ -4643,7 +4851,7 @@ pub fn build_map() -> HashMap<String, String> {
 
     m.insert("help.size.care".into(), "size --care ## 计算所有文件的大小（care 模式）".into());
 
-    m.insert("help.size.path".into(), "size -p, --path <路径|@tp> ## 显示指定路径或传送点的大小".into());
+    m.insert("help.size.path".into(), "size -p, --path <文件|路径|@tp> ## 显示指定文件、路径或传送点的大小".into());
 
     m.insert("help.size.size".into(), "size ## 显示当前目录大小".into());
 
@@ -4762,7 +4970,11 @@ pub fn build_map() -> HashMap<String, String> {
     m.insert("help.scan.example4".into(), "scan port 192.168.1.1 --top 10 ## 扫描前 10 个端口".into());
 
     m.insert("help.scan.example5".into(), "scan ip 192.168.1.0/24 ## 扫描存活主机".into());
+    m.insert("help.scan.example6".into(), "scan files *.rs ## 按名称匹配列出文件".into());
+    m.insert("help.scan.example7".into(), "scan dir k* ## 按名称匹配列出目录".into());
     m.insert("help.scan.ext".into(), "scan ext <扩展名...> ## 按扩展名列出文件（不统计行数）".into());
+    m.insert("help.scan.files".into(), "scan files [匹配] ## 按名称匹配列出文件（* 表示全部）".into());
+    m.insert("help.scan.dir".into(), "scan dir [匹配] ## 按名称匹配列出目录（* 表示全部）".into());
 
     m.insert("help.scan.port".into(), "scan port [主机] [--top N | --ports <范围> | --all] ## TCP 端口扫描".into());
 
@@ -4799,15 +5011,21 @@ pub fn build_map() -> HashMap<String, String> {
 
     m.insert("help.view.depth".into(), "view -d, --depth <n> ## 使用自定义深度显示树".into());
 
-    m.insert("help.view.dirsize".into(), "view -ds, --dirsize ## 显示仅含目录大小的树".into());
+    m.insert("help.view.dirsize".into(), "view -ds, --dirsize [最小值] ## 显示目录大小；带值时隐藏更小的目录".into());
+
+    m.insert("help.view.head".into(), "view --head <n> ## 仅显示前 n 行树".into());
+
+    m.insert("help.view.tail".into(), "view --tail <n> ## 仅显示后 n 行树".into());
+
+    m.insert("help.view.sort".into(), "view --sort size|char|ext ## 排序子项（目录仍在前）".into());
 
     m.insert("help.view.ext".into(), "view -ext, --ext <扩展名...> ## 仅显示匹配扩展名的树".into());
 
-    m.insert("help.view.filesize".into(), "view -fs, --filesize ## 显示仅含文件大小的树".into());
+    m.insert("help.view.filesize".into(), "view -fs, --filesize [最小值] ## 显示文件大小；带值时隐藏更小的文件".into());
 
     m.insert("help.view.path".into(), "view -p, --path <路径|@tp> ## 显示指定路径或传送点的树".into());
 
-    m.insert("help.view.size".into(), "view -s, --size ## 显示含目录和文件大小的树".into());
+    m.insert("help.view.size".into(), "view -s, --size [最小值] ## 显示大小；带值如 10KB、1.5MB 时隐藏更小的项".into());
 
     m.insert("help.view.time".into(), "view --time, -t ## 显示含执行时间的树".into());
 
@@ -5179,7 +5397,7 @@ pub fn build_map() -> HashMap<String, String> {
 
     m.insert("misc.mv.not_exist".into(), "mv：源不存在：'{}'".into());
 
-    m.insert("misc.mv.usage".into(), "用法：mv <源> <目标|@tp> [-f]".into());
+    m.insert("misc.mv.usage".into(), "用法：mv <源|@tp> <目标|@tp> [-f]".into());
 
     m.insert("misc.cp.error".into(), "cp：{}".into());
 
@@ -5193,7 +5411,7 @@ pub fn build_map() -> HashMap<String, String> {
 
     m.insert("misc.cp.same".into(), "cp：源和目标是同一文件：'{}'".into());
 
-    m.insert("misc.cp.usage".into(), "用法：cp <源> <目标|@tp> [-f]".into());
+    m.insert("misc.cp.usage".into(), "用法：cp <源|@tp> <目标|@tp> [-f]".into());
 
     m.insert("misc.say.example1".into(), " say \"hello world\" --loop 5 -n # 5行".into());
 
@@ -5455,6 +5673,12 @@ pub fn build_map() -> HashMap<String, String> {
     m.insert("msg.showcg.label_watch_limit".into(), "监视器行数：".into());
 
     m.insert("msg.showcg.label_dir_view".into(), "目录视图：".into());
+
+    m.insert("msg.showcg.label_serve_files".into(), "Serve 文件服务：".into());
+
+    m.insert("msg.showcg.label_serve_http".into(), "Serve 静态服务：".into());
+
+    m.insert("msg.showcg.label_serve_chess".into(), "Serve 象棋服务：".into());
 
     m.insert("msg.showcg.title".into(), "当前配置".into());
 
@@ -5937,6 +6161,8 @@ pub fn build_map() -> HashMap<String, String> {
     m.insert("output.filename_header".into(), "{}：".into());
 
     m.insert("output.line_prefix".into(), "行 {} >>".into());
+
+    m.insert("output.range_past_eof".into(), "（范围超出文件末尾 — 无内容可显示）".into());
 
     m.insert("output.mkdir_failed".into(), "创建目录失败：{}".into());
 
@@ -6434,10 +6660,11 @@ pub fn build_map() -> HashMap<String, String> {
     // help alias
     m.insert("help.alias.example1".into(), "ral add build \"cargo build\" ## 创建简单别名".into());
     m.insert("help.alias.example2".into(), "ral add greet(x) \"echo Hello $x\" ## 创建参数化别名".into());
-    m.insert("help.alias.example3".into(), "ral add copy(x) \"cp $x ${{x}}.bak\" ## 带默认值的别名".into());
+    m.insert("help.alias.example3".into(), "ral add v \"view --care -t -d ${x:-1}\" ## 带默认值的别名".into());
     m.insert("help.alias.example4".into(), "ral list ## 显示所有别名".into());
     m.insert("help.alias.example5".into(), "ral export --all myaliases ## 导出别名".into());
     m.insert("help.alias.example6".into(), "build ## 直接运行别名".into());
+    m.insert("help.alias.example7".into(), "ral hintn add port [8080,5050] ## 命名列表供 #x --hint-n port 使用".into());
 
     // help view
     m.insert("help.view.example1".into(), "view ## 显示目录树".into());
@@ -6448,10 +6675,14 @@ pub fn build_map() -> HashMap<String, String> {
     m.insert("help.view.example6".into(), "view -p C:\\code\\project ## 显示指定路径的目录树".into());
     m.insert("help.view.example7".into(), "view @web ## 显示传送点的目录树".into());
 
+    m.insert("help.view.example8".into(), "view -s 10MB ## 仅显示至少 10MB 的文件/目录".into());
+
+    m.insert("help.view.example9".into(), "view --sort size --head 20 ## 按大小排序并显示前 20 行".into());
+
     // help size
     m.insert("help.size.example1".into(), "size ## 显示当前目录大小".into());
     m.insert("help.size.example2".into(), "size ../src ## 显示其他目录的大小".into());
-    m.insert("help.size.example3".into(), "size -p C:\\code\\project ## 显示指定路径的大小".into());
+    m.insert("help.size.example3".into(), "size Cargo.toml ## 显示文件的大小".into());
     m.insert("help.size.example4".into(), "size @web --care -t ## 传送点使用 care 模式并显示耗时".into());
 
     // help report
@@ -6485,7 +6716,7 @@ pub fn build_map() -> HashMap<String, String> {
     m.insert("help.network.example3".into(), "dl https://example.com/file.zip --progress ## 下载并显示进度".into());
     m.insert("help.network.example4".into(), "ping google.com ## Ping google.com".into());
     m.insert("help.network.example5".into(), "dns example.com -t MX ## 查询 DNS MX 记录".into());
-    m.insert("help.network.example6".into(), "serve 8080 ## 在端口 8080 启动 HTTP 服务器".into());
+    m.insert("help.network.example6".into(), "serve files --port 8080 ## 在端口 8080 启动文件网盘服务器".into());
 
     // help clipboard
     m.insert("help.clipboard.example1".into(), "clip ## 显示剪贴板历史".into());
@@ -6626,6 +6857,44 @@ pub fn build_map() -> HashMap<String, String> {
     m.insert("help.config.git".into(), "config git ON|OFF ## 启用/禁用 git 集成（提示符和符号）".into());
 
     m.insert("help.config.dir_view".into(), "config dir_view ON|OFF ## 在shell中显示/隐藏目录树".into());
+
+    m.insert("help.config.serve".into(), "config serve [服务] [--port-default 端口] [--bind-default 地址] ## serve 各服务默认值（别名：serve config）".into());
+
+    m.insert("cmd.config.serve.title".into(), "Serve 配置（各服务默认值）".into());
+
+    m.insert("cmd.config.serve.status".into(), "  {}: {}:{}".into());
+
+    m.insert("cmd.config.serve.usage".into(), "用法：serve config [files|http-server|chess] [--port-default <端口>] [--bind-default <地址>]（别名：config serve …）".into());
+
+    m.insert("cmd.config.serve.example_show".into(), "  serve config                  显示所有服务".into());
+
+    m.insert("cmd.config.serve.example_show_one".into(), "  serve config files            显示文件服务默认值".into());
+
+    m.insert("cmd.config.serve.example_set".into(), "  serve config files --port-default 9000   设置文件服务默认端口".into());
+
+    m.insert("cmd.config.serve.saved".into(), "Serve {} 默认值已保存：{}:{}".into());
+
+    m.insert("cmd.config.serve.invalid_service".into(), "未知服务 '{}'（请用 files|http-server|chess）".into());
+
+    m.insert("cmd.config.serve.invalid_port".into(), "无效端口 '{}'（请用 1-65535）".into());
+
+    m.insert("cmd.config.serve.empty_bind".into(), "--bind-default 缺少值".into());
+
+    m.insert("cmd.config.serve.unknown_option".into(), "未知：{}".into());
+
+    m.insert("cmd.serve.current_defaults".into(), "已配置默认值（serve config）：端口 {}，绑定 {}".into());
+
+    m.insert("cmd.serve.chess_no_auth".into(), "`serve chess` 不支持 --auth（热座模式无需登录）".into());
+
+    m.insert("cmd.serve.chess_serving".into(), "象棋服务器运行于".into());
+
+    m.insert("cmd.serve.chess_title".into(), "象棋（双人热座）".into());
+
+    m.insert("cmd.serve.chess_usage".into(), "serve chess [--port 8000] [选项]".into());
+
+    m.insert("cmd.serve.example_chess_default".into(), "  serve chess              在 8080 上运行象棋".into());
+
+    m.insert("cmd.serve.example_chess_port".into(), "  serve chess --port 9000  在 9000 上运行象棋".into());
 
     m.insert("git.no_git_binary".into(), "未安装 Git。请运行 `ntpkg install git` 安装。".into());
 

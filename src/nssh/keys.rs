@@ -12,9 +12,7 @@
 //! Also implements the OpenSSH-style `~.` escape: `~` as the first
 //! character after a newline, followed by `.`, force-disconnects.
 
-use crossterm::event::{
-    KeyCode, KeyEvent, KeyModifiers, MouseButton, MouseEvent, MouseEventKind,
-};
+use crossterm::event::{KeyCode, KeyEvent, KeyModifiers, MouseButton, MouseEvent, MouseEventKind};
 
 /// BACKSPACE byte: DEL matches the Linux `stty erase` default (`^?`).
 pub const BACKSPACE_BYTE: u8 = 0x7F;
@@ -267,7 +265,16 @@ pub fn translate_mouse(m: &MouseEvent) -> Option<Vec<u8>> {
         cb += 16;
     }
     let suffix = if release { b'm' } else { b'M' };
-    Some(format!("\x1B[<{0};{1};{2}{3}", cb, m.column + 1, m.row + 1, suffix as char).into_bytes())
+    Some(
+        format!(
+            "\x1B[<{0};{1};{2}{3}",
+            cb,
+            m.column + 1,
+            m.row + 1,
+            suffix as char
+        )
+        .into_bytes(),
+    )
 }
 
 fn button_base(b: MouseButton) -> u8 {
@@ -314,34 +321,25 @@ mod tests {
     fn basics() {
         assert_eq!(tx(KeyCode::Enter), TranslateOut::Bytes(vec![b'\r']));
         assert_eq!(tx(KeyCode::Tab), TranslateOut::Bytes(vec![b'\t']));
-        assert_eq!(tx(KeyCode::BackTab), TranslateOut::Bytes(b"\x1B[Z".to_vec()));
+        assert_eq!(
+            tx(KeyCode::BackTab),
+            TranslateOut::Bytes(b"\x1B[Z".to_vec())
+        );
         // Agreed default: DEL matches Linux `stty erase ^?`.
         assert_eq!(tx(KeyCode::Backspace), TranslateOut::Bytes(vec![0x7F]));
         assert_eq!(tx(KeyCode::Esc), TranslateOut::Bytes(vec![0x1B]));
-        assert_eq!(
-            tx(KeyCode::Char('a')),
-            TranslateOut::Bytes(b"a".to_vec())
-        );
+        assert_eq!(tx(KeyCode::Char('a')), TranslateOut::Bytes(b"a".to_vec()));
         // Ctrl+Z must reach remote undo as 0x1A, never console-EOF us.
         assert_eq!(
-            KeyTranslator::new().translate_key(&key_mod(
-                KeyCode::Char('z'),
-                KeyModifiers::CONTROL
-            )),
+            KeyTranslator::new().translate_key(&key_mod(KeyCode::Char('z'), KeyModifiers::CONTROL)),
             TranslateOut::Bytes(vec![0x1A])
         );
         assert_eq!(
-            KeyTranslator::new().translate_key(&key_mod(
-                KeyCode::Char('C'),
-                KeyModifiers::CONTROL
-            )),
+            KeyTranslator::new().translate_key(&key_mod(KeyCode::Char('C'), KeyModifiers::CONTROL)),
             TranslateOut::Bytes(vec![0x03])
         );
         assert_eq!(
-            KeyTranslator::new().translate_key(&key_mod(
-                KeyCode::Char('x'),
-                KeyModifiers::ALT
-            )),
+            KeyTranslator::new().translate_key(&key_mod(KeyCode::Char('x'), KeyModifiers::ALT)),
             TranslateOut::Bytes(vec![0x1B, b'x'])
         );
     }
@@ -354,10 +352,22 @@ mod tests {
         assert_eq!(tx(KeyCode::Left), TranslateOut::Bytes(b"\x1B[D".to_vec()));
         assert_eq!(tx(KeyCode::Home), TranslateOut::Bytes(b"\x1B[H".to_vec()));
         assert_eq!(tx(KeyCode::End), TranslateOut::Bytes(b"\x1B[F".to_vec()));
-        assert_eq!(tx(KeyCode::PageUp), TranslateOut::Bytes(b"\x1B[5~".to_vec()));
-        assert_eq!(tx(KeyCode::PageDown), TranslateOut::Bytes(b"\x1B[6~".to_vec()));
-        assert_eq!(tx(KeyCode::Insert), TranslateOut::Bytes(b"\x1B[2~".to_vec()));
-        assert_eq!(tx(KeyCode::Delete), TranslateOut::Bytes(b"\x1B[3~".to_vec()));
+        assert_eq!(
+            tx(KeyCode::PageUp),
+            TranslateOut::Bytes(b"\x1B[5~".to_vec())
+        );
+        assert_eq!(
+            tx(KeyCode::PageDown),
+            TranslateOut::Bytes(b"\x1B[6~".to_vec())
+        );
+        assert_eq!(
+            tx(KeyCode::Insert),
+            TranslateOut::Bytes(b"\x1B[2~".to_vec())
+        );
+        assert_eq!(
+            tx(KeyCode::Delete),
+            TranslateOut::Bytes(b"\x1B[3~".to_vec())
+        );
         assert_eq!(
             KeyTranslator::new().translate_key(&key_mod(KeyCode::Left, KeyModifiers::ALT)),
             TranslateOut::Bytes(b"\x1B[1;3D".to_vec())
@@ -380,7 +390,10 @@ mod tests {
         assert_eq!(tx(KeyCode::F(1)), TranslateOut::Bytes(b"\x1BOP".to_vec()));
         assert_eq!(tx(KeyCode::F(4)), TranslateOut::Bytes(b"\x1BOS".to_vec()));
         assert_eq!(tx(KeyCode::F(5)), TranslateOut::Bytes(b"\x1B[15~".to_vec()));
-        assert_eq!(tx(KeyCode::F(12)), TranslateOut::Bytes(b"\x1B[24~".to_vec()));
+        assert_eq!(
+            tx(KeyCode::F(12)),
+            TranslateOut::Bytes(b"\x1B[24~".to_vec())
+        );
         assert_eq!(
             KeyTranslator::new().translate_key(&key_mod(KeyCode::F(5), KeyModifiers::CONTROL)),
             TranslateOut::Bytes(b"\x1B[15;5~".to_vec())
@@ -401,17 +414,41 @@ mod tests {
     fn tilde_dot_escapes() {
         let mut tr = KeyTranslator::new();
         // `~` mid-line is literal.
-        assert_eq!(tr.translate_key(&key(KeyCode::Char('~'))), TranslateOut::Bytes(b"~".to_vec()));
+        assert_eq!(
+            tr.translate_key(&key(KeyCode::Char('~'))),
+            TranslateOut::Bytes(b"~".to_vec())
+        );
         // Fresh line: `~` arms, `.` quits.
-        assert_eq!(tr.translate_key(&key(KeyCode::Enter)), TranslateOut::Bytes(vec![b'\r']));
-        assert_eq!(tr.translate_key(&key(KeyCode::Char('~'))), TranslateOut::Ignore);
-        assert_eq!(tr.translate_key(&key(KeyCode::Char('.'))), TranslateOut::ForceQuit);
+        assert_eq!(
+            tr.translate_key(&key(KeyCode::Enter)),
+            TranslateOut::Bytes(vec![b'\r'])
+        );
+        assert_eq!(
+            tr.translate_key(&key(KeyCode::Char('~'))),
+            TranslateOut::Ignore
+        );
+        assert_eq!(
+            tr.translate_key(&key(KeyCode::Char('.'))),
+            TranslateOut::ForceQuit
+        );
         // `~~` is a literal tilde, no quit follows.
         let mut tr = KeyTranslator::new();
-        assert_eq!(tr.translate_key(&key(KeyCode::Enter)), TranslateOut::Bytes(vec![b'\r']));
-        assert_eq!(tr.translate_key(&key(KeyCode::Char('~'))), TranslateOut::Ignore);
-        assert_eq!(tr.translate_key(&key(KeyCode::Char('~'))), TranslateOut::Bytes(b"~".to_vec()));
-        assert_eq!(tr.translate_key(&key(KeyCode::Char('.'))), TranslateOut::Bytes(b".".to_vec()));
+        assert_eq!(
+            tr.translate_key(&key(KeyCode::Enter)),
+            TranslateOut::Bytes(vec![b'\r'])
+        );
+        assert_eq!(
+            tr.translate_key(&key(KeyCode::Char('~'))),
+            TranslateOut::Ignore
+        );
+        assert_eq!(
+            tr.translate_key(&key(KeyCode::Char('~'))),
+            TranslateOut::Bytes(b"~".to_vec())
+        );
+        assert_eq!(
+            tr.translate_key(&key(KeyCode::Char('.'))),
+            TranslateOut::Bytes(b".".to_vec())
+        );
     }
 
     #[test]

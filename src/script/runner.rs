@@ -66,7 +66,12 @@ pub(crate) fn run_script(
                         if continue_on_err {
                             print_warning(&t!("scr.continue_warn", line_no));
                         } else {
-                            print_error(&t!("scr.error_at", display, line_no, t!("scr.cmd_failed")));
+                            print_error(&t!(
+                                "scr.error_at",
+                                display,
+                                line_no,
+                                t!("scr.cmd_failed")
+                            ));
                             print_error(&t!("scr.failed_abort", display, line_no, errors));
                             return Ok(());
                         }

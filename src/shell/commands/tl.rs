@@ -1,10 +1,10 @@
-use colored::*;
 use crate::config::Config;
 use crate::filetype::{is_supported_format_with_config, make_ignored_dir_filter, FormatConfig};
 use crate::navigator::Navigator;
 use crate::output::print_error;
 use crate::t;
 use anyhow::Result;
+use colored::*;
 use std::collections::BTreeMap;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -192,9 +192,7 @@ fn cmd_tl_ext(rest: &str, nav: &Navigator) -> Result<bool> {
 
     match sort {
         Some(TlSort::LineAsc) => entries.sort_by_key(|(_, l)| *l),
-        Some(TlSort::LineDesc) => {
-            entries.sort_by_key(|(_, l)| std::cmp::Reverse(*l))
-        }
+        Some(TlSort::LineDesc) => entries.sort_by_key(|(_, l)| std::cmp::Reverse(*l)),
         _ => {}
     }
 
@@ -206,7 +204,15 @@ fn cmd_tl_ext(rest: &str, nav: &Navigator) -> Result<bool> {
         println!("{}", "─".repeat(40));
         println!("{}", t!("cmd.tl.total_files_lines", count, total_lines));
         if max > 0 {
-            let highest = t!("cmd.tl.highest", entries.iter().find(|(_, l)| *l == max).map(|(r, _)| r).unwrap_or(&String::new()), max);
+            let highest = t!(
+                "cmd.tl.highest",
+                entries
+                    .iter()
+                    .find(|(_, l)| *l == max)
+                    .map(|(r, _)| r)
+                    .unwrap_or(&String::new()),
+                max
+            );
             print_highlight_line(highest, true);
         }
     } else {
@@ -279,9 +285,7 @@ fn cmd_tl_dir(rest: &str, nav: &Navigator) -> Result<bool> {
 
     match sort {
         Some(TlSort::LineAsc) => rows.sort_by_key(|(_, _, l)| *l),
-        Some(TlSort::LineDesc) => {
-            rows.sort_by_key(|(_, _, l)| std::cmp::Reverse(*l))
-        }
+        Some(TlSort::LineDesc) => rows.sort_by_key(|(_, _, l)| std::cmp::Reverse(*l)),
         _ => {}
     }
 

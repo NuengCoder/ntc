@@ -236,6 +236,74 @@ pub fn build_map() -> HashMap<String, String> {
 
     m.insert("alias.ral.info_params".into(), "Parameters".into());
 
+    m.insert("alias.ral.info_hints".into(), "Completion hints".into());
+
+    m.insert("alias.ral.hints_saved".into(), "Completion hints: {}".into());
+
+    m.insert("alias.ral.hint_error".into(), "Bad completion hints ({}): alias not saved.".into());
+
+    m.insert("alias.ral.hint_usage".into(), "Hints look like: #x --hint-dir  #y --hint-tp --hint-dir  (--hint-tp|--hint-ext [list]|--hint-spf|--hint-file|--hint-dir|--hint-fd|--hint-all)  Selects look like: #x --select-dir  #x --select-ext rs,txt  (--select-dir|--select-ext [list]|--select-file|--select-fd|--select-tp)  Inline values: #x --hint [8080,5000]  Named lists: #x --hint-n port (see ral hintn)".into());
+
+    m.insert("alias.ral.hint_cmd".into(), " ral add <name> <command> #x --hint-dir  Complete param x as a directory".into());
+
+    m.insert("alias.ral.select_cmd".into(), " ral add <name> <command> #x --select-dir  Prompt to pick param x when missing".into());
+
+    m.insert("alias.ral.hintn_cmd".into(), " ral hintn add|rm|rnm|info|ls  Manage named value lists for #x --hint-n <list>".into());
+
+    m.insert("alias.ral.usage_hintn".into(), "Usage: ral hintn add <name> [values] | ral hintn rm <name>[, ...] [--force] | ral hintn rnm <old> to <new> | ral hintn info <name> | ral hintn ls".into());
+
+    m.insert("alias.ral.usage_hintn_add".into(), "Usage: ral hintn add <name> [value, ...]  (quote values with spaces: [\"what is this\", ok])".into());
+
+    m.insert("alias.ral.usage_hintn_rm".into(), "Usage: ral hintn rm <name>[, ...] [--force]".into());
+
+    m.insert("alias.ral.usage_hintn_rnm".into(), "Usage: ral hintn rnm <old> to <new>".into());
+
+    m.insert("alias.ral.usage_hintn_info".into(), "Usage: ral hintn info <name>".into());
+
+    m.insert("alias.ral.hintn_added".into(), "Hint list '{}' saved ({} values): {}".into());
+
+    m.insert("alias.ral.hintn_removed".into(), "Hint list '{}' removed.".into());
+
+    m.insert("alias.ral.hintn_not_found".into(), "Hint list '{}' not found.".into());
+
+    m.insert("alias.ral.hintn_renamed".into(), "Hint list '{}' renamed to '{}'.".into());
+
+    m.insert("alias.ral.hintn_empty".into(), "No hint lists defined. Use 'ral hintn add <name> [values]'.".into());
+
+    m.insert("alias.ral.hintn_referenced".into(), "Hint list '{}' is used by: {}. Use --force to remove anyway.".into());
+
+    m.insert("alias.ral.hintn_info_title".into(), "📌 Hint List Info".into());
+
+    m.insert("alias.ral.hintn_info_name".into(), "Name".into());
+
+    m.insert("alias.ral.hintn_info_values".into(), "Values".into());
+
+    m.insert("alias.ral.hintn_info_used_by".into(), "Used by".into());
+
+    m.insert("alias.ral.hintn_list_title_global".into(), "📌 Hint Lists (global)".into());
+
+    m.insert("alias.ral.hintn_list_title_local".into(), "📌 Hint Lists (from local ntconfig.toml)".into());
+
+    m.insert("alias.ral.hintn_value_count".into(), "{} values".into());
+
+    m.insert("alias.ral.unknown_hint_list".into(), "Unknown hint list: '{}'.".into());
+
+    m.insert("alias.ral.hintn_create_hint".into(), "Create it first: ral hintn add {} [values]".into());
+
+    m.insert("alias.ral.arr_sep_error".into(), "error: {} have {} char in the array {} try $x[,] or $x[c]".into());
+
+    m.insert("alias.ral.example_hint_ext".into(), "ral add opimg \"image display ${x}\" #x --hint-ext png,jpeg,jpg,ico,bmp".into());
+
+    m.insert("alias.ral.example_hint_array".into(), "ral add runc \"gcc -o ${o}.exe $x[] && .\\${o}.exe && rmf ${o}.exe\" #x[] --hint-ext c".into());
+
+    m.insert("alias.ral.example_select_dir".into(), "ral add tldsel \"tl dir ${x:-.}\" #x --select-dir".into());
+
+    m.insert("alias.ral.example_hint_values".into(), "ral add srv \"ssh $p\" #p --hint [8080,5050,5000]".into());
+
+    m.insert("alias.ral.example_hintn".into(), "ral hintn add port [8080,5050,5000] + ral add srvn \"ssh $p\" #p --hint-n port".into());
+
+    m.insert("alias.ral.example_hint_sep".into(), "array join: $x[,] over [a,b] gives \"a , b\" (sep + suffix per element: $x[,].c)".into());
+
     m.insert("alias.ral.info_source".into(), "Source".into());
 
     m.insert("alias.ral.info_source_global".into(), "global".into());
@@ -324,7 +392,7 @@ pub fn build_map() -> HashMap<String, String> {
 
     m.insert("alias.ral.run_example3".into(), "  run_file(hello)      # Executes: python hello.py".into());
 
-    m.insert("alias.ral.run_example4".into(), "  runc [add,minus,mul] math  # Executes: cls && gcc -o math.exe add.c minus.c mul.c && ...".into());
+    m.insert("alias.ral.run_example4".into(), "  runc [add , minus , mul] math  # Executes: cls && gcc -o math.exe add.c minus.c mul.c && ...".into());
 
     m.insert("alias.ral.export_example1".into(), "  ral export --all myaliases       # Creates myaliases.ntc.ral".into());
 
@@ -960,7 +1028,7 @@ pub fn build_map() -> HashMap<String, String> {
 
     m.insert("cli.helpers.report_options".into(), " -i, --input <path> Process a file or directory\n -o, --output <file> Save output to specified file\n -f, --format <FORMAT> Output format: txt, html, json, md, pdf, docx, xlsx (default: txt)\n --cp Copy report to clipboard instead of saving to file\n --size Show current directory size\n --view Quick view of current directory tree\n --view --size Quick view with directory sizes\n".into());
 
-    m.insert("cli.helpers.shell_commands".into(), " ntc pathcp Copy path to clipboard\n ntc say \"hello\" --loop 3 Print text with loop\n ntc tl dir . Count lines in directory\n ntc ne Open text editor\n ntc size Show directory size\n ntc view Show directory tree\n ntc serve 8080 Start HTTP server on port 8080\n ntc dl https://example.com/file.zip --progress Download with progress\n ntc encode b64 hello Base64 encode a string\n ntc qr \"text\" Generate QR code in terminal\n ntc math 3+4*5 Evaluate expression\n ntc ral add btr \"cargo build --release\" Add alias from CLI\n".into());
+    m.insert("cli.helpers.shell_commands".into(), " ntc pathcp Copy path to clipboard\n ntc say \"hello\" --loop 3 Print text with loop\n ntc tl dir . Count lines in directory\n ntc ne Open text editor\n ntc size Show directory size\n ntc view Show directory tree\n ntc serve files --port 8080 Start files drive server on port 8080\n ntc dl https://example.com/file.zip --progress Download with progress\n ntc encode b64 hello Base64 encode a string\n ntc qr \"text\" Generate QR code in terminal\n ntc math 3+4*5 Evaluate expression\n ntc ral add btr \"cargo build --release\" Add alias from CLI\n".into());
 
     m.insert("cli.helpers.shell_header".into(), "SHELL COMMANDS (also work from CLI):".into());
 
@@ -971,6 +1039,38 @@ pub fn build_map() -> HashMap<String, String> {
     m.insert("cli.helpers.tp_options".into(), " --tp-add <name> Save current directory as teleport point\n --tp-list List all teleport points\n --tp-rm <name> Remove a teleport point\n".into());
 
     m.insert("cli.helpers.usage_header".into(), "USAGE:".into());
+
+    m.insert("cli.new.usage_header".into(), "Usage:".into());
+
+    m.insert("cli.new.usage_shell".into(), "  ntc                       Launch interactive shell".into());
+
+    m.insert("cli.new.usage_cmd".into(), "  ntc <command> [args...]   Run a shell command non-interactively".into());
+
+    m.insert("cli.new.usage_new".into(), "  ntc -n, --new [command]   Open a new terminal (run command there, stay interactive)".into());
+
+    m.insert("cli.new.usage_upgrade".into(), "  ntc --upgrade             Upgrade ntc to the latest version".into());
+
+    m.insert("cli.new.usage_version".into(), "  ntc --version, -v         Show version information".into());
+
+    m.insert("cli.new.usage_help".into(), "  ntc --help, -h            Show this help".into());
+
+    m.insert("cli.new.examples_header".into(), "Examples:".into());
+
+    m.insert("cli.new.ex_help".into(), "  ntc help                  Show shell help".into());
+
+    m.insert("cli.new.ex_version".into(), "  ntc version               Show version via shell".into());
+
+    m.insert("cli.new.ex_alias".into(), "  ntc t                     Run ral alias 't' (e.g. taskmgr)".into());
+
+    m.insert("cli.new.ex_new".into(), "  ntc -n                    Open a new interactive terminal".into());
+
+    m.insert("cli.new.ex_new_cmd".into(), "  ntc -n t                  Open a new terminal, run 't', stay interactive".into());
+
+    m.insert("cli.new.opened".into(), "Opened new terminal.".into());
+
+    m.insert("cli.new.no_terminal".into(), "no terminal found (tried: {})".into());
+
+    m.insert("cli.new.unsupported".into(), "ntc -n/--new is only supported on Windows, Linux and macOS".into());
 
     m.insert("cli.interactive.navigation".into(), " Navigation: cd, back, gos, gosc".into());
 
@@ -1186,7 +1286,7 @@ pub fn build_map() -> HashMap<String, String> {
 
     m.insert("cli.run.help_showcg".into(), "Show current configuration overview".into());
 
-    m.insert("cli.run.help_size".into(), "Show current directory size".into());
+    m.insert("cli.run.help_size".into(), "Show size of a file or directory".into());
 
     m.insert("cli.run.help_time".into(), "Show elapsed time (use with --size or --view)".into());
 
@@ -1242,7 +1342,7 @@ pub fn build_map() -> HashMap<String, String> {
 
     m.insert("cli.shell_cmd.say_loop".into(), " ntc say \"hello\" --loop 3 Print text with loop".into());
 
-    m.insert("cli.shell_cmd.serve".into(), " ntc serve 8080 Start HTTP server on port 8080".into());
+    m.insert("cli.shell_cmd.serve".into(), " ntc serve files --port 8080 Start files drive server on port 8080".into());
 
     m.insert("cli.shell_cmd.size".into(), " ntc size Show directory size".into());
 
@@ -1884,7 +1984,7 @@ pub fn build_map() -> HashMap<String, String> {
 
     m.insert("cmd.image.select_image".into(), "Select image:".into());
 
-    m.insert("cmd.image.usage".into(), "Usage: image <path> [display|show|to|out <format>] [--ocr] [--layout]".into());
+    m.insert("cmd.image.usage".into(), "Usage: image <path> [display|show [--sixel]|to|out <format>] [--ocr] [--layout]".into());
 
     m.insert("cmd.ipcfg.dns_label".into(), "DNS ......... :".into());
 
@@ -2217,6 +2317,10 @@ pub fn build_map() -> HashMap<String, String> {
     m.insert("cmd.scan.ext_usage".into(), "Usage: scan ext <ext...> [-d|--depth <n>] [-s|--size] [--care]".into());
     m.insert("cmd.scan.help_ext".into(), "  scan ext <ext...> [-d|--depth <n>] [-s|--size] [--care]  List files by extension (no line counts)".into());
 
+    m.insert("cmd.scan.help_files".into(), "  scan files [pattern] [-d|--depth <n>] [-s|--size] [--care]  List files by name pattern (* matches all)".into());
+
+    m.insert("cmd.scan.help_dir".into(), "  scan dir [pattern] [-d|--depth <n>] [-s|--size] [--care]  List directories by name pattern (* matches all)".into());
+
     m.insert("cmd.scan.help_port".into(), "  scan port [host] [--top N | --ports <spec> | --all] [--timeout MS]  TCP port scan (default host 127.0.0.1, top 20)".into());
 
     m.insert("cmd.scan.help_ip".into(), "  scan ip [cidr] [--top N | --ports <spec>] [--timeout MS]  Live-host sweep (default auto local /24)".into());
@@ -2246,6 +2350,16 @@ pub fn build_map() -> HashMap<String, String> {
 
     m.insert("cmd.scan.port_done".into(), "Open: {} of {} scanned.".into());
 
+    m.insert("cmd.scan.files_usage".into(), "Usage: scan files [pattern] [-d|--depth <n>] [-s|--size] [--care]".into());
+
+    m.insert("cmd.scan.dir_usage".into(), "Usage: scan dir [pattern] [-d|--depth <n>] [-s|--size] [--care]".into());
+
+    m.insert("cmd.scan.no_dirs".into(), "No {} directories found".into());
+
+    m.insert("cmd.scan.total_dirs".into(), "Total: {} directories".into());
+
+    m.insert("cmd.scan.total_dirs_size".into(), "Total: {} directories ({})".into());
+
     m.insert("cmd.scan.port_none".into(), "No open ports on {}.".into());
 
     m.insert("cmd.scan.port_start".into(), "Scanning {} ({} ports)...".into());
@@ -2261,7 +2375,11 @@ pub fn build_map() -> HashMap<String, String> {
     m.insert("cmd.scan.unexpected_arg".into(), "Unexpected argument: '{}'.".into());
     m.insert("cmd.scan.usage_title".into(), "Usage:".into());
 
-    m.insert("cmd.report.view_usage".into(), "Usage: view [-s|--size] [-c|--cp] [--care] [-t|--time] [-d|--depth <n>] [-p|--path <path|@tp>] [-ext|--ext <ext...>]".into());
+    m.insert("cmd.report.view_usage".into(), "Usage: view [-s|--size [min-size]] [-fs|--filesize [min-size]] [-ds|--dirsize [min-size]] [--sort size|char|ext] [--head <n>|--tail <n>] [-c|--cp] [--care] [-t|--time] [-d|--depth <n>] [-p|--path <path|@tp>] [-ext|--ext <ext...>]".into());
+
+    m.insert("cmd.report.invalid_sort".into(), "Invalid sort key: '{}' (size|char|ext)".into());
+
+    m.insert("cmd.report.invalid_count".into(), "Invalid line count: '{}' (must be > 0)".into());
 
     m.insert("cmd.serve.db_title".into(), "Database:".into());
 
@@ -2273,21 +2391,21 @@ pub fn build_map() -> HashMap<String, String> {
 
     m.insert("cmd.serve.db_title".into(), "Database:".into());
 
-    m.insert("cmd.serve.example_default".into(), "  serve                  HTTP on port 8080".into());
+    m.insert("cmd.serve.example_default".into(), "  serve files            HTTP on port 8080".into());
 
-    m.insert("cmd.serve.example_default".into(), "  serve                  HTTP on port 8080".into());
+    m.insert("cmd.serve.example_default".into(), "  serve files            HTTP on port 8080".into());
 
-    m.insert("cmd.serve.example_port".into(), "  serve 3000             HTTP on port 3000".into());
+    m.insert("cmd.serve.example_port".into(), "  serve files 3000       HTTP on port 3000".into());
 
-    m.insert("cmd.serve.example_port".into(), "  serve 3000             HTTP on port 3000".into());
+    m.insert("cmd.serve.example_port".into(), "  serve files 3000       HTTP on port 3000".into());
 
-    m.insert("cmd.serve.example_spa".into(), "  serve --spa            SPA fallback for React Router".into());
+    m.insert("cmd.serve.example_spa".into(), "  serve files --spa      SPA fallback for React Router".into());
 
-    m.insert("cmd.serve.example_spa".into(), "  serve --spa            SPA fallback for React Router".into());
+    m.insert("cmd.serve.example_spa".into(), "  serve files --spa      SPA fallback for React Router".into());
 
-    m.insert("cmd.serve.example_tunnel".into(), "  serve --tunnel         HTTP + cloudflared tunnel".into());
+    m.insert("cmd.serve.example_tunnel".into(), "  serve files --tunnel   HTTP + cloudflared tunnel".into());
 
-    m.insert("cmd.serve.example_tunnel".into(), "  serve --tunnel         HTTP + cloudflared tunnel".into());
+    m.insert("cmd.serve.example_tunnel".into(), "  serve files --tunnel   HTTP + cloudflared tunnel".into());
 
     m.insert("cmd.serve.examples_title".into(), "Examples:".into());
 
@@ -2327,7 +2445,7 @@ pub fn build_map() -> HashMap<String, String> {
 
     m.insert("cmd.serve.help_no_qr".into(), "  --no-qr               Suppress QR display".into());
 
-    m.insert("cmd.serve.example_share".into(), "  serve 8080 --share      Check internet, print LAN URL + QR".into());
+    m.insert("cmd.serve.example_share".into(), "  serve files 8080 --share  Check internet, print LAN URL + QR".into());
 
     m.insert("cmd.serve.share_checking".into(), "Checking internet connection...".into());
 
@@ -2349,9 +2467,9 @@ pub fn build_map() -> HashMap<String, String> {
 
     m.insert("cmd.serve.share_qr_fail".into(), "QR render failed: {}".into());
 
-    m.insert("cmd.serve.help_usage".into(), "serve [port] [options]".into());
+    m.insert("cmd.serve.help_usage".into(), "serve files [port] [options]".into());
 
-    m.insert("cmd.serve.help_usage".into(), "serve [port] [options]".into());
+    m.insert("cmd.serve.help_usage".into(), "serve files [port] [options]".into());
 
     m.insert("cmd.serve.help_web_dir".into(), "  --web-dir, -w <dir>   Serve custom frontend directory".into());
 
@@ -2359,7 +2477,7 @@ pub fn build_map() -> HashMap<String, String> {
 
     m.insert("cmd.serve.help_auth".into(), "  --auth <user:pass>    Require login for /api/* (e.g. --auth admin:secret)".into());
 
-    m.insert("cmd.serve.example_auth".into(), "  serve 8080 --auth admin:secret   HTTP on 8080, API needs login".into());
+    m.insert("cmd.serve.example_auth".into(), "  serve files 8080 --auth admin:secret   HTTP on 8080, API needs login".into());
 
     m.insert("cmd.serve.invalid_auth".into(), "Invalid --auth (use --auth <user:pass>)".into());
 
@@ -2534,6 +2652,36 @@ pub fn build_map() -> HashMap<String, String> {
     m.insert("cmd.serve.cloudflared_starting".into(), "Cloudflared tunnel starting (PID {})".into());
 
     m.insert("cmd.serve.cloudflared_missing".into(), "cloudflared not found: {}. Install: {}".into());
+
+    m.insert("cmd.serve.chess_soon".into(), "`serve chess` is coming soon (online multiplayer)".into());
+
+    m.insert("cmd.serve.services_title".into(), "Serve — pick a service".into());
+
+    m.insert("cmd.serve.services_usage".into(), "serve <service> [options]  (bare `serve` runs nothing)".into());
+
+    m.insert("cmd.serve.services_header".into(), "Services:".into());
+
+    m.insert("cmd.serve.services_row_files".into(), "  files         File-drive web UI (upload/download in browser)".into());
+
+    m.insert("cmd.serve.services_row_http".into(), "  http-server   Static server for the current directory".into());
+
+    m.insert("cmd.serve.services_row_chess".into(), "  chess         2-player hotseat chess in the browser".into());
+
+    m.insert("cmd.serve.services_row_config".into(), "  config        Show/set per-service defaults (port, bind)".into());
+
+    m.insert("cmd.serve.services_example_files".into(), "  serve files --port 9000".into());
+
+    m.insert("cmd.serve.services_example_http".into(), "  serve http-server ./dist".into());
+
+    m.insert("cmd.serve.services_example_config".into(), "  serve config files --port-default 9000".into());
+    m.insert("cmd.serve.http_title".into(), "HTTP Static Server (CWD)".into());
+    m.insert("cmd.serve.http_usage".into(), "serve http-server [dir] [--port 8000] [options]".into());
+    m.insert("cmd.serve.example_http_default".into(), "  serve http-server            Serve CWD on port 8080".into());
+    m.insert("cmd.serve.example_http_dir".into(), "  serve http-server ./dist --port 8001   Serve ./dist on 8001".into());
+    m.insert("cmd.serve.example_http_auth".into(), "  serve http-server --auth admin:secret  Require login".into());
+    m.insert("cmd.serve.help_auth_http".into(), "  --auth <user:pass>    Require login for all routes (e.g. --auth admin:secret)".into());
+    m.insert("cmd.serve.http_serving".into(), "Serving".into());
+    m.insert("cmd.serve.http_no_dir".into(), "Directory '{}' not found".into());
 
     m.insert("cmd.smtp.build_fail".into(), "Failed to build email message".into());
 
@@ -3222,6 +3370,20 @@ pub fn build_map() -> HashMap<String, String> {
 
     m.insert("editor.cmd_run_missing".into(), "run: missing command".into());
 
+    m.insert(
+        "editor.nerun_no_file".into(),
+        "run: save the file before running".into(),
+    );
+
+    m.insert("editor.nerun_save_failed".into(), "run: save failed: {}".into());
+
+    m.insert(
+        "editor.nerun_no_runner".into(),
+        "run: no runner for .{} — edit {}".into(),
+    );
+
+    m.insert("editor.nerun_running".into(), "Running {}: {}".into());
+
     m.insert("editor.cmd_save_failed".into(), "Save failed:".into());
 
     m.insert("editor.cmd_saved".into(), "Saved".into());
@@ -3258,7 +3420,9 @@ pub fn build_map() -> HashMap<String, String> {
 
     m.insert("editor.cmd_unknown".into(), "Unknown command:".into());
 
-    m.insert("editor.cmd_visual_hint".into(), "Visual mode arrow keys to select, Esc to exit".into());
+    m.insert("editor.cmd_visual_hint".into(), "Visual: arrows select, Alt+hjkl/arrows moves selection, Esc exits".into());
+
+    m.insert("editor.visual_dedent_blocked".into(), "Alt+h needs indent on every selected line".into());
 
     m.insert("editor.color_off".into(), "Color: OFF".into());
 
@@ -3446,7 +3610,7 @@ pub fn build_map() -> HashMap<String, String> {
 
     m.insert("editor.gs_loading".into(), " finding... {} pls wait".into());
 
-    m.insert("editor.help_screen".into(), " NORMAL MODE (vim-style verbs + motion)\n i=insert v=visual q=query n=save c=copy e=nfe f=find b=files t=term u=encoding g=gmode :=cmd ?=help 0=exit(dirty-checked)\n hjkl/awsd/arrows move \u{B7} Home/End line \u{B7} PgUp/PgDn page \u{B7} ^J=jump\n\n GMODE (press g, type, Enter)\n t/T=next/prev tab qt=close tab aqt=close all N=goto line q=exit Esc=cancel\n\n NFE SIDEBAR (press e)\n hjkl/arrows/wasd move \u{B7} Enter=dir-cd/file-open(stay) \u{B7} Esc=back\n\n INSERT MODE (editing)\n type to insert \u{B7} arrows move \u{B7} Esc=normal ^S=save ^Z=undo ^R=redo ^D=multi ^F=find ^N=files ^P=paste ^T=term ^J=jump ^E=cmd \u{B7} Home/End line \u{B7} PgUp/PgDn page \u{B7} F3/Sh+F3 find next/prev\n\n VISUAL MODE (selection)\n hjkl/arrows move (Shift selects) \u{B7} a=select-all toggle c=copy x=cut y=yank p=paste :=cmd e=nfe f=find g=gmode \u{B7} Esc=exit\n\n COMMAND MODE\n :<number> go to line number\n :l N or :line N go to line N\n :q or :quit quit editor (with save prompt)\n :wq save and quit\n :w or :write save file\n :auto on enable auto-save\n :auto off disable auto-save\n :syntax on enable syntax highlighting\n :syntax off disable syntax highlighting\n :color on|off toggle color output\n :cd <path> change directory (Navigator)\n :back [N] go to parent directory (N levels)\n :gos <N> navigate to Nth subdirectory\n :gosc list numbered subdirectories\n :mkdir <dir> create directory\n :mkd <dir> create directory (alias for :mkdir)\n :touch <file> create new file\n :mkf <file> create new file (alias for :touch)\n :rmd <target> recursively delete directory\n :rmf <target> force delete file or directory\n :rnmf <src> <dst> rename file\n :rnmd <src> <dst> rename directory\n :ne <file> navigate & edit (create if missing)\n :ne . show CWD in sidebar\n :theme <name> switch to theme by name\n :theme list list available themes\n :theme show current theme\n :git diff or :gd show git diff of current file\n :git blame or :blame show blame of current line\n :tp <name> jump to teleport savepoint\n :tp-add <name> save CWD as teleport\n :gs <pattern> search file contents across project\n :run <command> execute command in persistent run panel\n Esc cancel\n\n QUERY MODE (q in Normal, Ctrl+Alt+Q in Insert, :x in Command — leading / optional)\n /s 'text' select next occurrence after cursor (wraps); bare /s selects word under cursor\n /l N go to line N (cursor to line start)\n /sa 'text' select all occurrences in buffer\n /sal select all lines\n /sl N select line N; /sl A B range A..B (any order); /sl A , B , … discrete lines\n /rp <find> <replace> replace in selection (selection required; quote multi-word: /rp 'a b' 'c')\n /add <text> to #end|#start|#hm append/prepend on selected lines (selection required)\n /set <pat> to #end|#start|#hm align first occurrence of pat (selection required)\n /c | /cs clear selection\n /upper uppercase selection (selection required)\n /lower lowercase selection (selection required)\n /qal add <n> <q> add query alias (e.g. /qal sw /rp ${1} ${2})\n /qal rm <n> remove alias\n /qal info <n> show alias\n /qal edit <n> <q> update alias\n /qal rnm <a> to <b> rename alias\n /qal list list aliases\n <name> [args] run alias directly (no / needed)\n /undo undo\n /redo redo\n /exit /quit /Esc exit Query Mode\n ; chain multiple commands\n ${1} ${2} alias positional params\n ${1:-default} alias param with default\n ${1[]} alias array param (all remaining args)\n\n TERMINAL / RUN PANEL\n Ctrl+T toggle terminal panel\n :run <command> execute command, opens persistent run panel\n mouse click panel to focus, click editor to return\n Esc (in panel) run: close | terminal: return to editor\n drag \u{2500}\u{2500}\u{2500} row resize panel height".into());
+    m.insert("editor.help_screen".into(), " NORMAL MODE (vim-style verbs + motion)\n i=insert v=visual q=query x=save n=file m=dir c=copy e=nfe f=find b=files t=term u=encoding g=gmode :=cmd ?=help 0=exit(dirty-checked)\n hjkl/awsd/arrows move \u{B7} Home/End line \u{B7} PgUp/PgDn page \u{B7} ^J=jump\n\n GMODE (press g, type, Enter)\n t/T=next/prev tab qt=close tab aqt=close all N=goto line q=exit u=undo r=redo n=file m=dir i=insert v=visual e=nfe Esc=cancel\n\n NFE SIDEBAR (press e)\n hjkl/arrows/wasd move \u{B7} Enter=dir-cd/file-open(stay) \u{B7} i=insert v=visual \u{B7} Esc=back\n\n INSERT MODE (editing)\n type to insert \u{B7} arrows move \u{B7} Esc=normal ^S=save ^Z=undo ^R=redo ^D=multi ^F=find ^N=files ^P=paste ^T=term ^G=gmode ^E=nfe ^W=visual ^:=cmd \u{B7} Home/End line \u{B7} PgUp/PgDn page \u{B7} F3/Sh+F3 find next/prev\n\n VISUAL MODE (selection)\n hjkl/arrows move (Shift selects) \u{B7} Alt+hjkl/arrows moves selection (j/k) or indents it (h/l) \u{B7} i=insert u=undo r=redo a=select-all toggle c=copy x=cut p=paste :=cmd e=nfe f=find g=gmode \u{B7} Esc=exit\n\n COMMAND MODE\n :<number> go to line number\n :l N or :line N go to line N\n :q or :quit quit editor (with save prompt)\n :wq save and quit\n :w or :write save file\n :auto on enable auto-save\n :auto off disable auto-save\n :syntax on enable syntax highlighting\n :syntax off disable syntax highlighting\n :color on|off toggle color output\n :cd <path> change directory (Navigator)\n :back [N] go to parent directory (N levels)\n :gos <N> navigate to Nth subdirectory\n :gosc list numbered subdirectories\n :mkdir <dir> create directory\n :mkd <dir> create directory (alias for :mkdir)\n :touch <file> create new file\n :mkf <file> create new file (alias for :touch)\n :rmd <target> recursively delete directory\n :rmf <target> force delete file or directory\n :rnmf <src> <dst> rename file\n :rnmd <src> <dst> rename directory\n :ne <file> navigate & edit (create if missing)\n :ne . show CWD in sidebar\n :e open file explorer (nfe)\n :theme <name> switch to theme by name\n :theme list list available themes\n :theme show current theme\n :git diff or :gd show git diff of current file\n :git blame or :blame show blame of current line\n :tp <name> jump to teleport savepoint\n :tp-add <name> save CWD as teleport\n :gs <pattern> search file contents across project\n :run run current file via nerun.toml in terminal (extension-mapped, editable)\n :u undo last op\n :r redo last op\n :! <cmd> run command in terminal\n Esc cancel\n\n QUERY MODE (q in Normal, Ctrl+Alt+Q in Insert, :x in Command — leading / optional)\n /s 'text' select next occurrence after cursor (wraps); bare /s selects word under cursor\n /l N go to line N (cursor to line start)\n /sa 'text' select all occurrences in buffer\n /sal select all lines\n /sl N select line N; /sl A B range A..B (any order); /sl A , B , … discrete lines\n /rp <find> <replace> replace in selection (selection required; quote multi-word: /rp 'a b' 'c')\n /add <text> to #end|#start|#hm append/prepend on selected lines\n /rm <text> from #end|#start|#hm strip prefix/suffix on selected lines (selection required)\n /set <pat> to #end|#start|#hm align first occurrence of pat (selection required)\n /c | /cs clear selection\n /z [#hm|#end|#start] add cursor per selected line, then Insert (default #hm)\n /up uppercase selection (alias /upper)\n /low lowercase selection (alias /lower)\n /qal add <n> <q> add query alias (e.g. /qal sw /rp ${1} ${2})\n /qal rm <n> remove alias\n /qal info <n> show alias\n /qal edit <n> <q> update alias\n /qal rnm <a> to <b> rename alias\n /qal list list aliases\n <name> [args] run alias directly (no / needed)\n /undo undo\n /redo redo\n /exit /quit /Esc exit Query Mode\n ; chain multiple commands\n ${1} ${2} alias positional params\n ${1:-default} alias param with default\n ${1[]} alias array param (all remaining args)\n\n TERMINAL / RUN PANEL\n Ctrl+T toggle terminal panel\n :run <command> execute command, opens persistent run panel\n mouse click panel to focus, click editor to return\n Esc (in panel) run: close | terminal: return to editor\n drag \u{2500}\u{2500}\u{2500} row resize panel height".into());
 
     m.insert("editor.hex_cannot_read".into(), "hex: cannot read file: {}".into());
 
@@ -3504,7 +3668,7 @@ pub fn build_map() -> HashMap<String, String> {
 
     m.insert("editor.hint_hex_edit".into(), "Hex edit — type hex bytes".into());
 
-    m.insert("editor.hint_insert".into(), " Insert mode \u{2014} Esc=normal ^S=save ^Z=undo ^R=redo ^D=multi ^F=find ^N=files ^P=paste ^T=term ^J=jump".into());
+    m.insert("editor.hint_insert".into(), " Insert mode \u{2014} Esc=normal ^S=save ^Z=undo ^R=redo ^D=multi ^F=find ^N=files ^P=paste ^T=term ^G=gmode ^E=nfe ^W=visual ^:=cmd".into());
 
     m.insert("editor.hint_insert_msg".into(), " Esc=normal".into());
 
@@ -3518,11 +3682,15 @@ pub fn build_map() -> HashMap<String, String> {
 
     m.insert("editor.hint_gmode".into(), "g".into());
 
-    m.insert("editor.hint_gmode_actions".into(), "t/T=tabs qt/aqt=close N=goto q=exit Enter=run Esc=cancel".into());
+    m.insert("editor.hint_gmode_actions".into(), "t/T=tabs qt/aqt=close N=goto q=exit u=undo r=redo n=file m=dir i=insert v=visual e=nfe Enter=run Esc=cancel".into());
+
+    m.insert("editor.hint_create_actions".into(), "Enter=create Esc=cancel".into());
+
+    m.insert("editor.term_run_usage".into(), "Usage: ! <command> (run in terminal)".into());
 
     m.insert("editor.gmode_unknown".into(), "Unknown gmode command: '{}'".into());
 
-    m.insert("editor.hint_normal".into(), " i=insert v=visual f=find b=files e=nfe t=term g=gmode n=save c=copy Sh=select :cmd ?=help 0=exit".into());
+    m.insert("editor.hint_normal".into(), " i=insert v=visual f=find b=files e=nfe t=term g=gmode x=save n=file m=dir c=copy Sh=select :cmd ?=help 0=exit".into());
 
     m.insert("editor.hint_normal_msg".into(), " i=insert v=visual :cmd ?=help 0=exit".into());
 
@@ -3530,9 +3698,17 @@ pub fn build_map() -> HashMap<String, String> {
 
     m.insert("editor.hint_query".into(), "Query: {}".into());
 
-    m.insert("editor.hint_query_actions".into(), "Actions: /s next, /l goto, /sa all, /sal lines, /sl line, /rp replace, /add, /set, /upper, /lower, /qal, /c clear".into());
+    m.insert("editor.hint_query_actions".into(), "Actions: /s next, /l goto, /sa all, /sal lines, /sl line, /rp replace, /add, /rm, /set, /z cursors, /up, /low, /qal, /c clear".into());
 
-    m.insert("editor.hint_query_actions".into(), "Actions: /s next, /l goto, /sa all, /sal lines, /sl line, /rp replace, /add, /set, /upper, /lower, /qal, /c clear".into());
+    m.insert("editor.query_z_usage".into(), "/z [#hm|#end|#start] (default #hm)".into());
+
+    m.insert("editor.query_cursors_added".into(), "Added {} cursor(s)".into());
+
+    m.insert("editor.hint_query_actions".into(), "Actions: /s next, /l goto, /sa all, /sal lines, /sl line, /rp replace, /add, /rm, /set, /z cursors, /up, /low, /qal, /c clear".into());
+
+    m.insert("editor.query_z_usage".into(), "/z [#hm|#end|#start] (default #hm)".into());
+
+    m.insert("editor.query_cursors_added".into(), "Added {} cursor(s)".into());
 
     m.insert("editor.hint_query_prefix".into(), "/{} — {}".into());
 
@@ -3570,9 +3746,9 @@ pub fn build_map() -> HashMap<String, String> {
 
     m.insert("editor.hint_terminal".into(), "Terminal — {} — {}".into());
 
-    m.insert("editor.hint_visual".into(), " hjkl=move Sh=select a=all c=copy x=cut y=yank p=paste Esc=exit".into());
+    m.insert("editor.hint_visual".into(), " hjkl=move Sh=select i=insert u=undo r=redo a=all c=copy x=cut p=paste Esc=exit".into());
 
-    m.insert("editor.hint_visual_no_msg".into(), " Visual mode \u{2014} hjkl/arrows move \u{00B7} Shift selects \u{00B7} a=all c=copy x=cut y=yank p=paste".into());
+    m.insert("editor.hint_visual_no_msg".into(), " Visual mode \u{2014} hjkl/arrows move \u{00B7} Shift selects \u{00B7} i=insert u=undo r=redo \u{00B7} a=all c=copy x=cut p=paste".into());
 
     m.insert("editor.hover_title".into(), " info ".into());
 
@@ -3680,11 +3856,35 @@ pub fn build_map() -> HashMap<String, String> {
 
     m.insert("editor.mode_nfe".into(), "[Nfe]".into());
 
-    m.insert("editor.hint_nfe".into(), " hjkl/wasd/arrows move · Enter open · :=size · Esc back".into());
+    m.insert("editor.hint_nfe".into(), " hjkl/wasd/arrows move · Enter open · i/v edit · :=size · Esc back".into());
 
-    m.insert("editor.hint_nfe_cmd_actions".into(), "Enter=apply Esc=cancel".into());
+    m.insert("editor.hint_nfe_cmd_actions".into(), "Enter=apply Esc=cancel · :i/:v edit".into());
 
-    m.insert("editor.nfe_unknown".into(), "Unknown nfe command: '{}' (try size full|def|N%)".into());
+    m.insert("editor.nfe_unknown".into(), "Unknown nfe command: '{}' (try size full|def|N% | n <file> | m <dir> | rmd <dir> | rmf <file> | i | v)".into());
+
+    m.insert("editor.nfe_rm_usage".into(), "Usage: rmd <dir> | rmf <file> (names relative to sidebar root)".into());
+
+    m.insert("editor.nfe_rmd_not_dir".into(), "Not a directory: {}".into());
+
+    m.insert("editor.nfe_rmf_is_dir".into(), "Is a directory (use rmd): {}".into());
+
+    m.insert("editor.nfe_rm_not_exist".into(), "Not found: {}".into());
+
+    m.insert("editor.nfe_removed".into(), "Removed: {}".into());
+
+    m.insert("editor.nfe_rm_failed".into(), "Remove failed: {}".into());
+
+    m.insert("editor.nfe_rm_has_unsaved".into(), "Unsaved edits in '{}' — save first".into());
+
+    m.insert("editor.nfe_new_usage".into(), "Usage: n <file> | m <dir> (names relative to sidebar root)".into());
+
+    m.insert("editor.nfe_created_file".into(), "Created file: {}".into());
+
+    m.insert("editor.nfe_created_dir".into(), "Created directory: {}".into());
+
+    m.insert("editor.nfe_create_exists".into(), "Already exists: {}".into());
+
+    m.insert("editor.nfe_create_failed".into(), "Create failed: {}".into());
 
     m.insert("editor.nfe_size_usage".into(), "Usage: size full|def|N% (got '{}')".into());
 
@@ -3781,6 +3981,18 @@ pub fn build_map() -> HashMap<String, String> {
     m.insert("editor.query_added_text".into(), "Added text to {} line(s)".into());
 
     m.insert("editor.query_added_text".into(), "Added text to {} line(s)".into());
+
+    m.insert("editor.query_rm_usage".into(), "/rm <text> from #end|#start|#hm".into());
+
+    m.insert("editor.query_rm_usage".into(), "/rm <text> from #end|#start|#hm".into());
+
+    m.insert("editor.query_rm_format".into(), "Format: /rm <text> from #end|#start|#hm".into());
+
+    m.insert("editor.query_rm_format".into(), "Format: /rm <text> from #end|#start|#hm".into());
+
+    m.insert("editor.query_removed_text".into(), "Removed from {} line(s), skipped {}".into());
+
+    m.insert("editor.query_removed_text".into(), "Removed from {} line(s), skipped {}".into());
 
     m.insert("editor.query_alias_not_found".into(), "Alias not found: {}".into());
 
@@ -4236,6 +4448,8 @@ pub fn build_map() -> HashMap<String, String> {
 
     m.insert("help.alias.make".into(), "ral make [name] ## Create alias template in CWD".into());
 
+    m.insert("help.alias.hintn".into(), "ral hintn add|rm|rnm|info|ls ## Manage named value lists for --hint-n/--select-n".into());
+
     m.insert("help.alias.rm".into(), "ral rm <name>[, ...] ## Remove alias(es)".into());
 
     m.insert("help.alias.rnm".into(), "ral rnm <old> to <new> ## Rename alias".into());
@@ -4409,7 +4623,7 @@ pub fn build_map() -> HashMap<String, String> {
 
     m.insert("help.explorer.title".into(), "FILE EXPLORER (NFE):".into());
 
-    m.insert("help.fileops.cp".into(), "cp <src> <dst|@tp> [-f] ## Copy file or dir".into());
+    m.insert("help.fileops.cp".into(), "cp <src|@tp> <dst|@tp> [-f] ## Copy file or dir".into());
 
     m.insert("help.fileops.mkd".into(), "mkd <dir>[, ...] ## Create a new directory".into());
 
@@ -4423,7 +4637,7 @@ pub fn build_map() -> HashMap<String, String> {
 
     m.insert("help.fileops.rnmf".into(), "rnmf <old> <new> ## Rename a file".into());
 
-    m.insert("help.fileops.mv".into(), "mv <src> <dst|@tp> [-f] ## Move/rename file or dir".into());
+    m.insert("help.fileops.mv".into(), "mv <src|@tp> <dst|@tp> [-f] ## Move/rename file or dir".into());
 
     m.insert("help.fileops.title".into(), "FILE OPERATIONS:".into());
 
@@ -4466,6 +4680,10 @@ pub fn build_map() -> HashMap<String, String> {
     m.insert("help.image.display".into(), "image display <path> ## Render image inline in the terminal".into());
 
     m.insert("help.image.show".into(), "image show <path> ## Render image inline in the terminal".into());
+
+    m.insert("help.image.sixel".into(), "image display <path> --sixel ## Force sixel rendering".into());
+
+    m.insert("cmd.image.sixel_forced_warn".into(), "Forcing sixel output (detected: {}) — this terminal may show garbage.".into());
 
     m.insert("help.image.interactive".into(), "image ## Interactive image converter (pick from current dir)".into());
 
@@ -4531,7 +4749,7 @@ pub fn build_map() -> HashMap<String, String> {
 
     m.insert("help.network.ipcfg".into(), "ipcfg [name] ## Show adapters like ipconfig/ifconfig".into());
 
-    m.insert("help.network.serve".into(), "serve [port] ## HTTP file server (--auth, --tunnel, --share, --spa, --web-dir)".into());
+    m.insert("help.network.serve".into(), "serve files|http-server|config ## Services: file-drive UI, static CWD server, per-service defaults".into());
 
     m.insert("help.network.smtp".into(), "smtp ## SMTP email client (--id, -i, -u, -pwd, -s, -b, -f, --to)".into());
 
@@ -4676,7 +4894,9 @@ pub fn build_map() -> HashMap<String, String> {
 
     m.insert("help.report.txtc".into(), "txtc <file> ## Copy file content to clipboard".into());
 
-    m.insert("help.report.txtf".into(), "txtf <file> ## Display file content".into());
+    m.insert("help.report.txtf".into(), "txtf [--head N|--tail N|--betw A:B] [file] ## Display file content (original line numbers)".into());
+
+    m.insert("cmd.report.invalid_range".into(), "Invalid range: '{}' (expected n:m, e.g. --betw 10:20)".into());
 
     m.insert("help.report.xlsx".into(), "report xlsx [path] ## Generate XLSX report (with dependency analysis)".into());
 
@@ -4710,11 +4930,13 @@ pub fn build_map() -> HashMap<String, String> {
 
     m.insert("help.search.locate".into(), "locate <pattern> [-d <n>] ## Search both files and directories".into());
 
+    m.insert("help.search.qur".into(), "qur <glob> [-s \"pat\"] [-rp \"new\"] [-dp] [-d <n>] ## Query files, select content, replace".into());
+
     m.insert("help.search.title".into(), "SEARCH COMMANDS:".into());
 
     m.insert("help.size.care".into(), "size --care ## Calculate size including everything (care mode)".into());
 
-    m.insert("help.size.path".into(), "size -p, --path <path|@tp> ## Show size of a specific path or teleport savepoint".into());
+    m.insert("help.size.path".into(), "size -p, --path <path|@tp> ## Show size of a specific file, path or teleport savepoint".into());
 
     m.insert("help.size.size".into(), "size ## Show current directory size".into());
 
@@ -4833,7 +5055,15 @@ pub fn build_map() -> HashMap<String, String> {
     m.insert("help.scan.example4".into(), "scan port 192.168.1.1 --top 10 ## Scan top 10 ports".into());
 
     m.insert("help.scan.example5".into(), "scan ip 192.168.1.0/24 ## Sweep for live hosts".into());
+
+    m.insert("help.scan.example6".into(), "scan files *.rs ## List files by name pattern".into());
+
+    m.insert("help.scan.example7".into(), "scan dir k* ## List directories by name pattern".into());
     m.insert("help.scan.ext".into(), "scan ext <ext...> ## List files by extension (no line counts)".into());
+
+    m.insert("help.scan.files".into(), "scan files [pattern] ## List files by name pattern (* = all)".into());
+
+    m.insert("help.scan.dir".into(), "scan dir [pattern] ## List directories by name pattern (* = all)".into());
 
     m.insert("help.scan.port".into(), "scan port [host] [--top N | --ports <spec> | --all] ## TCP port scan".into());
 
@@ -4870,15 +5100,21 @@ pub fn build_map() -> HashMap<String, String> {
 
     m.insert("help.view.depth".into(), "view -d, --depth <n> ## Show tree with custom depth".into());
 
-    m.insert("help.view.dirsize".into(), "view -ds, --dirsize ## Show tree with directory sizes only".into());
+    m.insert("help.view.dirsize".into(), "view -ds, --dirsize [min-size] ## Show dir sizes; with value, hide smaller dirs".into());
+
+    m.insert("help.view.head".into(), "view --head <n> ## Show only first n tree lines".into());
+
+    m.insert("help.view.tail".into(), "view --tail <n> ## Show only last n tree lines".into());
+
+    m.insert("help.view.sort".into(), "view --sort size|char|ext ## Sort children (dirs stay first)".into());
 
     m.insert("help.view.ext".into(), "view -ext, --ext <ext...> ## Show tree with only matching extensions".into());
 
-    m.insert("help.view.filesize".into(), "view -fs, --filesize ## Show tree with file sizes only".into());
+    m.insert("help.view.filesize".into(), "view -fs, --filesize [min-size] ## Show file sizes; with value, hide smaller files".into());
 
     m.insert("help.view.path".into(), "view -p, --path <path|@tp> ## Show tree of a specific path or teleport savepoint".into());
 
-    m.insert("help.view.size".into(), "view -s, --size ## Show tree with dir and file sizes".into());
+    m.insert("help.view.size".into(), "view -s, --size [min-size] ## Show sizes; with value (10KB, 1.5MB), hide smaller".into());
 
     m.insert("help.view.time".into(), "view --time, -t ## Show tree with execution time".into());
 
@@ -4932,13 +5168,15 @@ pub fn build_map() -> HashMap<String, String> {
 
     m.insert("help.alias.example2".into(), "ral add greet(x) \"echo Hello $x\" ## Parameterised alias".into());
 
-    m.insert("help.alias.example3".into(), "ral add copy(x) \"cp $x ${{x}}.bak\" ## Alias with defaults".into());
+    m.insert("help.alias.example3".into(), "ral add v \"view --care -t -d ${x:-1}\" ## Alias with defaults".into());
 
     m.insert("help.alias.example4".into(), "ral list ## Show all aliases".into());
 
     m.insert("help.alias.example5".into(), "ral export --all myaliases ## Export aliases".into());
 
     m.insert("help.alias.example6".into(), "build ## Run alias directly".into());
+
+    m.insert("help.alias.example7".into(), "ral hintn add port [8080,5050] ## Named list for #x --hint-n port".into());
 
     m.insert("help.view.example1".into(), "view ## Show directory tree".into());
 
@@ -4954,11 +5192,25 @@ pub fn build_map() -> HashMap<String, String> {
 
     m.insert("help.view.example7".into(), "view @web ## Show tree of a teleport savepoint".into());
 
+    m.insert("help.view.example8".into(), "view -s 10MB ## Only files/dirs at least 10MB".into());
+
+    m.insert("help.view.example9".into(), "view --sort size --head 20 ## 20 largest entries first".into());
+
+    m.insert("help.view.file_usage".into(), "view <file> [--head N|--tail N|--betw A:B] ## Display file content (same as txtf)".into());
+
+    m.insert("help.view.example10".into(), "view main.rs --tail 30 ## Last 30 lines of main.rs".into());
+
+    m.insert("help.view.example11".into(), "view main.rs --betw 10:20 ## Lines 10-20 of main.rs".into());
+
+    m.insert("help.report.txtf_example1".into(), "txtf main.rs --head 30 ## First 30 lines of main.rs".into());
+
+    m.insert("help.report.txtf_example2".into(), "txtf --betw 10:20 main.rs ## Lines 10-20 of main.rs".into());
+
     m.insert("help.size.example1".into(), "size ## Show current directory size".into());
 
     m.insert("help.size.example2".into(), "size ../src ## Show size of another directory".into());
 
-    m.insert("help.size.example3".into(), "size -p C:\\code\\project ## Show size of a specific path".into());
+    m.insert("help.size.example3".into(), "size Cargo.toml ## Show size of a file".into());
 
     m.insert("help.size.example4".into(), "size @web --care -t ## Care mode with elapsed time for a savepoint".into());
 
@@ -4988,6 +5240,17 @@ pub fn build_map() -> HashMap<String, String> {
 
     m.insert("help.search.example5".into(), "locate README ## Search files & dirs for 'README'".into());
 
+    m.insert("help.search.example6".into(), "qur *.rs -s \"TODO\" -dp ## Query glob + grep-like display".into());
+
+    m.insert("help.context.qur.needs_glob".into(), "qur <glob> [-s \"pattern\"] [-rp \"new\"] [-dp] [-d <n>] [-l <n>]".into());
+    m.insert("help.context.qur.select_value".into(), "qur -s <pattern>  (content pattern, case-insensitive)".into());
+    m.insert("help.context.qur.replace_value".into(), "qur -rp <replacement>  (needs -s \"<pattern>\")".into());
+    m.insert("help.context.qur.depth_value".into(), "qur -d <n>  (max depth, 0 = current dir only)".into());
+    m.insert("help.context.qur.limit_value".into(), "qur -l <n>  (show only first n matches/files)".into());
+    m.insert("help.context.qur.next_select".into(), "qur <glob> -s \"<pattern>\" | -d <n> | -l <n>".into());
+    m.insert("help.context.qur.next_display_replace".into(), "qur <glob> -s \"<pattern>\" -dp | -rp \"<new>\" [-d <n>] [-l <n>]".into());
+    m.insert("help.context.qur.next_depth".into(), "qur <glob> -s \"<pattern>\" [-dp | -rp \"<new>\"] [-d <n>] [-l <n>]  (<cr> to run)".into());
+
     m.insert("help.igcare.example1".into(), "ignore dir node_modules ## Ignore node_modules".into());
 
     m.insert("help.igcare.example2".into(), "ignore ext .log ## Ignore .log files".into());
@@ -5006,7 +5269,7 @@ pub fn build_map() -> HashMap<String, String> {
 
     m.insert("help.network.example5".into(), "dns example.com -t MX ## DNS MX record lookup".into());
 
-    m.insert("help.network.example6".into(), "serve 8080 ## Start HTTP server on port 8080".into());
+    m.insert("help.network.example6".into(), "serve files --port 8080 ## Start files drive server on port 8080".into());
 
     m.insert("help.clipboard.example1".into(), "clip ## Show clipboard history".into());
 
@@ -5373,6 +5636,28 @@ pub fn build_map() -> HashMap<String, String> {
 
     m.insert("misc.gs.usage".into(), "Usage: gs <pattern> [-d <depth>] [-l <limit>] [-i]".into());
 
+    m.insert("misc.qur.usage".into(), "Usage: qur <glob> [-s \"pattern\"] [-rp \"replacement\"] [-dp] [-d <depth>] [-l <limit>]".into());
+    m.insert("misc.qur.example1".into(), " qur *.* # list files matching glob (recursive)".into());
+    m.insert("misc.qur.example2".into(), " qur *.rs -s \"TODO\" # summary per file".into());
+    m.insert("misc.qur.example3".into(), " qur *.* -s \"old\" -dp # detailed matches (like gs)".into());
+    m.insert("misc.qur.example4".into(), " qur *.md -s \"old\" -rp \"new\" -d 3 # preview, confirm, replace".into());
+    m.insert("misc.qur.searching".into(), "Querying files...".into());
+    m.insert("misc.qur.no_files".into(), "qur: no files match '{}'.".into());
+    m.insert("misc.qur.no_matches".into(), "qur: no matches for '{}'.".into());
+    m.insert("misc.qur.files_header".into(), "Files matching query ({}):".into());
+    m.insert("misc.qur.summary_header".into(), "Matches for \"{}\" ({} lines in {} files):".into());
+    m.insert("misc.qur.summary_hint".into(), "Add -dp for detailed lines (like gs), or -rp \"new\" to replace.".into());
+    m.insert("misc.qur.replace_preview".into(), "Replace \"{}\" with \"{}\" — {} occurrences in {} files:".into());
+    m.insert("misc.qur.confirm".into(), "Replace {} occurrences in {} files? [y/N]:".into());
+    m.insert("misc.qur.cancelled".into(), "Replace cancelled.".into());
+    m.insert("misc.qur.replaced".into(), "Replaced {} occurrences in {} files.".into());
+    m.insert("misc.qur.skipped".into(), "Skipped {} files (unreadable/write failed).".into());
+    m.insert("misc.qur.many_results".into(), "qur: {} matches found, showing first 20,000. Narrow your search.".into());
+    m.insert("misc.qur.replace_needs_select".into(), "qur: -rp needs -s \"<pattern>\" (e.g. qur *.* -s \"old\" -rp \"new\").".into());
+    m.insert("misc.qur.display_needs_select".into(), "qur: -dp needs -s \"<pattern>\" (e.g. qur *.* -s \"foo\" -dp).".into());
+    m.insert("misc.qur.empty_select".into(), "qur: -s needs a pattern (e.g. -s \"foo\").".into());
+    m.insert("misc.qur.empty_replace".into(), "qur: -rp needs a replacement (e.g. -rp \"bar\").".into());
+
     m.insert("misc.wi.not_dir".into(), "wi: not a directory: '{}'".into());
 
     m.insert("misc.wi.start_error".into(), "wi: cannot watch: {}".into());
@@ -5410,6 +5695,11 @@ pub fn build_map() -> HashMap<String, String> {
     m.insert("misc.mkf.exists".into(), "Already exists: {}".into());
 
     m.insert("misc.mkf.missing".into(), "mkf: missing operand".into());
+
+    m.insert(
+        "misc.ne.already_in_editor".into(),
+        "You are already in editor".into(),
+    );
 
     m.insert("misc.ne.created_hyper".into(), "Created hyper project: {}".into());
 
@@ -5497,7 +5787,7 @@ pub fn build_map() -> HashMap<String, String> {
 
     m.insert("misc.mv.not_exist".into(), "mv: source not found: '{}'".into());
 
-    m.insert("misc.mv.usage".into(), "Usage: mv <src> <dst|@tp> [-f]".into());
+    m.insert("misc.mv.usage".into(), "Usage: mv <src|@tp> <dst|@tp> [-f]".into());
 
     m.insert("misc.cp.error".into(), "cp: {}".into());
 
@@ -5511,7 +5801,7 @@ pub fn build_map() -> HashMap<String, String> {
 
     m.insert("misc.cp.same".into(), "cp: source and target are the same file: '{}'".into());
 
-    m.insert("misc.cp.usage".into(), "Usage: cp <src> <dst|@tp> [-f]".into());
+    m.insert("misc.cp.usage".into(), "Usage: cp <src|@tp> <dst|@tp> [-f]".into());
 
     m.insert("misc.say.example1".into(), " say \"hello world\" --loop 5 -n # 5 lines".into());
 
@@ -5773,6 +6063,12 @@ pub fn build_map() -> HashMap<String, String> {
     m.insert("msg.showcg.label_watch_limit".into(), "Watch limit:".into());
 
     m.insert("msg.showcg.label_dir_view".into(), "Dir View:".into());
+
+    m.insert("msg.showcg.label_serve_files".into(), "Serve files:".into());
+
+    m.insert("msg.showcg.label_serve_http".into(), "Serve http:".into());
+
+    m.insert("msg.showcg.label_serve_chess".into(), "Serve chess:".into());
 
     m.insert("msg.showcg.title".into(), "Current Configuration".into());
 
@@ -6255,6 +6551,8 @@ pub fn build_map() -> HashMap<String, String> {
     m.insert("output.filename_header".into(), "{}:".into());
 
     m.insert("output.line_prefix".into(), "LINE {}>>".into());
+
+    m.insert("output.range_past_eof".into(), "(range is past end of file — nothing to show)".into());
 
     m.insert("output.mkdir_failed".into(), "Failed to create directory: {}".into());
 
@@ -6759,6 +7057,44 @@ pub fn build_map() -> HashMap<String, String> {
     m.insert("help.config.git".into(), "config git ON|OFF ## Enable/disable git integration (prompt + symbols)".into());
 
     m.insert("help.config.dir_view".into(), "config dir_view ON|OFF ## Show/hide directory tree in shell".into());
+
+    m.insert("help.config.serve".into(), "config serve [service] [--port-default N] [--bind-default ADDR] ## Per-service serve defaults (alias: serve config)".into());
+
+    m.insert("cmd.config.serve.title".into(), "Serve Config (per-service defaults)".into());
+
+    m.insert("cmd.config.serve.status".into(), "  {}: {}:{}".into());
+
+    m.insert("cmd.config.serve.usage".into(), "Usage: serve config [files|http-server|chess] [--port-default <port>] [--bind-default <addr>]  (alias: config serve …)".into());
+
+    m.insert("cmd.config.serve.example_show".into(), "  serve config                  Show all services".into());
+
+    m.insert("cmd.config.serve.example_show_one".into(), "  serve config files            Show files defaults".into());
+
+    m.insert("cmd.config.serve.example_set".into(), "  serve config files --port-default 9000   Set files default port".into());
+
+    m.insert("cmd.config.serve.saved".into(), "Serve {} defaults saved: {}:{}".into());
+
+    m.insert("cmd.config.serve.invalid_service".into(), "Unknown service '{}' (use files|http-server|chess)".into());
+
+    m.insert("cmd.config.serve.invalid_port".into(), "Invalid port '{}' (use 1-65535)".into());
+
+    m.insert("cmd.config.serve.empty_bind".into(), "Missing value for --bind-default".into());
+
+    m.insert("cmd.config.serve.unknown_option".into(), "Unknown: {}".into());
+
+    m.insert("cmd.serve.current_defaults".into(), "Configured defaults (serve config): port {}, bind {}".into());
+
+    m.insert("cmd.serve.chess_no_auth".into(), "`serve chess` takes no --auth (hotseat has no login)".into());
+
+    m.insert("cmd.serve.chess_serving".into(), "Chess server on".into());
+
+    m.insert("cmd.serve.chess_title".into(), "Chess (2-player hotseat)".into());
+
+    m.insert("cmd.serve.chess_usage".into(), "serve chess [--port 8000] [options]".into());
+
+    m.insert("cmd.serve.example_chess_default".into(), "  serve chess              Chess on port 8080".into());
+
+    m.insert("cmd.serve.example_chess_port".into(), "  serve chess --port 9000  Chess on port 9000".into());
 
     m.insert("git.no_git_binary".into(), "Git is not installed. Run `ntpkg install git` to install it.".into());
 

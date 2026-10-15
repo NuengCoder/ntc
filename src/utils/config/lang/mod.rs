@@ -560,6 +560,63 @@ mod tests {
         assert_keys_present(super::lo::build_map(), "lao", SHARE_KEYS);
     }
 
+    /// Every `serve chess` key must exist in all four bundled language packs.
+    const SERVE_CHESS_KEYS: &[&str] = &[
+        "cmd.serve.chess_no_auth",
+        "cmd.serve.chess_serving",
+        "cmd.serve.chess_title",
+        "cmd.serve.chess_usage",
+        "cmd.serve.example_chess_default",
+        "cmd.serve.example_chess_port",
+    ];
+
+    #[test]
+    fn serve_chess_keys_exist_in_all_languages() {
+        assert_keys_present(super::en::build_map(), "english", SERVE_CHESS_KEYS);
+        assert_keys_present(super::zh::build_map(), "chinese", SERVE_CHESS_KEYS);
+        assert_keys_present(super::th::build_map(), "thai", SERVE_CHESS_KEYS);
+        assert_keys_present(super::lo::build_map(), "lao", SERVE_CHESS_KEYS);
+    }
+
+    /// Every `serve config` / `config serve` key must exist in all four
+    /// bundled language packs.
+    const SERVE_CONFIG_KEYS: &[&str] = &[
+        "help.config.serve",
+        "cmd.config.serve.title",
+        "cmd.config.serve.status",
+        "cmd.config.serve.usage",
+        "cmd.config.serve.example_show",
+        "cmd.config.serve.example_show_one",
+        "cmd.config.serve.example_set",
+        "cmd.config.serve.saved",
+        "cmd.config.serve.invalid_service",
+        "cmd.config.serve.invalid_port",
+        "cmd.config.serve.empty_bind",
+        "cmd.config.serve.unknown_option",
+        "cmd.serve.current_defaults",
+        "msg.showcg.label_serve_files",
+        "msg.showcg.label_serve_http",
+        "msg.showcg.label_serve_chess",
+        "cmd.serve.services_title",
+        "cmd.serve.services_usage",
+        "cmd.serve.services_header",
+        "cmd.serve.services_row_files",
+        "cmd.serve.services_row_http",
+        "cmd.serve.services_row_chess",
+        "cmd.serve.services_row_config",
+        "cmd.serve.services_example_files",
+        "cmd.serve.services_example_http",
+        "cmd.serve.services_example_config",
+    ];
+
+    #[test]
+    fn serve_config_keys_exist_in_all_languages() {
+        assert_keys_present(super::en::build_map(), "english", SERVE_CONFIG_KEYS);
+        assert_keys_present(super::zh::build_map(), "chinese", SERVE_CONFIG_KEYS);
+        assert_keys_present(super::th::build_map(), "thai", SERVE_CONFIG_KEYS);
+        assert_keys_present(super::lo::build_map(), "lao", SERVE_CONFIG_KEYS);
+    }
+
     /// Every `nsheet` (sheet viewer) key must exist in all four bundled packs.
     const NSHEET_KEYS: &[&str] = &[
         "cmd.nsheet.usage_title",
@@ -734,5 +791,95 @@ mod tests {
         assert_keys_present(super::zh::build_map(), "chinese", NSSH_KEYS);
         assert_keys_present(super::th::build_map(), "thai", NSSH_KEYS);
         assert_keys_present(super::lo::build_map(), "lao", NSSH_KEYS);
+    }
+
+    /// Every `ral hintn` / inline-values / named-list key must exist in all
+    /// four bundled language packs.
+    const RAL_HINTN_KEYS: &[&str] = &[
+        "alias.ral.hintn_cmd",
+        "alias.ral.usage_hintn",
+        "alias.ral.usage_hintn_add",
+        "alias.ral.usage_hintn_rm",
+        "alias.ral.usage_hintn_rnm",
+        "alias.ral.usage_hintn_info",
+        "alias.ral.hintn_added",
+        "alias.ral.hintn_removed",
+        "alias.ral.hintn_not_found",
+        "alias.ral.hintn_renamed",
+        "alias.ral.hintn_empty",
+        "alias.ral.hintn_referenced",
+        "alias.ral.hintn_info_title",
+        "alias.ral.hintn_info_name",
+        "alias.ral.hintn_info_values",
+        "alias.ral.hintn_info_used_by",
+        "alias.ral.hintn_list_title_global",
+        "alias.ral.hintn_list_title_local",
+        "alias.ral.hintn_value_count",
+        "alias.ral.unknown_hint_list",
+        "alias.ral.hintn_create_hint",
+        "alias.ral.example_hint_values",
+        "alias.ral.example_hintn",
+        "help.alias.hintn",
+        "help.alias.example7",
+    ];
+
+    #[test]
+    fn ral_hintn_keys_exist_in_all_languages() {
+        assert_keys_present(super::en::build_map(), "english", RAL_HINTN_KEYS);
+        assert_keys_present(super::zh::build_map(), "chinese", RAL_HINTN_KEYS);
+        assert_keys_present(super::th::build_map(), "thai", RAL_HINTN_KEYS);
+        assert_keys_present(super::lo::build_map(), "lao", RAL_HINTN_KEYS);
+    }
+
+    /// Every `scan files` / `scan dir` key must exist in all four bundled
+    /// language packs.
+    const SCAN_FILES_KEYS: &[&str] = &[
+        "cmd.scan.files_usage",
+        "cmd.scan.dir_usage",
+        "cmd.scan.help_files",
+        "cmd.scan.help_dir",
+        "cmd.scan.no_dirs",
+        "cmd.scan.total_dirs",
+        "cmd.scan.total_dirs_size",
+        "help.scan.files",
+        "help.scan.dir",
+        "help.scan.example6",
+        "help.scan.example7",
+    ];
+
+    #[test]
+    fn scan_files_keys_exist_in_all_languages() {
+        assert_keys_present(super::en::build_map(), "english", SCAN_FILES_KEYS);
+        assert_keys_present(super::zh::build_map(), "chinese", SCAN_FILES_KEYS);
+        assert_keys_present(super::th::build_map(), "thai", SCAN_FILES_KEYS);
+        assert_keys_present(super::lo::build_map(), "lao", SCAN_FILES_KEYS);
+    }
+
+    /// Every `ntc -n/--new` CLI key must exist in all four bundled packs.
+    const CLI_NEW_KEYS: &[&str] = &[
+        "cli.new.usage_header",
+        "cli.new.usage_shell",
+        "cli.new.usage_cmd",
+        "cli.new.usage_new",
+        "cli.new.usage_upgrade",
+        "cli.new.usage_version",
+        "cli.new.usage_help",
+        "cli.new.examples_header",
+        "cli.new.ex_help",
+        "cli.new.ex_version",
+        "cli.new.ex_alias",
+        "cli.new.ex_new",
+        "cli.new.ex_new_cmd",
+        "cli.new.opened",
+        "cli.new.no_terminal",
+        "cli.new.unsupported",
+    ];
+
+    #[test]
+    fn cli_new_keys_exist_in_all_languages() {
+        assert_keys_present(super::en::build_map(), "english", CLI_NEW_KEYS);
+        assert_keys_present(super::zh::build_map(), "chinese", CLI_NEW_KEYS);
+        assert_keys_present(super::th::build_map(), "thai", CLI_NEW_KEYS);
+        assert_keys_present(super::lo::build_map(), "lao", CLI_NEW_KEYS);
     }
 }

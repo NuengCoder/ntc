@@ -1,7 +1,7 @@
 /// Version stamp embedded as the last line of generated files.
 /// Bump when the content changes so stale copies can be refreshed.
-pub const WELCOME_VERSION: u32 = 3;
-const WELCOME_STAMP: &str = "<!-- ntc-welcome v3 -->";
+pub const WELCOME_VERSION: u32 = 6;
+const WELCOME_STAMP: &str = "<!-- ntc-welcome v6 -->";
 
 pub fn generate_welcome_content() -> String {
     format!(
@@ -18,16 +18,19 @@ Modes (Normal is home — Esc always walks back to it):
   Normal   single-letter verbs, nothing is typed
   Insert   actually edit text (i from Normal, Esc/Ctrl+Q back)
   Visual   select with hjkl/arrows (v from Normal, Esc back)
+           Alt+hjkl/arrows moves selection (j/k) or indents it (h/l)
 
 Normal mode:
   i / v / q      Insert / Visual / Query panel
-  n / e / b      Save / file explorer / file finder
+  x / e / b      Save / file explorer / file finder
+  n / m          New file / new directory (Enter accepts, Esc cancels)
   f / t / u      Search / terminal panel / encoding picker
   g / Ctrl+J     g-mode menu / jump to line
-  : then cmd     Command (:w :q :q! :wq :e! :ne :cd :run)
+  : then cmd     Command (:w :q :q! :wq :e! :u :r :! :ne :cd :run)
   ? / 0          Help screen / quit
   h j k l        move (also a s w d, arrows)
   Shift+dir      extend selection
+  Ctrl+h/l/a/d   word motion (also Ctrl+Left/Right)
   Home/End       line start/end      PgUp/PgDn  page scroll
 
 Insert mode:
@@ -55,6 +58,19 @@ Commands (press : then type):
   :ne <file>     Open/create file
   :cd <path>     Change directory
   :run <cmd>     Execute command in persistent panel
+  :u / :r         Undo / redo
+  :! <cmd>        Run command in terminal panel
+
+Visual mode:
+  i              enter Insert (keeps selection)
+  u / r          undo / redo
+  Alt+hjkl/arrows moves selection (j/k) or indents it (h/l)
+  Ctrl+h/l/a/d   word motion (also Ctrl+Left/Right)
+
+Gmode (press g, type, Enter):
+  u / r          undo / redo
+  n <name>       new file (opens it)
+  m <name>       new directory
 
 Query mode (q in Normal, Ctrl+Alt+Q in Insert, :x in Command):
   Leading / is optional — `s "hi"` works like `/s "hi"`.
@@ -67,9 +83,11 @@ Query mode (q in Normal, Ctrl+Alt+Q in Insert, :x in Command):
   /sl N          select line N (/sl A B range, /sl A , B , … discrete)
   /rp <f> <r>    replace in selection (quote multi-word: /rp "a b" "c")
   /add <t> to #end|#start|#hm   append/prepend on selected lines
+  /rm <t> from #end|#start|#hm  strip prefix/suffix on selected lines
   /set <p> to #end|#start|#hm   align first occurrence on selected lines
   /c | /cs       clear selection
-  /upper /lower  case of selection (selection required)
+  /z [#hm|#end|#start]  add cursor per selected line, then Insert (default #hm)
+  /up / /low     case of selection (aliases: /upper /lower)
   /qal add|rm|info|edit|rnm|list    query aliases
   <name> [args]  run alias directly (no / needed)
   ${{1}} ${{N:-def}} ${{N[]}}  alias params (positional / default / rest)

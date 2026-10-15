@@ -159,7 +159,10 @@ mod tests {
     #[test]
     fn expand_home_tilde() {
         let p = expand_home("~/.ssh/id_rsa");
-        assert!(p.to_string_lossy().ends_with(".ssh/id_rsa") || p.to_string_lossy().ends_with(".ssh\\id_rsa"));
+        assert!(
+            p.to_string_lossy().ends_with(".ssh/id_rsa")
+                || p.to_string_lossy().ends_with(".ssh\\id_rsa")
+        );
         assert_eq!(expand_home("/abs/path"), PathBuf::from("/abs/path"));
     }
 }

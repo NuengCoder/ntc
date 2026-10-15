@@ -150,11 +150,7 @@ fn split_chain(line: &str) -> Vec<&str> {
                 }
             }
             '"' if !in_single => in_double = !in_double,
-            '&' if !in_single
-                && !in_double
-                && i + 1 < chars.len()
-                && chars[i + 1].1 == '&' =>
-            {
+            '&' if !in_single && !in_double && i + 1 < chars.len() && chars[i + 1].1 == '&' => {
                 let piece = line[start..pos].trim();
                 if !piece.is_empty() {
                     parts.push(piece);
@@ -261,11 +257,7 @@ fn print_banner(cwd: &Path) {
     );
     println!(
         "{}",
-        t!(
-            "ndb.cwd_line",
-            crate::filetype::strip_unc_prefix(cwd)
-        )
-        .dimmed()
+        t!("ndb.cwd_line", crate::filetype::strip_unc_prefix(cwd)).dimmed()
     );
 }
 
@@ -333,7 +325,11 @@ fn resolve_db_spec(spec: &str, cwd: &Path) -> Option<PathBuf> {
         return None;
     }
     let path = PathBuf::from(spec);
-    let candidate = if path.is_absolute() { path } else { cwd.join(path) };
+    let candidate = if path.is_absolute() {
+        path
+    } else {
+        cwd.join(path)
+    };
     if candidate.is_file() {
         Some(candidate)
     } else {
@@ -584,11 +580,7 @@ fn show_table_schema(db: &Database, table: &str) {
                 } else {
                     c.col_type.clone()
                 };
-                vec![
-                    Some(c.name.clone()),
-                    Some(col_type),
-                    Some(c.constraint()),
-                ]
+                vec![Some(c.name.clone()), Some(col_type), Some(c.constraint())]
             })
             .collect();
         println!();
@@ -686,8 +678,7 @@ fn run_paged(db: &Database, base_sql: &str, limit: usize, skip: usize) -> Option
     match db.query(base_sql, take) {
         Ok(result) => {
             let available = result.rows.len();
-            let page_rows: Vec<Vec<Option<String>>> =
-                result.rows.into_iter().skip(skip).collect();
+            let page_rows: Vec<Vec<Option<String>>> = result.rows.into_iter().skip(skip).collect();
             let shown = page_rows.len();
             if shown == 0 {
                 println!("{}", t!("ndb.more_empty").yellow());
@@ -821,10 +812,7 @@ fn show_indexes(db: &Database, table: Option<&str>) {
     }
     let yes = t!("ndb.yes");
     let no = t!("ndb.no");
-    println!(
-        "{}",
-        t!("ndb.indexes_title", filtered.len()).cyan().bold()
-    );
+    println!("{}", t!("ndb.indexes_title", filtered.len()).cyan().bold());
     let headers = vec![
         t!("ndb.col_name"),
         t!("ndb.col_table"),
@@ -1061,8 +1049,13 @@ fn handle_root(command: &NdbCommand, cwd: &Path) -> Action {
         _ => {
             // Bare `dbal` alias names execute (with `$params` from the
             // trailing words) — but they need an open DB.
-            match dbal::try_bare(&command.cmd, &command.args, None, command.row_limit(), &mut None)
-            {
+            match dbal::try_bare(
+                &command.cmd,
+                &command.args,
+                None,
+                command.row_limit(),
+                &mut None,
+            ) {
                 Some(action) => action,
                 None => {
                     print_error(&t!("ndb.unknown_cmd", command.cmd));
@@ -1215,10 +1208,7 @@ fn ndb_history_path(base: &Path) -> PathBuf {
 /// Refresh the hinter context from the current shell state.
 /// `tables` is empty at the root level; `db_files` always mirrors `cwd`.
 fn sync_hinter_context(ctx: &NdbContext, cwd: &Path, state: &NdbState) {
-    let files: Vec<String> = db::list_db_files(cwd)
-        .into_iter()
-        .map(|f| f.name)
-        .collect();
+    let files: Vec<String> = db::list_db_files(cwd).into_iter().map(|f| f.name).collect();
     ctx.set_db_files(files);
     let mut aliases: Vec<String> = crate::config::Config::get_db_aliases()
         .into_keys()
@@ -1464,7 +1454,10 @@ mod tests {
         drop(conn);
         std::fs::write(tmp.path().join("b.txt"), b"x").unwrap();
 
-        assert_eq!(resolve_db_spec("1", tmp.path()), Some(tmp.path().join("a.db")));
+        assert_eq!(
+            resolve_db_spec("1", tmp.path()),
+            Some(tmp.path().join("a.db"))
+        );
         assert_eq!(
             resolve_db_spec("a.db", tmp.path()),
             Some(tmp.path().join("a.db"))
@@ -1487,15 +1480,9 @@ mod tests {
     fn clear_stays_at_the_current_level() {
         let tmp = tempfile::tempdir().unwrap();
         let cmd = parse_command("clear");
-        assert!(matches!(
-            handle_root(&cmd, tmp.path()),
-            Action::Stay
-        ));
+        assert!(matches!(handle_root(&cmd, tmp.path()), Action::Stay));
         let cls = parse_command("cls");
-        assert!(matches!(
-            handle_root(&cls, tmp.path()),
-            Action::Stay
-        ));
+        assert!(matches!(handle_root(&cls, tmp.path()), Action::Stay));
 
         let db_path = tmp.path().join("app.db");
         let conn = rusqlite::Connection::open(&db_path).unwrap();
@@ -1623,10 +1610,7 @@ mod tests {
             split_chain("tables && schema users"),
             vec!["tables", "schema users"]
         );
-        assert_eq!(
-            split_chain("tables&&tables"),
-            vec!["tables", "tables"]
-        );
+        assert_eq!(split_chain("tables&&tables"), vec!["tables", "tables"]);
         // `&&` inside string literals is not a separator ...
         assert_eq!(
             split_chain("sql SELECT 'a && b'"),
@@ -1637,7 +1621,10 @@ mod tests {
             vec!["sql SELECT \"a && b\""]
         );
         // ... and empties are dropped.
-        assert_eq!(split_chain("tables &&  && tables"), vec!["tables", "tables"]);
+        assert_eq!(
+            split_chain("tables &&  && tables"),
+            vec!["tables", "tables"]
+        );
         assert!(split_chain("  &&  ").is_empty());
     }
 
@@ -1740,7 +1727,8 @@ mod tests {
 
         let db_path = tmp.path().join("app.db");
         let conn = rusqlite::Connection::open(&db_path).unwrap();
-        conn.execute_batch("CREATE TABLE users (id INTEGER)").unwrap();
+        conn.execute_batch("CREATE TABLE users (id INTEGER)")
+            .unwrap();
         drop(conn);
         let db = Database::open(&db_path).unwrap();
         let state = NdbState::Db(Box::new(db));
@@ -1821,11 +1809,7 @@ mod tests {
         let backups: Vec<_> = std::fs::read_dir(tmp.path())
             .unwrap()
             .filter_map(|e| e.ok())
-            .filter(|e| {
-                e.file_name()
-                    .to_string_lossy()
-                    .starts_with("app.db.bak.")
-            })
+            .filter(|e| e.file_name().to_string_lossy().starts_with("app.db.bak."))
             .collect();
         assert_eq!(backups.len(), 1);
 
@@ -1855,11 +1839,7 @@ mod tests {
         let backups: Vec<_> = std::fs::read_dir(tmp.path())
             .unwrap()
             .filter_map(|e| e.ok())
-            .filter(|e| {
-                e.file_name()
-                    .to_string_lossy()
-                    .starts_with("app.db.bak.")
-            })
+            .filter(|e| e.file_name().to_string_lossy().starts_with("app.db.bak."))
             .collect();
         assert_eq!(backups.len(), 1);
 

@@ -49,7 +49,11 @@ pub fn image_to_ascii(
 ) -> Result<String> {
     let (width, height) = img.dimensions();
     let (cols, rows) = fit_ascii_grid(width, height, max_width, max_lines);
-    let small = img.resize_exact(cols as u32, rows as u32, image::imageops::FilterType::Lanczos3);
+    let small = img.resize_exact(
+        cols as u32,
+        rows as u32,
+        image::imageops::FilterType::Lanczos3,
+    );
 
     let mut ascii = String::with_capacity(cols * rows + rows);
     for ty in 0..rows {
@@ -121,7 +125,8 @@ mod tests {
         // Near-boundary tone (150 -> level ~5.29) dithers across the
         // two neighboring ramp chars instead of banding flat...
         let art = image_to_ascii(&solid(40, 20, 150), 40, Some(20)).unwrap();
-        let distinct: std::collections::HashSet<char> = art.chars().filter(|c| *c != '\n').collect();
+        let distinct: std::collections::HashSet<char> =
+            art.chars().filter(|c| *c != '\n').collect();
         assert_eq!(distinct, ['+'.into(), '*'.into()].into_iter().collect());
         // ...while solid black/white never flip a full level.
         let black = image_to_ascii(&solid(40, 20, 0), 40, Some(20)).unwrap();
@@ -130,8 +135,7 @@ mod tests {
         assert!(white.chars().all(|c| c == '@' || c == '\n'));
         // A full sweep uses most of the ramp (no giant flat bands).
         let sweep = image_to_ascii(&vgradient(40, 200), 40, Some(60)).unwrap();
-        let used: std::collections::HashSet<char> =
-            sweep.chars().filter(|c| *c != '\n').collect();
+        let used: std::collections::HashSet<char> = sweep.chars().filter(|c| *c != '\n').collect();
         assert!(used.len() >= 7, "{:?}", used);
     }
 

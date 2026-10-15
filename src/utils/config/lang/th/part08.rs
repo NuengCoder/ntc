@@ -161,14 +161,14 @@ pub fn fill(m: &mut HashMap<String, String>) {
     m.insert("misc.mv.missing".into(), "mv: ขาดอาร์กิวเมนต์".into());
     m.insert("misc.mv.moved".into(), "ย้าย '{}' -> '{}' แล้ว".into());
     m.insert("misc.mv.not_exist".into(), "mv: ไม่พบต้นทาง: '{}'".into());
-    m.insert("misc.mv.usage".into(), "การใช้งาน: mv <src> <dst|@tp> [-f]".into());
+    m.insert("misc.mv.usage".into(), "การใช้งาน: mv <src|@tp> <dst|@tp> [-f]".into());
     m.insert("misc.cp.error".into(), "cp: {}".into());
     m.insert("misc.cp.exists".into(), "cp: เป้าหมายมีอยู่แล้ว: '{}' (ใช้ -f เพื่อเขียนทับ)".into());
     m.insert("misc.cp.missing".into(), "cp: ขาดอาร์กิวเมนต์".into());
     m.insert("misc.cp.copied".into(), "คัดลอก '{}' -> '{}' แล้ว".into());
     m.insert("misc.cp.not_exist".into(), "cp: ไม่พบต้นทาง: '{}'".into());
     m.insert("misc.cp.same".into(), "cp: ต้นทางและปลายทางคือไฟล์เดียวกัน: '{}'".into());
-    m.insert("misc.cp.usage".into(), "การใช้งาน: cp <src> <dst|@tp> [-f]".into());
+    m.insert("misc.cp.usage".into(), "การใช้งาน: cp <src|@tp> <dst|@tp> [-f]".into());
     m.insert("misc.say.example1".into(), "  say \"hello world\" --loop 5 -n # 5 บรรทัด".into());
     m.insert("misc.say.example2".into(), "  say \"hello world\" --loop 3 -t # 1 บรรทัด 3 ครั้ง".into());
     m.insert("misc.say.loop_exceed".into(), "ค่า --loop เกินค่าสูงสุด ({}), กำลังจำกัดค่า".into());

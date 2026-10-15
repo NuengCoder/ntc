@@ -60,10 +60,7 @@ pub(crate) fn print_npm_guide(name: &str, npm_pkg: &str) -> Result<()> {
         let npm_bin = detect_npm_bin_dir();
         if let Some(ref bin_dir) = npm_bin {
             if !is_in_path(bin_dir) {
-                print_info(&t!(
-                    "ntpkg.npm_bin_not_in_path",
-                    bin_dir.display()
-                ));
+                print_info(&t!("ntpkg.npm_bin_not_in_path", bin_dir.display()));
                 println!("{}", t!("ntpkg.path_add_label"));
                 println!("    {}", bin_dir.display());
                 println!();

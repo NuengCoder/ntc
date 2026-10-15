@@ -28,6 +28,8 @@ pub fn fill(m: &mut HashMap<String, String>) {
     m.insert("cmd.scan.examples_title".into(), "ຕົວຢ່າງ:".into());
     m.insert("cmd.scan.ext_usage".into(), "ວິທີໃຊ້: scan ext <ນາມສະກຸນ...> [-d|--depth <n>] [-s|--size] [--care]".into());
     m.insert("cmd.scan.help_ext".into(), "  scan ext <ນາມສະກຸນ...> [-d|--depth <n>] [-s|--size] [--care]  ສະແດງໄຟລ໌ຕາມນາມສະກຸນ (ບໍ່ນັບແຖວ)".into());
+    m.insert("cmd.scan.help_files".into(), "  scan files [ແບບ] [-d|--depth <n>] [-s|--size] [--care]  ສະແດງໄຟລ໌ຕາມຊື່ (* = ທັງໝົດ)".into());
+    m.insert("cmd.scan.help_dir".into(), "  scan dir [ແບບ] [-d|--depth <n>] [-s|--size] [--care]  ສະແດງໄດເຣັກທໍຣີຕາມຊື່ (* = ທັງໝົດ)".into());
 
     m.insert("cmd.scan.help_port".into(), "  scan port [host] [--top N | --ports <spec> | --all] [--timeout MS]  ສະແກນ TCP port (ຄ່າເລີ່ມຕົ້ນ localhost, 20 ports ແລກ)".into());
 
@@ -57,6 +59,11 @@ pub fn fill(m: &mut HashMap<String, String>) {
     m.insert("cmd.scan.no_files".into(), "ບໍ່ພົບໄຟລ໌ {}".into());
 
     m.insert("cmd.scan.port_done".into(), "ເປີດ: {} ຈາກ {} ທີ່ສະແກນ".into());
+    m.insert("cmd.scan.files_usage".into(), "ວິທີໃຊ້: scan files [ແບບ] [-d|--depth <n>] [-s|--size] [--care]".into());
+    m.insert("cmd.scan.dir_usage".into(), "ວິທີໃຊ້: scan dir [ແບບ] [-d|--depth <n>] [-s|--size] [--care]".into());
+    m.insert("cmd.scan.no_dirs".into(), "ບໍ່ພົບໄດເຣັກທໍຣີ {}".into());
+    m.insert("cmd.scan.total_dirs".into(), "ທັງໝົດ: {} ໄດເຣັກທໍຣີ".into());
+    m.insert("cmd.scan.total_dirs_size".into(), "ທັງໝົດ: {} ໄດເຣັກທໍຣີ ({})".into());
 
     m.insert("cmd.scan.port_none".into(), "ບໍ່ມີ port ເປີດຢູ່ {}".into());
 
@@ -76,10 +83,10 @@ pub fn fill(m: &mut HashMap<String, String>) {
     m.insert("cmd.target.not_found".into(), "ບໍ່ພົບເສັ້ນທາງ '{}'".into());
     m.insert("cmd.target.tp_not_found".into(), "ບໍ່ພົບຈຸດບັນທຶກ '{}'".into());
     m.insert("cmd.serve.db_title".into(), "ຖານຂໍ້ມູນ:".into());
-    m.insert("cmd.serve.example_default".into(), "  serve                  HTTP ຢູ່ port 8080".into());
-    m.insert("cmd.serve.example_port".into(), "  serve 3000             HTTP ຢູ່ port 3000".into());
-    m.insert("cmd.serve.example_spa".into(), "  serve --spa            SPA fallback ສຳລັບ React Router".into());
-    m.insert("cmd.serve.example_tunnel".into(), "  serve --tunnel         HTTP + cloudflared tunnel".into());
+    m.insert("cmd.serve.example_default".into(), "  serve files            HTTP ຢູ່ port 8080".into());
+    m.insert("cmd.serve.example_port".into(), "  serve files 3000       HTTP ຢູ່ port 3000".into());
+    m.insert("cmd.serve.example_spa".into(), "  serve files --spa      SPA fallback ສຳລັບ React Router".into());
+    m.insert("cmd.serve.example_tunnel".into(), "  serve files --tunnel   HTTP + cloudflared tunnel".into());
     m.insert("cmd.serve.examples_title".into(), "ຕົວຢ່າງ:".into());
     m.insert("cmd.serve.files_stored_title".into(), "ເກັບໄຟລ໌ໄວ້ທີ່:".into());
     m.insert("cmd.serve.help_bind".into(), "  --bind, -b <addr>     ຜູກ bind address (ເລີ່ມຕົ້ນ: 0.0.0.0)".into());
@@ -91,7 +98,7 @@ pub fn fill(m: &mut HashMap<String, String>) {
     m.insert("cmd.serve.help_share".into(), "  --share [path]        ກວດເນັດ ແລ້ວສະແດງ LAN URL + QR ສຳລັບມືຖື".into());
     m.insert("cmd.serve.help_qr".into(), "  --qr                  ບັງຄັບສະແດງ QR (ລວມ --share)".into());
     m.insert("cmd.serve.help_no_qr".into(), "  --no-qr               ບໍ່ສະແດງ QR".into());
-    m.insert("cmd.serve.example_share".into(), "  serve 8080 --share      ກວດເນັດ ແລ້ວພິມ LAN URL + QR".into());
+    m.insert("cmd.serve.example_share".into(), "  serve files 8080 --share  ກວດເນັດ ແລ້ວພິມ LAN URL + QR".into());
     m.insert("cmd.serve.share_checking".into(), "ກຳລັງກວດການເຊື່ອມຕໍ່ອິນເຕີເນັດ...".into());
     m.insert("cmd.serve.share_online".into(), "ອິນເຕີເນັດປົກກະຕິ — ໂຫມດແຊຣ໌".into());
     m.insert("cmd.serve.share_offline".into(), "ບໍ່ມີອິນເຕີເນັດ — ສະແດງສະເພາະ localhost".into());
@@ -102,10 +109,10 @@ pub fn fill(m: &mut HashMap<String, String>) {
     m.insert("cmd.serve.share_not_private".into(), "ທີ່ຢູ່ {} ບໍ່ແມ່ນຊ່ວງ LAN ສ່ວນຕົວ".into());
     m.insert("cmd.serve.share_not_private_hint".into(), "ການແຊຣ໌ມືຖືຕ້ອງໃຊ້ 10.x.x.x, 172.16-31.x.x ຫຼື 192.168.x.x".into());
     m.insert("cmd.serve.share_qr_fail".into(), "render QR ລົ້ມເຫຼວ: {}".into());
-    m.insert("cmd.serve.help_usage".into(), "serve [port] [options]".into());
+    m.insert("cmd.serve.help_usage".into(), "serve files [port] [options]".into());
     m.insert("cmd.serve.help_web_dir".into(), "  --web-dir, -w <dir>   ສົ່ງ frontend directory ທີ່ກຳນົດເອງ".into());
     m.insert("cmd.serve.help_auth".into(), "  --auth <user:pass>     ຕ້ອງເຂົ້າສູ່ລະບົບສຳລັບ /api/* (ເຊັ່ນ --auth admin:secret)".into());
-    m.insert("cmd.serve.example_auth".into(), "  serve 8080 --auth admin:secret   HTTP ຢູ່ 8080, API ຕ້ອງເຂົ້າສູ່ລະບົບ".into());
+    m.insert("cmd.serve.example_auth".into(), "  serve files 8080 --auth admin:secret   HTTP ຢູ່ 8080, API ຕ້ອງເຂົ້າສູ່ລະບົບ".into());
     m.insert("cmd.serve.invalid_auth".into(), "--auth ບໍ່ຖືກຕ້ອງ (ໃຊ້ --auth <user:pass>)".into());
     m.insert("cmd.serve.missing_auth".into(), "ຂາດຄ່າຂອງ --auth".into());
     m.insert("cmd.serve.auth_on".into(), "ເປີດການຢືນຢັນຕົວຕົນ API ສຳລັບຜູ້ໃຊ້ '{}' ແລ້ວ".into());
@@ -119,6 +126,25 @@ pub fn fill(m: &mut HashMap<String, String>) {
     m.insert("cmd.serve.usage_title".into(), "ວິທີໃຊ້:".into());
     m.insert("cmd.serve.cloudflared_starting".into(), "ກຳລັງເລີ່ມ tunnel ຂອງ cloudflared (PID {})".into());
     m.insert("cmd.serve.cloudflared_missing".into(), "ບໍ່ພົບ cloudflared: {}. ຕິດຕັ້ງ: {}".into());
+    m.insert("cmd.serve.chess_soon".into(), "`serve chess` ກຳລັງມາ (ຫຼິ້ນອອນລາຍຫຼາຍຄົນ)".into());
+    m.insert("cmd.serve.services_title".into(), "Serve — ເລືອກບໍລິການ".into());
+    m.insert("cmd.serve.services_usage".into(), "serve <ບໍລິການ> [ຕົວເລືອກ] (`serve` ເປົ່າບໍ່ຣັນຫຍັງ)".into());
+    m.insert("cmd.serve.services_header".into(), "ບໍລິການ:".into());
+    m.insert("cmd.serve.services_row_files".into(), "  files         ເວັບ file-drive (ອັບໂຫຼດ/ດາວໂຫຼດໃນບຣາວເຊີ)".into());
+    m.insert("cmd.serve.services_row_http".into(), "  http-server   ເຊີເວີໄຟລ໌ສະຖິດຂອງໄດເຣັກທໍຣີປັດຈຸບັນ".into());
+    m.insert("cmd.serve.services_row_chess".into(), "  chess         ໝากรุก 2 ຄົນ hotseat ໃນບຣາວເຊີ".into());
+    m.insert("cmd.serve.services_row_config".into(), "  config        ເບິ່ງ/ຕັ້ງຄ່າເລີ່ມຕົ້ນລາຍບໍລິການ (ພອດ, bind)".into());
+    m.insert("cmd.serve.services_example_files".into(), "  serve files --port 9000".into());
+    m.insert("cmd.serve.services_example_http".into(), "  serve http-server ./dist".into());
+    m.insert("cmd.serve.services_example_config".into(), "  serve config files --port-default 9000".into());
+    m.insert("cmd.serve.http_title".into(), "ເຊີເວີໄຟລ໌ສະຖິດ HTTP (ໄດເຣັກທໍຣີປັດຈຸບັນ)".into());
+    m.insert("cmd.serve.http_usage".into(), "serve http-server [dir] [--port 8000] [options]".into());
+    m.insert("cmd.serve.example_http_default".into(), "  serve http-server            ສົ່ງ CWD ຢູ່ພອດ 8080".into());
+    m.insert("cmd.serve.example_http_dir".into(), "  serve http-server ./dist --port 8001   ສົ່ງ ./dist ຢູ່ພອດ 8001".into());
+    m.insert("cmd.serve.example_http_auth".into(), "  serve http-server --auth admin:secret  ຕ້ອງເຂົ້າສູ່ລະບົບ".into());
+    m.insert("cmd.serve.help_auth_http".into(), "  --auth <user:pass>     ທຸກເສັ້ນທາງຕ້ອງເຂົ້າສູ່ລະບົບ (ເຊັ່ນ --auth admin:secret)".into());
+    m.insert("cmd.serve.http_serving".into(), "ກຳລັງສົ່ງ".into());
+    m.insert("cmd.serve.http_no_dir".into(), "ບໍ່ພົບໄດເຣັກທໍຣີ '{}'".into());
     m.insert("cmd.nssh.usage_title".into(), "ວິທີໃຊ້:".into());
     m.insert("cmd.nssh.help_add".into(), "nssh add <ຊື່> --host <ໂຮສ> [--user ຜູ້ໃຊ້] [--port ພອດ] [--key ຄີ] [--pass-env ໂຕແປ]".into());
     m.insert("cmd.nssh.help_ssh".into(), "nssh ssh [ຊື່] [--cmd \"ຄຳສັ່ງ\"] [--trust] [--ask-pass] [--timeout ວິນາທີ]".into());

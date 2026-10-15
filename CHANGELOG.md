@@ -39,6 +39,40 @@
 - Filters: `col~text`, `col=text`, `col!=text`, `col>n`, `col<n`, `col>=n`, `col<=n` joined by `&&`/`||`; numeric-aware sorting; column by name (case-insensitive) or 1-based index
 - Shell completion: `open`/`view` + all flags, sheet-extension file filter (`.csv/.tsv/.json/.jsonl/.ndjson/.txt`); `help nsheet` topic; fully localized in all four languages
 
+#### ♟️ serve chess — Hotseat Chess Prototype (2-player)
+- `serve chess [--port 8000] [--bind addr] [--tunnel] [--share]` — new React app (`ntc_chess_web/`, embedded like `ntc_web`); no `--auth` by design
+- Hand-rolled Rust rules engine (no chess crate): legal move gen, check/checkmate/stalemate, castling, en passant, promotion picker, pawn double-push, threefold/50-move/insufficient-material auto-draws, server-side countdown clocks, resign/draw-agreement/rematch, game abandonment
+- Server-generated SAN history (`e4 e5 Nf3 O-O Bxf4+ Qxf7#`) with file/rank disambiguation, served per move; text piece glyphs (Q/K/P/N/R/B) with brown×egg board, A–H/1–8 coordinates, yellow last-move, red check, black-dot targets
+- Screens: 2 Player, vs AI (soon), Online (soon), Settings (7 sfx volume sliders incl. Check + default clock, persisted), Help, Tutorial; sound engine plays `/sounds/*.wav` and no-ops on 404 so the future PNG/WAV pack drops in with zero code changes
+- `chess.db` (next to `serve.db`): settings table live, rooms/players tables reserved for online play
+- Media pack wired: 12 transparent PNGs (`public/pieces/wP…bK.png`, 256×256) render on the brown×egg board via the `PieceGlyph` seam; 6 WAVs (`public/sounds/*.wav`) play on move/capture/promote/castle/win events with per-name volume sliders
+- `check.wav`: 7th sound for non-capture checks (`sfx.check` setting + Settings slider, default 80); capture+check keeps the capture sound, mate keeps `win`
+- Orange "hanging piece" highlight: server computes per-occupied-square attackers-vs-defenders after every move (kings excluded, check stays red) and serves `hot: [...]` in game state; board renders orange below red-check, above yellow last-move
+- Hot v2: cheaper-piece-eyes-pricier-piece always glows (pawn→N/B/R/Q, N/B→R/Q, R→Q) even when defended, plus a danger ring around both kings (neighbor squares, even empty, glow only on genuine overloads — the king itself counts as one defender)
+- Pins: absolutely-pinned pieces glow gray (`pinned: [...]` in state, below orange in priority so hot never changes color); a pinned piece's attacks count only on its pinner's square and only with real attack geometry behind them
+- Captured trays render actual piece images (strongest first, Q R B N P); promotion picker shows the mover's-color piece images; material lead (`+N`, P1 N3 B3 R5 Q9, counted from the live board so promotions stay exact) sits beside the leading side's clock
+- Undo takebacks (one ply per press, hold to rewind with reverse-slide animation, works after game over too) via snapshot stack restoring board/history/trays/clocks/status; ⇄ Flip swaps to Black's perspective (persisted per-device, 2P screen — future AI reuses it)
+- Clickable history: any played move previews its frozen board/trays (view-only, board locks, ● Now returns to live); served from the snapshot stack via `GET /api/chess/position?ply=K`
+- Tap-deselect + hold-drag: re-pressing a selected piece clears it; holding lifts the piece to follow the pointer (touch-safe via pointer capture), dropping on a target moves, elsewhere snaps back — purely client-side, so opponents never see it
+- Drop reliability: drops route through fetch-then-route (a press that outruns the dots fetch over a tunnel still moves); drag renders at most once per frame with memoized squares so phones don't jank
+- Per-device sessions: each browser owns an isolated hotseat game via `ntc_chess` cookie (laptop and phone no longer share a lobby); 30-min idle sweep + 64-session cap, zero frontend changes (same-origin cookies); also the future Online foundation (named joinable rooms instead of cookies)
+- HTTP keep-alive (chess): persistent per-connection request loop (HTTP/1.1 default, explicit `close` honored, 100-request cap, 15s idle timeout, Ctrl+C-aware) so tunnel polls/moves reuse one warm connection instead of re-handshaking every second
+- Theme refresh: wK.png favicon + menu logo, gray background with silver borders, real Back-button navigation (inline-SVG chevron) on all screens
+- Snappy ~140ms slide animation: mover ghosts from→to on every move (castling ghosts the rook too, promotions slide as pawns), captures vanish instantly, `prefers-reduced-motion` snaps
+- Stale-poll guard: in-flight polls abort on every mutation and late responses that rewind the move count (or un-terminate a finished game) are dropped — the previous move's ghost can no longer replay before the current one
+- Optimistic move ghost: the slide starts on click from the local board (no POST wait), holds at the destination until the response confirms it (pixel-identical handoff), and snaps back with a notice only on error; rapid moves replace mid-flight ghosts, resign/draw/new/rematch clear everything
+
+#### 🌐 serve http-server — Read-Only Static Server for the CWD
+- `serve http-server [dir] [--port 8000] [--bind addr] [--auth user:pass] [--tunnel] [--share [--qr|--no-qr]]` — python-`http.server`-style hosting of the current directory (or `[dir]`): GET/HEAD only, directory listing (python-style table, dirs first) + streamed file downloads with `mime_guess` types
+- Path-traversal safe: per-request canonicalization must stay under the served root (covers `..`, `%2e%2e`, symlink escapes) else `403`; missing paths are `404`; non-GET/HEAD is `405`
+- `--auth` gates every route (no login page for a raw file server); `--spa/--web-dir` rejected with a hint (they belong to `serve files`)
+- `serve` is now a dispatcher: `serve files` (existing file-drive UI, unchanged) and `serve http-server`; bare `serve` runs nothing and prints the service list (`files|http-server|chess|config`); the old `serve [port]` legacy alias is removed — use `serve files`; `serve chess` (online multiplayer) is stubbed as coming soon
+- Bare `serve files` / `serve http-server` (no args) start with configured defaults instead of printing help; per-service help examples updated to the `serve <service>` form
+- `serve http-server` prints a python-style access log per request (`127.0.0.1 - GET /hello.txt 200`, always on, http-server only) and shows a clean path in the Serving banner (no `\\?\` prefix on Windows)
+- `serve config [files|http-server] [--port-default N] [--bind-default ADDR]` (alias: `config serve …`) — per-service port/bind defaults persisted in `config.toml` (`[serve.files]`, `[serve.http-server]`, `[serve.chess]`); bare call shows all services, bare service name shows one; both servers use them when `--port`/`--bind` are absent; `showcg` gains `Serve files:`/`Serve http:`/`Serve chess:` rows; shell completion included; old configs without `[serve]` fall back to 8080/0.0.0.0
+#### 🖼️ image display --sixel — Force Sixel Rendering
+- `image display|show <path> [--sixel]` — flag accepted before or after the path; forces the sixel encoder regardless of terminal detection, with a warning when detection says otherwise; bare `image display --sixel` keeps the interactive picker; two-path and unknown-flag errors unchanged; shell completion (including after the path) + help in all four languages
+
 #### 🔗 serve --share — Internet-First LAN Sharing with QR
 - `serve [port] --share [path] [--qr|--no-qr]` — advertisement-only; auth/routing unchanged
 - Step 1 checks internet via quick TCP probes (`8.8.8.8:53`, `1.1.1.1:53`, ~900ms each); offline prints localhost only with a localized warning (no LAN, no QR)
@@ -88,7 +122,7 @@
 - Fully localized (`ndb.*` / `help.ndb.*`) in English, Chinese, Thai and Lao
 
 #### 🔐 serve --auth — Login for the file server
-- `serve 8080 --auth admin:555@ntcstorage` — every `/api/*` route requires HTTP Basic login (split on the first `:`, so `@` and later `:` stay literal); static `/` stays public so the login page always loads
+- `serve files 8080 --auth admin:555@ntcstorage` — every `/api/*` route requires HTTP Basic login (split on the first `:`, so `@` and later `:` stay literal); static `/` stays public so the login page always loads
 - Wrong/missing credentials get `401 {"error":"Unauthorized"}` + `WWW-Authenticate: Basic realm="ntc serve"`; the check runs before any body is read, so unauthenticated uploads can't burn bandwidth or disk
 - Web UI: login dialog (`🔒 Login required` → username + password → `Unlock`), credentials kept in `sessionStorage` (cleared on tab close + `🔒 Logout` button), every fetch/XHR carries the header, downloads go through authenticated fetch-blob, any `401` re-opens the login overlay
 - No `--auth` = exactly the old behavior (additive-only); localized (`cmd.serve.*`) in English, Chinese, Thai and Lao

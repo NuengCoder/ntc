@@ -79,6 +79,40 @@ impl TeleportManager {
         teleports.get(&name.to_lowercase()).cloned()
     }
 
+    /// Resolve `@name[/rest...]` to a concrete path: longest-prefix
+    /// savepoint match, remaining segments joined onto its root.
+    /// `@tp` alone resolves the root; `@tp/` tolerates the trailing slash.
+    /// Returns `None` when no savepoint prefix matches (or the spec has no
+    /// `@` prefix / an empty name). Pure lookup — callers own errors.
+    pub fn resolve_subpath(spec: &str) -> Option<PathBuf> {
+        let rest = spec.strip_prefix('@')?;
+        let trimmed = rest.trim_matches('/');
+        if trimmed.is_empty() {
+            return None;
+        }
+        let teleports = Self::get_all();
+        // Exact full match first (keeps slash-containing names working).
+        if let Some(root) = teleports.get(&trimmed.to_lowercase()) {
+            return Some(root.clone());
+        }
+        // Then strip trailing `/segments` until a savepoint matches.
+        let mut prefix = trimmed;
+        while let Some(pos) = prefix.rfind('/') {
+            prefix = &prefix[..pos];
+            if prefix.is_empty() {
+                return None;
+            }
+            if let Some(root) = teleports.get(&prefix.to_lowercase()) {
+                let tail = trimmed[prefix.len()..].trim_start_matches('/');
+                if tail.is_empty() {
+                    return Some(root.clone());
+                }
+                return Some(root.join(tail));
+            }
+        }
+        None
+    }
+
     pub fn show_current_tree(nav: &Navigator) {
         show_tree(nav, Some(1), false, false, false, false, false, false);
     }
@@ -92,9 +126,15 @@ impl TeleportManager {
             return Ok(());
         }
 
-        let mut cfg = Config::write_global();
-        let old_path = cfg.teleports.insert(name_lower.clone(), path.clone());
-        cfg.save();
+        // Drop the WRITE guard before printing: print_success() reads
+        // Config (via ThemeManager::ansi_enabled) and std RwLock deadlocks
+        // on WRITE->READ re-acquire on the same thread.
+        let old_path = {
+            let mut cfg = Config::write_global();
+            let old_path = cfg.teleports.insert(name_lower.clone(), path.clone());
+            cfg.save();
+            old_path
+        };
 
         if let Some(old) = old_path {
             print_success(&t!("teleport.updated", name_lower, old.display(), path.display()));
@@ -340,10 +380,17 @@ impl TeleportManager {
     /// Remove a teleport savepoint by name
     pub fn remove_by_name(name: &str) -> Result<()> {
         let name_lower = name.to_lowercase();
-        let mut cfg = Config::write_global();
+        // Drop WRITE guard before printing (print_* re-reads Config).
+        let was_removed = {
+            let mut cfg = Config::write_global();
+            let was_removed = cfg.teleports.remove(&name_lower).is_some();
+            if was_removed {
+                cfg.save();
+            }
+            was_removed
+        };
 
-        if cfg.teleports.remove(&name_lower).is_some() {
-            cfg.save();
+        if was_removed {
             print_success(&t!("teleport.removed", name_lower));
         } else {
             print_error(&t!("teleport.not_found", name));
@@ -377,27 +424,49 @@ impl TeleportManager {
             return Ok(());
         }
 
-        let mut cfg = Config::write_global();
-
-        if !cfg.teleports.contains_key(&old_lower) {
-            print_error(&t!("teleport.not_found", old_name));
-            return Ok(());
+        // Mutate under WRITE, then drop guard before any print (print_*
+        // re-reads Config and would deadlock on WRITE->READ re-acquire).
+        enum RenameOutcome {
+            OldNotFound,
+            NameExists,
+            Renamed(PathBuf),
         }
+        let outcome = {
+            let mut cfg = Config::write_global();
 
-        if cfg.teleports.contains_key(&new_lower) {
-            print_error(&t!("teleport.name_exists", new_name));
-            println!("{}", t!("teleport.jump_hint").dimmed());
-            return Ok(());
-        }
-
-        let Some(path) = cfg.teleports.remove(&old_lower) else {
-            print_error(&t!("teleport.not_found", old_name));
-            return Ok(());
+            if !cfg.teleports.contains_key(&old_lower) {
+                RenameOutcome::OldNotFound
+            } else if cfg.teleports.contains_key(&new_lower) {
+                RenameOutcome::NameExists
+            } else {
+                match cfg.teleports.remove(&old_lower) {
+                    Some(path) => {
+                        cfg.teleports.insert(new_lower.clone(), path.clone());
+                        cfg.save();
+                        RenameOutcome::Renamed(path)
+                    }
+                    None => RenameOutcome::OldNotFound,
+                }
+            }
         };
-        cfg.teleports.insert(new_lower.clone(), path.clone());
-        cfg.save();
 
-        print_success(&t!("teleport.renamed_with_path", old_lower, new_lower, path.display()));
+        match outcome {
+            RenameOutcome::OldNotFound => {
+                print_error(&t!("teleport.not_found", old_name));
+            }
+            RenameOutcome::NameExists => {
+                print_error(&t!("teleport.name_exists", new_name));
+                println!("{}", t!("teleport.jump_hint").dimmed());
+            }
+            RenameOutcome::Renamed(path) => {
+                print_success(&t!(
+                    "teleport.renamed_with_path",
+                    old_lower,
+                    new_lower,
+                    path.display()
+                ));
+            }
+        }
 
         Ok(())
     }
@@ -423,9 +492,11 @@ impl TeleportManager {
         let input = input.trim().to_lowercase();
 
         if input == "y" || input == "yes" {
-            let mut cfg = Config::write_global();
-            cfg.teleports.clear();
-            cfg.save();
+            {
+                let mut cfg = Config::write_global();
+                cfg.teleports.clear();
+                cfg.save();
+            }
             print_success(&t!("teleport.all_cleared"));
         } else {
             println!("{}", t!("teleport.clear_cancelled").dimmed());
@@ -437,6 +508,76 @@ impl TeleportManager {
     /// Get count of savepoints
     pub fn count() -> usize {
         Self::get_all().len()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::path::PathBuf;
+
+    fn cfg_with(tp1: &str, tp2: &str) -> Config {
+        let mut cfg = Config::default();
+        cfg.teleports
+            .insert("tp1".to_string(), PathBuf::from(tp1));
+        cfg.teleports
+            .insert("tp2".to_string(), PathBuf::from(tp2));
+        cfg
+    }
+
+    #[test]
+    fn resolve_subpath_roots_and_subpaths() {
+        Config::with_test_config(cfg_with("/t/one", "/t/two"), || {
+            assert_eq!(
+                TeleportManager::resolve_subpath("@tp1"),
+                Some(PathBuf::from("/t/one"))
+            );
+            // Case-insensitive, trailing slash tolerated.
+            assert_eq!(
+                TeleportManager::resolve_subpath("@TP1/"),
+                Some(PathBuf::from("/t/one"))
+            );
+            assert_eq!(
+                TeleportManager::resolve_subpath("@tp1/file.txt"),
+                Some(PathBuf::from("/t/one/file.txt"))
+            );
+            assert_eq!(
+                TeleportManager::resolve_subpath("@tp1/sub/dir"),
+                Some(PathBuf::from("/t/one/sub/dir"))
+            );
+        });
+    }
+
+    #[test]
+    fn resolve_subpath_rejects_unknown_and_bare() {
+        Config::with_test_config(cfg_with("/t/one", "/t/two"), || {
+            assert_eq!(TeleportManager::resolve_subpath("@ghost"), None);
+            assert_eq!(TeleportManager::resolve_subpath("@ghost/file.txt"), None);
+            assert_eq!(TeleportManager::resolve_subpath("@"), None);
+            assert_eq!(TeleportManager::resolve_subpath("tp1"), None);
+            assert_eq!(TeleportManager::resolve_subpath(""), None);
+        });
+    }
+
+    #[test]
+    fn resolve_subpath_prefers_longest_match() {
+        let mut cfg = Config::default();
+        cfg.teleports
+            .insert("a/b".to_string(), PathBuf::from("/slash"));
+        cfg.teleports
+            .insert("a".to_string(), PathBuf::from("/a"));
+        Config::with_test_config(cfg, || {
+            // Exact slash-name still resolves on its own.
+            assert_eq!(
+                TeleportManager::resolve_subpath("@a/b"),
+                Some(PathBuf::from("/slash"))
+            );
+            // With a tail, the longest prefix wins over `a` + `b/c`.
+            assert_eq!(
+                TeleportManager::resolve_subpath("@a/b/c"),
+                Some(PathBuf::from("/slash/c"))
+            );
+        });
     }
 }
 

@@ -108,19 +108,37 @@ mod tests {
     #[test]
     fn test_set_parses() {
         let stmts = parse("set name = world");
-        assert_eq!(stmts[0], Stmt::Set { name: "name".into(), value: "world".into() });
+        assert_eq!(
+            stmts[0],
+            Stmt::Set {
+                name: "name".into(),
+                value: "world".into()
+            }
+        );
     }
 
     #[test]
     fn test_set_quoted_value() {
         let stmts = parse(r#"set msg = "hello world""#);
-        assert_eq!(stmts[0], Stmt::Set { name: "msg".into(), value: "hello world".into() });
+        assert_eq!(
+            stmts[0],
+            Stmt::Set {
+                name: "msg".into(),
+                value: "hello world".into()
+            }
+        );
     }
 
     #[test]
     fn test_set_single_quotes() {
         let stmts = parse("set msg = 'hello world'");
-        assert_eq!(stmts[0], Stmt::Set { name: "msg".into(), value: "hello world".into() });
+        assert_eq!(
+            stmts[0],
+            Stmt::Set {
+                name: "msg".into(),
+                value: "hello world".into()
+            }
+        );
     }
 
     #[test]

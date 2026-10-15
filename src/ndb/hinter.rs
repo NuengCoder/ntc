@@ -22,16 +22,67 @@ use crate::config::Config;
 
 /// Commands available at `ndb [<cwd>]>` (no database open).
 pub(crate) const ROOT_COMMANDS: &[&str] = &[
-    "help", "h", "view", "ls", "list", "interface", "use", "open", "in", "i", "sql", "query",
-    "dbal", "clear", "cls", "exit", "quit", "q",
+    "help",
+    "h",
+    "view",
+    "ls",
+    "list",
+    "interface",
+    "use",
+    "open",
+    "in",
+    "i",
+    "sql",
+    "query",
+    "dbal",
+    "clear",
+    "cls",
+    "exit",
+    "quit",
+    "q",
 ];
 
 /// Commands available at `ndb [<file.db>]>` (database open).
 pub(crate) const DB_COMMANDS: &[&str] = &[
-    "help", "h", "viewf", "vf", "view", "v", "tables", "t", "ls", "list", "tablef", "tblf", "tf",
-    "schema", "desc", "describe", "sql", "query", "edit", "write", "backup", "bak", "more",
-    "next", "m", "indexes", "idx", "info", "dbal", "interface", "use", "open", "in", "i",
-    "clear", "cls", "exit", "quit", "q",
+    "help",
+    "h",
+    "viewf",
+    "vf",
+    "view",
+    "v",
+    "tables",
+    "t",
+    "ls",
+    "list",
+    "tablef",
+    "tblf",
+    "tf",
+    "schema",
+    "desc",
+    "describe",
+    "sql",
+    "query",
+    "edit",
+    "write",
+    "backup",
+    "bak",
+    "more",
+    "next",
+    "m",
+    "indexes",
+    "idx",
+    "info",
+    "dbal",
+    "interface",
+    "use",
+    "open",
+    "in",
+    "i",
+    "clear",
+    "cls",
+    "exit",
+    "quit",
+    "q",
 ];
 
 /// `dbal` subcommands (mirrors `dbal::SUBCOMMANDS` without help aliases).
@@ -234,10 +285,7 @@ impl NdbHinter {
             let (sub, frag) = if trailing_space {
                 (parts.last().copied().unwrap_or(""), "")
             } else if parts.len() >= 3 {
-                (
-                    parts[parts.len() - 2],
-                    parts.last().copied().unwrap_or(""),
-                )
+                (parts[parts.len() - 2], parts.last().copied().unwrap_or(""))
             } else {
                 ("", "")
             };
@@ -253,10 +301,7 @@ impl NdbHinter {
             let (prev, frag) = if trailing_space {
                 (parts.last().copied().unwrap_or(""), "")
             } else if parts.len() >= 3 {
-                (
-                    parts[parts.len() - 2],
-                    parts.last().copied().unwrap_or(""),
-                )
+                (parts[parts.len() - 2], parts.last().copied().unwrap_or(""))
             } else {
                 ("", "")
             };
@@ -577,10 +622,7 @@ mod tests {
         assert!(subs.contains(&"run".to_string()));
         assert!(subs.contains(&"rm".to_string()));
         // Alias-name completion for subcommands that take one.
-        assert_eq!(
-            h.candidates_for("dbal run "),
-            vec!["top_users".to_string()]
-        );
+        assert_eq!(h.candidates_for("dbal run "), vec!["top_users".to_string()]);
         assert_eq!(
             h.candidates_for("dbal run top"),
             vec!["top_users".to_string()]

@@ -141,9 +141,9 @@ impl Editor {
                         // Auto-scroll to cursor if follow mode is on
                         if follow {
                             if let Some(ref term) = self.terminal {
-                                let panel_h = self.run_panel_height();
+                                let panel_h = self.terminal_content_rows();
                                 let total = term.total_lines();
-                                let cursor_abs_y = term.scrollback.len() + term.cursor_y;
+                                let cursor_abs_y = term.cursor_abs_y();
                                 self.sv.run = (cursor_abs_y + 1)
                                     .saturating_sub(panel_h)
                                     .min(total.saturating_sub(panel_h));
@@ -151,10 +151,10 @@ impl Editor {
                         }
                         // Horizontal follow — keep cursor in visible range
                         if let Some(ref term) = self.terminal {
-                            let editor_cols = self.term_w.saturating_sub(self.editor_offset());
+                            let content_cols = self.terminal_content_cols();
                             term.ensure_cursor_visible_x(
                                 &mut self.sv.terminal_scroll_x,
-                                editor_cols.saturating_sub(1),
+                                content_cols,
                             );
                         }
                         self.mark_all_dirty();
@@ -299,10 +299,10 @@ impl Editor {
 
             if is_resize {
                 self.mark_all_dirty();
-                // Resize the embedded terminal if active
+                // Resize the embedded terminal if active (fixed 50%)
                 if let Some(ref mut term) = self.terminal {
                     let (tw, th) = crate::editor::helpers::term_size();
-                    let term_h = (th as f64 * 0.4) as u16;
+                    let term_h = (th / 2) as u16;
                     term.resize(tw as u16, term_h);
                 }
             }
@@ -344,9 +344,9 @@ impl Editor {
                     if is_dirty {
                         if follow {
                             if let Some(ref term) = self.terminal {
-                                let panel_h = self.run_panel_height();
+                                let panel_h = self.terminal_content_rows();
                                 let total = term.total_lines();
-                                let cursor_abs_y = term.scrollback.len() + term.cursor_y;
+                                let cursor_abs_y = term.cursor_abs_y();
                                 self.sv.run = (cursor_abs_y + 1)
                                     .saturating_sub(panel_h)
                                     .min(total.saturating_sub(panel_h));
@@ -354,10 +354,10 @@ impl Editor {
                         }
                         // Horizontal follow — keep cursor in visible range
                         if let Some(ref term) = self.terminal {
-                            let editor_cols = self.term_w.saturating_sub(self.editor_offset());
+                            let content_cols = self.terminal_content_cols();
                             term.ensure_cursor_visible_x(
                                 &mut self.sv.terminal_scroll_x,
-                                editor_cols.saturating_sub(1),
+                                content_cols,
                             );
                         }
                         self.mark_all_dirty();

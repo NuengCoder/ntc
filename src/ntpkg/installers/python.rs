@@ -203,8 +203,7 @@ pub(crate) fn build_from_source(
         .ok_or_else(|| anyhow::anyhow!("No download URL for platform '{platform_key}'"))?;
 
     print_info(&format!("Downloading {name} {version} source..."));
-    fs::create_dir_all(vdir)
-        .with_context(|| format!("Failed to create {}", vdir.display()))?;
+    fs::create_dir_all(vdir).with_context(|| format!("Failed to create {}", vdir.display()))?;
     let tarball = vdir.join(format!("Python-{version}.tar.xz"));
     download_with_progress(url, &tarball)?;
 
@@ -242,8 +241,7 @@ pub(crate) fn download_and_launch_installer(
     };
     // vdir does not exist yet on a fresh install — create it before the
     // download or fs::write fails with "Failed to write downloaded file".
-    fs::create_dir_all(vdir)
-        .with_context(|| format!("Failed to create {}", vdir.display()))?;
+    fs::create_dir_all(vdir).with_context(|| format!("Failed to create {}", vdir.display()))?;
     let installer_path = vdir.join(format!("{name}-{version}{ext}"));
 
     print_info(&format!("Downloading {name} {version}..."));

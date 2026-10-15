@@ -133,7 +133,9 @@ pub(crate) fn extract_user_functions(lines: &[String]) -> Vec<UserFunction> {
             return false;
         }
         let before = code[..paren].trim();
-        if before.contains(['=', '.', '>', '<', '+', '-', '*', '/', '%', '!', '&', '|', '?', ':']) {
+        if before.contains([
+            '=', '.', '>', '<', '+', '-', '*', '/', '%', '!', '&', '|', '?', ':',
+        ]) {
             return false;
         }
         before.split_whitespace().count() >= 2
@@ -424,9 +426,7 @@ fn body_ranges(lines: &[String], keyword: &str) -> Vec<(String, usize, usize)> {
             .next()
             .unwrap_or("")
             .to_string();
-        if name.is_empty()
-            || !name.starts_with(|c: char| c.is_alphabetic() || c == '_')
-        {
+        if name.is_empty() || !name.starts_with(|c: char| c.is_alphabetic() || c == '_') {
             i += 1;
             continue;
         }
@@ -613,9 +613,7 @@ fn parse_body_members(
             }
             let before = code[..paren].trim();
             let mname = before.split_whitespace().last().unwrap_or("");
-            if mname.is_empty()
-                || !mname.starts_with(|c: char| c.is_alphabetic() || c == '_')
-            {
+            if mname.is_empty() || !mname.starts_with(|c: char| c.is_alphabetic() || c == '_') {
                 nest = nest.saturating_add(opens).saturating_sub(closes);
                 continue;
             }
@@ -637,8 +635,14 @@ fn parse_body_members(
                 .rev()
                 .filter(|t| {
                     ![
-                        "static", "virtual", "override", "const", "extern", "private",
-                        "protected", "public",
+                        "static",
+                        "virtual",
+                        "override",
+                        "const",
+                        "extern",
+                        "private",
+                        "protected",
+                        "public",
                     ]
                     .contains(t)
                 })
@@ -750,9 +754,7 @@ pub(crate) fn extract_classes_full(lines: &[String]) -> Vec<ClassInfo> {
             continue;
         }
         let mname = after[..paren].trim();
-        if mname.is_empty()
-            || !mname.starts_with(|c: char| c.is_alphabetic() || c == '_')
-        {
+        if mname.is_empty() || !mname.starts_with(|c: char| c.is_alphabetic() || c == '_') {
             continue;
         }
         let close = after[paren..].find(')').unwrap_or(0);
@@ -970,9 +972,7 @@ pub(crate) fn extract_enums(lines: &[String]) -> Vec<EnumInfo> {
             enums.push(EnumInfo { name, members });
         } else if name.is_empty() {
             // Anonymous enum: still offer its members under no name.
-            if !members.is_empty()
-                && !enums.iter().any(|e: &EnumInfo| e.name.is_empty())
-            {
+            if !members.is_empty() && !enums.iter().any(|e: &EnumInfo| e.name.is_empty()) {
                 enums.push(EnumInfo {
                     name: String::new(),
                     members,
@@ -1062,7 +1062,8 @@ mod tests {
     }
 
     #[test]
-    fn defines_plain_valued_and_funclike() {       let lines = sl(&[
+    fn defines_plain_valued_and_funclike() {
+        let lines = sl(&[
             "#define MAXLOT 10",
             "#define WINDOW \"main\" // main window",
             "#define SQR(x) ((x)*(x))",

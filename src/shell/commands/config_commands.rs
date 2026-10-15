@@ -2,6 +2,7 @@
 //! `opencg`, `resetcg`, `restorecg`, `local`, `init`, `deinit`.
 
 use crate::config::Config;
+use crate::config::ServeService;
 use crate::config::VALID_LANGUAGES;
 use crate::navigator::Navigator;
 use crate::output::{print_error, print_info, print_success, print_warning};
@@ -30,6 +31,7 @@ pub fn cmd_config(args: &str, _nav: &mut Navigator) -> Result<bool> {
         "git" => config_git(subargs),
         "dir_view" | "dv" => config_dir_view(subargs),
         "qsc" => config_qsc(subargs),
+        "serve" => config_serve(subargs),
         "lang" | "language" => config_lang(subargs),
         _ => {
             println!("{}", t!("cmd.config.title").cyan().bold());
@@ -47,6 +49,7 @@ pub fn cmd_config(args: &str, _nav: &mut Navigator) -> Result<bool> {
             println!("  {}", t!("help.config.watch"));
             println!("  {}", t!("help.config.qsc"));
             println!("  {}", t!("help.config.qsc_off"));
+            println!("  {}", t!("help.config.serve"));
             println!("  {}", t!("help.config.watch_trigger"));
             println!("  {}", t!("help.config.watch_trigger_off"));
             println!("  {}", t!("help.config.lang"));
@@ -222,6 +225,106 @@ fn config_dir_view(args: &str) -> Result<bool> {
         }
     }
     Ok(false)
+}
+
+/// `serve config [service] [--port-default N] [--bind-default ADDR]`
+/// (alias: `config serve …` — both route here). Bare call shows all
+/// services; a bare service name shows that service; flags save new
+/// per-service defaults (port + bind) used when `--port`/`--bind`
+/// are absent at serve startup.
+pub(crate) fn config_serve(args: &str) -> Result<bool> {
+    let tokens: Vec<&str> = args.split_whitespace().collect();
+    if tokens.is_empty() {
+        print_serve_config_all();
+        return Ok(false);
+    }
+    if matches!(tokens[0].to_lowercase().as_str(), "help" | "--help" | "-h") {
+        print_serve_config_help();
+        return Ok(false);
+    }
+    let Some(svc) = ServeService::parse(tokens[0]) else {
+        print_error(&t!("cmd.config.serve.invalid_service", tokens[0]));
+        return Ok(false);
+    };
+
+    let mut port: Option<u16> = None;
+    let mut bind: Option<String> = None;
+    let mut i = 1;
+    while i < tokens.len() {
+        match tokens[i].to_lowercase().as_str() {
+            "--port-default" => {
+                i += 1;
+                let v = tokens.get(i).copied().unwrap_or("");
+                match v.parse::<u32>() {
+                    Ok(n) if (1..=65535).contains(&n) => port = Some(n as u16),
+                    _ => {
+                        print_error(&t!("cmd.config.serve.invalid_port", v));
+                        return Ok(false);
+                    }
+                }
+            }
+            "--bind-default" => {
+                i += 1;
+                let v = tokens.get(i).copied().unwrap_or("");
+                if v.is_empty() {
+                    print_error(&t!("cmd.config.serve.empty_bind"));
+                    return Ok(false);
+                }
+                bind = Some(v.to_string());
+            }
+            other => {
+                print_error(&t!("cmd.config.serve.unknown_option", other));
+                return Ok(false);
+            }
+        }
+        i += 1;
+    }
+
+    if port.is_none() && bind.is_none() {
+        print_serve_config_one(svc);
+    } else {
+        if let Some(p) = port {
+            Config::global_set_serve_port(svc, p);
+        }
+        if let Some(b) = bind {
+            Config::global_set_serve_bind(svc, &b);
+        }
+        print_success(&t!(
+            "cmd.config.serve.saved",
+            svc.name(),
+            Config::global_get_serve_bind(svc),
+            Config::global_get_serve_port(svc)
+        ));
+    }
+    Ok(false)
+}
+
+fn print_serve_config_one(svc: ServeService) {
+    println!(
+        "{}",
+        t!(
+            "cmd.config.serve.status",
+            svc.name(),
+            Config::global_get_serve_bind(svc),
+            Config::global_get_serve_port(svc)
+        )
+    );
+}
+
+fn print_serve_config_all() {
+    println!("{}", t!("cmd.config.serve.title").cyan().bold());
+    print_serve_config_one(ServeService::Files);
+    print_serve_config_one(ServeService::Http);
+    print_serve_config_one(ServeService::Chess);
+}
+
+fn print_serve_config_help() {
+    println!("{}", t!("cmd.config.serve.title").cyan().bold());
+    println!();
+    println!("{}", t!("cmd.config.serve.usage"));
+    println!("  {}", t!("cmd.config.serve.example_show"));
+    println!("  {}", t!("cmd.config.serve.example_show_one"));
+    println!("  {}", t!("cmd.config.serve.example_set"));
 }
 
 fn config_threads(args: &str) -> Result<bool> {
@@ -551,6 +654,36 @@ pub fn cmd_showcg(_args: &str, _nav: &mut Navigator) -> Result<bool> {
             .yellow()
             .to_string()
         }
+    );
+    println!(
+        "│ {:<20} {:<42} │",
+        t!("msg.showcg.label_serve_files"),
+        format!(
+            "{}:{}",
+            Config::global_get_serve_bind(ServeService::Files),
+            Config::global_get_serve_port(ServeService::Files)
+        )
+        .cyan()
+    );
+    println!(
+        "│ {:<20} {:<42} │",
+        t!("msg.showcg.label_serve_http"),
+        format!(
+            "{}:{}",
+            Config::global_get_serve_bind(ServeService::Http),
+            Config::global_get_serve_port(ServeService::Http)
+        )
+        .cyan()
+    );
+    println!(
+        "│ {:<20} {:<42} │",
+        t!("msg.showcg.label_serve_chess"),
+        format!(
+            "{}:{}",
+            Config::global_get_serve_bind(ServeService::Chess),
+            Config::global_get_serve_port(ServeService::Chess)
+        )
+        .cyan()
     );
     println!("{}", t!("msg.showcg.box_bottom", "─".repeat(w)));
     println!();
@@ -1258,4 +1391,74 @@ pub fn cmd_deinit(args: &str, _nav: &mut Navigator) -> Result<bool> {
     }
 
     Ok(false)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn serve_config_rejects_unknown_service() {
+        // Error paths return before touching the global singleton.
+        assert!(config_serve("nope").is_ok());
+        assert!(config_serve("files --port-default 0").is_ok());
+        assert!(config_serve("files --port-default 99999").is_ok());
+        assert!(config_serve("files --port-default abc").is_ok());
+        assert!(config_serve("files --bind-default").is_ok());
+        assert!(config_serve("files --nope").is_ok());
+    }
+
+    #[test]
+    fn serve_config_set_then_show_roundtrip() {
+        // The setter path persists via save() to the real config.toml
+        // (no other test writes it). Back it up and restore afterwards
+        // so the suite never leaves residue behind. The file restore runs
+        // INSIDE the serial guard so a parallel test's save() can never
+        // land after our restore (a stale-default write was once observed
+        // clobbering a live [serve.chess] table).
+        let cfg_path = dirs::config_dir().map(|d| d.join("ntc").join("config.toml"));
+        let backup: Option<(PathBuf, Option<Vec<u8>>)> = cfg_path.clone().map(|p| {
+            let prev = std::fs::read(&p).ok();
+            (p, prev)
+        });
+        fn restore(backup: &Option<(PathBuf, Option<Vec<u8>>)>) {
+            if let Some((p, prev)) = backup {
+                match prev {
+                    Some(bytes) => {
+                        let _ = std::fs::write(p, bytes);
+                    }
+                    None => {
+                        let _ = std::fs::remove_file(p);
+                    }
+                }
+            }
+        }
+        // Swap in a clean config so global reads are deterministic.
+        Config::with_test_config(Config::new(), || {
+            assert!(config_serve("files --port-default 9000").is_ok());
+            assert_eq!(Config::global_get_serve_port(ServeService::Files), 9000);
+            assert!(config_serve("http-server --bind-default 127.0.0.1").is_ok());
+            assert_eq!(
+                Config::global_get_serve_bind(ServeService::Http),
+                "127.0.0.1"
+            );
+            // Untouched service keeps defaults.
+            assert_eq!(Config::global_get_serve_port(ServeService::Http), 8080);
+            // Show paths don't mutate.
+            assert!(config_serve("").is_ok());
+            assert!(config_serve("files").is_ok());
+            assert!(
+                config_serve("http-server --port-default 9001 --bind-default 127.0.0.2").is_ok()
+            );
+            assert_eq!(Config::global_get_serve_port(ServeService::Http), 9001);
+            // chess is a real service now.
+            assert!(config_serve("chess").is_ok());
+            assert!(config_serve("chess --port-default 9100").is_ok());
+            assert_eq!(Config::global_get_serve_port(ServeService::Chess), 9100);
+            assert!(config_serve("help").is_ok());
+            restore(&backup);
+        });
+        // Best-effort outer restore (covers a panic inside the guard).
+        restore(&backup);
+    }
 }

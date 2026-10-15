@@ -503,6 +503,57 @@ pub fn search_content(root: &Path, pattern: &str, max_depth: usize) -> Vec<Conte
     results
 }
 
+/// Search file contents for a pattern (case-insensitive) within an
+/// explicit file list (already glob-filtered by the caller, e.g. `qur`).
+/// Same guards as [`search_content`]: skips huge files and non-UTF8 files.
+/// Returns matches sorted by file path then line number.
+pub fn search_content_in_files(files: &[PathBuf], pattern: &str) -> Vec<ContentMatch> {
+    if pattern.is_empty() {
+        return Vec::new();
+    }
+    let pattern_lower = pattern.to_lowercase();
+    let mut results: Vec<ContentMatch> = files
+        .par_iter()
+        .filter_map(|path| {
+            if let Ok(md) = std::fs::metadata(path) {
+                if md.len() > MAX_GS_FILE_BYTES {
+                    return None;
+                }
+            }
+            let content = std::fs::read_to_string(path).ok()?;
+            let mut matches: Vec<ContentMatch> = Vec::new();
+            for (i, line) in content.lines().enumerate() {
+                if matches.len() >= MAX_GS_MATCHES_PER_FILE {
+                    break;
+                }
+                if line.len() < pattern.len() {
+                    continue;
+                }
+                if line.to_lowercase().contains(&pattern_lower) {
+                    matches.push(ContentMatch {
+                        file_path: path.clone(),
+                        line_number: i + 1,
+                        line: line.to_string(),
+                    });
+                }
+            }
+            if matches.is_empty() {
+                None
+            } else {
+                Some(matches)
+            }
+        })
+        .flatten()
+        .collect();
+
+    results.sort_by(|a, b| {
+        a.file_path
+            .cmp(&b.file_path)
+            .then_with(|| a.line_number.cmp(&b.line_number))
+    });
+    results
+}
+
 /// Display path for `gs` results: relative to the search root
 /// (`sub_dir/file.ext`), never the full path / CWD prefix.
 /// Falls back to file name when the path is not under `root`.

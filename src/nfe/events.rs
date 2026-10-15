@@ -432,11 +432,7 @@ fn handle_viewer_key(state: &mut NfeState, key: crossterm::event::KeyEvent) -> A
 // ── Mouse handler ──
 
 fn handle_mouse(state: &mut NfeState, mouse: MouseEvent) {
-    if state.help_visible
-        || state.line_prompt_active
-        || state.find_active
-        || state.viewer_active
-    {
+    if state.help_visible || state.line_prompt_active || state.find_active || state.viewer_active {
         return;
     }
 
@@ -573,7 +569,12 @@ fn enter_goto_mode(state: &mut NfeState) -> Result<()> {
                             state.set_status(format!(
                                 "{} matches: {}",
                                 matches.len(),
-                                matches.iter().take(5).cloned().collect::<Vec<_>>().join(", ")
+                                matches
+                                    .iter()
+                                    .take(5)
+                                    .cloned()
+                                    .collect::<Vec<_>>()
+                                    .join(", ")
                             ));
                         }
                     }

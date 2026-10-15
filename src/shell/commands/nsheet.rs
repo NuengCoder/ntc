@@ -22,9 +22,7 @@ use crate::utils::terminal::asciify;
 use anyhow::Result;
 use colored::*;
 use crossterm::cursor::{Hide, MoveTo, Show};
-use crossterm::event::{
-    self, Event, KeyCode, KeyEventKind, KeyModifiers,
-};
+use crossterm::event::{self, Event, KeyCode, KeyEventKind, KeyModifiers};
 use crossterm::style::{
     Attribute, Color as CxColor, Print, ResetColor, SetAttribute, SetBackgroundColor,
     SetForegroundColor,
@@ -122,7 +120,9 @@ fn parse_nsheet_args(tokens: &[String]) -> Result<NsheetArgs, String> {
     while i < tokens.len() {
         match tokens[i].as_str() {
             "-d" | "--delimiter" => {
-                let val = tokens.get(i + 1).ok_or_else(|| t!("cmd.nsheet.delimiter_usage"))?;
+                let val = tokens
+                    .get(i + 1)
+                    .ok_or_else(|| t!("cmd.nsheet.delimiter_usage"))?;
                 args.delimiter = parse_delimiter_value(val)?;
                 i += 2;
             }
@@ -135,7 +135,9 @@ fn parse_nsheet_args(tokens: &[String]) -> Result<NsheetArgs, String> {
                 i += 1;
             }
             "-l" | "--limit" => {
-                let val = tokens.get(i + 1).ok_or_else(|| t!("cmd.nsheet.limit_usage"))?;
+                let val = tokens
+                    .get(i + 1)
+                    .ok_or_else(|| t!("cmd.nsheet.limit_usage"))?;
                 match val.parse::<usize>() {
                     Ok(n) => args.limit = Some(n),
                     Err(_) => return Err(t!("cmd.nsheet.invalid_limit", val)),
@@ -147,7 +149,9 @@ fn parse_nsheet_args(tokens: &[String]) -> Result<NsheetArgs, String> {
                 i += 1;
             }
             "--sort" => {
-                let val = tokens.get(i + 1).ok_or_else(|| t!("cmd.nsheet.sort_usage"))?;
+                let val = tokens
+                    .get(i + 1)
+                    .ok_or_else(|| t!("cmd.nsheet.sort_usage"))?;
                 args.sort_col = Some(val.clone());
                 i += 2;
             }
@@ -156,12 +160,16 @@ fn parse_nsheet_args(tokens: &[String]) -> Result<NsheetArgs, String> {
                 i += 1;
             }
             "--filter" => {
-                let val = tokens.get(i + 1).ok_or_else(|| t!("cmd.nsheet.filter_usage"))?;
+                let val = tokens
+                    .get(i + 1)
+                    .ok_or_else(|| t!("cmd.nsheet.filter_usage"))?;
                 args.filter = Some(val.clone());
                 i += 2;
             }
             "--export" => {
-                let val = tokens.get(i + 1).ok_or_else(|| t!("cmd.nsheet.export_usage"))?;
+                let val = tokens
+                    .get(i + 1)
+                    .ok_or_else(|| t!("cmd.nsheet.export_usage"))?;
                 let low = val.to_lowercase();
                 if low != "json" && low != "md" {
                     return Err(t!("cmd.nsheet.invalid_export", val));
@@ -170,7 +178,9 @@ fn parse_nsheet_args(tokens: &[String]) -> Result<NsheetArgs, String> {
                 i += 2;
             }
             "-o" | "--output" => {
-                let val = tokens.get(i + 1).ok_or_else(|| t!("cmd.nsheet.output_usage"))?;
+                let val = tokens
+                    .get(i + 1)
+                    .ok_or_else(|| t!("cmd.nsheet.output_usage"))?;
                 args.output = Some(val.clone());
                 i += 2;
             }
@@ -206,8 +216,8 @@ fn prepare_view_in(cwd: &Path, args: &NsheetArgs) -> Result<SheetView, String> {
     if !path.is_file() {
         return Err(t!("cmd.nsheet.file_not_found", args.file));
     }
-    let sheet = load_file(&path, args.delimiter, args.header)
-        .map_err(|e| t!("cmd.nsheet.load_fail", e))?;
+    let sheet =
+        load_file(&path, args.delimiter, args.header).map_err(|e| t!("cmd.nsheet.load_fail", e))?;
     if sheet.headers.is_empty() {
         return Err(t!("cmd.nsheet.empty_sheet"));
     }
@@ -219,8 +229,8 @@ fn prepare_view_in(cwd: &Path, args: &NsheetArgs) -> Result<SheetView, String> {
         rows.retain(|r| row_matches(r, &conds, logic));
     }
     if let Some(ref spec) = args.sort_col {
-        let col =
-            resolve_col(spec, &sheet.headers).ok_or_else(|| t!("cmd.nsheet.unknown_column", spec))?;
+        let col = resolve_col(spec, &sheet.headers)
+            .ok_or_else(|| t!("cmd.nsheet.unknown_column", spec))?;
         sort_rows(&mut rows, col, args.sort_desc);
     }
     Ok((sheet.headers, rows, total))
@@ -283,8 +293,7 @@ fn run_export(
 
 fn cmd_view(nav: &mut Navigator, args: &NsheetArgs) -> Result<bool> {
     let cwd = nav.current_path().to_path_buf();
-    let (headers, rows, total) =
-        prepare_view(nav, args).map_err(|e| anyhow::anyhow!("{}", e))?;
+    let (headers, rows, total) = prepare_view(nav, args).map_err(|e| anyhow::anyhow!("{}", e))?;
     // Export bypasses the table printer.
     if let Some(ref format) = args.export {
         let mut export_rows = rows;
@@ -294,7 +303,11 @@ fn cmd_view(nav: &mut Navigator, args: &NsheetArgs) -> Result<bool> {
         }
         return run_export(&headers, &export_rows, format, args.output.as_deref(), &cwd);
     }
-    let limit = if args.all { usize::MAX } else { args.limit.unwrap_or(DEFAULT_LIMIT) };
+    let limit = if args.all {
+        usize::MAX
+    } else {
+        args.limit.unwrap_or(DEFAULT_LIMIT)
+    };
     let shown: Vec<Vec<String>> = rows.iter().take(limit).cloned().collect();
     let width = headers.len();
     let boxed = format_box_table(&headers, &to_opt_rows(&shown, width), MAX_CELL_WIDTH);
@@ -634,10 +647,7 @@ impl NsheetTui {
                 if x + need > self.term_w && c > self.off_c {
                     break;
                 }
-                let raw = row
-                    .and_then(|r| r.get(c))
-                    .map(|s| s.as_str())
-                    .unwrap_or("");
+                let raw = row.and_then(|r| r.get(c)).map(|s| s.as_str()).unwrap_or("");
                 let label = elide(&one_line(raw), w);
                 let pad = w.saturating_sub(display_width(&label));
                 let is_cursor = vi == self.cur_r && c == self.cur_c;
@@ -679,7 +689,11 @@ impl NsheetTui {
         } else {
             format!("{}/{}", self.cur_r + 1, self.view.len())
         };
-        let bar = format!("{}  {}", elide(&hint, self.term_w.saturating_sub(pos.len() + 3)), pos);
+        let bar = format!(
+            "{}  {}",
+            elide(&hint, self.term_w.saturating_sub(pos.len() + 3)),
+            pos
+        );
         queue!(
             out,
             SetForegroundColor(CxColor::DarkGrey),
@@ -789,7 +803,9 @@ impl NsheetTui {
 }
 
 fn terminal_size() -> (usize, usize) {
-    terminal::size().map(|(w, h)| (w as usize, h as usize)).unwrap_or((80, 24))
+    terminal::size()
+        .map(|(w, h)| (w as usize, h as usize))
+        .unwrap_or((80, 24))
 }
 
 fn cmd_open(nav: &mut Navigator, args: &NsheetArgs) -> Result<bool> {
@@ -917,7 +933,9 @@ fn cmd_open(nav: &mut Navigator, args: &NsheetArgs) -> Result<bool> {
                         tui.render(&mut stdout)?;
                     }
                     KeyCode::Char('/') => {
-                        if let Some(s) = tui.prompt(&mut stdout, &t!("cmd.nsheet.tui_search_prompt"), "")? {
+                        if let Some(s) =
+                            tui.prompt(&mut stdout, &t!("cmd.nsheet.tui_search_prompt"), "")?
+                        {
                             tui.search = s;
                             // Jump to first hit.
                             let hits = tui.search_hits();
@@ -1082,7 +1100,14 @@ mod tests {
         let t = tokenize(r#"view a.csv --filter "age>30 && city~york" -l 5"#);
         assert_eq!(
             t,
-            vec!["view", "a.csv", "--filter", "age>30 && city~york", "-l", "5"]
+            vec![
+                "view",
+                "a.csv",
+                "--filter",
+                "age>30 && city~york",
+                "-l",
+                "5"
+            ]
         );
     }
 

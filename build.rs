@@ -1,6 +1,7 @@
 use std::path::Path;
 
-fn build_frontend() {    let dist_dir = Path::new("ntc_web").join("dist");
+fn build_frontend() {
+    let dist_dir = Path::new("ntc_web").join("dist");
     if !dist_dir.join("index.html").exists() {
         panic!("ntc_web/dist/index.html not found. Run 'cd ntc_web && npm run build' first.");
     }
@@ -9,6 +10,15 @@ fn build_frontend() {    let dist_dir = Path::new("ntc_web").join("dist");
     println!("cargo:rerun-if-changed=ntc_web/index.html");
     println!("cargo:rerun-if-changed=ntc_web/package.json");
     println!("cargo:rerun-if-changed=ntc_web/vite.config.ts");
+    let chess_dir = Path::new("ntc_chess_web").join("dist");
+    if !chess_dir.join("index.html").exists() {
+        panic!("ntc_chess_web/dist/index.html not found. Run 'cd ntc_chess_web && npm run build' first.");
+    }
+    println!("cargo:rerun-if-changed=ntc_chess_web/src");
+    println!("cargo:rerun-if-changed=ntc_chess_web/public");
+    println!("cargo:rerun-if-changed=ntc_chess_web/index.html");
+    println!("cargo:rerun-if-changed=ntc_chess_web/package.json");
+    println!("cargo:rerun-if-changed=ntc_chess_web/vite.config.ts");
 }
 
 /// Stamp the git short hash into `BUILD_GIT_HASH` so `--version`
@@ -42,7 +52,8 @@ fn main() {
 #[cfg(not(windows))]
 fn main() {
     build_frontend();
-    set_build_hash();    arm64_link_search();
+    set_build_hash();
+    arm64_link_search();
 }
 
 /// ARM64 Windows library search paths (portable, machine-local).

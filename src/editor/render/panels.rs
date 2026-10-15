@@ -1,6 +1,9 @@
 use crossterm::cursor::MoveTo;
 use crossterm::queue;
-use crossterm::style::{Print, ResetColor, SetBackgroundColor, SetForegroundColor};
+use crossterm::style::{
+    Attribute, Color as CxColor, Print, ResetColor, SetAttribute, SetBackgroundColor,
+    SetForegroundColor,
+};
 use crossterm::terminal::{Clear, ClearType};
 
 use super::super::{Editor, Focus};
@@ -264,54 +267,80 @@ impl Editor {
         stdout: &mut std::io::Stdout,
     ) -> std::io::Result<()> {
         let theme = crate::utils::theme::ThemeManager::current();
-        let split = self.run_split_row();
-        let panel_top = split + 1;
-        let panel_h = self.run_panel_height();
+        let (btop, bleft, bright, bbottom) = self.terminal_box();
+        let panel_top = btop + 1;
+        let (content_cols, content_h) = self.terminal_content_size();
         let cols = self.term_w;
-        let eo = self.editor_offset();
-        let editor_cols = cols.saturating_sub(eo);
         let sb_col = cols.saturating_sub(1);
 
-        // Separator header
-        let sep_title = if let Some(ref term) = self.terminal {
+        // Rect-box frame: teal when focused, dim when not, white when
+        // color is off. Title keeps the legacy header fg behavior.
+        let use_box_color = self.editor_cfg.color_enabled;
+        let border_fg = if !use_box_color {
+            CxColor::White
+        } else if self.focus == Focus::Terminal {
+            theme.shell.separator.to_crossterm()
+        } else {
+            theme.editor.run_header_unfocused_fg.to_crossterm()
+        };
+        let title_fg = if !use_box_color {
+            CxColor::White
+        } else if self.focus == Focus::Terminal {
+            theme.editor.run_header_fg.to_crossterm()
+        } else {
+            theme.editor.run_header_unfocused_fg.to_crossterm()
+        };
+        let box_title = if let Some(ref term) = self.terminal {
             format!(" {} ", term.title)
         } else {
             format!(" {} ", t!("editor.panel_terminal"))
         };
-        let sep_fill = editor_cols.saturating_sub(sep_title.chars().count());
-        let sep = format!("{}{}", sep_title, "\u{2500}".repeat(sep_fill));
-        let sep_fg = if self.focus == Focus::Terminal {
-            theme.editor.run_header_fg
-        } else {
-            theme.editor.run_header_unfocused_fg
-        };
+        let inner_w = bright.saturating_sub(bleft + 1);
+        let mut title_chars: String = box_title.chars().take(inner_w).collect();
+        while title_chars.chars().count() < inner_w {
+            title_chars.push('\u{2500}');
+        }
         queue!(
             stdout,
-            MoveTo(eo as u16, split as u16),
-            SetForegroundColor(sep_fg.to_crossterm()),
-            Print(&sep),
+            MoveTo(bleft as u16, btop as u16),
+            SetForegroundColor(border_fg),
+            Print('\u{250C}'),
+            SetForegroundColor(title_fg),
+            Print(&title_chars),
+            SetForegroundColor(border_fg),
+            Print('\u{2510}'),
             ResetColor,
+            Clear(ClearType::UntilNewLine),
+        )?;
+        // Bottom border (drawn now so content rows can't overrun it).
+        queue!(
+            stdout,
+            MoveTo(bleft as u16, bbottom as u16),
+            SetForegroundColor(border_fg),
+            Print('\u{2514}'),
+            Print("\u{2500}".repeat(inner_w)),
+            Print('\u{2518}'),
+            ResetColor,
+            Clear(ClearType::UntilNewLine),
         )?;
 
         if let Some(ref term) = self.terminal {
-            let default_bg = (30, 30, 30);
-            let default_fg = (204, 204, 204);
             let total = term.total_lines();
             let scroll = self.sv.run.min(total.saturating_sub(1));
             let scroll_x = self.sv.terminal_scroll_x;
-            let sb_len = term.scrollback.len();
 
-            // Cursor screen position (in absolute line indexes)
-            let cursor_abs_y = sb_len + term.cursor_y;
+            // Cursor screen position (alt-aware: grid-relative on the
+            // alternate screen, scrollback-relative otherwise).
+            let cursor_abs_y = term.cursor_abs_y();
 
-            // Scrollbar
+            // Scrollbar (outside the box, shares the content rows)
             let vscroll_thumb_height;
             let vscroll_thumb_start;
-            if total > panel_h {
-                vscroll_thumb_height = (panel_h * panel_h / total).max(1);
-                let max_scroll = total - panel_h;
+            if total > content_h {
+                vscroll_thumb_height = (content_h * content_h / total).max(1);
+                let max_scroll = total - content_h;
                 vscroll_thumb_start = max_scroll.checked_div(1).map_or(0, |_| {
-                    scroll * (panel_h - vscroll_thumb_height) / max_scroll
+                    scroll * (content_h - vscroll_thumb_height) / max_scroll
                 });
             } else {
                 vscroll_thumb_height = 0;
@@ -320,25 +349,28 @@ impl Editor {
 
             let selection_range = term.selection_range();
 
-            for i in 0..panel_h {
+            for i in 0..content_h {
                 let row = panel_top + i;
                 let line_idx = scroll + i;
 
-                // Set background for the entire row
+                // Transparent passthrough: clear the row WITHOUT painting any
+                // background, so the embedded ntc shell inherits the user's
+                // own terminal colors exactly like the standalone shell.
+                // Side walls of the rect box frame the content.
                 queue!(
                     stdout,
-                    MoveTo(eo as u16, row as u16),
-                    SetBackgroundColor(crossterm::style::Color::Rgb {
-                        r: default_bg.0,
-                        g: default_bg.1,
-                        b: default_bg.2,
-                    }),
-                    SetForegroundColor(crossterm::style::Color::Rgb {
-                        r: default_fg.0,
-                        g: default_fg.1,
-                        b: default_fg.2,
-                    }),
+                    MoveTo((bleft + 1) as u16, row as u16),
+                    ResetColor,
                     Clear(ClearType::UntilNewLine),
+                )?;
+                queue!(
+                    stdout,
+                    MoveTo(bleft as u16, row as u16),
+                    SetForegroundColor(border_fg),
+                    Print('\u{2502}'),
+                    MoveTo(bright as u16, row as u16),
+                    Print('\u{2502}'),
+                    ResetColor,
                 )?;
 
                 // Check if this line has any selection cells
@@ -348,17 +380,21 @@ impl Editor {
 
                 if line_idx < total {
                     let line = term.get_line(line_idx);
-                    let mut last_fg = default_fg;
-                    let mut last_bg = default_bg;
+                    let mut last_fg: Option<(u8, u8, u8)> = None;
+                    let mut last_bg: Option<(u8, u8, u8)> = None;
+                    let mut last_rev = false;
+                    let mut last_bold = false;
                     let mut need_move = true;
-                    let is_cursor_line = term.cursor_visible && line_idx == cursor_abs_y;
+                    let is_cursor_line =
+                        term.cursor_visible && !term.app_cursor_hidden && line_idx == cursor_abs_y;
 
                     let sel_start = selection_range.map(|r| r.0);
                     let sel_end = selection_range.map(|r| r.1);
 
-                    let max_cells = editor_cols.saturating_sub(1);
+                    let max_cells = content_cols;
+                    let content_x0 = bleft + 1;
                     for (x, (ci, cell)) in
-                        (eo..).zip(line.iter().enumerate().skip(scroll_x).take(max_cells))
+                        (content_x0..).zip(line.iter().enumerate().skip(scroll_x).take(max_cells))
                     {
                         let in_sel = sel_on_line
                             && sel_start
@@ -377,80 +413,92 @@ impl Editor {
                                 .unwrap_or(false);
 
                         let is_cursor = is_cursor_line && ci == term.cursor_x;
-                        let (fg, bg) = if is_cursor {
-                            (default_bg, default_fg)
+                        // Cursor and passthrough-selection use reverse video
+                        // so they stay visible on any background. Explicitly
+                        // colored selections keep the classic fg/bg swap.
+                        let (fg, bg, rev) = if is_cursor {
+                            (cell.fg, cell.bg, true)
                         } else if in_sel {
-                            (cell.bg, cell.fg)
+                            match (cell.fg, cell.bg) {
+                                (None, None) => (None, None, true),
+                                (fg, bg) => (bg, fg, false),
+                            }
                         } else {
-                            (cell.fg, cell.bg)
+                            (cell.fg, cell.bg, false)
                         };
 
-                        let fg_changed = fg != last_fg;
-                        let bg_changed = bg != last_bg;
-
-                        if need_move || fg_changed || bg_changed {
+                        let bold = cell.bold && !is_cursor;
+                        if need_move
+                            || fg != last_fg
+                            || bg != last_bg
+                            || rev != last_rev
+                            || bold != last_bold
+                        {
                             queue!(stdout, MoveTo(x as u16, row as u16))?;
-                            if fg_changed {
-                                queue!(
-                                    stdout,
-                                    SetForegroundColor(crossterm::style::Color::Rgb {
-                                        r: fg.0,
-                                        g: fg.1,
-                                        b: fg.2,
-                                    })
-                                )?;
+                            if rev != last_rev {
+                                if rev {
+                                    queue!(stdout, SetAttribute(Attribute::Reverse))?;
+                                } else {
+                                    queue!(stdout, SetAttribute(Attribute::NoReverse))?;
+                                }
+                                last_rev = rev;
+                            }
+                            if bold != last_bold {
+                                if bold {
+                                    queue!(stdout, SetAttribute(Attribute::Bold))?;
+                                } else {
+                                    queue!(stdout, SetAttribute(Attribute::NoBold))?;
+                                }
+                                last_bold = bold;
+                            }
+                            if fg != last_fg {
+                                match fg {
+                                    Some((r, g, b)) => queue!(
+                                        stdout,
+                                        SetForegroundColor(CxColor::Rgb { r, g, b })
+                                    )?,
+                                    None => queue!(stdout, SetForegroundColor(CxColor::Reset))?,
+                                }
                                 last_fg = fg;
                             }
-                            if bg_changed {
-                                queue!(
-                                    stdout,
-                                    SetBackgroundColor(crossterm::style::Color::Rgb {
-                                        r: bg.0,
-                                        g: bg.1,
-                                        b: bg.2,
-                                    })
-                                )?;
+                            if bg != last_bg {
+                                match bg {
+                                    Some((r, g, b)) => queue!(
+                                        stdout,
+                                        SetBackgroundColor(CxColor::Rgb { r, g, b })
+                                    )?,
+                                    None => queue!(stdout, SetBackgroundColor(CxColor::Reset))?,
+                                }
                                 last_bg = bg;
                             }
                             need_move = false;
                         }
-                        queue!(stdout, Print(if is_cursor { ' ' } else { cell.ch }))?;
+                        let ch = if cell.ch == '\0' { ' ' } else { cell.ch };
+                        queue!(stdout, Print(if is_cursor { ' ' } else { ch }))?;
+                    }
+                    if last_rev {
+                        queue!(stdout, SetAttribute(Attribute::NoReverse))?;
+                    }
+                    if last_bold {
+                        queue!(stdout, SetAttribute(Attribute::NoBold))?;
                     }
 
-                    // Left overflow indicator
+                    // Left overflow indicator (passthrough colors)
                     if scroll_x > 0 && line_idx < total {
                         queue!(
                             stdout,
-                            MoveTo(eo as u16, row as u16),
-                            SetForegroundColor(crossterm::style::Color::Rgb {
-                                r: default_fg.0,
-                                g: default_fg.1,
-                                b: default_fg.2,
-                            }),
-                            SetBackgroundColor(crossterm::style::Color::Rgb {
-                                r: default_bg.0,
-                                g: default_bg.1,
-                                b: default_bg.2,
-                            }),
+                            MoveTo(content_x0 as u16, row as u16),
+                            ResetColor,
                             Print('\u{2039}'),
                         )?;
                     }
 
-                    // Right overflow indicator
+                    // Right overflow indicator (passthrough colors)
                     if line_idx < total && line.len() > scroll_x + max_cells {
                         queue!(
                             stdout,
-                            MoveTo((eo + max_cells - 1) as u16, row as u16),
-                            SetForegroundColor(crossterm::style::Color::Rgb {
-                                r: default_fg.0,
-                                g: default_fg.1,
-                                b: default_fg.2,
-                            }),
-                            SetBackgroundColor(crossterm::style::Color::Rgb {
-                                r: default_bg.0,
-                                g: default_bg.1,
-                                b: default_bg.2,
-                            }),
+                            MoveTo((content_x0 + max_cells - 1) as u16, row as u16),
+                            ResetColor,
                             Print('\u{203A}'),
                         )?;
                     }
@@ -464,11 +512,7 @@ impl Editor {
                     queue!(
                         stdout,
                         MoveTo(sb_col as u16, row as u16),
-                        SetBackgroundColor(crossterm::style::Color::Rgb {
-                            r: default_bg.0,
-                            g: default_bg.1,
-                            b: default_bg.2,
-                        }),
+                        ResetColor,
                         SetForegroundColor(if in_thumb {
                             theme.editor.scrollbar_thumb.to_crossterm()
                         } else {

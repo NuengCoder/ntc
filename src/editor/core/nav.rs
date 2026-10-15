@@ -209,7 +209,8 @@ impl Editor {
         self.status_msg = Some(t!("editor.nav_line_selected"));
     }
 
-    pub(crate) fn select_word_under_cursor(&mut self) -> Option<String> {        let line = self.current();
+    pub(crate) fn select_word_under_cursor(&mut self) -> Option<String> {
+        let line = self.current();
         let byte = self.cursor.byte;
         if byte >= line.len() || line.is_empty() {
             return None;
@@ -314,11 +315,10 @@ impl Editor {
             self.mark_all_dirty();
         } else {
             let (tw, th) = crate::editor::helpers::term_size();
-            let term_h = (th as f64 * 0.4) as u16;
-            let cwd =
-                std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from("."));
-            let shell = if cfg!(windows) { "powershell" } else { "sh" };
-            match crate::editor::terminal::TerminalState::spawn(shell, tw as u16, term_h, &cwd) {
+            // Fixed 50% of the editor text field.
+            let term_h = (th / 2) as u16;
+            let cwd = std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from("."));
+            match crate::editor::terminal::TerminalState::spawn_ntc_shell(tw as u16, term_h, &cwd) {
                 Ok(term) => {
                     self.terminal = Some(term);
                     self.run_panel_open = false;
@@ -336,12 +336,8 @@ impl Editor {
     pub(crate) fn save_with_status(&mut self, stdout: &mut std::io::Stdout) {
         match self.save() {
             Ok(()) => {
-                let _ = set_status_bar(
-                    stdout,
-                    Color::Green,
-                    Color::White,
-                    &t!("editor.saved_full"),
-                );
+                let _ =
+                    set_status_bar(stdout, Color::Green, Color::White, &t!("editor.saved_full"));
             }
             Err(e) => {
                 let _ = set_status_bar(

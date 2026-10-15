@@ -76,7 +76,11 @@ pub fn cmd_spec(_args: &str, _nav: &mut Navigator) -> Result<bool> {
         };
         disk_rows.push((
             format!("  {}", label),
-            format!("{}{}", kind_part, crate::explorer::human_readable_size(size)),
+            format!(
+                "{}{}",
+                kind_part,
+                crate::explorer::human_readable_size(size)
+            ),
         ));
     }
 
@@ -84,10 +88,8 @@ pub fn cmd_spec(_args: &str, _nav: &mut Navigator) -> Result<bool> {
     let manufacturer = manufacturer_name();
     let computer_model = computer_model_name();
     let serial = serial_number().unwrap_or_else(|| t!("cmd.spec.unknown").to_string());
-    let hostname = System::host_name()
-        .unwrap_or_else(|| t!("cmd.spec.unknown").to_string());
-    let kernel = System::kernel_version()
-        .unwrap_or_else(|| t!("cmd.spec.unknown").to_string());
+    let hostname = System::host_name().unwrap_or_else(|| t!("cmd.spec.unknown").to_string());
+    let kernel = System::kernel_version().unwrap_or_else(|| t!("cmd.spec.unknown").to_string());
     let uptime = format_uptime(System::uptime());
 
     // ── render ─────────────────────────────────────────────────────────
@@ -103,13 +105,22 @@ pub fn cmd_spec(_args: &str, _nav: &mut Navigator) -> Result<bool> {
 
     print_info(&t!("cmd.spec.title"));
     println!("{}", b(format!("┌{}┐", "─".repeat(BOX_W))));
-    println!("{}", b(format!("│{:^width$}│", t!("cmd.spec.title"), width = BOX_W)));
+    println!(
+        "{}",
+        b(format!("│{:^width$}│", t!("cmd.spec.title"), width = BOX_W))
+    );
     println!("{}", b(format!("├{}┤", "─".repeat(BOX_W))));
     println!("{}", b(r(&t!("cmd.spec.cpu"), &brand)));
     println!("{}", b(r(&t!("cmd.spec.vendor"), &cpu_vendor)));
     println!("{}", b(r(&t!("cmd.spec.generation"), &cpu_gen)));
     println!("{}", b(r(&t!("cmd.spec.model"), &cpu_model)));
-    println!("{}", b(r(&t!("cmd.spec.cores"), &format!("{} / {}", cores, threads))));
+    println!(
+        "{}",
+        b(r(
+            &t!("cmd.spec.cores"),
+            &format!("{} / {}", cores, threads)
+        ))
+    );
     println!("{}", b(r(&t!("cmd.spec.gpu"), &gpu)));
     println!("{}", b(r(&t!("cmd.spec.ram"), &ram)));
     println!(
@@ -178,10 +189,7 @@ fn parse_intel(brand: &str) -> (String, String) {
     // Classic: "Intel(R) Core(TM) i7-10700K CPU @ 3.80GHz"
     let chars: Vec<(usize, char)> = upper.char_indices().collect();
     for (i, (_, c)) in chars.iter().enumerate() {
-        if (*c == 'I' || *c == 'C')
-            && i + 1 < chars.len()
-            && chars[i + 1].1.is_ascii_digit()
-        {
+        if (*c == 'I' || *c == 'C') && i + 1 < chars.len() && chars[i + 1].1.is_ascii_digit() {
             let mut j = i + 1;
             while j < chars.len() && chars[j].1.is_ascii_digit() {
                 j += 1;
@@ -196,11 +204,7 @@ fn parse_intel(brand: &str) -> (String, String) {
                     .take_while(|ch| ch.is_ascii_alphanumeric())
                     .collect();
                 if !model_num.is_empty() {
-                    let core_name = prefix
-                        .rsplit(' ')
-                        .next()
-                        .unwrap_or("")
-                        .to_string();
+                    let core_name = prefix.rsplit(' ').next().unwrap_or("").to_string();
                     let model = format!("{}-{}", core_name, model_num);
                     let digits: String = model_num
                         .chars()
@@ -281,10 +285,7 @@ fn parse_amd(brand: &str) -> (String, String) {
     // "Ryzen 7 5800X 8-Core Processor" → series 5000, model 5800X
     if toks[0].parse::<u32>().is_ok() && toks.len() >= 2 {
         let model = toks[1].to_string();
-        let digits: String = model
-            .chars()
-            .take_while(|ch| ch.is_ascii_digit())
-            .collect();
+        let digits: String = model.chars().take_while(|ch| ch.is_ascii_digit()).collect();
         if digits.len() >= 4 {
             let series = digits[..1].parse::<u32>().unwrap_or(0) * 1000;
             return (format!("Ryzen {} series", series), model);
@@ -403,7 +404,11 @@ fn manufacturer_name() -> String {
     {
         if let Some(m) = run_capture(
             "powershell",
-            &["-NoProfile", "-Command", "(Get-CimInstance Win32_ComputerSystem).Manufacturer"],
+            &[
+                "-NoProfile",
+                "-Command",
+                "(Get-CimInstance Win32_ComputerSystem).Manufacturer",
+            ],
         ) {
             if !is_placeholder(&m) {
                 return m;
@@ -446,7 +451,11 @@ fn computer_model_name() -> String {
     {
         if let Some(m) = run_capture(
             "powershell",
-            &["-NoProfile", "-Command", "(Get-CimInstance Win32_ComputerSystem).Model"],
+            &[
+                "-NoProfile",
+                "-Command",
+                "(Get-CimInstance Win32_ComputerSystem).Model",
+            ],
         ) {
             if !is_placeholder(&m) {
                 return m;
@@ -500,7 +509,11 @@ fn serial_number() -> Option<String> {
     {
         let s = run_capture(
             "powershell",
-            &["-NoProfile", "-Command", "(Get-CimInstance Win32_BIOS).SerialNumber"],
+            &[
+                "-NoProfile",
+                "-Command",
+                "(Get-CimInstance Win32_BIOS).SerialNumber",
+            ],
         )?;
         if is_placeholder(&s) {
             None
@@ -510,7 +523,10 @@ fn serial_number() -> Option<String> {
     }
     #[cfg(target_os = "linux")]
     {
-        for p in ["/sys/class/dmi/id/product_serial", "/sys/class/dmi/id/board_serial"] {
+        for p in [
+            "/sys/class/dmi/id/product_serial",
+            "/sys/class/dmi/id/board_serial",
+        ] {
             if let Ok(s) = std::fs::read_to_string(p) {
                 let s = s.trim().to_string();
                 if !is_placeholder(&s) {
@@ -560,7 +576,11 @@ fn gpu_info() -> Vec<String> {
         let mut gpus: Vec<String> = Vec::new();
         if let Some(out) = run_capture(
             "powershell",
-            &["-NoProfile", "-Command", "(Get-CimInstance Win32_VideoController).Name"],
+            &[
+                "-NoProfile",
+                "-Command",
+                "(Get-CimInstance Win32_VideoController).Name",
+            ],
         ) {
             for line in out.lines() {
                 let l = line.trim().to_string();
@@ -570,10 +590,9 @@ fn gpu_info() -> Vec<String> {
             }
         }
         if gpus.is_empty() {
-            if let Some(out) = run_capture(
-                "nvidia-smi",
-                &["--query-gpu=name", "--format=csv,noheader"],
-            ) {
+            if let Some(out) =
+                run_capture("nvidia-smi", &["--query-gpu=name", "--format=csv,noheader"])
+            {
                 gpus.extend(
                     out.lines()
                         .map(|l| l.trim().to_string())
@@ -608,10 +627,9 @@ fn gpu_info() -> Vec<String> {
             }
         }
         if gpus.is_empty() {
-            if let Some(out) = run_capture(
-                "nvidia-smi",
-                &["--query-gpu=name", "--format=csv,noheader"],
-            ) {
+            if let Some(out) =
+                run_capture("nvidia-smi", &["--query-gpu=name", "--format=csv,noheader"])
+            {
                 gpus.extend(
                     out.lines()
                         .map(|l| l.trim().to_string())
@@ -643,10 +661,8 @@ fn gpu_info() -> Vec<String> {
     #[cfg(target_os = "android")]
     {
         let mut gpus: Vec<String> = Vec::new();
-        if let Some(out) = run_capture(
-            "nvidia-smi",
-            &["--query-gpu=name", "--format=csv,noheader"],
-        ) {
+        if let Some(out) = run_capture("nvidia-smi", &["--query-gpu=name", "--format=csv,noheader"])
+        {
             gpus.extend(
                 out.lines()
                     .map(|l| l.trim().to_string())

@@ -157,8 +157,7 @@ pub fn map_to_palette(pixels: &[(u8, u8, u8)], palette: &[PaletteColor]) -> Vec<
             let mut best = 0u8;
             let mut best_d = i32::MAX;
             for (i, (r, g, b)) in pal.iter().enumerate() {
-                let d =
-                    (pr - r) * (pr - r) + (pg - g) * (pg - g) + (pb - b) * (pb - b);
+                let d = (pr - r) * (pr - r) + (pg - g) * (pg - g) + (pb - b) * (pb - b);
                 if d < best_d {
                     best_d = d;
                     best = i as u8;
@@ -195,12 +194,7 @@ pub fn encode_sixel(
     out.push_str("\x1bPq");
     // Register 0 is the caller's background (letterbox bands);
     // palette colors occupy registers 1..=len.
-    out.push_str(&format!(
-        "#0;2;{};{};{}",
-        pct(bg.0),
-        pct(bg.1),
-        pct(bg.2)
-    ));
+    out.push_str(&format!("#0;2;{};{};{}", pct(bg.0), pct(bg.1), pct(bg.2)));
     for (i, c) in palette.iter().enumerate() {
         out.push_str(&format!("#{};2;{};{};{}", i + 1, c.r, c.g, c.b));
     }
@@ -271,16 +265,16 @@ pub fn encode_sixel(
 /// (attribute 4). Parses `CSI ? Pm ; … ; Ps c` loosely: any `;4;`,
 /// `;4c`, `?4;` or `?4c` field match counts; bare numbers must equal 4
 /// (so `64` never matches).
-pub fn da1_advertises_sixel(resp: &str) -> bool {    let s = resp.trim();
-    let s = s.strip_prefix("\x1b[").or_else(|| s.strip_prefix('\u{9b}')).unwrap_or(s);
+pub fn da1_advertises_sixel(resp: &str) -> bool {
+    let s = resp.trim();
+    let s = s
+        .strip_prefix("\x1b[")
+        .or_else(|| s.strip_prefix('\u{9b}'))
+        .unwrap_or(s);
     let s = s.strip_prefix('?').unwrap_or(s);
     let body = s.strip_suffix('c').unwrap_or(s);
-    body.split(';').any(|f| {
-        f.trim()
-            .parse::<u32>()
-            .map(|n| n == 4)
-            .unwrap_or(false)
-    })
+    body.split(';')
+        .any(|f| f.trim().parse::<u32>().map(|n| n == 4).unwrap_or(false))
 }
 
 /// Viewer pixel backend, best first.
@@ -307,12 +301,8 @@ fn env_override(env: &Env) -> Option<PixelBackend> {
         _ => {}
     }
     match env.get("NFE_SIXEL").as_deref() {
-        Some(v) if v == "0" || v == "off" || v == "false" => {
-            return Some(PixelBackend::Sextant)
-        }
-        Some(v) if v == "1" || v == "on" || v == "true" => {
-            return Some(PixelBackend::Sixel)
-        }
+        Some(v) if v == "0" || v == "off" || v == "false" => return Some(PixelBackend::Sextant),
+        Some(v) if v == "1" || v == "on" || v == "true" => return Some(PixelBackend::Sixel),
         _ => None,
     }
 }
@@ -375,7 +365,11 @@ pub fn detect_backend(env: &Env, da1: Option<bool>) -> (PixelBackend, &'static s
     if env_is(env, "WT_SESSION") {
         return (Sixel, "sixel-wt");
     }
-    if env.get("TERM").map(|v| v.starts_with("foot")).unwrap_or(false) {
+    if env
+        .get("TERM")
+        .map(|v| v.starts_with("foot"))
+        .unwrap_or(false)
+    {
         return (Sixel, "sixel-foot");
     }
     // Ambiguous terminals: the DA1 probe decides (mintty, xterm,
@@ -401,7 +395,10 @@ pub fn is_legacy_console(env: &Env) -> bool {
     {
         !env_is(env, "WT_SESSION")
             && !env_is(env, "KITTY_WINDOW_ID")
-            && env.get("TERM_PROGRAM").map(|v| v.is_empty()).unwrap_or(true)
+            && env
+                .get("TERM_PROGRAM")
+                .map(|v| v.is_empty())
+                .unwrap_or(true)
             && env.get("TERM").map(|v| v.is_empty()).unwrap_or(true)
     }
 }
@@ -544,8 +541,12 @@ pub fn cell_pixel_size() -> (u32, u32) {
                 let w: u32 = w.trim().parse().unwrap_or(0);
                 let h: u32 = h.trim().parse().unwrap_or(0);
                 // Sanity: cell must be within 4..=64 px each way.
-                let term_w = crossterm::terminal::size().map(|(w, _)| w as u32).unwrap_or(80);
-                let term_h = crossterm::terminal::size().map(|(_, h)| h as u32).unwrap_or(24);
+                let term_w = crossterm::terminal::size()
+                    .map(|(w, _)| w as u32)
+                    .unwrap_or(80);
+                let term_h = crossterm::terminal::size()
+                    .map(|(_, h)| h as u32)
+                    .unwrap_or(24);
                 if (4..=64).contains(&w) && (4..=64).contains(&h) && term_w > 0 && term_h > 0 {
                     // Cross-check: reported text area must roughly match
                     // the known terminal size (guards half-parsed junk).
@@ -578,7 +579,13 @@ mod tests {
     fn quantize_caps_registers() {
         // 300 distinct colors must collapse to <= 16 registers.
         let px: Vec<(u8, u8, u8)> = (0..300)
-            .map(|i| ((i % 256) as u8, ((i * 7) % 256) as u8, ((i * 13) % 256) as u8))
+            .map(|i| {
+                (
+                    (i % 256) as u8,
+                    ((i * 7) % 256) as u8,
+                    ((i * 13) % 256) as u8,
+                )
+            })
             .collect();
         let pal = median_cut(&px, 16);
         assert!(!pal.is_empty() && pal.len() <= 16, "{}", pal.len());
@@ -596,7 +603,11 @@ mod tests {
     fn encode_single_band_solid() {
         // 4x6 all register-0: one band, `!4` + blank rows map to `?`.
         let idx = vec![0u8; 4 * 6];
-        let pal = vec![PaletteColor { r: 100, g: 100, b: 100 }];
+        let pal = vec![PaletteColor {
+            r: 100,
+            g: 100,
+            b: 100,
+        }];
         let s = encode_sixel(&idx, 4, 6, &pal, (0, 0, 0));
         assert!(s.starts_with("\x1bPq"), "{}", &s[..8]);
         assert!(s.ends_with("\x1b\\"));

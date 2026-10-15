@@ -127,10 +127,12 @@ impl Editor {
                     .map(|p| p.to_path_buf())
                     .unwrap_or_else(|| std::path::PathBuf::from("."));
                 match crate::utils::git::blame_line(&dir, &self.path, self.cursor.y + 1) {
-                    Some(info) => self.status_msg = Some(format!(
-                        "{} {}  {}  {}",
-                        info.commit, info.author, info.time, info.summary
-                    )),
+                    Some(info) => {
+                        self.status_msg = Some(format!(
+                            "{} {}  {}  {}",
+                            info.commit, info.author, info.time, info.summary
+                        ))
+                    }
                     None => self.status_msg = Some(t!("editor.git_no_blame").into()),
                 }
             } else {
@@ -189,6 +191,21 @@ impl Editor {
                     self.status_msg = Some(format!("{} {}", t!("editor.cmd_save_failed"), e));
                 }
             }
+            return Ok(false);
+        }
+
+        if cmd == "u" {
+            self.undo();
+            return Ok(false);
+        }
+
+        if cmd == "r" {
+            self.redo();
+            return Ok(false);
+        }
+
+        if let Some(rest) = cmd.strip_prefix('!') {
+            self.run_in_terminal(rest);
             return Ok(false);
         }
 
@@ -528,13 +545,11 @@ impl Editor {
             return Ok(false);
         }
 
-        if let Some(cmd_line) = cmd.strip_prefix("run ") {
-            let cmd_line = cmd_line.trim();
-            if cmd_line.is_empty() {
-                self.status_msg = Some(t!("editor.cmd_run_missing").into());
-            } else {
-                self.start_run(cmd_line);
-            }
+        // `:run` always uses nerun.toml extension mapping and executes
+        // in the embedded terminal. Any trailing args are ignored so
+        // `:run`, `:run <anything>` both compile the current file ($CWF).
+        if cmd == "run" || cmd.starts_with("run ") {
+            self.start_configured_run();
             return Ok(false);
         }
 
@@ -675,6 +690,12 @@ impl Editor {
 
         if cmd == "B" || cmd == "b" {
             self.toggle_sidebar();
+            return Ok(false);
+        }
+
+        if cmd == "e" {
+            self.prev_mode = Mode::Normal;
+            self.enter_nfe();
             return Ok(false);
         }
 

@@ -58,4 +58,10 @@ set "RUST_TARGET_PATH=%~dp0targets"
 set "RUSTFLAGS=-Zunstable-options"
 cargo +nightly build -Zbuild-std=core,std --release --target aarch64-win7-windows-msvc --target-dir target/win7-arm64
 if %errorlevel% neq 0 exit /b %errorlevel%
+rem Same combase.dll -> ole32.dll post-link fix as build_win7amd.cmd
+rem (new SDKs resolve CoTaskMemFree to Win8+ combase.dll). Non-fatal here:
+rem the ARM64 import table hasn't been dumpbin-verified on this host yet,
+rem so warn instead of failing; verify before shipping Win7-ARM64 binaries.
+python3 "%~dp0fix_win7_imports.py" "target\win7-arm64\aarch64-win7-windows-msvc\release\ntc.exe"
+if %errorlevel% neq 0 echo WARNING: fix_win7_imports.py found nothing to patch - verify imports with dumpbin before shipping.
 echo Build complete: target\win7-arm64\aarch64-win7-windows-msvc\release\ntc.exe

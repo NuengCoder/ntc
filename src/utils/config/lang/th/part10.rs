@@ -9,6 +9,7 @@ pub fn fill(m: &mut HashMap<String, String>) {
     m.insert("ntpkg.which_usage".into(), "การใช้งาน: ntpkg which <language> [version]".into());
     m.insert("output.filename_header".into(), "{}:".into());
     m.insert("output.line_prefix".into(), "LINE {}>>".into());
+    m.insert("output.range_past_eof".into(), "(ช่วงเกินท้ายไฟล์ — ไม่มีอะไรแสดง)".into());
     m.insert("output.mkdir_failed".into(), "ไม่สามารถสร้างไดเรกทอรี: {}".into());
     m.insert("output.mkfile_failed".into(), "ไม่สามารถสร้างไฟล์: {}".into());
     m.insert("output.print_error".into(), "\u{2717} {}".into());
@@ -262,6 +263,25 @@ pub fn fill(m: &mut HashMap<String, String>) {
     m.insert("help.config.git".into(), "config git ON|OFF ## เปิด/ปิด git integration (prompt + สัญลักษณ์)".into());
 
     m.insert("help.config.dir_view".into(), "config dir_view ON|OFF ## แสดง/ซ่อนแผนผังไดเรกทอรีใน shell".into());
+    m.insert("help.config.serve".into(), "config serve [บริการ] [--port-default พอร์ต] [--bind-default ที่อยู่] ## ค่าเริ่มต้น serve รายบริการ (alias: serve config)".into());
+    m.insert("cmd.config.serve.title".into(), "การตั้งค่า Serve (ค่าเริ่มต้นรายบริการ)".into());
+    m.insert("cmd.config.serve.status".into(), "  {}: {}:{}".into());
+    m.insert("cmd.config.serve.usage".into(), "วิธีใช้: serve config [files|http-server|chess] [--port-default <พอร์ต>] [--bind-default <ที่อยู่>] (alias: config serve …)".into());
+    m.insert("cmd.config.serve.example_show".into(), "  serve config                  แสดงทุกบริการ".into());
+    m.insert("cmd.config.serve.example_show_one".into(), "  serve config files            แสดงค่าเริ่มต้น files".into());
+    m.insert("cmd.config.serve.example_set".into(), "  serve config files --port-default 9000   ตั้งพอร์ตเริ่มต้น files".into());
+    m.insert("cmd.config.serve.saved".into(), "บันทึกค่าเริ่มต้น Serve {} แล้ว: {}:{}".into());
+    m.insert("cmd.config.serve.invalid_service".into(), "ไม่รู้จักบริการ '{}' (ใช้ files|http-server|chess)".into());
+    m.insert("cmd.config.serve.invalid_port".into(), "พอร์ต '{}' ไม่ถูกต้อง (ใช้ 1-65535)".into());
+    m.insert("cmd.config.serve.empty_bind".into(), "--bind-default ขาดค่า".into());
+    m.insert("cmd.config.serve.unknown_option".into(), "ไม่รู้จัก: {}".into());
+    m.insert("cmd.serve.current_defaults".into(), "ค่าเริ่มต้นที่ตั้งไว้ (serve config): พอร์ต {} bind {}".into());
+    m.insert("cmd.serve.chess_no_auth".into(), "`serve chess` ไม่รับ --auth (hotseat ไม่ต้องล็อกอิน)".into());
+    m.insert("cmd.serve.chess_serving".into(), "เซิร์ฟเวอร์หมากรุกที่".into());
+    m.insert("cmd.serve.chess_title".into(), "หมากรุก (2 คน hotseat)".into());
+    m.insert("cmd.serve.chess_usage".into(), "serve chess [--port 8000] [options]".into());
+    m.insert("cmd.serve.example_chess_default".into(), "  serve chess              หมากรุกพอร์ต 8080".into());
+    m.insert("cmd.serve.example_chess_port".into(), "  serve chess --port 9000  หมากรุกพอร์ต 9000".into());
     m.insert("git.no_git_binary".into(), "ยังไม่ได้ติดตั้ง Git. ใช้ `ntpkg install git` เพื่อติดตั้ง".into());
     m.insert("git.not_repo".into(), "ไม่ใช่ git repository (หรือไดเรกทอรีแม่)".into());
     m.insert("git.executing".into(), "กำลังดำเนินการ: {}".into());

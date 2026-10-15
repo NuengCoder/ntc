@@ -15,7 +15,6 @@ use std::sync::{Arc, Mutex};
 mod alias_commands;
 mod arc;
 mod autoup;
-mod scan;
 mod backup;
 pub(crate) mod clipboard;
 mod config_commands;
@@ -36,10 +35,15 @@ mod nssh;
 mod pathman;
 mod qr;
 mod qsc;
+mod qur;
 mod ran_commands;
 mod report;
+mod scan;
 mod scr_commands;
 mod serve;
+mod serve_http;
+pub(crate) mod chess_engine;
+mod serve_chess;
 mod smtp_client;
 mod spec;
 mod sysmon;
@@ -47,8 +51,8 @@ mod theme;
 mod tl;
 mod tmprt;
 mod todo;
-mod wi;
 pub(crate) mod upgrade;
+mod wi;
 
 #[cfg(feature = "image2doc")]
 mod image;
@@ -168,6 +172,7 @@ pub(crate) fn execute_command(
         "dns" => downloader::cmd_dns(args, nav),
         "ds" => misc::cmd_ds(args, nav),
         "gs" => misc::cmd_gs(args, nav),
+        "qur" => qur::cmd_qur(args, nav),
         "wi" => wi::cmd_wi(args, nav),
         "fgo" => nav::cmd_fgo(args, nav),
         "fsc" => misc::cmd_fsc(args, nav),
@@ -349,7 +354,7 @@ fn run_system_command(args: &str, cwd: &Path) -> Result<std::process::ExitStatus
 fn help_topic_for_command(cmd: &str) -> Option<&'static str> {
     Some(match cmd {
         "mv" | "move" | "mkf" | "mkd" | "rmf" | "rmd" | "rnmf" | "rnmd" | "cp" => "fileops",
-        "gs" | "fs" | "ds" | "locate" | "fsc" => "search",
+        "gs" | "fs" | "ds" | "locate" | "fsc" | "qur" => "search",
         "config" | "wi" => "config",
         "ne" | "ntceditor" => "editor",
         "size" => "size",
@@ -522,6 +527,15 @@ fn show_file_selection_menu(
     files: Vec<(String, PathBuf)>,
     copy_mode: bool,
 ) -> Result<()> {
+    show_file_selection_menu_range(_nav, files, copy_mode, None)
+}
+
+fn show_file_selection_menu_range(
+    _nav: &Navigator,
+    files: Vec<(String, PathBuf)>,
+    copy_mode: bool,
+    range: Option<crate::output::FileLineRange>,
+) -> Result<()> {
     let title = if copy_mode {
         "Select a file to COPY to clipboard"
     } else {
@@ -547,7 +561,7 @@ fn show_file_selection_menu(
             print_success(&format!("File '{}' copied to clipboard!", name));
         } else {
             let show_lines = Config::global_get_show_line_numbers();
-            crate::output::cat_file_with_syntax(path, show_lines)?;
+            crate::output::cat_file_with_syntax_range(path, show_lines, range)?;
         }
     }
 

@@ -93,7 +93,7 @@ pub(super) fn print_topic_help(topic: &str) -> bool {
         "size" => print_size_help(),
         "report" => print_report_help(),
         "backup" => print_backup_help(),
-        "search" | "gs" | "fs" | "ds" | "locate" | "fsc" => print_search_help(),
+        "search" | "gs" | "fs" | "ds" | "locate" | "fsc" | "qur" => print_search_help(),
         "igcare" | "ignore" | "care" | "igcared" => print_igcare_help(),
         "network" | "http" | "dl" | "up" | "ping" | "dns" | "smtp" | "serve" | "ipcfg" => {
             print_network_help()
@@ -291,6 +291,7 @@ fn print_alias_help() {
     usage("help.alias.export_select");
     usage("help.alias.import");
     usage("help.alias.make");
+    usage("help.alias.hintn");
     usage("help.alias.run");
     usage("help.alias.run_direct");
     usage("help.alias.run_param");
@@ -301,11 +302,14 @@ fn print_alias_help() {
     example_row("help.alias.example4");
     example_row("help.alias.example5");
     example_row("help.alias.example6");
+    example_row("help.alias.example7");
 }
 
 fn print_scan_help() {
     section_header("help.scan.title");
     usage("help.scan.ext");
+    usage("help.scan.files");
+    usage("help.scan.dir");
     usage("help.scan.depth");
     usage("help.scan.size");
     usage("help.scan.care");
@@ -317,6 +321,8 @@ fn print_scan_help() {
     example_row("help.scan.example3");
     example_row("help.scan.example4");
     example_row("help.scan.example5");
+    example_row("help.scan.example6");
+    example_row("help.scan.example7");
 }
 
 fn print_view_help() {
@@ -325,6 +331,10 @@ fn print_view_help() {
     usage("help.view.size");
     usage("help.view.filesize");
     usage("help.view.dirsize");
+    usage("help.view.sort");
+    usage("help.view.head");
+    usage("help.view.tail");
+    usage("help.view.file_usage");
     usage("help.view.ext");
     usage("help.view.cp");
     usage("help.view.depth");
@@ -339,6 +349,10 @@ fn print_view_help() {
     example_row("help.view.example5");
     example_row("help.view.example6");
     example_row("help.view.example7");
+    example_row("help.view.example8");
+    example_row("help.view.example9");
+    example_row("help.view.example10");
+    example_row("help.view.example11");
 }
 
 fn print_size_help() {
@@ -371,6 +385,8 @@ fn print_report_help() {
     example_row("help.report.example2");
     example_row("help.report.example3");
     example_row("help.report.example4");
+    example_row("help.report.txtf_example1");
+    example_row("help.report.txtf_example2");
 }
 
 fn print_backup_help() {
@@ -398,6 +414,7 @@ fn print_search_help() {
     section_header("help.search.title");
     usage("help.search.gs");
     usage("help.search.gs_interactive");
+    usage("help.search.qur");
     usage("help.search.fs");
     usage("help.search.ds");
     usage("help.search.locate");
@@ -408,6 +425,7 @@ fn print_search_help() {
     example_row("help.search.example3");
     example_row("help.search.example4");
     example_row("help.search.example5");
+    example_row("help.search.example6");
 }
 
 fn print_igcare_help() {
@@ -746,6 +764,7 @@ fn print_image_help() {
     usage("help.image.open");
     usage("help.image.display");
     usage("help.image.show");
+    usage("help.image.sixel");
     usage("help.image.convert");
     usage("help.image.save");
     usage("help.image.ocr");
@@ -845,6 +864,7 @@ pub(crate) fn print_contextual_help(prefix_line: &str) -> bool {
         "tp" => print_tp_context_help(&parts, &lowers),
         "arc" => print_arc_context_help(&parts, &lowers),
         "scan" => print_scan_context_help(&parts, &lowers),
+        "qur" => print_qur_context_help(&parts, &lowers),
         _ => print_generic_help(&parts, &lowers, root),
     }
 }
@@ -1004,6 +1024,61 @@ fn print_scan_context_help(parts: &[&str], lowers: &[String]) -> bool {
     true
 }
 
+fn print_qur_context_help(parts: &[&str], lowers: &[String]) -> bool {
+    use super::hinter::subcommands_for;
+    // Bare `qur`: needs a file glob first.
+    if parts.len() == 1 {
+        println!("{}", t!("help.context.qur.needs_glob"));
+        for s in subcommands_for(&[parts[0]]) {
+            println!("{}", s);
+        }
+        return true;
+    }
+    let has = |flags: &[&str]| {
+        lowers
+            .iter()
+            .any(|t| flags.contains(&t.as_str()) || t.starts_with("--limit="))
+    };
+    let has_select = has(&["-s", "--select"]);
+    let has_replace = has(&["-rp", "--replace"]);
+    let has_display = has(&["-dp", "--display"]);
+    // Value-taking flag awaiting its value (`-s`, `-rp`, `-d`, `-l`) → show slot.
+    if let Some(last) = lowers.last().map(|s| s.as_str()) {
+        match last {
+            "-s" | "--select" => {
+                println!("{}", t!("help.context.qur.select_value"));
+                return true;
+            }
+            "-rp" | "--replace" => {
+                println!("{}", t!("help.context.qur.replace_value"));
+                return true;
+            }
+            "-d" | "--depth" => {
+                println!("{}", t!("help.context.qur.depth_value"));
+                return true;
+            }
+            "-l" | "--limit" => {
+                println!("{}", t!("help.context.qur.limit_value"));
+                return true;
+            }
+            _ => {}
+        }
+    }
+    if !has_select {
+        // Glob given, no `-s` yet: next step is select or depth/limit.
+        println!("{}", t!("help.context.qur.next_select"));
+        return true;
+    }
+    if has_replace || has_display {
+        // Select + display/replace present: only depth/limit (or Enter) remain.
+        println!("{}", t!("help.context.qur.next_depth"));
+        return true;
+    }
+    // Select present without display/replace: suggest both next steps.
+    println!("{}", t!("help.context.qur.next_display_replace"));
+    true
+}
+
 fn print_generic_help(parts: &[&str], lowers: &[String], _root: &str) -> bool {
     use super::hinter::{
         alias_names_for_command, dedup_sorted, ntpkg_names_for_command,
@@ -1093,9 +1168,7 @@ fn named_next_sanitized(parts: &[&str]) -> Vec<String> {
     out.extend(scr_scripts_for_command(parts));
     out.extend(ntpkg_names_for_command(parts));
     out.extend(theme_names_for_command(parts));
-    if parts.len() == 1
-        && matches!(parts[0].to_lowercase().as_str(), "godrive" | "god")
-    {
+    if parts.len() == 1 && matches!(parts[0].to_lowercase().as_str(), "godrive" | "god") {
         out.extend(
             crate::navigator::Navigator::list_drives()
                 .into_iter()
@@ -1184,6 +1257,7 @@ fn is_known_root(root: &str) -> bool {
             | "tpb"
             | "backup"
             | "gs"
+            | "qur"
             | "wi"
             | "fs"
             | "ds"
@@ -1279,6 +1353,10 @@ mod tests {
         assert!(print_contextual_help("arc extract"));
         assert!(print_contextual_help("scan"));
         assert!(print_contextual_help("scan ext"));
+        assert!(print_contextual_help("qur"));
+        assert!(print_contextual_help("qur *.*"));
+        assert!(print_contextual_help("qur *.* -s foo"));
+        assert!(print_contextual_help("qur *.* -s foo -dp"));
         assert!(print_contextual_help("where"));
         assert!(!print_contextual_help(""));
         assert!(!print_contextual_help("definitely_not_a_cmd_xyz"));

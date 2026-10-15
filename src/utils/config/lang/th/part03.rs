@@ -263,7 +263,7 @@ pub fn fill(m: &mut HashMap<String, String>) {
     m.insert("cmd.image.no_files".into(), "ไม่พบไฟล์ภาพในไดเรกทอรีปัจจุบัน.".into());
     m.insert("cmd.image.select_image".into(), "เลือกภาพ:".into());
     m.insert("cmd.image.displaying".into(), "กำลังแสดง {} ({}x{}) ผ่าน {}".into());
-    m.insert("cmd.image.usage".into(), "การใช้งาน: image <เส้นทาง> [display|show|to|out <รูปแบบ>] [--ocr] [--layout]".into());
+    m.insert("cmd.image.usage".into(), "การใช้งาน: image <เส้นทาง> [display|show [--sixel]|to|out <รูปแบบ>] [--ocr] [--layout]".into());
     m.insert("cmd.ipcfg.dns_label".into(), "DNS ......... :".into());
     m.insert("cmd.ipcfg.no_adapters".into(), "ไม่พบอะแดปเตอร์เครือข่าย".into());
     m.insert("cmd.ipcfg.no_such_adapter".into(), "ไม่มีอะแดปเตอร์ชื่อ '{}'".into());

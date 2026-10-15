@@ -255,7 +255,44 @@ impl Editor {
         self.gs_state.loading = false;
         self.mark_all_dirty();
     }
+}
 
+/// Display suffix for a file-finder result: `../rel/dir` when the file
+/// name is duplicated in the result set, otherwise empty. Relative to
+/// `root` (the walk root / CWD) — never an absolute full path, unless the
+/// file escapes the root (different drive → UNC-stripped absolute parent
+/// fallback). A file directly under `root` shows no suffix (bare name).
+pub(crate) fn finder_dup_suffix(
+    path: &std::path::Path,
+    root: &std::path::Path,
+    duplicated: bool,
+) -> String {
+    if !duplicated {
+        return String::new();
+    }
+    let parent = match path.parent() {
+        Some(p) => p,
+        None => return String::new(),
+    };
+    let pn = crate::filetype::strip_unc_prefix(parent).replace('\\', "/");
+    let rn = crate::filetype::strip_unc_prefix(root).replace('\\', "/");
+    #[cfg(windows)]
+    let (pn, rn) = (pn.to_lowercase(), rn.to_lowercase());
+    if pn == rn {
+        return String::new();
+    }
+    let prefix = if rn.ends_with('/') {
+        rn.clone()
+    } else {
+        format!("{rn}/")
+    };
+    match pn.strip_prefix(&prefix) {
+        Some(rel) => format!("../{rel}"),
+        None => crate::filetype::strip_unc_prefix(parent),
+    }
+}
+
+impl Editor {
     fn rebuild_ff_results(&mut self) {
         if self.ff_query.is_empty() {
             self.ff_results.clear();
@@ -270,8 +307,12 @@ impl Editor {
         if !cache_fresh {
             let ignored_dirs = crate::config::Config::get_ignored_dirs_combined();
             let fmt_cfg = FormatConfig::from_both();
+            // Hide binaries: known-binary extensions plus extensionless
+            // files that fail the text sniff (compiled outputs).
             let files: Vec<(String, std::path::PathBuf)> =
-                crate::search::walk_files(&root, 10, &ignored_dirs, &fmt_cfg).collect();
+                crate::search::walk_files(&root, 10, &ignored_dirs, &fmt_cfg)
+                    .filter(|(_, path)| !crate::filetype::is_finder_hidden(path))
+                    .collect();
             self.file_index = Some((std::time::Instant::now(), files));
         }
 
@@ -297,17 +338,60 @@ impl Editor {
             }
         }
 
+        // Path tiebreaks keep same-name duplicates in a stable order
+        // across index rebuilds (walk order is filesystem-dependent).
         if !exact.is_empty() {
-            exact.sort_by(|a, b| a.0.cmp(&b.0));
+            exact.sort_by(|a, b| a.0.cmp(&b.0).then_with(|| a.1.cmp(&b.1)));
             self.ff_results = exact;
         } else if !partial.is_empty() {
-            partial.sort_by(|a, b| b.2.partial_cmp(&a.2).unwrap_or(std::cmp::Ordering::Equal));
+            partial.sort_by(|a, b| {
+                b.2.partial_cmp(&a.2)
+                    .unwrap_or(std::cmp::Ordering::Equal)
+                    .then_with(|| a.1.cmp(&b.1))
+            });
             self.ff_results = partial;
         } else {
-            fuzzy.sort_by(|a, b| b.2.partial_cmp(&a.2).unwrap_or(std::cmp::Ordering::Equal));
+            fuzzy.sort_by(|a, b| {
+                b.2.partial_cmp(&a.2)
+                    .unwrap_or(std::cmp::Ordering::Equal)
+                    .then_with(|| a.1.cmp(&b.1))
+            });
             fuzzy.truncate(20);
             self.ff_results = fuzzy;
         }
         self.ff_idx = 0;
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::path::PathBuf;
+
+    #[test]
+    fn dup_suffix_unique_is_bare() {
+        let root = PathBuf::from("/proj");
+        assert_eq!(
+            finder_dup_suffix(&PathBuf::from("/proj/src/mod.rs"), &root, false),
+            ""
+        );
+    }
+
+    #[test]
+    fn dup_suffix_shows_rel_parent() {
+        let root = PathBuf::from("/proj");
+        assert_eq!(
+            finder_dup_suffix(&PathBuf::from("/proj/src/editor/mod.rs"), &root, true),
+            "../src/editor"
+        );
+    }
+
+    #[test]
+    fn dup_suffix_root_level_is_bare() {
+        let root = PathBuf::from("/proj");
+        assert_eq!(
+            finder_dup_suffix(&PathBuf::from("/proj/mod.rs"), &root, true),
+            ""
+        );
     }
 }

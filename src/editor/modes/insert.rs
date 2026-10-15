@@ -31,9 +31,8 @@ impl Editor {
         // only dirty rows — so any popup visibility transition must
         // mark dirty, or the dismissed box lingers as ghost pixels.
         let (oy, ob, olen) = (self.cursor.y, self.cursor.byte, self.lines.len());
-        let was_popup = self.completion.is_some()
-            || self.sighelp.is_some()
-            || self.hover_text.is_some();
+        let was_popup =
+            self.completion.is_some() || self.sighelp.is_some() || self.hover_text.is_some();
         let mut keep_popup = false;
         match ev {
             Event::Key(KeyEvent {
@@ -108,12 +107,12 @@ impl Editor {
                             self.mark_all_dirty();
                         } else {
                             let (tw, th) = crate::editor::helpers::term_size();
-                            let term_h = (th as f64 * 0.4) as u16;
+                            // Fixed 50% of the editor text field.
+                            let term_h = (th / 2) as u16;
                             let cwd = std::env::current_dir()
                                 .unwrap_or_else(|_| std::path::PathBuf::from("."));
-                            let shell = if cfg!(windows) { "powershell" } else { "sh" };
-                            match crate::editor::terminal::TerminalState::spawn(
-                                shell, tw as u16, term_h, &cwd,
+                            match crate::editor::terminal::TerminalState::spawn_ntc_shell(
+                                tw as u16, term_h, &cwd,
                             ) {
                                 Ok(term) => {
                                     self.terminal = Some(term);
@@ -128,6 +127,25 @@ impl Editor {
                         }
                     }
                     (true, _, _, KeyCode::Char('e')) => {
+                        self.prev_mode = Mode::Insert;
+                        self.enter_nfe();
+                    }
+                    (true, _, _, KeyCode::Char('g')) => {
+                        self.prev_mode = Mode::Insert;
+                        self.mode = Mode::Gmode;
+                        self.gmode_buf.clear();
+                        self.status_msg = None;
+                        self.mark_all_dirty();
+                    }
+                    (true, _, _, KeyCode::Char('w')) => {
+                        self.mode = Mode::Visual;
+                        self.clear_selection();
+                        self.status_msg = Some(t!("editor.mode_visual_start"));
+                    }
+                    // Ctrl+; / Ctrl+: (shift folds unpredictably across
+                    // terminals — accept both, like Normal mode does).
+                    (true, _, _, KeyCode::Char(':'))
+                    | (true, _, _, KeyCode::Char(';')) => {
                         self.mode = Mode::Command;
                         self.cmd_buf.clear();
                     }
@@ -159,12 +177,6 @@ impl Editor {
                         if self.has_multiple_cursors() {
                             self.mode = Mode::InsertMulti;
                         }
-                    }
-                    (true, _, _, KeyCode::Char('j')) => {
-                        self.prev_mode = Mode::Insert;
-                        self.mode = Mode::Jump;
-                        self.jump_buf.clear();
-                        self.status_msg = None;
                     }
                     (true, _, _, KeyCode::Char('k')) => self.kill_line(),
                     (true, _, _, KeyCode::Char('l')) => self.select_line(),
@@ -217,8 +229,7 @@ impl Editor {
                     (false, false, false, KeyCode::Up) => {
                         let cycling = match self.completion.as_mut() {
                             Some(st) if !st.items.is_empty() => {
-                                st.selected =
-                                    (st.selected + st.items.len() - 1) % st.items.len();
+                                st.selected = (st.selected + st.items.len() - 1) % st.items.len();
                                 true
                             }
                             _ => false,
@@ -451,7 +462,9 @@ impl Editor {
                         if let Some(st) = self.completion.as_mut() {
                             if !st.items.is_empty() {
                                 let n = st.items.len();
-                                st.selected = (st.selected + n - (crate::editor::complete::COMPLETE_ROWS % n.max(1))) % n.max(1);
+                                st.selected = (st.selected + n
+                                    - (crate::editor::complete::COMPLETE_ROWS % n.max(1)))
+                                    % n.max(1);
                                 self.mark_all_dirty();
                                 keep_popup = true;
                             }
@@ -467,7 +480,8 @@ impl Editor {
                         if let Some(st) = self.completion.as_mut() {
                             if !st.items.is_empty() {
                                 let n = st.items.len();
-                                st.selected = (st.selected + crate::editor::complete::COMPLETE_ROWS) % n;
+                                st.selected =
+                                    (st.selected + crate::editor::complete::COMPLETE_ROWS) % n;
                                 self.mark_all_dirty();
                                 keep_popup = true;
                             }
@@ -475,7 +489,8 @@ impl Editor {
                         if !keep_popup {
                             let rows = self.term_h.saturating_sub(4);
                             self.move_cursors(|e| {
-                                e.cursor.y = (e.cursor.y + rows).min(e.lines.len().saturating_sub(1));
+                                e.cursor.y =
+                                    (e.cursor.y + rows).min(e.lines.len().saturating_sub(1));
                             });
                         }
                     }
@@ -502,7 +517,11 @@ impl Editor {
 
                     // Enter accepts the selection; Tab always indents.
                     (false, false, false, KeyCode::Enter) | (true, _, _, KeyCode::Enter) => {
-                        if self.completion.as_ref().is_some_and(|s| !s.items.is_empty()) {
+                        if self
+                            .completion
+                            .as_ref()
+                            .is_some_and(|s| !s.items.is_empty())
+                        {
                             self.accept_completion();
                             keep_popup = true;
                         } else if self.has_multiple_cursors() {
@@ -603,17 +622,14 @@ impl Editor {
         // A visibility transition in either direction repaints the whole
         // field so dismissed boxes are actually erased from the screen.
         if !keep_popup
-            && (self.cursor.y != oy
-                || self.cursor.byte != ob
-                || self.lines.len() != olen)
+            && (self.cursor.y != oy || self.cursor.byte != ob || self.lines.len() != olen)
         {
             self.completion = None;
         }
         self.refresh_sighelp();
         self.trigger_function_signature();
-        let now_popup = self.completion.is_some()
-            || self.sighelp.is_some()
-            || self.hover_text.is_some();
+        let now_popup =
+            self.completion.is_some() || self.sighelp.is_some() || self.hover_text.is_some();
         if was_popup || now_popup {
             self.mark_all_dirty();
         }

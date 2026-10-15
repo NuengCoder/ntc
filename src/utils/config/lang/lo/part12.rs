@@ -12,6 +12,10 @@ pub fn fill(m: &mut HashMap<String, String>) {
     m.insert("help.image.convert".into(), "image <path> to <fmt> ## ແປງ ແລະ ສະແດງຜົນລັບ (json|md|html|txt|desc)".into());
     m.insert("help.image.display".into(), "image display <path> ## ສະແດງຮູບໃນ terminal ໂດຍກົງ".into());
     m.insert("help.image.show".into(), "image show <path> ## ສະແດງຮູບໃນ terminal ໂດຍກົງ".into());
+
+    m.insert("help.image.sixel".into(), "image display <path> --sixel ## ບັງຄັບ render ແບບ sixel".into());
+
+    m.insert("cmd.image.sixel_forced_warn".into(), "ກຳລັງບັງຄັບ sixel output (ກວດພົບ: {}) — terminal ນີ້ອາດສະແດງບໍ່ຖືກຕ້ອງ".into());
     m.insert("help.image.interactive".into(), "image ## ເຄື່ອງມືແປງຮູບ interactive (ເລືອກຈາກໄດເຣັກທໍຣີປັດຈຸບັນ)".into());
     m.insert("help.image.layout".into(), "image <path> --layout ## ເປີດການກວດຈັບ UI layout".into());
     m.insert("help.image.ocr".into(), "image <path> --ocr ## ເປີດການສະກັດຂໍ້ຄວາມ OCR".into());
@@ -44,7 +48,7 @@ pub fn fill(m: &mut HashMap<String, String>) {
     m.insert("help.network.http".into(), "http <method> <url> ## HTTP API client (-H, -d, --json, -q, -a, --bearer, -s, -o, -v, -t)".into());
     m.insert("help.network.ping".into(), "ping <host> ## ICMP ping (-c count)".into());
     m.insert("help.network.ipcfg".into(), "ipcfg [ຊື່] ## ສະແດງ adapters ແບບ ipconfig/ifconfig".into());
-    m.insert("help.network.serve".into(), "serve [port] ## HTTP file server (--auth, --tunnel, --share, --spa, --web-dir)".into());
+    m.insert("help.network.serve".into(), "serve files|http-server|config ## ບໍລິການ: file-drive, ເຊີເວີ CWD, ຄ່າເລີ່ມຕົ້ນລາຍບໍລິການ".into());
     m.insert("help.network.smtp".into(), "smtp ## SMTP email client (--id, -i, -u, -pwd, -s, -b, -f, --to)".into());
     m.insert("help.network.spec".into(), "spec ## ສະແດງສະເປັກຄອມພິວເຕີ/ລະບົບ (CPU, GPU, RAM, ບ່ອນເກັບຂໍ້ມູນ, OS, ເລກຊີຣຽວ)".into());
     m.insert("help.network.sys".into(), "sys, top ## ຕິດຕາມລະບົບແບບສົດ (CPU, memory, disk, processes)".into());
@@ -117,7 +121,13 @@ pub fn fill(m: &mut HashMap<String, String>) {
     m.insert("help.report.title".into(), "ຄຳສັ່ງ REPORT:".into());
     m.insert("help.report.txt".into(), "report txt [path] ## ສ້າງບົດລາຍງານ TXT".into());
     m.insert("help.report.txtc".into(), "txtc <file> ## ສຳເນົາເນື້ອໃນໄຟລ໌ໃສ່ clipboard".into());
-    m.insert("help.report.txtf".into(), "txtf <file> ## ສະແດງເນື້ອໃນໄຟລ໌".into());
+    m.insert("help.report.txtf".into(), "txtf [--head N|--tail N|--betw A:B] [file] ## ສະແດງເນື້ອໃນໄຟລ໌ (ເລກແຖວເດີມ)".into());
+    m.insert("cmd.report.invalid_range".into(), "Invalid range: '{}' (expected n:m, e.g. --betw 10:20)".into());
+    m.insert("help.view.file_usage".into(), "view <file> [--head N|--tail N|--betw A:B] ## ສະແດງເນື້ອໃນໄຟລ໌ (ຄື txtf)".into());
+    m.insert("help.view.example10".into(), "view main.rs --tail 30 ## 30 ແຖວສຸດທ້າຍຂອງ main.rs".into());
+    m.insert("help.view.example11".into(), "view main.rs --betw 10:20 ## ແຖວ 10-20 ຂອງ main.rs".into());
+    m.insert("help.report.txtf_example1".into(), "txtf main.rs --head 30 ## 30 ແຖວທຳອິດຂອງ main.rs".into());
+    m.insert("help.report.txtf_example2".into(), "txtf --betw 10:20 main.rs ## ແຖວ 10-20 ຂອງ main.rs".into());
     m.insert("help.report.xlsx".into(), "report xlsx [path] ## ສ້າງບົດລາຍງານ XLSX (ພ້ອມການວິເຄາະ dependency)".into());
     m.insert("help.scr.continue".into(), "scr -c <file.ntc> [args...] ## ແລ່ນສະຄຣິບ ສືບຕໍ່ຫຼັງມີຂໍ້ຜິດພາດ".into());
     m.insert("help.scr.example1".into(), "scr deploy.ntc ## ແລ່ນ deploy.ntc".into());
@@ -136,7 +146,7 @@ pub fn fill(m: &mut HashMap<String, String>) {
     m.insert("help.search.locate".into(), "locate <pattern> [-d <n>] ## ຄົ້ນຫາທັງໄຟລ໌ ແລະ ໄດເຣັກທໍຣີ".into());
     m.insert("help.search.title".into(), "ຄຳສັ່ງ SEARCH:".into());
     m.insert("help.size.care".into(), "size --care ## ຄຳນວນຂະໜາດລວມທຸກຢ່າງ (ໂໝດ care)".into());
-    m.insert("help.size.path".into(), "size -p, --path <path|@tp> ## ສະແດງຂະໜາດຂອງ path ຫຼື teleport savepoint ທີ່ລະບຸ".into());
+    m.insert("help.size.path".into(), "size -p, --path <path|@tp> ## ສະແດງຂະໜາດຂອງໄຟລ໌, path ຫຼື teleport savepoint ທີ່ລະບຸ".into());
     m.insert("help.size.size".into(), "size ## ສະແດງຂະໜາດໄດເຣັກທໍຣີປັດຈຸບັນ".into());
     m.insert("help.size.time".into(), "size -t, --time ## ສະແດງເວລາທີ່ໃຊ້".into());
     m.insert("help.size.title".into(), "ຄຳສັ່ງ SIZE:".into());

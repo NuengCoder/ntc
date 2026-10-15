@@ -262,8 +262,7 @@ fn extract_tar_gz(buf: &[u8], exe_names: &[&str]) -> Result<Vec<u8>> {
         .map_err(|e| anyhow!("{}", t!("cmd.upgrade.extract_fail", e)))?;
 
     for entry in entries {
-        let mut file = entry
-            .map_err(|e| anyhow!("{}", t!("cmd.upgrade.extract_fail", e)))?;
+        let mut file = entry.map_err(|e| anyhow!("{}", t!("cmd.upgrade.extract_fail", e)))?;
         if !file.header().entry_type().is_file() {
             continue;
         }
@@ -350,8 +349,8 @@ fn launch_installer_download(installer_url: &str) -> Result<()> {
     std::fs::create_dir_all(&tmp_dir).context(t!("cmd.upgrade.tmpdir_fail").to_string())?;
 
     let installer_path = tmp_dir.join("ntc-installer.exe");
-    let buf = download_to_vec(installer_url)
-        .context(t!("cmd.upgrade.download_fail").to_string())?;
+    let buf =
+        download_to_vec(installer_url).context(t!("cmd.upgrade.download_fail").to_string())?;
     std::fs::write(&installer_path, &buf).context(t!("cmd.upgrade.write_fail").to_string())?;
 
     print_info(&t!("cmd.upgrade.installer_launch"));
@@ -366,8 +365,12 @@ fn launch_installer_download(installer_url: &str) -> Result<()> {
 fn platform_binary_key() -> Result<String> {
     #[cfg(windows)]
     {
-        let key = windows_asset_key(std::env::consts::ARCH)
-            .ok_or_else(|| anyhow!("{}", t!("cmd.upgrade.no_arch_asset", std::env::consts::ARCH)))?;
+        let key = windows_asset_key(std::env::consts::ARCH).ok_or_else(|| {
+            anyhow!(
+                "{}",
+                t!("cmd.upgrade.no_arch_asset", std::env::consts::ARCH)
+            )
+        })?;
         Ok(key.to_string())
     }
     #[cfg(all(target_os = "linux", not(target_os = "android")))]
@@ -404,14 +407,16 @@ fn platform_binary_key() -> Result<String> {
             )),
         }
     }
-    #[cfg(not(any(windows, target_os = "linux", target_os = "android", target_os = "macos")))]
+    #[cfg(not(any(
+        windows,
+        target_os = "linux",
+        target_os = "android",
+        target_os = "macos"
+    )))]
     {
         Err(anyhow!(
             "{}",
-            t!(
-                "cmd.upgrade.unsupported_platform",
-                std::env::consts::ARCH
-            )
+            t!("cmd.upgrade.unsupported_platform", std::env::consts::ARCH)
         ))
     }
 }
@@ -532,8 +537,7 @@ fn replace_binary_at(tmp_path: &Path, dst_path: &Path) -> Result<()> {
         let _ = std::fs::remove_file(&staging);
     };
 
-    std::fs::copy(tmp_path, &staging)
-        .map_err(|e| anyhow!("{}", t!("cmd.upgrade.copy_fail", e)))?;
+    std::fs::copy(tmp_path, &staging).map_err(|e| anyhow!("{}", t!("cmd.upgrade.copy_fail", e)))?;
 
     if let Err(e) = std::fs::set_permissions(&staging, std::fs::Permissions::from_mode(0o755)) {
         cleanup();
@@ -558,8 +562,7 @@ fn install_binary_impl(
         Err(_direct_fail) => {
             let home = dirs::home_dir().context(t!("cmd.upgrade.home_fail").to_string())?;
             let bin_dir = home.join(".local").join("bin");
-            std::fs::create_dir_all(&bin_dir)
-                .context(t!("cmd.upgrade.home_fail").to_string())?;
+            std::fs::create_dir_all(&bin_dir).context(t!("cmd.upgrade.home_fail").to_string())?;
             let bin_path = bin_dir.join("ntc");
             replace_binary_at(tmp_path, &bin_path)?;
 
@@ -621,7 +624,10 @@ fn install_binary_impl(
     _assets: &[(String, String)],
     _version: &str,
 ) -> Result<bool> {
-    Err(anyhow!("{}", t!("cmd.upgrade.unsupported_platform", "unknown")))
+    Err(anyhow!(
+        "{}",
+        t!("cmd.upgrade.unsupported_platform", "unknown")
+    ))
 }
 
 #[cfg(all(unix, not(target_os = "android")))]

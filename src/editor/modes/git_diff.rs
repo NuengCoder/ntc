@@ -33,8 +33,10 @@ impl Editor {
                     }
                     KeyCode::Down | KeyCode::Char('j') => {
                         if let Some(state) = &mut self.git_diff {
-                            let max =
-                                state.lines.len().saturating_sub(self.term_h.saturating_sub(4));
+                            let max = state
+                                .lines
+                                .len()
+                                .saturating_sub(self.term_h.saturating_sub(4));
                             state.scroll = (state.scroll + 1).min(max);
                         }
                         self.mark_all_dirty();
@@ -47,8 +49,10 @@ impl Editor {
                     }
                     KeyCode::PageDown => {
                         if let Some(state) = &mut self.git_diff {
-                            let max =
-                                state.lines.len().saturating_sub(self.term_h.saturating_sub(4));
+                            let max = state
+                                .lines
+                                .len()
+                                .saturating_sub(self.term_h.saturating_sub(4));
                             state.scroll = (state.scroll + 10).min(max);
                         }
                         self.mark_all_dirty();

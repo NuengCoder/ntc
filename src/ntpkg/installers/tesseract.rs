@@ -1,6 +1,6 @@
-use anyhow::Result;
 #[cfg(target_os = "windows")]
 use anyhow::Context;
+use anyhow::Result;
 #[cfg(target_os = "windows")]
 use std::fs;
 use std::path::Path;
@@ -54,12 +54,7 @@ pub(crate) fn install_tesseract(
 }
 
 #[cfg(target_os = "windows")]
-fn install_windows(
-    name: &str,
-    version: &str,
-    url: Option<&String>,
-    vdir: &Path,
-) -> Result<()> {
+fn install_windows(name: &str, version: &str, url: Option<&String>, vdir: &Path) -> Result<()> {
     let url = url.ok_or_else(|| anyhow::anyhow!("No download URL for tesseract on Windows"))?;
 
     let tmp_dir = std::env::temp_dir().join(format!("ntc-install-{name}-{version}"));

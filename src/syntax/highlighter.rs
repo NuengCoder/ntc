@@ -1025,7 +1025,15 @@ mod tests {
 
     #[test]
     fn variable_interpolation_is_builtin() {
-        for line in &["$name", "${name}", "${name:-default}", "$1", "$12", "$@", "$*"] {
+        for line in &[
+            "$name",
+            "${name}",
+            "${name:-default}",
+            "$1",
+            "$12",
+            "$@",
+            "$*",
+        ] {
             let t = toks(line);
             assert_eq!(t.len(), 1, "line {:?}", line);
             assert_eq!(t[0].2, TokenType::Builtin, "line {:?}", line);

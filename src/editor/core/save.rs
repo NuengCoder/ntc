@@ -22,11 +22,7 @@ fn utf16_bytes(text: &str, big_endian: bool) -> Vec<u8> {
 /// Write `lines` to `path` encoded as `enc` (LF line endings, BOM prepended
 /// when the encoding defines one), creating parent directories as needed.
 /// Shared by the editor save flow and tab-close saves.
-pub(crate) fn save_lines_to(
-    path: &Path,
-    lines: &[String],
-    enc: EditorEncoding,
-) -> Result<()> {
+pub(crate) fn save_lines_to(path: &Path, lines: &[String], enc: EditorEncoding) -> Result<()> {
     if let Some(p) = path.parent() {
         std::fs::create_dir_all(p)?;
     }

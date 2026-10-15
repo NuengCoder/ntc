@@ -5,3 +5,17 @@
 # btr = "cargo build --release"
 # py = "python main.py"
 # hello = "echo Hello, World!"
+# tldsel = "tl dir ${x:-.}"
+# show = "txtf $x"
+
+# Per-alias completion/selection specs (`ral add <name> "<cmd>" #x --hint-dir ...).
+# Uncomment to ship hints with this file:
+# [run_alias_hints]
+# tldsel = "#x --select-dir"
+# show = "#x --select-ext rs,txt"
+
+# Named value lists for `#x --hint-n <name>` / `--select-n <name>`
+# (manage with: ral hintn add <name> [values]).
+# Uncomment to ship named lists with this file:
+# [run_hint_lists]
+# port = ["8080", "5050", "5000"]

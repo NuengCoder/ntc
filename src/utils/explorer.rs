@@ -446,6 +446,29 @@ pub fn calculate_total_size(path: &Path) -> u64 {
         .sum()
 }
 
+/// Size of a single file (uses the shared per-file size cache).
+pub fn calculate_file_size(path: &Path) -> u64 {
+    if let Some(size) = get_cached_size(path) {
+        return size;
+    }
+    let size = std::fs::metadata(path).map(|m| m.len()).unwrap_or(0);
+    set_cached_size(path.to_path_buf(), size);
+    size
+}
+
+/// Size of any `size`-command target: file → its length,
+/// directory → walked total (`care` selects ignore-rules vs everything).
+pub fn calculate_target_size(path: &Path, care: bool) -> u64 {
+    if path.is_file() {
+        return calculate_file_size(path);
+    }
+    if care {
+        calculate_total_size(path)
+    } else {
+        calculate_dir_size(path)
+    }
+}
+
 /// Calculate total size with progress bar (parallel)
 pub fn calculate_dir_size_with_progress(path: &Path, pb: &ProgressBar) -> u64 {
     let ignored_dirs = Config::get_ignored_dirs_combined();
@@ -464,6 +487,141 @@ pub fn calculate_dir_size_with_progress(path: &Path, pb: &ProgressBar) -> u64 {
 }
 
 /// Convert bytes to human-readable string
+/// Sort key for `view --sort`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TreeSortKey {
+    /// Largest first (ties: name A–Z).
+    Size,
+    /// Name A–Z (today's default).
+    Char,
+    /// Extension A–Z, then name A–Z.
+    Ext,
+}
+
+/// Parse a minimum-size value for `view -s/-fs/-ds <size>`.
+/// Case-insensitive `B/KB/MB/GB/TB/PB` (1024-based, matching
+/// [`human_readable_size`]); fractions ok (`1.5MB`); a bare number
+/// means bytes (`1024`). Returns bytes, or `None` when invalid.
+pub fn parse_size_value(raw: &str) -> Option<u64> {
+    let s = raw.trim();
+    if s.is_empty() {
+        return None;
+    }
+    const UNITS: &[(&str, u64)] = &[
+        ("PB", 1024 * 1024 * 1024 * 1024 * 1024),
+        ("TB", 1024 * 1024 * 1024 * 1024),
+        ("GB", 1024 * 1024 * 1024),
+        ("MB", 1024 * 1024),
+        ("KB", 1024),
+        ("B", 1),
+    ];
+    let upper = s.to_uppercase();
+    for (suffix, mult) in UNITS {
+        if let Some(num) = upper.strip_suffix(suffix) {
+            let num = num.trim();
+            if num.is_empty() {
+                return None;
+            }
+            let val: f64 = num.parse().ok()?;
+            if !val.is_finite() || val < 0.0 {
+                return None;
+            }
+            let bytes = val * (*mult as f64);
+            if bytes > u64::MAX as f64 {
+                return None;
+            }
+            return Some(bytes as u64);
+        }
+    }
+    // Bare number = bytes (integers only, like `--head` counts).
+    let val: u64 = s.parse().ok()?;
+    Some(val)
+}
+
+/// Prune a tree by minimum sizes: files below `file_min` are dropped,
+/// directories below `dir_min` (by their computed `size`) are pruned.
+/// Directories left empty by pruning vanish (same rule as
+/// [`prune_tree_by_exts`]); the root is always kept. Sizes must already
+/// be computed (see [`compute_tree_sizes`]/[`compute_filtered_sizes`).
+/// Returns (kept_files, kept_dirs).
+pub fn prune_tree_by_min_size(
+    root: &mut TreeNode,
+    file_min: Option<u64>,
+    dir_min: Option<u64>,
+) -> (usize, usize) {
+    fn keep(node: &mut TreeNode, file_min: Option<u64>, dir_min: Option<u64>) -> (bool, usize, usize) {
+        if !node.is_dir {
+            let ok = match file_min {
+                Some(min) => node.size.unwrap_or(0) >= min,
+                None => true,
+            };
+            return (ok, usize::from(ok), 0);
+        }
+        let mut files = 0usize;
+        let mut dirs = 0usize;
+        node.children.retain_mut(|child| {
+            let (keep_child, f, d) = keep(child, file_min, dir_min);
+            files += f;
+            dirs += d;
+            keep_child
+        });
+        // Directory threshold applies to non-root nodes with a computed size.
+        if node.depth > 0 {
+            if let Some(min) = dir_min {
+                if node.size.unwrap_or(0) < min {
+                    return (false, 0, 0);
+                }
+            }
+        }
+        if node.children.is_empty() && (file_min.is_some() || dir_min.is_some()) {
+            return (false, 0, 0);
+        }
+        (true, files, dirs + 1)
+    }
+
+    let mut files = 0usize;
+    let mut dirs = 0usize;
+    root.children.retain_mut(|child| {
+        let (keep_child, f, d) = keep(child, file_min, dir_min);
+        files += f;
+        dirs += d;
+        keep_child
+    });
+    (files, dirs)
+}
+
+/// Recursively sort a tree's children by `key`, keeping directories
+/// grouped before files (today's layout rule).
+pub fn sort_tree_by_key(root: &mut TreeNode, key: TreeSortKey) {
+    fn ext_of(name: &str) -> String {
+        match name.rfind('.') {
+            Some(i) if i + 1 < name.len() => name[i + 1..].to_lowercase(),
+            _ => String::new(),
+        }
+    }
+    fn sort_level(children: &mut [TreeNode], key: TreeSortKey) {
+        children.sort_by(|a, b| match (a.is_dir, b.is_dir) {
+            (true, false) => std::cmp::Ordering::Less,
+            (false, true) => std::cmp::Ordering::Greater,
+            _ => match key {
+                TreeSortKey::Char => a.name.to_lowercase().cmp(&b.name.to_lowercase()),
+                TreeSortKey::Ext => ext_of(&a.name)
+                    .cmp(&ext_of(&b.name))
+                    .then_with(|| a.name.to_lowercase().cmp(&b.name.to_lowercase())),
+                TreeSortKey::Size => b
+                    .size
+                    .unwrap_or(0)
+                    .cmp(&a.size.unwrap_or(0))
+                    .then_with(|| a.name.to_lowercase().cmp(&b.name.to_lowercase())),
+            },
+        });
+        for child in children.iter_mut() {
+            sort_level(&mut child.children, key);
+        }
+    }
+    sort_level(&mut root.children, key);
+}
+
 pub fn human_readable_size(bytes: u64) -> String {
     const UNITS: &[&str] = &["B", "KB", "MB", "GB", "TB", "PB"];
     if bytes == 0 {
@@ -655,6 +813,130 @@ mod tests {
         assert_eq!(src.children[0].name, "main.rs");
         assert!(root.children.iter().any(|c| c.name == "top.c"));
         assert!(!root.children.iter().any(|c| c.name == "empty"));
+    }
+
+    #[test]
+    fn parse_size_value_units() {
+        assert_eq!(parse_size_value("1024"), Some(1024));
+        assert_eq!(parse_size_value("0"), Some(0));
+        assert_eq!(parse_size_value("10B"), Some(10));
+        assert_eq!(parse_size_value("10KB"), Some(10 * 1024));
+        assert_eq!(parse_size_value("1.5MB"), Some(1_572_864));
+        assert_eq!(parse_size_value("2gb"), Some(2 * 1024 * 1024 * 1024));
+        assert_eq!(parse_size_value("1TB"), Some(1024 * 1024 * 1024 * 1024));
+        assert_eq!(parse_size_value(" 3 MB "), Some(3 * 1024 * 1024));
+        assert_eq!(parse_size_value(""), None);
+        assert_eq!(parse_size_value("MB"), None);
+        assert_eq!(parse_size_value("-5"), None);
+        assert_eq!(parse_size_value("abc"), None);
+        assert_eq!(parse_size_value("10XB"), None);
+    }
+
+    fn sized_file(name: &str, size: u64) -> TreeNode {
+        let mut n = file(name);
+        n.size = Some(size);
+        n
+    }
+
+    fn sized_dir(name: &str, size: u64, children: Vec<TreeNode>) -> TreeNode {
+        let mut d = dir(name, children);
+        d.size = Some(size);
+        d
+    }
+
+    #[test]
+    fn prune_by_min_size_drops_small_files_and_emptied_dirs() {
+        let mut root = TreeNode {
+            name: "root".to_string(),
+            path: "/root".to_string(),
+            is_dir: true,
+            is_ignored: false,
+            is_supported: None,
+            children: vec![
+                sized_dir(
+                    "src",
+                    500,
+                    vec![sized_file("big.rs", 400), sized_file("tiny.rs", 100)],
+                ),
+                sized_dir("docs", 50, vec![sized_file("note.md", 50)]),
+                sized_file("top.bin", 10),
+            ],
+            depth: 0,
+            size: Some(560),
+        };
+        let (files, _) = prune_tree_by_min_size(&mut root, Some(200), None);
+        assert_eq!(files, 1);
+        // docs emptied → pruned; top.bin dropped; tiny.rs dropped.
+        assert_eq!(root.children.len(), 1);
+        let src = root.children.iter().find(|c| c.name == "src").unwrap();
+        assert_eq!(src.children.len(), 1);
+        assert_eq!(src.children[0].name, "big.rs");
+    }
+
+    #[test]
+    fn prune_by_dir_min_prunes_small_subtrees() {
+        let mut root = TreeNode {
+            name: "root".to_string(),
+            path: "/root".to_string(),
+            is_dir: true,
+            is_ignored: false,
+            is_supported: None,
+            children: vec![
+                sized_dir("big", 5000, vec![sized_file("a.bin", 5000)]),
+                sized_dir("small", 100, vec![sized_file("b.bin", 100)]),
+            ],
+            depth: 0,
+            size: Some(5100),
+        };
+        prune_tree_by_min_size(&mut root, None, Some(1000));
+        assert_eq!(root.children.len(), 1);
+        assert_eq!(root.children[0].name, "big");
+    }
+
+    #[test]
+    fn prune_by_min_size_no_thresholds_keeps_all() {
+        let mut root = TreeNode {
+            name: "root".to_string(),
+            path: "/root".to_string(),
+            is_dir: true,
+            is_ignored: false,
+            is_supported: None,
+            children: vec![file("a.txt")],
+            depth: 0,
+            size: None,
+        };
+        let (files, _) = prune_tree_by_min_size(&mut root, None, None);
+        assert_eq!(files, 1);
+        assert_eq!(root.children.len(), 1);
+    }
+
+    #[test]
+    fn sort_tree_by_key_orders_children() {
+        let mut root = TreeNode {
+            name: "root".to_string(),
+            path: "/root".to_string(),
+            is_dir: true,
+            is_ignored: false,
+            is_supported: None,
+            children: vec![
+                sized_file("b.txt", 300),
+                sized_dir("adir", 10, vec![]),
+                sized_file("a.md", 100),
+                sized_file("c.rs", 200),
+            ],
+            depth: 0,
+            size: None,
+        };
+        sort_tree_by_key(&mut root, TreeSortKey::Size);
+        let names: Vec<&str> = root.children.iter().map(|c| c.name.as_str()).collect();
+        // Dirs first, then files largest-first.
+        assert_eq!(names, vec!["adir", "b.txt", "c.rs", "a.md"]);
+        sort_tree_by_key(&mut root, TreeSortKey::Ext);
+        let names: Vec<&str> = root.children.iter().map(|c| c.name.as_str()).collect();
+        assert_eq!(names, vec!["adir", "a.md", "c.rs", "b.txt"]);
+        sort_tree_by_key(&mut root, TreeSortKey::Char);
+        let names: Vec<&str> = root.children.iter().map(|c| c.name.as_str()).collect();
+        assert_eq!(names, vec!["adir", "a.md", "b.txt", "c.rs"]);
     }
 
     #[test]

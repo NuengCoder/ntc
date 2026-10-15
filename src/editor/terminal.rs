@@ -11,11 +11,19 @@ pub(crate) enum TermMessage {
     Output(Vec<u8>),
 }
 
-#[derive(Clone, Default)]
+/// A terminal grid cell. `fg`/`bg` are `None` when the child process
+/// emitted no explicit color (transparent passthrough): the renderer
+/// must not paint any color so the embedded ntc shell looks exactly
+/// like the standalone ntc shell in the user's own terminal.
+#[derive(Clone, Default, PartialEq, Eq)]
 pub(crate) struct TermCell {
     pub ch: char,
-    pub fg: (u8, u8, u8),
-    pub bg: (u8, u8, u8),
+    pub fg: Option<(u8, u8, u8)>,
+    pub bg: Option<(u8, u8, u8)>,
+    /// SGR bold (`\x1b[1m`) active for this cell. The ntc shell emits
+    /// bold via `paint_ansi_bold()` / `colored.bold()`; without this the
+    /// panel renders those spans in dark/dull variants.
+    pub bold: bool,
 }
 
 pub(crate) struct TerminalState {
@@ -35,6 +43,11 @@ pub(crate) struct TerminalState {
     pub follow_mode: bool,
     pub dirty: bool,
     pub cursor_visible: bool,
+    /// App-requested cursor hide (`CSI ? 25 l`), synced from the performer.
+    pub app_cursor_hidden: bool,
+    /// Last observed alt-screen state; used to drop stale selections and
+    /// scroll offsets on fullscreen-app enter/exit.
+    was_alt: bool,
     pub last_blink: Instant,
     pub selection_anchor: Option<(usize, usize)>,
     pub selection_active: Option<(usize, usize)>,
@@ -47,9 +60,18 @@ struct VtePerformer {
     cursor_y: usize,
     width: usize,
     height: usize,
+    /// Active grid: the main grid, or the alternate screen while a
+    /// fullscreen app (DECSET 1047/1049, e.g. opencode) is running.
     lines: Vec<Vec<TermCell>>,
-    current_fg: (u8, u8, u8),
-    current_bg: (u8, u8, u8),
+    /// Stashed main grid while the alternate screen is active.
+    main_lines: Option<Vec<Vec<TermCell>>>,
+    /// Saved main-grid cursor for 1048/1049 restore.
+    saved_cursor: (usize, usize),
+    current_fg: Option<(u8, u8, u8)>,
+    current_bg: Option<(u8, u8, u8)>,
+    current_bold: bool,
+    /// App-requested cursor hide (`CSI ? 25 l`).
+    app_cursor_hidden: bool,
     scrollback: Vec<Vec<TermCell>>,
 }
 
@@ -61,9 +83,44 @@ impl Default for VtePerformer {
             width: 80,
             height: 24,
             lines: vec![vec![TermCell::default(); 80]; 24],
-            current_fg: (204, 204, 204),
-            current_bg: (30, 30, 30),
+            main_lines: None,
+            saved_cursor: (0, 0),
+            // Transparent passthrough: no forced colors.
+            current_fg: None,
+            current_bg: None,
+            current_bold: false,
+            app_cursor_hidden: false,
             scrollback: Vec::new(),
+        }
+    }
+}
+
+impl VtePerformer {
+    fn alt_active(&self) -> bool {
+        self.main_lines.is_some()
+    }
+
+    /// Switch to the alternate screen. With `save_cursor` (1049) the
+    /// main-grid cursor is stashed for restore; 1047 skips that.
+    fn enter_alt(&mut self) {
+        if self.main_lines.is_some() {
+            return;
+        }
+        let cleared = vec![vec![TermCell::default(); self.width]; self.height];
+        self.main_lines = Some(std::mem::replace(&mut self.lines, cleared));
+        self.cursor_x = 0;
+        self.cursor_y = 0;
+    }
+
+    /// Leave the alternate screen, discarding it. With `restore_cursor`
+    /// (1049/1048) the stashed main-grid cursor is restored.
+    fn exit_alt(&mut self, restore_cursor: bool) {
+        if let Some(main) = self.main_lines.take() {
+            self.lines = main;
+            if restore_cursor {
+                self.cursor_x = self.saved_cursor.0.min(self.width.saturating_sub(1));
+                self.cursor_y = self.saved_cursor.1.min(self.height.saturating_sub(1));
+            }
         }
     }
 }
@@ -75,6 +132,7 @@ impl vte::Perform for VtePerformer {
                 ch,
                 fg: self.current_fg,
                 bg: self.current_bg,
+                bold: self.current_bold,
             };
             self.cursor_x += 1;
         }
@@ -107,10 +165,48 @@ impl vte::Perform for VtePerformer {
     fn csi_dispatch(
         &mut self,
         params: &vte::Params,
-        _intermediates: &[u8],
+        intermediates: &[u8],
         _ignore: bool,
         action: char,
     ) {
+        // DEC private modes (`CSI ? ... h/l`): alternate screen for
+        // fullscreen TUIs (opencode), app cursor hide/show. All other
+        // private modes (mouse tracking, bracketed paste, …) are parsed
+        // and ignored — the editor handles mouse itself.
+        if intermediates == [b'?'] && (action == 'h' || action == 'l') {
+            let enable = action == 'h';
+            for p in params.iter() {
+                match p[0] {
+                    25 => self.app_cursor_hidden = !enable,
+                    // 1047: alt screen without save; 1049: with save.
+                    1047 => {
+                        if enable {
+                            self.enter_alt();
+                        } else {
+                            self.exit_alt(false);
+                        }
+                    }
+                    1048 => {
+                        if enable {
+                            self.saved_cursor = (self.cursor_x, self.cursor_y);
+                        } else {
+                            self.cursor_x = self.saved_cursor.0.min(self.width.saturating_sub(1));
+                            self.cursor_y = self.saved_cursor.1.min(self.height.saturating_sub(1));
+                        }
+                    }
+                    1049 => {
+                        if enable {
+                            self.saved_cursor = (self.cursor_x, self.cursor_y);
+                            self.enter_alt();
+                        } else {
+                            self.exit_alt(true);
+                        }
+                    }
+                    _ => {}
+                }
+            }
+            return;
+        }
         let pv: Vec<u16> = params.iter().map(|p| p[0]).collect();
         match action {
             'A' => {
@@ -158,9 +254,12 @@ impl vte::Perform for VtePerformer {
                     }
                     2 | 3 => {
                         self.lines.fill(vec![TermCell::default(); self.width]);
-                        self.scrollback.clear();
-                        self.cursor_x = 0;
-                        self.cursor_y = 0;
+                        // Never let a fullscreen app wipe the main scrollback.
+                        if !self.alt_active() {
+                            self.scrollback.clear();
+                            self.cursor_x = 0;
+                            self.cursor_y = 0;
+                        }
                     }
                     _ => {}
                 }
@@ -200,9 +299,18 @@ impl vte::Perform for VtePerformer {
                 let mut i = 0;
                 while i < pv.len() {
                     match pv[i] {
+                        // Reset → transparent passthrough (no forced colors).
                         0 => {
-                            self.current_fg = (204, 204, 204);
-                            self.current_bg = (30, 30, 30);
+                            self.current_fg = None;
+                            self.current_bg = None;
+                            self.current_bold = false;
+                        }
+                        // Bold on/off (ntc shell `paint_ansi_bold` / `.bold()`).
+                        1 => {
+                            self.current_bold = true;
+                        }
+                        22 => {
+                            self.current_bold = false;
                         }
                         30..=37 => {
                             let idx = (pv[i] - 30) as usize;
@@ -216,7 +324,11 @@ impl vte::Perform for VtePerformer {
                                 (0, 170, 170),
                                 (170, 170, 170),
                             ];
-                            self.current_fg = colors[idx];
+                            self.current_fg = Some(colors[idx]);
+                        }
+                        // Default foreground → passthrough.
+                        39 => {
+                            self.current_fg = None;
                         }
                         40..=47 => {
                             let idx = (pv[i] - 40) as usize;
@@ -230,7 +342,11 @@ impl vte::Perform for VtePerformer {
                                 (0, 170, 170),
                                 (170, 170, 170),
                             ];
-                            self.current_bg = colors[idx];
+                            self.current_bg = Some(colors[idx]);
+                        }
+                        // Default background → passthrough.
+                        49 => {
+                            self.current_bg = None;
                         }
                         90..=97 => {
                             let idx = (pv[i] - 90) as usize;
@@ -244,7 +360,7 @@ impl vte::Perform for VtePerformer {
                                 (85, 255, 255),
                                 (255, 255, 255),
                             ];
-                            self.current_fg = colors[idx];
+                            self.current_fg = Some(colors[idx]);
                         }
                         100..=107 => {
                             let idx = (pv[i] - 100) as usize;
@@ -258,15 +374,27 @@ impl vte::Perform for VtePerformer {
                                 (85, 255, 255),
                                 (255, 255, 255),
                             ];
-                            self.current_bg = colors[idx];
+                            self.current_bg = Some(colors[idx]);
                         }
                         38 if i + 2 < pv.len() && pv[i + 1] == 5 => {
-                            self.current_fg = ansi256_to_rgb(pv[i + 2] as u8);
+                            self.current_fg = Some(ansi256_to_rgb(pv[i + 2] as u8));
                             i += 2;
                         }
+                        // Truecolor `38;2;r;g;b` (e.g. theme `Rgb` tree colors).
+                        38 if i + 4 < pv.len() && pv[i + 1] == 2 => {
+                            self.current_fg =
+                                Some((pv[i + 2] as u8, pv[i + 3] as u8, pv[i + 4] as u8));
+                            i += 4;
+                        }
                         48 if i + 2 < pv.len() && pv[i + 1] == 5 => {
-                            self.current_bg = ansi256_to_rgb(pv[i + 2] as u8);
+                            self.current_bg = Some(ansi256_to_rgb(pv[i + 2] as u8));
                             i += 2;
+                        }
+                        // Truecolor `48;2;r;g;b` background.
+                        48 if i + 4 < pv.len() && pv[i + 1] == 2 => {
+                            self.current_bg =
+                                Some((pv[i + 2] as u8, pv[i + 3] as u8, pv[i + 4] as u8));
+                            i += 4;
                         }
                         _ => {}
                     }
@@ -288,7 +416,11 @@ impl VtePerformer {
     fn scroll_up(&mut self) {
         if !self.lines.is_empty() {
             let first = self.lines.remove(0);
-            self.scrollback.push(first);
+            // The alternate screen has no scrollback: scrolled-off lines
+            // are discarded so TUIs can't pollute the main history.
+            if !self.alt_active() {
+                self.scrollback.push(first);
+            }
             self.lines.push(vec![TermCell::default(); self.width]);
         }
     }
@@ -342,7 +474,29 @@ fn ansi256_to_rgb(idx: u8) -> (u8, u8, u8) {
 }
 
 impl TerminalState {
-    pub fn spawn(shell: &str, width: u16, height: u16, cwd: &Path) -> Result<Self> {
+    /// Spawn the embedded terminal running the ntc shell only
+    /// (`std::env::current_exe()` with no args → logo + interactive shell).
+    /// Foreign shells (powershell / sh / fish / zsh) are never used.
+    pub fn spawn_ntc_shell(width: u16, height: u16, cwd: &Path) -> Result<Self> {
+        let exe = std::env::current_exe()?;
+        Self::spawn_cmd(
+            exe.to_string_lossy().as_ref(),
+            &[],
+            width,
+            height,
+            cwd,
+            "ntc",
+        )
+    }
+
+    fn spawn_cmd(
+        prog: &str,
+        args: &[&str],
+        width: u16,
+        height: u16,
+        cwd: &Path,
+        title_shell: &str,
+    ) -> Result<Self> {
         let pty_system = portable_pty::native_pty_system();
 
         let pair = pty_system.openpty(portable_pty::PtySize {
@@ -352,8 +506,22 @@ impl TerminalState {
             pixel_height: 0,
         })?;
 
-        let mut cmd = portable_pty::CommandBuilder::new(shell);
+        let mut cmd = portable_pty::CommandBuilder::new(prog);
+        cmd.args(args);
         cmd.cwd(cwd);
+        // Mark the child as running inside the editor: the embedded ntc
+        // shell skips session-directory restore/save and refuses nested
+        // `ne` / `ntceditor` invocations when this is set.
+        cmd.env("NTC_IN_EDITOR", "1");
+        // Deterministic child rendering: without an explicit TERM the
+        // shell can degrade to ASCII-fallback boxes / plain output that
+        // never appear in the standalone shell.
+        let term_unset = std::env::var("TERM")
+            .map(|t| t.is_empty() || t == "dumb")
+            .unwrap_or(true);
+        if term_unset {
+            cmd.env("TERM", "xterm-256color");
+        }
 
         let child = pair.slave.spawn_command(cmd)?;
 
@@ -406,7 +574,7 @@ impl TerminalState {
                 "{} {} {} {} {}",
                 t!("editor.term_title"),
                 "\u{2014}",
-                shell,
+                title_shell,
                 "\u{2014}",
                 title_cwd
             ),
@@ -414,6 +582,8 @@ impl TerminalState {
             follow_mode: true,
             dirty: true,
             cursor_visible: true,
+            app_cursor_hidden: false,
+            was_alt: false,
             last_blink: Instant::now(),
             selection_anchor: None,
             selection_active: None,
@@ -439,7 +609,33 @@ impl TerminalState {
             self.cursor_x = self.performer.cursor_x;
             self.cursor_y = self.performer.cursor_y;
             self.scrollback = self.performer.scrollback.clone();
+            self.app_cursor_hidden = self.performer.app_cursor_hidden;
+            // Fullscreen-app enter/exit invalidates scroll + selection
+            // (alt grid has no scrollback; indices don't transfer).
+            let is_alt = self.performer.alt_active();
+            if is_alt != self.was_alt {
+                self.was_alt = is_alt;
+                self.selection_anchor = None;
+                self.selection_active = None;
+                self.follow_mode = true;
+            }
             self.dirty = true;
+        }
+    }
+
+    /// True while a fullscreen app owns the alternate screen.
+    pub fn is_alt_screen(&self) -> bool {
+        self.performer.alt_active()
+    }
+
+    /// Absolute cursor line index in `total_lines()`/`get_line()` space:
+    /// grid-relative on the alternate screen (no scrollback there),
+    /// scrollback-relative otherwise.
+    pub fn cursor_abs_y(&self) -> usize {
+        if self.is_alt_screen() {
+            self.cursor_y
+        } else {
+            self.scrollback.len() + self.cursor_y
         }
     }
 
@@ -455,12 +651,12 @@ impl TerminalState {
         self.height = height as usize;
         self.performer.width = width as usize;
         self.performer.height = height as usize;
-        for line in &mut self.performer.lines {
-            line.resize(width as usize, TermCell::default());
+        Self::resize_grid(&mut self.performer.lines, width as usize, height as usize);
+        // A stashed main grid must track the size too so alt-exit
+        // restores a correctly shaped grid.
+        if let Some(ref mut main) = self.performer.main_lines {
+            Self::resize_grid(main, width as usize, height as usize);
         }
-        self.performer
-            .lines
-            .resize(height as usize, vec![TermCell::default(); width as usize]);
         self.lines = self.performer.lines.clone();
         self.dirty = true;
 
@@ -497,14 +693,33 @@ impl TerminalState {
         *scroll_x = (*scroll_x).min(max_scroll);
     }
 
+    fn resize_grid(grid: &mut Vec<Vec<TermCell>>, width: usize, height: usize) {
+        for line in grid.iter_mut() {
+            line.resize(width, TermCell::default());
+        }
+        grid.resize(height, vec![TermCell::default(); width]);
+    }
+
     /// Total number of lines in the scrollback buffer + visible screen.
+    /// On the alternate screen there is no scrollback: just the grid.
     pub fn total_lines(&self) -> usize {
-        self.scrollback.len() + self.lines.len()
+        if self.is_alt_screen() {
+            self.lines.len()
+        } else {
+            self.scrollback.len() + self.lines.len()
+        }
     }
 
     /// Get a line by index from the combined scrollback + screen buffer.
     /// Index 0 = oldest scrollback line, total_lines()-1 = bottom of screen.
+    /// On the alternate screen the index addresses the grid directly.
     pub fn get_line(&self, idx: usize) -> &Vec<TermCell> {
+        if self.is_alt_screen() {
+            return self
+                .lines
+                .get(idx)
+                .unwrap_or_else(|| &self.lines[self.lines.len().saturating_sub(1)]);
+        }
         let sb_len = self.scrollback.len();
         if idx < sb_len {
             &self.scrollback[idx]
@@ -589,5 +804,104 @@ impl TerminalState {
             result.push('\n');
         }
         result
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn feed(p: &mut VtePerformer, parser: &mut vte::Parser, s: &[u8]) {
+        for b in s {
+            parser.advance(p, *b);
+        }
+    }
+
+    #[test]
+    fn truecolor_fg_parses() {
+        let mut p = VtePerformer::default();
+        let mut parser = vte::Parser::new();
+        // Theme `Rgb(30,220,220)` tree-branch teal, as emitted by the shell.
+        feed(&mut p, &mut parser, b"\x1b[38;2;30;220;220mA");
+        assert_eq!(p.lines[0][0].fg, Some((30, 220, 220)));
+        assert_eq!(p.lines[0][0].ch, 'A');
+    }
+
+    #[test]
+    fn truecolor_bg_parses() {
+        let mut p = VtePerformer::default();
+        let mut parser = vte::Parser::new();
+        feed(&mut p, &mut parser, b"\x1b[48;2;1;2;3mA");
+        assert_eq!(p.lines[0][0].bg, Some((1, 2, 3)));
+    }
+
+    #[test]
+    fn bold_sets_and_reset_clears() {
+        let mut p = VtePerformer::default();
+        let mut parser = vte::Parser::new();
+        feed(&mut p, &mut parser, b"\x1b[1mB");
+        assert!(p.lines[0][0].bold);
+        assert_eq!(p.lines[0][0].ch, 'B');
+        // SGR 0 clears bold + colors back to passthrough.
+        feed(&mut p, &mut parser, b"\x1b[0m");
+        assert!(!p.current_bold);
+        assert_eq!(p.current_fg, None);
+        assert_eq!(p.current_bg, None);
+    }
+
+    #[test]
+    fn default_reset_codes_are_passthrough() {
+        let mut p = VtePerformer::default();
+        let mut parser = vte::Parser::new();
+        feed(&mut p, &mut parser, b"\x1b[31m\x1b[39m\x1b[49mA");
+        assert_eq!(p.lines[0][0].fg, None);
+        assert_eq!(p.lines[0][0].bg, None);
+    }
+
+    #[test]
+    fn alt_screen_isolates_and_restores() {
+        let mut p = VtePerformer::default();
+        let mut parser = vte::Parser::new();
+        feed(&mut p, &mut parser, b"main");
+        assert!(!p.alt_active());
+        // Enter alt (1049): grid cleared, main stashed.
+        feed(&mut p, &mut parser, b"\x1b[?1049h");
+        assert!(p.alt_active());
+        assert_eq!(p.lines[0][0].ch, '\0');
+        feed(&mut p, &mut parser, b"tui");
+        assert_eq!(p.lines[0][0].ch, 't');
+        // Scrolling on alt must not grow the main scrollback.
+        for _ in 0..30 {
+            feed(&mut p, &mut parser, b"\n");
+        }
+        assert!(p.scrollback.is_empty());
+        // Exit alt: main grid restored, alt discarded.
+        feed(&mut p, &mut parser, b"\x1b[?1049l");
+        assert!(!p.alt_active());
+        assert_eq!(p.lines[0][0].ch, 'm');
+    }
+
+    #[test]
+    fn alt_clear_does_not_wipe_scrollback() {
+        let mut p = VtePerformer::default();
+        let mut parser = vte::Parser::new();
+        for _ in 0..30 {
+            feed(&mut p, &mut parser, b"x\n");
+        }
+        assert!(!p.scrollback.is_empty());
+        let sb_len = p.scrollback.len();
+        feed(&mut p, &mut parser, b"\x1b[?1049h\x1b[2J\x1b[?1049l");
+        assert_eq!(p.scrollback.len(), sb_len);
+    }
+
+    #[test]
+    fn app_cursor_hide_show() {
+        let mut p = VtePerformer::default();
+        let mut parser = vte::Parser::new();
+        assert!(!p.app_cursor_hidden);
+        feed(&mut p, &mut parser, b"\x1b[?25l");
+        assert!(p.app_cursor_hidden);
+        feed(&mut p, &mut parser, b"\x1b[?25h");
+        assert!(!p.app_cursor_hidden);
     }
 }

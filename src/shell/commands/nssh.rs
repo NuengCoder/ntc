@@ -116,17 +116,23 @@ fn parse_profile_flags(tokens: &[String], start: usize) -> Result<(ProfileFlags,
     while i < tokens.len() {
         match tokens[i].as_str() {
             "--host" => {
-                let v = tokens.get(i + 1).ok_or_else(|| t!("cmd.nssh.missing_host"))?;
+                let v = tokens
+                    .get(i + 1)
+                    .ok_or_else(|| t!("cmd.nssh.missing_host"))?;
                 f.host = Some(v.clone());
                 i += 2;
             }
             "--user" | "-u" => {
-                let v = tokens.get(i + 1).ok_or_else(|| t!("cmd.nssh.missing_user"))?;
+                let v = tokens
+                    .get(i + 1)
+                    .ok_or_else(|| t!("cmd.nssh.missing_user"))?;
                 f.user = Some(v.clone());
                 i += 2;
             }
             "--port" | "-p" => {
-                let v = tokens.get(i + 1).ok_or_else(|| t!("cmd.nssh.missing_port"))?;
+                let v = tokens
+                    .get(i + 1)
+                    .ok_or_else(|| t!("cmd.nssh.missing_port"))?;
                 f.port = Some(
                     v.parse::<u16>()
                         .map_err(|_| t!("cmd.nssh.invalid_port", v))?,
@@ -137,7 +143,9 @@ fn parse_profile_flags(tokens: &[String], start: usize) -> Result<(ProfileFlags,
                 i += 2;
             }
             "--key" => {
-                let v = tokens.get(i + 1).ok_or_else(|| t!("cmd.nssh.missing_key"))?;
+                let v = tokens
+                    .get(i + 1)
+                    .ok_or_else(|| t!("cmd.nssh.missing_key"))?;
                 f.key = Some(v.clone());
                 i += 2;
             }
@@ -146,7 +154,9 @@ fn parse_profile_flags(tokens: &[String], start: usize) -> Result<(ProfileFlags,
                 i += 1;
             }
             "--pass-env" => {
-                let v = tokens.get(i + 1).ok_or_else(|| t!("cmd.nssh.missing_pass_env"))?;
+                let v = tokens
+                    .get(i + 1)
+                    .ok_or_else(|| t!("cmd.nssh.missing_pass_env"))?;
                 f.pass_env = Some(v.clone());
                 i += 2;
             }
@@ -182,14 +192,19 @@ fn cmd_add(tokens: &[String]) -> Result<bool> {
             return Ok(false);
         }
     };
-    if store::get_profile(name).map_err(|e| anyhow::anyhow!("{}", e))?.is_some() {
+    if store::get_profile(name)
+        .map_err(|e| anyhow::anyhow!("{}", e))?
+        .is_some()
+    {
         print_error(&t!("cmd.nssh.profile_exists", name));
         return Ok(false);
     }
     let profile = store::Profile {
         host,
         user: flags.user.unwrap_or_else(|| {
-            std::env::var("USER").or_else(|_| std::env::var("USERNAME")).unwrap_or_else(|_| "root".to_string())
+            std::env::var("USER")
+                .or_else(|_| std::env::var("USERNAME"))
+                .unwrap_or_else(|_| "root".to_string())
         }),
         port: flags.port.unwrap_or(22),
         key: flags.key.clone(),
@@ -267,8 +282,7 @@ fn cmd_rm(tokens: &[String]) -> Result<bool> {
     let name = &tokens[1];
     let yes = tokens.iter().any(|t| t == "--yes" || t == "-y");
     if !yes {
-        let confirm =
-            prompt_yes_no(&t!("cmd.nssh.rm_confirm", name), false).unwrap_or(false);
+        let confirm = prompt_yes_no(&t!("cmd.nssh.rm_confirm", name), false).unwrap_or(false);
         if !confirm {
             print_info(&t!("cmd.nssh.rm_cancelled"));
             return Ok(false);
@@ -345,10 +359,7 @@ fn resolve_or_pick(name: Option<&str>) -> Result<Option<(String, store::Profile)
         .iter()
         .map(|n| {
             let p = &profiles[n];
-            MenuItem::with_detail(
-                n.clone(),
-                format!("{}@{}:{}", p.user, p.host, p.port),
-            )
+            MenuItem::with_detail(n.clone(), format!("{}@{}:{}", p.user, p.host, p.port))
         })
         .collect();
     match InteractiveMenu::new(&t!("cmd.nssh.pick_profile"))
@@ -412,7 +423,9 @@ fn cmd_ssh(tokens: &[String]) -> Result<bool> {
     while i < tokens.len() {
         match tokens[i].as_str() {
             "--cmd" => {
-                let v = tokens.get(i + 1).ok_or_else(|| anyhow::anyhow!("{}", t!("cmd.nssh.missing_cmd")))?;
+                let v = tokens
+                    .get(i + 1)
+                    .ok_or_else(|| anyhow::anyhow!("{}", t!("cmd.nssh.missing_cmd")))?;
                 cmd = Some(v.clone());
                 i += 2;
             }
@@ -425,8 +438,12 @@ fn cmd_ssh(tokens: &[String]) -> Result<bool> {
                 i += 1;
             }
             "--timeout" => {
-                let v = tokens.get(i + 1).ok_or_else(|| anyhow::anyhow!("{}", t!("cmd.nssh.missing_timeout")))?;
-                let s: u64 = v.parse().map_err(|_| anyhow::anyhow!("{}", t!("cmd.nssh.invalid_timeout", v)))?;
+                let v = tokens
+                    .get(i + 1)
+                    .ok_or_else(|| anyhow::anyhow!("{}", t!("cmd.nssh.missing_timeout")))?;
+                let s: u64 = v
+                    .parse()
+                    .map_err(|_| anyhow::anyhow!("{}", t!("cmd.nssh.invalid_timeout", v)))?;
                 timeout = Duration::from_secs(s.max(1));
                 i += 2;
             }
@@ -529,8 +546,12 @@ fn cmd_cp(tokens: &[String], nav: &mut Navigator) -> Result<bool> {
                 i += 1;
             }
             "--timeout" => {
-                let v = tokens.get(i + 1).ok_or_else(|| anyhow::anyhow!("{}", t!("cmd.nssh.missing_timeout")))?;
-                let s: u64 = v.parse().map_err(|_| anyhow::anyhow!("{}", t!("cmd.nssh.invalid_timeout", v)))?;
+                let v = tokens
+                    .get(i + 1)
+                    .ok_or_else(|| anyhow::anyhow!("{}", t!("cmd.nssh.missing_timeout")))?;
+                let s: u64 = v
+                    .parse()
+                    .map_err(|_| anyhow::anyhow!("{}", t!("cmd.nssh.invalid_timeout", v)))?;
                 timeout = Duration::from_secs(s.max(1));
                 i += 2;
             }
@@ -625,7 +646,8 @@ async fn cp_upload(
     trust: bool,
     timeout: Duration,
 ) -> Result<()> {
-    let data = std::fs::read(local).map_err(|e| anyhow::anyhow!("{}", t!("cmd.nssh.cp_read_fail", e)))?;
+    let data =
+        std::fs::read(local).map_err(|e| anyhow::anyhow!("{}", t!("cmd.nssh.cp_read_fail", e)))?;
     if data.len() as u64 > CP_SIZE_GUARD {
         return Err(anyhow::anyhow!("{}", t!("cmd.nssh.cp_too_large")));
     }
@@ -635,7 +657,15 @@ async fn cp_upload(
         profile.host,
         remote
     ));
-    let conn = transport::connect(&profile.host, profile.port, &profile.user, auth, trust, timeout).await?;
+    let conn = transport::connect(
+        &profile.host,
+        profile.port,
+        &profile.user,
+        auth,
+        trust,
+        timeout,
+    )
+    .await?;
     let sftp = transport::sftp(&conn).await?;
     let bar = progress_bar(data.len() as u64);
     // Chunked write so the progress bar moves on big files.
@@ -674,7 +704,15 @@ async fn cp_download(
         remote,
         local.display()
     ));
-    let conn = transport::connect(&profile.host, profile.port, &profile.user, auth, trust, timeout).await?;
+    let conn = transport::connect(
+        &profile.host,
+        profile.port,
+        &profile.user,
+        auth,
+        trust,
+        timeout,
+    )
+    .await?;
     let sftp = transport::sftp(&conn).await?;
     let data = sftp
         .read(remote.to_string())
@@ -698,18 +736,29 @@ fn cmd_scan(tokens: &[String]) -> Result<bool> {
     while i < tokens.len() {
         match tokens[i].as_str() {
             "--ports" => {
-                let v = tokens.get(i + 1).ok_or_else(|| anyhow::anyhow!("{}", t!("cmd.nssh.missing_ports")))?;
+                let v = tokens
+                    .get(i + 1)
+                    .ok_or_else(|| anyhow::anyhow!("{}", t!("cmd.nssh.missing_ports")))?;
                 ports_spec = Some(v.clone());
                 i += 2;
             }
             "--top" => {
-                let v = tokens.get(i + 1).ok_or_else(|| anyhow::anyhow!("{}", t!("cmd.nssh.missing_top")))?;
-                top = Some(v.parse().map_err(|_| anyhow::anyhow!("{}", t!("cmd.nssh.invalid_top", v)))?);
+                let v = tokens
+                    .get(i + 1)
+                    .ok_or_else(|| anyhow::anyhow!("{}", t!("cmd.nssh.missing_top")))?;
+                top = Some(
+                    v.parse()
+                        .map_err(|_| anyhow::anyhow!("{}", t!("cmd.nssh.invalid_top", v)))?,
+                );
                 i += 2;
             }
             "--timeout" => {
-                let v = tokens.get(i + 1).ok_or_else(|| anyhow::anyhow!("{}", t!("cmd.nssh.missing_timeout")))?;
-                timeout_ms = v.parse().map_err(|_| anyhow::anyhow!("{}", t!("cmd.nssh.invalid_timeout", v)))?;
+                let v = tokens
+                    .get(i + 1)
+                    .ok_or_else(|| anyhow::anyhow!("{}", t!("cmd.nssh.missing_timeout")))?;
+                timeout_ms = v
+                    .parse()
+                    .map_err(|_| anyhow::anyhow!("{}", t!("cmd.nssh.invalid_timeout", v)))?;
                 i += 2;
             }
             _ => {
@@ -739,13 +788,8 @@ fn cmd_scan(tokens: &[String]) -> Result<bool> {
         let n = top.unwrap_or(20).clamp(1, portscan::TOP_PORTS.len());
         portscan::TOP_PORTS[..n].to_vec()
     };
-    let ips =
-        portscan::resolve_host(&host, ports[0]).map_err(|e| anyhow::anyhow!("{}", e))?;
-    print_info(&t!(
-        "cmd.nssh.scan_start",
-        host,
-        ports.len().to_string()
-    ));
+    let ips = portscan::resolve_host(&host, ports[0]).map_err(|e| anyhow::anyhow!("{}", e))?;
+    print_info(&t!("cmd.nssh.scan_start", host, ports.len().to_string()));
     let hits = portscan::scan_ports(&ips, &ports, Duration::from_millis(timeout_ms.max(50)));
     if hits.is_empty() {
         print_warning(&t!("cmd.nssh.scan_none", host));
@@ -774,7 +818,10 @@ fn cmd_keygen(args: &str) -> Result<bool> {
         .wait()
         .map_err(|e| anyhow::anyhow!("{}", e))?;
     if !status.success() {
-        print_warning(&t!("cmd.nssh.keygen_exit", status.code().unwrap_or(-1).to_string()));
+        print_warning(&t!(
+            "cmd.nssh.keygen_exit",
+            status.code().unwrap_or(-1).to_string()
+        ));
     }
     Ok(false)
 }
@@ -804,16 +851,15 @@ pub fn cmd_nssh(args: &str, nav: &mut Navigator) -> Result<bool> {
                 ))?;
                 print_info(&t!("cmd.nssh.shell_hint"));
                 match runtime.block_on(transport::shell(&conn))? {
-                    transport::ShellEnd::Forced => {
-                        print_warning(&t!("cmd.nssh.shell_forced"))
-                    }
+                    transport::ShellEnd::Forced => print_warning(&t!("cmd.nssh.shell_forced")),
                     transport::ShellEnd::Closed => {}
                 }
                 print_info(&t!("cmd.nssh.shell_back"));
-                let _ = runtime.block_on(
-                    conn.handle
-                        .disconnect(russh::Disconnect::ByApplication, "nssh done", ""),
-                );
+                let _ = runtime.block_on(conn.handle.disconnect(
+                    russh::Disconnect::ByApplication,
+                    "nssh done",
+                    "",
+                ));
                 Ok(false)
             }
             None => Ok(false),
@@ -884,6 +930,10 @@ mod tests {
     #[test]
     fn bare_name_routes_to_ssh() {
         // Unknown profile prints an error and returns Ok(false).
+        // Isolated config home (empty store) so a real user profile on the
+        // dev machine / CI runner cannot leak in; also serializes CWD/env
+        // access with parallel tests.
+        let _home = crate::utils::test_support::IsolatedConfigHome::new();
         let mut nav = Navigator::new().unwrap();
         let r = cmd_nssh("definitely-not-a-profile-xyz", &mut nav).unwrap();
         assert!(!r);

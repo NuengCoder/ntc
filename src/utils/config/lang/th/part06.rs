@@ -15,6 +15,7 @@ pub fn fill(m: &mut HashMap<String, String>) {
     m.insert("help.alias.info".into(), "ral info <ชื่อ> [--edit] ## แสดงรายละเอียด alias (--edit: คัดลอกคำสั่งแก้ไขไปยังคลิปบอร์ด)".into());
     m.insert("help.alias.list".into(), "ral list ## แสดง alias ทั้งหมด".into());
     m.insert("help.alias.make".into(), "ral make [ชื่อ] ## สร้างเทมเพลต alias ใน CWD".into());
+    m.insert("help.alias.hintn".into(), "ral hintn add|rm|rnm|info|ls ## จัดการรายการค่าที่ตั้งชื่อไว้".into());
     m.insert("help.alias.rm".into(), "ral rm <ชื่อ>[, ...] ## ลบ alias".into());
     m.insert("help.alias.rnm".into(), "ral rnm <เก่า> to <ใหม่> ## เปลี่ยนชื่อ alias".into());
     m.insert("help.alias.run".into(), "run <alias> ## เรียก alias ด้วย 'run'".into());
@@ -100,14 +101,14 @@ pub fn fill(m: &mut HashMap<String, String>) {
     m.insert("help.explorer.hint5".into(), "q/Esc=ออก, เมาส์=คลิก/เลื่อน".into());
     m.insert("help.explorer.launch".into(), "explorer, nfe [PATH] ## เปิดตัวสำรวจไฟล์แบบเต็มหน้าจอ".into());
     m.insert("help.explorer.title".into(), "ตัวสำรวจไฟล์ (NFE):".into());
-    m.insert("help.fileops.cp".into(), "cp <src> <dst|@tp> [-f] ## คัดลอกไฟล์หรือไดเรกทอรี".into());
+    m.insert("help.fileops.cp".into(), "cp <src|@tp> <dst|@tp> [-f] ## คัดลอกไฟล์หรือไดเรกทอรี".into());
     m.insert("help.fileops.mkd".into(), "mkd <dir>[, ...] ## สร้างไดเรกทอรีใหม่".into());
     m.insert("help.fileops.mkf".into(), "mkf <file>[, ...] ## สร้างไฟล์ใหม่".into());
     m.insert("help.fileops.rmd".into(), "rmd <dir>[, ...] ## ลบไดเรกทอรี (ถามยืนยัน)".into());
     m.insert("help.fileops.rmf".into(), "rmf <file>[, ...] ## ลบไฟล์ (ถามยืนยัน)".into());
     m.insert("help.fileops.rnmd".into(), "rnmd <old> <new> ## เปลี่ยนชื่อไดเรกทอรี".into());
     m.insert("help.fileops.rnmf".into(), "rnmf <old> <new> ## เปลี่ยนชื่อไฟล์".into());
-    m.insert("help.fileops.mv".into(), "mv <src> <dst|@tp> [-f] ## ย้าย/เปลี่ยนชื่อไฟล์หรือไดเรกทอรี".into());
+    m.insert("help.fileops.mv".into(), "mv <src|@tp> <dst|@tp> [-f] ## ย้าย/เปลี่ยนชื่อไฟล์หรือไดเรกทอรี".into());
     m.insert("help.fileops.title".into(), "การจัดการไฟล์ (FILE OPERATIONS):".into());
     m.insert("help.fmt.json".into(), "fmt json <file> [to yaml|toml] ## แปลง JSON เป็น YAML หรือ TOML".into());
     m.insert("help.fmt.output".into(), "(เพิ่ม -o <file> เพื่อบันทึกผลลัพธ์)".into());
@@ -129,6 +130,10 @@ pub fn fill(m: &mut HashMap<String, String>) {
     m.insert("help.image.convert".into(), "image <path> to <fmt> ## แปลงและแสดงผลลัพธ์ (json|md|html|txt|desc)".into());
     m.insert("help.image.display".into(), "image display <เส้นทาง> ## แสดงภาพในเทอร์มินัลโดยตรง".into());
     m.insert("help.image.show".into(), "image show <เส้นทาง> ## แสดงภาพในเทอร์มินัลโดยตรง".into());
+
+    m.insert("help.image.sixel".into(), "image display <เส้นทาง> --sixel ## บังคับเรนเดอร์แบบ sixel".into());
+
+    m.insert("cmd.image.sixel_forced_warn".into(), "กำลังบังคับเอาต์พุต sixel (ตรวจพบ: {}) — เทอร์มินัลนี้อาจแสดงผลเพี้ยน".into());
     m.insert("help.image.interactive".into(), "image ## ตัวแปลงภาพแบบโต้ตอบ (เลือกจากไดเรกทอรีปัจจุบัน)".into());
     m.insert("help.image.layout".into(), "image <path> --layout ## เปิดการตรวจจับเลย์เอาต์ UI".into());
     m.insert("help.image.ocr".into(), "image <path> --ocr ## เปิดการแยกข้อความ OCR".into());
@@ -161,7 +166,7 @@ pub fn fill(m: &mut HashMap<String, String>) {
     m.insert("help.network.http".into(), "http <method> <url> ## HTTP API client (-H, -d, --json, -q, -a, --bearer, -s, -o, -v, -t)".into());
     m.insert("help.network.ping".into(), "ping <host> ## ICMP ping (-c count)".into());
     m.insert("help.network.ipcfg".into(), "ipcfg [ชื่อ] ## แสดงอะแดปเตอร์เครือข่ายแบบ ipconfig/ifconfig".into());
-    m.insert("help.network.serve".into(), "serve [port] ## เซิร์ฟเวอร์ไฟล์ HTTP (--auth, --tunnel, --share, --spa, --web-dir)".into());
+    m.insert("help.network.serve".into(), "serve files|http-server|config ## บริการ: file-drive, เซิร์ฟเวอร์ CWD, ค่าเริ่มต้นรายบริการ".into());
     m.insert("help.network.smtp".into(), "smtp ## SMTP email client (--id, -i, -u, -pwd, -s, -b, -f, --to)".into());
     m.insert("help.network.spec".into(), "spec ## แสดงสเปกคอมพิวเตอร์/ระบบ (CPU, GPU, RAM, พื้นที่เก็บ, OS, เลขซีเรียล)".into());
     m.insert("help.network.sys".into(), "sys, top ## ตัวตรวจสอบระบบแบบสด (CPU, หน่วยความจำ, ดิสก์, โพรเซส)".into());

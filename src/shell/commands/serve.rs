@@ -1,3 +1,4 @@
+use crate::config::{Config, ServeService};
 use crate::navigator::Navigator;
 use crate::output::{print_error, print_info, print_warning};
 use crate::t;
@@ -73,7 +74,17 @@ fn ensure_db() -> Result<rusqlite::Connection> {
 
 // ── Tokenize ──────────────────────────────────────────────────────────────
 
-fn tokenize(input: &str) -> Vec<String> {
+/// True only for an explicit help request (`help`/`--help`/`-h` as the
+/// first token). Empty args mean "run with defaults", never help —
+/// bare `serve` is intercepted by the dispatcher before it gets here.
+pub(crate) fn is_help_request(tokens: &[String]) -> bool {
+    matches!(
+        tokens.first().map(|s| s.as_str()),
+        Some("help" | "--help" | "-h")
+    )
+}
+
+pub(crate) fn tokenize(input: &str) -> Vec<String> {
     let mut v = Vec::new();
     let mut c = String::new();
     let mut s = false;
@@ -98,14 +109,67 @@ fn tokenize(input: &str) -> Vec<String> {
 
 // ── Entry ─────────────────────────────────────────────────────────────────
 
-pub fn cmd_serve(args: &str, _nav: &mut Navigator) -> Result<bool> {
+pub fn cmd_serve(args: &str, nav: &mut Navigator) -> Result<bool> {
     let tokens = tokenize(args);
+    // Bare `serve` never runs anything — it lists the services.
     if tokens.is_empty() || matches!(tokens[0].as_str(), "help" | "--help" | "-h") {
+        print_serve_services();
+        return Ok(false);
+    }
+    match tokens[0].as_str() {
+        "http-server" => {
+            let rest = tokens[1..].join(" ");
+            return super::serve_http::cmd_serve_http(&rest, nav);
+        }
+        "files" => {
+            let rest = tokens[1..].join(" ");
+            return cmd_serve_files(&rest, nav);
+        }
+        "chess" => {
+            let rest = tokens[1..].join(" ");
+            return super::serve_chess::cmd_serve_chess(&rest, nav);
+        }
+        "config" => {
+            let rest = tokens[1..].join(" ");
+            return super::config_commands::config_serve(&rest);
+        }
+        _ => {
+            print_error(&t!("cmd.serve.unknown_option", tokens[0]));
+            print_serve_services();
+            return Ok(false);
+        }
+    }
+}
+
+/// Top-level `serve` help: service list only, never runs a server.
+/// Per-service details live in `serve <service> --help`.
+fn print_serve_services() {
+    println!("{}", t!("cmd.serve.services_title").bold());
+    println!();
+    println!("{}", t!("cmd.serve.usage_title").cyan().bold());
+    println!("  {}", t!("cmd.serve.services_usage"));
+    println!();
+    println!("{}", t!("cmd.serve.services_header").cyan().bold());
+    println!("  {}", t!("cmd.serve.services_row_files"));
+    println!("  {}", t!("cmd.serve.services_row_http"));
+    println!("  {}", t!("cmd.serve.services_row_chess"));
+    println!("  {}", t!("cmd.serve.services_row_config"));
+    println!();
+    println!("{}", t!("cmd.serve.examples_title").cyan().bold());
+    println!("  {}", t!("cmd.serve.services_example_files"));
+    println!("  {}", t!("cmd.serve.services_example_http"));
+    println!("  {}", t!("cmd.serve.services_example_config"));
+}
+
+pub fn cmd_serve_files(args: &str, _nav: &mut Navigator) -> Result<bool> {
+    let tokens = tokenize(args);
+    if is_help_request(&tokens) {
         print_serve_help();
         return Ok(false);
     }
-    let mut port = 8080u16;
-    let mut bind = "0.0.0.0".to_string();
+    // Defaults come from `serve config files` (see `config serve`).
+    let mut port = Config::global_get_serve_port(ServeService::Files);
+    let mut bind = Config::global_get_serve_bind(ServeService::Files);
     let mut use_tunnel = false;
     let mut spa = false;
     let mut web_dir = String::new();
@@ -249,7 +313,7 @@ pub fn cmd_serve(args: &str, _nav: &mut Navigator) -> Result<bool> {
 
 /// Split `--auth <user:pass>` on the FIRST `:` (`@` and later `:` are
 /// literal, so `admin:555@ntcstorage` → `admin` / `555@ntcstorage`).
-fn parse_auth(value: &str) -> Result<(String, String)> {
+pub(crate) fn parse_auth(value: &str) -> Result<(String, String)> {
     match value.split_once(':') {
         Some((user, pass)) if !user.is_empty() && !pass.is_empty() => {
             Ok((user.to_string(), pass.to_string()))
@@ -259,7 +323,7 @@ fn parse_auth(value: &str) -> Result<(String, String)> {
 }
 
 /// Expected `Authorization` header value for these credentials.
-fn basic_expectation(user: &str, pass: &str) -> String {
+pub(crate) fn basic_expectation(user: &str, pass: &str) -> String {
     let raw = format!("{}:{}", user, pass);
     let encoded =
         base64::Engine::encode(&base64::engine::general_purpose::STANDARD, raw.as_bytes());
@@ -267,7 +331,7 @@ fn basic_expectation(user: &str, pass: &str) -> String {
 }
 
 /// Constant-time-ish equality so wrong passwords don't fail faster.
-fn auth_matches(given: &str, expected: &str) -> bool {
+pub(crate) fn auth_matches(given: &str, expected: &str) -> bool {
     let a = given.trim().as_bytes();
     let b = expected.as_bytes();
     if a.len() != b.len() {
@@ -280,7 +344,7 @@ fn auth_matches(given: &str, expected: &str) -> bool {
     diff == 0
 }
 
-fn respond_unauthorized(stream: &mut TcpStream) {
+pub(crate) fn respond_unauthorized(stream: &mut TcpStream) {
     let body = r#"{"error":"Unauthorized"}"#;
     let resp = format!(
         "HTTP/1.1 401 Unauthorized\r\nWWW-Authenticate: Basic realm=\"ntc serve\"\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\nAccess-Control-Allow-Origin: *\r\n\r\n{}",
@@ -361,7 +425,7 @@ fn print_share_qr(url: &str) {
 }
 
 /// Print the `--share` block: internet check first, LAN + QR only when online.
-fn print_share_block(port: u16, bind: &str, share_path: Option<&str>, show_qr: bool) {
+pub(crate) fn print_share_block(port: u16, bind: &str, share_path: Option<&str>, show_qr: bool) {
     println!("{}", t!("cmd.serve.share_checking").dimmed());
     if !has_internet() {
         print_warning(&t!("cmd.serve.share_offline"));
@@ -381,7 +445,11 @@ fn print_share_block(port: u16, bind: &str, share_path: Option<&str>, show_qr: b
             if prio == 3 {
                 print_warning(&t!("cmd.serve.share_not_private", ip));
             }
-            println!("  {} {}", t!("cmd.serve.share_lan_title").cyan().bold(), url.cyan());
+            println!(
+                "  {} {}",
+                t!("cmd.serve.share_lan_title").cyan().bold(),
+                url.cyan()
+            );
             if !is_rfc1918(ip) {
                 print_warning(&t!("cmd.serve.share_not_private_hint"));
             }
@@ -539,7 +607,7 @@ fn handle_connection(
                             respond(&mut stream, 408, "text/plain", b"408 Request Timeout");
                             return;
                         }
-                        continue
+                        continue;
                     }
                     Err(e) => {
                         print_error(&format!("serve: JSON body read failed: {}", e));
@@ -676,7 +744,7 @@ fn read_body_to_file(
                         "upload timed out",
                     ));
                 }
-                continue
+                continue;
             }
             Err(_) => {
                 let _ = std::fs::remove_file(&tmp);
@@ -688,11 +756,14 @@ fn read_body_to_file(
     Ok(Some(tmp))
 }
 
-fn respond(stream: &mut TcpStream, status: u16, ct: &str, data: &[u8]) {
+pub(crate) fn respond(stream: &mut TcpStream, status: u16, ct: &str, data: &[u8]) {
     let reason = match status {
         200 => "OK",
         400 => "Bad Request",
+        401 => "Unauthorized",
+        403 => "Forbidden",
         404 => "Not Found",
+        405 => "Method Not Allowed",
         409 => "Conflict",
         413 => "Payload Too Large",
         408 => "Request Timeout",
@@ -706,7 +777,7 @@ fn respond(stream: &mut TcpStream, status: u16, ct: &str, data: &[u8]) {
 
 /// Writes all bytes, retrying transient WouldBlock/TimedOut errors that can
 /// happen when a socket still carries the listener's non-blocking mode.
-fn write_all_retry(stream: &mut TcpStream, mut data: &[u8]) -> std::io::Result<()> {
+pub(crate) fn write_all_retry(stream: &mut TcpStream, mut data: &[u8]) -> std::io::Result<()> {
     while !data.is_empty() {
         match stream.write(data) {
             Ok(0) => {
@@ -728,11 +799,14 @@ fn write_all_retry(stream: &mut TcpStream, mut data: &[u8]) -> std::io::Result<(
     Ok(())
 }
 
-fn response_bytes(status: u16, ct: &str, data: Vec<u8>) -> Vec<u8> {
+pub(crate) fn response_bytes(status: u16, ct: &str, data: Vec<u8>) -> Vec<u8> {
     let reason = match status {
         200 => "OK",
         400 => "Bad Request",
+        401 => "Unauthorized",
+        403 => "Forbidden",
         404 => "Not Found",
+        405 => "Method Not Allowed",
         409 => "Conflict",
         413 => "Payload Too Large",
         408 => "Request Timeout",
@@ -745,7 +819,7 @@ fn response_bytes(status: u16, ct: &str, data: Vec<u8>) -> Vec<u8> {
     r
 }
 
-fn json_error(status: u16) -> Vec<u8> {
+pub(crate) fn json_error(status: u16) -> Vec<u8> {
     let reason = match status {
         400 => "Bad Request",
         404 => "Not Found",
@@ -758,7 +832,7 @@ fn json_error(status: u16) -> Vec<u8> {
     response_bytes(status, "application/json", body.into_bytes())
 }
 
-fn json_ok(data: Vec<u8>) -> Vec<u8> {
+pub(crate) fn json_ok(data: Vec<u8>) -> Vec<u8> {
     response_bytes(200, "application/json", data)
 }
 
@@ -849,7 +923,7 @@ fn handle_api(
     }
 }
 
-fn parse_query(query: &str) -> HashMap<String, String> {
+pub(crate) fn parse_query(query: &str) -> HashMap<String, String> {
     let mut m = HashMap::new();
     for pair in query.split('&').filter(|s| !s.is_empty()) {
         if let Some((k, v)) = pair.split_once('=') {
@@ -859,7 +933,7 @@ fn parse_query(query: &str) -> HashMap<String, String> {
     m
 }
 
-fn url_decode(s: &str) -> String {
+pub(crate) fn url_decode(s: &str) -> String {
     // Percent-decoded bytes are collected as raw bytes first so multi-byte
     // UTF-8 sequences (e.g. `%C3%A9` for "é") decode correctly; decoding them
     // byte-by-byte as chars would mangle non-ASCII folder/file names and make
@@ -966,10 +1040,11 @@ fn api_upload(
     if boundary.is_empty() {
         return ApiResponse::Bytes(json_error(400));
     }
-    let (dest_path, files, _fields) = match parse_multipart_stream(upload_path, boundary, &files_dir()) {
-        Ok(f) => f,
-        Err(_) => return ApiResponse::Bytes(json_error(500)),
-    };
+    let (dest_path, files, _fields) =
+        match parse_multipart_stream(upload_path, boundary, &files_dir()) {
+            Ok(f) => f,
+            Err(_) => return ApiResponse::Bytes(json_error(500)),
+        };
     if files.is_empty() {
         return ApiResponse::Bytes(json_error(400));
     }
@@ -1030,11 +1105,11 @@ fn api_upload_chunk(
     if boundary.is_empty() {
         return ApiResponse::Bytes(json_error(400));
     }
-    let (dest_path, files, fields) = match parse_multipart_stream(upload_path, boundary, &files_dir())
-    {
-        Ok(f) => f,
-        Err(_) => return ApiResponse::Bytes(json_error(500)),
-    };
+    let (dest_path, files, fields) =
+        match parse_multipart_stream(upload_path, boundary, &files_dir()) {
+            Ok(f) => f,
+            Err(_) => return ApiResponse::Bytes(json_error(500)),
+        };
     // The parser extracts each chunk to a disk file; those are intermediate
     // and must be removed on every path below (success or failure).
     let drop_extracted = || {
@@ -1151,7 +1226,10 @@ fn api_upload_finalize(body: &[u8], db: Arc<Mutex<rusqlite::Connection>>) -> Vec
         Some(id) if valid_upload_id(id) => id.to_string(),
         _ => return json_error(400),
     };
-    let dest_path = j["path"].as_str().map(clean_path).unwrap_or_else(|| "/".to_string());
+    let dest_path = j["path"]
+        .as_str()
+        .map(clean_path)
+        .unwrap_or_else(|| "/".to_string());
     let filename = match j["filename"].as_str() {
         Some(n) if !n.trim().is_empty() => n.trim().to_string(),
         _ => return json_error(400),
@@ -1724,7 +1802,7 @@ fn split_path(full: &str) -> Result<(String, String), ()> {
     }
 }
 
-fn spawn_cloudflared(port: u16) {
+pub(crate) fn spawn_cloudflared(port: u16) {
     let url = format!("http://localhost:{}", port);
     let cf = find_cloudflared().unwrap_or_else(|| "cloudflared".to_string());
     match std::process::Command::new(&cf)
@@ -1732,10 +1810,7 @@ fn spawn_cloudflared(port: u16) {
         .spawn()
     {
         Ok(mut c) => {
-            print_info(&t!(
-                "cmd.serve.cloudflared_starting",
-                c.id()
-            ));
+            print_info(&t!("cmd.serve.cloudflared_starting", c.id()));
             std::thread::spawn(move || {
                 let _ = c.wait();
             });
@@ -1802,6 +1877,18 @@ fn print_serve_help() {
     println!("  {}", t!("cmd.serve.example_tunnel"));
     println!("  {}", t!("cmd.serve.example_share"));
     println!("  {}", t!("cmd.serve.example_spa"));
+    println!("  {}", t!("cmd.serve.example_http_default"));
+    println!("  {}", t!("cmd.serve.example_http_dir"));
+    println!();
+    println!(
+        "  {}",
+        t!(
+            "cmd.serve.current_defaults",
+            Config::global_get_serve_port(ServeService::Files),
+            Config::global_get_serve_bind(ServeService::Files)
+        )
+        .dimmed()
+    );
     println!();
     println!("{}", t!("cmd.serve.files_stored_title").cyan().bold());
     println!("  {}", files_dir().to_string_lossy().dimmed());
@@ -1812,6 +1899,44 @@ fn print_serve_help() {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn bare_serve_lists_services_without_running() {
+        let mut nav = crate::navigator::Navigator::new().unwrap();
+        assert!(cmd_serve("", &mut nav).is_ok());
+        assert!(cmd_serve("help", &mut nav).is_ok());
+        assert!(cmd_serve("--help", &mut nav).is_ok());
+        assert!(cmd_serve("-h", &mut nav).is_ok());
+    }
+
+    #[test]
+    fn help_request_only_on_explicit_token() {
+        // Empty args mean "run with defaults" — only an explicit first
+        // token asks for help.
+        assert!(!is_help_request(&[]));
+        assert!(!is_help_request(&["--port".to_string()]));
+        assert!(!is_help_request(&["8080".to_string()]));
+        assert!(is_help_request(&["help".to_string()]));
+        assert!(is_help_request(&["--help".to_string()]));
+        assert!(is_help_request(&["-h".to_string()]));
+        // Help later in the arg list is not a help request here (the
+        // per-service parsers handle `help` anywhere themselves).
+        assert!(!is_help_request(&[
+            "--port".to_string(),
+            "9000".to_string(),
+            "help".to_string()
+        ]));
+    }
+
+    #[test]
+    fn unknown_serve_token_shows_list_without_running() {
+        let mut nav = crate::navigator::Navigator::new().unwrap();
+        // Unknown subcommand (incl. legacy bare ports/flags) never starts
+        // a server — error + service list, Ok(false).
+        assert!(cmd_serve("nope", &mut nav).is_ok());
+        assert!(cmd_serve("8080", &mut nav).is_ok());
+        assert!(cmd_serve("--port 9000", &mut nav).is_ok());
+    }
 
     #[test]
     fn auth_splits_on_first_colon_only() {
@@ -1836,11 +1961,8 @@ mod tests {
         assert!(expected.starts_with("Basic "));
         // Decodes back to the exact user:pass pair.
         let encoded = expected.strip_prefix("Basic ").unwrap();
-        let bytes = base64::Engine::decode(
-            &base64::engine::general_purpose::STANDARD,
-            encoded,
-        )
-        .unwrap();
+        let bytes =
+            base64::Engine::decode(&base64::engine::general_purpose::STANDARD, encoded).unwrap();
         assert_eq!(bytes, b"admin:555@ntcstorage");
     }
 

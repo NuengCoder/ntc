@@ -147,7 +147,10 @@ mod tests {
 
     #[test]
     fn test_default_used_when_unset() {
-        assert_eq!(interpolate("${missing:-fallback}", &vars(), &[]), "fallback");
+        assert_eq!(
+            interpolate("${missing:-fallback}", &vars(), &[]),
+            "fallback"
+        );
     }
 
     #[test]
@@ -162,7 +165,10 @@ mod tests {
 
     #[test]
     fn test_positional_args() {
-        assert_eq!(interpolate("say $1 and $2", &vars(), &args()), "say dev and prod");
+        assert_eq!(
+            interpolate("say $1 and $2", &vars(), &args()),
+            "say dev and prod"
+        );
     }
 
     #[test]

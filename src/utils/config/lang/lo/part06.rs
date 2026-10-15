@@ -28,7 +28,7 @@ pub fn fill(m: &mut HashMap<String, String>) {
     m.insert("cmd.image.no_files".into(), "ບໍ່ພົບໄຟລ໌ຮູບພາບໃນໄດເຣັກທໍຣີປັດຈຸບັນ.".into());
     m.insert("cmd.image.select_image".into(), "ເລືອກຮູບພາບ:".into());
     m.insert("cmd.image.displaying".into(), "ກຳລັງສະແດງ {} ({}x{}) ຜ່ານ {}".into());
-    m.insert("cmd.image.usage".into(), "ວິທີໃຊ້: image <path> [display|show|to|out <format>] [--ocr] [--layout]".into());
+    m.insert("cmd.image.usage".into(), "ວິທີໃຊ້: image <path> [display|show [--sixel]|to|out <format>] [--ocr] [--layout]".into());
     m.insert("cmd.ipcfg.dns_label".into(), "DNS ......... :".into());
     m.insert("cmd.ipcfg.no_adapters".into(), "ບໍ່ພົບ network adapters.".into());
     m.insert("cmd.ipcfg.no_such_adapter".into(), "ບໍ່ມີ adapter ຊື່ '{}'.".into());

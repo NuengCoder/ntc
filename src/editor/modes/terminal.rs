@@ -15,9 +15,9 @@ impl Editor {
                 let eo = self.editor_offset();
                 let split = self.run_split_row();
 
-                // Run/terminal panel border drag — delegate while dragging or on separator row
-                if self.dragging_run_border || (m.row as usize) == split {
-                    self.handle_mouse(m);
+                // Fixed 50% split: the separator row is not draggable and
+                // consumes no mouse action.
+                if (m.row as usize) == split {
                     return Ok(());
                 }
 
@@ -34,12 +34,18 @@ impl Editor {
                 }
 
                 let panel_top = split + 1;
-                let panel_h = self.run_panel_height();
-                let editor_cols = self.term_w.saturating_sub(eo);
+                let panel_h = self.terminal_content_rows();
+                let content_cols = self.terminal_content_cols();
+                let (_, _, bright, _) = self.terminal_box();
+                // Bottom box border consumes no mouse action.
+                let (_, _, _, bbottom) = self.terminal_box();
+                if (m.row as usize) == bbottom {
+                    return Ok(());
+                }
                 if let Some(ref mut term) = self.terminal {
                     let total = term.total_lines();
                     let max_scroll = total.saturating_sub(panel_h);
-                    let max_scroll_x = term.width.saturating_sub(editor_cols.saturating_sub(1));
+                    let max_scroll_x = term.width.saturating_sub(content_cols);
                     match m.kind {
                         MouseEventKind::ScrollUp => {
                             self.sv.run = self.sv.run.saturating_sub(3);
@@ -65,7 +71,13 @@ impl Editor {
                         }
                         MouseEventKind::Down(crossterm::event::MouseButton::Left) => {
                             let r = m.row as usize;
-                            let c = (m.column as usize).saturating_sub(eo);
+                            let mcol = m.column as usize;
+                            // Content starts one column past the left wall;
+                            // clicks on either wall are ignored.
+                            if mcol <= eo || mcol >= bright {
+                                return Ok(());
+                            }
+                            let c = mcol - (eo + 1);
                             if r >= panel_top && r < panel_top + panel_h {
                                 let line_idx = self.sv.run + (r - panel_top);
                                 if line_idx < total {
@@ -77,7 +89,11 @@ impl Editor {
                         }
                         MouseEventKind::Drag(crossterm::event::MouseButton::Left) => {
                             let r = m.row as usize;
-                            let c = (m.column as usize).saturating_sub(eo);
+                            let mcol = m.column as usize;
+                            if mcol <= eo || mcol >= bright {
+                                return Ok(());
+                            }
+                            let c = mcol - (eo + 1);
                             if r >= panel_top && r < panel_top + panel_h {
                                 let line_idx = self.sv.run + (r - panel_top);
                                 if line_idx < total {
@@ -95,13 +111,13 @@ impl Editor {
                                     term.send_input(text.as_bytes());
                                     term.follow_mode = true;
                                     let total = term.total_lines();
-                                    let cursor_abs_y = term.scrollback.len() + term.cursor_y;
+                                    let cursor_abs_y = term.cursor_abs_y();
                                     self.sv.run = (cursor_abs_y + 1)
                                         .saturating_sub(panel_h)
                                         .min(total.saturating_sub(panel_h));
                                     term.ensure_cursor_visible_x(
                                         &mut self.sv.terminal_scroll_x,
-                                        editor_cols.saturating_sub(1),
+                                        content_cols,
                                     );
                                     term.dirty = true;
                                 }
@@ -129,8 +145,8 @@ impl Editor {
                         self.mark_all_dirty();
                     }
                     (true, false, KeyCode::Char('c')) => {
-                        let panel_h = self.run_panel_height();
-                        let editor_cols = self.term_w.saturating_sub(self.editor_offset());
+                        let panel_h = self.terminal_content_rows();
+                        let content_cols = self.terminal_content_cols();
                         if let Some(ref mut term) = self.terminal {
                             if term.has_selection() {
                                 if let Some(text) = term.selected_text() {
@@ -144,13 +160,13 @@ impl Editor {
                                 term.send_input(&[3]);
                                 term.follow_mode = true;
                                 let total = term.total_lines();
-                                let cursor_abs_y = term.scrollback.len() + term.cursor_y;
+                                let cursor_abs_y = term.cursor_abs_y();
                                 self.sv.run = (cursor_abs_y + 1)
                                     .saturating_sub(panel_h)
                                     .min(total.saturating_sub(panel_h));
                                 term.ensure_cursor_visible_x(
                                     &mut self.sv.terminal_scroll_x,
-                                    editor_cols.saturating_sub(1),
+                                    content_cols,
                                 );
                                 term.dirty = true;
                             }
@@ -158,7 +174,7 @@ impl Editor {
                     }
                     (true, true, KeyCode::Char('c')) => {
                         if let Some(ref term) = self.terminal {
-                            let panel_h = self.run_panel_height();
+                            let panel_h = self.terminal_content_rows();
                             let text = term.visible_text(self.sv.run, panel_h);
                             self.clipboard = text.clone();
                             Self::push_to_system_clipboard(&text);
@@ -172,120 +188,119 @@ impl Editor {
                         self.mark_all_dirty();
                     }
                     (false, false, KeyCode::Enter) => {
-                        let panel_h = self.run_panel_height();
-                        let editor_cols = self.term_w.saturating_sub(self.editor_offset());
+                        let panel_h = self.terminal_content_rows();
+                        let content_cols = self.terminal_content_cols();
                         if let Some(ref mut term) = self.terminal {
                             term.send_input(b"\r");
                             term.follow_mode = true;
                             let total = term.total_lines();
-                            let cursor_abs_y = term.scrollback.len() + term.cursor_y;
+                            let cursor_abs_y = term.cursor_abs_y();
                             self.sv.run = (cursor_abs_y + 1)
                                 .saturating_sub(panel_h)
                                 .min(total.saturating_sub(panel_h));
                             term.ensure_cursor_visible_x(
                                 &mut self.sv.terminal_scroll_x,
-                                editor_cols.saturating_sub(1),
+                                content_cols,
                             );
                             term.dirty = true;
                         }
                     }
                     (false, false, KeyCode::Backspace) => {
-                        let panel_h = self.run_panel_height();
-                        let editor_cols = self.term_w.saturating_sub(self.editor_offset());
+                        let panel_h = self.terminal_content_rows();
+                        let content_cols = self.terminal_content_cols();
                         if let Some(ref mut term) = self.terminal {
                             term.send_input(&[127]);
                             term.follow_mode = true;
                             let total = term.total_lines();
-                            let cursor_abs_y = term.scrollback.len() + term.cursor_y;
+                            let cursor_abs_y = term.cursor_abs_y();
                             self.sv.run = (cursor_abs_y + 1)
                                 .saturating_sub(panel_h)
                                 .min(total.saturating_sub(panel_h));
                             term.ensure_cursor_visible_x(
                                 &mut self.sv.terminal_scroll_x,
-                                editor_cols.saturating_sub(1),
+                                content_cols,
                             );
                             term.dirty = true;
                         }
                     }
                     (false, false, KeyCode::Tab) => {
-                        let panel_h = self.run_panel_height();
-                        let editor_cols = self.term_w.saturating_sub(self.editor_offset());
+                        let panel_h = self.terminal_content_rows();
+                        let content_cols = self.terminal_content_cols();
                         if let Some(ref mut term) = self.terminal {
                             term.send_input(b"\t");
                             term.follow_mode = true;
                             let total = term.total_lines();
-                            let cursor_abs_y = term.scrollback.len() + term.cursor_y;
+                            let cursor_abs_y = term.cursor_abs_y();
                             self.sv.run = (cursor_abs_y + 1)
                                 .saturating_sub(panel_h)
                                 .min(total.saturating_sub(panel_h));
                             term.ensure_cursor_visible_x(
                                 &mut self.sv.terminal_scroll_x,
-                                editor_cols.saturating_sub(1),
+                                content_cols,
                             );
                             term.dirty = true;
                         }
                     }
                     (false, _, KeyCode::Char(c)) => {
-                        let panel_h = self.run_panel_height();
-                        let editor_cols = self.term_w.saturating_sub(self.editor_offset());
+                        let panel_h = self.terminal_content_rows();
+                        let content_cols = self.terminal_content_cols();
                         if let Some(ref mut term) = self.terminal {
                             let mut buf = [0u8; 4];
                             let s = c.encode_utf8(&mut buf);
                             term.send_input(s.as_bytes());
                             term.follow_mode = true;
                             let total = term.total_lines();
-                            let cursor_abs_y = term.scrollback.len() + term.cursor_y;
+                            let cursor_abs_y = term.cursor_abs_y();
                             self.sv.run = (cursor_abs_y + 1)
                                 .saturating_sub(panel_h)
                                 .min(total.saturating_sub(panel_h));
                             term.ensure_cursor_visible_x(
                                 &mut self.sv.terminal_scroll_x,
-                                editor_cols.saturating_sub(1),
+                                content_cols,
                             );
                             term.dirty = true;
                         }
                     }
                     (false, false, KeyCode::Up) => {
-                        let panel_h = self.run_panel_height();
-                        let editor_cols = self.term_w.saturating_sub(self.editor_offset());
+                        let panel_h = self.terminal_content_rows();
+                        let content_cols = self.terminal_content_cols();
                         if let Some(ref mut term) = self.terminal {
                             term.send_input(b"\x1b[A");
                             term.follow_mode = true;
                             let total = term.total_lines();
-                            let cursor_abs_y = term.scrollback.len() + term.cursor_y;
+                            let cursor_abs_y = term.cursor_abs_y();
                             self.sv.run = (cursor_abs_y + 1)
                                 .saturating_sub(panel_h)
                                 .min(total.saturating_sub(panel_h));
                             term.ensure_cursor_visible_x(
                                 &mut self.sv.terminal_scroll_x,
-                                editor_cols.saturating_sub(1),
+                                content_cols,
                             );
                             term.dirty = true;
                         }
                     }
                     (false, false, KeyCode::Down) => {
-                        let panel_h = self.run_panel_height();
-                        let editor_cols = self.term_w.saturating_sub(self.editor_offset());
+                        let panel_h = self.terminal_content_rows();
+                        let content_cols = self.terminal_content_cols();
                         if let Some(ref mut term) = self.terminal {
                             term.send_input(b"\x1b[B");
                             term.follow_mode = true;
                             let total = term.total_lines();
-                            let cursor_abs_y = term.scrollback.len() + term.cursor_y;
+                            let cursor_abs_y = term.cursor_abs_y();
                             self.sv.run = (cursor_abs_y + 1)
                                 .saturating_sub(panel_h)
                                 .min(total.saturating_sub(panel_h));
                             term.ensure_cursor_visible_x(
                                 &mut self.sv.terminal_scroll_x,
-                                editor_cols.saturating_sub(1),
+                                content_cols,
                             );
                             term.dirty = true;
                         }
                     }
                     (false, false, KeyCode::Right) if alt => {
-                        let editor_cols = self.term_w.saturating_sub(self.editor_offset());
+                        let content_cols = self.terminal_content_cols();
                         if let Some(ref mut term) = self.terminal {
-                            let max_scroll_x =
-                                term.width.saturating_sub(editor_cols.saturating_sub(1));
+                            let max_scroll_x = term.width.saturating_sub(content_cols);
                             self.sv.terminal_scroll_x =
                                 (self.sv.terminal_scroll_x + 3).min(max_scroll_x);
                             term.dirty = true;
@@ -298,43 +313,43 @@ impl Editor {
                         }
                     }
                     (false, false, KeyCode::Right) => {
-                        let panel_h = self.run_panel_height();
-                        let editor_cols = self.term_w.saturating_sub(self.editor_offset());
+                        let panel_h = self.terminal_content_rows();
+                        let content_cols = self.terminal_content_cols();
                         if let Some(ref mut term) = self.terminal {
                             term.send_input(b"\x1b[C");
                             term.follow_mode = true;
                             let total = term.total_lines();
-                            let cursor_abs_y = term.scrollback.len() + term.cursor_y;
+                            let cursor_abs_y = term.cursor_abs_y();
                             self.sv.run = (cursor_abs_y + 1)
                                 .saturating_sub(panel_h)
                                 .min(total.saturating_sub(panel_h));
                             term.ensure_cursor_visible_x(
                                 &mut self.sv.terminal_scroll_x,
-                                editor_cols.saturating_sub(1),
+                                content_cols,
                             );
                             term.dirty = true;
                         }
                     }
                     (false, false, KeyCode::Left) => {
-                        let panel_h = self.run_panel_height();
-                        let editor_cols = self.term_w.saturating_sub(self.editor_offset());
+                        let panel_h = self.terminal_content_rows();
+                        let content_cols = self.terminal_content_cols();
                         if let Some(ref mut term) = self.terminal {
                             term.send_input(b"\x1b[D");
                             term.follow_mode = true;
                             let total = term.total_lines();
-                            let cursor_abs_y = term.scrollback.len() + term.cursor_y;
+                            let cursor_abs_y = term.cursor_abs_y();
                             self.sv.run = (cursor_abs_y + 1)
                                 .saturating_sub(panel_h)
                                 .min(total.saturating_sub(panel_h));
                             term.ensure_cursor_visible_x(
                                 &mut self.sv.terminal_scroll_x,
-                                editor_cols.saturating_sub(1),
+                                content_cols,
                             );
                             term.dirty = true;
                         }
                     }
                     (false, false, KeyCode::PageUp) => {
-                        let panel_h = self.run_panel_height();
+                        let panel_h = self.terminal_content_rows();
                         if let Some(ref mut term) = self.terminal {
                             let total = term.total_lines();
                             let max_scroll = total.saturating_sub(panel_h);
@@ -347,7 +362,7 @@ impl Editor {
                         }
                     }
                     (false, false, KeyCode::PageDown) => {
-                        let panel_h = self.run_panel_height();
+                        let panel_h = self.terminal_content_rows();
                         if let Some(ref mut term) = self.terminal {
                             let total = term.total_lines();
                             let max_scroll = total.saturating_sub(panel_h);
@@ -367,7 +382,7 @@ impl Editor {
                         }
                     }
                     (false, false, KeyCode::End) => {
-                        let panel_h = self.run_panel_height();
+                        let panel_h = self.terminal_content_rows();
                         if let Some(ref mut term) = self.terminal {
                             let total = term.total_lines();
                             self.sv.run = total.saturating_sub(panel_h);
@@ -381,7 +396,7 @@ impl Editor {
             Event::Resize(w, h) => {
                 self.term_w = w as usize;
                 self.term_h = h as usize;
-                let panel_h = self.run_panel_height();
+                let panel_h = self.terminal_content_rows();
                 let (max_scroll, max_scroll_x) = match self.terminal.as_ref() {
                     Some(t) => (
                         t.total_lines().saturating_sub(panel_h),

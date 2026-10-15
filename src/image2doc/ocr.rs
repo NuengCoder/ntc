@@ -30,7 +30,11 @@ fn find_tesseract() -> Option<PathBuf> {
         return Some(path);
     }
 
-    let exe_name = if cfg!(windows) { "tesseract.exe" } else { "tesseract" };
+    let exe_name = if cfg!(windows) {
+        "tesseract.exe"
+    } else {
+        "tesseract"
+    };
 
     for dir in crate::ntpkg::build_package_path_entries() {
         let candidate = dir.join(exe_name);
@@ -216,8 +220,7 @@ mod tests {
 
     #[test]
     fn parses_tsv_word_line() {
-        let line =
-            "5\t1\t1\t1\t1\t1\t120\t40\t180\t30\t92.5\tHello";
+        let line = "5\t1\t1\t1\t1\t1\t120\t40\t180\t30\t92.5\tHello";
         let word = parse_tsv_line(line).expect("line should parse");
         assert_eq!(word.text, "Hello");
         assert_eq!(word.x, 120);

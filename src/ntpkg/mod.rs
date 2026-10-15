@@ -115,7 +115,11 @@ pub fn cmd_ntpkg(args: &str, _nav: &mut crate::navigator::Navigator) -> Result<b
                     } else {
                         println!();
                         for (name, version, active) in &packages {
-                            let marker = if *active { t!("ntpkg.active_marker") } else { String::new() };
+                            let marker = if *active {
+                                t!("ntpkg.active_marker")
+                            } else {
+                                String::new()
+                            };
                             println!("  {} {}{}", name, version, marker);
                         }
                         println!();
@@ -226,21 +230,44 @@ pub fn cmd_ntpkg(args: &str, _nav: &mut crate::navigator::Navigator) -> Result<b
             let has_bin_dir = active.is_some() && vdir.exists();
             println!();
             println!("╔══════════════════════════════════════════════════════════════════╗");
-            println!("║{:^60}", t!("ntpkg.package_info_title", name).cyan().bold());
+            println!(
+                "║{:^60}",
+                t!("ntpkg.package_info_title", name).cyan().bold()
+            );
             println!("╠══════════════════════════════════════════════════════════════════╣");
             if let Some(ver) = active {
-                println!("║  {:<20} {:<37}", t!("ntpkg.active_label"), ver.to_string().green());
+                println!(
+                    "║  {:<20} {:<37}",
+                    t!("ntpkg.active_label"),
+                    ver.to_string().green()
+                );
             } else {
-                println!("║  {:<20} {:<37}", t!("ntpkg.active_label"), t!("ntpkg.not_set").dimmed());
+                println!(
+                    "║  {:<20} {:<37}",
+                    t!("ntpkg.active_label"),
+                    t!("ntpkg.not_set").dimmed()
+                );
             }
             if let Some(vers) = installed {
                 let versions_str = vers.join(", ");
-                println!("║  {:<20} {:<37}", t!("ntpkg.installed_label"), versions_str);
+                println!(
+                    "║  {:<20} {:<37}",
+                    t!("ntpkg.installed_label"),
+                    versions_str
+                );
             } else {
-                println!("║  {:<20} {:<37}", t!("ntpkg.installed_label"), t!("ntpkg.none").dimmed());
+                println!(
+                    "║  {:<20} {:<37}",
+                    t!("ntpkg.installed_label"),
+                    t!("ntpkg.none").dimmed()
+                );
             }
             if active.is_some() {
-                println!("║  {:<20} {:<37}", t!("ntpkg.location_label"), vdir.display().to_string());
+                println!(
+                    "║  {:<20} {:<37}",
+                    t!("ntpkg.location_label"),
+                    vdir.display().to_string()
+                );
                 if has_bin_dir {
                     if let Ok(entries) = std::fs::read_dir(&vdir) {
                         let bins: Vec<String> = entries

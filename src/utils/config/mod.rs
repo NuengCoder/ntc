@@ -17,6 +17,74 @@ pub struct QscHotkey {
     pub key: String,
 }
 
+/// A `serve` sub-service with its own defaults (`files`, `http-server`, `chess`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ServeService {
+    Files,
+    Http,
+    Chess,
+}
+
+impl ServeService {
+    /// Parse a user-supplied service name (`files` | `http-server` | `chess`).
+    pub fn parse(s: &str) -> Option<Self> {
+        match s.to_lowercase().as_str() {
+            "files" => Some(ServeService::Files),
+            "http-server" | "http" => Some(ServeService::Http),
+            "chess" => Some(ServeService::Chess),
+            _ => None,
+        }
+    }
+
+    pub fn name(self) -> &'static str {
+        match self {
+            ServeService::Files => "files",
+            ServeService::Http => "http-server",
+            ServeService::Chess => "chess",
+        }
+    }
+}
+
+/// Per-service `serve` defaults (port + bind). Managed via
+/// `serve config <service> [--port-default N] [--bind-default ADDR]`
+/// (alias: `config serve …`).
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct ServeServiceConfig {
+    #[serde(default = "default_serve_port")]
+    pub port: u16,
+    #[serde(default = "default_serve_bind")]
+    pub bind: String,
+}
+
+/// Per-service `serve` defaults container.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct ServeConfig {
+    #[serde(default = "default_serve_service_config")]
+    pub files: ServeServiceConfig,
+    #[serde(default = "default_serve_service_config")]
+    pub http_server: ServeServiceConfig,
+    #[serde(default = "default_serve_service_config")]
+    pub chess: ServeServiceConfig,
+}
+
+impl ServeConfig {
+    pub fn for_service(&self, svc: ServeService) -> &ServeServiceConfig {
+        match svc {
+            ServeService::Files => &self.files,
+            ServeService::Http => &self.http_server,
+            ServeService::Chess => &self.chess,
+        }
+    }
+
+    pub fn for_service_mut(&mut self, svc: ServeService) -> &mut ServeServiceConfig {
+        match svc {
+            ServeService::Files => &mut self.files,
+            ServeService::Http => &mut self.http_server,
+            ServeService::Chess => &mut self.chess,
+        }
+    }
+}
+
 pub(crate) mod globals;
 pub mod lang;
 
@@ -71,6 +139,16 @@ pub struct Config {
     #[serde(default)]
     pub run_aliases: HashMap<String, String>,
 
+    /// `#param --hint-*` completion specs for run aliases, keyed by
+    /// lowercased alias name (serialized `#x --hint-dir …` form).
+    #[serde(default)]
+    pub run_alias_hints: HashMap<String, String>,
+
+    /// Named value lists for `#param --hint-n <name>` / `--select-n <name>`
+    /// (managed with `ral hintn`), keyed by lowercased list name.
+    #[serde(default, skip_serializing_if = "HashMap::is_empty")]
+    pub run_hint_lists: HashMap<String, Vec<String>>,
+
     /// Saved read-only SQL queries for the `ndb` shell (`dbal` dimension:
     /// `qal` lives in the editor, `ral` in the ntc shell, `dbal` in ndb).
     #[serde(default)]
@@ -117,6 +195,10 @@ pub struct Config {
     /// Whether directory tree view is shown in shell prompt
     #[serde(default = "default_dir_view_enabled")]
     pub dir_view_enabled: bool,
+
+    /// Per-service `serve` defaults (port + bind), see `ServeConfig`
+    #[serde(default = "default_serve_config")]
+    pub serve: ServeConfig,
 }
 
 // Single source of truth for alias name validation.
@@ -251,6 +333,29 @@ fn default_dir_view_enabled() -> bool {
     true
 }
 
+fn default_serve_port() -> u16 {
+    8080
+}
+
+fn default_serve_bind() -> String {
+    "0.0.0.0".to_string()
+}
+
+fn default_serve_service_config() -> ServeServiceConfig {
+    ServeServiceConfig {
+        port: default_serve_port(),
+        bind: default_serve_bind(),
+    }
+}
+
+fn default_serve_config() -> ServeConfig {
+    ServeConfig {
+        files: default_serve_service_config(),
+        http_server: default_serve_service_config(),
+        chess: default_serve_service_config(),
+    }
+}
+
 fn default_ignored_dirs() -> HashSet<String> {
     let mut s = HashSet::new();
     s.insert("target".to_string());
@@ -284,6 +389,8 @@ impl Config {
             git_integration_enabled: default_git_integration_enabled(),
             teleports: HashMap::new(),
             run_aliases: HashMap::new(),
+            run_alias_hints: HashMap::new(),
+            run_hint_lists: HashMap::new(),
             db_aliases: HashMap::new(),
             math_functions: HashMap::new(),
             watch_trigger_alias: None,
@@ -294,6 +401,7 @@ impl Config {
             openweather_api_key: None,
             openweather_default_city: None,
             dir_view_enabled: default_dir_view_enabled(),
+            serve: default_serve_config(),
         }
     }
 
@@ -614,12 +722,25 @@ impl Config {
     /// });
     /// ```
     pub fn with_test_config<R>(config: Config, f: impl FnOnce() -> R) -> R {
-        let mut guard = Self::global().write().unwrap();
+        // Serialize whole swap-run-restore: without this, two parallel
+        // tests each swap the singleton and observe each other's config
+        // (flaky CI failures). The guard is held across `f()`.
+        static SERIAL: std::sync::OnceLock<std::sync::Mutex<()>> = std::sync::OnceLock::new();
+        let _serial = SERIAL
+            .get_or_init(|| std::sync::Mutex::new(()))
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
+        let mut guard = Self::global().write().unwrap_or_else(|e| e.into_inner());
         let old = std::mem::replace(&mut *guard, config);
         drop(guard);
-        let result = f();
-        *Self::global().write().unwrap() = old;
-        result
+        let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(f));
+        *Self::global()
+            .write()
+            .unwrap_or_else(|e| e.into_inner()) = old;
+        match result {
+            Ok(v) => v,
+            Err(e) => std::panic::resume_unwind(e),
+        }
     }
 }
 
@@ -639,6 +760,8 @@ pub struct LocalConfig {
     pub ignored_files: Option<Vec<String>>,
     pub extra_supported_files: Option<Vec<String>>,
     pub run_aliases: Option<HashMap<String, String>>,
+    pub run_alias_hints: Option<HashMap<String, String>>,
+    pub run_hint_lists: Option<HashMap<String, Vec<String>>>,
     pub db_aliases: Option<HashMap<String, String>>,
 }
 
@@ -721,5 +844,78 @@ mod tests {
         assert_eq!(Config::parse_num_threads("0"), None);
         assert_eq!(Config::parse_num_threads("-1"), None);
         assert_eq!(Config::parse_num_threads("abc"), None);
+    }
+
+    #[test]
+    fn test_serve_service_parse() {
+        assert_eq!(ServeService::parse("files"), Some(ServeService::Files));
+        assert_eq!(ServeService::parse("FILES"), Some(ServeService::Files));
+        assert_eq!(
+            ServeService::parse("http-server"),
+            Some(ServeService::Http)
+        );
+        assert_eq!(ServeService::parse("http"), Some(ServeService::Http));
+        assert_eq!(ServeService::parse("chess"), Some(ServeService::Chess));
+        assert_eq!(ServeService::parse("CHESS"), Some(ServeService::Chess));
+        assert_eq!(ServeService::parse("nope"), None);
+        assert_eq!(ServeService::parse(""), None);
+        assert_eq!(ServeService::Files.name(), "files");
+        assert_eq!(ServeService::Http.name(), "http-server");
+        assert_eq!(ServeService::Chess.name(), "chess");
+    }
+
+    #[test]
+    fn test_serve_defaults() {
+        let cfg = Config::new();
+        assert_eq!(cfg.serve.files.port, 8080);
+        assert_eq!(cfg.serve.files.bind, "0.0.0.0");
+        assert_eq!(cfg.serve.http_server.port, 8080);
+        assert_eq!(cfg.serve.http_server.bind, "0.0.0.0");
+        assert_eq!(cfg.serve.chess.port, 8080);
+        assert_eq!(cfg.serve.chess.bind, "0.0.0.0");
+        assert_eq!(
+            cfg.serve.for_service(ServeService::Files).port,
+            8080
+        );
+        assert_eq!(
+            cfg.serve.for_service(ServeService::Http).bind,
+            "0.0.0.0"
+        );
+    }
+
+    #[test]
+    fn test_serve_serde_missing_table_falls_back_to_defaults() {
+        // Old config.toml files have no [serve] table at all.
+        let cfg: Config = toml::from_str("max_depth = 3\n").unwrap();
+        assert_eq!(cfg.max_depth, 3);
+        assert_eq!(cfg.serve.files.port, 8080);
+        assert_eq!(cfg.serve.http_server.bind, "0.0.0.0");
+    }
+
+    #[test]
+    fn test_serve_serde_roundtrip_preserves_values() {
+        let mut cfg = Config::new();
+        cfg.serve.files.port = 9000;
+        cfg.serve.http_server.bind = "127.0.0.1".to_string();
+        let s = toml::to_string(&cfg).unwrap();
+        let back: Config = toml::from_str(&s).unwrap();
+        assert_eq!(back.serve.files.port, 9000);
+        assert_eq!(back.serve.http_server.bind, "127.0.0.1");
+        assert_eq!(back.serve.http_server.port, 8080);
+    }
+
+    #[test]
+    fn test_serve_getters_read_swapped_config() {
+        let mut cfg = Config::new();
+        cfg.serve.files.port = 9000;
+        cfg.serve.http_server.bind = "127.0.0.1".to_string();
+        Config::with_test_config(cfg, || {
+            assert_eq!(Config::global_get_serve_port(ServeService::Files), 9000);
+            assert_eq!(
+                Config::global_get_serve_bind(ServeService::Http),
+                "127.0.0.1"
+            );
+            assert_eq!(Config::global_get_serve_port(ServeService::Http), 8080);
+        });
     }
 }

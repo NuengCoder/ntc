@@ -2,14 +2,13 @@ use crate::config::Config as NtcConfig;
 use crate::navigator::Navigator;
 use crate::output::{print_error, print_info, print_warning};
 use crate::session::SessionState;
-use crate::shell::alias::expand_command_line;
+use crate::shell::alias::{expand_command_line, expand_command_line_interactive};
 use crate::shell::commands::execute_command;
 use crate::shell::helpers::show_tree;
 use crate::t;
 use crate::watcher;
 
 use anyhow::Result;
-use colored::*;
 use rustyline::completion::{Completer, Pair};
 use rustyline::error::ReadlineError;
 use rustyline::highlight::Highlighter;
@@ -64,12 +63,24 @@ impl rustyline::Helper for NtcHelper {}
 // Main shell entry points
 // ============================================================================
 
+/// True when this shell runs inside the editor's embedded terminal
+/// (spawned with `NTC_IN_EDITOR=1`). The embedded shell keeps the PTY
+/// working directory (the editor's CWD) and must not restore or save
+/// the outer session's directory.
+pub fn embedded_in_editor() -> bool {
+    std::env::var("NTC_IN_EDITOR").is_ok()
+}
+
 pub fn run_shell() -> Result<()> {
-    let last_dir = SessionState::read_global().last_directory.clone();
     let mut nav = Navigator::new()?;
-    if let Some(ref last_dir) = last_dir {
-        if last_dir.exists() {
-            let _ = nav.go_to(last_dir);
+    // Embedded shell: keep the spawn cwd (editor's current cwd).
+    // Standalone shell: restore the last session directory as before.
+    if !embedded_in_editor() {
+        let last_dir = SessionState::read_global().last_directory.clone();
+        if let Some(ref last_dir) = last_dir {
+            if last_dir.exists() {
+                let _ = nav.go_to(last_dir);
+            }
         }
     }
     run_shell_with_nav(nav)
@@ -147,12 +158,10 @@ pub fn run_classic_shell(mut nav: Navigator) -> Result<()> {
     );
     println!(
         "{}",
-        format!(
+        crate::utils::theme::ThemeColor::Cyan.paint_ansi_bold(&format!(
             "{:^66}",
             t!("entry.welcome_fmt", env!("CARGO_PKG_VERSION"))
-        )
-        .cyan()
-        .bold()
+        ))
     );
     println!(
         "{}",
@@ -161,7 +170,10 @@ pub fn run_classic_shell(mut nav: Navigator) -> Result<()> {
         )
     );
     println!();
-    println!("{}", t!("entry.startup_hint").dimmed());
+    println!(
+        "{}",
+        crate::utils::theme::ThemeColor::BrightBlack.paint_ansi(&t!("entry.startup_hint"))
+    );
     if NtcConfig::global_get_dir_view_enabled() {
         show_tree(&nav, Some(1), false, false, false, false, false, false);
     }
@@ -236,7 +248,10 @@ pub fn run_classic_shell(mut nav: Navigator) -> Result<()> {
                 continue;
             }
             Err(ReadlineError::Eof) => {
-                println!("{}", t!("entry.goodbye").green());
+                println!(
+                    "{}",
+                    crate::utils::theme::ThemeColor::Green.paint_ansi(&t!("entry.goodbye"))
+                );
                 break;
             }
             Err(_) => break,
@@ -250,8 +265,11 @@ pub fn run_classic_shell(mut nav: Navigator) -> Result<()> {
             continue;
         }
 
-        // Expand all aliases in the entire line
-        let expanded_commands = expand_command_line(line);
+        // Expand all aliases in the entire line (interactive `--select-*` menus included)
+        let expanded_commands = match expand_command_line_interactive(line, &mut nav)? {
+            None => continue,
+            Some(cmds) => cmds,
+        };
 
         // Execute each expanded command in sequence
         let mut should_exit = false;
@@ -304,16 +322,25 @@ pub fn run_classic_shell(mut nav: Navigator) -> Result<()> {
         }
 
         if should_exit {
-            SessionState::write_global().last_directory = Some(nav.current_path().to_path_buf());
-            SessionState::save_global();
-            println!("{}", t!("entry.goodbye").green());
+            // Embedded shell: never overwrite the outer session's directory.
+            if !embedded_in_editor() {
+                SessionState::write_global().last_directory =
+                    Some(nav.current_path().to_path_buf());
+                SessionState::save_global();
+            }
+            println!(
+                "{}",
+                crate::utils::theme::ThemeColor::Green.paint_ansi(&t!("entry.goodbye"))
+            );
             break;
         }
     }
 
-    // Also save on EOF
-    SessionState::write_global().last_directory = Some(nav.current_path().to_path_buf());
-    SessionState::save_global();
+    // Also save on EOF (skipped when embedded in the editor)
+    if !embedded_in_editor() {
+        SessionState::write_global().last_directory = Some(nav.current_path().to_path_buf());
+        SessionState::save_global();
+    }
 
     if NtcConfig::global_get_history_enabled() {
         if let Some(history_path) = NtcConfig::read_global().resolve_history_path() {

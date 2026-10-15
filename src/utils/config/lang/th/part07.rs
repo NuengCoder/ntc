@@ -19,7 +19,13 @@ pub fn fill(m: &mut HashMap<String, String>) {
     m.insert("help.report.title".into(), "คำสั่งรายงาน (REPORT):".into());
     m.insert("help.report.txt".into(), "report txt [path] ## สร้างรายงาน TXT".into());
     m.insert("help.report.txtc".into(), "txtc <file> ## คัดลอกเนื้อหาไฟล์ไปยังคลิปบอร์ด".into());
-    m.insert("help.report.txtf".into(), "txtf <file> ## แสดงเนื้อหาไฟล์".into());
+    m.insert("help.report.txtf".into(), "txtf [--head N|--tail N|--betw A:B] [file] ## แสดงเนื้อหาไฟล์ (เลขบรรทัดเดิม)".into());
+    m.insert("cmd.report.invalid_range".into(), "ช่วงไม่ถูกต้อง: '{}' (ต้องเป็น n:m เช่น --betw 10:20)".into());
+    m.insert("help.view.file_usage".into(), "view <file> [--head N|--tail N|--betw A:B] ## แสดงเนื้อหาไฟล์ (เหมือน txtf)".into());
+    m.insert("help.view.example10".into(), "view main.rs --tail 30 ## 30 บรรทัดสุดท้ายของ main.rs".into());
+    m.insert("help.view.example11".into(), "view main.rs --betw 10:20 ## บรรทัด 10-20 ของ main.rs".into());
+    m.insert("help.report.txtf_example1".into(), "txtf main.rs --head 30 ## 30 บรรทัดแรกของ main.rs".into());
+    m.insert("help.report.txtf_example2".into(), "txtf --betw 10:20 main.rs ## บรรทัด 10-20 ของ main.rs".into());
     m.insert("help.report.xlsx".into(), "report xlsx [path] ## สร้างรายงาน XLSX (พร้อมการวิเคราะห์การอ้างอิง)".into());
     m.insert("help.scr.continue".into(), "scr -c <file.ntc> [args...] ## เรียกสคริปต์ ไปต่อหลังเกิดข้อผิดพลาด".into());
     m.insert("help.scr.example1".into(), "scr deploy.ntc ## เรียกใช้ deploy.ntc".into());
@@ -38,7 +44,7 @@ pub fn fill(m: &mut HashMap<String, String>) {
     m.insert("help.search.locate".into(), "locate <pattern> [-d <n>] ## ค้นหาทั้งไฟล์และไดเรกทอรี".into());
     m.insert("help.search.title".into(), "คำสั่งค้นหา (SEARCH):".into());
     m.insert("help.size.care".into(), "size --care ## คำนวณขนาดรวมทุกอย่าง (โหมด care)".into());
-    m.insert("help.size.path".into(), "size -p, --path <path|@tp> ## แสดงขนาดของเส้นทางหรือจุดเทเลพอร์ตที่ระบุ".into());
+    m.insert("help.size.path".into(), "size -p, --path <path|@tp> ## แสดงขนาดของไฟล์ เส้นทาง หรือจุดเทเลพอร์ตที่ระบุ".into());
     m.insert("help.size.size".into(), "size ## แสดงขนาดไดเรกทอรีปัจจุบัน".into());
     m.insert("help.size.time".into(), "size -t, --time ## แสดงเวลาที่ใช้".into());
     m.insert("help.size.title".into(), "คำสั่งขนาด (SIZE):".into());
@@ -106,7 +112,11 @@ pub fn fill(m: &mut HashMap<String, String>) {
     m.insert("help.scan.example4".into(), "scan port 192.168.1.1 --top 10 ## สแกน 10 พอร์ตแรก".into());
 
     m.insert("help.scan.example5".into(), "scan ip 192.168.1.0/24 ## กวาดหาโฮสต์ที่ alive".into());
+    m.insert("help.scan.example6".into(), "scan files *.rs ## แสดงไฟล์ตามชื่อ".into());
+    m.insert("help.scan.example7".into(), "scan dir k* ## แสดงไดเรกทอรีตามชื่อ".into());
     m.insert("help.scan.ext".into(), "scan ext <นามสกุล...> ## แสดงไฟล์ตามนามสกุล (ไม่นับบรรทัด)".into());
+    m.insert("help.scan.files".into(), "scan files [แบบ] ## แสดงไฟล์ตามชื่อ (* = ทั้งหมด)".into());
+    m.insert("help.scan.dir".into(), "scan dir [แบบ] ## แสดงไดเรกทอรีตามชื่อ (* = ทั้งหมด)".into());
 
     m.insert("help.scan.port".into(), "scan port [host] [--top N | --ports <spec> | --all] ## สแกนพอร์ต TCP".into());
 
@@ -137,11 +147,16 @@ pub fn fill(m: &mut HashMap<String, String>) {
     m.insert("help.view.care".into(), "view --care ## แสดงต้นไม้พร้อม care ทุกอย่าง".into());
     m.insert("help.view.cp".into(), "view -c, --cp ## แสดงต้นไม้และคัดลอกไปยังคลิปบอร์ด".into());
     m.insert("help.view.depth".into(), "view -d, --depth <n> ## แสดงต้นไม้พร้อมความลึกกำหนดเอง".into());
-    m.insert("help.view.dirsize".into(), "view -ds, --dirsize ## แสดงต้นไม้พร้อมเฉพาะขนาดไดเรกทอรี".into());
+    m.insert("help.view.dirsize".into(), "view -ds, --dirsize [ขนาดขั้นต่ำ] ## แสดงขนาดไดเรกทอรี; ใส่ค่าจะซ่อนที่เล็กกว่า".into());
+    m.insert("help.view.head".into(), "view --head <n> ## แสดงเพียง n บรรทัดแรกของ tree".into());
+    m.insert("help.view.tail".into(), "view --tail <n> ## แสดงเพียง n บรรทัดสุดท้ายของ tree".into());
+    m.insert("help.view.sort".into(), "view --sort size|char|ext ## เรียงลูก (ไดเรกทอรีอยู่ก่อน)".into());
+    m.insert("cmd.report.invalid_sort".into(), "คีย์เรียงไม่ถูกต้อง: '{}' (size|char|ext)".into());
+    m.insert("cmd.report.invalid_count".into(), "จำนวนบรรทัดไม่ถูกต้อง: '{}' (ต้องมากกว่า 0)".into());
     m.insert("help.view.ext".into(), "view -ext, --ext <นามสกุล...> ## แสดงต้นไม้เฉพาะนามสกุลที่ตรง".into());
-    m.insert("help.view.filesize".into(), "view -fs, --filesize ## แสดงต้นไม้พร้อมเฉพาะขนาดไฟล์".into());
+    m.insert("help.view.filesize".into(), "view -fs, --filesize [ขนาดขั้นต่ำ] ## แสดงขนาดไฟล์; ใส่ค่าจะซ่อนไฟล์ที่เล็กกว่า".into());
     m.insert("help.view.path".into(), "view -p, --path <path|@tp> ## แสดงต้นไม้ของเส้นทางหรือจุดเทเลพอร์ตที่ระบุ".into());
-    m.insert("help.view.size".into(), "view -s, --size ## แสดงต้นไม้พร้อมขนาดไดเรกทอรีและไฟล์".into());
+    m.insert("help.view.size".into(), "view -s, --size [ขนาดขั้นต่ำ] ## แสดงขนาด; ใส่ค่าเช่น 10KB, 1.5MB จะซ่อนที่เล็กกว่า".into());
     m.insert("help.view.time".into(), "view --time, -t ## แสดงต้นไม้พร้อมเวลาดำเนินการ".into());
     m.insert("help.view.title".into(), "คำสั่ง View:".into());
     m.insert("help.view.tree".into(), "view ## แสดงต้นไม้ไดเรกทอรี (ใช้ความลึกจาก config)".into());
@@ -168,10 +183,11 @@ pub fn fill(m: &mut HashMap<String, String>) {
     m.insert("help.ran.example3".into(), "ran list ## แสดง target ทั้งหมด".into());
     m.insert("help.alias.example1".into(), "ral add build \"cargo build\" ## สร้าง alias ง่าย ๆ".into());
     m.insert("help.alias.example2".into(), "ral add greet(x) \"echo Hello $x\" ## Alias แบบมีพารามิเตอร์".into());
-    m.insert("help.alias.example3".into(), "ral add copy(x) \"cp $x ${{x}}.bak\" ## Alias พร้อมค่าเริ่มต้น".into());
+    m.insert("help.alias.example3".into(), "ral add v \"view --care -t -d ${x:-1}\" ## Alias พร้อมค่าเริ่มต้น".into());
     m.insert("help.alias.example4".into(), "ral list ## แสดง alias ทั้งหมด".into());
     m.insert("help.alias.example5".into(), "ral export --all myaliases ## ส่งออก alias".into());
     m.insert("help.alias.example6".into(), "build ## เรียก alias ตรง ๆ".into());
+    m.insert("help.alias.example7".into(), "ral hintn add port [8080,5050] ## รายการที่ตั้งชื่อไว้".into());
     m.insert("help.view.example1".into(), "view ## แสดงต้นไม้ไดเรกทอรี".into());
     m.insert("help.view.example2".into(), "view --size ## แสดงต้นไม้พร้อมขนาด".into());
     m.insert("help.view.example3".into(), "view -d 2 ## แสดงต้นไม้พร้อมความลึก 2".into());
@@ -179,9 +195,11 @@ pub fn fill(m: &mut HashMap<String, String>) {
     m.insert("help.view.example5".into(), "view --time ## แสดงต้นไม้พร้อมเวลาดำเนินการ".into());
     m.insert("help.view.example6".into(), "view -p C:\\code\\project ## แสดงต้นไม้ของเส้นทางที่ระบุ".into());
     m.insert("help.view.example7".into(), "view @web ## แสดงต้นไม้ของจุดเทเลพอร์ต".into());
+    m.insert("help.view.example8".into(), "view -s 10MB ## แสดงเฉพาะไฟล์/ไดเรกทอรีอย่างน้อย 10MB".into());
+    m.insert("help.view.example9".into(), "view --sort size --head 20 ## เรียงตามขนาดแสดง 20 บรรทัดแรก".into());
     m.insert("help.size.example1".into(), "size ## แสดงขนาดไดเรกทอรีปัจจุบัน".into());
     m.insert("help.size.example2".into(), "size ../src ## แสดงขนาดของไดเรกทอรีอื่น".into());
-    m.insert("help.size.example3".into(), "size -p C:\\code\\project ## แสดงขนาดของเส้นทางที่ระบุ".into());
+    m.insert("help.size.example3".into(), "size Cargo.toml ## แสดงขนาดของไฟล์".into());
     m.insert("help.size.example4".into(), "size @web --care -t ## โหมด care พร้อมเวลาที่ใช้สำหรับจุดเทเลพอร์ต".into());
     m.insert("help.report.example1".into(), "report txt ## สร้างรายงาน TXT".into());
     m.insert("help.report.example2".into(), "report html --cp ## คัดลอกรายงาน HTML ไปยังคลิปบอร์ด".into());
@@ -205,7 +223,7 @@ pub fn fill(m: &mut HashMap<String, String>) {
     m.insert("help.network.example3".into(), "dl https://example.com/file.zip --progress ## ดาวน์โหลดพร้อมความคืบหน้า".into());
     m.insert("help.network.example4".into(), "ping google.com ## ping google.com".into());
     m.insert("help.network.example5".into(), "dns example.com -t MX ## ค้นหา DNS MX record".into());
-    m.insert("help.network.example6".into(), "serve 8080 ## เริ่มเซิร์ฟเวอร์ HTTP บนพอร์ต 8080".into());
+    m.insert("help.network.example6".into(), "serve files --port 8080 ## เริ่มเซิร์ฟเวอร์ file-drive บนพอร์ต 8080".into());
     m.insert("help.clipboard.example1".into(), "clip ## แสดงประวัติคลิปบอร์ด".into());
     m.insert("help.clipboard.example2".into(), "clip select 1 ## คัดลอกรายการ #1 กลับไปยังคลิปบอร์ด".into());
     m.insert("help.clipboard.example3".into(), "pathcp ## คัดลอกเส้นทางไดเรกทอรีปัจจุบัน".into());

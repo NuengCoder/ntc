@@ -24,9 +24,9 @@ impl Editor {
             let col = m.column as usize;
             let split = self.run_split_row();
 
-            // Run/terminal panel border drag — delegate while dragging or on separator row
-            if self.dragging_run_border || (m.row as usize) == split {
-                self.handle_mouse(m);
+            // Fixed 50% split: the separator row is not draggable and
+            // consumes no mouse action.
+            if (m.row as usize) == split {
                 return Ok(());
             }
 
@@ -74,8 +74,15 @@ impl Editor {
                         if let Some(rest) = cmd.strip_prefix(":run ") {
                             let rest = rest.trim();
                             if !rest.is_empty() {
-                                self.start_run(rest);
+                                // nerun.toml mapping always wins; explicit
+                                // trailing text is ignored (see :run docs).
+                                let _ = rest;
+                                self.start_configured_run();
+                            } else {
+                                self.start_configured_run();
                             }
+                        } else if cmd.trim() == ":run" {
+                            self.start_configured_run();
                         } else if let Some(rest) = cmd.strip_prefix(":") {
                             let rest = rest.trim();
                             if !rest.is_empty() {
@@ -362,13 +369,143 @@ impl Editor {
         }
     }
 
+    /// Run an arbitrary shell line in the embedded terminal panel
+    /// (`:! <cmd>`): spawn the terminal on demand, send the command as
+    /// typed input, and focus the terminal so output is visible there.
+    pub(crate) fn run_in_terminal(&mut self, cmd_line: &str) {
+        if cmd_line.trim().is_empty() {
+            self.status_msg = Some(t!("editor.term_run_usage"));
+            return;
+        }
+        if self.terminal.is_none() {
+            let (tw, th) = crate::editor::helpers::term_size();
+            let term_h = (th / 2) as u16;
+            let cwd = std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from("."));
+            match crate::editor::terminal::TerminalState::spawn_ntc_shell(tw as u16, term_h, &cwd) {
+                Ok(term) => {
+                    self.terminal = Some(term);
+                }
+                Err(e) => {
+                    self.status_msg = Some(t!("editor.mode_terminal_err", e));
+                    return;
+                }
+            }
+        }
+        if let Some(term) = self.terminal.as_mut() {
+            term.send_input(format!("{}\n", cmd_line.trim()).as_bytes());
+        }
+        self.run_panel_open = false;
+        self.focus = Focus::Terminal;
+        self.status_msg = None;
+        self.mark_all_dirty();
+    }
+
+    /// `:run` via `nerun.toml`: resolve the active tab's extension to a
+    /// configured command and execute it in the embedded terminal panel.
+    ///
+    /// Flow: auto-save (when enabled) → extension lookup → placeholder
+    /// expansion (`$CWF` = current working file) → spawn/reuse terminal →
+    /// send command as typed input (so it is visible) → focus terminal.
+    pub(crate) fn start_configured_run(&mut self) {
+        use crate::editor::nerun::NeRunConfig;
+
+        if self.is_scratch_path(&self.path) {
+            self.status_msg = Some(t!("editor.nerun_no_file").into());
+            return;
+        }
+        let cfg = NeRunConfig::load();
+        if cfg.options.save_before_run && self.modified && !self.is_scratch_path(&self.path) {
+            if let Err(e) = self.save() {
+                self.status_msg = Some(t!("editor.nerun_save_failed", e));
+                return;
+            }
+        }
+        let file = self.path.clone();
+        let Some(resolved) = cfg.resolve_with_fallback(&file) else {
+            let ext = file
+                .extension()
+                .and_then(|e| e.to_str())
+                .unwrap_or_default();
+            let cfg_path = NeRunConfig::config_path()
+                .map(|p| p.display().to_string())
+                .unwrap_or_else(|| "nerun.toml".into());
+            self.status_msg = Some(t!("editor.nerun_no_runner", ext, cfg_path));
+            return;
+        };
+
+        // Spawn the embedded ntc-shell terminal on demand (fixed 50%).
+        // Fall back to the process CWD when the configured cwd does not
+        // exist (e.g. unsaved parent).
+        if self.terminal.is_none() {
+            let (tw, th) = crate::editor::helpers::term_size();
+            let term_h = (th / 2) as u16;
+            let cwd = if resolved.cwd.exists() {
+                resolved.cwd.clone()
+            } else {
+                std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from("."))
+            };
+            match crate::editor::terminal::TerminalState::spawn_ntc_shell(tw as u16, term_h, &cwd) {
+                Ok(term) => {
+                    self.terminal = Some(term);
+                }
+                Err(e) => {
+                    self.status_msg = Some(t!("editor.mode_terminal_err", e));
+                    return;
+                }
+            }
+        }
+
+        if let Some(term) = self.terminal.as_mut() {
+            // The command itself is sent as shell input so it is visible
+            // in the terminal alongside its output.
+            term.send_input(format!("{}\n", resolved.command).as_bytes());
+        }
+        self.run_panel_open = false;
+        self.focus = Focus::Terminal;
+        self.status_msg = Some(t!("editor.nerun_running", resolved.name, resolved.command));
+        self.mark_all_dirty();
+    }
+
     pub(crate) fn run_panel_height(&self) -> usize {
         let split = self.run_split_row();
         self.term_h.saturating_sub(4).saturating_sub(split).max(3)
     }
 
+    /// Fixed 50% split between the editor text field and the
+    /// terminal/run panel. Border dragging is disabled.
     pub(crate) fn run_split_row(&self) -> usize {
         let max_split = self.term_h.saturating_sub(7).max(5);
-        self.stored_run_split.clamp(5, max_split)
+        (self.term_h / 2).clamp(5, max_split)
+    }
+
+    /// Rect-box geometry of the terminal panel: `(top, left, right,
+    /// bottom)` cell rows/cols, inclusive. Terminal panel only — the
+    /// legacy run panel keeps its separator header. The box lives inside
+    /// the panel rect: the top border replaces the old `─` separator, the
+    /// side walls inset content by one column each, and the bottom border
+    /// takes the last panel row.
+    pub(crate) fn terminal_box(&self) -> (usize, usize, usize, usize) {
+        let top = self.run_split_row();
+        let bottom = top.saturating_add(self.run_panel_height());
+        let left = self.editor_offset();
+        let right = self.term_w.saturating_sub(2).max(left.saturating_add(2));
+        (top, left, right, bottom)
+    }
+
+    /// Visible content size inside the terminal box: `(cols, rows)`.
+    pub(crate) fn terminal_content_size(&self) -> (usize, usize) {
+        let (top, left, right, bottom) = self.terminal_box();
+        (
+            right.saturating_sub(left + 1).max(1),
+            bottom.saturating_sub(top + 1).max(1),
+        )
+    }
+
+    pub(crate) fn terminal_content_rows(&self) -> usize {
+        self.terminal_content_size().1
+    }
+
+    pub(crate) fn terminal_content_cols(&self) -> usize {
+        self.terminal_content_size().0
     }
 }

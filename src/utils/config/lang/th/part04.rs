@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+﻿use std::collections::HashMap;
 
 pub fn fill(m: &mut HashMap<String, String>) {
     m.insert("cmd.qsc.help_listen".into(), "  qsc listen              เริ่มเดม่อนปุ่มลัด QSC".into());
@@ -44,6 +44,8 @@ pub fn fill(m: &mut HashMap<String, String>) {
     m.insert("cmd.scan.examples_title".into(), "ตัวอย่าง:".into());
     m.insert("cmd.scan.ext_usage".into(), "การใช้งาน: scan ext <นามสกุล...> [-d|--depth <n>] [-s|--size] [--care]".into());
     m.insert("cmd.scan.help_ext".into(), "  scan ext <นามสกุล...> [-d|--depth <n>] [-s|--size] [--care]  แสดงไฟล์ตามนามสกุล (ไม่นับบรรทัด)".into());
+    m.insert("cmd.scan.help_files".into(), "  scan files [แบบ] [-d|--depth <n>] [-s|--size] [--care]  แสดงไฟล์ตามชื่อ (* = ทั้งหมด)".into());
+    m.insert("cmd.scan.help_dir".into(), "  scan dir [แบบ] [-d|--depth <n>] [-s|--size] [--care]  แสดงไดเรกทอรีตามชื่อ (* = ทั้งหมด)".into());
 
     m.insert("cmd.scan.help_port".into(), "  scan port [host] [--top N | --ports <spec> | --all] [--timeout MS]  สแกนพอร์ต TCP (ค่าเริ่มต้น localhost, 20 พอร์ตแรก)".into());
 
@@ -73,6 +75,11 @@ pub fn fill(m: &mut HashMap<String, String>) {
     m.insert("cmd.scan.no_files".into(), "ไม่พบไฟล์ {}".into());
 
     m.insert("cmd.scan.port_done".into(), "เปิด: {} จาก {} ที่สแกน".into());
+    m.insert("cmd.scan.files_usage".into(), "การใช้งาน: scan files [แบบ] [-d|--depth <n>] [-s|--size] [--care]".into());
+    m.insert("cmd.scan.dir_usage".into(), "การใช้งาน: scan dir [แบบ] [-d|--depth <n>] [-s|--size] [--care]".into());
+    m.insert("cmd.scan.no_dirs".into(), "ไม่พบไดเรกทอรี {}".into());
+    m.insert("cmd.scan.total_dirs".into(), "ทั้งหมด: {} ไดเรกทอรี".into());
+    m.insert("cmd.scan.total_dirs_size".into(), "ทั้งหมด: {} ไดเรกทอรี ({})".into());
 
     m.insert("cmd.scan.port_none".into(), "ไม่มีพอร์ตเปิดบน {}".into());
 
@@ -92,10 +99,10 @@ pub fn fill(m: &mut HashMap<String, String>) {
     m.insert("cmd.target.not_found".into(), "ไม่พบเส้นทาง '{}'".into());
     m.insert("cmd.target.tp_not_found".into(), "ไม่พบจุดบันทึก '{}'".into());
     m.insert("cmd.serve.db_title".into(), "ฐานข้อมูล:".into());
-    m.insert("cmd.serve.example_default".into(), "  serve                  HTTP บนพอร์ต 8080".into());
-    m.insert("cmd.serve.example_port".into(), "  serve 3000             HTTP บนพอร์ต 3000".into());
-    m.insert("cmd.serve.example_spa".into(), "  serve --spa            SPA fallback สำหรับ React Router".into());
-    m.insert("cmd.serve.example_tunnel".into(), "  serve --tunnel         HTTP + อุโมงค์ cloudflared".into());
+    m.insert("cmd.serve.example_default".into(), "  serve files            HTTP บนพอร์ต 8080".into());
+    m.insert("cmd.serve.example_port".into(), "  serve files 3000       HTTP บนพอร์ต 3000".into());
+    m.insert("cmd.serve.example_spa".into(), "  serve files --spa      SPA fallback สำหรับ React Router".into());
+    m.insert("cmd.serve.example_tunnel".into(), "  serve files --tunnel   HTTP + อุโมงค์ cloudflared".into());
     m.insert("cmd.serve.examples_title".into(), "ตัวอย่าง:".into());
     m.insert("cmd.serve.files_stored_title".into(), "ไฟล์ที่เก็บใน:".into());
     m.insert("cmd.serve.help_bind".into(), "  --bind, -b <addr>     ที่อยู่ bind (ค่าเริ่มต้น: 0.0.0.0)".into());
@@ -107,7 +114,7 @@ pub fn fill(m: &mut HashMap<String, String>) {
     m.insert("cmd.serve.help_share".into(), "  --share [path]        ตรวจเน็ต แล้วแสดง LAN URL + QR สำหรับมือถือ".into());
     m.insert("cmd.serve.help_qr".into(), "  --qr                  บังคับแสดง QR (รวม --share)".into());
     m.insert("cmd.serve.help_no_qr".into(), "  --no-qr               ไม่แสดง QR".into());
-    m.insert("cmd.serve.example_share".into(), "  serve 8080 --share      ตรวจเน็ต แล้วพิมพ์ LAN URL + QR".into());
+    m.insert("cmd.serve.example_share".into(), "  serve files 8080 --share  ตรวจเน็ต แล้วพิมพ์ LAN URL + QR".into());
     m.insert("cmd.serve.share_checking".into(), "กำลังตรวจสอบการเชื่อมต่ออินเทอร์เน็ต...".into());
     m.insert("cmd.serve.share_online".into(), "อินเทอร์เน็ตปกติ — โหมดแชร์".into());
     m.insert("cmd.serve.share_offline".into(), "ไม่มีอินเทอร์เน็ต — แสดงเฉพาะ localhost".into());
@@ -118,10 +125,10 @@ pub fn fill(m: &mut HashMap<String, String>) {
     m.insert("cmd.serve.share_not_private".into(), "ที่อยู่ {} ไม่ใช่ช่วง LAN ส่วนตัว".into());
     m.insert("cmd.serve.share_not_private_hint".into(), "การแชร์มือถือต้องใช้ 10.x.x.x, 172.16-31.x.x หรือ 192.168.x.x".into());
     m.insert("cmd.serve.share_qr_fail".into(), "เรนเดอร์ QR ล้มเหลว: {}".into());
-    m.insert("cmd.serve.help_usage".into(), "serve [port] [options]".into());
+    m.insert("cmd.serve.help_usage".into(), "serve files [port] [options]".into());
     m.insert("cmd.serve.help_web_dir".into(), "  --web-dir, -w <dir>   เสิร์ฟไดเรกทอรี frontend ที่กำหนดเอง".into());
     m.insert("cmd.serve.help_auth".into(), "  --auth <user:pass>     ต้องล็อกอินสำหรับ /api/* (เช่น --auth admin:secret)".into());
-    m.insert("cmd.serve.example_auth".into(), "  serve 8080 --auth admin:secret   HTTP พอร์ต 8080, API ต้องล็อกอิน".into());
+    m.insert("cmd.serve.example_auth".into(), "  serve files 8080 --auth admin:secret   HTTP พอร์ต 8080, API ต้องล็อกอิน".into());
     m.insert("cmd.serve.invalid_auth".into(), "--auth ไม่ถูกต้อง (ใช้ --auth <user:pass>)".into());
     m.insert("cmd.serve.missing_auth".into(), "ขาดค่าของ --auth".into());
     m.insert("cmd.serve.auth_on".into(), "เปิดการยืนยันตัวตน API สำหรับผู้ใช้ '{}' แล้ว".into());
@@ -135,6 +142,25 @@ pub fn fill(m: &mut HashMap<String, String>) {
     m.insert("cmd.serve.usage_title".into(), "การใช้งาน:".into());
     m.insert("cmd.serve.cloudflared_starting".into(), "กำลังเริ่มอุโมงค์ cloudflared (PID {})".into());
     m.insert("cmd.serve.cloudflared_missing".into(), "ไม่พบ cloudflared: {}. ติดตั้ง: {}".into());
+    m.insert("cmd.serve.chess_soon".into(), "`serve chess` กำลังมา (หลายผู้เล่นออนไลน์)".into());
+    m.insert("cmd.serve.services_title".into(), "Serve — เลือกบริการ".into());
+    m.insert("cmd.serve.services_usage".into(), "serve <บริการ> [ตัวเลือก] (`serve` เปล่าๆ ไม่รันอะไร)".into());
+    m.insert("cmd.serve.services_header".into(), "บริการ:".into());
+    m.insert("cmd.serve.services_row_files".into(), "  files         เว็บ file-drive (อัปโหลด/ดาวน์โหลดในเบราว์เซอร์)".into());
+    m.insert("cmd.serve.services_row_http".into(), "  http-server   เซิร์ฟเวอร์ไฟล์สถิตของไดเรกทอรีปัจจุบัน".into());
+    m.insert("cmd.serve.services_row_chess".into(), "  chess         หมากรุก 2 คน hotseat ในเบราว์เซอร์".into());
+    m.insert("cmd.serve.services_row_config".into(), "  config        ดู/ตั้งค่าเริ่มต้นรายบริการ (พอร์ต, bind)".into());
+    m.insert("cmd.serve.services_example_files".into(), "  serve files --port 9000".into());
+    m.insert("cmd.serve.services_example_http".into(), "  serve http-server ./dist".into());
+    m.insert("cmd.serve.services_example_config".into(), "  serve config files --port-default 9000".into());
+    m.insert("cmd.serve.http_title".into(), "เซิร์ฟเวอร์ไฟล์สถิต HTTP (ไดเรกทอรีปัจจุบัน)".into());
+    m.insert("cmd.serve.http_usage".into(), "serve http-server [dir] [--port 8000] [options]".into());
+    m.insert("cmd.serve.example_http_default".into(), "  serve http-server            เสิร์ฟ CWD พอร์ต 8080".into());
+    m.insert("cmd.serve.example_http_dir".into(), "  serve http-server ./dist --port 8001   เสิร์ฟ ./dist พอร์ต 8001".into());
+    m.insert("cmd.serve.example_http_auth".into(), "  serve http-server --auth admin:secret  ต้องล็อกอิน".into());
+    m.insert("cmd.serve.help_auth_http".into(), "  --auth <user:pass>     ทุกเส้นทางต้องล็อกอิน (เช่น --auth admin:secret)".into());
+    m.insert("cmd.serve.http_serving".into(), "กำลังเสิร์ฟ".into());
+    m.insert("cmd.serve.http_no_dir".into(), "ไม่พบไดเรกทอรี '{}'".into());
     m.insert("cmd.nssh.usage_title".into(), "การใช้งาน:".into());
     m.insert("cmd.nssh.help_add".into(), "nssh add <ชื่อ> --host <โฮสต์> [--user ผู้ใช้] [--port พอร์ต] [--key คีย์] [--pass-env ตัวแปร]".into());
     m.insert("cmd.nssh.help_ssh".into(), "nssh ssh [ชื่อ] [--cmd \"คำสั่ง\"] [--trust] [--ask-pass] [--timeout วินาที]".into());
@@ -653,7 +679,7 @@ pub fn fill(m: &mut HashMap<String, String>) {
     m.insert("editor.gosc_hint".into(), " Enter=ไป -N=ย้อนกลับ N Esc=ปิด ".into());
     m.insert("editor.gosc_title".into(), " gosc \u{2014} นำทางต่อเนื่อง ".into());
     m.insert("editor.gs_loading".into(), " กำลังค้นหา... {} โปรดรอ".into());
-    m.insert("editor.help_screen".into(), " โหมดปกติ (verbs + motion)\n i=insert v=visual q=query n=บันทึก c=copy e=nfe f=ค้นหา b=files t=term u=encoding g=gmode :=cmd ?=ช่วยเหลือ 0=ออก(ถามถ้าไม่เซฟ)\n hjkl/awsd/ลูกศร เลื่อน \u{B7} Home/End ต้น/ท้ายบรรทัด \u{B7} PgUp/PgDn เลื่อนหน้า \u{B7} ^J=ข้าม\n\n GMODE (กด g พิมพ์ Enter)\n t/T=แท็บถัดไป/ก่อนหน้า qt=ปิดแท็บ aqt=ปิดทั้งหมด ตัวเลข=ข้าม q=ออก Esc=ยกเลิก\n\n NFE SIDEBAR (กด e)\n hjkl/ลูกศร/wasd เลื่อน \u{B7} Enter=เข้าdir/เปิดไฟล์(อยู่ต่อ) \u{B7} Esc=กลับ\n\n โหมด INSERT (แก้ไข)\n พิมพ์เพื่อแทรก \u{B7} ลูกศรเลื่อน \u{B7} Esc=ปกติ ^S=บันทึก ^Z=เลิกทำ ^R=ทำซ้ำ ^D=หลายเคอร์เซอร์ ^F=ค้นหา ^N=ไฟล์ ^P=วาง ^T=เทอร์มินัล ^J=ข้าม ^E=คำสั่ง \u{B7} Home/End ต้น/ท้าย \u{B7} PgUp/PgDn เลื่อนหน้า \u{B7} F3/Sh+F3 ค้นหาถัดไป/ก่อนหน้า\n\n โหมด VISUAL (เลือก)\n hjkl/ลูกศร เลื่อน (Shift เลือก) \u{B7} a=เลือกทั้งหมดสลับ c=copy x=cut y=yank p=paste :=คำสั่ง e=nfe f=ค้นหา g=gmode \u{B7} Esc=ออก\n\n โหมด COMMAND\n :<number> ไปที่หมายเลขบรรทัด\n :l N หรือ :line N ไปที่บรรทัด N\n :q หรือ :quit ออกจากตัวแก้ไข (พร้อมถามบันทึก)\n :wq บันทึกและออก\n :w หรือ :write บันทึกไฟล์\n :auto on เปิดบันทึกอัตโนมัติ\n :auto off ปิดบันทึกอัตโนมัติ\n :syntax on เปิดไฮไลต์ไวยากรณ์\n :syntax off ปิดไฮไลต์ไวยากรณ์\n :color on|off เปิด/ปิดสี\n :cd <path> เปลี่ยนไดเรกทอรี (Navigator)\n :back [N] ไปยังไดเรกทอรีหลัก (N ระดับ)\n :gos <N> ไปยังไดเรกทอรีย่อยที่ N\n :gosc แสดงรายการไดเรกทอรีย่อยแบบมีเลข\n :mkdir <dir> สร้างไดเรกทอรี\n :mkd <dir> สร้างไดเรกทอรี (ชื่อย่อของ :mkdir)\n :git diff หรือ :gd แสดง git diff ของไฟล์ปัจจุบัน\n :git blame หรือ :blame แสดง blame ของบรรทัดปัจจุบัน\n\n โหมด QUERY (q ใน Normal, Ctrl+Alt+Q ใน Insert, :x ใน Command — ไม่ต้องใส่ / นำหน้าก็ได้)\n /s 'ข้อความ' เลือกการเกิดถัดไปหลังเคอร์เซอร์ (วนรอบ); /s เปล่า เลือกคำใต้เคอร์เซอร์\n /l N ไปที่บรรทัด N (เคอร์เซอร์ไปต้นบรรทัด)\n /sa 'ข้อความ' เลือกทุกการเกิดในบัฟเฟอร์\n /sal เลือกทุกบรรทัด\n /sl N เลือกบรรทัด N; /sl A B ช่วง A..B (สลับกันได้); /sl A , B , … เลือกบรรทัดแบบแยก\n /rp <ค้นหา> <แทนที่> แทนที่ในการเลือก (ต้องเลือกก่อน; หลายคำใส่ '...' : /rp 'a b' 'c')\n /add <ข้อความ> to #end|#start|#hm เพิ่มข้อความในบรรทัดที่เลือก (ต้องเลือกก่อน)\n /set <รูปแบบ> to #end|#start|#hm จัดแนวการเกิดครั้งแรก (ต้องเลือกก่อน)\n /c | /cs ล้างการเลือก\n /upper แปลงส่วนที่เลือกเป็นตัวพิมพ์ใหญ่ (ต้องเลือกก่อน)\n /lower แปลงส่วนที่เลือกเป็นตัวพิมพ์เล็ก (ต้องเลือกก่อน)\n /qal add <n> <q> เพิ่ม query alias (ต.ย. /qal sw /rp ${1} ${2}; s/l/sa/sal/sl/rp/c เป็นชื่อสงวน)\n /qal rm <n> ลบ alias\n /qal info <n> แสดง alias\n /qal edit <n> <q> อัปเดต alias\n /qal rnm <a> to <b> เปลี่ยนชื่อ alias\n /qal list แสดงรายการ alias\n <name> [args] เรียก alias โดยตรง (ไม่ต้องมี /)\n /undo เลิกทำ\n /redo ทำซ้ำ\n /exit /quit /Esc ออกจาก Query Mode\n ; เชื่อมหลายคำสั่ง\n ${1} ${2} พารามิเตอร์ alias ตามตำแหน่ง\n ${1:-default} พารามิเตอร์ alias พร้อมค่าเริ่มต้น\n ${1[]} พารามิเตอร์ alias แบบอาร์เรย์ (อาร์กิวเมนต์ที่เหลือทั้งหมด)".into());
+    m.insert("editor.help_screen".into(), " โหมดปกติ (verbs + motion)\n i=insert v=visual q=query x=บันทึก n=ไฟล์ m=dir c=copy e=nfe f=ค้นหา b=files t=term u=encoding g=gmode :=cmd ?=ช่วยเหลือ 0=ออก(ถามถ้าไม่เซฟ)\n hjkl/awsd/ลูกศร เลื่อน \u{B7} Home/End ต้น/ท้ายบรรทัด \u{B7} PgUp/PgDn เลื่อนหน้า \u{B7} ^J=ข้าม\n\n GMODE (กด g พิมพ์ Enter)\n t/T=แท็บถัดไป/ก่อนหน้า qt=ปิดแท็บ aqt=ปิดทั้งหมด ตัวเลข=ข้าม q=ออก i=insert v=visual e=nfe Esc=ยกเลิก\n\n NFE SIDEBAR (กด e)\n hjkl/ลูกศร/wasd เลื่อน \u{B7} Enter=เข้าdir/เปิดไฟล์(อยู่ต่อ) \u{B7} i=insert v=visual \u{B7} Esc=กลับ\n\n โหมด INSERT (แก้ไข)\n พิมพ์เพื่อแทรก \u{B7} ลูกศรเลื่อน \u{B7} Esc=ปกติ ^S=บันทึก ^Z=เลิกทำ ^R=ทำซ้ำ ^D=หลายเคอร์เซอร์ ^F=ค้นหา ^N=ไฟล์ ^P=วาง ^T=เทอร์มินัล ^G=gmode ^E=nfe ^W=visual ^:=cmd \u{B7} Home/End ต้น/ท้าย \u{B7} PgUp/PgDn เลื่อนหน้า \u{B7} F3/Sh+F3 ค้นหาถัดไป/ก่อนหน้า\n\n โหมด VISUAL (เลือก)\n hjkl/ลูกศร เลื่อน (Shift เลือก) \u{B7} Alt+hjkl/ลูกศร ย้าย selection (j/k) หรือ indent (h/l) \u{B7} a=เลือกทั้งหมดสลับ c=copy x=cut y=yank p=paste :=คำสั่ง e=nfe f=ค้นหา g=gmode \u{B7} Esc=ออก\n\n โหมด COMMAND\n :<number> ไปที่หมายเลขบรรทัด\n :l N หรือ :line N ไปที่บรรทัด N\n :q หรือ :quit ออกจากตัวแก้ไข (พร้อมถามบันทึก)\n :wq บันทึกและออก\n :w หรือ :write บันทึกไฟล์\n :auto on เปิดบันทึกอัตโนมัติ\n :auto off ปิดบันทึกอัตโนมัติ\n :syntax on เปิดไฮไลต์ไวยากรณ์\n :syntax off ปิดไฮไลต์ไวยากรณ์\n :color on|off เปิด/ปิดสี\n :cd <path> เปลี่ยนไดเรกทอรี (Navigator)\n :back [N] ไปยังไดเรกทอรีหลัก (N ระดับ)\n :gos <N> ไปยังไดเรกทอรีย่อยที่ N\n :gosc แสดงรายการไดเรกทอรีย่อยแบบมีเลข\n :mkdir <dir> สร้างไดเรกทอรี\n :mkd <dir> สร้างไดเรกทอรี (ชื่อย่อของ :mkdir)\n :e เปิด file explorer (nfe)\n :git diff หรือ :gd แสดง git diff ของไฟล์ปัจจุบัน\n :git blame หรือ :blame แสดง blame ของบรรทัดปัจจุบัน\n\n โหมด QUERY (q ใน Normal, Ctrl+Alt+Q ใน Insert, :x ใน Command — ไม่ต้องใส่ / นำหน้าก็ได้)\n /s 'ข้อความ' เลือกการเกิดถัดไปหลังเคอร์เซอร์ (วนรอบ); /s เปล่า เลือกคำใต้เคอร์เซอร์\n /l N ไปที่บรรทัด N (เคอร์เซอร์ไปต้นบรรทัด)\n /sa 'ข้อความ' เลือกทุกการเกิดในบัฟเฟอร์\n /sal เลือกทุกบรรทัด\n /sl N เลือกบรรทัด N; /sl A B ช่วง A..B (สลับกันได้); /sl A , B , … เลือกบรรทัดแบบแยก\n /rp <ค้นหา> <แทนที่> แทนที่ในการเลือก (ต้องเลือกก่อน; หลายคำใส่ '...' : /rp 'a b' 'c')\n /add <ข้อความ> to #end|#start|#hm เพิ่มข้อความในบรรทัดที่เลือก (ต้องเลือกก่อน)\n /rm <ข้อความ> from #end|#start|#hm ลบ prefix/suffix ในบรรทัดที่เลือก (ต้องเลือกก่อน)\n /set <รูปแบบ> to #end|#start|#hm จัดแนวการเกิดครั้งแรก (ต้องเลือกก่อน)\n /c | /cs ล้างการเลือก\n /up แปลงส่วนที่เลือกเป็นตัวพิมพ์ใหญ่ (/upper alias ต้องเลือกก่อน)\n /low แปลงส่วนที่เลือกเป็นตัวพิมพ์เล็ก (/lower alias ต้องเลือกก่อน)\n /qal add <n> <q> เพิ่ม query alias (ต.ย. /qal sw /rp ${1} ${2}; s/l/sa/sal/sl/rp/c เป็นชื่อสงวน)\n /qal rm <n> ลบ alias\n /qal info <n> แสดง alias\n /qal edit <n> <q> อัปเดต alias\n /qal rnm <a> to <b> เปลี่ยนชื่อ alias\n /qal list แสดงรายการ alias\n <name> [args] เรียก alias โดยตรง (ไม่ต้องมี /)\n /undo เลิกทำ\n /redo ทำซ้ำ\n /exit /quit /Esc ออกจาก Query Mode\n ; เชื่อมหลายคำสั่ง\n ${1} ${2} พารามิเตอร์ alias ตามตำแหน่ง\n ${1:-default} พารามิเตอร์ alias พร้อมค่าเริ่มต้น\n ${1[]} พารามิเตอร์ alias แบบอาร์เรย์ (อาร์กิวเมนต์ที่เหลือทั้งหมด)".into());
     m.insert("editor.hex_cannot_read".into(), "hex: ไม่สามารถอ่านไฟล์: {}".into());
     m.insert("editor.hex_mode_hint".into(), "โหมด Hex — 0-9/a-f แก้ไขไบต์  u=เลิกทำ  Ctrl+R=ทำซ้ำ  :=คำสั่ง  Esc=ออก".into());
     m.insert("editor.hex_saved".into(), "บันทึก hex แล้ว".into());

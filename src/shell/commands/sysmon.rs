@@ -9,7 +9,7 @@ use crossterm::{execute, queue};
 use std::collections::{HashMap, HashSet};
 use std::io::{stdout, Write};
 use std::time::Instant;
-use sysinfo::{Disks, System};
+use sysinfo::{DiskKind, Disks, System};
 
 const REFRESH_MS: u64 = 1500;
 
@@ -46,7 +46,7 @@ impl SysMon {
         sys.refresh_all();
         std::thread::sleep(std::time::Duration::from_millis(200));
         sys.refresh_all();
-        let disks = Disks::new();
+        let disks = Disks::new_with_refreshed_list();
         let (w, h) = terminal_size();
         let mut sm = Self {
             sys,
@@ -74,7 +74,9 @@ impl SysMon {
         let now = Instant::now();
         self.last_refresh = now;
         self.sys.refresh_all();
-        self.disks = Disks::new();
+        // Re-enumerate volumes (picks up plugged/unplugged drives)
+        // without dropping existing entries.
+        self.disks.refresh(false);
         self.refresh_filtered();
     }
 
@@ -338,7 +340,7 @@ impl SysMon {
         )?;
         row += 1;
 
-        // ── Disks ──
+        // ── Disks (every volume sysinfo lists: C:\, D:\, USB, …) ──
         for disk in &self.disks {
             if row >= (self.term_h as u16).saturating_sub(1) {
                 break;
@@ -350,8 +352,6 @@ impl SysMon {
                 .checked_mul(100)
                 .and_then(|v| v.checked_div(total))
                 .unwrap_or(0) as usize;
-            let bar = render_text_bar(pct);
-            let mount = disk.mount_point().to_string_lossy();
             let fg = if pct > 85 {
                 fg_err
             } else if pct > 60 {
@@ -363,10 +363,15 @@ impl SysMon {
                 stdout,
                 MoveTo(0, row),
                 SetForegroundColor(fg),
-                Print(&format!(
-                    " {mount} {bar}  {} / {}",
-                    format_size(used),
-                    format_size(total)
+                Print(&format_disk_line(
+                    &disk.mount_point().to_string_lossy(),
+                    &disk.name().to_string_lossy(),
+                    &disk.file_system().to_string_lossy(),
+                    disk.kind(),
+                    disk.is_removable(),
+                    disk.is_read_only(),
+                    used,
+                    total,
                 )),
                 ResetColor,
             )?;
@@ -601,6 +606,56 @@ fn render_text_bar(pct: usize) -> String {
     format!("[{}{} {}%]", "-".repeat(fill), " ".repeat(empty), pct_str)
 }
 
+/// Render one disk row: ` C:\ [Label] (NTFS SSD) [USB] [bar] used / total`.
+/// Empty labels / filesystems are omitted, unknown kinds are skipped,
+/// and a zero total renders `0 / 0` without dividing by zero.
+pub(crate) fn format_disk_line(
+    mount: &str,
+    label: &str,
+    fs: &str,
+    kind: DiskKind,
+    removable: bool,
+    readonly: bool,
+    used: u64,
+    total: u64,
+) -> String {
+    let pct = used
+        .checked_mul(100)
+        .and_then(|v| v.checked_div(total))
+        .unwrap_or(0) as usize;
+    let mut s = format!(" {}", mount);
+    let label = label.trim();
+    if !label.is_empty() {
+        s.push_str(&format!(" [{}]", label));
+    }
+    let mut paren: Vec<&str> = Vec::new();
+    let fs = fs.trim();
+    if !fs.is_empty() {
+        paren.push(fs);
+    }
+    match kind {
+        DiskKind::HDD => paren.push("HDD"),
+        DiskKind::SSD => paren.push("SSD"),
+        DiskKind::Unknown(_) => {}
+    }
+    if !paren.is_empty() {
+        s.push_str(&format!(" ({})", paren.join(" ")));
+    }
+    if removable {
+        s.push_str(" [USB]");
+    }
+    if readonly {
+        s.push_str(" [RO]");
+    }
+    s.push_str(&format!(
+        " {}  {} / {}",
+        render_text_bar(pct),
+        format_size(used),
+        format_size(total)
+    ));
+    s
+}
+
 fn format_size(bytes: u64) -> String {
     const UNITS: &[&str] = &["B", "K", "M", "G", "T"];
     let mut value = bytes as f64;
@@ -627,6 +682,44 @@ impl Drop for TerminalGuard {
             Show,
             LeaveAlternateScreen
         );
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn disk_line_full_detail() {
+        let line = format_disk_line(
+            "C:\\",
+            "Windows",
+            "NTFS",
+            DiskKind::SSD,
+            false,
+            false,
+            120 * 1024 * 1024 * 1024,
+            500 * 1024 * 1024 * 1024,
+        );
+        assert!(line.starts_with(" C:\\ [Windows] (NTFS SSD) "), "got: {}", line);
+        assert!(line.contains("120"), "got: {}", line);
+        assert!(!line.contains("USB"), "got: {}", line);
+    }
+
+    #[test]
+    fn disk_line_tags_removable_and_readonly() {
+        let line = format_disk_line("E:\\", "", "FAT32", DiskKind::HDD, true, true, 0, 100);
+        assert!(line.contains(" [USB]"), "got: {}", line);
+        assert!(line.contains(" [RO]"), "got: {}", line);
+        // Empty label omitted, no stray brackets.
+        assert!(!line.contains("[]"), "got: {}", line);
+    }
+
+    #[test]
+    fn disk_line_unknown_kind_and_zero_total() {
+        let line = format_disk_line("/", "", "", DiskKind::Unknown(-1), false, false, 0, 0);
+        assert!(!line.contains('('), "got: {}", line);
+        assert!(line.ends_with("0.0B / 0.0B"), "got: {}", line);
     }
 }
 

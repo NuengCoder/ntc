@@ -82,6 +82,23 @@ pub(crate) enum Focus {
     Terminal,
 }
 
+/// Inline create prompt opened by Normal `n`/`m`: type a name,
+/// Enter accepts, Esc cancels.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub(crate) enum CreateKind {
+    File,
+    Dir,
+}
+
+impl CreateKind {
+    pub(crate) fn prompt_label(&self) -> &'static str {
+        match self {
+            Self::File => "new file:",
+            Self::Dir => "new dir:",
+        }
+    }
+}
+
 // ── snapshot for undo/redo ────────────────────────────────────────────────────
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
@@ -209,6 +226,8 @@ pub(crate) struct Sidebar {
     pub(crate) nodes: Vec<FileNode>,
     pub(crate) root: std::path::PathBuf,
     pub(crate) dragging_border: bool,
+    /// True while the sidebar scrollbar is being dragged.
+    pub(crate) dragging_scroll: bool,
     // File watcher for live reload (Windows only)
     #[cfg(windows)]
     pub(crate) watcher_rx: Option<std::sync::mpsc::Receiver<()>>,
@@ -230,6 +249,7 @@ impl Sidebar {
             nodes: Vec::new(),
             root,
             dragging_border: false,
+            dragging_scroll: false,
             #[cfg(windows)]
             watcher_rx: None,
             #[cfg(windows)]
@@ -522,7 +542,6 @@ pub(crate) const ALL_ENCODINGS: [EditorEncoding; 4] = [
     EditorEncoding::Windows1252,
 ];
 
-
 /// Holds the complete state of one editor tab.
 /// When a tab is inactive, its state is stored here.
 /// When activated, the state is swapped onto the Editor's direct fields.
@@ -773,6 +792,10 @@ pub(crate) struct Editor {
     pub(crate) query_buf: String,
     pub(crate) qal_aliases: HashMap<String, String>,
 
+    // Inline create prompt (Normal `n`/`m`): None = closed.
+    pub(crate) create_kind: Option<CreateKind>,
+    pub(crate) create_buf: String,
+
     // Run mode state
     pub(crate) run_lines: Vec<String>,
     pub(crate) run_cmd_buf: String,
@@ -780,8 +803,6 @@ pub(crate) struct Editor {
     pub(crate) last_run_cmd: Option<String>,
     pub(crate) run_rx: Option<std::sync::mpsc::Receiver<RunMessage>>,
     pub(crate) run_child: Option<std::process::Child>,
-    pub(crate) stored_run_split: usize,
-    pub(crate) dragging_run_border: bool,
     pub(crate) run_panel_open: bool,
     pub(crate) focus: Focus,
 
@@ -910,14 +931,14 @@ impl Editor {
             gosc_buf: String::new(),
             query_buf: String::new(),
             qal_aliases: HashMap::new(),
+            create_kind: None,
+            create_buf: String::new(),
             run_lines: Vec::new(),
             run_cmd_buf: String::new(),
             run_executing: None,
             last_run_cmd: None,
             run_rx: None,
             run_child: None,
-            stored_run_split: (th * 2 / 3).max(5),
-            dragging_run_border: false,
             run_panel_open: false,
             focus: Focus::Editor,
             buffer_stack: vec![path.to_path_buf()],
@@ -1060,17 +1081,16 @@ impl Editor {
         };
         // Decode like the file loader (BOM/UTF-16 aware), falling back
         // to lossy UTF-8 for anything else.
-        let new_lines: Vec<String> =
-            match crate::editor::core::read_file_lines(&self.path) {
-                Ok((lines, enc)) => {
-                    self.encoding = enc;
-                    lines
-                }
-                Err(_) => String::from_utf8_lossy(&content)
-                    .lines()
-                    .map(|l| l.to_string())
-                    .collect(),
-            };
+        let new_lines: Vec<String> = match crate::editor::core::read_file_lines(&self.path) {
+            Ok((lines, enc)) => {
+                self.encoding = enc;
+                lines
+            }
+            Err(_) => String::from_utf8_lossy(&content)
+                .lines()
+                .map(|l| l.to_string())
+                .collect(),
+        };
         self.lines = if new_lines.is_empty() {
             vec![String::new()]
         } else {
@@ -1147,7 +1167,8 @@ impl Editor {
             self.external_change_pending = true;
             self.disk_fingerprint = fp;
             self.status_msg = Some(
-                "File changed externally — buffer has unsaved edits (:e! to load disk version)".into(),
+                "File changed externally — buffer has unsaved edits (:e! to load disk version)"
+                    .into(),
             );
             self.mark_all_dirty();
             return false;

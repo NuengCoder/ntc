@@ -119,12 +119,8 @@ fn list_adapters_android(
     // `Local:` table (no interface attribution there, so those
     // addresses join the default-route interface).
     let ip_addrs = parse_ip_addr_o(&ip_addr_show());
-    let inet6 = parse_if_inet6(
-        &std::fs::read_to_string(if_inet6).unwrap_or_default(),
-    );
-    let fib_v4 = parse_fib_trie_local(
-        &std::fs::read_to_string(fib_trie).unwrap_or_default(),
-    );
+    let inet6 = parse_if_inet6(&std::fs::read_to_string(if_inet6).unwrap_or_default());
+    let fib_v4 = parse_fib_trie_local(&std::fs::read_to_string(fib_trie).unwrap_or_default());
     let default_iface = gateways.first().map(|(n, _)| n.clone());
 
     let mut names: Vec<String> = Vec::new();
@@ -217,7 +213,9 @@ fn ip_addr_show() -> String {
 /// `2: wlan0    inet6 fe80::…/64 scope link …`.
 /// Unknown families and malformed rows are skipped.
 #[cfg(any(test, target_os = "android"))]
-fn parse_ip_addr_o(text: &str) -> std::collections::HashMap<String, (Vec<(Ipv4Addr, u8)>, Vec<String>)> {
+fn parse_ip_addr_o(
+    text: &str,
+) -> std::collections::HashMap<String, (Vec<(Ipv4Addr, u8)>, Vec<String>)> {
     use std::collections::HashMap;
 
     let mut out: HashMap<String, (Vec<(Ipv4Addr, u8)>, Vec<String>)> = HashMap::new();
@@ -407,8 +405,7 @@ fn gateway_windows() -> Vec<(String, String)> {
     );
     for line in lines {
         let mut parts = line.splitn(3, '|');
-        let (Some(alias), Some(idx), Some(gw)) = (parts.next(), parts.next(), parts.next())
-        else {
+        let (Some(alias), Some(idx), Some(gw)) = (parts.next(), parts.next(), parts.next()) else {
             continue;
         };
         if gw.parse::<IpAddr>().is_err() {
@@ -441,9 +438,7 @@ fn dns_windows() -> Vec<String> {
 /// Linux kernel procfs, so the same reader applies.)
 #[cfg(any(target_os = "linux", target_os = "android"))]
 fn gateway_linux() -> Vec<(String, String)> {
-    parse_proc_net_route(
-        &std::fs::read_to_string("/proc/net/route").unwrap_or_default(),
-    )
+    parse_proc_net_route(&std::fs::read_to_string("/proc/net/route").unwrap_or_default())
 }
 
 #[cfg(any(test, target_os = "linux", target_os = "android"))]
@@ -498,9 +493,7 @@ fn parse_netstat_rn(text: &str) -> Vec<(String, String)> {
 /// Unix DNS from /etc/resolv.conf `nameserver` lines.
 #[cfg(not(windows))]
 fn dns_resolv_conf() -> Vec<String> {
-    parse_resolv_conf(
-        &std::fs::read_to_string("/etc/resolv.conf").unwrap_or_default(),
-    )
+    parse_resolv_conf(&std::fs::read_to_string("/etc/resolv.conf").unwrap_or_default())
 }
 
 #[cfg(any(test, not(windows)))]
@@ -608,7 +601,8 @@ mod tests {
 
     #[test]
     fn netstat_rn_parses_default() {
-        let text = "Routing tables\nInternet:\nDestination        Gateway            Flags      Netif\n\
+        let text =
+            "Routing tables\nInternet:\nDestination        Gateway            Flags      Netif\n\
                     default            192.168.1.1        UGSc           en0\n\
                     127                127.0.0.1          UCS            lo0\n";
         assert_eq!(
@@ -620,7 +614,8 @@ mod tests {
 
     #[test]
     fn resolv_conf_parses_nameservers() {
-        let text = "# comment\nnameserver 8.8.8.8\nnameserver 8.8.8.8\nnameserver 1.1.1.1\nsearch lan\n";
+        let text =
+            "# comment\nnameserver 8.8.8.8\nnameserver 8.8.8.8\nnameserver 1.1.1.1\nsearch lan\n";
         assert_eq!(
             parse_resolv_conf(text),
             vec!["8.8.8.8".to_string(), "1.1.1.1".to_string()]
@@ -707,10 +702,7 @@ mod tests {
                     1: lo    inet 127.0.0.1/8 scope host\n\
                     3: rmnet0    unknown 10.0.0.1/32 scope global\n";
         let got = parse_ip_addr_o(text);
-        assert_eq!(
-            got["wlan0"].0,
-            vec![(Ipv4Addr::new(192, 168, 1, 5), 24)]
-        );
+        assert_eq!(got["wlan0"].0, vec![(Ipv4Addr::new(192, 168, 1, 5), 24)]);
         assert_eq!(got["wlan0"].1, vec!["fe80::1".to_string()]);
         assert_eq!(got["lo"].0, vec![(Ipv4Addr::new(127, 0, 0, 1), 8)]);
         // Unknown families are skipped, interface still absent.

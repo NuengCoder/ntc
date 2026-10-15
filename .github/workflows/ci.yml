@@ -26,6 +26,8 @@ jobs:
         run: |
           cd ntc_web && npm ci && npm run build
           ls dist/index.html
+          cd ../ntc_chess_web && npm ci && npm run build
+          ls dist/index.html
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt, clippy
@@ -58,28 +60,21 @@ jobs:
         run: |
           cd ntc_web && npm ci && npm run build
           ls dist/index.html
+          cd ../ntc_chess_web && npm ci && npm run build
+          ls dist/index.html
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
       - name: Test
         run: cargo test --all-features
 
+  # macOS-only build: Linux / Windows / Android binaries are built and
+  # uploaded by the maintainer by hand (no MacBook for local verification
+  # of the CI-built macOS assets, and vice versa). Tests above stay blocking.
   build:
-    name: Build (${{ matrix.os }})
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ubuntu-latest, windows-latest, macos-latest]
-    runs-on: ${{ matrix.os }}
+    name: Build (macos-latest)
+    runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Install Linux system deps
-        if: runner.os == 'Linux'
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y \
-            build-essential pkg-config libssl-dev \
-            libx11-dev libxcb1-dev libxcb-render0-dev libxcb-shape0-dev libxcb-xfixes0-dev \
-            libxkbcommon-dev libasound2-dev
       - uses: actions/setup-node@v4
         with:
           node-version: 20
@@ -88,6 +83,8 @@ jobs:
       - name: Build frontend (required by build.rs)
         run: |
           cd ntc_web && npm ci && npm run build
+          ls dist/index.html
+          cd ../ntc_chess_web && npm ci && npm run build
           ls dist/index.html
         shell: bash
       - uses: dtolnay/rust-toolchain@stable

@@ -260,7 +260,12 @@ impl NfeState {
                     if shown.as_ref() != Some(&key) {
                         if shown.is_some() {
                             self.erase_panel_rect(
-                                stdout, preview_x, content_top, preview_w, list_h, bg,
+                                stdout,
+                                preview_x,
+                                content_top,
+                                preview_w,
+                                list_h,
+                                bg,
                             )?;
                             if backend == PixelBackend::Kitty {
                                 queue!(stdout, Print(crate::nfe::kitty::delete_cmd()))?;
@@ -271,17 +276,14 @@ impl NfeState {
                             _ => (0, 0, 0),
                         };
                         self.build_panel_seq(&path, preview_w, list_h, cw, ch, bg_rgb);
-                        if let Some(blit) =
-                            self.panel_seq.as_ref().and_then(|(k, b)| {
-                                (*k == key).then(|| b.clone())
-                            })
+                        if let Some(blit) = self
+                            .panel_seq
+                            .as_ref()
+                            .and_then(|(k, b)| (*k == key).then(|| b.clone()))
                         {
                             match blit {
                                 crate::nfe::state::PanelBlit::Sixel(seq) => {
-                                    queue!(
-                                        stdout,
-                                        MoveTo(preview_x as u16, content_top as u16)
-                                    )?;
+                                    queue!(stdout, MoveTo(preview_x as u16, content_top as u16))?;
                                     stdout.flush()?;
                                     stdout.write_all(seq.as_bytes())?;
                                     stdout.flush()?;
@@ -304,8 +306,7 @@ impl NfeState {
                         }
                         // Build failed: fall through to text painting with
                         // an explanatory line.
-                        self.preview_content =
-                            vec!["(cannot preview image)".to_string()];
+                        self.preview_content = vec!["(cannot preview image)".to_string()];
                         self.panel_shown = None;
                     } else {
                         return Ok(());
@@ -358,7 +359,7 @@ impl NfeState {
                 let line_idx = self.preview_scroll + i;
                 if line_idx < lines.len() {
                     let line = &lines[line_idx];
-        let max_w = preview_w.saturating_sub(1);
+                    let max_w = preview_w.saturating_sub(1);
                     let truncated: String = if line.chars().count() > max_w {
                         line.chars().take(max_w).collect()
                     } else {

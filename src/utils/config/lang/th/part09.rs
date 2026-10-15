@@ -62,6 +62,9 @@ pub fn fill(m: &mut HashMap<String, String>) {
     m.insert("msg.showcg.label_watch_limit".into(), "ขีดจำกัด watch:".into());
 
     m.insert("msg.showcg.label_dir_view".into(), "Dir View:".into());
+    m.insert("msg.showcg.label_serve_files".into(), "Serve files:".into());
+    m.insert("msg.showcg.label_serve_http".into(), "Serve http:".into());
+    m.insert("msg.showcg.label_serve_chess".into(), "Serve chess:".into());
     m.insert("msg.showcg.title".into(), "การกำหนดค่าปัจจุบัน".into());
     m.insert("msg.size.bytes_label".into(), "ไบต์:".into());
     m.insert("msg.size.human_label".into(), "มนุษย์:".into());

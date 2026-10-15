@@ -240,7 +240,8 @@ fn cmd_log(nav: &Navigator) -> Result<bool> {
         print_error(&t!("git.not_repo"));
         return Ok(false);
     }
-    let out = match gitmod::git_output(nav.current_path(), &["log", "--pretty=format:%h %s", "-20"]) {
+    let out = match gitmod::git_output(nav.current_path(), &["log", "--pretty=format:%h %s", "-20"])
+    {
         Some(o) => o,
         None => {
             print_error(&t!("git.log_failed"));
@@ -258,7 +259,10 @@ fn cmd_log(nav: &Navigator) -> Result<bool> {
             {
                 println!(
                     "  {} {}",
-                    rest.0.green().bold().color(theme.shell.git_branch.to_colored()),
+                    rest.0
+                        .green()
+                        .bold()
+                        .color(theme.shell.git_branch.to_colored()),
                     rest.1.dimmed()
                 );
             }
@@ -301,8 +305,10 @@ mod tests {
         if !run(&["init", "-b", "master"]) {
             return;
         }
-        let mut nav = Navigator::new().unwrap();
-        nav.go_to(dir.path()).unwrap();
+        // NOTE: intentionally uses `for_test` instead of `go_to` — `go_to`
+        // calls `set_current_dir`, which is process-global and used to move
+        // the CWD out from under parallel hinter/helpers tests on CI.
+        let mut nav = Navigator::for_test(dir.path());
         cmd_git("branch -M main", &mut nav).unwrap();
         let head = gitmod::git_output(dir.path(), &["symbolic-ref", "--short", "HEAD"])
             .unwrap_or_default();

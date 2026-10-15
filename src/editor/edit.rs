@@ -1,4 +1,4 @@
-use super::{ci_find, is_ctrl_char, prev_char_byte, sel_range, CursorPos, Editor};
+use super::{ci_find, is_ctrl_char, prev_char_byte, sel_range, CreateKind, CursorPos, Editor};
 use crate::t;
 
 impl Editor {
@@ -458,6 +458,64 @@ impl Editor {
         self.status_msg = Some(t!("editor.edit_no_more_occurrences"));
     }
 
+    /// Open the inline create prompt (Normal `n` = file, `m` = dir).
+    pub(crate) fn open_create_prompt(&mut self, kind: CreateKind) {
+        self.create_kind = Some(kind);
+        self.create_buf.clear();
+        self.status_msg = None;
+        self.mark_all_dirty();
+    }
+
+    /// Accept the inline create prompt: Enter creates relative to CWD.
+    /// `n` also opens the new file. Failures keep the prompt open.
+    pub(crate) fn accept_create_prompt(&mut self) {
+        let kind = match self.create_kind {
+            Some(k) => k,
+            None => return,
+        };
+        let name = self.create_buf.trim().to_string();
+        let cwd = std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from("."));
+        match super::modes::nfe::resolve_new_path(&cwd, &name) {
+            Err(msg) => {
+                self.status_msg = Some(msg);
+                self.mark_all_dirty();
+                return;
+            }
+            Ok(path) => {
+                if path.exists() {
+                    self.status_msg = Some(t!("editor.nfe_create_exists", name));
+                    self.mark_all_dirty();
+                    return;
+                }
+                let ok = match kind {
+                    CreateKind::File => {
+                        let parents_ok = path
+                            .parent()
+                            .map(|p| std::fs::create_dir_all(p).is_ok())
+                            .unwrap_or(true);
+                        parents_ok && std::fs::write(&path, "").is_ok()
+                    }
+                    CreateKind::Dir => std::fs::create_dir_all(&path).is_ok(),
+                };
+                if !ok {
+                    self.status_msg = Some(t!("editor.nfe_create_failed", name));
+                    self.mark_all_dirty();
+                    return;
+                }
+                if kind == CreateKind::File {
+                    self.open_file(&path);
+                }
+                self.create_kind = None;
+                self.create_buf.clear();
+                self.status_msg = Some(match kind {
+                    CreateKind::File => t!("editor.nfe_created_file", name),
+                    CreateKind::Dir => t!("editor.nfe_created_dir", name),
+                });
+                self.mark_all_dirty();
+            }
+        }
+    }
+
     /// Move current line up (Alt+Up).
     pub(crate) fn move_line_up(&mut self) {
         if self.cursor.y == 0 {
@@ -490,6 +548,74 @@ impl Editor {
         self.save_if_auto();
     }
 
+    /// Move the whole selected block up one line (Visual Alt+k/Up).
+    /// Selection follows the block. No-op (no snapshot) at the top or
+    /// without a selection. Extra cursors are left untouched.
+    pub(crate) fn move_selected_block_up(&mut self) {
+        let (ay, ab) = match self.cursor.selection_anchor {
+            Some(a) => a,
+            None => return,
+        };
+        if !self.has_selection() {
+            return;
+        }
+        let sy = self.cursor.y.min(ay);
+        let ey = self.cursor.y.max(ay);
+        if sy == 0 || ey >= self.lines.len() {
+            return;
+        }
+        self.snapshot();
+        let above = self.lines.remove(sy - 1);
+        self.lines.insert(ey, above);
+        for row in sy - 1..=ey {
+            self.syntax.invalidate_line(row);
+            self.mark_dirty(row);
+        }
+        self.cursor.y = self.cursor.y.saturating_sub(1);
+        self.cursor.selection_anchor = Some((ay.saturating_sub(1), ab));
+        self.clamp();
+        self.modified = true;
+        self.search.mark_dirty();
+        self.save_if_auto();
+    }
+
+    /// Move the whole selected block down one line (Visual Alt+j/Down).
+    /// Selection follows the block. At the bottom an empty line is appended
+    /// first so the block always has somewhere to go (undo removes it).
+    /// No-op (no snapshot) without a selection. Extra cursors are untouched.
+    pub(crate) fn move_selected_block_down(&mut self) {
+        let (ay, ab) = match self.cursor.selection_anchor {
+            Some(a) => a,
+            None => return,
+        };
+        if !self.has_selection() {
+            return;
+        }
+        let sy = self.cursor.y.min(ay);
+        let ey = self.cursor.y.max(ay);
+        // Snapshot first so undo also removes a line created below.
+        self.snapshot();
+        if ey + 1 >= self.lines.len() {
+            self.lines.push(String::new());
+            self.syntax.insert_line(self.lines.len() - 1);
+            self.syntax.invalidate_line(self.lines.len() - 1);
+            self.mark_dirty(self.lines.len() - 1);
+            self.dirty_end = self.dirty_end.max(self.lines.len());
+        }
+        let below = self.lines.remove(ey + 1);
+        self.lines.insert(sy, below);
+        for row in sy..=ey + 1 {
+            self.syntax.invalidate_line(row);
+            self.mark_dirty(row);
+        }
+        self.cursor.y += 1;
+        self.cursor.selection_anchor = Some((ay + 1, ab));
+        self.clamp();
+        self.modified = true;
+        self.search.mark_dirty();
+        self.save_if_auto();
+    }
+
     /// Indent selected lines or current line (Tab with selection).
     pub(crate) fn indent_lines(&mut self) {
         let tab = " ".repeat(self.editor_cfg.tab_size);
@@ -508,6 +634,51 @@ impl Editor {
             }
         }
         self.save_if_auto();
+    }
+
+    /// Strict block dedent for Visual Alt+h/Left: every non-empty selected
+    /// line must start with whitespace, otherwise the whole op aborts with
+    /// no snapshot and no edits. Returns true when lines were dedented.
+    /// (Shift+Tab stays lenient via [`dedent_lines`].)
+    pub(crate) fn dedent_selected_block_strict(&mut self) -> bool {
+        let (ay, _ab) = match self.cursor.selection_anchor {
+            Some(a) => a,
+            None => return false,
+        };
+        if !self.has_selection() {
+            return false;
+        }
+        let sy = self.cursor.y.min(ay);
+        let ey = self
+            .cursor
+            .y
+            .max(ay)
+            .min(self.lines.len().saturating_sub(1));
+        for row in sy..=ey {
+            let line = &self.lines[row];
+            if !line.is_empty() && !line.starts_with(' ') && !line.starts_with('\t') {
+                self.status_msg = Some(t!("editor.visual_dedent_blocked"));
+                return false;
+            }
+        }
+        let tab_size = self.editor_cfg.tab_size;
+        self.snapshot();
+        for row in sy..=ey {
+            let spaces = self.lines[row]
+                .chars()
+                .take(tab_size)
+                .filter(|&c| c == ' ' || c == '\t')
+                .count();
+            let to_remove = spaces.min(tab_size);
+            self.lines[row].drain(..to_remove);
+            self.mark_dirty(row);
+            self.syntax.invalidate_line(row);
+        }
+        self.cursor.byte = self.cursor.byte.saturating_sub(tab_size);
+        self.modified = true;
+        self.search.mark_dirty();
+        self.save_if_auto();
+        true
     }
 
     /// Dedent selected lines or current line (Shift+Tab).

@@ -1,7 +1,7 @@
 use crate::navigator::Navigator;
 use crate::output::{print_error, print_info, print_success, print_warning};
 use crate::script;
-use crate::shell::alias::expand_command_line;
+use crate::shell::alias::expand_command_line_interactive;
 use crate::t;
 
 use anyhow::Result;
@@ -100,14 +100,21 @@ fn cmd_scr_run(
     let mut exec = |cmd: &str, force: bool| -> Result<bool> {
         let trimmed = cmd.trim();
         let lower = trimmed.to_lowercase();
-        if lower == "scr" || lower == "script" || lower.starts_with("scr ") || lower.starts_with("script ") {
+        if lower == "scr"
+            || lower == "script"
+            || lower.starts_with("scr ")
+            || lower.starts_with("script ")
+        {
             print_error(&t!("scr.calling_not_allowed"));
             return Ok(false);
         }
         if force {
             return Ok(run_system_ok(trimmed, &cwd));
         }
-        let expanded = expand_command_line(trimmed);
+        let expanded = match expand_command_line_interactive(trimmed, nav)? {
+            None => return Ok(false),
+            Some(cmds) => cmds,
+        };
         for part in expanded {
             super::execute_command(&part, nav, &None)?;
         }

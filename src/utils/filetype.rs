@@ -94,7 +94,8 @@ const KNOWN_UNSUPPORTED_EXTENSIONS: &[&str] = &[
     "wma", "m4a", "mp4", "avi", "mkv", "mov", "wmv", "flv", "webm", "doc", "docx", "pdf", "xls",
     "xlsx", "ppt", "pptx", "zip", "rar", "7z", "tar", "gz", "exe", "dll", "so", "bin", "iso",
     "dmg", "vmdk", "qcow2", "apk", "ipa", "jar", "war", "ear", "msi", "deb", "rpm", "qcow2", "vhd",
-    "vhdx", "img", "ex4", "ex5", "spv", "spirv",
+    "vhdx", "img", "ex4", "ex5", "spv", "spirv", "o", "obj", "a", "lib", "pyc", "pyo",
+    "class", "sqlite", "db", "db3",
 ];
 
 /// A snapshot of the config sets needed for format-checking.
@@ -299,6 +300,26 @@ pub(crate) fn is_known_unsupported_file_name(file_name: &str) -> bool {
         .any(|e| lower.ends_with(&format!(".{}", e)))
 }
 
+/// True when `path` should be hidden from the editor file finder:
+/// known-binary extensions (exe, zip, gz, ex4, ex5, … — case-insensitive),
+/// or extensionless files whose first 8 KB contain a null byte (compiled
+/// outputs like `app` / `a.out`). Unknown extensions are kept so new text
+/// formats are never punished.
+pub fn is_finder_hidden(path: &Path) -> bool {
+    if is_known_unsupported_format(path) {
+        return true;
+    }
+    if path.extension().is_none() && path.is_file() {
+        if let Ok(content) = std::fs::read(path) {
+            let sample = &content[..content.len().min(8192)];
+            if sample.contains(&0) {
+                return true;
+            }
+        }
+    }
+    false
+}
+
 /// Create a WalkDir `filter_entry` closure that filters out ignored directories.
 /// `ignored_dirs` is a set of lowercase directory names to exclude.
 /// The closure returns `true` to include the entry, `false` to exclude it.
@@ -468,5 +489,45 @@ mod tests {
             format_ext_list(&["rs".to_string(), "c".to_string()]),
             ".rs, .c"
         );
+    }
+
+    #[test]
+    fn test_finder_hidden_binaries() {
+        for name in [
+            "app.exe",
+            "setup.EXE",
+            "backup.zip",
+            "data.tar.gz",
+            "expert.ex4",
+            "expert.EX5",
+            "lib.so",
+            "lib.dll",
+            "mod.pyc",
+            "data.sqlite",
+        ] {
+            assert!(
+                is_finder_hidden(Path::new(name)),
+                "{} should be hidden",
+                name
+            );
+        }
+    }
+
+    #[test]
+    fn test_finder_keeps_text() {
+        let dir = tempfile::tempdir().unwrap();
+        let txt = dir.path().join("notes.txt");
+        fs::write(&txt, "hello").unwrap();
+        assert!(!is_finder_hidden(&txt));
+        // Extensionless text is kept…
+        let no_ext = dir.path().join("README");
+        fs::write(&no_ext, "plain text, no nulls").unwrap();
+        assert!(!is_finder_hidden(&no_ext));
+        // …while extensionless binaries are hidden.
+        let bin = dir.path().join("compiled_app");
+        fs::write(&bin, b"MZ\x90\x00binary\x00data").unwrap();
+        assert!(is_finder_hidden(&bin));
+        // Unknown extensions are never punished.
+        assert!(!is_finder_hidden(Path::new("weird.zzz9")));
     }
 }

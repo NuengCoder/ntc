@@ -35,7 +35,7 @@ pub fn fill(m: &mut HashMap<String, String>) {
     m.insert("cli.run.help_seto".into(), "ສະແດງ ຫຼື ຕັ້ງໄດເຣັກທໍຣີຜົນລັບເລີ່ມຕົ້ນ".into());
     m.insert("cli.run.help_sett".into(), "ສະແດງ ຫຼື ຕັ້ງຈຳນວນ threads".into());
     m.insert("cli.run.help_showcg".into(), "ສະແດງພາບລວມການຕັ້ງຄ່າປັດຈຸບັນ".into());
-    m.insert("cli.run.help_size".into(), "ສະແດງຂະໜາດໄດເຣັກທໍຣີປັດຈຸບັນ".into());
+    m.insert("cli.run.help_size".into(), "ສະແດງຂະໜາດຂອງໄຟລ໌ ຫຼື ໄດເຣັກທໍຣີ".into());
     m.insert("cli.run.help_path".into(), "ເສັ້ນທາງເປົ້າໝາຍ ຫຼື savepoint (ໃຊ້ກັບ --size ຫຼື --view)".into());
     m.insert("cli.run.help_time".into(), "ສະແດງເວລາທີ່ໃຊ້ (ໃຊ້ກັບ --size ຫຼື --view)".into());
     m.insert("cli.run.help_tp_add".into(), "ບັນທຶກໄດເຣັກທໍຣີປັດຈຸບັນເປັນ teleport point".into());
@@ -64,7 +64,7 @@ pub fn fill(m: &mut HashMap<String, String>) {
     m.insert("cli.shell_cmd.qr".into(), " ntc qr \"text\" ສ້າງລະຫັດ QR ໃນ terminal".into());
     m.insert("cli.shell_cmd.ral_add".into(), " ntc ral add btr \"cargo build --release\" ເພີ່ມ alias ຈາກ CLI\n".into());
     m.insert("cli.shell_cmd.say_loop".into(), " ntc say \"hello\" --loop 3 ພິມຂໍ້ຄວາມດ້ວຍ loop".into());
-    m.insert("cli.shell_cmd.serve".into(), " ntc serve 8080 ເລີ່ມ HTTP server ຢູ່ port 8080".into());
+    m.insert("cli.shell_cmd.serve".into(), " ntc serve files --port 8080 ເລີ່ມ file-drive server ຢູ່ port 8080".into());
     m.insert("cli.shell_cmd.size".into(), " ntc size ສະແດງຂະໜາດໄດເຣັກທໍຣີ".into());
     m.insert("cli.shell_cmd.tl".into(), " ntc tl dir . ນັບແຖວໃນໄດເຣັກທໍຣີ".into());
     m.insert("cli.shell_cmd.view".into(), " ntc view ສະແດງຕົ້ນໄມ້ໄດເຣັກທໍຣີ".into());

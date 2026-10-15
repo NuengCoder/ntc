@@ -6,12 +6,12 @@ use std::path::Path;
 use crate::output::{print_info, print_success};
 use crate::t;
 
+#[cfg(not(windows))]
+use super::super::download::{download_with_progress, extract_archive};
 #[cfg(windows)]
 use super::super::download::{download_with_progress, extract_archive, find_binary};
 #[cfg(windows)]
 use super::super::manager::{copy_recursive, load_manifest, platform_key, save_manifest};
-#[cfg(not(windows))]
-use super::super::download::{download_with_progress, extract_archive};
 #[cfg(not(windows))]
 use super::super::manager::{load_manifest, save_manifest};
 #[cfg(not(windows))]
@@ -64,12 +64,7 @@ pub(crate) fn install_nginx(
 }
 
 #[cfg(windows)]
-fn install_windows(
-    name: &str,
-    version: &str,
-    source: &PackageSource,
-    vdir: &Path,
-) -> Result<()> {
+fn install_windows(name: &str, version: &str, source: &PackageSource, vdir: &Path) -> Result<()> {
     let platform_key = platform_key();
     let url = source
         .urls
@@ -142,7 +137,10 @@ fn install_android(name: &str, version: &str, vdir: &Path) -> Result<()> {
 #[cfg(not(windows))]
 fn choose_source_build(name: &str, version: &str, vdir: &Path) -> Result<()> {
     let items = vec![
-        MenuItem::with_detail(&t!("ntpkg.nginx_option_source"), format!("nginx-{version}.tar.gz")),
+        MenuItem::with_detail(
+            &t!("ntpkg.nginx_option_source"),
+            format!("nginx-{version}.tar.gz"),
+        ),
         MenuItem::simple(&t!("ntpkg.nginx_option_system")),
     ];
     let menu_title = t!("ntpkg.nginx_choose_method");
@@ -199,14 +197,16 @@ fn build_from_source(name: &str, version: &str, vdir: &Path) -> Result<()> {
     run_in_dir(
         &src_dir,
         "sh",
-        &["-c".to_string(), format!("./configure --prefix={}", vdir.display())],
+        &[
+            "-c".to_string(),
+            format!("./configure --prefix={}", vdir.display()),
+        ],
     )
     .context("Failed to run ./configure (are build deps installed? see hint above)")?;
 
     print_info(&t!("ntpkg.nginx_compiling"));
     run_in_dir(&src_dir, "make", &[]).context("Failed to run make")?;
-    run_in_dir(&src_dir, "make", &["install".to_string()])
-        .context("Failed to run make install")?;
+    run_in_dir(&src_dir, "make", &["install".to_string()]).context("Failed to run make install")?;
 
     let sbin = vdir.join("sbin");
     if sbin.join("nginx").exists() {

@@ -60,8 +60,7 @@ pub fn subnet24_of(ip: IpAddr) -> Result<Ipv4Addr, String> {
 /// Detect the primary local /24: UDP bind + sham connect to a public
 /// resolver, then read back the local address. Sends no packets.
 pub fn local_subnet() -> Result<(Ipv4Addr, u8), String> {
-    let sock =
-        UdpSocket::bind("0.0.0.0:0").map_err(|e| format!("cannot open socket: {}", e))?;
+    let sock = UdpSocket::bind("0.0.0.0:0").map_err(|e| format!("cannot open socket: {}", e))?;
     sock.connect("8.8.8.8:53")
         .map_err(|e| format!("cannot route: {}", e))?;
     let local = sock
@@ -95,9 +94,7 @@ pub fn parse_cidr(spec: &str) -> Result<Vec<IpAddr>, String> {
     if count > MAX_SWEEP_HOSTS as u64 + 2 {
         return Err(format!(
             "CIDR '{}' covers {} hosts (max {} — narrow the range)",
-            spec,
-            count,
-            MAX_SWEEP_HOSTS
+            spec, count, MAX_SWEEP_HOSTS
         ));
     }
     let base_u = u32::from(base);
@@ -329,11 +326,8 @@ pub fn sweep_hosts_async(
                 let (ip, port) = (*ip, *port);
                 set.spawn(async move {
                     let _permit = permit;
-                    let r = tokio::time::timeout(
-                        timeout,
-                        tokio::net::TcpStream::connect(addr),
-                    )
-                    .await;
+                    let r =
+                        tokio::time::timeout(timeout, tokio::net::TcpStream::connect(addr)).await;
                     matches!(r, Ok(Ok(_))).then_some((ip, port))
                 });
             }
@@ -344,18 +338,20 @@ pub fn sweep_hosts_async(
                 Ok(Some((ip, port))) => {
                     progress.tick(true);
                     on_hit(ip, port);
-                    by_ip.entry(ip).or_default().push(crate::nssh::scan::ScanHit {
-                        port,
-                        service: crate::nssh::scan::service_name(port).unwrap_or("unknown"),
-                    });
+                    by_ip
+                        .entry(ip)
+                        .or_default()
+                        .push(crate::nssh::scan::ScanHit {
+                            port,
+                            service: crate::nssh::scan::service_name(port).unwrap_or("unknown"),
+                        });
                 }
                 _ => {
                     progress.tick(false);
                 }
             }
         }
-        let mut out: Vec<(IpAddr, Vec<crate::nssh::scan::ScanHit>)> =
-            by_ip.into_iter().collect();
+        let mut out: Vec<(IpAddr, Vec<crate::nssh::scan::ScanHit>)> = by_ip.into_iter().collect();
         for (_, v) in out.iter_mut() {
             v.sort_by_key(|h| h.port);
             v.dedup_by_key(|h| h.port);
@@ -371,10 +367,7 @@ pub fn arp_table(want: &[IpAddr]) -> Vec<IpAddr> {
     use std::collections::HashSet;
     let raw = arp_table_raw();
     let want_set: HashSet<IpAddr> = want.iter().copied().collect();
-    let mut out: Vec<IpAddr> = raw
-        .into_iter()
-        .filter(|ip| want_set.contains(ip))
-        .collect();
+    let mut out: Vec<IpAddr> = raw.into_iter().filter(|ip| want_set.contains(ip)).collect();
     out.sort();
     out.dedup();
     out
@@ -652,7 +645,14 @@ mod tests {
         let port = listener.local_addr().unwrap().port();
         let ips = vec!["127.0.0.1".parse().unwrap()];
         let progress = SweepProgress::new("test".to_string(), 1);
-        let out = sweep_hosts_async(&ips, &[port], Duration::from_secs(2), 64, &progress, |_, _| {});
+        let out = sweep_hosts_async(
+            &ips,
+            &[port],
+            Duration::from_secs(2),
+            64,
+            &progress,
+            |_, _| {},
+        );
         assert_eq!(out.len(), 1);
         assert_eq!(out[0].1.len(), 1);
         assert_eq!(out[0].1[0].port, port);
@@ -665,7 +665,14 @@ mod tests {
     fn async_sweep_silent_on_closed() {
         let ips = vec!["127.0.0.1".parse().unwrap()];
         let progress = SweepProgress::new("test".to_string(), 1);
-        let out = sweep_hosts_async(&ips, &[1], Duration::from_millis(300), 64, &progress, |_, _| {});
+        let out = sweep_hosts_async(
+            &ips,
+            &[1],
+            Duration::from_millis(300),
+            64,
+            &progress,
+            |_, _| {},
+        );
         assert!(out.is_empty());
         assert_eq!(progress.done.load(Ordering::Relaxed), 1);
         assert_eq!(progress.open.load(Ordering::Relaxed), 0);
@@ -675,7 +682,14 @@ mod tests {
     fn async_sweep_empty_inputs_short_circuit() {
         let progress = SweepProgress::new("test".to_string(), 0);
         let ips: Vec<IpAddr> = Vec::new();
-        let out = sweep_hosts_async(&ips, &[80], Duration::from_secs(1), 64, &progress, |_, _| {});
+        let out = sweep_hosts_async(
+            &ips,
+            &[80],
+            Duration::from_secs(1),
+            64,
+            &progress,
+            |_, _| {},
+        );
         assert!(out.is_empty());
         assert_eq!(
             sweep_hosts_async(

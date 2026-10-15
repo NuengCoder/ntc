@@ -81,8 +81,7 @@ impl Editor {
                     ));
                 }
                 Err(e) => {
-                    self.status_msg =
-                        Some(format!("{} {}", t!("editor.encoding_reload_error"), e));
+                    self.status_msg = Some(format!("{} {}", t!("editor.encoding_reload_error"), e));
                 }
             }
         } else {

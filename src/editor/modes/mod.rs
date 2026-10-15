@@ -1,13 +1,13 @@
 mod command;
 mod encoding;
-mod finder;
+pub(crate) mod finder;
 mod git_diff;
 mod gmode;
 mod gosc;
 mod help;
 mod insert;
 mod jump;
-mod nfe;
+pub(crate) mod nfe;
 mod normal;
 mod query;
 mod run;

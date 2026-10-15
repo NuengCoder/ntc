@@ -15,10 +15,12 @@ pub mod scan;
 pub mod ssh;
 pub mod store;
 
-pub use keys::{translate_key_bytes, translate_mouse, translate_paste, KeyTranslator, TranslateOut};
+pub use keys::{
+    translate_key_bytes, translate_mouse, translate_paste, KeyTranslator, TranslateOut,
+};
 
 pub use scan::{parse_ports, resolve_host, scan_ports, service_name, ScanHit, TOP_PORTS};
-pub use ssh::{connect, exec, shell, sftp, Connected, NsshHandler, ShellEnd, SshAuth};
+pub use ssh::{connect, exec, sftp, shell, Connected, NsshHandler, ShellEnd, SshAuth};
 pub use store::{
     delete_profile, expand_home, get_profile, list_profiles, save_profile, store_path,
     valid_profile_name, Profile,

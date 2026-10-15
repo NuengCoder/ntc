@@ -371,8 +371,8 @@ fn cmd_decode_b10(args: &str, cwd: &Path) -> Result<bool> {
     }
     let (target, out) = parse_out_flag(args);
     let raw = resolve_target(target, cwd);
-    let input_str =
-        String::from_utf8(raw).map_err(|_| anyhow!("{}", t!("encode.input_not_text", "Decimal")))?;
+    let input_str = String::from_utf8(raw)
+        .map_err(|_| anyhow!("{}", t!("encode.input_not_text", "Decimal")))?;
     let decoded = decode_b10(&input_str)?;
     handle_output(decoded, out, cwd)?;
     Ok(false)

@@ -1,7 +1,7 @@
 use anyhow::Result;
 use crossterm::event::{Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 
-use crate::editor::{Editor, Mode};
+use crate::editor::{next_word_byte, prev_word_byte, Editor, Mode};
 use crate::t;
 
 impl Editor {
@@ -24,6 +24,30 @@ impl Editor {
                 let ctrl = modifiers.contains(KeyModifiers::CONTROL);
                 let alt = modifiers.contains(KeyModifiers::ALT);
                 let shift = modifiers.contains(KeyModifiers::SHIFT);
+                // ── inline create prompt (`n`/`m`): Esc cancels, Enter accepts.
+                if self.create_kind.is_some() {
+                    match code {
+                        KeyCode::Esc => {
+                            self.create_kind = None;
+                            self.create_buf.clear();
+                            self.status_msg = None;
+                            self.mark_all_dirty();
+                        }
+                        KeyCode::Enter => self.accept_create_prompt(),
+                        KeyCode::Backspace => {
+                            self.create_buf.pop();
+                            self.status_msg = None;
+                            self.mark_all_dirty();
+                        }
+                        KeyCode::Char(c) if !ctrl && !alt => {
+                            self.create_buf.push(c);
+                            self.status_msg = None;
+                            self.mark_all_dirty();
+                        }
+                        _ => {}
+                    }
+                    return Ok(());
+                }
                 match (ctrl, alt, code) {
                     // ── Flagged uppercase selects (kitty-style terminals
                     // report Shift as a flag). First: bare uppercase below
@@ -53,38 +77,38 @@ impl Editor {
                         self.extend_down();
                     }
                     // ── verbs ──
-                    (false, false, KeyCode::Char('i'))
-                    | (false, false, KeyCode::Char('I')) => {
+                    (false, false, KeyCode::Char('i')) | (false, false, KeyCode::Char('I')) => {
                         self.mode = Mode::Insert;
                         self.completion = None;
                         self.sighelp = None;
                         self.status_msg = None;
                     }
-                    (false, false, KeyCode::Char('v'))
-                    | (false, false, KeyCode::Char('V')) => {
+                    (false, false, KeyCode::Char('v')) | (false, false, KeyCode::Char('V')) => {
                         self.mode = Mode::Visual;
                         self.clear_selection();
                         self.status_msg = Some(t!("editor.mode_visual_start"));
                     }
-                    (false, false, KeyCode::Char('q'))
-                    | (false, false, KeyCode::Char('Q')) => {
+                    (false, false, KeyCode::Char('q')) | (false, false, KeyCode::Char('Q')) => {
                         self.prev_mode = Mode::Normal;
                         self.mode = Mode::Query;
                         self.query_buf.clear();
                         self.status_msg = None;
                         self.mark_all_dirty();
                     }
-                    (false, false, KeyCode::Char('n'))
-                    | (false, false, KeyCode::Char('N')) => {
+                    (false, false, KeyCode::Char('x')) | (false, false, KeyCode::Char('X')) => {
                         self.save_with_status(stdout);
                     }
-                    (false, false, KeyCode::Char('e'))
-                    | (false, false, KeyCode::Char('E')) => {
+                    (false, false, KeyCode::Char('n')) | (false, false, KeyCode::Char('N')) => {
+                        self.open_create_prompt(crate::editor::CreateKind::File);
+                    }
+                    (false, false, KeyCode::Char('m')) | (false, false, KeyCode::Char('M')) => {
+                        self.open_create_prompt(crate::editor::CreateKind::Dir);
+                    }
+                    (false, false, KeyCode::Char('e')) | (false, false, KeyCode::Char('E')) => {
                         self.prev_mode = Mode::Normal;
                         self.enter_nfe();
                     }
-                    (false, false, KeyCode::Char('f'))
-                    | (false, false, KeyCode::Char('F')) => {
+                    (false, false, KeyCode::Char('f')) | (false, false, KeyCode::Char('F')) => {
                         self.mode = Mode::Search;
                         if self.has_selection() {
                             self.search.query = self.selected_text();
@@ -99,24 +123,20 @@ impl Editor {
                         }
                         self.mark_all_dirty();
                     }
-                    (false, false, KeyCode::Char('b'))
-                    | (false, false, KeyCode::Char('B')) => {
+                    (false, false, KeyCode::Char('b')) | (false, false, KeyCode::Char('B')) => {
                         self.mode = Mode::FileFinder;
                         self.ff_query.clear();
                         self.ff_results.clear();
                         self.ff_idx = 0;
                         self.mark_all_dirty();
                     }
-                    (false, false, KeyCode::Char('t'))
-                    | (false, false, KeyCode::Char('T')) => {
+                    (false, false, KeyCode::Char('t')) | (false, false, KeyCode::Char('T')) => {
                         self.toggle_terminal();
                     }
-                    (false, false, KeyCode::Char('u'))
-                    | (false, false, KeyCode::Char('U')) => {
+                    (false, false, KeyCode::Char('u')) | (false, false, KeyCode::Char('U')) => {
                         self.open_encoding_picker();
                     }
-                    (false, false, KeyCode::Char('g'))
-                    | (false, false, KeyCode::Char('G')) => {
+                    (false, false, KeyCode::Char('g')) | (false, false, KeyCode::Char('G')) => {
                         self.prev_mode = Mode::Normal;
                         self.mode = Mode::Gmode;
                         self.gmode_buf.clear();
@@ -154,8 +174,7 @@ impl Editor {
                         self.status_msg = None;
                     }
                     // ── fast copy without Visual ──
-                    (false, false, KeyCode::Char('c'))
-                    | (false, false, KeyCode::Char('C')) => {
+                    (false, false, KeyCode::Char('c')) | (false, false, KeyCode::Char('C')) => {
                         self.copy_selection();
                     }
                     // ── Shift+direction selects (kitty-style flagged
@@ -229,6 +248,32 @@ impl Editor {
                     }
                     (false, true, KeyCode::Right) => {
                         self.sv.x = (self.sv.x + 3).min(self.max_scroll_x());
+                    }
+                    // ── Ctrl+word motion (h/l, a/d, arrows) ──
+                    (true, false, KeyCode::Char('h'))
+                    | (true, false, KeyCode::Char('H'))
+                    | (true, false, KeyCode::Char('a'))
+                    | (true, false, KeyCode::Char('A'))
+                    | (true, false, KeyCode::Left) => {
+                        if self.cursor.byte > 0 {
+                            self.cursor.byte = prev_word_byte(self.current(), self.cursor.byte);
+                        } else if self.cursor.y > 0 {
+                            self.cursor.y -= 1;
+                            self.cursor.byte = self.current().len();
+                        }
+                    }
+                    (true, false, KeyCode::Char('l'))
+                    | (true, false, KeyCode::Char('L'))
+                    | (true, false, KeyCode::Char('d'))
+                    | (true, false, KeyCode::Char('D'))
+                    | (true, false, KeyCode::Right) => {
+                        let line = self.current();
+                        if self.cursor.byte < line.len() {
+                            self.cursor.byte = next_word_byte(line, self.cursor.byte);
+                        } else if self.cursor.y + 1 < self.lines.len() {
+                            self.cursor.y += 1;
+                            self.cursor.byte = 0;
+                        }
                     }
                     (false, _, KeyCode::Home) => {
                         self.move_line_start_toggle();

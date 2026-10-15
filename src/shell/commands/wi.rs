@@ -150,11 +150,10 @@ impl Wi {
             let end = self.events.len();
             (end.saturating_sub(lh), end)
         } else {
-            let start = self.selected.saturating_sub(lh.saturating_sub(1)).min(
-                self.events
-                    .len()
-                    .saturating_sub(lh.min(self.events.len())),
-            );
+            let start = self
+                .selected
+                .saturating_sub(lh.saturating_sub(1))
+                .min(self.events.len().saturating_sub(lh.min(self.events.len())));
             (start, (start + lh).min(self.events.len()))
         }
     }
@@ -201,7 +200,12 @@ impl Wi {
             } else {
                 " no changes yet — create, modify or delete a file to see it flow "
             };
-            queue!(stdout, MoveTo(0, 2), Print(truncate_cols(msg, cols)), ResetColor)?;
+            queue!(
+                stdout,
+                MoveTo(0, 2),
+                Print(truncate_cols(msg, cols)),
+                ResetColor
+            )?;
             for row in 3..lh + 2 {
                 if row < self.term_h {
                     queue!(
@@ -242,7 +246,11 @@ impl Wi {
                         Print(format!(" {}  {}  ", ev.time, ev.name)),
                     )?;
                     // file_type dimmed is skipped for width simplicity; plain print:
-                    queue!(stdout, Print(truncate_cols(&ev.file_type, cols)), ResetColor)?;
+                    queue!(
+                        stdout,
+                        Print(truncate_cols(&ev.file_type, cols)),
+                        ResetColor
+                    )?;
                     queue!(stdout, Clear(ClearType::UntilNewLine))?;
                 }
             }
@@ -311,7 +319,10 @@ fn resolve_root(args: &str, nav: &Navigator) -> Option<PathBuf> {
         return Some(nav.current_path().to_path_buf());
     }
     // Strip surrounding quotes if the user quoted a path with spaces.
-    let a = a.strip_prefix('"').and_then(|s| s.strip_suffix('"')).unwrap_or(a);
+    let a = a
+        .strip_prefix('"')
+        .and_then(|s| s.strip_suffix('"'))
+        .unwrap_or(a);
     let p = PathBuf::from(a);
     let full = if p.is_absolute() {
         p

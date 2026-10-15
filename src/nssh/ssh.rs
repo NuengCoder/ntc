@@ -5,9 +5,7 @@
 
 use anyhow::{anyhow, Context, Result};
 use russh::client::{self, Handler};
-use russh::keys::known_hosts::{
-    check_known_hosts, known_host_keys, learn_known_hosts,
-};
+use russh::keys::known_hosts::{check_known_hosts, known_host_keys, learn_known_hosts};
 use russh::keys::{load_secret_key, PrivateKeyWithHashAlg, PublicKey, PublicKeyOrCertificate};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -163,8 +161,7 @@ pub async fn connect(
 }
 
 fn load_key(path: &Path) -> Result<russh::keys::PrivateKey> {
-    load_secret_key(path, None)
-        .with_context(|| format!("cannot load key '{}'", path.display()))
+    load_secret_key(path, None).with_context(|| format!("cannot load key '{}'", path.display()))
 }
 
 /// Run one remote command; streams stdout/stderr; returns the exit status.
@@ -216,7 +213,8 @@ fn session_term() -> String {
             let t = v.trim();
             if !t.is_empty()
                 && t.len() <= 32
-                && t.chars().all(|c| c.is_ascii_alphanumeric() || "-_.".contains(c))
+                && t.chars()
+                    .all(|c| c.is_ascii_alphanumeric() || "-_.".contains(c))
             {
                 return t.to_string();
             }

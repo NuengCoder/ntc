@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: 'Version to publish (e.g. v2.4.4). Only used for manual runs.'
+        description: 'Version to publish (e.g. v2.4.5). Only used for manual runs.'
         required: false
         default: ''
 
@@ -44,6 +44,8 @@ jobs:
       - name: Build frontend (required by build.rs)
         run: |
           cd ntc_web && npm ci && npm run build
+          ls dist/index.html
+          cd ../ntc_chess_web && npm ci && npm run build
           ls dist/index.html
       - uses: dtolnay/rust-toolchain@stable
         with:
@@ -123,6 +125,7 @@ jobs:
           test "$(node -p "require('./npm-package/package.json').version")" = "$VERSION_NO_V"
           node --check npm-package/scripts/install.js
           node --check npm-package/bin/ntc.js
+          node npm-package/scripts/selftest.js
       - run: npm publish ./npm-package --access public
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

@@ -28,14 +28,30 @@ use self::token::tokenize;
 
 /// Returns true if the input looks like a math expression (starts with digit,
 /// dot, paren, or unary +/- followed by a digit/paren/dot).
+/// A leading '.' is math only when it starts a fractional number (e.g. `.5`);
+/// path prefixes like `./`, `.\`, `../`, `..\`, dotfiles (`.gitignore`) must
+/// fall through to system-command execution.
 pub fn is_math_expression(input: &str) -> bool {
     let trimmed = input.trim();
     if trimmed.is_empty() {
         return false;
     }
+    // Explicit path-prefix guard (redundant with the digit check below, but
+    // protects against future relaxations of the '.' rule).
+    if trimmed.starts_with("./")
+        || trimmed.starts_with(".\\")
+        || trimmed.starts_with("../")
+        || trimmed.starts_with("..\\")
+    {
+        return false;
+    }
     let first = trimmed.chars().next().unwrap();
-    if first.is_ascii_digit() || first == '.' || first == '(' {
+    if first.is_ascii_digit() || first == '(' {
         return true;
+    }
+    if first == '.' {
+        // `.5`, `.5+1` are math; `./a.out`, `.hidden`, `...` are not.
+        return trimmed.chars().nth(1).is_some_and(|c| c.is_ascii_digit());
     }
     if (first == '-' || first == '+') && trimmed.len() > 1 {
         let second = trimmed.chars().nth(1).unwrap();

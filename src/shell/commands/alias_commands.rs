@@ -3,9 +3,294 @@ use crate::config::Config;
 use crate::navigator::Navigator;
 use crate::output::{print_error, print_info, print_success};
 use crate::shell::alias::{
-    expand_command_line, extract_param_names, inject_template_defaults, parse_call_syntax,
-    parse_param_defaults,
+    expand_command_line_interactive, extract_param_names, find_invalid_array_sep,
+    inject_template_defaults, named_refs_in_groups, parse_call_syntax, parse_param_defaults,
+    parse_value_list_raw, rename_named_in_spec, serialize_hint_spec, spec_references_named,
+    split_hint_annotations, ParamHint,
 };
+
+/// Reject `--hint-n` / `--select-n` references to hint lists that do not
+/// exist. Returns the missing list name, if any.
+fn missing_named_list(hints: &[ParamHint]) -> Option<String> {
+    let store = Config::get_run_hint_lists_merged();
+    named_refs_in_groups(hints)
+        .into_iter()
+        .find(|n| !store.contains_key(n))
+}
+
+/// Print the unknown-list error. Returns true when every referenced
+/// hint list exists.
+fn check_named_refs(hints: &[ParamHint]) -> bool {
+    if let Some(name) = missing_named_list(hints) {
+        print_error(&t!("alias.ral.unknown_hint_list", name));
+        println!("{}", t!("alias.ral.hintn_create_hint", name));
+        false
+    } else {
+        true
+    }
+}
+
+/// Alias names (sorted) whose hint specs reference hint list `name`.
+/// Scans both the global and the local spec stores.
+fn hint_list_referenced_by(name: &str) -> Vec<String> {
+    let mut out: Vec<String> = Vec::new();
+    for (alias, spec) in Config::global_get_run_alias_hints() {
+        if spec_references_named(&spec, name) && !out.contains(&alias) {
+            out.push(alias);
+        }
+    }
+    if let Some(local) = Config::get_local_config() {
+        if let Some(map) = local.run_alias_hints {
+            for (alias, spec) in map {
+                if spec_references_named(&spec, name) && !out.contains(&alias) {
+                    out.push(alias);
+                }
+            }
+        }
+    }
+    out.sort();
+    out
+}
+
+/// Rewrite `--hint-n` / `--select-n` references `old` → `new` in every
+/// stored alias spec (global + local).
+fn rewrite_hint_list_refs(old: &str, new: &str) {
+    for (alias, spec) in Config::global_get_run_alias_hints() {
+        if spec_references_named(&spec, old) {
+            let updated = rename_named_in_spec(&spec, old, new);
+            let _ = Config::global_update_run_alias_hint(&alias, &updated);
+        }
+    }
+    if let Some(local) = Config::get_local_config() {
+        if let Some(map) = local.run_alias_hints {
+            for (alias, spec) in map {
+                if spec_references_named(&spec, old) {
+                    let updated = rename_named_in_spec(&spec, old, new);
+                    let _ = Config::local_add_run_alias_hint(&alias, &updated);
+                }
+            }
+        }
+    }
+}
+
+/// `ral hintn add|rm|rnm|info|ls` — named value lists backing
+/// `#param --hint-n <name>` / `--select-n <name>`.
+fn cmd_ral_hintn(args: &str) -> Result<bool> {
+    let args = args.trim();
+    if args.is_empty() {
+        print_error(&t!("alias.ral.usage_hintn"));
+        return Ok(false);
+    }
+    let (action, rest) = match args.split_once(' ') {
+        Some((a, b)) => (a.to_lowercase(), b.trim()),
+        None => (args.to_lowercase(), ""),
+    };
+    match action.as_str() {
+        "add" => {
+            let trimmed = rest.trim_start();
+            let name_end = trimmed
+                .find(|c: char| c == ' ' || c == '\t')
+                .unwrap_or(trimmed.len());
+            let (name, values_raw) =
+                (trimmed[..name_end].trim(), trimmed[name_end..].trim());
+            if name.is_empty() || values_raw.is_empty() {
+                print_error(&t!("alias.ral.usage_hintn_add"));
+                return Ok(false);
+            }
+            if !crate::config::validate_alias_name(name) {
+                print_error(&t!("alias.ral.invalid_name", name));
+                return Ok(false);
+            }
+            let values = match parse_value_list_raw(values_raw) {
+                Ok(v) => v,
+                Err(()) => {
+                    print_error(&t!("alias.ral.usage_hintn_add"));
+                    return Ok(false);
+                }
+            };
+            let _ = Config::local_add_run_hint_list(name, &values);
+            Config::reload_global();
+            ALIAS_GENERATION.fetch_add(1, Ordering::Relaxed);
+            print_success(&t!(
+                "alias.ral.hintn_added",
+                name.to_lowercase(),
+                values.len(),
+                values.join(", ")
+            ));
+        }
+        "rm" | "remove" => {
+            if rest.is_empty() {
+                print_error(&t!("alias.ral.usage_hintn_rm"));
+                return Ok(false);
+            }
+            let force = rest
+                .split_whitespace()
+                .any(|w| w == "--force" || w == "-f");
+            let names: Vec<String> = rest
+                .split([',', ' ', '\t'])
+                .map(|s| s.trim().trim_matches(',').to_lowercase())
+                .filter(|s| !s.is_empty() && s != "--force" && s != "-f")
+                .collect();
+            if names.is_empty() {
+                print_error(&t!("alias.ral.usage_hintn_rm"));
+                return Ok(false);
+            }
+            for name in names {
+                let store = Config::get_run_hint_lists_merged();
+                if !store.contains_key(&name) {
+                    print_error(&t!("alias.ral.hintn_not_found", name));
+                    continue;
+                }
+                let refs = hint_list_referenced_by(&name);
+                if !refs.is_empty() && !force {
+                    print_error(&t!("alias.ral.hintn_referenced", name, refs.join(", ")));
+                    continue;
+                }
+                let _ = Config::local_remove_run_hint_list(&name);
+                print_success(&t!("alias.ral.hintn_removed", name));
+            }
+            Config::reload_global();
+            ALIAS_GENERATION.fetch_add(1, Ordering::Relaxed);
+        }
+        "rnm" | "rename" => {
+            let parts: Vec<&str> = rest.splitn(3, ' ').collect();
+            if parts.len() < 3 || parts[1].to_lowercase() != "to" {
+                print_error(&t!("alias.ral.usage_hintn_rnm"));
+                return Ok(false);
+            }
+            let old = parts[0].trim().to_lowercase();
+            let new = parts[2].trim();
+            if old.is_empty() || new.is_empty() {
+                print_error(&t!("alias.ral.usage_hintn_rnm"));
+                return Ok(false);
+            }
+            if !crate::config::validate_alias_name(new) {
+                print_error(&t!("alias.ral.invalid_name", new));
+                return Ok(false);
+            }
+            let store = Config::get_run_hint_lists_merged();
+            if !store.contains_key(&old) {
+                print_error(&t!("alias.ral.hintn_not_found", old));
+                return Ok(false);
+            }
+            rewrite_hint_list_refs(&old, new);
+            Config::local_rename_run_hint_list(&old, new);
+            Config::reload_global();
+            ALIAS_GENERATION.fetch_add(1, Ordering::Relaxed);
+            print_success(&t!("alias.ral.hintn_renamed", old, new.to_lowercase()));
+        }
+        "info" => {
+            let name = rest
+                .split_whitespace()
+                .next()
+                .unwrap_or("")
+                .to_lowercase();
+            if name.is_empty() {
+                print_error(&t!("alias.ral.usage_hintn_info"));
+                return Ok(false);
+            }
+            let (store, is_local) = Config::get_run_hint_lists_with_source();
+            if let Some(values) = store.get(&name) {
+                println!();
+                println!(
+                    "{}",
+                    "==================================================".cyan()
+                );
+                println!("{}", t!("alias.ral.hintn_info_title").cyan().bold());
+                println!(
+                    "{}",
+                    "==================================================".cyan()
+                );
+                println!(
+                    "  {}: {}",
+                    t!("alias.ral.hintn_info_name").yellow(),
+                    name.blue().bold()
+                );
+                println!(
+                    "  {}: {}",
+                    t!("alias.ral.hintn_info_values").yellow(),
+                    values.join(", ").dimmed()
+                );
+                let refs = hint_list_referenced_by(&name);
+                if refs.is_empty() {
+                    println!(
+                        "  {}: {}",
+                        t!("alias.ral.hintn_info_used_by").yellow(),
+                        t!("alias.ral.info_none").dimmed()
+                    );
+                } else {
+                    println!(
+                        "  {}: {}",
+                        t!("alias.ral.hintn_info_used_by").yellow(),
+                        refs.join(", ").cyan()
+                    );
+                }
+                let source = if is_local {
+                    t!("alias.ral.info_source_local").cyan().to_string()
+                } else {
+                    t!("alias.ral.info_source_global").green().to_string()
+                };
+                println!("  {}: {}", t!("alias.ral.info_source").yellow(), source);
+                println!();
+            } else {
+                print_error(&t!("alias.ral.hintn_not_found", name));
+            }
+        }
+        "ls" | "list" => {
+            let (store, is_local) = Config::get_run_hint_lists_with_source();
+            if store.is_empty() {
+                print_info(&t!("alias.ral.hintn_empty"));
+            } else {
+                println!();
+                println!(
+                    "{}",
+                    "==================================================".cyan()
+                );
+                if is_local {
+                    println!("{}", t!("alias.ral.hintn_list_title_local").cyan().bold());
+                } else {
+                    println!(
+                        "{}",
+                        t!("alias.ral.hintn_list_title_global").cyan().bold()
+                    );
+                }
+                println!(
+                    "{}",
+                    "==================================================".cyan()
+                );
+                let mut sorted: Vec<_> = store.iter().collect();
+                sorted.sort_by(|a, b| a.0.cmp(b.0));
+                for (i, (name, values)) in sorted.iter().enumerate() {
+                    println!(
+                        "  {}. {} ({}) -> {}",
+                        (i + 1).to_string().yellow(),
+                        name.blue(),
+                        t!("alias.ral.hintn_value_count", values.len()).dimmed(),
+                        values.join(", ").dimmed()
+                    );
+                }
+                println!();
+            }
+        }
+        _ => {
+            print_error(&t!("alias.ral.usage_hintn"));
+        }
+    }
+    Ok(false)
+}
+
+/// Reject templates with multi-char array brackets (`$x[ab]`).
+/// Returns true when clean.
+fn check_array_separators(command: &str) -> bool {
+    match find_invalid_array_sep(command) {
+        Some((display, content)) => {
+            let len = content.chars().count();
+            print_error(&t!("alias.ral.arr_sep_error", display, len, content));
+            false
+        }
+        None => true,
+    }
+}
 use crate::shell::helpers::{ral_export_all, ral_export_select, ral_import};
 use crate::shell::hinter::ALIAS_GENERATION;
 use crate::t;
@@ -15,6 +300,36 @@ use anyhow::Result;
 use colored::*;
 use std::io::{self, Write};
 
+/// Usage examples for `ral add` / `ral edit`, shown when either is
+/// invoked bare. Covers `#param --hint-*` / `#param --select-*` annotations
+/// and the `$x[sep]` array separator form.
+fn print_ral_add_examples() {
+    println!(
+        "  {}",
+        t!("alias.ral.example_hint_ext").green()
+    );
+    println!(
+        "  {}",
+        t!("alias.ral.example_hint_array").green()
+    );
+    println!(
+        "  {}",
+        t!("alias.ral.example_select_dir").green()
+    );
+    println!(
+        "  {}",
+        t!("alias.ral.example_hint_values").green()
+    );
+    println!(
+        "  {}",
+        t!("alias.ral.example_hintn").green()
+    );
+    println!(
+        "  {}",
+        t!("alias.ral.example_hint_sep").dimmed()
+    );
+}
+
 pub fn cmd_ral(args: &str, nav: &mut Navigator) -> Result<bool> {
     if args.is_empty() {
         println!("{}", t!("alias.ral.title").cyan().bold());
@@ -22,6 +337,9 @@ pub fn cmd_ral(args: &str, nav: &mut Navigator) -> Result<bool> {
         println!("{}", t!("alias.ral.param_cmd"));
         println!("{}", t!("alias.ral.default_cmd"));
         println!("{}", t!("alias.ral.array_cmd"));
+        println!("{}", t!("alias.ral.hint_cmd"));
+        println!("{}", t!("alias.ral.select_cmd"));
+        println!("{}", t!("alias.ral.hintn_cmd"));
         println!("{}", t!("alias.ral.edit_cmd"));
         println!("{}", t!("alias.ral.rnm_cmd"));
         println!("{}", t!("alias.ral.rm_cmd"));
@@ -43,6 +361,13 @@ pub fn cmd_ral(args: &str, nav: &mut Navigator) -> Result<bool> {
         println!(
             "  ral add runc(x[],y) \"cls && gcc -o $y.exe $x[].c && ./$y.exe && rm -rf $y.exe\""
         );
+        println!("  ral add tld \"tl dir ${{x:-.}}\" #x --hint-dir");
+        println!("  ral add tldsel \"tl dir ${{x:-.}}\" #x --select-dir");
+        println!("  ral add show \"txtf $x\" #x --select-ext rs,txt");
+        println!("  ral add srv \"ssh $p\" #p --hint [8080,5050,5000]");
+        println!("  ral hintn add port [8080,5050,5000,55555,56789,38533]");
+        println!("  ral add srvn \"ssh $p\" #p --hint-n port");
+        println!("  ral add cop \"cp ${{x}} ${{y}}\" #x --hint-all #y --hint-tp --hint-dir");
         println!("  ral list");
         println!("  ral rm py");
         println!();
@@ -65,6 +390,7 @@ pub fn cmd_ral(args: &str, nav: &mut Navigator) -> Result<bool> {
             "add" => {
                 if subargs.is_empty() {
                     print_error(&t!("alias.ral.usage_add"));
+                    print_ral_add_examples();
                 } else {
                     let add_parts: Vec<&str> = subargs.splitn(2, ' ').collect();
                     if add_parts.len() < 2 {
@@ -85,6 +411,23 @@ pub fn cmd_ral(args: &str, nav: &mut Navigator) -> Result<bool> {
                             println!("{}", t!("alias.ral.name_rule_reserved"));
                             return Ok(false);
                         }
+                        // Trailing `#param --hint-*` annotations are stored
+                        // separately (never in the executed command).
+                        let (clean_command, hints) = match split_hint_annotations(&command) {
+                            Ok((c, h)) => (c, h),
+                            Err(code) => {
+                                print_error(&t!("alias.ral.hint_error", code));
+                                println!("{}", t!("alias.ral.hint_usage"));
+                                return Ok(false);
+                            }
+                        };
+                        command = clean_command;
+                        if !check_array_separators(&command) {
+                            return Ok(false);
+                        }
+                        if !check_named_refs(&hints) {
+                            return Ok(false);
+                        }
                         let has_defaults = param_hint.is_some_and(|hint| {
                             let defaults = parse_param_defaults(hint);
                             if !defaults.is_empty() {
@@ -94,8 +437,15 @@ pub fn cmd_ral(args: &str, nav: &mut Navigator) -> Result<bool> {
                                 false
                             }
                         });
-                        let is_param = param_hint.is_some();
+                        let is_param = param_hint.is_some() || !hints.is_empty();
                         let _ = Config::local_add_run_alias(name, &command);
+                        if hints.is_empty() {
+                            let _ = Config::local_remove_run_alias_hint(name);
+                        } else {
+                            let spec = serialize_hint_spec(&hints);
+                            let _ = Config::local_add_run_alias_hint(name, &spec);
+                            println!("  {}", t!("alias.ral.hints_saved", spec.cyan()));
+                        }
                         Config::reload_global();
                         ALIAS_GENERATION.fetch_add(1, Ordering::Relaxed);
                         if is_param {
@@ -119,6 +469,7 @@ pub fn cmd_ral(args: &str, nav: &mut Navigator) -> Result<bool> {
             "edit" => {
                 if subargs.is_empty() {
                     print_error(&t!("alias.ral.usage_edit"));
+                    print_ral_add_examples();
                 } else {
                     let edit_parts: Vec<&str> = subargs.splitn(2, ' ').collect();
                     if edit_parts.len() < 2 {
@@ -135,7 +486,29 @@ pub fn cmd_ral(args: &str, nav: &mut Navigator) -> Result<bool> {
                             print_error(&t!("alias.ral.invalid_name", name));
                             return Ok(false);
                         }
+                        // Annotations present → replace hints; absent →
+                        // keep existing hints untouched.
+                        let (clean_command, hints) = match split_hint_annotations(&command) {
+                            Ok((c, h)) => (c, h),
+                            Err(code) => {
+                                print_error(&t!("alias.ral.hint_error", code));
+                                println!("{}", t!("alias.ral.hint_usage"));
+                                return Ok(false);
+                            }
+                        };
+                        command = clean_command;
+                        if !check_array_separators(&command) {
+                            return Ok(false);
+                        }
+                        if !check_named_refs(&hints) {
+                            return Ok(false);
+                        }
                         let _ = Config::local_update_run_alias(name, &command);
+                        if !hints.is_empty() {
+                            let spec = serialize_hint_spec(&hints);
+                            let _ = Config::local_add_run_alias_hint(name, &spec);
+                            println!("  {}", t!("alias.ral.hints_saved", spec.cyan()));
+                        }
                         Config::reload_global();
                         ALIAS_GENERATION.fetch_add(1, Ordering::Relaxed);
                     }
@@ -151,6 +524,7 @@ pub fn cmd_ral(args: &str, nav: &mut Navigator) -> Result<bool> {
                         .filter(|s| !s.is_empty())
                     {
                         let _ = Config::local_remove_run_alias(name);
+                        let _ = Config::local_remove_run_alias_hint(name);
                     }
                     Config::reload_global();
                     ALIAS_GENERATION.fetch_add(1, Ordering::Relaxed);
@@ -226,6 +600,7 @@ pub fn cmd_ral(args: &str, nav: &mut Navigator) -> Result<bool> {
                     );
                     let mut sorted: Vec<_> = aliases.iter().collect();
                     sorted.sort_by(|a, b| a.0.cmp(b.0));
+                    let hint_specs = Config::global_get_run_alias_hints();
                     for (i, (name, cmd)) in sorted.iter().enumerate() {
                         let is_valid = crate::config::validate_alias_name(name);
                         let name_display = if is_valid {
@@ -255,6 +630,9 @@ pub fn cmd_ral(args: &str, nav: &mut Navigator) -> Result<bool> {
                             name_display,
                             cmd_display
                         );
+                        if let Some(spec) = hint_specs.get(name.as_str()) {
+                            println!("     ## {}", spec.dimmed());
+                        }
                     }
                     println!();
                     println!("{}", t!("alias.ral.usage_hint").green());
@@ -324,6 +702,14 @@ pub fn cmd_ral(args: &str, nav: &mut Navigator) -> Result<bool> {
                                 t!("alias.ral.info_none").dimmed()
                             );
                         }
+                        let hints = Config::global_get_run_alias_hints();
+                        if let Some(spec) = hints.get(&name_lower) {
+                            println!(
+                                "  {}: {}",
+                                t!("alias.ral.info_hints").yellow(),
+                                spec.cyan()
+                            );
+                        }
                         let (_, is_local) = Config::get_run_aliases_with_source();
                         let source = if is_local {
                             t!("alias.ral.info_source_local").cyan().to_string()
@@ -334,7 +720,15 @@ pub fn cmd_ral(args: &str, nav: &mut Navigator) -> Result<bool> {
                         println!();
                         if edit_mode {
                             let escaped = cmd.replace('"', "\\\"");
-                            let snippet = format!("ral edit {} \"{}\"", name, escaped);
+                            let mut snippet = format!("ral edit {} \"{}\"", name, escaped);
+                            // Include the stored hint/select spec so the
+                            // pasted command round-trips (`ral edit` replaces
+                            // hints only when annotations are present).
+                            let edit_hints = Config::global_get_run_alias_hints();
+                            if let Some(spec) = edit_hints.get(&name_lower) {
+                                snippet.push(' ');
+                                snippet.push_str(spec);
+                            }
                             crate::output::copy_to_clipboard(&snippet, "ral edit")?;
                             print_success(&t!("alias.ral.info_edit_copied"));
                             println!("  {}", snippet.green().bold());
@@ -365,6 +759,7 @@ pub fn cmd_ral(args: &str, nav: &mut Navigator) -> Result<bool> {
                             let command = command.clone();
                             let _ = Config::local_remove_run_alias(old_name);
                             let _ = Config::local_add_run_alias(new_name, &command);
+                            Config::local_rename_run_alias_hint(old_name, new_name);
                             Config::reload_global();
                             ALIAS_GENERATION.fetch_add(1, Ordering::Relaxed);
                             print_success(&t!("alias.ral.renamed", old_name, new_name));
@@ -373,6 +768,9 @@ pub fn cmd_ral(args: &str, nav: &mut Navigator) -> Result<bool> {
                         }
                     }
                 }
+            }
+            "hintn" => {
+                cmd_ral_hintn(subargs)?;
             }
             "export" => {
                 if subargs.is_empty() {
@@ -415,14 +813,28 @@ pub fn cmd_ral(args: &str, nav: &mut Navigator) -> Result<bool> {
                 if path.exists() {
                     print_error(&t!("alias.ral.file_exists", path.display()));
                 } else {
-                    let content = r#"# ntc run aliases template
+                    let content = r##"# ntc run aliases template
 # Import with: ral import <file>
 
 [run_aliases]
 # btr = "cargo build --release"
 # py = "python main.py"
 # hello = "echo Hello, World!"
-"#;
+# tldsel = "tl dir ${x:-.}"
+# show = "txtf $x"
+
+# Per-alias completion/selection specs (`ral add <name> "<cmd>" #x --hint-dir ...).
+# Uncomment to ship hints with this file:
+# [run_alias_hints]
+# tldsel = "#x --select-dir"
+# show = "#x --select-ext rs,txt"
+
+# Named value lists for `#x --hint-n <name>` / `--select-n <name>`
+# (manage with: ral hintn add <name> [values]).
+# Uncomment to ship named lists with this file:
+# [run_hint_lists]
+# port = ["8080", "5050", "5000"]
+"##;
                     match std::fs::write(&path, content) {
                         Ok(()) => {
                             print_success(&t!("alias.ral.template_created", path.display()));
@@ -451,7 +863,10 @@ pub fn cmd_run(args: &str, nav: &mut Navigator) -> Result<bool> {
         println!("{}", t!("alias.run.example_alias_args"));
         println!("{}", t!("alias.run.example_param"));
     } else {
-        let expanded_parts = expand_command_line(args);
+        let expanded_parts = match expand_command_line_interactive(args, nav)? {
+            None => return Ok(false),
+            Some(cmds) => cmds,
+        };
         for cmd in expanded_parts {
             execute_system_command(&cmd, nav.current_path())?;
         }

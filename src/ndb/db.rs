@@ -307,7 +307,12 @@ impl Database {
             &self.path,
             OpenFlags::SQLITE_OPEN_READ_WRITE | OpenFlags::SQLITE_OPEN_URI,
         )
-        .with_context(|| format!("failed to open database for writing: {}", self.path.display()))?;
+        .with_context(|| {
+            format!(
+                "failed to open database for writing: {}",
+                self.path.display()
+            )
+        })?;
         conn.query_row("SELECT count(*) FROM sqlite_master", [], |r| {
             r.get::<_, i64>(0)
         })
@@ -355,9 +360,7 @@ impl Database {
              ORDER BY name COLLATE NOCASE",
         )?;
         let raw: Vec<(String, String)> = stmt
-            .query_map([], |r| {
-                Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?))
-            })?
+            .query_map([], |r| Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?)))?
             .collect::<rusqlite::Result<Vec<_>>>()?;
         let mut out = Vec::with_capacity(raw.len());
         for (name, kind) in raw {
@@ -488,9 +491,7 @@ impl Database {
             page_count: self.pragma_int("page_count"),
             sqlite_version: self
                 .conn
-                .query_row("SELECT sqlite_version()", [], |r| {
-                    r.get::<_, String>(0)
-                })
+                .query_row("SELECT sqlite_version()", [], |r| r.get::<_, String>(0))
                 .unwrap_or_default(),
         }
     }
@@ -501,10 +502,7 @@ impl Database {
         let mut stmt = self.conn.prepare(&sql)?;
         let names: Vec<(String, bool)> = stmt
             .query_map([], |r| {
-                Ok((
-                    r.get::<_, String>(1)?,
-                    r.get::<_, i64>(2).unwrap_or(0) != 0,
-                ))
+                Ok((r.get::<_, String>(1)?, r.get::<_, i64>(2).unwrap_or(0) != 0))
             })?
             .collect::<rusqlite::Result<Vec<_>>>()?;
         drop(stmt);
@@ -587,11 +585,7 @@ impl Database {
             Err(_) => return Vec::new(),
         };
         stmt.query_map([table], |r| r.get::<_, Option<String>>(0))
-            .map(|rows| {
-                rows
-                    .filter_map(|r| r.ok().flatten())
-                    .collect::<Vec<_>>()
-            })
+            .map(|rows| rows.filter_map(|r| r.ok().flatten()).collect::<Vec<_>>())
             .unwrap_or_default()
     }
 }
@@ -714,15 +708,15 @@ mod tests {
         let db = Database::open(&path).unwrap();
 
         let on_books = db.indexes("books").unwrap();
-        assert!(on_books.iter().any(|i| i.name == "idx_books_author" && i.unique == false));
-        assert!(
-            on_books
-                .iter()
-                .find(|i| i.name == "idx_books_author")
-                .and_then(|i| i.sql.clone())
-                .unwrap_or_default()
-                .contains("CREATE INDEX")
-        );
+        assert!(on_books
+            .iter()
+            .any(|i| i.name == "idx_books_author" && i.unique == false));
+        assert!(on_books
+            .iter()
+            .find(|i| i.name == "idx_books_author")
+            .and_then(|i| i.sql.clone())
+            .unwrap_or_default()
+            .contains("CREATE INDEX"));
 
         let all = db.all_indexes().unwrap();
         // No sqlite_% internals; user index present.
@@ -786,7 +780,9 @@ mod tests {
         let path = make_db(tmp.path(), "app.db");
         let db = Database::open(&path).unwrap();
 
-        let all = db.query("SELECT id, name, score FROM users ORDER BY id", 10).unwrap();
+        let all = db
+            .query("SELECT id, name, score FROM users ORDER BY id", 10)
+            .unwrap();
         assert_eq!(all.columns, vec!["id", "name", "score"]);
         assert_eq!(all.rows.len(), 2);
         assert!(!all.truncated);
@@ -818,7 +814,9 @@ mod tests {
         let db = Database::open(&path).unwrap();
         // Even if the keyword guard were bypassed, SQLite refuses the write.
         assert!(db.query("DELETE FROM users", 10).is_err());
-        assert!(db.query("INSERT INTO users (name) VALUES ('x')", 10).is_err());
+        assert!(db
+            .query("INSERT INTO users (name) VALUES ('x')", 10)
+            .is_err());
     }
 
     #[test]
@@ -847,7 +845,9 @@ mod tests {
         let path = make_db(tmp.path(), "app.db");
         let mut db = Database::open(&path).unwrap();
         assert!(!db.is_writable());
-        assert!(db.exec_write("INSERT INTO users (name) VALUES ('x')").is_err());
+        assert!(db
+            .exec_write("INSERT INTO users (name) VALUES ('x')")
+            .is_err());
 
         db.make_writable().unwrap();
         assert!(db.is_writable());
@@ -860,7 +860,9 @@ mod tests {
         assert_eq!(n, 1);
         assert_eq!(db.row_count("users").unwrap(), 3);
 
-        let n = db.exec_write("UPDATE users SET name='q' WHERE name='zz'").unwrap();
+        let n = db
+            .exec_write("UPDATE users SET name='q' WHERE name='zz'")
+            .unwrap();
         assert_eq!(n, 1);
         let n = db.exec_write("DELETE FROM users WHERE name='q'").unwrap();
         assert_eq!(n, 1);

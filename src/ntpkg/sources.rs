@@ -144,13 +144,15 @@ pub fn get_source(name: &str, version: &str) -> Option<PackageSource> {
         "imagemagick" => imagemagick_source(version),
         "tesseract" => tesseract_source(version),
         "nginx" => nginx_source(version),
-        "opencode" | "mimocode" | "kilocode" | "omniroute" | "vscode" | "freebuff" => Some(PackageSource {
-            name: name.to_string(),
-            version: version.to_string(),
-            urls: HashMap::new(),
-            sha256: HashMap::new(),
-            archive_type: ArchiveType::Zip,
-        }),
+        "opencode" | "mimocode" | "kilocode" | "omniroute" | "vscode" | "freebuff" => {
+            Some(PackageSource {
+                name: name.to_string(),
+                version: version.to_string(),
+                urls: HashMap::new(),
+                sha256: HashMap::new(),
+                archive_type: ArchiveType::Zip,
+            })
+        }
         _ => None,
     }
 }
@@ -349,14 +351,8 @@ fn nginx_source(version: &str) -> Option<PackageSource> {
 
     let mut urls = HashMap::new();
     // Windows: official prebuilt zip. ARM64 Windows runs the x64 build under emulation.
-    urls.insert(
-        "windows-x86_64".to_string(),
-        format!("{base}.zip"),
-    );
-    urls.insert(
-        "windows-aarch64".to_string(),
-        format!("{base}.zip"),
-    );
+    urls.insert("windows-x86_64".to_string(), format!("{base}.zip"));
+    urls.insert("windows-aarch64".to_string(), format!("{base}.zip"));
     // Linux/macOS: official source tarball (built by ntpkg when requested).
     urls.insert("linux-x86_64".to_string(), format!("{base}.tar.gz"));
     urls.insert("linux-aarch64".to_string(), format!("{base}.tar.gz"));

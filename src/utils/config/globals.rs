@@ -2,12 +2,47 @@
 //! Provides `impl Config` blocks for the convenience methods that read and
 //! mutate the global singleton, plus local ntconfig.toml file management.
 
-use crate::config::{validate_alias_name, Config, LocalConfig};
+use crate::config::{validate_alias_name, Config, FakeColumn, LocalConfig};
 
 use crate::output::{print_error, print_success};
 use serde::Deserialize;
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
+
+/// Which config store a write targets.
+///
+/// `Auto` writes to the local `ntconfig.toml` when the current directory has
+/// one, otherwise to the global config. `Global` always writes the global
+/// config and is only reachable through the explicit `-g/--global` flag — a
+/// local command can therefore never modify the global config by accident.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ConfigScope {
+    Auto,
+    Global,
+}
+
+impl ConfigScope {
+    /// True when the write targets the local `ntconfig.toml`.
+    pub fn is_local(self) -> bool {
+        match self {
+            ConfigScope::Auto => Config::get_local_config_path().is_some(),
+            ConfigScope::Global => false,
+        }
+    }
+
+    /// True when the write targets the global config.
+    pub fn is_global(self) -> bool {
+        !self.is_local()
+    }
+}
+
+/// Which config store an alias was found in / removed from.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum AliasStore {
+    Local,
+    Global,
+    NotFound,
+}
 
 impl Config {
     //
@@ -379,6 +414,16 @@ impl Config {
         (Self::get_run_hint_lists_merged(), is_local)
     }
 
+    /// Hint lists split by store: `(global, local)`.
+    pub fn get_run_hint_lists_by_source(
+    ) -> (HashMap<String, Vec<String>>, HashMap<String, Vec<String>>) {
+        let global = Self::read_global().run_hint_lists.clone();
+        let local = Self::read_local_config()
+            .map(|l| l.run_hint_lists.unwrap_or_default())
+            .unwrap_or_default();
+        (global, local)
+    }
+
     pub fn global_get_run_hint_lists() -> HashMap<String, Vec<String>> {
         Self::read_global().run_hint_lists.clone()
     }
@@ -406,18 +451,17 @@ impl Config {
         }
     }
 
-    /// Add a hint list to local config (or global if no local config).
-    pub fn local_add_run_hint_list(
+    /// Add a hint list to the scoped store.
+    pub fn add_run_hint_list(
         name: &str,
         values: &[String],
+        scope: ConfigScope,
     ) -> std::result::Result<(), Box<dyn std::error::Error>> {
         let name_lower = name.to_lowercase();
-        if Self::get_local_config_path().is_some() {
+        if scope.is_local() {
             let mut local = Self::read_local_config().unwrap_or_default();
-            if local.run_hint_lists.is_none() {
-                local.run_hint_lists = Some(std::collections::HashMap::new());
-            }
-            if let Some(ref mut map) = local.run_hint_lists {
+            {
+                let map = local.run_hint_lists.get_or_insert_with(HashMap::new);
                 map.insert(name_lower, values.to_vec());
             }
             Self::write_local_config(&local)?;
@@ -427,13 +471,14 @@ impl Config {
         Ok(())
     }
 
-    /// Remove a hint list from local config (or global if no local config).
+    /// Remove a hint list from the scoped store.
     /// Returns true when an entry was actually removed.
-    pub fn local_remove_run_hint_list(
+    pub fn remove_run_hint_list(
         name: &str,
+        scope: ConfigScope,
     ) -> std::result::Result<bool, Box<dyn std::error::Error>> {
         let name_lower = name.to_lowercase();
-        if Self::get_local_config_path().is_some() {
+        if scope.is_local() {
             let mut local = Self::read_local_config().unwrap_or_default();
             let removed = match local.run_hint_lists.as_mut() {
                 Some(map) => {
@@ -453,8 +498,8 @@ impl Config {
     }
 
     /// Move a hint list from old name to new name (for `ral hintn rnm`).
-    pub fn local_rename_run_hint_list(old_name: &str, new_name: &str) {
-        if Self::get_local_config_path().is_some() {
+    pub fn rename_run_hint_list(old_name: &str, new_name: &str, scope: ConfigScope) {
+        if scope.is_local() {
             let mut local = Self::read_local_config().unwrap_or_default();
             if let Some(ref mut map) = local.run_hint_lists {
                 if let Some(values) = map.remove(&old_name.to_lowercase()) {
@@ -633,6 +678,185 @@ impl Config {
         }
     }
 
+    // ---- Fake groups (`fake group` dimension) ----
+    //
+    // Reads merge global + local (local wins); writes go to the local
+    // ntconfig.toml when one exists in the cwd, else the global config —
+    // same routing as `dbal`/`ral`.
+
+    /// Merged `fake` groups: global entries overlaid by local ones.
+    pub fn get_fake_groups() -> HashMap<String, Vec<FakeColumn>> {
+        let mut merged = Self::read_global().fake_groups.clone();
+        if let Ok(local) = Self::read_local_config() {
+            if let Some(map) = local.fake_groups {
+                merged.extend(map);
+            }
+        }
+        merged
+    }
+
+    /// Fetch one merged group by (case-insensitive) name.
+    pub fn get_fake_group(name: &str) -> Option<Vec<FakeColumn>> {
+        Self::get_fake_groups().get(&name.to_lowercase()).cloned()
+    }
+
+    /// Whether the cwd has a local ntconfig.toml (write routing target).
+    pub fn fake_groups_are_local() -> bool {
+        Self::get_local_config_path().is_some()
+    }
+
+    /// Insert or overwrite a `fake` group. Returns `true` when it landed in
+    /// the local config, `false` for the global config.
+    pub fn add_fake_group(
+        name: &str,
+        columns: &[FakeColumn],
+    ) -> std::result::Result<bool, Box<dyn std::error::Error>> {
+        let key = name.to_lowercase();
+        if Self::get_local_config_path().is_some() {
+            let mut local = Self::read_local_config().unwrap_or_default();
+            let map = local.fake_groups.get_or_insert_with(HashMap::new);
+            map.insert(key, columns.to_vec());
+            Self::write_local_config(&local)?;
+            Ok(true)
+        } else {
+            let mut cfg = Self::write_global();
+            cfg.fake_groups.insert(key, columns.to_vec());
+            cfg.save();
+            Ok(false)
+        }
+    }
+
+    /// Replace an existing `fake` group's columns in the routed store.
+    /// Returns `true` when the group existed and was updated.
+    pub fn update_fake_group(
+        name: &str,
+        columns: &[FakeColumn],
+    ) -> std::result::Result<bool, Box<dyn std::error::Error>> {
+        let key = name.to_lowercase();
+        if Self::get_local_config_path().is_some() {
+            let mut local = Self::read_local_config().unwrap_or_default();
+            let updated = match local.fake_groups.as_mut() {
+                Some(map) => map.contains_key(&key),
+                None => false,
+            };
+            if updated {
+                if let Some(map) = local.fake_groups.as_mut() {
+                    map.insert(key, columns.to_vec());
+                }
+                Self::write_local_config(&local)?;
+            }
+            Ok(updated)
+        } else {
+            let mut cfg = Self::write_global();
+            if let std::collections::hash_map::Entry::Occupied(mut e) = cfg.fake_groups.entry(key) {
+                e.insert(columns.to_vec());
+                cfg.save();
+                Ok(true)
+            } else {
+                Ok(false)
+            }
+        }
+    }
+
+    /// Remove a `fake` group from the routed store. Returns `true` when an
+    /// entry was actually removed.
+    pub fn remove_fake_group(name: &str) -> std::result::Result<bool, Box<dyn std::error::Error>> {
+        let key = name.to_lowercase();
+        if Self::get_local_config_path().is_some() {
+            let mut local = Self::read_local_config().unwrap_or_default();
+            let removed = match local.fake_groups.as_mut() {
+                Some(map) => map.remove(&key).is_some(),
+                None => false,
+            };
+            if removed {
+                if local.fake_groups.as_ref().is_some_and(|m| m.is_empty()) {
+                    local.fake_groups = None;
+                }
+                Self::write_local_config(&local)?;
+            }
+            Ok(removed)
+        } else {
+            let mut cfg = Self::write_global();
+            let removed = cfg.fake_groups.remove(&key).is_some();
+            cfg.save();
+            Ok(removed)
+        }
+    }
+
+    /// Rename a `fake` group, keeping it in whichever store holds it.
+    /// Returns `false` when `old` is unknown or `new` is taken/invalid.
+    pub fn rename_fake_group(old_name: &str, new_name: &str) -> bool {
+        let old_key = old_name.to_lowercase();
+        let new_key = new_name.to_lowercase();
+        if new_key.trim().is_empty() || new_key.contains(' ') {
+            return false;
+        }
+        let merged = Self::get_fake_groups();
+        let Some(cols) = merged.get(&old_key).cloned() else {
+            return false;
+        };
+        if merged.contains_key(&new_key) {
+            return false;
+        }
+        // Rename in whichever store actually holds `old` (local wins).
+        let in_local = Self::read_local_config()
+            .ok()
+            .and_then(|l| l.fake_groups)
+            .is_some_and(|m| m.contains_key(&old_key));
+        // Drop the old key from both stores so nothing is left shadowed.
+        {
+            let mut cfg = Self::write_global();
+            cfg.fake_groups.remove(&old_key);
+            cfg.save();
+        }
+        if let Ok(mut local) = Self::read_local_config() {
+            let mut touched = false;
+            if let Some(ref mut map) = local.fake_groups {
+                touched = map.remove(&old_key).is_some();
+                if map.is_empty() {
+                    local.fake_groups = None;
+                }
+            }
+            if touched {
+                let _ = Self::write_local_config(&local);
+            }
+        }
+        if in_local {
+            match Self::read_local_config() {
+                Ok(mut local) => {
+                    local
+                        .fake_groups
+                        .get_or_insert_with(HashMap::new)
+                        .insert(new_key, cols);
+                    Self::write_local_config(&local).is_ok()
+                }
+                Err(_) => false,
+            }
+        } else {
+            let mut cfg = Self::write_global();
+            cfg.fake_groups.insert(new_key, cols);
+            cfg.save();
+            true
+        }
+    }
+
+    /// Clear the routed store's `fake` groups. Returns the count removed.
+    pub fn clear_fake_groups() -> std::result::Result<usize, Box<dyn std::error::Error>> {
+        if Self::get_local_config_path().is_some() {
+            let mut local = Self::read_local_config().unwrap_or_default();
+            let count = local.fake_groups.as_ref().map(|m| m.len()).unwrap_or(0);
+            local.fake_groups = None;
+            Self::write_local_config(&local)?;
+            Ok(count)
+        } else {
+            let mut cfg = Self::write_global();
+            let count = cfg.fake_groups.len();
+            cfg.fake_groups.clear();
+            cfg.save();
+            Ok(count)
+        }
+    }
+
     // ---- Math functions (global only) ----
 
     pub fn global_get_math_fns() -> HashMap<String, String> {
@@ -705,161 +929,208 @@ impl Config {
     // These consolidate the repetitive "read-local-or-fall-back-to-global" pattern
     // that appeared 8+ times in the codebase.
 
-    /// Modify a `Vec<String>` field on the local config (or global `HashSet` as fallback).
-    fn modify_local_vec(
-        local_field: fn(&mut LocalConfig) -> &mut Option<Vec<String>>,
-        global_add: fn(&str),
+    /// Add `item` to a local `Option<Vec<String>>` field.
+    fn add_to_local_list(
+        local: &mut LocalConfig,
+        field: fn(&mut LocalConfig) -> &mut Option<Vec<String>>,
         item: &str,
-        success_msg: &str,
     ) {
-        if Self::get_local_config_path().is_some() {
-            let mut local = Self::read_local_config().unwrap_or_default();
-            let vec = local_field(&mut local);
-            if vec.is_none() {
-                *vec = Some(Vec::new());
-            }
-            if let Some(ref mut v) = vec {
-                if !v.contains(&item.to_string()) {
-                    v.push(item.to_string());
-                }
-            }
-            if Self::write_local_config(&local).is_ok() {
-                print_success(&format!("{} (local config)", success_msg));
-            }
-        } else {
-            global_add(item);
+        let vec = field(local).get_or_insert_with(Vec::new);
+        if !vec.iter().any(|x| x == item) {
+            vec.push(item.to_string());
         }
     }
 
-    /// Remove from a `Vec<String>` field on the local config (or global `HashSet` as fallback).
-    fn remove_from_local_vec(
-        local_field: fn(&mut LocalConfig) -> &mut Option<Vec<String>>,
-        global_remove: fn(&str),
+    /// Remove `item` from a local `Option<Vec<String>>` field, clearing the
+    /// field when it becomes empty.
+    fn remove_from_local_list(
+        local: &mut LocalConfig,
+        field: fn(&mut LocalConfig) -> &mut Option<Vec<String>>,
         item: &str,
-        success_msg: &str,
     ) {
-        if Self::get_local_config_path().is_some() {
-            let mut local = Self::read_local_config().unwrap_or_default();
-            if let Some(ref mut vec) = local_field(&mut local) {
+        let empty = {
+            if let Some(ref mut vec) = field(local) {
                 vec.retain(|x| x != item);
-                if vec.is_empty() {
-                    *local_field(&mut local) = None;
-                }
+                vec.is_empty()
+            } else {
+                false
             }
-            if Self::write_local_config(&local).is_ok() {
-                print_success(&format!("{} (local config)", success_msg));
-            }
+        };
+        if empty {
+            *field(local) = None;
+        }
+    }
+
+    /// Add ignored directory to the scoped store.
+    pub fn add_ignored_dir(
+        name: &str,
+        scope: ConfigScope,
+    ) -> std::result::Result<(), Box<dyn std::error::Error>> {
+        if scope.is_local() {
+            let mut local = Self::read_local_config().unwrap_or_default();
+            Self::add_to_local_list(&mut local, |lc| &mut lc.ignored_directory_names, name);
+            // Ignoring wins over caring inside the same store.
+            Self::remove_from_local_list(&mut local, |lc| &mut lc.cared_directory_names, name);
+            Self::write_local_config(&local)?;
+            print_success(&format!("Now ignoring directory: {} (local config)", name));
         } else {
-            global_remove(item);
+            Config::global_add_ignored_dir(name);
         }
-    }
-
-    /// Add ignored directory to local config (or global if no local config)
-    pub fn local_add_ignored_dir(
-        name: &str,
-    ) -> std::result::Result<(), Box<dyn std::error::Error>> {
-        Self::modify_local_vec(
-            |lc| &mut lc.ignored_directory_names,
-            Config::global_add_ignored_dir,
-            name,
-            &format!("Now ignoring directory: {}", name),
-        );
         Ok(())
     }
 
-    /// Remove ignored directory from local config (or global if no local config)
-    pub fn local_remove_ignored_dir(
+    /// Stop ignoring a directory in the scoped store.
+    ///
+    /// In the local store this records the name in the "cared" list, so the
+    /// name is not ignored here even when the global config ignores it — the
+    /// global config file itself is never modified.
+    pub fn add_cared_dir(
         name: &str,
+        scope: ConfigScope,
     ) -> std::result::Result<(), Box<dyn std::error::Error>> {
-        Self::remove_from_local_vec(
-            |lc| &mut lc.ignored_directory_names,
-            Config::global_remove_ignored_dir,
-            name,
-            &format!("No longer ignoring directory: {}", name),
-        );
+        if scope.is_local() {
+            let mut local = Self::read_local_config().unwrap_or_default();
+            Self::add_to_local_list(&mut local, |lc| &mut lc.cared_directory_names, name);
+            Self::remove_from_local_list(&mut local, |lc| &mut lc.ignored_directory_names, name);
+            Self::write_local_config(&local)?;
+            print_success(&format!(
+                "Now caring about directory: {} (local config)",
+                name
+            ));
+        } else {
+            Config::global_remove_ignored_dir(name);
+        }
         Ok(())
     }
 
-    /// Add ignored extension to local config (or global if no local config)
-    pub fn local_add_ignored_extension(
+    /// Add ignored extension to the scoped store.
+    pub fn add_ignored_extension(
         ext: &str,
+        scope: ConfigScope,
     ) -> std::result::Result<(), Box<dyn std::error::Error>> {
         let ext_lower = ext.to_lowercase();
-        // Pre-add to global's `ignored_extensions` before going through the helper
-        // so the fn pointer path can be used.
-        if Self::get_local_config_path().is_none() {
+        if scope.is_local() {
+            let mut local = Self::read_local_config().unwrap_or_default();
+            Self::add_to_local_list(&mut local, |lc| &mut lc.ignored_extensions, &ext_lower);
+            Self::remove_from_local_list(&mut local, |lc| &mut lc.cared_extensions, &ext_lower);
+            Self::write_local_config(&local)?;
+            print_success(&format!("Now ignoring .{} files (local config)", ext));
+        } else {
             Config::global_add_ignored_extension(&ext_lower);
-            return Ok(());
         }
-        let mut local = Self::read_local_config().unwrap_or_default();
-        let vec = local.ignored_extensions.get_or_insert_with(Vec::new);
-        if !vec.contains(&ext_lower) {
-            vec.push(ext_lower.clone());
-        }
-        Self::write_local_config(&local)?;
-        print_success(&format!("Now ignoring .{} files (local config)", ext));
         Ok(())
     }
 
-    /// Add extra supported extension to local config (or global if no local config)
-    pub fn local_add_extra_supported_extension(
+    /// Stop ignoring an extension in the scoped store (and treat it as text).
+    pub fn add_cared_extension(
         ext: &str,
+        scope: ConfigScope,
     ) -> std::result::Result<(), Box<dyn std::error::Error>> {
         let ext_lower = ext.to_lowercase();
-        if Self::get_local_config_path().is_none() {
+        if scope.is_local() {
+            let mut local = Self::read_local_config().unwrap_or_default();
+            Self::add_to_local_list(&mut local, |lc| &mut lc.cared_extensions, &ext_lower);
+            Self::remove_from_local_list(&mut local, |lc| &mut lc.ignored_extensions, &ext_lower);
+            Self::add_to_local_list(
+                &mut local,
+                |lc| &mut lc.extra_supported_extensions,
+                &ext_lower,
+            );
+            Self::write_local_config(&local)?;
+            print_success(&format!("Now caring about .{} files (local config)", ext));
+        } else {
+            Config::global_remove_ignored_extension(&ext_lower);
             Config::global_add_extra_supported_extension(&ext_lower);
-            return Ok(());
         }
-        let mut local = Self::read_local_config().unwrap_or_default();
-        let vec = local
-            .extra_supported_extensions
-            .get_or_insert_with(Vec::new);
-        if !vec.contains(&ext_lower) {
-            vec.push(ext_lower.clone());
+        Ok(())
+    }
+
+    /// Add extra supported extension to the scoped store.
+    pub fn add_extra_supported_extension(
+        ext: &str,
+        scope: ConfigScope,
+    ) -> std::result::Result<(), Box<dyn std::error::Error>> {
+        let ext_lower = ext.to_lowercase();
+        if scope.is_local() {
+            let mut local = Self::read_local_config().unwrap_or_default();
+            Self::add_to_local_list(
+                &mut local,
+                |lc| &mut lc.extra_supported_extensions,
+                &ext_lower,
+            );
+            Self::remove_from_local_list(&mut local, |lc| &mut lc.cared_extensions, &ext_lower);
+            Self::write_local_config(&local)?;
+            print_success(&format!("Now caring about .{} files (local config)", ext));
+        } else {
+            Config::global_add_extra_supported_extension(&ext_lower);
         }
-        Self::write_local_config(&local)?;
-        print_success(&format!("Now caring about .{} files (local config)", ext));
         Ok(())
     }
 
-    /// Add ignored file to local config (or global if no local config)
-    pub fn local_add_ignored_file(
+    /// Add ignored file to the scoped store.
+    pub fn add_ignored_file(
         name: &str,
+        scope: ConfigScope,
     ) -> std::result::Result<(), Box<dyn std::error::Error>> {
-        Self::modify_local_vec(
-            |lc| &mut lc.ignored_files,
-            Config::global_add_ignored_file,
-            name,
-            &format!("Now ignoring file: {}", name),
-        );
+        if scope.is_local() {
+            let mut local = Self::read_local_config().unwrap_or_default();
+            Self::add_to_local_list(&mut local, |lc| &mut lc.ignored_files, name);
+            Self::remove_from_local_list(&mut local, |lc| &mut lc.cared_files, name);
+            Self::write_local_config(&local)?;
+            print_success(&format!("Now ignoring file: {} (local config)", name));
+        } else {
+            Config::global_add_ignored_file(name);
+        }
         Ok(())
     }
 
-    /// Add extra supported file to local config (or global if no local config)
-    pub fn local_add_extra_supported_file(
+    /// Stop ignoring a file in the scoped store (and treat it as text).
+    pub fn add_cared_file(
         name: &str,
+        scope: ConfigScope,
     ) -> std::result::Result<(), Box<dyn std::error::Error>> {
-        Self::modify_local_vec(
-            |lc| &mut lc.extra_supported_files,
-            Config::global_add_extra_supported_file,
-            name,
-            &format!("Now caring about file: {}", name),
-        );
+        if scope.is_local() {
+            let mut local = Self::read_local_config().unwrap_or_default();
+            Self::add_to_local_list(&mut local, |lc| &mut lc.cared_files, name);
+            Self::remove_from_local_list(&mut local, |lc| &mut lc.ignored_files, name);
+            Self::add_to_local_list(&mut local, |lc| &mut lc.extra_supported_files, name);
+            Self::write_local_config(&local)?;
+            print_success(&format!("Now caring about file: {} (local config)", name));
+        } else {
+            Config::global_remove_ignored_file(name);
+            Config::global_add_extra_supported_file(name);
+        }
         Ok(())
     }
 
-    /// Add run alias to local config (or global if no local config)
-    pub fn local_add_run_alias(
+    /// Add extra supported file to the scoped store.
+    pub fn add_extra_supported_file(
+        name: &str,
+        scope: ConfigScope,
+    ) -> std::result::Result<(), Box<dyn std::error::Error>> {
+        if scope.is_local() {
+            let mut local = Self::read_local_config().unwrap_or_default();
+            Self::add_to_local_list(&mut local, |lc| &mut lc.extra_supported_files, name);
+            Self::remove_from_local_list(&mut local, |lc| &mut lc.cared_files, name);
+            Self::write_local_config(&local)?;
+            print_success(&format!("Now caring about file: {} (local config)", name));
+        } else {
+            Config::global_add_extra_supported_file(name);
+        }
+        Ok(())
+    }
+
+    /// Add a run alias to the scoped store.
+    pub fn add_run_alias(
         name: &str,
         command: &str,
+        scope: ConfigScope,
     ) -> std::result::Result<(), Box<dyn std::error::Error>> {
         let name_lower = name.to_lowercase();
-        if Self::get_local_config_path().is_some() {
+        if scope.is_local() {
             let mut local = Self::read_local_config().unwrap_or_default();
-            if local.run_aliases.is_none() {
-                local.run_aliases = Some(std::collections::HashMap::new());
-            }
-            if let Some(ref mut map) = local.run_aliases {
+            {
+                let map = local.run_aliases.get_or_insert_with(HashMap::new);
                 map.insert(name_lower, command.to_string());
             }
             Self::write_local_config(&local)?;
@@ -874,51 +1145,67 @@ impl Config {
         Ok(())
     }
 
-    /// Remove run alias from local config (or global if no local config)
-    pub fn local_remove_run_alias(
+    /// Remove a run alias from the scoped store.
+    ///
+    /// Returns the store the alias was removed from. A local command never
+    /// removes a global alias — the global entry stays untouched.
+    pub fn remove_run_alias(
         name: &str,
-    ) -> std::result::Result<(), Box<dyn std::error::Error>> {
+        scope: ConfigScope,
+    ) -> std::result::Result<AliasStore, Box<dyn std::error::Error>> {
         let name_lower = name.to_lowercase();
-        if Self::get_local_config_path().is_some() {
+        if scope.is_local() {
             let mut local = Self::read_local_config().unwrap_or_default();
+            let mut removed = false;
             if let Some(ref mut map) = local.run_aliases {
-                if map.remove(&name_lower).is_some() {
-                    if map.is_empty() {
-                        local.run_aliases = None;
-                    }
-                    Self::write_local_config(&local)?;
-                    print_success(&format!("Removed alias '{}' (local config)", name));
-                } else {
-                    print_error(&format!("Alias '{}' not found in local config", name));
+                removed = map.remove(&name_lower).is_some();
+                if map.is_empty() {
+                    local.run_aliases = None;
                 }
-            } else {
-                print_error(&format!("Alias '{}' not found in local config", name));
             }
+            if removed {
+                Self::write_local_config(&local)?;
+                print_success(&format!("Removed alias '{}' (local config)", name));
+                return Ok(AliasStore::Local);
+            }
+            print_error(&format!("Alias '{}' not found in local config", name));
+            Ok(AliasStore::NotFound)
         } else {
+            let existed = Self::read_global().run_aliases.contains_key(&name_lower);
             Config::global_remove_run_alias(name);
-            print_success(&format!("Removed alias '{}' (global config)", name));
+            if existed {
+                print_success(&format!("Removed alias '{}' (global config)", name));
+                Ok(AliasStore::Global)
+            } else {
+                print_error(&format!("Alias '{}' not found in global config", name));
+                Ok(AliasStore::NotFound)
+            }
         }
-        Ok(())
     }
 
-    /// Update run alias in local config (or global if no local config)
-    pub fn local_update_run_alias(
+    /// Update a run alias in the scoped store.
+    pub fn update_run_alias(
         name: &str,
         command: &str,
+        scope: ConfigScope,
     ) -> std::result::Result<bool, Box<dyn std::error::Error>> {
         let name_lower = name.to_lowercase();
-        if Self::get_local_config_path().is_some() {
+        if scope.is_local() {
             let mut local = Self::read_local_config().unwrap_or_default();
+            let mut updated = false;
             if let Some(ref mut map) = local.run_aliases {
                 if let std::collections::hash_map::Entry::Occupied(mut e) = map.entry(name_lower) {
                     e.insert(command.to_string());
-                    Self::write_local_config(&local)?;
-                    print_success(&format!(
-                        "Updated alias '{}' -> '{}' (local config)",
-                        name, command
-                    ));
-                    return Ok(true);
+                    updated = true;
                 }
+            }
+            if updated {
+                Self::write_local_config(&local)?;
+                print_success(&format!(
+                    "Updated alias '{}' -> '{}' (local config)",
+                    name, command
+                ));
+                return Ok(true);
             }
             print_error(&format!("Alias '{}' not found in local config", name));
             Ok(false)
@@ -936,19 +1223,17 @@ impl Config {
         }
     }
 
-    /// Add run alias hint spec to local config (or global if no local config).
-    /// Pass `None` as spec to just remove any existing hint (used on plain edits).
-    pub fn local_add_run_alias_hint(
+    /// Add a run alias hint spec to the scoped store.
+    pub fn add_run_alias_hint(
         name: &str,
         spec: &str,
+        scope: ConfigScope,
     ) -> std::result::Result<(), Box<dyn std::error::Error>> {
         let name_lower = name.to_lowercase();
-        if Self::get_local_config_path().is_some() {
+        if scope.is_local() {
             let mut local = Self::read_local_config().unwrap_or_default();
-            if local.run_alias_hints.is_none() {
-                local.run_alias_hints = Some(std::collections::HashMap::new());
-            }
-            if let Some(ref mut map) = local.run_alias_hints {
+            {
+                let map = local.run_alias_hints.get_or_insert_with(HashMap::new);
                 map.insert(name_lower, spec.to_string());
             }
             Self::write_local_config(&local)?;
@@ -958,17 +1243,22 @@ impl Config {
         Ok(())
     }
 
-    /// Remove a run alias hint spec from local config (or global if no local config).
-    pub fn local_remove_run_alias_hint(
+    /// Remove a run alias hint spec from the scoped store.
+    pub fn remove_run_alias_hint(
         name: &str,
+        scope: ConfigScope,
     ) -> std::result::Result<(), Box<dyn std::error::Error>> {
         let name_lower = name.to_lowercase();
-        if Self::get_local_config_path().is_some() {
+        if scope.is_local() {
             let mut local = Self::read_local_config().unwrap_or_default();
+            let mut removed = false;
             if let Some(ref mut map) = local.run_alias_hints {
-                if map.remove(&name_lower).is_some() && map.is_empty() {
+                removed = map.remove(&name_lower).is_some();
+                if map.is_empty() {
                     local.run_alias_hints = None;
                 }
+            }
+            if removed {
                 Self::write_local_config(&local)?;
             }
         } else {
@@ -978,8 +1268,8 @@ impl Config {
     }
 
     /// Move a hint spec from old name to new name (for `ral rnm`).
-    pub fn local_rename_run_alias_hint(old_name: &str, new_name: &str) {
-        if Self::get_local_config_path().is_some() {
+    pub fn rename_run_alias_hint(old_name: &str, new_name: &str, scope: ConfigScope) {
+        if scope.is_local() {
             let mut local = Self::read_local_config().unwrap_or_default();
             if let Some(ref mut map) = local.run_alias_hints {
                 if let Some(spec) = map.remove(&old_name.to_lowercase()) {
@@ -992,23 +1282,68 @@ impl Config {
         }
     }
 
-    /// Get all run aliases (already handled by global_get_run_aliases which merges)
-    /// But for display, we might want to show source
-    pub fn get_run_aliases_with_source() -> (HashMap<String, String>, bool) {
-        let is_local = Self::get_local_config_path().is_some();
-        let aliases = Config::global_get_run_aliases();
-        (aliases, is_local)
+    // ---- Run alias reads (global + local) ----
+    //
+    // The local ntconfig.toml is layered on top of the global config: local
+    // entries win per key, and every name the local config does not define
+    // keeps working from the global config.
+
+    /// Run aliases of the global config.
+    pub fn get_global_run_aliases() -> HashMap<String, String> {
+        Self::read_global().run_aliases.clone()
     }
 
-    /// Clear all run aliases from local config (or global if no local config)
-    pub fn local_clear_run_aliases() -> std::result::Result<(), Box<dyn std::error::Error>> {
-        if Self::get_local_config_path().is_some() {
+    /// Run aliases of the local ntconfig.toml (empty when there is none).
+    pub fn get_local_run_aliases() -> HashMap<String, String> {
+        Self::read_local_config()
+            .map(|l| l.run_aliases.unwrap_or_default())
+            .unwrap_or_default()
+    }
+
+    /// Effective run aliases: global entries overlaid by the local ones.
+    pub fn get_run_aliases_merged() -> HashMap<String, String> {
+        let mut merged = Self::get_global_run_aliases();
+        merged.extend(Self::get_local_run_aliases());
+        merged
+    }
+
+    /// Run aliases split by store: `(global, local)`.
+    pub fn get_run_aliases_by_source() -> (HashMap<String, String>, HashMap<String, String>) {
+        (
+            Self::get_global_run_aliases(),
+            Self::get_local_run_aliases(),
+        )
+    }
+
+    /// Run alias hint specs of the local ntconfig.toml.
+    pub fn get_local_run_alias_hints() -> HashMap<String, String> {
+        Self::read_local_config()
+            .map(|l| l.run_alias_hints.unwrap_or_default())
+            .unwrap_or_default()
+    }
+
+    /// Effective run alias hint specs: global entries overlaid by the local ones.
+    pub fn get_run_alias_hints_merged() -> HashMap<String, String> {
+        let mut merged = Self::read_global().run_alias_hints.clone();
+        merged.extend(Self::get_local_run_alias_hints());
+        merged
+    }
+
+    /// Run alias hint specs split by store: `(global, local)`.
+    pub fn get_run_alias_hints_by_source() -> (HashMap<String, String>, HashMap<String, String>) {
+        (
+            Self::read_global().run_alias_hints.clone(),
+            Self::get_local_run_alias_hints(),
+        )
+    }
+
+    /// Clear all run aliases from the scoped store. Returns the number cleared.
+    pub fn clear_run_aliases(
+        scope: ConfigScope,
+    ) -> std::result::Result<usize, Box<dyn std::error::Error>> {
+        if scope.is_local() {
             let mut local = Self::read_local_config().unwrap_or_default();
-            let count = if let Some(ref map) = local.run_aliases {
-                map.len()
-            } else {
-                0
-            };
+            let count = local.run_aliases.as_ref().map(|m| m.len()).unwrap_or(0);
             local.run_aliases = None;
             local.run_alias_hints = None;
             Self::write_local_config(&local)?;
@@ -1016,6 +1351,7 @@ impl Config {
                 "Cleared {} run alias(es) from local config.",
                 count
             ));
+            Ok(count)
         } else {
             // Drop WRITE guard before printing: print_success() re-reads
             // Config (via ansi_enabled) and would deadlock on same-thread
@@ -1032,8 +1368,8 @@ impl Config {
                 "Cleared {} run alias(es) from global config.",
                 count
             ));
+            Ok(count)
         }
-        Ok(())
     }
 
     pub fn global_get_watch_trigger_alias() -> Option<String> {
@@ -1087,6 +1423,16 @@ impl Config {
     pub fn global_set_dir_view_enabled(enabled: bool) {
         let mut cfg = Self::write_global();
         cfg.dir_view_enabled = enabled;
+        cfg.save();
+    }
+
+    pub fn global_get_update_check_enabled() -> bool {
+        Self::read_global().update_check_enabled
+    }
+
+    pub fn global_set_update_check_enabled(enabled: bool) {
+        let mut cfg = Self::write_global();
+        cfg.update_check_enabled = enabled;
         cfg.save();
     }
 
@@ -1175,10 +1521,11 @@ impl Config {
 
     // ---- Import helpers ----
 
-    /// Import run aliases from a `.ntc.ral` file and merge into local or global config.
+    /// Import run aliases from a `.ntc.ral` file into the scoped store.
     /// Batches writes: reads the target config once, applies all changes, writes once.
     pub fn import_run_aliases_from_file(
         path: &Path,
+        scope: ConfigScope,
     ) -> std::result::Result<(), Box<dyn std::error::Error>> {
         let content = std::fs::read_to_string(path)?;
         #[derive(Deserialize)]
@@ -1195,27 +1542,23 @@ impl Config {
         let hints = ral.run_alias_hints.unwrap_or_default();
         let lists = ral.run_hint_lists.unwrap_or_default();
 
-        if Self::get_local_config_path().is_some() {
+        if scope.is_local() {
             // Batch into local config: read once, apply all, write once
             let mut local = Self::read_local_config().unwrap_or_default();
-            let map = local
-                .run_aliases
-                .get_or_insert_with(std::collections::HashMap::new);
-            for (name, cmd) in &aliases {
-                map.insert(name.to_lowercase(), cmd.clone());
+            {
+                let map = local.run_aliases.get_or_insert_with(HashMap::new);
+                for (name, cmd) in &aliases {
+                    map.insert(name.to_lowercase(), cmd.clone());
+                }
             }
             if !hints.is_empty() {
-                let hmap = local
-                    .run_alias_hints
-                    .get_or_insert_with(std::collections::HashMap::new);
+                let hmap = local.run_alias_hints.get_or_insert_with(HashMap::new);
                 for (name, spec) in &hints {
                     hmap.insert(name.to_lowercase(), spec.clone());
                 }
             }
             if !lists.is_empty() {
-                let lmap = local
-                    .run_hint_lists
-                    .get_or_insert_with(std::collections::HashMap::new);
+                let lmap = local.run_hint_lists.get_or_insert_with(HashMap::new);
                 for (name, values) in &lists {
                     lmap.insert(name.to_lowercase(), values.clone());
                 }
@@ -1249,10 +1592,11 @@ impl Config {
         Ok(())
     }
 
-    /// Import ignore/care settings from a `.ntc.igcare` file and merge into local or global config.
+    /// Import ignore/care settings from a `.ntc.igcare` file into the scoped store.
     /// Batches writes: reads the target config once, applies all changes, writes once.
     pub fn import_igcare_from_file(
         path: &Path,
+        scope: ConfigScope,
     ) -> std::result::Result<(), Box<dyn std::error::Error>> {
         let content = std::fs::read_to_string(path)?;
         #[derive(Deserialize)]
@@ -1262,12 +1606,15 @@ impl Config {
             extra_supported_extensions: Option<Vec<String>>,
             ignored_files: Option<Vec<String>>,
             extra_supported_files: Option<Vec<String>>,
+            cared_directory_names: Option<Vec<String>>,
+            cared_extensions: Option<Vec<String>>,
+            cared_files: Option<Vec<String>>,
         }
         let igc: IgcareFile = toml::from_str(&content)?;
 
         let mut total = 0usize;
 
-        if Self::get_local_config_path().is_some() {
+        if scope.is_local() {
             // Batch into local config: read once, apply all, write once
             let mut local = Self::read_local_config().unwrap_or_default();
 
@@ -1295,6 +1642,15 @@ impl Config {
             }
             if let Some(ref files) = igc.extra_supported_files {
                 extend(&mut local.extra_supported_files, files);
+            }
+            if let Some(ref dirs) = igc.cared_directory_names {
+                extend(&mut local.cared_directory_names, dirs);
+            }
+            if let Some(ref exts) = igc.cared_extensions {
+                extend(&mut local.cared_extensions, exts);
+            }
+            if let Some(ref files) = igc.cared_files {
+                extend(&mut local.cared_files, files);
             }
 
             Self::write_local_config(&local)?;
@@ -1337,6 +1693,32 @@ impl Config {
                     }
                 }
             }
+            // The global store has no "cared" layer: a cared name simply
+            // leaves the global ignore list.
+            if let Some(ref dirs) = igc.cared_directory_names {
+                for dir in dirs {
+                    if cfg.ignored_directory_names.remove(dir) {
+                        total += 1;
+                    }
+                }
+            }
+            if let Some(ref exts) = igc.cared_extensions {
+                for ext in exts {
+                    let lower = ext.to_lowercase();
+                    if cfg.ignored_extensions.remove(&lower) {
+                        total += 1;
+                    }
+                    cfg.extra_supported_extensions.insert(lower);
+                }
+            }
+            if let Some(ref files) = igc.cared_files {
+                for file in files {
+                    if cfg.ignored_files.remove(file) {
+                        total += 1;
+                    }
+                    cfg.extra_supported_files.insert(file.clone());
+                }
+            }
 
             cfg.save();
         }
@@ -1354,6 +1736,143 @@ mod tests {
         TempCwd::with_fixture(&[("ntconfig.toml", "")], &[])
     }
 
+    /// Restores the default global config location when dropped.
+    struct ConfigPathGuard;
+
+    impl Drop for ConfigPathGuard {
+        fn drop(&mut self) {
+            crate::config::set_test_config_path(None);
+        }
+    }
+
+    #[test]
+    fn local_alias_is_visible_and_wins_over_global() {
+        let _cwd = local_ntconfig();
+        let mut cfg = Config::default();
+        cfg.run_aliases.insert("ll".into(), "global ll".into());
+        cfg.run_aliases.insert("gonly".into(), "global only".into());
+        Config::with_test_config(cfg, || {
+            // A local alias is written to the local file, not the global one.
+            Config::add_run_alias("ll", "local ll", ConfigScope::Auto).unwrap();
+
+            // The global store still holds its own entry.
+            assert_eq!(
+                Config::get_global_run_aliases()
+                    .get("ll")
+                    .map(String::as_str),
+                Some("global ll")
+            );
+            // The merged view prefers the local entry ...
+            let merged = Config::get_run_aliases_merged();
+            assert_eq!(merged.get("ll").map(String::as_str), Some("local ll"));
+            // ... and keeps every global name the local config does not use.
+            assert_eq!(merged.get("gonly").map(String::as_str), Some("global only"));
+
+            // The per-source split shows both entries.
+            let (global, local) = Config::get_run_aliases_by_source();
+            assert_eq!(global.get("ll").map(String::as_str), Some("global ll"));
+            assert_eq!(local.get("ll").map(String::as_str), Some("local ll"));
+        });
+    }
+
+    #[test]
+    fn local_write_never_touches_the_global_config() {
+        let _cwd = local_ntconfig();
+        let mut cfg = Config::default();
+        cfg.run_aliases.insert("ll".into(), "global ll".into());
+        Config::with_test_config(cfg, || {
+            Config::add_run_alias("only-local", "echo local", ConfigScope::Auto).unwrap();
+            assert!(!Config::get_global_run_aliases().contains_key("only-local"));
+            assert_eq!(
+                Config::get_local_run_aliases()
+                    .get("only-local")
+                    .map(String::as_str),
+                Some("echo local")
+            );
+        });
+    }
+
+    #[test]
+    fn removing_an_alias_in_a_project_keeps_the_global_one() {
+        let _cwd = local_ntconfig();
+        let mut cfg = Config::default();
+        cfg.run_aliases.insert("gonly".into(), "global only".into());
+        Config::with_test_config(cfg, || {
+            // The alias only exists globally → nothing is removed, the global
+            // entry stays untouched.
+            let store = Config::remove_run_alias("gonly", ConfigScope::Auto).unwrap();
+            assert_eq!(store, AliasStore::NotFound);
+            assert_eq!(
+                Config::get_global_run_aliases()
+                    .get("gonly")
+                    .map(String::as_str),
+                Some("global only")
+            );
+
+            // A local alias is removed from the local file only.
+            Config::add_run_alias("ll", "local ll", ConfigScope::Auto).unwrap();
+            let store = Config::remove_run_alias("ll", ConfigScope::Auto).unwrap();
+            assert_eq!(store, AliasStore::Local);
+            assert!(!Config::get_local_run_aliases().contains_key("ll"));
+            // The global store is still empty.
+            assert!(!Config::get_global_run_aliases().contains_key("ll"));
+        });
+    }
+
+    #[test]
+    fn global_scope_writes_the_global_config() {
+        let _cwd = local_ntconfig();
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("config.toml");
+        let cfg = Config::default();
+        Config::with_test_config(cfg, || {
+            let _guard = ConfigPathGuard;
+            crate::config::set_test_config_path(Some(path.clone()));
+            Config::add_run_alias("gnew", "echo global", ConfigScope::Global).unwrap();
+            // The local file was not touched.
+            assert!(!Config::get_local_run_aliases().contains_key("gnew"));
+        });
+        let content = std::fs::read_to_string(&path).unwrap();
+        assert!(content.contains("gnew"), "got:\n{}", content);
+    }
+
+    #[test]
+    fn local_cared_dir_cancels_a_global_ignore() {
+        let _cwd = local_ntconfig();
+        let mut cfg = Config::default();
+        cfg.ignored_directory_names.insert("target".into());
+        Config::with_test_config(cfg, || {
+            assert!(Config::is_dir_ignored("target"));
+
+            // `care dir target` in the project records the name in the local
+            // "cared" list.
+            Config::add_cared_dir("target", ConfigScope::Auto).unwrap();
+            assert!(!Config::is_dir_ignored("target"));
+
+            // The global config still ignores it.
+            assert!(Config::global_get_ignored_dirs().contains("target"));
+
+            // Ignoring it again in the project wins over the local cared list.
+            Config::add_ignored_dir("target", ConfigScope::Auto).unwrap();
+            assert!(Config::is_dir_ignored("target"));
+        });
+    }
+
+    #[test]
+    fn local_cared_extension_cancels_a_global_ignore() {
+        let _cwd = local_ntconfig();
+        let mut cfg = Config::default();
+        cfg.ignored_extensions.insert("log".into());
+        Config::with_test_config(cfg, || {
+            assert!(Config::is_extension_ignored("log"));
+            Config::add_cared_extension("log", ConfigScope::Auto).unwrap();
+            assert!(!Config::is_extension_ignored("log"));
+            // A cared extension is treated as a text file.
+            assert!(Config::get_extra_supported_extensions_combined().contains("log"));
+            assert!(Config::global_get_ignored_extensions().contains("log"));
+        });
+    }
+
     fn local_hints() -> HashMap<String, String> {
         Config::read_local_config()
             .unwrap_or_default()
@@ -1365,18 +1884,18 @@ mod tests {
     fn hint_specs_follow_alias_lifecycle_locally() {
         let _cwd = local_ntconfig();
         // add
-        Config::local_add_run_alias_hint("tld", "#x --hint-dir").unwrap();
+        Config::add_run_alias_hint("tld", "#x --hint-dir", ConfigScope::Auto).unwrap();
         assert_eq!(
             local_hints().get("tld").map(String::as_str),
             Some("#x --hint-dir")
         );
         // rename moves the spec
-        Config::local_rename_run_alias_hint("tld", "tlx");
+        Config::rename_run_alias_hint("tld", "tlx", ConfigScope::Auto);
         let hints = local_hints();
         assert!(!hints.contains_key("tld"));
         assert_eq!(hints.get("tlx").map(String::as_str), Some("#x --hint-dir"));
         // remove deletes it
-        Config::local_remove_run_alias_hint("tlx").unwrap();
+        Config::remove_run_alias_hint("tlx", ConfigScope::Auto).unwrap();
         assert!(!local_hints().contains_key("tlx"));
     }
 
@@ -1390,7 +1909,7 @@ mod tests {
             "[run_aliases]\ntld = \"tl dir ${x:-.}\"\n\n[run_alias_hints]\ntld = \"#x --hint-dir\"\n",
         )
         .unwrap();
-        Config::import_run_aliases_from_file(&path).unwrap();
+        Config::import_run_aliases_from_file(&path, ConfigScope::Auto).unwrap();
         let local = Config::read_local_config().unwrap_or_default();
         assert_eq!(
             local
@@ -1413,7 +1932,7 @@ mod tests {
         let dir = std::env::current_dir().unwrap();
         let path = dir.join("nohints_test.ntc.ral");
         std::fs::write(&path, "[run_aliases]\nbtr = \"cargo build\"\n").unwrap();
-        Config::import_run_aliases_from_file(&path).unwrap();
+        Config::import_run_aliases_from_file(&path, ConfigScope::Auto).unwrap();
         assert!(local_hints().is_empty());
         let _ = std::fs::remove_file(&path);
     }
@@ -1435,7 +1954,7 @@ mod tests {
             "[run_aliases]\nsrv = \"ssh $p\"\n\n[run_alias_hints]\nsrv = \"#p --hint-n port\"\n\n[run_hint_lists]\nport = [\"8080\", \"5050\"]\n",
         )
         .unwrap();
-        Config::import_run_aliases_from_file(&path).unwrap();
+        Config::import_run_aliases_from_file(&path, ConfigScope::Auto).unwrap();
         assert_eq!(
             local_lists().get("port"),
             Some(&vec!["8080".to_string(), "5050".to_string()])
@@ -1446,21 +1965,22 @@ mod tests {
     #[test]
     fn hint_lists_follow_routed_lifecycle() {
         let _cwd = local_ntconfig();
-        Config::local_add_run_hint_list(
+        Config::add_run_hint_list(
             "port",
             &["8080".to_string(), "5050".to_string()],
+            ConfigScope::Auto,
         )
         .unwrap();
         assert_eq!(
             local_lists().get("port"),
             Some(&vec!["8080".to_string(), "5050".to_string()])
         );
-        Config::local_rename_run_hint_list("port", "ports");
+        Config::rename_run_hint_list("port", "ports", ConfigScope::Auto);
         let lists = local_lists();
         assert!(!lists.contains_key("port"));
         assert!(lists.contains_key("ports"));
-        assert!(Config::local_remove_run_hint_list("ports").unwrap());
+        assert!(Config::remove_run_hint_list("ports", ConfigScope::Auto).unwrap());
         assert!(!local_lists().contains_key("ports"));
-        assert!(!Config::local_remove_run_hint_list("ports").unwrap());
+        assert!(!Config::remove_run_hint_list("ports", ConfigScope::Auto).unwrap());
     }
 }

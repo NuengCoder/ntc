@@ -487,23 +487,27 @@ impl Editor {
                     self.mark_all_dirty();
                     return;
                 }
-                let ok = match kind {
-                    CreateKind::File => {
-                        let parents_ok = path
-                            .parent()
-                            .map(|p| std::fs::create_dir_all(p).is_ok())
-                            .unwrap_or(true);
-                        parents_ok && std::fs::write(&path, "").is_ok()
+                match kind {
+                    CreateKind::File => match crate::editor::init_file(&path) {
+                        Ok(true) => {}
+                        Ok(false) => {
+                            self.status_msg = Some(t!("editor.nfe_create_failed", name));
+                            self.mark_all_dirty();
+                            return;
+                        }
+                        Err(e) => {
+                            self.status_msg = Some(t!("editor.nfe_create_failed", e));
+                            self.mark_all_dirty();
+                            return;
+                        }
+                    },
+                    CreateKind::Dir => {
+                        if std::fs::create_dir_all(&path).is_err() {
+                            self.status_msg = Some(t!("editor.nfe_create_failed", name));
+                            self.mark_all_dirty();
+                            return;
+                        }
                     }
-                    CreateKind::Dir => std::fs::create_dir_all(&path).is_ok(),
-                };
-                if !ok {
-                    self.status_msg = Some(t!("editor.nfe_create_failed", name));
-                    self.mark_all_dirty();
-                    return;
-                }
-                if kind == CreateKind::File {
-                    self.open_file(&path);
                 }
                 self.create_kind = None;
                 self.create_buf.clear();

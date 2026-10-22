@@ -67,6 +67,34 @@ pub struct ServeConfig {
     pub chess: ServeServiceConfig,
 }
 
+/// One column of a `fake` group: the output column name (`alias`) plus the
+/// generator `type` that fills it. Serialized as `{ alias = "…", type = "…" }`.
+/// A trailing `!` in the CLI spec sets `unique`.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct FakeColumn {
+    pub alias: String,
+    #[serde(rename = "type")]
+    pub type_name: String,
+    /// When true, the generated values for this column must be unique across
+    /// all rows (`fake group add … [col as type !]`).
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub unique: bool,
+}
+
+fn is_false(b: &bool) -> bool {
+    !*b
+}
+
+impl FakeColumn {
+    pub fn new(alias: impl Into<String>, type_name: impl Into<String>) -> Self {
+        FakeColumn {
+            alias: alias.into(),
+            type_name: type_name.into(),
+            unique: false,
+        }
+    }
+}
+
 impl ServeConfig {
     pub fn for_service(&self, svc: ServeService) -> &ServeServiceConfig {
         match svc {
@@ -86,6 +114,36 @@ impl ServeConfig {
 }
 
 pub(crate) mod globals;
+pub(crate) use globals::{AliasStore, ConfigScope};
+
+/// Test-only override for the global config file location.
+///
+/// Tests that write the global config point it at a temp file so the
+/// developer's real `config.toml` is never touched.
+#[cfg(test)]
+static TEST_CONFIG_PATH: std::sync::OnceLock<std::sync::Mutex<Option<PathBuf>>> =
+    std::sync::OnceLock::new();
+
+/// Test-only: redirect the global config file to `path` (`None` restores the
+/// per-process temp file).
+#[cfg(test)]
+pub(crate) fn set_test_config_path(path: Option<PathBuf>) {
+    let slot = TEST_CONFIG_PATH.get_or_init(|| std::sync::Mutex::new(None));
+    *slot.lock().unwrap_or_else(|e| e.into_inner()) = path;
+}
+
+#[cfg(test)]
+fn test_config_path() -> Option<PathBuf> {
+    let slot = TEST_CONFIG_PATH.get_or_init(|| std::sync::Mutex::new(None));
+    slot.lock().unwrap_or_else(|e| e.into_inner()).clone()
+}
+
+/// Test-only: the config file every test writes to. It lives in the OS temp
+/// directory, so no test run can modify the real `config.toml`.
+#[cfg(test)]
+pub(crate) fn test_config_file() -> PathBuf {
+    std::env::temp_dir().join(format!("ntc-test-config-{}.toml", std::process::id()))
+}
 pub mod lang;
 
 /// Global configuration (persisted to disk)
@@ -161,6 +219,11 @@ pub struct Config {
     #[serde(default)]
     pub watch_trigger_alias: Option<String>,
 
+    /// Saved `fake` generator groups for the `fake` shell command, keyed by
+    /// lowercased group name; each value is an ordered list of columns.
+    #[serde(default, skip_serializing_if = "HashMap::is_empty")]
+    pub fake_groups: HashMap<String, Vec<FakeColumn>>,
+
     /// Whether autosuggest (ghost text) is enabled in the shell
     #[serde(default = "default_autosuggest_enabled")]
     pub autosuggest_enabled: bool,
@@ -196,6 +259,10 @@ pub struct Config {
     #[serde(default = "default_dir_view_enabled")]
     pub dir_view_enabled: bool,
 
+    /// Whether the daily new-release notice is shown at shell startup
+    #[serde(default = "default_update_check_enabled")]
+    pub update_check_enabled: bool,
+
     /// Per-service `serve` defaults (port + bind), see `ServeConfig`
     #[serde(default = "default_serve_config")]
     pub serve: ServeConfig,
@@ -213,6 +280,8 @@ pub fn validate_alias_name(name: &str) -> bool {
         "back",
         "b",
         "view",
+        "viewf",
+        "viewd",
         "ls",
         "report",
         "txtc",
@@ -274,8 +343,10 @@ pub fn validate_alias_name(name: &str) -> bool {
         "tmprt",
         "git",
         "ndb",
+        "nms",
         "nsheet",
         "nssh",
+        "fake",
     ];
 
     if name.trim().is_empty() || name.contains(' ') {
@@ -330,6 +401,10 @@ fn default_language_active() -> bool {
 }
 
 fn default_dir_view_enabled() -> bool {
+    true
+}
+
+fn default_update_check_enabled() -> bool {
     true
 }
 
@@ -394,6 +469,7 @@ impl Config {
             db_aliases: HashMap::new(),
             math_functions: HashMap::new(),
             watch_trigger_alias: None,
+            fake_groups: HashMap::new(),
             qsc: None,
             language: default_language(),
             language_active: default_language_active(),
@@ -401,13 +477,23 @@ impl Config {
             openweather_api_key: None,
             openweather_default_city: None,
             dir_view_enabled: default_dir_view_enabled(),
+            update_check_enabled: default_update_check_enabled(),
             serve: default_serve_config(),
         }
     }
 
     // ---- Persistence ----
     fn config_path() -> Option<PathBuf> {
-        dirs::config_dir().map(|d| d.join("ntc").join("config.toml"))
+        #[cfg(test)]
+        {
+            // Tests never touch the developer's real `config.toml`: the path
+            // points at a per-process temp file unless a test overrides it.
+            Some(test_config_path().unwrap_or_else(test_config_file))
+        }
+        #[cfg(not(test))]
+        {
+            dirs::config_dir().map(|d| d.join("ntc").join("config.toml"))
+        }
     }
 
     /// Load config from disk, then merge .ntconfig if present in current dir
@@ -505,129 +591,155 @@ impl Config {
 
     /// Check if a directory name is ignored by either global or local config.
     pub fn is_dir_ignored(name: &str) -> bool {
-        let cfg = Self::read_global();
-        if cfg.ignored_directory_names.contains(name) {
-            return true;
-        }
-        drop(cfg);
-        if let Some(local) = Self::get_local_config() {
-            if let Some(ref dirs) = local.ignored_directory_names {
-                if dirs.iter().any(|d| d == name) {
-                    return true;
-                }
-            }
-        }
-        false
+        Self::effective_igcare()
+            .ignored_directory_names
+            .contains(name)
     }
 
     /// Check if a file extension is ignored by either global or local config.
     pub fn is_extension_ignored(ext: &str) -> bool {
         let ext_lower = ext.to_lowercase();
-        let cfg = Self::read_global();
-        if cfg.ignored_extensions.contains(&ext_lower) {
-            return true;
-        }
-        drop(cfg);
-        if let Some(local) = Self::get_local_config() {
-            if let Some(ref exts) = local.ignored_extensions {
-                if exts.iter().any(|e| e.to_lowercase() == ext_lower) {
-                    return true;
-                }
-            }
-        }
-        false
+        Self::effective_igcare()
+            .ignored_extensions
+            .contains(&ext_lower)
     }
 
     /// Check if a filename is ignored by either global or local config.
     pub fn is_file_ignored(name: &str) -> bool {
+        Self::effective_igcare().ignored_files.contains(name)
+    }
+
+    /// Effective ignore/care sets for the current directory.
+    ///
+    /// Precedence: the local config is applied on top of the global one, so a
+    /// local "cared" name is never ignored (even when the global config
+    /// ignores it) while every name the local config does not mention keeps
+    /// the global behaviour. The global config file is never modified.
+    pub fn effective_igcare() -> EffectiveIgcare {
         let cfg = Self::read_global();
-        if cfg.ignored_files.contains(name) {
-            return true;
-        }
+        let mut eff = EffectiveIgcare {
+            ignored_directory_names: cfg.ignored_directory_names.clone(),
+            ignored_extensions: cfg.ignored_extensions.clone(),
+            extra_supported_extensions: cfg.extra_supported_extensions.clone(),
+            ignored_files: cfg.ignored_files.clone(),
+            extra_supported_files: cfg.extra_supported_files.clone(),
+        };
         drop(cfg);
+
         if let Some(local) = Self::get_local_config() {
+            if let Some(ref dirs) = local.ignored_directory_names {
+                eff.ignored_directory_names.extend(dirs.iter().cloned());
+            }
+            if let Some(ref exts) = local.ignored_extensions {
+                eff.ignored_extensions
+                    .extend(exts.iter().map(|e| e.to_lowercase()));
+            }
+            if let Some(ref exts) = local.extra_supported_extensions {
+                eff.extra_supported_extensions
+                    .extend(exts.iter().map(|e| e.to_lowercase()));
+            }
             if let Some(ref files) = local.ignored_files {
-                if files.iter().any(|f| f == name) {
-                    return true;
+                eff.ignored_files.extend(files.iter().cloned());
+            }
+            if let Some(ref files) = local.extra_supported_files {
+                eff.extra_supported_files.extend(files.iter().cloned());
+            }
+
+            // A locally cared name wins over every ignore list.
+            if let Some(ref dirs) = local.cared_directory_names {
+                for d in dirs {
+                    eff.ignored_directory_names.remove(d);
+                }
+            }
+            if let Some(ref exts) = local.cared_extensions {
+                for e in exts {
+                    let lower = e.to_lowercase();
+                    eff.ignored_extensions.remove(&lower);
+                    eff.extra_supported_extensions.insert(lower);
+                }
+            }
+            if let Some(ref files) = local.cared_files {
+                for f in files {
+                    eff.ignored_files.remove(f);
+                    eff.extra_supported_files.insert(f.clone());
                 }
             }
         }
-        false
+        eff
     }
 
-    /// Get the combined set of ignored directory names from global + local config.
+    /// Get the effective set of ignored directory names (global + local).
     pub fn get_ignored_dirs_combined() -> HashSet<String> {
-        let cfg = Self::read_global();
-        let mut dirs = cfg.ignored_directory_names.clone();
-        drop(cfg);
-        if let Some(local) = Self::get_local_config() {
-            if let Some(ref local_dirs) = local.ignored_directory_names {
-                for d in local_dirs {
-                    dirs.insert(d.clone());
-                }
-            }
-        }
-        dirs
+        Self::effective_igcare().ignored_directory_names
     }
 
-    /// Get the combined set of ignored extensions from global + local config.
+    /// Get the effective set of ignored extensions (global + local).
     pub fn get_ignored_extensions_combined() -> HashSet<String> {
-        let cfg = Self::read_global();
-        let mut exts = cfg.ignored_extensions.clone();
-        drop(cfg);
-        if let Some(local) = Self::get_local_config() {
-            if let Some(ref local_exts) = local.ignored_extensions {
-                for e in local_exts {
-                    exts.insert(e.to_lowercase());
-                }
-            }
-        }
-        exts
+        Self::effective_igcare().ignored_extensions
     }
 
-    /// Get the combined set of ignored files from global + local config.
+    /// Get the effective set of ignored files (global + local).
     pub fn get_ignored_files_combined() -> HashSet<String> {
-        let cfg = Self::read_global();
-        let mut files = cfg.ignored_files.clone();
-        drop(cfg);
-        if let Some(local) = Self::get_local_config() {
-            if let Some(ref local_files) = local.ignored_files {
-                for f in local_files {
-                    files.insert(f.clone());
-                }
-            }
-        }
-        files
+        Self::effective_igcare().ignored_files
     }
 
-    /// Get the combined set of extra supported extensions from global + local config.
+    /// Get the effective set of extra supported extensions (global + local).
     pub fn get_extra_supported_extensions_combined() -> HashSet<String> {
-        let cfg = Self::read_global();
-        let mut exts = cfg.extra_supported_extensions.clone();
-        drop(cfg);
-        if let Some(local) = Self::get_local_config() {
-            if let Some(ref local_exts) = local.extra_supported_extensions {
-                for e in local_exts {
-                    exts.insert(e.to_lowercase());
-                }
-            }
-        }
-        exts
+        Self::effective_igcare().extra_supported_extensions
     }
 
-    /// Get the combined set of extra supported files from global + local config.
+    /// Get the effective set of extra supported files (global + local).
     pub fn get_extra_supported_files_combined() -> HashSet<String> {
+        Self::effective_igcare().extra_supported_files
+    }
+
+    /// Raw ignore/care sets of the global config (for the `igcared` listing).
+    pub fn global_igcare_sets() -> IgcareSets {
         let cfg = Self::read_global();
-        let mut files = cfg.extra_supported_files.clone();
-        drop(cfg);
-        if let Some(local) = Self::get_local_config() {
-            if let Some(ref local_files) = local.extra_supported_files {
-                for f in local_files {
-                    files.insert(f.clone());
-                }
-            }
+        IgcareSets {
+            ignored_directory_names: cfg.ignored_directory_names.clone(),
+            ignored_extensions: cfg.ignored_extensions.clone(),
+            extra_supported_extensions: cfg.extra_supported_extensions.clone(),
+            ignored_files: cfg.ignored_files.clone(),
+            extra_supported_files: cfg.extra_supported_files.clone(),
+            cared_directory_names: HashSet::new(),
+            cared_extensions: HashSet::new(),
+            cared_files: HashSet::new(),
         }
-        files
+    }
+
+    /// Raw ignore/care sets of the local `ntconfig.toml` (empty when there is
+    /// no local config in the current directory).
+    pub fn local_igcare_sets() -> IgcareSets {
+        let mut sets = IgcareSets::default();
+        let Some(local) = Self::get_local_config() else {
+            return sets;
+        };
+        if let Some(v) = local.ignored_directory_names {
+            sets.ignored_directory_names = v.into_iter().collect();
+        }
+        if let Some(v) = local.ignored_extensions {
+            sets.ignored_extensions = v.into_iter().map(|e| e.to_lowercase()).collect();
+        }
+        if let Some(v) = local.extra_supported_extensions {
+            sets.extra_supported_extensions = v.into_iter().map(|e| e.to_lowercase()).collect();
+        }
+        if let Some(v) = local.ignored_files {
+            sets.ignored_files = v.into_iter().collect();
+        }
+        if let Some(v) = local.extra_supported_files {
+            sets.extra_supported_files = v.into_iter().collect();
+        }
+        if let Some(v) = local.cared_directory_names {
+            sets.cared_directory_names = v.into_iter().collect();
+        }
+        if let Some(v) = local.cared_extensions {
+            sets.cared_extensions = v.into_iter().map(|e| e.to_lowercase()).collect();
+        }
+        if let Some(v) = local.cared_files {
+            sets.cared_files = v.into_iter().collect();
+        }
+        sets
     }
 
     // NOTE: merge_local() was removed. Local config is never merged into
@@ -759,10 +871,43 @@ pub struct LocalConfig {
     pub extra_supported_extensions: Option<Vec<String>>,
     pub ignored_files: Option<Vec<String>>,
     pub extra_supported_files: Option<Vec<String>>,
+    /// Names the local config explicitly *cares* about: they are never
+    /// ignored, even when the global config ignores them. The global config
+    /// itself is never modified — the local list only wins for this folder.
+    pub cared_directory_names: Option<Vec<String>>,
+    pub cared_extensions: Option<Vec<String>>,
+    pub cared_files: Option<Vec<String>>,
     pub run_aliases: Option<HashMap<String, String>>,
     pub run_alias_hints: Option<HashMap<String, String>>,
     pub run_hint_lists: Option<HashMap<String, Vec<String>>>,
     pub db_aliases: Option<HashMap<String, String>>,
+    pub fake_groups: Option<HashMap<String, Vec<FakeColumn>>>,
+}
+
+/// Raw ignore/care sets of one config store (global or local), used by the
+/// `igcared` listing to show each source separately.
+#[derive(Debug, Clone, Default)]
+pub struct IgcareSets {
+    pub ignored_directory_names: HashSet<String>,
+    pub ignored_extensions: HashSet<String>,
+    pub extra_supported_extensions: HashSet<String>,
+    pub ignored_files: HashSet<String>,
+    pub extra_supported_files: HashSet<String>,
+    /// Only the local store has "cared" lists (un-ignore overrides).
+    pub cared_directory_names: HashSet<String>,
+    pub cared_extensions: HashSet<String>,
+    pub cared_files: HashSet<String>,
+}
+
+/// Effective ignore/care sets for the current directory: the global sets with
+/// the local sets applied on top (local "cared" names win over every ignore).
+#[derive(Debug, Clone, Default)]
+pub struct EffectiveIgcare {
+    pub ignored_directory_names: HashSet<String>,
+    pub ignored_extensions: HashSet<String>,
+    pub extra_supported_extensions: HashSet<String>,
+    pub ignored_files: HashSet<String>,
+    pub extra_supported_files: HashSet<String>,
 }
 
 #[cfg(test)]

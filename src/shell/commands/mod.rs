@@ -16,11 +16,14 @@ mod alias_commands;
 mod arc;
 mod autoup;
 mod backup;
+pub(crate) mod chess_engine;
 pub(crate) mod clipboard;
 mod config_commands;
 mod downloader;
 mod encode_decode;
 mod fmt;
+mod fmt_doc;
+mod fmt_sheet;
 mod git;
 mod gs_interactive;
 mod http_client;
@@ -30,27 +33,31 @@ mod misc;
 mod mode;
 mod nav;
 mod ndb;
+mod nms;
 mod nsheet;
 mod nssh;
 mod pathman;
 mod qr;
 mod qsc;
-mod qur;
+pub(crate) mod qur;
 mod ran_commands;
 mod report;
+mod rev;
 mod scan;
+mod scope;
 mod scr_commands;
 mod serve;
-mod serve_http;
-pub(crate) mod chess_engine;
 mod serve_chess;
+mod serve_http;
 mod smtp_client;
+mod sort;
 mod spec;
 mod sysmon;
 mod theme;
 mod tl;
 mod tmprt;
 mod todo;
+mod trim;
 pub(crate) mod upgrade;
 mod wi;
 
@@ -61,8 +68,22 @@ mod image;
 // Command execution
 // ============================================================================
 
-/// Execute a single command (already fully expanded)
+/// Execute a full command line, handling pipelines (`|`), logical
+/// operators (`&&` / `||`) and redirections (`>` `>>` `<` `<<`). Falls
+/// back to a single-command dispatch when no operator is present.
 pub(crate) fn execute_command(
+    input: &str,
+    nav: &mut Navigator,
+    watcher_handle: &Option<Arc<watcher::WatcherHandle>>,
+) -> Result<bool> {
+    if crate::shell::pipeline::has_operators(input) {
+        return crate::shell::pipeline::run(input, nav, watcher_handle);
+    }
+    execute_single_command(input, nav, watcher_handle)
+}
+
+/// Execute a single command (already fully expanded, no operators).
+pub(crate) fn execute_single_command(
     input: &str,
     nav: &mut Navigator,
     watcher_handle: &Option<Arc<watcher::WatcherHandle>>,
@@ -127,9 +148,14 @@ pub(crate) fn execute_command(
         "godrive" | "god" => nav::cmd_godrive(args, nav),
         "back" | "b" => nav::cmd_back(args, nav),
         "view" => report::cmd_view(args, nav),
+        "viewf" => report::cmd_viewf(args, nav),
+        "viewd" => report::cmd_viewd(args, nav),
         "report" => report::cmd_report(args, nav),
         "txtc" => report::cmd_txtc(args, nav),
         "txtf" => report::cmd_txtf(args, nav),
+        "head" => trim::cmd_head(args, nav),
+        "tail" => trim::cmd_tail(args, nav),
+        "betw" => trim::cmd_betw(args, nav),
         "config" => config_commands::cmd_config(args, nav),
         "clear" => misc::cmd_clear(args, nav),
         "encode" => encode_decode::cmd_encode(args, nav),
@@ -139,7 +165,7 @@ pub(crate) fn execute_command(
         "math" => misc::cmd_math(args, nav),
         "mode" => mode::cmd_mode(args, nav),
         "version" => misc::cmd_version(args, nav),
-        "where" => nav::cmd_where(nav),
+        "where" => nav::cmd_where(args, nav),
         "gos" => nav::cmd_gos(nav),
         "gosc" => nav::cmd_gosc(nav),
         "ral" => alias_commands::cmd_ral(args, nav),
@@ -187,6 +213,8 @@ pub(crate) fn execute_command(
         "cp" => misc::cmd_cp(args, nav),
         "sys" | "top" => sysmon::cmd_sys(args, nav),
         "spec" => spec::cmd_spec(args, nav),
+        "sort" => sort::cmd_sort(args, nav),
+        "rev" => rev::cmd_rev(args, nav),
         "theme" => theme::cmd_theme(args, nav),
         "up" => downloader::cmd_up(args, nav),
         "ping" => downloader::cmd_ping(args, nav),
@@ -229,25 +257,36 @@ pub(crate) fn execute_command(
         "tmprt" => tmprt::cmd_tmprt(args, nav),
         "git" => git::cmd_git(args, nav),
         "ndb" => ndb::cmd_ndb(args, nav),
+        "nms" => nms::cmd_nms(args, nav),
         "nsheet" => nsheet::cmd_nsheet(args, nav),
         "nssh" => nssh::cmd_nssh(args, nav),
+        "fake" => crate::fake::cmd_fake(args, nav),
         _ => misc::cmd_fallback(input, nav, watcher_handle),
     }
 }
 
 /// Execute a system command
 fn execute_system_command(cmd: &str, cwd: &Path) -> Result<bool> {
-    print_info(&format!("Executing: {}", cmd));
-    println!();
+    let quiet = crate::shell::pipeline::is_quiet();
+    if !quiet {
+        print_info(&format!("Executing: {}", cmd));
+        println!();
+    }
 
     let status = run_system_command(cmd, cwd);
-    println!();
+    if !quiet {
+        println!();
+    }
 
     match status {
         Ok(exit_status) => {
             if exit_status.success() {
-                print_success(&t!("cmd.completed"));
+                if !quiet {
+                    print_success(&t!("cmd.completed"));
+                }
             } else {
+                // Non-zero exit counts as a failure for `&&` / `||`.
+                crate::shell::pipeline::mark_failed();
                 match exit_status.code() {
                     Some(code) => print_error(&format!("Command exited with code: {}", code)),
                     None => print_warning(&t!("cmd.terminated")),
@@ -256,6 +295,7 @@ fn execute_system_command(cmd: &str, cwd: &Path) -> Result<bool> {
             Ok(false)
         }
         Err(e) => {
+            crate::shell::pipeline::mark_failed();
             print_error(&format!("Failed to execute command: {}", e));
             Ok(false)
         }
@@ -313,37 +353,44 @@ pub fn init_ctrlc_handler() {
 fn run_system_command(args: &str, cwd: &Path) -> Result<std::process::ExitStatus> {
     init_ctrlc_handler();
 
-    #[cfg(windows)]
-    {
-        let mut child = std::process::Command::new("cmd")
-            .args(["/C", args])
-            .current_dir(cwd)
-            .stdin(std::process::Stdio::inherit())
-            .stdout(std::process::Stdio::inherit())
-            .stderr(std::process::Stdio::inherit())
-            .spawn()?;
+    // Input installed by a pipeline/`<` redirect (or piped process stdin).
+    let input = crate::shell::stdin::take_input();
+    let stdin_cfg = if input.is_some() {
+        std::process::Stdio::piped()
+    } else {
+        std::process::Stdio::inherit()
+    };
 
-        CHILD_PID.store(child.id(), Ordering::SeqCst);
-        let status = child.wait()?;
-        CHILD_PID.store(0, Ordering::SeqCst);
-        Ok(status)
-    }
+    #[cfg(windows)]
+    let mut child = std::process::Command::new("cmd")
+        .args(["/C", args])
+        .current_dir(cwd)
+        .stdin(stdin_cfg)
+        .stdout(std::process::Stdio::inherit())
+        .stderr(std::process::Stdio::inherit())
+        .spawn()?;
 
     #[cfg(not(windows))]
-    {
-        let mut child = std::process::Command::new("sh")
-            .args(["-c", args])
-            .current_dir(cwd)
-            .stdin(std::process::Stdio::inherit())
-            .stdout(std::process::Stdio::inherit())
-            .stderr(std::process::Stdio::inherit())
-            .spawn()?;
+    let mut child = std::process::Command::new("sh")
+        .args(["-c", args])
+        .current_dir(cwd)
+        .stdin(stdin_cfg)
+        .stdout(std::process::Stdio::inherit())
+        .stderr(std::process::Stdio::inherit())
+        .spawn()?;
 
-        CHILD_PID.store(child.id(), Ordering::SeqCst);
-        let status = child.wait()?;
-        CHILD_PID.store(0, Ordering::SeqCst);
-        Ok(status)
+    if let Some(bytes) = input {
+        if let Some(mut si) = child.stdin.take() {
+            use std::io::Write;
+            let _ = si.write_all(&bytes);
+            // dropping `si` closes the pipe, signalling EOF to the child
+        }
     }
+
+    CHILD_PID.store(child.id(), Ordering::SeqCst);
+    let status = child.wait()?;
+    CHILD_PID.store(0, Ordering::SeqCst);
+    Ok(status)
 }
 
 /// Opt-in registry for universal `<cmd> -h | --help` (sole-arg only).
@@ -358,7 +405,8 @@ fn help_topic_for_command(cmd: &str) -> Option<&'static str> {
         "config" | "wi" => "config",
         "ne" | "ntceditor" => "editor",
         "size" => "size",
-        "view" | "txtc" | "txtf" => "view",
+        "view" | "viewf" | "viewd" | "txtc" | "txtf" => "view",
+        "head" | "tail" | "betw" | "sort" | "rev" => "pipe",
         "report" => "report",
         "tp" | "tpb" => "teleport",
         "theme" => "theme",
@@ -371,8 +419,10 @@ fn help_topic_for_command(cmd: &str) -> Option<&'static str> {
         "math" => "math",
         "fmt" => "fmt",
         "ndb" => "ndb",
+        "nms" => "nms",
         "nsheet" => "nsheet",
         "nssh" => "nssh",
+        "fake" => "fake",
         "cd" | "back" | "b" | "where" | "gos" | "gosc" | "fgo" => "nav",
         _ => return None,
     })
@@ -422,6 +472,21 @@ pub(crate) struct GsArgs {
     pub max_depth: usize,
     pub limit: Option<usize>,
     pub interactive: bool,
+    /// File-scope globs (`-p` / positional `*.*` / `dir/`).
+    pub paths: Vec<String>,
+    /// `None` = default order (path, then line); `Some` = explicit `-s`.
+    pub sort: Option<GsSort>,
+}
+
+/// Sort key for `gs -s|--sort`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum GsSort {
+    /// Match-line text, case-insensitive (default for bare `-s`).
+    Line,
+    /// File path, then line number.
+    Path,
+    /// File size ascending (small → large), tie-break path + line.
+    Size,
 }
 
 fn tokenize_gs_args(args: &str) -> Vec<String> {
@@ -446,7 +511,10 @@ fn tokenize_gs_args(args: &str) -> Vec<String> {
 }
 
 /// Parse `gs` args in any flag order:
-/// `gs <pattern> [-d <n>] [-l <n> | --limit <n> | --limit=<n>] [-i]`
+/// `gs <pattern> [-d <n>] [-l <n> | --limit <n> | --limit=<n>] [-i]
+///   [-p <glob> | --path <glob> | --path=<glob>]... [-s [line|path|size] | --sort ...]`
+/// Positional path-like tokens (`*.*`, `dir/`, existing file/dir) after the
+/// first pattern token act as `-p` filters; everything else joins the pattern.
 pub(crate) fn parse_gs_args(args: &str) -> GsArgs {
     let default_depth = Config::global_get_max_depth();
     let parts = tokenize_gs_args(args);
@@ -454,6 +522,8 @@ pub(crate) fn parse_gs_args(args: &str) -> GsArgs {
     let mut max_depth = default_depth;
     let mut limit: Option<usize> = None;
     let mut interactive = false;
+    let mut paths: Vec<String> = Vec::new();
+    let mut sort: Option<GsSort> = None;
 
     let mut i = 0;
     while i < parts.len() {
@@ -488,7 +558,54 @@ pub(crate) fn parse_gs_args(args: &str) -> GsArgs {
                     pattern_parts.push(parts[i].clone());
                 }
             }
-            other => pattern_parts.push(other.to_string()),
+            s if s.starts_with("-p=") || s.starts_with("--path=") => {
+                paths.push(
+                    s.split_once('=')
+                        .map(|(_, v)| v)
+                        .unwrap_or_default()
+                        .to_string(),
+                );
+            }
+            "-p" | "--path" => {
+                if let Some(next) = parts.get(i + 1) {
+                    if !next.starts_with('-') {
+                        paths.push(next.clone());
+                        i += 1;
+                    } else {
+                        pattern_parts.push(parts[i].clone());
+                    }
+                } else {
+                    pattern_parts.push(parts[i].clone());
+                }
+            }
+            s if s.starts_with("--sort=") => match parse_gs_sort_value(&s["--sort=".len()..]) {
+                Some(k) => sort = Some(k),
+                None => pattern_parts.push(parts[i].clone()),
+            },
+            "-s" | "--sort" => {
+                if let Some(next) = parts.get(i + 1) {
+                    match parse_gs_sort_value(next) {
+                        Some(k) => {
+                            sort = Some(k);
+                            i += 1;
+                        }
+                        // A value other than line|path|size remains part of
+                        // the search pattern; bare -s always means line sort.
+                        None => sort = Some(GsSort::Line),
+                    }
+                } else {
+                    sort = Some(GsSort::Line);
+                }
+            }
+            other => {
+                // Positional `gs <pattern> <*.* + dir/>`: tokens after the
+                // pattern head that look like paths become `-p` filters.
+                if !pattern_parts.is_empty() && gs_looks_like_path(other) {
+                    paths.push(other.to_string());
+                } else {
+                    pattern_parts.push(other.to_string());
+                }
+            }
         }
         i += 1;
     }
@@ -498,14 +615,63 @@ pub(crate) fn parse_gs_args(args: &str) -> GsArgs {
         max_depth,
         limit,
         interactive,
+        paths,
+        sort,
     }
 }
 
+/// `line|path|size` (case-insensitive).
+fn parse_gs_sort_value(v: &str) -> Option<GsSort> {
+    match v.to_lowercase().as_str() {
+        "line" => Some(GsSort::Line),
+        "path" => Some(GsSort::Path),
+        "size" => Some(GsSort::Size),
+        _ => None,
+    }
+}
+
+/// Heuristic: `*.rs`, `src/`, `app.log`, existing file/dir.
+fn gs_looks_like_path(tok: &str) -> bool {
+    // An OR alternative (`a\|b`, `a|b`) belongs to the pattern even though the
+    // escaped form carries a backslash — never treat it as an `-p` filter.
+    if tok.contains('|') && !tok.contains('/') && !tok.contains('*') && !tok.contains('?') {
+        return false;
+    }
+    if tok.contains('*') || tok.contains('?') || tok.contains('/') || tok.contains('\\') {
+        return true;
+    }
+    if tok.starts_with('.') && tok.len() > 1 && !tok.contains(' ') {
+        return true;
+    }
+    if !tok.contains(' ') {
+        if let Some(dot) = tok.rfind('.') {
+            let ext = &tok[dot + 1..];
+            if !ext.is_empty() && ext.len() <= 5 && ext.chars().all(|c| c.is_ascii_alphanumeric()) {
+                let stem = &tok[..dot];
+                if !stem.is_empty()
+                    && stem
+                        .chars()
+                        .all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-' || c == '.')
+                {
+                    return true;
+                }
+            }
+        }
+    }
+    let p = std::path::Path::new(tok);
+    p.is_file() || p.is_dir()
+}
+
 fn list_supported_files(nav: &Navigator) -> Result<Vec<(String, PathBuf)>> {
+    list_supported_files_in(nav.current_path())
+}
+
+/// Supported files directly inside `dir` (not recursive), sorted by name.
+fn list_supported_files_in(dir: &Path) -> Result<Vec<(String, PathBuf)>> {
     let fmt_cfg = FormatConfig::from_both();
     let mut files = Vec::new();
 
-    if let Ok(entries) = std::fs::read_dir(nav.current_path()) {
+    if let Ok(entries) = std::fs::read_dir(dir) {
         for entry in entries.flatten() {
             let path = entry.path();
             if path.is_file() {
@@ -588,6 +754,54 @@ mod tests {
     use super::*;
 
     #[test]
+    fn gs_parses_path_and_sort_flags() {
+        let a = parse_gs_args("main -p \"*.rs\" -s size");
+        assert_eq!(a.pattern, "main");
+        assert_eq!(a.paths, vec!["*.rs".to_string()]);
+        assert_eq!(a.sort, Some(GsSort::Size));
+
+        let a = parse_gs_args("main -p=*.rs --path=src/*.rs");
+        assert_eq!(a.paths, vec!["*.rs".to_string(), "src/*.rs".to_string()]);
+
+        let b = parse_gs_args("main -s");
+        assert_eq!(b.pattern, "main");
+        assert_eq!(b.sort, Some(GsSort::Line));
+
+        let b = parse_gs_args("-s main");
+        assert_eq!(b.pattern, "main");
+        assert_eq!(b.sort, Some(GsSort::Line));
+
+        let c = parse_gs_args("main -s path");
+        assert_eq!(c.sort, Some(GsSort::Path));
+
+        let c = parse_gs_args("--sort=size main");
+        assert_eq!(c.pattern, "main");
+        assert_eq!(c.sort, Some(GsSort::Size));
+
+        let c = parse_gs_args("main -s yesterday");
+        assert_eq!(c.pattern, "main yesterday");
+        assert_eq!(c.sort, Some(GsSort::Line));
+
+        let d = parse_gs_args("main -p *.rs -p src/");
+        assert_eq!(d.paths, vec!["*.rs".to_string(), "src/".to_string()]);
+
+        // Positional `gs <pattern> <*.* + dir/>` == `gs <pattern> -p ...`.
+        let e = parse_gs_args("main *.rs");
+        assert_eq!(e.pattern, "main");
+        assert_eq!(e.paths, vec!["*.rs".to_string()]);
+
+        let e = parse_gs_args("\"foo bar\"");
+        assert_eq!(e.pattern, "foo bar");
+
+        // Multi-word patterns still join; flags keep working in any order.
+        let f = parse_gs_args("-s size -d 3 foo bar");
+        assert_eq!(f.pattern, "foo bar");
+        assert_eq!(f.sort, Some(GsSort::Size));
+        assert_eq!(f.max_depth, 3);
+        assert!(f.paths.is_empty());
+    }
+
+    #[test]
     fn help_registry_covers_safe_commands() {
         assert_eq!(help_topic_for_command("mv"), Some("fileops"));
         assert_eq!(help_topic_for_command("move"), Some("fileops"));
@@ -617,5 +831,39 @@ mod tests {
         assert_eq!(b.pattern, "main");
         assert_eq!(b.limit, Some(7));
         assert!(b.interactive);
+    }
+
+    #[test]
+    fn parse_gs_args_keeps_or_alternatives_in_the_pattern() {
+        let a = parse_gs_args("error\\|warning -d 2");
+        assert_eq!(a.pattern, "error\\|warning");
+        assert_eq!(a.max_depth, 2);
+
+        // A later OR alternative stays pattern text even though it carries a
+        // backslash, which otherwise marks a path filter.
+        let b = parse_gs_args("error warning\\|fatal");
+        assert_eq!(b.pattern, "error warning\\|fatal");
+        assert!(b.paths.is_empty());
+
+        // Real path filters are still recognised after an OR pattern.
+        let c = parse_gs_args("error\\|warning -p \"*.rs\"");
+        assert_eq!(c.pattern, "error\\|warning");
+        assert_eq!(c.paths, vec!["*.rs".to_string()]);
+    }
+
+    #[test]
+    fn list_supported_files_in_filters_one_level_and_sorts() {
+        let _cwd = crate::utils::test_support::TempCwd::with_fixture(
+            &[
+                ("docs/b.txt", "b"),
+                ("docs/a.rs", "a"),
+                ("docs/image.png", "\0fake"),
+                ("docs/nested/deep.txt", "deep"),
+            ],
+            &["docs", "docs/nested"],
+        );
+        let files = list_supported_files_in(Path::new("docs")).unwrap();
+        let names: Vec<&str> = files.iter().map(|(name, _)| name.as_str()).collect();
+        assert_eq!(names, vec!["a.rs", "b.txt"]);
     }
 }

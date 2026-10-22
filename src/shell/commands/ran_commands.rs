@@ -22,20 +22,18 @@ pub(crate) fn cmd_ran(args: &str, nav: &mut Navigator) -> Result<bool> {
         // No "run " prefix → full ntc pipeline (interactive selects allowed)
         let expanded = match expand_command_line_interactive(cmd, nav)? {
             None => return Ok(false),
-            Some(cmds) => cmds,
+            Some(s) => s,
         };
-        for part in expanded {
-            let lower = part.trim().to_lowercase();
-            if lower.starts_with("ran ") || lower == "ran" {
-                print_error(&t!("ran.calling_not_allowed"));
+        let lower = expanded.trim().to_lowercase();
+        if lower.starts_with("ran ") || lower == "ran" {
+            print_error(&t!("ran.calling_not_allowed"));
+            return Ok(false);
+        }
+        match super::execute_command(&expanded, nav, &None) {
+            Ok(_) => {}
+            Err(e) => {
+                print_error(&format!("{}", e));
                 return Ok(false);
-            }
-            match super::execute_command(&part, nav, &None) {
-                Ok(_) => {}
-                Err(e) => {
-                    print_error(&format!("{}", e));
-                    return Ok(false);
-                }
             }
         }
         Ok(true)

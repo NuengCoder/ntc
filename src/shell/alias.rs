@@ -62,15 +62,37 @@ pub(crate) fn parse_call_syntax(token: &str) -> (&str, Option<&str>) {
     (token, None)
 }
 
-/// Tokenize a string on whitespace, respecting `[...]` as single tokens.
+/// Tokenize a string on whitespace, respecting `[...]` as single tokens
+/// and `"..."` as a single (quote-stripped) token so a quoted value with
+/// spaces counts as one argument. `\"` is a literal quote inside quotes.
 /// e.g. `"[add,minus,mul] math"` → `["[add,minus,mul]", "math"]`
+///      `a "wow nice" b`        → `["a", "wow nice", "b"]`
 fn tokenize_args(input: &str) -> Vec<String> {
     let mut tokens = Vec::new();
     let mut current = String::new();
     let mut in_bracket = false;
+    let mut in_quotes = false;
+    let mut escaped = false;
     for ch in input.chars() {
+        if in_bracket {
+            // Array literal: copy verbatim until the closing `]`.
+            current.push(ch);
+            if ch == ']' {
+                in_bracket = false;
+                tokens.push(current.trim().to_string());
+                current.clear();
+            }
+            continue;
+        }
+        if escaped {
+            current.push(ch);
+            escaped = false;
+            continue;
+        }
         match ch {
-            '[' if !in_bracket => {
+            '\\' if in_quotes => escaped = true,
+            '"' => in_quotes = !in_quotes,
+            '[' if !in_quotes => {
                 if !current.trim().is_empty() {
                     tokens.push(current.trim().to_string());
                 }
@@ -78,13 +100,7 @@ fn tokenize_args(input: &str) -> Vec<String> {
                 current.push(ch);
                 in_bracket = true;
             }
-            ']' if in_bracket => {
-                current.push(ch);
-                in_bracket = false;
-                tokens.push(current.trim().to_string());
-                current.clear();
-            }
-            ' ' | '\t' if !in_bracket => {
+            ' ' | '\t' if !in_quotes => {
                 if !current.trim().is_empty() {
                     tokens.push(current.trim().to_string());
                 }
@@ -107,16 +123,16 @@ struct VarRef {
     /// `Some(c)` for `$x[c]` / `${x}[c]` (single-char join separator).
     array_sep: Option<char>,
     default_val: Option<String>,
+    /// `true` for `$*{name}` / `$*{name:-default}`: a greedy, quote- and
+    /// space-aware capture of the remaining args as one value.
+    rest_capture: bool,
 }
 
 /// Read an array suffix starting at `from` (first char after `]`):
 /// runs until whitespace, `&` or `;`.
 fn read_array_suffix(chars: &[char], from: usize) -> (String, usize) {
     let mut end = from;
-    while end < chars.len()
-        && !chars[end].is_whitespace()
-        && chars[end] != '&'
-        && chars[end] != ';'
+    while end < chars.len() && !chars[end].is_whitespace() && chars[end] != '&' && chars[end] != ';'
     {
         end += 1;
     }
@@ -126,13 +142,25 @@ fn read_array_suffix(chars: &[char], from: usize) -> (String, usize) {
 /// Parse a variable reference starting at `chars[i]` where `chars[i] == '$'`.
 /// Returns `Some(VarRef)` on success.
 /// Supports:
-///   - `$name`          (name: [a-z][a-zA-Z0-9_]*)
-///   - `${name}`        (braced)
-///   - `${name:-val}`   (braced with default)
-///   - `$name[]suffix`  / `${name}[]suffix`  (array expansion)
+///   - `$name`           (name: [a-z][a-zA-Z0-9_]*)
+///   - `${name}`         (braced)
+///   - `${name:-val}`    (braced with default)
+///   - `$name[]suffix`   / `${name}[]suffix`  (array expansion)
+///   - `$*{name}`        / `$*{name:-val}`    (greedy rest capture; see
+///     [`VarRef::rest_capture`])
 fn parse_var_ref(chars: &[char], mut i: usize) -> Option<VarRef> {
     // chars[i] is known to be '$'
     i += 1;
+    // `$*{name}` / `$*{name:-default}`: rest-capture. `*` is not a valid
+    // name start, so this can never collide with an existing template.
+    // The form is braced-only; a bare `$*` is left literal (`None`).
+    let rest_capture = i < chars.len() && chars[i] == '*';
+    if rest_capture {
+        i += 1;
+        if i >= chars.len() || chars[i] != '{' {
+            return None;
+        }
+    }
     let (name, end, default_val) = if i < chars.len() && chars[i] == '{' {
         // ${name} or ${name:-default} syntax
         i += 1;
@@ -194,6 +222,7 @@ fn parse_var_ref(chars: &[char], mut i: usize) -> Option<VarRef> {
                     array_suffix: Some(suffix),
                     array_sep: None,
                     default_val,
+                    rest_capture,
                 });
             } else if content.chars().count() == 1 {
                 let sep = content.chars().next().unwrap();
@@ -204,6 +233,7 @@ fn parse_var_ref(chars: &[char], mut i: usize) -> Option<VarRef> {
                     array_suffix: Some(suffix),
                     array_sep: Some(sep),
                     default_val,
+                    rest_capture,
                 });
             }
         }
@@ -214,6 +244,7 @@ fn parse_var_ref(chars: &[char], mut i: usize) -> Option<VarRef> {
         array_suffix: None,
         array_sep: None,
         default_val,
+        rest_capture,
     })
 }
 
@@ -236,7 +267,11 @@ pub(crate) fn find_invalid_array_sep(template: &str) -> Option<(String, String)>
             i += 1;
             let mut colon_pos = None;
             while i < chars.len() && chars[i] != '}' {
-                if chars[i] == ':' && i + 1 < chars.len() && chars[i + 1] == '-' && colon_pos.is_none() {
+                if chars[i] == ':'
+                    && i + 1 < chars.len()
+                    && chars[i + 1] == '-'
+                    && colon_pos.is_none()
+                {
                     colon_pos = Some(i);
                 }
                 i += 1;
@@ -312,7 +347,36 @@ pub(crate) fn substitute_params(template: &str, args: &[&str]) -> String {
     while i < chars.len() {
         if chars[i] == '$' {
             if let Some(ref vr) = parse_var_ref(&chars, i) {
-                if vr.array_suffix.is_some() || vr.array_sep.is_some() {
+                if vr.rest_capture {
+                    // `$*{x}` binds one argument (spaces preserved by the
+                    // quote-aware tokenizer, so `"wow nice"` arrives here as a
+                    // single arg). Only the *last* placeholder in the template
+                    // acts as a catch-all and joins every remaining arg — this
+                    // prevents an earlier `$*{}` from swallowing the arguments
+                    // meant for the placeholders after it, e.g.
+                    // `-s "$*{title}" -b "$*{body}"` with `["Good Evening",
+                    // "How are you"]`.
+                    let idx = param_order
+                        .iter()
+                        .position(|n| n == &vr.name)
+                        .unwrap_or(usize::MAX);
+                    let is_last = idx != usize::MAX && idx + 1 == param_order.len();
+                    if idx != usize::MAX && idx < args.len() {
+                        if is_last {
+                            result.push_str(&args[idx..].join(" "));
+                        } else {
+                            result.push_str(args[idx]);
+                        }
+                    } else if let Some(ref default) = vr.default_val {
+                        result.push_str(default);
+                    } else {
+                        result.push('$');
+                        result.push('*');
+                        result.push('{');
+                        result.push_str(&vr.name);
+                        result.push('}');
+                    }
+                } else if vr.array_suffix.is_some() || vr.array_sep.is_some() {
                     // Array expansion: `$name[]suffix` (space join) or
                     // `$name[sep]suffix` (joined with ` sep `).
                     let suffix = vr.array_suffix.as_deref().unwrap_or("");
@@ -459,9 +523,10 @@ pub(super) fn inject_template_defaults(template: &str, defaults: &[(String, Stri
                 // Only inject default if this name has no existing default and we have one
                 if vr.default_val.is_none() {
                     if let Some((_, def_val)) = defaults.iter().find(|(n, _)| *n == vr.name) {
-                        // Replace with ${name:-default}, preserving any
-                        // array tail (`[]`, `[c]`, suffix) verbatim.
-                        result.push_str("${");
+                        // Replace with ${name:-default} (or $*{name:-default}
+                        // for a rest-capture param), preserving any array tail
+                        // (`[]`, `[c]`, suffix) verbatim.
+                        result.push_str(if vr.rest_capture { "$*{" } else { "${" });
                         result.push_str(&vr.name);
                         result.push_str(":-");
                         result.push_str(def_val);
@@ -515,8 +580,13 @@ pub(crate) enum ParamHintKind {
     Tp,
     /// Extensions without dots, lowercased; empty = all files.
     Ext(Vec<String>),
+    /// File stems (extension stripped) of files matching the extensions;
+    /// empty = stems of all files. `--hint-ext-name [list]`.
+    ExtName(Vec<String>),
     Spf,
     File,
+    /// File stems (extension stripped) of all files. `--hint-file-name`.
+    FileName,
     Dir,
     Fd,
     All,
@@ -534,7 +604,12 @@ pub(crate) enum ParamSelectKind {
     Tp,
     /// Extensions without dots, lowercased; empty = all files.
     Ext(Vec<String>),
+    /// File stems (extension stripped) of files matching the extensions;
+    /// empty = stems of all files. `--select-ext-name [list]`.
+    ExtName(Vec<String>),
     File,
+    /// File stems (extension stripped) of all files. `--select-file-name`.
+    FileName,
     Dir,
     Fd,
     /// Inline literal values: `--select [a,b]`.
@@ -578,21 +653,19 @@ pub(crate) fn parse_hint_param(tok: &str) -> Option<(String, bool, Option<char>)
     if body.is_empty() {
         return None;
     }
-    let (name, is_array, sep) = if let Some(inner) = body
-        .strip_suffix(']')
-        .and_then(|b| b.split_once('['))
-    {
-        let (n, content) = inner;
-        if content.is_empty() {
-            (n, true, None)
-        } else if content.chars().count() == 1 {
-            (n, true, content.chars().next())
+    let (name, is_array, sep) =
+        if let Some(inner) = body.strip_suffix(']').and_then(|b| b.split_once('[')) {
+            let (n, content) = inner;
+            if content.is_empty() {
+                (n, true, None)
+            } else if content.chars().count() == 1 {
+                (n, true, content.chars().next())
+            } else {
+                return None;
+            }
         } else {
-            return None;
-        }
-    } else {
-        (body, false, None)
-    };
+            (body, false, None)
+        };
     if name.is_empty() {
         return None;
     }
@@ -645,6 +718,8 @@ fn parse_hint_flag(flag: &str, values: &[String]) -> Result<ParamHintKind, ()> {
         "--hint-fd" => Ok(ParamHintKind::Fd),
         "--hint-all" => Ok(ParamHintKind::All),
         "--hint-ext" => Ok(ParamHintKind::Ext(parse_ext_values(values))),
+        "--hint-ext-name" => Ok(ParamHintKind::ExtName(parse_ext_values(values))),
+        "--hint-file-name" => Ok(ParamHintKind::FileName),
         "--hint" => Ok(ParamHintKind::Values(parse_inline_values(values))),
         "--hint-n" => Ok(ParamHintKind::Named(clean_hint_list_name(values))),
         _ => Err(()),
@@ -675,6 +750,8 @@ fn parse_select_flag(flag: &str, values: &[String]) -> Result<ParamSelectKind, (
         "--select-dir" => Ok(ParamSelectKind::Dir),
         "--select-fd" => Ok(ParamSelectKind::Fd),
         "--select-ext" => Ok(ParamSelectKind::Ext(parse_ext_values(values))),
+        "--select-ext-name" => Ok(ParamSelectKind::ExtName(parse_ext_values(values))),
+        "--select-file-name" => Ok(ParamSelectKind::FileName),
         "--select" => Ok(ParamSelectKind::Values(parse_inline_values(values))),
         "--select-n" => Ok(ParamSelectKind::Named(clean_hint_list_name(values))),
         _ => Err(()),
@@ -877,11 +954,12 @@ fn parse_hint_tail(
             let Some((_, ref mut g)) = cur else {
                 return Err(("bad_group", i));
             };
-            let is_hint_ext = tok == "--hint-ext";
-            let is_select_ext = tok == "--select-ext";
+            let is_hint_ext = tok == "--hint-ext" || tok == "--hint-ext-name";
+            let is_select_ext = tok == "--select-ext" || tok == "--select-ext-name";
             let is_inline = tok == "--hint" || tok == "--select";
             let is_named = tok == "--hint-n" || tok == "--select-n";
-            // `--hint-ext` / `--select-ext` take space/comma values;
+            // `--hint-ext` / `--hint-ext-name` / `--select-ext` /
+            // `--select-ext-name` take space/comma values;
             // `--hint` / `--select` take one `[...]` span; `--hint-n` /
             // `--select-n` take one name. Other flags take none, so a
             // following bare token falls through to the `bad_group` arm.
@@ -901,10 +979,7 @@ fn parse_hint_tail(
                 // Bracket span: join tokens until brackets balance.
                 // Stops at a new group/flag; an unclosed span is malformed.
                 let mut depth = 0i32;
-                while j < toks.len()
-                    && !toks[j].starts_with('#')
-                    && !is_annotation_flag(&toks[j])
-                {
+                while j < toks.len() && !toks[j].starts_with('#') && !is_annotation_flag(&toks[j]) {
                     for ch in toks[j].chars() {
                         if ch == '[' {
                             depth += 1;
@@ -989,7 +1064,9 @@ fn is_annotation_flag(tok: &str) -> bool {
 /// remembered, not fatal: with no parseable region, a tail that
 /// mentioned `--hint-*` / `--select-*` returns the first failure code,
 /// otherwise the whole input is plain command text.
-pub(crate) fn split_hint_annotations(input: &str) -> Result<(String, Vec<ParamHint>), &'static str> {
+pub(crate) fn split_hint_annotations(
+    input: &str,
+) -> Result<(String, Vec<ParamHint>), &'static str> {
     let toks = tokenize_hint_args(input);
     let mut first_err: Option<&'static str> = None;
     let mut mentioned = false;
@@ -999,7 +1076,10 @@ pub(crate) fn split_hint_annotations(input: &str) -> Result<(String, Vec<ParamHi
         }
         let tail = &toks[start..];
         if tail.iter().any(|t| {
-            t == "--hint" || t == "--select" || t.starts_with("--hint-") || t.starts_with("--select-")
+            t == "--hint"
+                || t == "--select"
+                || t.starts_with("--hint-")
+                || t.starts_with("--select-")
         }) {
             mentioned = true;
         }
@@ -1055,12 +1135,19 @@ pub(crate) fn serialize_hint_spec(hints: &[ParamHint]) -> String {
                 ParamHintKind::Tp => p.push_str(" --hint-tp"),
                 ParamHintKind::Spf => p.push_str(" --hint-spf"),
                 ParamHintKind::File => p.push_str(" --hint-file"),
+                ParamHintKind::FileName => p.push_str(" --hint-file-name"),
                 ParamHintKind::Dir => p.push_str(" --hint-dir"),
                 ParamHintKind::Fd => p.push_str(" --hint-fd"),
                 ParamHintKind::All => p.push_str(" --hint-all"),
                 ParamHintKind::Ext(exts) if exts.is_empty() => p.push_str(" --hint-ext"),
                 ParamHintKind::Ext(exts) => {
                     p.push_str(&format!(" --hint-ext {}", exts.join(",")));
+                }
+                ParamHintKind::ExtName(exts) if exts.is_empty() => {
+                    p.push_str(" --hint-ext-name");
+                }
+                ParamHintKind::ExtName(exts) => {
+                    p.push_str(&format!(" --hint-ext-name {}", exts.join(",")));
                 }
                 ParamHintKind::Values(vals) => {
                     p.push_str(&format!(" --hint [{}]", serialize_values(vals)));
@@ -1074,11 +1161,18 @@ pub(crate) fn serialize_hint_spec(hints: &[ParamHint]) -> String {
             match k {
                 ParamSelectKind::Tp => p.push_str(" --select-tp"),
                 ParamSelectKind::File => p.push_str(" --select-file"),
+                ParamSelectKind::FileName => p.push_str(" --select-file-name"),
                 ParamSelectKind::Dir => p.push_str(" --select-dir"),
                 ParamSelectKind::Fd => p.push_str(" --select-fd"),
                 ParamSelectKind::Ext(exts) if exts.is_empty() => p.push_str(" --select-ext"),
                 ParamSelectKind::Ext(exts) => {
                     p.push_str(&format!(" --select-ext {}", exts.join(",")));
+                }
+                ParamSelectKind::ExtName(exts) if exts.is_empty() => {
+                    p.push_str(" --select-ext-name");
+                }
+                ParamSelectKind::ExtName(exts) => {
+                    p.push_str(&format!(" --select-ext-name {}", exts.join(",")));
                 }
                 ParamSelectKind::Values(vals) => {
                     p.push_str(&format!(" --select [{}]", serialize_values(vals)));
@@ -1100,9 +1194,10 @@ pub(crate) fn serialize_hint_spec(hints: &[ParamHint]) -> String {
 fn serialize_values(vals: &[String]) -> String {
     vals.iter()
         .map(|v| {
-            let needs_quote = v.chars().any(|c| {
-                c.is_whitespace() || c == ',' || c == '[' || c == ']' || c == '#'
-            }) || v.starts_with('-')
+            let needs_quote = v
+                .chars()
+                .any(|c| c.is_whitespace() || c == ',' || c == '[' || c == ']' || c == '#')
+                || v.starts_with('-')
                 || v.contains('"')
                 || v.contains('\'');
             if !needs_quote {
@@ -1210,7 +1305,7 @@ fn expand_aliases_rec(cmd: &str, depth: usize) -> String {
         return cmd.to_string();
     }
 
-    let aliases = Config::global_get_run_aliases();
+    let aliases = Config::get_run_aliases_merged();
     let parts: Vec<&str> = cmd.splitn(2, ' ').collect();
     if parts.is_empty() {
         return cmd.to_string();
@@ -1341,11 +1436,62 @@ fn select_cwd_dirs(cwd: &std::path::Path) -> Vec<String> {
     out
 }
 
+/// File-name stem for a hint/select candidate: strip the longest matching
+/// listed extension suffix (`foo.ntc.ral` + `ntc.ral` -> `foo`). With an
+/// empty list, strip the final extension (`foo.rs` -> `foo`). `None` when
+/// the name has no usable stem.
+pub(crate) fn file_stem_matching(name: &str, exts: &[String]) -> Option<String> {
+    if exts.is_empty() {
+        return std::path::Path::new(name)
+            .file_stem()
+            .and_then(|s| s.to_str())
+            .map(|s| s.to_string());
+    }
+    let lower = name.to_lowercase();
+    let mut best: Option<&String> = None;
+    for e in exts {
+        if lower == *e || lower.ends_with(&format!(".{}", e)) {
+            if best.map_or(true, |b| e.len() > b.len()) {
+                best = Some(e);
+            }
+        }
+    }
+    let e = best?;
+    let dotted = format!(".{}", e);
+    if name.len() > dotted.len() && name[name.len() - dotted.len()..].eq_ignore_ascii_case(&dotted)
+    {
+        Some(name[..name.len() - dotted.len()].to_string())
+    } else if lower == *e {
+        // File is named exactly the extension; nothing to strip.
+        Some(name.to_string())
+    } else {
+        std::path::Path::new(name)
+            .file_stem()
+            .and_then(|s| s.to_str())
+            .map(|s| s.to_string())
+    }
+}
+
+/// Stems of `cwd` files matching `exts` (empty = all files), sorted/deduped.
+fn select_file_stems(cwd: &std::path::Path, exts: &[String]) -> Vec<String> {
+    let names = select_cwd_files(cwd, |n| {
+        exts.is_empty() || {
+            let lower = n.to_lowercase();
+            exts.iter()
+                .any(|e| lower == *e || lower.ends_with(&format!(".{}", e)))
+        }
+    });
+    let mut out: Vec<String> = names
+        .iter()
+        .filter_map(|n| file_stem_matching(n, exts))
+        .collect();
+    out.sort();
+    out.dedup();
+    out
+}
+
 /// Union candidates for one param's `--select-*` kinds (sorted, deduped).
-fn select_kind_candidates(
-    kinds: &[ParamSelectKind],
-    cwd: &std::path::Path,
-) -> Vec<String> {
+fn select_kind_candidates(kinds: &[ParamSelectKind], cwd: &std::path::Path) -> Vec<String> {
     let mut out: Vec<String> = Vec::new();
     for kind in kinds {
         match kind {
@@ -1361,6 +1507,12 @@ fn select_kind_candidates(
             }
             ParamSelectKind::Ext(_) | ParamSelectKind::File => {
                 out.extend(select_cwd_files(cwd, |_| true));
+            }
+            ParamSelectKind::ExtName(exts) => {
+                out.extend(select_file_stems(cwd, exts));
+            }
+            ParamSelectKind::FileName => {
+                out.extend(select_file_stems(cwd, &[]));
             }
             ParamSelectKind::Dir => {
                 out.push(".".to_string());
@@ -1409,10 +1561,7 @@ fn prompt_select_value(
         Some(d) => format!("Select {} (0 = default '{}'):", param, d),
         None => format!("Select {}:", param),
     };
-    let items: Vec<MenuItem> = candidates
-        .iter()
-        .map(|c| MenuItem::simple(c))
-        .collect();
+    let items: Vec<MenuItem> = candidates.iter().map(|c| MenuItem::simple(c)).collect();
     let prompt = format!("Enter number (1-{}) or 0: ", candidates.len());
     // InteractiveMenu owns its title str; build an owned string first.
     let title_owned = title.clone();
@@ -1456,7 +1605,7 @@ fn fill_invocation_once(
     };
     let (base_name, call_arg) = parse_call_syntax(first_token);
     let lookup_key = base_name.to_lowercase();
-    let aliases = Config::global_get_run_aliases();
+    let aliases = Config::get_run_aliases_merged();
     let Some(template) = aliases.get(&lookup_key) else {
         return Ok(Some((part.to_string(), false)));
     };
@@ -1467,7 +1616,11 @@ fn fill_invocation_once(
     }
     let is_call_form = call_arg.is_some();
     let base_original = base_name.to_string();
-    let trailing = if is_call_form { rest.to_string() } else { String::new() };
+    let trailing = if is_call_form {
+        rest.to_string()
+    } else {
+        String::new()
+    };
     let mut provided: Vec<String> = if let Some(args_str) = call_arg {
         if args_str.trim().is_empty() {
             Vec::new()
@@ -1480,7 +1633,7 @@ fn fill_invocation_once(
         tokenize_args(rest)
     };
     // If every missing slot has no select spec, let the classic path handle it.
-    let hints = Config::global_get_run_alias_hints();
+    let hints = Config::get_run_alias_hints_merged();
     let groups: Vec<ParamHint> = hints
         .get(&lookup_key)
         .map(|spec| parse_hint_spec(spec))
@@ -1526,7 +1679,11 @@ fn fill_invocation_once(
     // Build full positional args, prompting for select slots.
     let mut full_args: Vec<String> = Vec::new();
     // Keep leading provided (for call-form, keep up to start_idx).
-    let keep = if is_call_form { start_idx.min(provided.len()) } else { provided.len() };
+    let keep = if is_call_form {
+        start_idx.min(provided.len())
+    } else {
+        provided.len()
+    };
     for a in provided.iter().take(keep) {
         full_args.push(a.clone());
     }
@@ -1569,53 +1726,81 @@ fn fill_invocation_once(
     Ok(Some((filled, true)))
 }
 
+/// Rejoin `(separator, segment)` pairs into a single line.
+fn join_segments(parts: &[(Option<String>, String)]) -> String {
+    let mut out = String::new();
+    for (i, (sep, seg)) in parts.iter().enumerate() {
+        if i > 0 {
+            if let Some(s) = sep {
+                out.push(' ');
+                out.push_str(s);
+                out.push(' ');
+            }
+        }
+        out.push_str(seg.trim());
+    }
+    out
+}
+
+/// Expand aliases in a full line, treating each command segment (`&&` / `||`
+/// / `|` separated) independently so pipeline stages expand on their own.
+pub(super) fn expand_aliases_line(input: &str) -> String {
+    let parts = crate::shell::pipeline::split_commands(input);
+    let mut out = String::new();
+    for (i, (sep, seg)) in parts.iter().enumerate() {
+        if i > 0 {
+            if let Some(s) = sep {
+                out.push(' ');
+                out.push_str(s);
+                out.push(' ');
+            }
+        }
+        if seg.trim().is_empty() {
+            continue;
+        }
+        out.push_str(&expand_aliases(seg));
+    }
+    out
+}
+
 /// Expand aliases, prompting `--select-*` menus for missing args.
-/// Returns `Ok(None)` when the user cancelled (execute nothing).
+/// Returns `Ok(None)` when the user cancelled (execute nothing). The
+/// returned string is a single, fully expanded command line whose pipeline
+/// and redirection operators are left intact for the executor.
 pub(crate) fn expand_command_line_interactive(
     input: &str,
     nav: &mut crate::navigator::Navigator,
-) -> anyhow::Result<Option<Vec<String>>> {
+) -> anyhow::Result<Option<String>> {
     if input.trim().is_empty() {
-        return Ok(Some(vec![]));
+        return Ok(Some(String::new()));
     }
     let mut current = input.trim().to_string();
     for _ in 0..5 {
-        let parts = split_on_ampersands(&current);
+        let parts = crate::shell::pipeline::split_commands(&current);
         let mut any_prompted = false;
-        let mut filled_parts: Vec<String> = Vec::new();
-        for part in &parts {
-            match fill_invocation_once(part, nav)? {
+        let mut filled: Vec<(Option<String>, String)> = Vec::new();
+        for (sep, seg) in parts {
+            match fill_invocation_once(&seg, nav)? {
                 None => return Ok(None),
-                Some((filled, prompted)) => {
+                Some((filled_seg, prompted)) => {
                     any_prompted |= prompted;
-                    filled_parts.push(filled);
+                    filled.push((sep, filled_seg));
                 }
             }
         }
-        let joined = filled_parts.join(" && ");
-        let expanded = expand_command_line(&joined);
-        let expanded_joined = expanded.join(" && ");
-        if !any_prompted && expanded_joined == joined {
+        let joined = join_segments(&filled);
+        let expanded = expand_aliases_line(&joined);
+        if expanded == current {
             return Ok(Some(expanded));
         }
-        if !any_prompted && expanded_joined == current {
+        if !any_prompted && expanded == joined {
             return Ok(Some(expanded));
         }
-        // If nothing more to expand and nothing prompted, done.
-        if expanded_joined == current && !any_prompted {
-            return Ok(Some(expanded));
-        }
-        current = expanded_joined;
-        if !any_prompted {
-            // No prompts this round but expansion progressed (chained
-            // alias); loop again to catch deeper `--select-*` roots.
-            continue;
-        }
-        // Prompted: loop again in case expansion revealed another alias
-        // needing selection; otherwise next round exits with no prompts.
-        continue;
+        current = expanded;
+        // Loop again: a prompt revealed another alias, or expansion
+        // progressed (chained alias) and may expose deeper `--select-*`.
     }
-    Ok(Some(expand_command_line(&current)))
+    Ok(Some(expand_aliases_line(&current)))
 }
 
 #[cfg(test)]
@@ -1698,8 +1883,7 @@ mod tests {
 
     #[test]
     fn hint_annotations_all_kinds() {
-        let (cmd, hints) =
-            split_hint_annotations("tl dir ${x:-.} #x --hint-dir").unwrap();
+        let (cmd, hints) = split_hint_annotations("tl dir ${x:-.} #x --hint-dir").unwrap();
         assert_eq!(cmd, "tl dir ${x:-.}");
         assert_eq!(hints.len(), 1);
         assert_eq!(hints[0].param, "x");
@@ -1710,15 +1894,11 @@ mod tests {
     #[test]
     fn hint_annotations_multi_flag_union_and_ext_forms() {
         let (cmd, hints) =
-            split_hint_annotations("cp ${x} ${y} #x --hint-all #y --hint-tp --hint-dir")
-                .unwrap();
+            split_hint_annotations("cp ${x} ${y} #x --hint-all #y --hint-tp --hint-dir").unwrap();
         assert_eq!(cmd, "cp ${x} ${y}");
         assert_eq!(hints.len(), 2);
         assert_eq!(hints[0].kinds, vec![ParamHintKind::All]);
-        assert_eq!(
-            hints[1].kinds,
-            vec![ParamHintKind::Tp, ParamHintKind::Dir]
-        );
+        assert_eq!(hints[1].kinds, vec![ParamHintKind::Tp, ParamHintKind::Dir]);
         // Ext value forms.
         for (tail, want) in [
             ("#x --hint-ext py", vec!["py"]),
@@ -1729,11 +1909,15 @@ mod tests {
             let (_, hints) =
                 split_hint_annotations(&format!("python ${{x:-test}} {}", tail)).unwrap();
             let want: Vec<String> = want.into_iter().map(str::to_string).collect();
-            assert_eq!(hints[0].kinds, vec![ParamHintKind::Ext(want)], "tail: {}", tail);
+            assert_eq!(
+                hints[0].kinds,
+                vec![ParamHintKind::Ext(want)],
+                "tail: {}",
+                tail
+            );
         }
         // Bare --hint-ext with no values = all files.
-        let (_, hints) =
-            split_hint_annotations("run $x #x --hint-ext").unwrap();
+        let (_, hints) = split_hint_annotations("run $x #x --hint-ext").unwrap();
         assert_eq!(hints[0].kinds, vec![ParamHintKind::Ext(vec![])]);
         // Array placeholder form.
         let (_, hints) =
@@ -1784,14 +1968,12 @@ mod tests {
     #[test]
     fn hint_spec_roundtrips() {
         let (_, hints) =
-            split_hint_annotations("cp ${x} ${y} #x --hint-all #y --hint-tp --hint-dir")
-                .unwrap();
+            split_hint_annotations("cp ${x} ${y} #x --hint-all #y --hint-tp --hint-dir").unwrap();
         assert_eq!(
             serialize_hint_spec(&hints),
             "#x --hint-all #y --hint-tp --hint-dir"
         );
-        let (_, hints) =
-            split_hint_annotations("run $x #x --hint-ext (py, c)").unwrap();
+        let (_, hints) = split_hint_annotations("run $x #x --hint-ext (py, c)").unwrap();
         assert_eq!(serialize_hint_spec(&hints), "#x --hint-ext py,c");
     }
 
@@ -1803,8 +1985,7 @@ mod tests {
             ("#x --select-fd", "fd"),
             ("#x --select-tp", "tp"),
         ] {
-            let (cmd, hints) =
-                split_hint_annotations(&format!("run $x {}", tail)).unwrap();
+            let (cmd, hints) = split_hint_annotations(&format!("run $x {}", tail)).unwrap();
             assert_eq!(cmd, "run $x", "tail: {}", tail);
             assert_eq!(hints.len(), 1);
             assert_eq!(hints[0].param, "x");
@@ -1827,8 +2008,7 @@ mod tests {
             ("#x --select-ext py,c", vec!["py", "c"]),
             ("#x --select-ext .PY", vec!["py"]),
         ] {
-            let (_, hints) =
-                split_hint_annotations(&format!("run $x {}", tail)).unwrap();
+            let (_, hints) = split_hint_annotations(&format!("run $x {}", tail)).unwrap();
             let want: Vec<String> = want.into_iter().map(str::to_string).collect();
             assert_eq!(
                 hints[0].selects,
@@ -1841,9 +2021,10 @@ mod tests {
 
     #[test]
     fn select_mixed_hint_and_union() {
-        let (cmd, hints) =
-            split_hint_annotations("cp ${x} ${y} #x --hint-dir --select-dir #y --select-tp --select-dir")
-                .unwrap();
+        let (cmd, hints) = split_hint_annotations(
+            "cp ${x} ${y} #x --hint-dir --select-dir #y --select-tp --select-dir",
+        )
+        .unwrap();
         assert_eq!(cmd, "cp ${x} ${y}");
         assert_eq!(hints.len(), 2);
         assert_eq!(hints[0].kinds, vec![ParamHintKind::Dir]);
@@ -1853,17 +2034,13 @@ mod tests {
             vec![ParamSelectKind::Tp, ParamSelectKind::Dir]
         );
         // Same-param repeats merge.
-        let (_, hints) =
-            split_hint_annotations("run $x #x --select-dir #x --select-tp").unwrap();
+        let (_, hints) = split_hint_annotations("run $x #x --select-dir #x --select-tp").unwrap();
         assert_eq!(
             hints[0].selects,
             vec![ParamSelectKind::Dir, ParamSelectKind::Tp]
         );
         // Roundtrip keeps both.
-        assert_eq!(
-            serialize_hint_spec(&hints),
-            "#x --select-dir --select-tp"
-        );
+        assert_eq!(serialize_hint_spec(&hints), "#x --select-dir --select-tp");
         let (_, hints) =
             split_hint_annotations("run $x #x --hint-dir --select-dir --select-ext py,c").unwrap();
         assert_eq!(
@@ -1897,6 +2074,98 @@ mod tests {
     }
 
     #[test]
+    fn ext_name_and_file_name_parse_and_roundtrip() {
+        // --hint-ext-name takes ext values, like --hint-ext.
+        for (tail, want) in [
+            ("#x --hint-ext-name py", vec!["py"]),
+            ("#x --hint-ext-name (py, c)", vec!["py", "c"]),
+            ("#x --hint-ext-name py,c", vec!["py", "c"]),
+            ("#x --hint-ext-name .PY", vec!["py"]),
+        ] {
+            let (_, hints) = split_hint_annotations(&format!("run $x {}", tail)).unwrap();
+            let want: Vec<String> = want.into_iter().map(str::to_string).collect();
+            assert_eq!(
+                hints[0].kinds,
+                vec![ParamHintKind::ExtName(want)],
+                "tail: {}",
+                tail
+            );
+        }
+        // Bare --hint-ext-name = stems of all files.
+        let (_, hints) = split_hint_annotations("run $x #x --hint-ext-name").unwrap();
+        assert_eq!(hints[0].kinds, vec![ParamHintKind::ExtName(vec![])]);
+
+        // --hint-file-name takes no values.
+        let (cmd, hints) = split_hint_annotations("run $x #x --hint-file-name").unwrap();
+        assert_eq!(cmd, "run $x");
+        assert_eq!(hints[0].kinds, vec![ParamHintKind::FileName]);
+
+        // Select forms mirror hints.
+        let (_, hints) = split_hint_annotations("run $x #x --select-ext-name py,c").unwrap();
+        assert_eq!(
+            hints[0].selects,
+            vec![ParamSelectKind::ExtName(vec!["py".into(), "c".into()])]
+        );
+        let (_, hints) = split_hint_annotations("run $x #x --select-file-name").unwrap();
+        assert_eq!(hints[0].selects, vec![ParamSelectKind::FileName]);
+
+        // Roundtrip keeps canonical spellings.
+        let (_, hints) =
+            split_hint_annotations("run $x #x --hint-file-name --hint-ext-name py,c").unwrap();
+        assert_eq!(
+            serialize_hint_spec(&hints),
+            "#x --hint-file-name --hint-ext-name py,c"
+        );
+        let (_, hints) =
+            split_hint_annotations("run $x #x --select-file-name --select-ext-name py,c").unwrap();
+        assert_eq!(
+            serialize_hint_spec(&hints),
+            "#x --select-file-name --select-ext-name py,c"
+        );
+        // A bare token after a value-less --hint-file-name is a bad group.
+        assert_eq!(
+            split_hint_annotations("run $x #x --hint-file-name oops").unwrap_err(),
+            "bad_group"
+        );
+    }
+
+    #[test]
+    fn file_stem_matching_strips_extensions() {
+        let exts = |v: &[&str]| v.iter().map(|s| s.to_string()).collect::<Vec<_>>();
+        // Empty list strips the final extension only.
+        assert_eq!(file_stem_matching("main.rs", &[]).as_deref(), Some("main"));
+        assert_eq!(
+            file_stem_matching("archive.tar.gz", &[]).as_deref(),
+            Some("archive.tar")
+        );
+        assert_eq!(file_stem_matching("README", &[]).as_deref(), Some("README"));
+        assert_eq!(
+            file_stem_matching(".gitignore", &[]).as_deref(),
+            Some(".gitignore")
+        );
+        // Listed ext strips the whole matched suffix; longest match wins.
+        assert_eq!(
+            file_stem_matching("main.rs", &exts(&["rs"])).as_deref(),
+            Some("main")
+        );
+        assert_eq!(
+            file_stem_matching("foo.ntc.ral", &exts(&["ntc.ral"])).as_deref(),
+            Some("foo")
+        );
+        assert_eq!(
+            file_stem_matching("foo.ntc.ral", &exts(&["ral", "ntc.ral"])).as_deref(),
+            Some("foo")
+        );
+        // Case-insensitive suffix strip keeps the original stem casing.
+        assert_eq!(
+            file_stem_matching("Main.RS", &exts(&["rs"])).as_deref(),
+            Some("Main")
+        );
+        // Non-matching extension yields None.
+        assert_eq!(file_stem_matching("main.rs", &exts(&["py"])), None);
+    }
+
+    #[test]
     fn placeholder_defaults_captured() {
         let order = placeholder_defaults("cp ${x} ${y:-def} $x[]");
         assert_eq!(order.len(), 2);
@@ -1909,8 +2178,7 @@ mod tests {
     #[test]
     fn inline_values_parse_and_serialize() {
         // Bare --hint / --select with bracket lists.
-        let (cmd, hints) =
-            split_hint_annotations("ssh $p #p --hint [8080,38533,55555]").unwrap();
+        let (cmd, hints) = split_hint_annotations("ssh $p #p --hint [8080,38533,55555]").unwrap();
         assert_eq!(cmd, "ssh $p");
         assert_eq!(
             hints[0].kinds,
@@ -1920,10 +2188,7 @@ mod tests {
                 "55555".to_string()
             ])]
         );
-        assert_eq!(
-            serialize_hint_spec(&hints),
-            "#p --hint [8080,38533,55555]"
-        );
+        assert_eq!(serialize_hint_spec(&hints), "#p --hint [8080,38533,55555]");
         // Quoted phrases with spaces survive.
         let (_, hints) =
             split_hint_annotations("echo $w #w --select [\"what is this\",omg]").unwrap();
@@ -1959,31 +2224,34 @@ mod tests {
 
     #[test]
     fn named_refs_parse_and_helpers() {
-        let (cmd, hints) =
-            split_hint_annotations("ssh $p #p --hint-n port").unwrap();
+        let (cmd, hints) = split_hint_annotations("ssh $p #p --hint-n port").unwrap();
         assert_eq!(cmd, "ssh $p");
-        assert_eq!(hints[0].kinds, vec![ParamHintKind::Named("port".to_string())]);
+        assert_eq!(
+            hints[0].kinds,
+            vec![ParamHintKind::Named("port".to_string())]
+        );
         assert_eq!(serialize_hint_spec(&hints), "#p --hint-n port");
-        let (_, hints) =
-            split_hint_annotations("run $x #x --select-dir --select-n port").unwrap();
+        let (_, hints) = split_hint_annotations("run $x #x --select-dir --select-n port").unwrap();
         assert_eq!(
             hints[0].selects,
-            vec![ParamSelectKind::Dir, ParamSelectKind::Named("port".to_string())]
+            vec![
+                ParamSelectKind::Dir,
+                ParamSelectKind::Named("port".to_string())
+            ]
         );
         // Names normalize to lowercase.
-        let (_, hints) =
-            split_hint_annotations("run $x #x --hint-n PORT").unwrap();
-        assert_eq!(hints[0].kinds, vec![ParamHintKind::Named("port".to_string())]);
+        let (_, hints) = split_hint_annotations("run $x #x --hint-n PORT").unwrap();
+        assert_eq!(
+            hints[0].kinds,
+            vec![ParamHintKind::Named("port".to_string())]
+        );
         // Missing name is malformed.
         assert_eq!(
             split_hint_annotations("run $x #x --hint-n").unwrap_err(),
             "bad_group"
         );
         // Spec helpers.
-        assert_eq!(
-            named_refs_in_groups(&hints),
-            vec!["port".to_string()]
-        );
+        assert_eq!(named_refs_in_groups(&hints), vec!["port".to_string()]);
         assert!(spec_references_named("#p --hint-n port", "PORT"));
         assert!(!spec_references_named("#p --hint-dir", "port"));
         assert_eq!(
@@ -2011,15 +2279,9 @@ mod tests {
             parse_value_list_raw("[\"that's great\", \"omg,nice\", ok]").unwrap(),
             vec!["that's great", "omg,nice", "ok"]
         );
-        assert_eq!(
-            parse_value_list_raw("['a b',c]").unwrap(),
-            vec!["a b", "c"]
-        );
+        assert_eq!(parse_value_list_raw("['a b',c]").unwrap(), vec!["a b", "c"]);
         // Dedup, drop empties.
-        assert_eq!(
-            parse_value_list_raw("[a,,a, b]").unwrap(),
-            vec!["a", "b"]
-        );
+        assert_eq!(parse_value_list_raw("[a,,a, b]").unwrap(), vec!["a", "b"]);
         // Failures: no brackets, unbalanced, empty, trailing garbage.
         assert!(parse_value_list_raw("8080,5050").is_err());
         assert!(parse_value_list_raw("[8080,5050").is_err());
@@ -2059,16 +2321,10 @@ mod tests {
         assert_eq!(substitute_params("run $x[,] ", &["solo"]), "run solo ");
         // Bracketed defaults split on commas too (plain defaults
         // stay one value, like legacy `[]`).
-        assert_eq!(
-            substitute_params("run ${x:-[a,b]}[,]", &[]),
-            "run a , b"
-        );
+        assert_eq!(substitute_params("run ${x:-[a,b]}[,]", &[]), "run a , b");
         assert_eq!(substitute_params("run ${x:-a,b}[,]", &[]), "run a,b");
         // Braced sep form.
-        assert_eq!(
-            substitute_params("run ${x}[,]", &["[a,b]"]),
-            "run a , b"
-        );
+        assert_eq!(substitute_params("run ${x}[,]", &["[a,b]"]), "run a , b");
     }
 
     #[test]
@@ -2099,6 +2355,118 @@ mod tests {
         assert_eq!(out, "run ${x:-a,b}[,]");
         let out = inject_template_defaults("run $x[].c", &[("x".into(), "a".into())]);
         assert_eq!(out, "run ${x:-a}[].c");
+    }
+
+    #[test]
+    fn tokenize_args_is_quote_aware() {
+        assert_eq!(tokenize_args("a b"), vec!["a", "b"]);
+        // A quoted span with spaces is one (quote-stripped) token.
+        assert_eq!(tokenize_args("\"wow nice\""), vec!["wow nice"]);
+        assert_eq!(tokenize_args("a \"b c\" d"), vec!["a", "b c", "d"]);
+        // Escaped quote inside a quoted span survives.
+        assert_eq!(tokenize_args("\"a \\\"b\\\" c\""), vec!["a \"b\" c"]);
+        // Array literals still stay one token (verbatim).
+        assert_eq!(tokenize_args("[a,b] c"), vec!["[a,b]", "c"]);
+        assert_eq!(tokenize_args("[add only] math"), vec!["[add only]", "math"]);
+    }
+
+    #[test]
+    fn rest_capture_binds_joined_args() {
+        // Quoted single arg.
+        assert_eq!(
+            substitute_params("echo $*{x}", &["wow nice"]),
+            "echo wow nice"
+        );
+        // Unquoted tokens are joined back into one value.
+        assert_eq!(
+            substitute_params("echo $*{x}", &["wow", "nice"]),
+            "echo wow nice"
+        );
+        // Trailing text after the capture is preserved.
+        assert_eq!(
+            substitute_params("echo $*{x} world", &["wow", "nice"]),
+            "echo wow nice world"
+        );
+        // Braced form with a default.
+        assert_eq!(
+            substitute_params("echo $*{x:-fallback}", &[]),
+            "echo fallback"
+        );
+        // Missing with no default stays literally intact.
+        assert_eq!(substitute_params("echo $*{x}", &[]), "echo $*{x}");
+    }
+
+    #[test]
+    fn rest_capture_multiple_placeholders_split_positionally() {
+        // Only the *last* `$*{}` is a catch-all; earlier ones bind exactly
+        // one argument (this is the send-email title/body bug).
+        let tmpl = "smtp --id 1 --to a@b -s \"$*{title}\" -b \"$*{body}\"";
+        assert_eq!(
+            substitute_params(tmpl, &["Good Evening", "How are you"]),
+            "smtp --id 1 --to a@b -s \"Good Evening\" -b \"How are you\""
+        );
+        // Extra args flow into the trailing catch-all.
+        assert_eq!(
+            substitute_params(tmpl, &["T", "line one", "line two"]),
+            "smtp --id 1 --to a@b -s \"T\" -b \"line one line two\""
+        );
+        // A non-last placeholder does not swallow the next one's arg even
+        // when the following placeholder is a plain `${y}`.
+        assert_eq!(
+            substitute_params("run $*{x} $y", &["a b", "c"]),
+            "run a b c"
+        );
+        // Single (hence last) placeholder keeps the old greedy behaviour.
+        assert_eq!(
+            substitute_params("echo $*{x}", &["a", "b", "c"]),
+            "echo a b c"
+        );
+    }
+
+    #[test]
+    fn rest_capture_ident_and_defaults() {
+        // Names/interfaces see the base name (hints, selects, list/info).
+        assert_eq!(extract_param_names("echo $*{x}"), vec!["x".to_string()]);
+        assert_eq!(
+            placeholder_idents("echo $*{x}"),
+            vec![("x".to_string(), false)]
+        );
+        assert!(find_invalid_array_sep("echo $*{x}").is_none());
+        // Default injection round-trips the `*` sigil.
+        let out = inject_template_defaults("echo $*{x}", &[("x".into(), "a b".into())]);
+        assert_eq!(out, "echo $*{x:-a b}");
+    }
+
+    #[test]
+    fn expand_rest_capture_end_to_end() {
+        let mut cfg = Config::new();
+        cfg.run_aliases
+            .insert("hi".to_string(), "echo $*{x}".to_string());
+        cfg.run_aliases
+            .insert("run_file".to_string(), "python $x.py".to_string());
+        cfg.run_aliases.insert(
+            "mail".to_string(),
+            "smtp --to a@b -s \"$*{title}\" -b \"$*{body}\"".to_string(),
+        );
+        Config::with_test_config(cfg, || {
+            // Quoted single arg and unquoted multi-token both collapse to one.
+            assert_eq!(
+                expand_command_line("hi \"wow nice\""),
+                vec!["echo wow nice"]
+            );
+            assert_eq!(expand_command_line("hi wow nice"), vec!["echo wow nice"]);
+            assert_eq!(expand_command_line("hi a b c"), vec!["echo a b c"]);
+            // Two placeholders split positionally (title, body).
+            assert_eq!(
+                expand_command_line("mail \"Good Evening\" \"How are you\""),
+                vec!["smtp --to a@b -s \"Good Evening\" -b \"How are you\""]
+            );
+            // Existing whitespace-split `${x}` behaviour is unchanged.
+            assert_eq!(
+                expand_command_line("run_file hello"),
+                vec!["python hello.py"]
+            );
+        });
     }
 
     #[test]

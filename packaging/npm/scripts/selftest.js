@@ -13,7 +13,8 @@ const os = require('os');
 const path = require('path');
 const zlib = require('zlib');
 const { execFileSync } = require('child_process');
-const { extractArchive } = require('./install.js');
+const { extractArchive, getPlatformInfo } = require('./install.js');
+const VERSION = require('../package.json').version;
 
 let failures = 0;
 function check(name, cond, extra) {
@@ -155,6 +156,56 @@ function buildTar(entries) {
   return Buffer.concat(parts);
 }
 
+// Platform -> release-asset selection. Regression guard for the 2.4.5 bug
+// where Termux (process.platform === 'android') resolved to no asset at all
+// and the installer exited with "unsupported platform android-arm64".
+function testPlatformMatrix() {
+  const a = (n) => `ntc-v${VERSION}-${n}`;
+  const cases = [
+    { name: 'termux android arm64',   p: 'android', a: 'arm64', x: true,  bin: 'ntc',     primary: a('aarch64-linux-android.tar.gz'),      rest: [a('linux-aarch64.tar.gz')] },
+    { name: 'termux android x64',     p: 'android', a: 'x64',   x: true,  bin: 'ntc',     primary: a('x86_64-linux-android.tar.gz'),       rest: [a('linux-x86_64.tar.gz')] },
+    { name: 'termux android arm',     p: 'android', a: 'arm',   x: true,  bin: 'ntc',     primary: a('armv7-linux-androideabi.tar.gz'),    rest: [] },
+    { name: 'termux reporting linux', p: 'linux',   a: 'arm64', x: true,  bin: 'ntc',     primary: a('aarch64-linux-android.tar.gz'),      rest: [a('linux-aarch64.tar.gz')] },
+    { name: 'linux arm64',            p: 'linux',   a: 'arm64', x: false, bin: 'ntc',     primary: a('linux-aarch64.tar.gz'),              rest: [] },
+    { name: 'linux x64',              p: 'linux',   a: 'x64',   x: false, bin: 'ntc',     primary: a('linux-x86_64.tar.gz'),               rest: [] },
+    { name: 'windows x64',            p: 'win32',   a: 'x64',   x: false, bin: 'ntc.exe', primary: a('windows-x86_64.zip'),                rest: [] },
+    { name: 'windows arm64',          p: 'win32',   a: 'arm64', x: false, bin: 'ntc.exe', primary: a('windows-arm64.zip'),                 rest: [] },
+    { name: 'macos arm64',            p: 'darwin',  a: 'arm64', x: false, bin: 'ntc',     primary: a('macos-aarch64.tar.gz'),              rest: [] },
+    { name: 'macos x64',              p: 'darwin',  a: 'x64',   x: false, bin: 'ntc',     primary: a('macos-x86_64.tar.gz'),               rest: [] },
+  ];
+
+  for (const c of cases) {
+    const info = getPlatformInfo(c.p, c.a, c.x);
+    const got = info && info.candidates;
+    const ok = !!info &&
+      info.bin === c.bin &&
+      got[0] === c.primary &&
+      got.length === 1 + c.rest.length &&
+      c.rest.every((f, i) => got[i + 1] === f);
+    check(`platform matrix: ${c.name}`, ok, `got ${JSON.stringify(got)} bin=${info && info.bin}`);
+  }
+
+  check('platform matrix: unsupported -> null', getPlatformInfo('freebsd', 'x64', false) === null);
+
+  const saved = process.env.NTC_NPM_ASSET;
+  process.env.NTC_NPM_ASSET = 'ntc-v0.0.0-custom.tar.gz';
+  try {
+    const forced = getPlatformInfo('linux', 'x64', false);
+    check(
+      'platform matrix: NTC_NPM_ASSET override',
+      !!forced && forced.candidates.length === 1 && forced.candidates[0] === 'ntc-v0.0.0-custom.tar.gz'
+    );
+  } finally {
+    if (saved === undefined) delete process.env.NTC_NPM_ASSET;
+    else process.env.NTC_NPM_ASSET = saved;
+  }
+
+  // Whatever this machine is, the real (unparameterised) call must resolve,
+  // since the selftest only runs on supported platforms.
+  const real = getPlatformInfo();
+  check('platform matrix: real platform resolves', !!real && real.candidates.length > 0, JSON.stringify(real));
+}
+
 function testZip() {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ntc-selftest-zip-'));
   try {
@@ -256,6 +307,7 @@ function testArcRoundTrip() {
   }
 }
 
+testPlatformMatrix();
 testZip();
 testTarGz();
 testArcRoundTrip();

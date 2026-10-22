@@ -113,11 +113,12 @@ fn cmd_scr_run(
         }
         let expanded = match expand_command_line_interactive(trimmed, nav)? {
             None => return Ok(false),
-            Some(cmds) => cmds,
+            Some(s) => s,
         };
-        for part in expanded {
-            super::execute_command(&part, nav, &None)?;
+        if expanded.trim().is_empty() {
+            return Ok(true);
         }
+        super::execute_command(&expanded, nav, &None)?;
         Ok(true)
     };
 

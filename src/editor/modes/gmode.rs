@@ -77,21 +77,17 @@ impl Editor {
                     self.status_msg = Some(t!("editor.nfe_create_exists", name));
                     return;
                 }
-                let ok = if is_file {
-                    let parents_ok = path
-                        .parent()
-                        .map(|p| std::fs::create_dir_all(p).is_ok())
-                        .unwrap_or(true);
-                    parents_ok && std::fs::write(&path, "").is_ok()
-                } else {
-                    std::fs::create_dir_all(&path).is_ok()
-                };
-                if !ok {
+                if is_file {
+                    match crate::editor::init_file(&path) {
+                        Ok(true) => {}
+                        _ => {
+                            self.status_msg = Some(t!("editor.nfe_create_failed", name));
+                            return;
+                        }
+                    }
+                } else if std::fs::create_dir_all(&path).is_err() {
                     self.status_msg = Some(t!("editor.nfe_create_failed", name));
                     return;
-                }
-                if is_file {
-                    self.open_file(&path);
                 }
                 self.status_msg = Some(if is_file {
                     t!("editor.nfe_created_file", name)

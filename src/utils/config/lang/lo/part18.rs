@@ -74,6 +74,7 @@ pub fn fill(m: &mut HashMap<String, String>) {
     m.insert("help.git.example3".into(), "git commit -am \"msg\" ## ໃຊ້ git ປົກກະຕິ (passthrough)".into());
     m.insert("help.config.git".into(), "config git ON|OFF ## ເປີດ/ປິດ git integration (prompt + ສັນຍາລັກ)".into());
     m.insert("help.config.dir_view".into(), "config dir_view ON|OFF ## ສະແດງ/ເຊື່ອງຕົ້ນໄມ້ໃນ shell".into());
+    m.insert("help.config.update_check".into(), "config update_check ON|OFF ## ສະແດງ/ເຊື່ອງແຈ້ງເຕືອນເວີຊັນໃໝ່ລາຍວັນ (alias: uc)".into());
     m.insert("help.config.serve".into(), "config serve [ບໍລິການ] [--port-default ພອດ] [--bind-default ທີ່ຢູ່] ## ຄ່າເລີ່ມຕົ້ນ serve ລາຍບໍລິການ (alias: serve config)".into());
     m.insert("cmd.config.serve.title".into(), "ການຕັ້ງຄ່າ Serve (ຄ່າເລີ່ມຕົ້ນລາຍບໍລິການ)".into());
     m.insert("cmd.config.serve.status".into(), "  {}: {}:{}".into());
@@ -132,6 +133,11 @@ pub fn fill(m: &mut HashMap<String, String>) {
     m.insert("msg.setDV.on".into(), "ເປີດ Dir view ແລ້ວ".into());
     m.insert("msg.setDV.off".into(), "ປິດ Dir view ແລ້ວ".into());
     m.insert("msg.setDV.error".into(), "ການໃຊ້ງານ: config dir_view ON|OFF".into());
+    m.insert("msg.setUC.status".into(), "Update check: {}".into());
+    m.insert("msg.setUC.on".into(), "ເປີດແຈ້ງເຕືອນເວີຊັນໃໝ່ລາຍວັນແລ້ວ".into());
+    m.insert("msg.setUC.off".into(), "ປິດແຈ້ງເຕືອນເວີຊັນໃໝ່ແລ້ວ".into());
+    m.insert("msg.setUC.error".into(), "ການໃຊ້ງານ: config update_check ON|OFF".into());
+    m.insert("msg.update.available".into(), "ມີ NTC {} ໃໝ່ (ເຈົ້າໃຊ້ {}) — ລັນ 'ntc --upgrade' ໃນ {} ຫຼືເບິ່ງ {}".into());
     m.insert("cmd.tmprt.unknown_sub".into(), "tmprt subcommand ບໍ່ຮູ້ຈັກ: {}".into());
     m.insert("cmd.spec.other".into(), "ອື່ນໆ".into());
     m.insert("cmd.spec.title".into(), "ສະເປັກລະບົບ".into());

@@ -8,5 +8,6 @@ export interface FileItem {
 export interface FilesResponse {
   path: string
   items: FileItem[]
+  locked?: boolean
   error?: string
 }

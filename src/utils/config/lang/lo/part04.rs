@@ -104,7 +104,8 @@ pub fn fill(m: &mut HashMap<String, String>) {
     m.insert("cmd.config.deinit.remove_failed".into(), "ລຶບ {} ບໍ່ສຳເລັດ: {}".into());
     m.insert("cmd.config.deinit.removed".into(), "ລຶບ {} ແລ້ວ".into());
     m.insert("cmd.config.deinit.skipped".into(), "ຂ້າມໄປ.".into());
-    m.insert("cmd.config.deinit.usage".into(), "ວິທີໃຊ້: deinit [--all | --ran | --local]".into());
+    m.insert("cmd.config.deinit.usage".into(), "ວິທີໃຊ້: deinit [--all | --ran | --local | --opencode] [--force]".into());
+    m.insert("cmd.config.deinit.opencode_not_found".into(), "ບໍ່ພົບ scaffold .opencode, ຂ້າມໄປ.".into());
     m.insert("cmd.config.example_depth".into(), " config depth 4  # ຕັ້ງຄວາມເລິກຕົ້ນໄມ້ສູງສຸດເປັນ 4".into());
     m.insert("cmd.config.example_history".into(), " config history off  # ປິດໃຊ້ງານ history".into());
     m.insert("cmd.config.example_linenumbers".into(), " config linenumbers ON  # ເປີດເບີແຖວໃນການສະແດງໄຟລ໌".into());
@@ -115,7 +116,8 @@ pub fn fill(m: &mut HashMap<String, String>) {
     m.insert("cmd.config.init.created".into(), "ສ້າງ {} ແລ້ວ".into());
     m.insert("cmd.config.init.exists_warn".into(), "{} ມີຢູ່ແລ້ວ, ຂ້າມໄປ.".into());
     m.insert("cmd.config.init.local_exists".into(), "ntconfig.toml ມີຢູ່ແລ້ວ, ຂ້າມໄປ.".into());
-    m.insert("cmd.config.init.usage".into(), "ວິທີໃຊ້: init [--all | --ran | --local]".into());
+    m.insert("cmd.config.init.usage".into(), "ວິທີໃຊ້: init [--all | --ran | --local | --opencode] [--force]".into());
+    m.insert("cmd.config.init.opencode_ready".into(), "OpenCode scaffold ພ້ອມແລ້ວ: {}".into());
     m.insert("cmd.config.lang.active".into(), "{} (active)".into());
     m.insert("cmd.config.lang.available".into(), "ພາສາທີ່ມີ:".into());
     m.insert("cmd.config.lang.coming_soon".into(), "{} (set, coming soon)".into());
@@ -123,16 +125,10 @@ pub fn fill(m: &mut HashMap<String, String>) {
     m.insert("cmd.config.lang.set_coming_soon".into(), "ຕັ້ງພາສາເປັນ: {} (coming soon)".into());
     m.insert("cmd.config.lang.unsupported".into(), "ພາສາ '{}' ບໍ່ຮອງຮັບ. ທີ່ມີ: {}".into());
     m.insert("cmd.config.local.create_failed".into(), "ສ້າງ ntconfig.toml ບໍ່ສຳເລັດ: {}".into());
-    m.insert("cmd.config.local.created_export".into(), "ສ້າງ ntconfig.toml ພ້ອມການຕັ້ງຄ່າປັດຈຸບັນໃນ: {}".into());
     m.insert("cmd.config.local.created_template".into(), "ສ້າງ ntconfig.toml template ໃນ: {}".into());
     m.insert("cmd.config.local.exists_warning".into(), "\u{26a0}\u{fe0f} ntconfig.toml ມີຢູ່ແລ້ວ!".into());
-    m.insert("cmd.config.local.export_aliases".into(), " \u{2022} Run aliases".into());
-    m.insert("cmd.config.local.export_extras".into(), " \u{2022} ໄຟລ໌/ນາມສະກຸນທີ່ຮອງຮັບເພີ່ມເຕີມ".into());
-    m.insert("cmd.config.local.export_ignores".into(), " \u{2022} ໄດເຣັກທໍຣີ/ນາມສະກຸນ/ໄຟລ໌ທີ່ຖືກ ignore".into());
-    m.insert("cmd.config.local.export_valid".into(), "\u{2705} ການຕັ້ງຄ່າທີ່ເປີດໃຊ້ໄດ້ຖືກສົ່ງອອກພ້ອມ syntax TOML ທີ່ຖືກຕ້ອງ:".into());
     m.insert("cmd.config.local.init_cancelled".into(), "ຍົກເລີກການເລີ່ມຕົ້ນ.".into());
     m.insert("cmd.config.local.overwrite_prompt".into(), "ຂຽນທັບ? (y/N): ".into());
-    m.insert("cmd.config.local.template_all_hint".into(), " ຫຼື ແລ່ນ: local init --all ເພື່ອສົ່ງອອກການຕັ້ງຄ່າປັດຈຸບັນ".into());
     m.insert("cmd.config.local.template_edit_hint".into(), " ແກ້ໄຂໄຟລ໌ ແລະ ລຶບ '#' ອອກຈາກແຖວທີ່ຕ້ອງການເປີດໃຊ້".into());
     m.insert("cmd.config.local.template_hint".into(), "\u{1f4dd} ນີ້ແມ່ນ COMMENTED TEMPLATE - ຍັງບໍ່ມີການຕັ້ງຄ່າທີ່ເປີດໃຊ້".into());
     m.insert("cmd.config.local.tip_global".into(), "\u{1f4a1} ຄຳແນະນຳ: ການຕັ້ງຄ່າ global (teleports, output path, depth) ຍັງຄົງ global".into());

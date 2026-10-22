@@ -62,25 +62,56 @@ pub fn run_cli() -> Result<bool> {
 }
 
 /// Expand ral aliases (prompting on stdin like the interactive shell),
-/// execute each resulting command, and stay interactive when `NTC_STAY=1`.
+/// execute the resulting command line, and stay interactive when `NTC_STAY=1`.
 fn run_shell_command_line(cmd: &str) -> Result<bool> {
     let stay = std::env::var(STAY_ENV).as_deref() == Ok("1");
     if stay {
         std::env::remove_var(STAY_ENV);
     }
     let mut nav = Navigator::new()?;
+
+    // Heredocs on the command line read their bodies from process stdin.
+    if crate::shell::pipeline::has_heredoc(cmd) {
+        let bodies = read_heredocs_stdin(cmd);
+        crate::shell::pipeline::set_heredoc_bodies(bodies);
+    } else {
+        crate::shell::pipeline::set_heredoc_bodies(Vec::new());
+    }
+
     let expanded = match crate::shell::alias::expand_command_line_interactive(cmd, &mut nav)? {
         None => return Ok(false),
-        Some(cmds) => cmds,
+        Some(s) => s,
     };
-    for c in &expanded {
-        if c.trim().is_empty() {
-            continue;
-        }
-        execute_command(c, &mut nav, &None)?;
+    if !expanded.trim().is_empty() {
+        execute_command(&expanded, &mut nav, &None)?;
     }
+
     if stay {
         crate::shell::run_shell_with_nav(nav)?;
     }
     Ok(false)
+}
+
+/// Read `<<` heredoc bodies (in declaration order) from process stdin.
+fn read_heredocs_stdin(line: &str) -> Vec<Vec<u8>> {
+    let delims = crate::shell::pipeline::scan_heredoc_delims(line);
+    let mut bodies: Vec<Vec<u8>> = Vec::new();
+    if delims.is_empty() {
+        return bodies;
+    }
+    use std::io::BufRead;
+    let stdin = std::io::stdin();
+    let mut lines = stdin.lock().lines();
+    for delim in delims {
+        let mut body = String::new();
+        while let Some(Ok(l)) = lines.next() {
+            if l.trim_end_matches(['\r', '\n']) == delim {
+                break;
+            }
+            body.push_str(&l);
+            body.push('\n');
+        }
+        bodies.push(body.into_bytes());
+    }
+    bodies
 }

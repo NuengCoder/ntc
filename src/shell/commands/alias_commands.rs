@@ -1,5 +1,6 @@
 use super::execute_system_command;
-use crate::config::Config;
+use super::scope::{split_scope_flag, split_scope_flag_prefix};
+use crate::config::{Config, ConfigScope};
 use crate::navigator::Navigator;
 use crate::output::{print_error, print_info, print_success};
 use crate::shell::alias::{
@@ -8,6 +9,8 @@ use crate::shell::alias::{
     parse_value_list_raw, rename_named_in_spec, serialize_hint_spec, spec_references_named,
     split_hint_annotations, ParamHint,
 };
+use std::collections::HashMap;
+use std::path::Path;
 
 /// Reject `--hint-n` / `--select-n` references to hint lists that do not
 /// exist. Returns the missing list name, if any.
@@ -34,18 +37,9 @@ fn check_named_refs(hints: &[ParamHint]) -> bool {
 /// Scans both the global and the local spec stores.
 fn hint_list_referenced_by(name: &str) -> Vec<String> {
     let mut out: Vec<String> = Vec::new();
-    for (alias, spec) in Config::global_get_run_alias_hints() {
+    for (alias, spec) in Config::get_run_alias_hints_merged() {
         if spec_references_named(&spec, name) && !out.contains(&alias) {
             out.push(alias);
-        }
-    }
-    if let Some(local) = Config::get_local_config() {
-        if let Some(map) = local.run_alias_hints {
-            for (alias, spec) in map {
-                if spec_references_named(&spec, name) && !out.contains(&alias) {
-                    out.push(alias);
-                }
-            }
         }
     }
     out.sort();
@@ -55,27 +49,62 @@ fn hint_list_referenced_by(name: &str) -> Vec<String> {
 /// Rewrite `--hint-n` / `--select-n` references `old` → `new` in every
 /// stored alias spec (global + local).
 fn rewrite_hint_list_refs(old: &str, new: &str) {
-    for (alias, spec) in Config::global_get_run_alias_hints() {
+    let (global_specs, local_specs) = Config::get_run_alias_hints_by_source();
+    for (alias, spec) in global_specs {
         if spec_references_named(&spec, old) {
             let updated = rename_named_in_spec(&spec, old, new);
             let _ = Config::global_update_run_alias_hint(&alias, &updated);
         }
     }
-    if let Some(local) = Config::get_local_config() {
-        if let Some(map) = local.run_alias_hints {
-            for (alias, spec) in map {
-                if spec_references_named(&spec, old) {
-                    let updated = rename_named_in_spec(&spec, old, new);
-                    let _ = Config::local_add_run_alias_hint(&alias, &updated);
-                }
+    if Config::get_local_config_path().is_some() {
+        for (alias, spec) in local_specs {
+            if spec_references_named(&spec, old) {
+                let updated = rename_named_in_spec(&spec, old, new);
+                let _ = Config::add_run_alias_hint(&alias, &updated, ConfigScope::Auto);
             }
         }
     }
 }
 
+/// Render one `[global]` / `[local]` section of the `ral hintn ls` listing.
+fn render_hint_list_section(
+    title: &str,
+    lists: &HashMap<String, Vec<String>>,
+    path: Option<&Path>,
+    empty_note: &str,
+) -> String {
+    let mut out = String::new();
+    out.push_str("==================================================\n");
+    out.push_str(&format!("{}\n", title.cyan().bold()));
+    if let Some(p) = path {
+        out.push_str(&format!(
+            "{}\n",
+            t!("alias.ral.config_path", p.display()).dimmed()
+        ));
+    }
+    out.push_str("==================================================\n");
+    if lists.is_empty() {
+        out.push_str(&format!("  {}\n", empty_note.dimmed()));
+        return out;
+    }
+    let mut sorted: Vec<_> = lists.iter().collect();
+    sorted.sort_by(|a, b| a.0.cmp(b.0));
+    for (i, (name, values)) in sorted.iter().enumerate() {
+        out.push_str(&format!(
+            "  {}. {} ({}) -> {}\n",
+            (i + 1).to_string().yellow(),
+            name.blue(),
+            t!("alias.ral.hintn_value_count", values.len()).dimmed(),
+            values.join(", ").dimmed()
+        ));
+    }
+    out
+}
+
 /// `ral hintn add|rm|rnm|info|ls` — named value lists backing
 /// `#param --hint-n <name>` / `--select-n <name>`.
 fn cmd_ral_hintn(args: &str) -> Result<bool> {
+    let (outer_scope, args) = split_scope_flag(args);
     let args = args.trim();
     if args.is_empty() {
         print_error(&t!("alias.ral.usage_hintn"));
@@ -85,14 +114,21 @@ fn cmd_ral_hintn(args: &str) -> Result<bool> {
         Some((a, b)) => (a.to_lowercase(), b.trim()),
         None => (args.to_lowercase(), ""),
     };
+    // The flag may also sit between the action and its arguments
+    // (`ral hintn add -g name values`).
+    let (inner_scope, rest) = split_scope_flag(rest);
+    let scope = if outer_scope == ConfigScope::Global {
+        outer_scope
+    } else {
+        inner_scope
+    };
     match action.as_str() {
         "add" => {
             let trimmed = rest.trim_start();
             let name_end = trimmed
                 .find(|c: char| c == ' ' || c == '\t')
                 .unwrap_or(trimmed.len());
-            let (name, values_raw) =
-                (trimmed[..name_end].trim(), trimmed[name_end..].trim());
+            let (name, values_raw) = (trimmed[..name_end].trim(), trimmed[name_end..].trim());
             if name.is_empty() || values_raw.is_empty() {
                 print_error(&t!("alias.ral.usage_hintn_add"));
                 return Ok(false);
@@ -108,7 +144,7 @@ fn cmd_ral_hintn(args: &str) -> Result<bool> {
                     return Ok(false);
                 }
             };
-            let _ = Config::local_add_run_hint_list(name, &values);
+            let _ = Config::add_run_hint_list(name, &values, scope);
             Config::reload_global();
             ALIAS_GENERATION.fetch_add(1, Ordering::Relaxed);
             print_success(&t!(
@@ -123,9 +159,7 @@ fn cmd_ral_hintn(args: &str) -> Result<bool> {
                 print_error(&t!("alias.ral.usage_hintn_rm"));
                 return Ok(false);
             }
-            let force = rest
-                .split_whitespace()
-                .any(|w| w == "--force" || w == "-f");
+            let force = rest.split_whitespace().any(|w| w == "--force" || w == "-f");
             let names: Vec<String> = rest
                 .split([',', ' ', '\t'])
                 .map(|s| s.trim().trim_matches(',').to_lowercase())
@@ -146,7 +180,7 @@ fn cmd_ral_hintn(args: &str) -> Result<bool> {
                     print_error(&t!("alias.ral.hintn_referenced", name, refs.join(", ")));
                     continue;
                 }
-                let _ = Config::local_remove_run_hint_list(&name);
+                let _ = Config::remove_run_hint_list(&name, scope);
                 print_success(&t!("alias.ral.hintn_removed", name));
             }
             Config::reload_global();
@@ -174,23 +208,23 @@ fn cmd_ral_hintn(args: &str) -> Result<bool> {
                 return Ok(false);
             }
             rewrite_hint_list_refs(&old, new);
-            Config::local_rename_run_hint_list(&old, new);
+            Config::rename_run_hint_list(&old, new, scope);
             Config::reload_global();
             ALIAS_GENERATION.fetch_add(1, Ordering::Relaxed);
             print_success(&t!("alias.ral.hintn_renamed", old, new.to_lowercase()));
         }
         "info" => {
-            let name = rest
-                .split_whitespace()
-                .next()
-                .unwrap_or("")
-                .to_lowercase();
+            let name = rest.split_whitespace().next().unwrap_or("").to_lowercase();
             if name.is_empty() {
                 print_error(&t!("alias.ral.usage_hintn_info"));
                 return Ok(false);
             }
-            let (store, is_local) = Config::get_run_hint_lists_with_source();
-            if let Some(values) = store.get(&name) {
+            let (global_lists, local_lists) = Config::get_run_hint_lists_by_source();
+            // Local wins: the local list is the effective one.
+            let local_values = local_lists.get(&name);
+            let global_values = global_lists.get(&name);
+            let store = local_values.or(global_values);
+            if let Some(values) = store {
                 println!();
                 println!(
                     "{}",
@@ -225,7 +259,7 @@ fn cmd_ral_hintn(args: &str) -> Result<bool> {
                         refs.join(", ").cyan()
                     );
                 }
-                let source = if is_local {
+                let source = if local_values.is_some() {
                     t!("alias.ral.info_source_local").cyan().to_string()
                 } else {
                     t!("alias.ral.info_source_global").green().to_string()
@@ -237,38 +271,36 @@ fn cmd_ral_hintn(args: &str) -> Result<bool> {
             }
         }
         "ls" | "list" => {
-            let (store, is_local) = Config::get_run_hint_lists_with_source();
-            if store.is_empty() {
+            let (global_lists, local_lists) = Config::get_run_hint_lists_by_source();
+            if global_lists.is_empty() && local_lists.is_empty() {
                 print_info(&t!("alias.ral.hintn_empty"));
             } else {
                 println!();
-                println!(
+                print!(
                     "{}",
-                    "==================================================".cyan()
+                    render_hint_list_section(
+                        &t!("alias.ral.section_global"),
+                        &global_lists,
+                        None,
+                        &t!("alias.ral.none"),
+                    )
                 );
-                if is_local {
-                    println!("{}", t!("alias.ral.hintn_list_title_local").cyan().bold());
+                println!();
+                let local_path = Config::get_local_config_path();
+                let local_note = if local_path.is_some() {
+                    t!("alias.ral.none")
                 } else {
-                    println!(
-                        "{}",
-                        t!("alias.ral.hintn_list_title_global").cyan().bold()
-                    );
-                }
-                println!(
+                    t!("alias.ral.no_local")
+                };
+                print!(
                     "{}",
-                    "==================================================".cyan()
+                    render_hint_list_section(
+                        &t!("alias.ral.section_local"),
+                        &local_lists,
+                        local_path.as_deref(),
+                        &local_note,
+                    )
                 );
-                let mut sorted: Vec<_> = store.iter().collect();
-                sorted.sort_by(|a, b| a.0.cmp(b.0));
-                for (i, (name, values)) in sorted.iter().enumerate() {
-                    println!(
-                        "  {}. {} ({}) -> {}",
-                        (i + 1).to_string().yellow(),
-                        name.blue(),
-                        t!("alias.ral.hintn_value_count", values.len()).dimmed(),
-                        values.join(", ").dimmed()
-                    );
-                }
                 println!();
             }
         }
@@ -304,30 +336,99 @@ use std::io::{self, Write};
 /// invoked bare. Covers `#param --hint-*` / `#param --select-*` annotations
 /// and the `$x[sep]` array separator form.
 fn print_ral_add_examples() {
-    println!(
-        "  {}",
-        t!("alias.ral.example_hint_ext").green()
-    );
-    println!(
-        "  {}",
-        t!("alias.ral.example_hint_array").green()
-    );
-    println!(
-        "  {}",
-        t!("alias.ral.example_select_dir").green()
-    );
-    println!(
-        "  {}",
-        t!("alias.ral.example_hint_values").green()
-    );
-    println!(
-        "  {}",
-        t!("alias.ral.example_hintn").green()
-    );
-    println!(
-        "  {}",
-        t!("alias.ral.example_hint_sep").dimmed()
-    );
+    println!("  {}", t!("alias.ral.example_rest").green());
+    println!("  {}", t!("alias.ral.example_hint_ext").green());
+    println!("  {}", t!("alias.ral.example_hint_array").green());
+    println!("  {}", t!("alias.ral.example_select_dir").green());
+    println!("  {}", t!("alias.ral.example_hint_values").green());
+    println!("  {}", t!("alias.ral.example_hintn").green());
+    println!("  {}", t!("alias.ral.example_hint_sep").dimmed());
+}
+
+/// Human label of a config scope (used in confirmations and notes).
+fn scope_label(scope: ConfigScope) -> String {
+    if scope.is_local() {
+        t!("alias.ral.scope_local").to_string()
+    } else {
+        t!("alias.ral.scope_global").to_string()
+    }
+}
+
+/// Note that a local alias of the same name takes priority over a global one.
+fn print_scope_note(name: &str, scope: ConfigScope) {
+    if scope.is_global() && Config::get_local_run_aliases().contains_key(&name.to_lowercase()) {
+        print_info(&t!("alias.ral.local_priority_note", name));
+    }
+}
+
+/// Render one `[global]` / `[local]` section of the `ral ls` listing.
+///
+/// `shadowed_by` holds the entries of the other store: a name listed in both
+/// sections is marked so the shadowing is visible instead of silent.
+fn render_alias_section(
+    title: &str,
+    aliases: &HashMap<String, String>,
+    shadowed_by: &HashMap<String, String>,
+    hint_specs: &HashMap<String, String>,
+    path: Option<&Path>,
+    empty_note: &str,
+) -> String {
+    let mut out = String::new();
+    out.push_str("==================================================\n");
+    out.push_str(&format!("{}\n", title.cyan().bold()));
+    if let Some(p) = path {
+        out.push_str(&format!(
+            "{}\n",
+            t!("alias.ral.config_path", p.display()).dimmed()
+        ));
+    }
+    out.push_str("==================================================\n");
+    if aliases.is_empty() {
+        out.push_str(&format!("  {}\n", empty_note.dimmed()));
+        return out;
+    }
+    let mut sorted: Vec<(&String, &String)> = aliases.iter().collect();
+    sorted.sort_by(|a, b| a.0.cmp(b.0));
+    for (i, (name, cmd)) in sorted.iter().enumerate() {
+        let is_valid = crate::config::validate_alias_name(name);
+        let name_display = if is_valid {
+            name.blue()
+        } else {
+            t!("alias.ral.invalid_suffix", name).red()
+        };
+        let param_names = extract_param_names(cmd);
+        let cmd_display = if !param_names.is_empty() {
+            let params_str = if param_names.len() == 1 {
+                format!("({})", param_names[0])
+            } else {
+                format!("({})", param_names.join(", "))
+            };
+            format!(
+                "{} {} {}",
+                cmd.dimmed(),
+                "(parameterised)".cyan(),
+                params_str.cyan()
+            )
+        } else {
+            cmd.dimmed().to_string()
+        };
+        let shadow = if shadowed_by.contains_key(*name) {
+            format!("  {}", t!("alias.ral.shadowed").dimmed())
+        } else {
+            String::new()
+        };
+        out.push_str(&format!(
+            "  {}. {} -> {}{}\n",
+            (i + 1).to_string().yellow(),
+            name_display,
+            cmd_display,
+            shadow
+        ));
+        if let Some(spec) = hint_specs.get(name.as_str()) {
+            out.push_str(&format!("     ## {}\n", spec.dimmed()));
+        }
+    }
+    out
 }
 
 pub fn cmd_ral(args: &str, nav: &mut Navigator) -> Result<bool> {
@@ -335,6 +436,7 @@ pub fn cmd_ral(args: &str, nav: &mut Navigator) -> Result<bool> {
         println!("{}", t!("alias.ral.title").cyan().bold());
         println!("{}", t!("alias.ral.add_cmd"));
         println!("{}", t!("alias.ral.param_cmd"));
+        println!("{}", t!("alias.ral.rest_cmd"));
         println!("{}", t!("alias.ral.default_cmd"));
         println!("{}", t!("alias.ral.array_cmd"));
         println!("{}", t!("alias.ral.hint_cmd"));
@@ -358,6 +460,7 @@ pub fn cmd_ral(args: &str, nav: &mut Navigator) -> Result<bool> {
         println!("  ral edit py \"python main.py\"");
         println!("  ral add run_file(x) \"python $x.py\"");
         println!("  ral add mkf({{x=a,e=txt}}) \"echo. > $x.$e\"");
+        println!("  ral add hi \"echo $*{{x}}\"   # hi \"wow nice\" -> echo wow nice");
         println!(
             "  ral add runc(x[],y) \"cls && gcc -o $y.exe $x[].c && ./$y.exe && rm -rf $y.exe\""
         );
@@ -388,6 +491,7 @@ pub fn cmd_ral(args: &str, nav: &mut Navigator) -> Result<bool> {
 
         match subcmd.as_str() {
             "add" => {
+                let (mut scope, subargs) = split_scope_flag(subargs);
                 if subargs.is_empty() {
                     print_error(&t!("alias.ral.usage_add"));
                     print_ral_add_examples();
@@ -398,6 +502,13 @@ pub fn cmd_ral(args: &str, nav: &mut Navigator) -> Result<bool> {
                     } else {
                         let raw_name = add_parts[0];
                         let mut command = add_parts[1].to_string();
+                        // `ral add ll -g "cmd"` — the scope flag may follow
+                        // the alias name.
+                        let (mid_scope, rest) = split_scope_flag_prefix(&command);
+                        if mid_scope == ConfigScope::Global {
+                            scope = mid_scope;
+                        }
+                        command = rest.to_string();
                         if command.starts_with('"') && command.ends_with('"') && command.len() >= 2
                         {
                             command = command[1..command.len() - 1].to_string();
@@ -438,14 +549,15 @@ pub fn cmd_ral(args: &str, nav: &mut Navigator) -> Result<bool> {
                             }
                         });
                         let is_param = param_hint.is_some() || !hints.is_empty();
-                        let _ = Config::local_add_run_alias(name, &command);
+                        let _ = Config::add_run_alias(name, &command, scope);
                         if hints.is_empty() {
-                            let _ = Config::local_remove_run_alias_hint(name);
+                            let _ = Config::remove_run_alias_hint(name, scope);
                         } else {
                             let spec = serialize_hint_spec(&hints);
-                            let _ = Config::local_add_run_alias_hint(name, &spec);
+                            let _ = Config::add_run_alias_hint(name, &spec, scope);
                             println!("  {}", t!("alias.ral.hints_saved", spec.cyan()));
                         }
+                        print_scope_note(name, scope);
                         Config::reload_global();
                         ALIAS_GENERATION.fetch_add(1, Ordering::Relaxed);
                         if is_param {
@@ -467,6 +579,7 @@ pub fn cmd_ral(args: &str, nav: &mut Navigator) -> Result<bool> {
                 }
             }
             "edit" => {
+                let (mut scope, subargs) = split_scope_flag(subargs);
                 if subargs.is_empty() {
                     print_error(&t!("alias.ral.usage_edit"));
                     print_ral_add_examples();
@@ -478,6 +591,13 @@ pub fn cmd_ral(args: &str, nav: &mut Navigator) -> Result<bool> {
                         let (base_name, _) = parse_call_syntax(edit_parts[0]);
                         let name = base_name;
                         let mut command = edit_parts[1].to_string();
+                        // `ral edit ll -g "cmd"` — the scope flag may follow
+                        // the alias name.
+                        let (mid_scope, rest) = split_scope_flag_prefix(&command);
+                        if mid_scope == ConfigScope::Global {
+                            scope = mid_scope;
+                        }
+                        command = rest.to_string();
                         if command.starts_with('"') && command.ends_with('"') && command.len() >= 2
                         {
                             command = command[1..command.len() - 1].to_string();
@@ -503,18 +623,20 @@ pub fn cmd_ral(args: &str, nav: &mut Navigator) -> Result<bool> {
                         if !check_named_refs(&hints) {
                             return Ok(false);
                         }
-                        let _ = Config::local_update_run_alias(name, &command);
+                        let _ = Config::update_run_alias(name, &command, scope);
                         if !hints.is_empty() {
                             let spec = serialize_hint_spec(&hints);
-                            let _ = Config::local_add_run_alias_hint(name, &spec);
+                            let _ = Config::add_run_alias_hint(name, &spec, scope);
                             println!("  {}", t!("alias.ral.hints_saved", spec.cyan()));
                         }
+                        print_scope_note(name, scope);
                         Config::reload_global();
                         ALIAS_GENERATION.fetch_add(1, Ordering::Relaxed);
                     }
                 }
             }
             "rm" | "remove" => {
+                let (scope, subargs) = split_scope_flag(subargs);
                 if subargs.is_empty() {
                     print_error(&t!("alias.ral.usage_rm"));
                 } else {
@@ -523,15 +645,40 @@ pub fn cmd_ral(args: &str, nav: &mut Navigator) -> Result<bool> {
                         .map(|s| s.trim())
                         .filter(|s| !s.is_empty())
                     {
-                        let _ = Config::local_remove_run_alias(name);
-                        let _ = Config::local_remove_run_alias_hint(name);
+                        let store = match Config::remove_run_alias(name, scope) {
+                            Ok(store) => store,
+                            Err(_) => continue,
+                        };
+                        match store {
+                            crate::config::AliasStore::Local => {
+                                if Config::get_global_run_aliases()
+                                    .contains_key(&name.to_lowercase())
+                                {
+                                    print_info(&t!("alias.ral.global_active_again", name));
+                                }
+                            }
+                            crate::config::AliasStore::Global => {}
+                            crate::config::AliasStore::NotFound => {
+                                if Config::get_global_run_aliases()
+                                    .contains_key(&name.to_lowercase())
+                                {
+                                    print_error(&t!("alias.ral.global_only_hint", name, name));
+                                }
+                            }
+                        }
                     }
                     Config::reload_global();
                     ALIAS_GENERATION.fetch_add(1, Ordering::Relaxed);
                 }
             }
             "cls" | "clear" => {
-                let aliases = Config::global_get_run_aliases();
+                let (scope, subargs) = split_scope_flag(subargs);
+                let (global_aliases, local_aliases) = Config::get_run_aliases_by_source();
+                let aliases = if scope.is_local() {
+                    local_aliases
+                } else {
+                    global_aliases
+                };
                 if aliases.is_empty() {
                     print_info(&t!("alias.ral.no_aliases"));
                     return Ok(false);
@@ -543,11 +690,10 @@ pub fn cmd_ral(args: &str, nav: &mut Navigator) -> Result<bool> {
                     println!();
                     println!("{}", t!("alias.ral.cls_warning").yellow().bold());
                     println!("{}", t!("alias.ral.alias_count", aliases.len()).yellow());
-
-                    let is_local = Config::get_local_config_path().is_some();
-                    if is_local {
-                        println!("{}", t!("alias.ral.local_config_only").dimmed());
-                    }
+                    println!(
+                        "{}",
+                        t!("alias.ral.cls_target", scope_label(scope)).dimmed()
+                    );
 
                     let mut sorted: Vec<_> = aliases.keys().collect();
                     sorted.sort();
@@ -572,73 +718,48 @@ pub fn cmd_ral(args: &str, nav: &mut Navigator) -> Result<bool> {
                     }
                 }
 
-                let _ = Config::local_clear_run_aliases();
+                let _ = Config::clear_run_aliases(scope);
                 Config::reload_global();
                 ALIAS_GENERATION.fetch_add(1, Ordering::Relaxed);
             }
             "list" | "ls" => {
-                let (aliases, is_local) = Config::get_run_aliases_with_source();
-                if aliases.is_empty() {
+                let (global_aliases, local_aliases) = Config::get_run_aliases_by_source();
+                if global_aliases.is_empty() && local_aliases.is_empty() {
                     print_info(&t!("alias.ral.empty"));
                 } else {
+                    let hint_specs = Config::get_run_alias_hints_merged();
                     println!();
-                    println!(
+                    print!(
                         "{}",
-                        "==================================================".cyan()
+                        render_alias_section(
+                            &t!("alias.ral.section_global"),
+                            &global_aliases,
+                            &local_aliases,
+                            &hint_specs,
+                            None,
+                            &t!("alias.ral.none"),
+                        )
                     );
-                    if is_local {
-                        println!("{}", t!("alias.ral.list_title_local").cyan().bold());
-                        if let Some(path) = Config::get_local_config_path() {
-                            println!("{}", t!("alias.ral.config_path", path.display()).dimmed());
-                        }
+                    println!();
+                    let local_path = Config::get_local_config_path();
+                    let local_note = if local_path.is_some() {
+                        t!("alias.ral.none")
                     } else {
-                        println!("{}", t!("alias.ral.list_title_global").cyan().bold());
-                    }
-                    println!(
+                        t!("alias.ral.no_local")
+                    };
+                    print!(
                         "{}",
-                        "==================================================".cyan()
+                        render_alias_section(
+                            &t!("alias.ral.section_local"),
+                            &local_aliases,
+                            &HashMap::new(),
+                            &hint_specs,
+                            local_path.as_deref(),
+                            &local_note,
+                        )
                     );
-                    let mut sorted: Vec<_> = aliases.iter().collect();
-                    sorted.sort_by(|a, b| a.0.cmp(b.0));
-                    let hint_specs = Config::global_get_run_alias_hints();
-                    for (i, (name, cmd)) in sorted.iter().enumerate() {
-                        let is_valid = crate::config::validate_alias_name(name);
-                        let name_display = if is_valid {
-                            name.blue()
-                        } else {
-                            t!("alias.ral.invalid_suffix", name).red()
-                        };
-                        let param_names = extract_param_names(cmd);
-                        let cmd_display = if !param_names.is_empty() {
-                            let params_str = if param_names.len() == 1 {
-                                format!("({})", param_names[0])
-                            } else {
-                                format!("({})", param_names.join(", "))
-                            };
-                            format!(
-                                "{} {} {}",
-                                cmd.dimmed(),
-                                "(parameterised)".cyan(),
-                                params_str.cyan()
-                            )
-                        } else {
-                            cmd.dimmed().to_string()
-                        };
-                        println!(
-                            "  {}. {} -> {}",
-                            (i + 1).to_string().yellow(),
-                            name_display,
-                            cmd_display
-                        );
-                        if let Some(spec) = hint_specs.get(name.as_str()) {
-                            println!("     ## {}", spec.dimmed());
-                        }
-                    }
                     println!();
                     println!("{}", t!("alias.ral.usage_hint").green());
-                    if is_local {
-                        println!("{}", t!("alias.ral.tip_local").dimmed());
-                    }
                 }
             }
             "info" => {
@@ -659,9 +780,14 @@ pub fn cmd_ral(args: &str, nav: &mut Navigator) -> Result<bool> {
                         return Ok(false);
                     }
                     let name = name_parts.join(" ");
-                    let aliases = Config::global_get_run_aliases();
+                    let (global_aliases, local_aliases) = Config::get_run_aliases_by_source();
                     let name_lower = name.to_lowercase();
-                    if let Some(cmd) = aliases.get(&name_lower) {
+                    // Local wins: the local entry is the effective one.
+                    let local_cmd = local_aliases.get(&name_lower);
+                    let global_cmd = global_aliases.get(&name_lower);
+                    let effective = local_cmd.or(global_cmd);
+                    if let Some(cmd) = effective {
+                        let is_local = local_cmd.is_some();
                         println!();
                         println!(
                             "{}",
@@ -702,21 +828,27 @@ pub fn cmd_ral(args: &str, nav: &mut Navigator) -> Result<bool> {
                                 t!("alias.ral.info_none").dimmed()
                             );
                         }
-                        let hints = Config::global_get_run_alias_hints();
+                        let hints = Config::get_run_alias_hints_merged();
                         if let Some(spec) = hints.get(&name_lower) {
-                            println!(
-                                "  {}: {}",
-                                t!("alias.ral.info_hints").yellow(),
-                                spec.cyan()
-                            );
+                            println!("  {}: {}", t!("alias.ral.info_hints").yellow(), spec.cyan());
                         }
-                        let (_, is_local) = Config::get_run_aliases_with_source();
                         let source = if is_local {
                             t!("alias.ral.info_source_local").cyan().to_string()
                         } else {
                             t!("alias.ral.info_source_global").green().to_string()
                         };
                         println!("  {}: {}", t!("alias.ral.info_source").yellow(), source);
+                        // The global store may hold the same name — show it as
+                        // the shadowed entry instead of hiding it.
+                        if is_local {
+                            if let Some(other) = global_cmd {
+                                println!(
+                                    "  {}: {}",
+                                    t!("alias.ral.shadowed_global").yellow(),
+                                    other.dimmed()
+                                );
+                            }
+                        }
                         println!();
                         if edit_mode {
                             let escaped = cmd.replace('"', "\\\"");
@@ -724,7 +856,7 @@ pub fn cmd_ral(args: &str, nav: &mut Navigator) -> Result<bool> {
                             // Include the stored hint/select spec so the
                             // pasted command round-trips (`ral edit` replaces
                             // hints only when annotations are present).
-                            let edit_hints = Config::global_get_run_alias_hints();
+                            let edit_hints = Config::get_run_alias_hints_merged();
                             if let Some(spec) = edit_hints.get(&name_lower) {
                                 snippet.push(' ');
                                 snippet.push_str(spec);
@@ -741,6 +873,7 @@ pub fn cmd_ral(args: &str, nav: &mut Navigator) -> Result<bool> {
                 }
             }
             "rnm" | "rename" => {
+                let (scope, subargs) = split_scope_flag(subargs);
                 if subargs.is_empty() {
                     print_error(&t!("alias.ral.usage_rnm"));
                 } else {
@@ -754,17 +887,36 @@ pub fn cmd_ral(args: &str, nav: &mut Navigator) -> Result<bool> {
                             print_error(&t!("alias.ral.invalid_name", new_name));
                             return Ok(false);
                         }
-                        let aliases = Config::global_get_run_aliases();
-                        if let Some(command) = aliases.get(&old_name.to_lowercase()) {
-                            let command = command.clone();
-                            let _ = Config::local_remove_run_alias(old_name);
-                            let _ = Config::local_add_run_alias(new_name, &command);
-                            Config::local_rename_run_alias_hint(old_name, new_name);
-                            Config::reload_global();
-                            ALIAS_GENERATION.fetch_add(1, Ordering::Relaxed);
-                            print_success(&t!("alias.ral.renamed", old_name, new_name));
+                        let (global_aliases, local_aliases) = Config::get_run_aliases_by_source();
+                        let old_lower = old_name.to_lowercase();
+                        // Rename in the store that owns the alias: the local
+                        // one wins, the global one is only touched on request.
+                        let target = if scope.is_global() {
+                            global_aliases.get(&old_lower).cloned()
+                        } else if local_aliases.contains_key(&old_lower) {
+                            local_aliases.get(&old_lower).cloned()
                         } else {
-                            print_error(&t!("alias.ral.not_found", old_name));
+                            global_aliases.get(&old_lower).cloned()
+                        };
+                        match target {
+                            Some(command) => {
+                                let target_scope = if scope.is_global() {
+                                    ConfigScope::Global
+                                } else if local_aliases.contains_key(&old_lower) {
+                                    ConfigScope::Auto
+                                } else {
+                                    ConfigScope::Global
+                                };
+                                let _ = Config::remove_run_alias(old_name, target_scope);
+                                let _ = Config::add_run_alias(new_name, &command, target_scope);
+                                Config::rename_run_alias_hint(old_name, new_name, target_scope);
+                                Config::reload_global();
+                                ALIAS_GENERATION.fetch_add(1, Ordering::Relaxed);
+                                print_success(&t!("alias.ral.renamed", old_name, new_name));
+                            }
+                            None => {
+                                print_error(&t!("alias.ral.not_found", old_name));
+                            }
                         }
                     }
                 }
@@ -795,10 +947,11 @@ pub fn cmd_ral(args: &str, nav: &mut Navigator) -> Result<bool> {
                 }
             }
             "import" => {
+                let (scope, subargs) = split_scope_flag(subargs);
                 if subargs.is_empty() {
                     print_error(&t!("alias.ral.usage_import"));
                 } else {
-                    ral_import(subargs)?;
+                    ral_import(subargs, scope)?;
                 }
             }
             "make" | "mk" => {
@@ -822,6 +975,7 @@ pub fn cmd_ral(args: &str, nav: &mut Navigator) -> Result<bool> {
 # hello = "echo Hello, World!"
 # tldsel = "tl dir ${x:-.}"
 # show = "txtf $x"
+# hi = "echo $*{x}"              # one arg, spaces kept: hi "wow nice" -> echo wow nice
 
 # Per-alias completion/selection specs (`ral add <name> "<cmd>" #x --hint-dir ...).
 # Uncomment to ship hints with this file:
@@ -863,13 +1017,126 @@ pub fn cmd_run(args: &str, nav: &mut Navigator) -> Result<bool> {
         println!("{}", t!("alias.run.example_alias_args"));
         println!("{}", t!("alias.run.example_param"));
     } else {
-        let expanded_parts = match expand_command_line_interactive(args, nav)? {
+        let expanded = match expand_command_line_interactive(args, nav)? {
             None => return Ok(false),
-            Some(cmds) => cmds,
+            Some(s) => s,
         };
-        for cmd in expanded_parts {
-            execute_system_command(&cmd, nav.current_path())?;
+        if !expanded.trim().is_empty() {
+            execute_system_command(&expanded, nav.current_path())?;
         }
     }
     Ok(false)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::utils::test_support::TempCwd;
+
+    /// `ral ls` shows a `[global]` and a `[local]` section, each with its own
+    /// aliases.
+    #[test]
+    fn ral_ls_lists_global_and_local_sections() {
+        let _cwd = TempCwd::with_fixture(
+            &[("ntconfig.toml", "[run_aliases]\nllocal = \"echo local\"\n")],
+            &[],
+        );
+        let mut cfg = Config::default();
+        cfg.run_aliases
+            .insert("gglobal".into(), "echo global".into());
+        Config::with_test_config(cfg, || {
+            let (global_aliases, local_aliases) = Config::get_run_aliases_by_source();
+            let hint_specs = Config::get_run_alias_hints_merged();
+            let global_section = render_alias_section(
+                &t!("alias.ral.section_global"),
+                &global_aliases,
+                &local_aliases,
+                &hint_specs,
+                None,
+                &t!("alias.ral.none"),
+            );
+            let local_section = render_alias_section(
+                &t!("alias.ral.section_local"),
+                &local_aliases,
+                &HashMap::new(),
+                &hint_specs,
+                None,
+                &t!("alias.ral.none"),
+            );
+            assert!(
+                global_section.contains("[global]"),
+                "got:\n{}",
+                global_section
+            );
+            assert!(local_section.contains("[local]"), "got:\n{}", local_section);
+            assert!(
+                global_section.contains("gglobal"),
+                "got:\n{}",
+                global_section
+            );
+            assert!(local_section.contains("llocal"), "got:\n{}", local_section);
+        });
+    }
+
+    /// The same name in both stores is listed twice and the global entry is
+    /// marked as shadowed.
+    #[test]
+    fn ral_ls_marks_shadowed_global_entries() {
+        let _cwd = TempCwd::with_fixture(
+            &[("ntconfig.toml", "[run_aliases]\nll = \"echo local\"\n")],
+            &[],
+        );
+        let mut cfg = Config::default();
+        cfg.run_aliases.insert("ll".into(), "echo global".into());
+        Config::with_test_config(cfg, || {
+            let (global_aliases, local_aliases) = Config::get_run_aliases_by_source();
+            let hint_specs = Config::get_run_alias_hints_merged();
+            let global_section = render_alias_section(
+                &t!("alias.ral.section_global"),
+                &global_aliases,
+                &local_aliases,
+                &hint_specs,
+                None,
+                &t!("alias.ral.none"),
+            );
+            assert!(
+                global_section.contains("echo global"),
+                "got:\n{}",
+                global_section
+            );
+            assert!(
+                global_section.contains("shadowed"),
+                "got:\n{}",
+                global_section
+            );
+        });
+    }
+
+    /// Without a local config the `[local]` section says so instead of
+    /// pretending the folder has local aliases.
+    #[test]
+    fn ral_ls_reports_a_missing_local_config() {
+        let _cwd = TempCwd::with_fixture(&[], &[]);
+        let mut cfg = Config::default();
+        cfg.run_aliases
+            .insert("gglobal".into(), "echo global".into());
+        Config::with_test_config(cfg, || {
+            let (_global_aliases, local_aliases) = Config::get_run_aliases_by_source();
+            let hint_specs = Config::get_run_alias_hints_merged();
+            let local_section = render_alias_section(
+                &t!("alias.ral.section_local"),
+                &local_aliases,
+                &HashMap::new(),
+                &hint_specs,
+                None,
+                &t!("alias.ral.no_local"),
+            );
+            assert!(local_section.contains("[local]"), "got:\n{}", local_section);
+            assert!(
+                local_section.contains("no local config"),
+                "got:\n{}",
+                local_section
+            );
+        });
+    }
 }

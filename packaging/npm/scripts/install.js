@@ -9,8 +9,11 @@ const VERSION = pkg.version;
 const REPO = 'NuengCoder/ntc';
 
 function isAndroidTermux() {
-  // Node on Termux reports process.platform === 'linux', never 'android',
-  // so detect Android via release string, PREFIX env, or install path.
+  // Termux's own Node build reports process.platform === 'android' (npm needs
+  // "android" in the package `os` field for this reason). Some Node builds
+  // running under Termux report 'linux' instead, so ALSO detect Android via
+  // the kernel release string, the Termux PREFIX env, or the install path.
+  if (process.platform === 'android') return true;
   try {
     const os = require('os');
     if (/android/i.test(os.release() || '')) return true;
@@ -21,29 +24,55 @@ function isAndroidTermux() {
   return false;
 }
 
-function getPlatformInfo() {
-  const platform = process.platform;
-  const arch = process.arch;
-  const android = isAndroidTermux();
+// Android/Termux assets use Rust target triples and Node's `arch` names.
+const ANDROID_ASSET_BY_ARCH = {
+  arm64: 'aarch64-linux-android.tar.gz',
+  x64:   'x86_64-linux-android.tar.gz',
+  arm:   'armv7-linux-androideabi.tar.gz',
+};
 
-  const map = {
-    'darwin-x64':     { file: `ntc-v${VERSION}-macos-x86_64.tar.gz`,    bin: 'ntc' },
-    'darwin-arm64':   { file: `ntc-v${VERSION}-macos-aarch64.tar.gz`,   bin: 'ntc' },
-    'win32-x64':      { file: `ntc-v${VERSION}-windows-x86_64.zip`,     bin: 'ntc.exe' },
-    'win32-arm64':    { file: `ntc-v${VERSION}-windows-arm64.zip`,      bin: 'ntc.exe' },
-    'linux-x64':      { file: `ntc-v${VERSION}-linux-x86_64.tar.gz`,    bin: 'ntc' },
-    'linux-arm64':    { file: `ntc-v${VERSION}-linux-aarch64.tar.gz`,   bin: 'ntc' },
-  };
+// Native (non-Android) release assets.
+const NATIVE_ASSET_BY_PLATFORM = {
+  'darwin-x64':   'macos-x86_64.tar.gz',
+  'darwin-arm64': 'macos-aarch64.tar.gz',
+  'win32-x64':    'windows-x86_64.zip',
+  'win32-arm64':  'windows-arm64.zip',
+  'linux-x64':    'linux-x86_64.tar.gz',
+  'linux-arm64':  'linux-aarch64.tar.gz',
+};
 
-  // Termux (Android) uses its own asset; arch names follow Rust targets.
-  if (android && platform === 'linux') {
-    if (arch === 'arm64') return { file: `ntc-v${VERSION}-aarch64-linux-android.tar.gz`, bin: 'ntc' };
-    if (arch === 'x64')   return { file: `ntc-v${VERSION}-x86_64-linux-android.tar.gz`, bin: 'ntc' };
-    if (arch === 'arm')   return { file: `ntc-v${VERSION}-armv7-linux-androideabi.tar.gz`, bin: 'ntc' };
-    // Fall through to linux mapping so the 404 helper can explain.
-  }
+// Same-arch Linux build, used as the Termux fallback when the manually
+// uploaded Android asset is missing: degrade to the Linux build instead of
+// hard-failing, and say so on stdout.
+const LINUX_ASSET_BY_ARCH = {
+  arm64: 'linux-aarch64.tar.gz',
+  x64:   'linux-x86_64.tar.gz',
+};
 
-  return map[`${platform}-${arch}`] || null;
+// Returns { bin, candidates: [filename, ...] } so a missing/renamed manual
+// asset can fall back instead of 404ing. `platform`/`arch`/`android` are
+// parameters (not read from `process`) purely so scripts/selftest.js can
+// exercise every branch — this is the regression that shipped in 2.4.5.
+function getPlatformInfo(platform = process.platform, arch = process.arch, android = isAndroidTermux()) {
+  const bin = platform === 'win32' ? 'ntc.exe' : 'ntc';
+
+  // Escape hatch for emergencies: force an exact asset name or a full URL,
+  // e.g. NTC_NPM_ASSET=ntc-v2.4.6-linux-x86_64.tar.gz
+  const forced = process.env.NTC_NPM_ASSET;
+  if (forced) return { bin, candidates: [forced] };
+
+  const nativeAsset = NATIVE_ASSET_BY_PLATFORM[`${platform}-${arch}`];
+  const androidAsset = android ? ANDROID_ASSET_BY_ARCH[arch] : null;
+  const linuxAsset = LINUX_ASSET_BY_ARCH[arch];
+
+  const order = [];
+  if (androidAsset) order.push(androidAsset);          // Termux first
+  if (nativeAsset) order.push(nativeAsset);
+  if (androidAsset && !nativeAsset) order.push(linuxAsset); // Termux -> Linux
+  const names = [...new Set(order)].filter(Boolean);
+
+  if (names.length === 0) return null;
+  return { bin, candidates: names.map(n => `ntc-v${VERSION}-${n}`) };
 }
 
 async function downloadOnce(url, destPath) {
@@ -96,6 +125,9 @@ async function download(url, destPath, retries = 3) {
     } catch (err) {
       lastErr = err;
       try { fs.rmSync(destPath, { force: true }); } catch {}
+      // A missing asset will still be missing on attempt 4: let the caller
+      // fall back to the next candidate immediately.
+      if (err.httpStatus === 404) break;
       if (attempt < retries) {
         const waitMs = attempt * 1500;
         console.log(`ntc: download attempt ${attempt} failed (${err.message}), retrying in ${waitMs}ms...`);
@@ -326,10 +358,22 @@ function printPathHint() {
   } catch {}
 }
 
+function describePlatform() {
+  let release = '';
+  try { release = require('os').release() || ''; } catch {}
+  const prefix = process.env.PREFIX || '(unset)';
+  return `platform=${process.platform} arch=${process.arch} android=${isAndroidTermux()} release=${release || '(unknown)'} PREFIX=${prefix}`;
+}
+
 function print404Help(info) {
-  console.log(`ntc: binary not found for v${VERSION} on ${process.platform}-${process.arch} (expected ${info.file}).`);
+  const primary = info.candidates[0];
+  const alts = info.candidates.slice(1);
+  console.log(`ntc: binary not found for v${VERSION} on ${process.platform}-${process.arch}${isAndroidTermux() ? ' (Termux/Android)' : ''}.`);
+  console.log(`ntc: expected release asset: ${primary}`);
+  if (alts.length) console.log(`ntc: also tried: ${alts.join(', ')}`);
+  console.log(`ntc: debug: ${describePlatform()}`);
   console.log(`ntc: CI builds macOS assets only; Linux/Windows/Android assets are uploaded manually.`);
-  console.log(`ntc: check https://github.com/${REPO}/releases/tag/v${VERSION} — if ${info.file} is missing,`);
+  console.log(`ntc: check https://github.com/${REPO}/releases/tag/v${VERSION} — if ${primary} is missing,`);
   console.log('ntc: install from source instead: cargo install ntc');
 }
 
@@ -339,6 +383,7 @@ async function main() {
 
   if (!info) {
     console.log(`ntc: unsupported platform ${process.platform}-${process.arch}.`);
+    console.log(`ntc: debug: ${describePlatform()}`);
     console.log('Install from source: cargo install ntc');
     process.exit(1);
   }
@@ -351,15 +396,40 @@ async function main() {
     return;
   }
 
-  const url = `https://github.com/${REPO}/releases/download/v${VERSION}/${info.file}`;
-  console.log(`ntc: downloading ${info.file}...`);
-  console.log('ntc: (pure-JS extractor — no system tar/unzip required)');
-
   const tmpDir = fs.mkdtempSync(path.join(pkgDir, 'tmp-'));
-  const archivePath = path.join(tmpDir, info.file);
 
   try {
-    await download(url, archivePath);
+    // Try each candidate asset in order. Only a 404 moves on to the next one;
+    // transient network failures are retried inside download().
+    let archivePath = null;
+    for (let i = 0; i < info.candidates.length; i++) {
+      const candidate = info.candidates[i];
+      const isUrl = /^https?:\/\//i.test(candidate);
+      const archiveName = isUrl
+        ? (path.basename(new URL(candidate).pathname) || 'ntc-asset')
+        : candidate;
+      const url = isUrl
+        ? candidate
+        : `https://github.com/${REPO}/releases/download/v${VERSION}/${candidate}`;
+      const dest = path.join(tmpDir, archiveName);
+
+      console.log(`ntc: downloading ${archiveName}...`);
+      if (i === 0) console.log('ntc: (pure-JS extractor — no system tar/unzip required)');
+
+      try {
+        await download(url, dest);
+        archivePath = dest;
+        break;
+      } catch (err) {
+        const is404 = err.httpStatus === 404 || /HTTP 404|Not Found/i.test(err.message || '');
+        if (is404 && i < info.candidates.length - 1) {
+          console.log(`ntc: ${archiveName} not found (404) — trying the next asset...`);
+          continue;
+        }
+        throw err;
+      }
+    }
+
     extractArchive(archivePath, tmpDir);
 
     const walk = (dir) => {
@@ -421,4 +491,6 @@ module.exports = {
   extractZip,
   extractArchive,
   getPlatformInfo,
+  isAndroidTermux,
+  describePlatform,
 };

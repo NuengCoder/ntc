@@ -22,6 +22,8 @@ export default function App() {
   // behind the login dialog until valid credentials are stored.
   const [locked, setLocked] = useState(false)
   const [authed, setAuthed] = useState(() => hasCredentials())
+  // True when the server runs `serve files --lock` (read-only).
+  const [readOnly, setReadOnly] = useState(false)
 
   const load = useCallback(async () => {
     try {
@@ -29,6 +31,7 @@ export default function App() {
       setError('')
       const res = await listFiles(path)
       setItems(res.items)
+      setReadOnly(!!res.locked)
     } catch (e: any) {
       if (e.status === 401) {
         setLocked(true)
@@ -80,19 +83,21 @@ export default function App() {
   return (
     <div className="app">
       <header className="top-bar">
-        <h1>ntc serve</h1>
+        <h1>ntc serve{readOnly ? ' 🔒' : ''}</h1>
         <div className="top-actions">
           {authed && <button className="top-btn" onClick={handleLogout} title="Log out">🔒 Logout</button>}
-          <button className="top-btn" onClick={() => setShowNewFolder(true)}>+ Folder</button>
+          {!readOnly && <button className="top-btn" onClick={() => setShowNewFolder(true)}>+ Folder</button>}
           <button className="top-btn" onClick={refresh}>↻</button>
         </div>
       </header>
+
+      {readOnly && <div className="error-bar">🔒 Read-only mode: downloads allowed, uploads/edits disabled.</div>}
 
       <Breadcrumb path={path} onNavigate={setPath} />
 
       {error && <div className="error-bar">{error}</div>}
 
-      <UploadArea currentPath={path} onUploaded={refresh} />
+      {!readOnly && <UploadArea currentPath={path} onUploaded={refresh} />}
 
       <FileList
         items={items}
@@ -103,6 +108,7 @@ export default function App() {
         onDelete={setDeleting}
         onRefresh={refresh}
         onError={setError}
+        readOnly={readOnly}
       />
 
       {locked && <LoginDialog onDone={handleUnlock} />}

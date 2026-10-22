@@ -6,3 +6,8 @@ ignored_extensions = []
 extra_supported_extensions = []
 ignored_files = []
 extra_supported_files = []
+
+# Cared names are never ignored, even when the global config ignores them.
+cared_directory_names = []
+cared_extensions = []
+cared_files = []

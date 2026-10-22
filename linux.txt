@@ -1,18 +1,36 @@
 ntc Linux Install Instructions
 ─────────────────────────────────────────
 
-1. Build:
+1. Install build prerequisites:
+   cpal/alsa-sys needs ALSA headers to build the `nms` audio player.
+
+   Debian / Ubuntu:
+     sudo apt-get update
+     sudo apt-get install -y build-essential pkg-config libasound2-dev
+
+   Fedora:
+     sudo dnf install -y gcc pkg-config alsa-lib-devel
+
+   Arch:
+     sudo pacman -S --needed base-devel pkgconf alsa-lib
+
+   These are required for both `cargo build --release` and `cargo deb`.
+
+2. Build:
    cargo build --release
 
-2. Install to user bin:
+   Debian package (optional):
+   cargo deb
+
+3. Install to user bin:
    cp target/release/ntc ~/.local/bin/
    chmod +x ~/.local/bin/ntc
 
    Or system-wide:
    sudo cp target/release/ntc /usr/local/bin/
 
-3. Verify:
+4. Verify:
    ntc --version
 
-4. Pack into archive (optional):
+5. Pack into archive (optional):
    tar -czvf ntc-v$(ver)-linux-x86_64.tar.gz -C target/release ntc

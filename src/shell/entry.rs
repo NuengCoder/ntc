@@ -59,6 +59,45 @@ impl Completer for NtcHelper {
 impl Validator for NtcHelper {}
 impl rustyline::Helper for NtcHelper {}
 
+/// Read the bodies of every `<<` heredoc declared on `line`, prompting with
+/// a `heredoc>` continuation until each delimiter line is seen. Returns
+/// `None` when input is aborted (EOF / Ctrl-C), in which case nothing runs.
+fn read_heredocs_interactive(rl: &mut Editor<NtcHelper, FileHistory>, line: &str) -> Option<()> {
+    let delims = crate::shell::pipeline::scan_heredoc_delims(line);
+    if delims.is_empty() {
+        crate::shell::pipeline::set_heredoc_bodies(Vec::new());
+        return Some(());
+    }
+    let mut bodies: Vec<Vec<u8>> = Vec::new();
+    for delim in delims {
+        let mut body = String::new();
+        loop {
+            match rl.readline("heredoc> ") {
+                Ok(l) => {
+                    let l = l.trim_end_matches(['\r', '\n']);
+                    if l == delim {
+                        break;
+                    }
+                    body.push_str(l);
+                    body.push('\n');
+                }
+                Err(ReadlineError::Interrupted) => {
+                    println!("^C");
+                    crate::shell::pipeline::set_heredoc_bodies(Vec::new());
+                    return None;
+                }
+                Err(_) => {
+                    crate::shell::pipeline::set_heredoc_bodies(Vec::new());
+                    return None;
+                }
+            }
+        }
+        bodies.push(body.into_bytes());
+    }
+    crate::shell::pipeline::set_heredoc_bodies(bodies);
+    Some(())
+}
+
 // ============================================================================
 // Main shell entry points
 // ============================================================================
@@ -174,6 +213,9 @@ pub fn run_classic_shell(mut nav: Navigator) -> Result<()> {
         "{}",
         crate::utils::theme::ThemeColor::BrightBlack.paint_ansi(&t!("entry.startup_hint"))
     );
+    // Daily new-release notice (max 1x/24h, background thread, silent on
+    // failure): needs internet + GitHub tag newer than this build.
+    crate::shell::update_check::spawn_update_check();
     if NtcConfig::global_get_dir_view_enabled() {
         show_tree(&nav, Some(1), false, false, false, false, false, false);
     }
@@ -266,31 +308,37 @@ pub fn run_classic_shell(mut nav: Navigator) -> Result<()> {
         }
 
         // Expand all aliases in the entire line (interactive `--select-*` menus included)
-        let expanded_commands = match expand_command_line_interactive(line, &mut nav)? {
-            None => continue,
-            Some(cmds) => cmds,
-        };
+        // Heredocs (`<<EOF`) are read from the terminal before expansion.
+        if crate::shell::pipeline::has_heredoc(line) {
+            if read_heredocs_interactive(&mut rl, line).is_none() {
+                continue;
+            }
+        } else {
+            crate::shell::pipeline::set_heredoc_bodies(Vec::new());
+        }
 
-        // Execute each expanded command in sequence
+        let expanded = match expand_command_line_interactive(line, &mut nav)? {
+            None => continue,
+            Some(s) => s,
+        };
+        if expanded.trim().is_empty() {
+            continue;
+        }
+
+        // Execute the (possibly piped / redirected) command line.
         let mut should_exit = false;
-        for cmd in expanded_commands {
-            match execute_command(&cmd, &mut nav, &watcher_handle) {
-                Ok(exit) => {
-                    // Keep watcher in sync after every command (cheap no-op if same path)
-                    if let Some(ref wh) = watcher_handle {
-                        let _ = wh.update_path(nav.current_path());
-                    }
-                    // Refresh git status cache so prompt stays accurate
-                    crate::utils::git::invalidate();
-                    if exit {
-                        should_exit = true;
-                        break;
-                    }
+        match execute_command(&expanded, &mut nav, &watcher_handle) {
+            Ok(exit) => {
+                // Keep watcher in sync after the command (cheap no-op if same path)
+                if let Some(ref wh) = watcher_handle {
+                    let _ = wh.update_path(nav.current_path());
                 }
-                Err(e) => {
-                    print_error(&format!("{}", e));
-                    break;
-                }
+                // Refresh git status cache so prompt stays accurate
+                crate::utils::git::invalidate();
+                should_exit = exit;
+            }
+            Err(e) => {
+                print_error(&format!("{}", e));
             }
         }
 

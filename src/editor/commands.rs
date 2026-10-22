@@ -4,6 +4,12 @@ use crate::t;
 use crate::teleport::TeleportManager;
 use anyhow::Result;
 
+#[derive(Clone, Copy)]
+enum NeEditorTemplate {
+    Init,
+    Super,
+}
+
 impl Editor {
     pub(super) fn list_subdirs(&self) -> Vec<String> {
         let cwd = std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from("."));
@@ -526,22 +532,107 @@ impl Editor {
             return Ok(false);
         }
 
-        if let Some(file) = cmd.strip_prefix("ne").map(|s| s.trim()) {
+        if cmd == "ne" {
             self.sidebar.rebuild_tree();
             self.mark_all_dirty();
-            if file.is_empty() || file == "." {
-            } else {
-                let path = std::path::Path::new(file);
-                if !path.exists() {
-                    if let Some(parent) = path.parent() {
-                        if !parent.as_os_str().is_empty() {
-                            let _ = std::fs::create_dir_all(parent);
-                        }
-                    }
-                    let _ = std::fs::write(path, "");
+            return Ok(false);
+        }
+
+        if let Some(rest) = cmd.strip_prefix("ne ") {
+            let rest = rest.trim();
+            if let Some(hyper_args) = rest.strip_prefix("--hyper ") {
+                let tokens: Vec<&str> = hyper_args.split_whitespace().collect();
+                if tokens.is_empty() {
+                    self.status_msg = Some(t!("misc.ne.usage_hyper").into());
+                    return Ok(false);
                 }
-                self.open_file(path);
+                let name = tokens[0];
+                if name.contains('.') {
+                    self.status_msg = Some(t!("misc.ne.usage_hyper").into());
+                    return Ok(false);
+                }
+                let mut lang = "c";
+                let mut i = 1;
+                while i < tokens.len() {
+                    if tokens[i] == "--lang" && i + 1 < tokens.len() {
+                        lang = tokens[i + 1];
+                        i += 2;
+                    } else {
+                        self.status_msg = Some(t!("misc.ne.usage_hyper").into());
+                        return Ok(false);
+                    }
+                }
+                match crate::editor::init_hyper_project(name, lang) {
+                    Ok(_) => {
+                        self.sidebar.rebuild_tree();
+                        self.mark_all_dirty();
+                        self.status_msg = Some(t!("misc.ne.created_hyper", name).into());
+                    }
+                    Err(e) => {
+                        self.status_msg = Some(t!("misc.ne.hyper_error", e).into());
+                    }
+                }
+                return Ok(false);
             }
+
+            let template_kind = if let Some(file) = rest.strip_prefix("--init ") {
+                Some((file.trim(), NeEditorTemplate::Init))
+            } else if let Some(file) = rest.strip_prefix("--super ") {
+                Some((file.trim(), NeEditorTemplate::Super))
+            } else {
+                None
+            };
+            if let Some((file, kind)) = template_kind {
+                if file.is_empty() || file.split_whitespace().count() > 1 {
+                    self.status_msg = Some(t!("misc.ne.one_file").into());
+                    return Ok(false);
+                }
+                let path = std::path::Path::new(file);
+                if path.exists() {
+                    self.status_msg = Some(t!("misc.mkf.exists", file).into());
+                    return Ok(false);
+                }
+                let created = match kind {
+                    NeEditorTemplate::Init => crate::editor::init_file(path),
+                    NeEditorTemplate::Super => crate::editor::init_super_file(path),
+                };
+                match created {
+                    Ok(true) => {
+                        self.sidebar.rebuild_tree();
+                        self.mark_all_dirty();
+                        self.status_msg = Some(match kind {
+                            NeEditorTemplate::Init => {
+                                t!("misc.ne.created_template", file)
+                            }
+                            NeEditorTemplate::Super => t!("misc.ne.created_super", file),
+                        });
+                    }
+                    Ok(false) => {
+                        self.status_msg = Some(t!("misc.ne.create_failed", file).into());
+                    }
+                    Err(e) => {
+                        self.status_msg =
+                            Some(t!("misc.ne.create_failed", format!("{}: {}", file, e)));
+                    }
+                }
+                return Ok(false);
+            }
+
+            if rest == "--init" || rest == "--super" || rest == "--hyper" {
+                self.status_msg = Some(t!("misc.ne.missing_file").into());
+                return Ok(false);
+            }
+            if rest.is_empty() || rest == "." {
+                self.sidebar.rebuild_tree();
+                self.mark_all_dirty();
+                return Ok(false);
+            }
+            let path = std::path::Path::new(rest);
+            if !path.exists() {
+                self.status_msg = Some(t!("misc.ne.file_missing", rest).into());
+                return Ok(false);
+            }
+            self.open_file(path);
             return Ok(false);
         }
 

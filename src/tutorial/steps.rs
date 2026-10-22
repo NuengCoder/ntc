@@ -231,7 +231,7 @@ pub const STEPS: &[TutorialStep] = &[
             "  rnmd <old> <new>   — Rename a directory",
             "  cp <src> <dst>     — Copy a file",
             "  txtc <file>        — Copy file content to clipboard",
-            "  txtf <file>        — Display file content",
+            "  txtf <file|dir>    — Display a file or pick one from a directory",
             "",
             "All destructive commands prompt for confirmation.",
         ],

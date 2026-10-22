@@ -28,8 +28,6 @@ pub fn init_hyper_project(name: &str, lang: &str) -> Result<bool> {
         bail!("{}", t!("editor.hyper_dir_exists", name));
     }
 
-    println!("{}", t!("editor.hyper_creating", name));
-
     for dir in &["", "dsa", "debug", "os", "header", "ntclib"] {
         fs::create_dir_all(root.join(dir))?;
     }
@@ -96,7 +94,6 @@ pub fn init_hyper_project(name: &str, lang: &str) -> Result<bool> {
     // NTCRANFILE.toml
     write_file(&r("NTCRANFILE.toml"), &ntc_ranfile_toml(name))?;
 
-    println!("{}", t!("editor.hyper_created", name));
     Ok(true)
 }
 

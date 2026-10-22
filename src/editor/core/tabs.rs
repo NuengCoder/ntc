@@ -197,6 +197,26 @@ impl Editor {
             .unwrap_or(false)
     }
 
+    /// Display name shown for a tab (without padding or modified marker).
+    pub(crate) fn tab_display_name(&self, tab: &Tab) -> String {
+        if self.is_scratch_path(&tab.path) {
+            t!("editor.scratch_label")
+        } else {
+            tab.path
+                .file_name()
+                .map(|n| n.to_string_lossy().into_owned())
+                .unwrap_or_else(|| t!("editor.untitled_label"))
+        }
+    }
+
+    /// Label drawn for a tab in the tab bar, including the modified marker.
+    /// Shared by rendering and mouse hit-testing so both agree on widths.
+    pub(crate) fn tab_label(&self, tab: &Tab) -> String {
+        let name = self.tab_display_name(tab);
+        let mark = if tab.modified { " ●" } else { "" };
+        format!(" {} {} ", name, mark)
+    }
+
     pub(crate) fn open_scratch_tab(&mut self) {
         let cwd = std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from("."));
         let welcome_path = cwd.join("welcome.ntcEditor");

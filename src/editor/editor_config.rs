@@ -44,8 +44,8 @@ pub struct EditorConfig {
     /// Maximum session age in hours before it's discarded (default: 24).
     #[serde(default = "default_session_max_age_hours")]
     pub session_max_age_hours: u64,
-    /// Mouse support in text field and terminal panel only
-    /// (tab bar, sidebar, scrollbars ignore mouse). Default: on.
+    /// Mouse support in the text field, sidebar, tab bar and terminal
+    /// panel. Panel borders ignore mouse. Default: on.
     #[serde(default = "default_true")]
     pub mouse_enabled: bool,
     /// Sidebar width as percent of terminal width (1-100).

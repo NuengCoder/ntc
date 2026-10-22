@@ -1,6 +1,6 @@
 [package]
 name = "ntc"
-version = "2.4.5"
+version = "2.4.6"
 edition = "2021"
 description = "Navigate, Toolkit, Center - A Combine of Navigation , Project Toolkit Center hub"
 authors = ["NuengCoder"]
@@ -62,6 +62,14 @@ tar = "0.4"
 flate2 = "1"
 xz2 = "0.1"
 network-interface = "2.0.5"
+comrak = "0.56.0"
+quick-xml = "0.42.0"
+scraper = "0.27.0"
+ego-tree = "0.11.0"
+# Audio playback + decoding for `nms` (NTC Music).
+# Default features bring the symphonia decoders (mp3/wav/flac/m4a/aac/ogg/vorbis/mp4)
+# and cpal output, so no extra features are needed for the requested formats.
+rodio = "0.23"
 
 [target.'cfg(windows)'.dependencies.windows-sys]
 version = "0.59"

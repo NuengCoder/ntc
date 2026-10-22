@@ -57,6 +57,7 @@ pub(super) fn print_interactive_help() {
     print_scan_help();
     print_other_help();
     print_syscmd_help();
+    print_pipe_help();
     print_fileops_help();
     print_tl_help();
     print_ntpkg_help();
@@ -73,6 +74,8 @@ pub(super) fn print_interactive_help() {
     print_ndb_help();
     print_nsheet_help();
     print_nssh_help();
+    print_nms_help();
+    print_fake_help();
 }
 
 /// Print a single help section for `help <topic>` / `<cmd> -h`.
@@ -89,7 +92,7 @@ pub(super) fn print_topic_help(topic: &str) -> bool {
         "ran" => print_ran_help(),
         "scr" | "script" => print_scr_help(),
         "alias" | "ral" | "run" | "r" => print_alias_help(),
-        "view" | "txtc" | "txtf" => print_view_help(),
+        "view" | "viewf" | "viewd" | "txtc" | "txtf" => print_view_help(),
         "size" => print_size_help(),
         "report" => print_report_help(),
         "backup" => print_backup_help(),
@@ -108,6 +111,9 @@ pub(super) fn print_topic_help(topic: &str) -> bool {
         "other" | "clear" | "version" | "say" | "print" | "tutorial" | "ui" | "exit" | "quit"
         | "esc" | "help" => print_other_help(),
         "syscmd" | "sys" | "top" => print_syscmd_help(),
+        "pipe" | "pipes" | "redirect" | "redirection" | "pipeline" | "operator" => {
+            print_pipe_help()
+        }
         "fileops" | "mkf" | "mkd" | "rmf" | "rmd" | "rnmf" | "rnmd" | "mv" | "move" | "cp" => {
             print_fileops_help()
         }
@@ -126,6 +132,8 @@ pub(super) fn print_topic_help(topic: &str) -> bool {
         "ndb" => print_ndb_help(),
         "nsheet" => print_nsheet_help(),
         "nssh" => print_nssh_help(),
+        "nms" => print_nms_help(),
+        "fake" => print_fake_help(),
         _ => return false,
     }
     true
@@ -146,6 +154,7 @@ fn print_nav_help() {
     example_row("help.nav.example2");
     example_row("help.nav.example3");
     example_row("help.nav.example4");
+    example_row("help.nav.example5");
 }
 
 fn print_config_help() {
@@ -172,7 +181,6 @@ fn print_config_help() {
     usage("help.config.resetcg");
     usage("help.config.restorecg");
     usage("help.config.local_init");
-    usage("help.config.local_init_all");
     usage("help.config.local_deinit");
     usage("help.config.local_help");
     usage("help.config.showenv");
@@ -281,6 +289,7 @@ fn print_alias_help() {
     usage("help.alias.add_param");
     usage("help.alias.add_defaults");
     usage("help.alias.add_array");
+    usage("help.alias.add_rest");
     usage("help.alias.edit");
     usage("help.alias.rnm");
     usage("help.alias.rm");
@@ -335,6 +344,8 @@ fn print_view_help() {
     usage("help.view.head");
     usage("help.view.tail");
     usage("help.view.file_usage");
+    usage("help.view.file_only");
+    usage("help.view.dir_only");
     usage("help.view.ext");
     usage("help.view.cp");
     usage("help.view.depth");
@@ -353,6 +364,36 @@ fn print_view_help() {
     example_row("help.view.example9");
     example_row("help.view.example10");
     example_row("help.view.example11");
+    example_row("help.view.example12");
+
+    section_header("help.viewf.title");
+    usage("help.viewf.tree");
+    usage("help.viewf.file_usage");
+    usage("help.viewf.size");
+    usage("help.viewf.sort");
+    usage("help.viewf.ext");
+    usage("help.viewf.care");
+    usage("help.viewf.time");
+    usage("help.viewf.copy");
+    println!("{}", t!("help.examples_header").green());
+    example_row("help.viewf.example1");
+    example_row("help.viewf.example2");
+    example_row("help.viewf.example3");
+    example_row("help.viewf.example4");
+
+    section_header("help.viewd.title");
+    usage("help.viewd.usage");
+    usage("help.viewd.depth");
+    usage("help.viewd.size");
+    usage("help.viewd.care");
+    usage("help.viewd.sort");
+    usage("help.viewd.time");
+    usage("help.viewd.copy");
+    println!("{}", t!("help.examples_header").green());
+    example_row("help.viewd.example1");
+    example_row("help.viewd.example2");
+    example_row("help.viewd.example3");
+    example_row("help.viewd.example4");
 }
 
 fn print_size_help() {
@@ -387,6 +428,8 @@ fn print_report_help() {
     example_row("help.report.example4");
     example_row("help.report.txtf_example1");
     example_row("help.report.txtf_example2");
+    example_row("help.report.txtf_example3");
+    example_row("help.report.txtf_example4");
 }
 
 fn print_backup_help() {
@@ -419,6 +462,7 @@ fn print_search_help() {
     usage("help.search.ds");
     usage("help.search.locate");
     usage("help.search.fsc");
+    usage("help.search.pipe");
     println!("{}", t!("help.examples_header").green());
     example_row("help.search.example1");
     example_row("help.search.example2");
@@ -426,6 +470,8 @@ fn print_search_help() {
     example_row("help.search.example4");
     example_row("help.search.example5");
     example_row("help.search.example6");
+    example_row("help.search.example7");
+    example_row("help.search.example8");
 }
 
 fn print_igcare_help() {
@@ -576,6 +622,37 @@ fn print_syscmd_help() {
     usage("help.syscmd.any");
     usage("help.syscmd.native");
     usage("help.syscmd.native2");
+}
+
+fn print_pipe_help() {
+    section_header("help.pipe.title");
+    usage("help.pipe.pipe");
+    usage("help.pipe.and");
+    usage("help.pipe.or");
+    usage("help.pipe.out");
+    usage("help.pipe.append");
+    usage("help.pipe.in");
+    usage("help.pipe.heredoc");
+    usage("help.pipe.herestring");
+    usage("help.pipe.head");
+    usage("help.pipe.tail");
+    usage("help.pipe.betw");
+    usage("help.pipe.sort");
+    usage("help.pipe.rev");
+    usage("help.pipe.filters");
+    usable_note("help.pipe.note");
+    usable_note("help.pipe.hint");
+    println!("{}", t!("help.examples_header").green());
+    example_row("help.pipe.example1");
+    example_row("help.pipe.example2");
+    example_row("help.pipe.example3");
+    example_row("help.pipe.example4");
+    example_row("help.pipe.example5");
+}
+
+/// Print an indented note row (no `##` split).
+fn usable_note(key: &str) {
+    println!("  {}", t!(key));
 }
 
 fn print_fileops_help() {
@@ -749,13 +826,17 @@ fn print_encdec_help() {
 
 fn print_fmt_help() {
     section_header("help.fmt.title");
-    usage("help.fmt.json");
-    usage("help.fmt.yaml");
-    usage("help.fmt.toml");
-    usage("help.fmt.output");
+    usage("cmd.fmt.usage");
     println!("{}", t!("help.examples_header").green());
-    example_row("help.fmt.example1");
-    example_row("help.fmt.example2");
+    example_row("fmt.help_example1");
+    example_row("fmt.help_example2");
+    example_row("fmt.help_example4");
+    example_row("fmt.help_example5");
+    example_row("fmt.help_example6");
+    example_row("fmt.help_example7");
+    example_row("fmt.help_example8");
+    example_row("fmt.help_example9");
+    example_row("fmt.help_example10");
 }
 
 fn print_image_help() {
@@ -816,6 +897,19 @@ pub(crate) fn print_nssh_help() {
     example_row("help.nssh.example3");
 }
 
+pub(crate) fn print_nms_help() {
+    section_header("help.nms.title");
+    usage("help.nms.play");
+    usage("help.nms.scan");
+    usage("help.nms.long");
+    usage("help.nms.keys");
+    println!("{}", t!("help.examples_header").green());
+    example_row("help.nms.example1");
+    example_row("help.nms.example2");
+    example_row("help.nms.example3");
+    example_row("help.nms.example4");
+}
+
 pub(crate) fn print_nsheet_help() {
     section_header("help.nsheet.title");
     usage("help.nsheet.open");
@@ -828,6 +922,34 @@ pub(crate) fn print_nsheet_help() {
     example_row("help.nsheet.example1");
     example_row("help.nsheet.example2");
     example_row("help.nsheet.example3");
+}
+
+pub(crate) fn print_fake_help() {
+    section_header("help.fake.title");
+    usage("help.fake.gen");
+    usage("help.fake.gen_options");
+    usage("help.fake.gen_group");
+    usage("help.fake.gen_unique");
+    usage("help.fake.gen_locale");
+    usage("help.fake.types");
+    usage("help.fake.types_search");
+    usage("help.fake.locales");
+    usage("help.fake.group_add");
+    usage("help.fake.group_edit");
+    usage("help.fake.group_rm");
+    usage("help.fake.group_rnm");
+    usage("help.fake.group_ls");
+    usage("help.fake.group_info");
+    usage("help.fake.group_clear");
+    usage("help.fake.group_export");
+    usage("help.fake.group_import");
+    usage("help.fake.group_ref");
+    usage("help.fake.help");
+    println!("{}", t!("help.examples_header").green());
+    example_row("help.fake.example1");
+    example_row("help.fake.example2");
+    example_row("help.fake.example3");
+    example_row("help.fake.example4");
 }
 
 pub(super) fn print_tp_help() {
@@ -1228,6 +1350,8 @@ fn is_known_root(root: &str) -> bool {
             | "back"
             | "b"
             | "view"
+            | "viewf"
+            | "viewd"
             | "ls"
             | "report"
             | "txtc"
@@ -1323,8 +1447,10 @@ fn is_known_root(root: &str) -> bool {
             | "tutorial"
             | "guide"
             | "ndb"
+            | "nms"
             | "nsheet"
             | "nssh"
+            | "fake"
             | "esc"
     )
 }

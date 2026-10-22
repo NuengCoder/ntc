@@ -2,7 +2,10 @@
 //! (`report` with subcommands: txt, json, md, html, pdf, docx, xlsx).
 //! Also provides `txtc` (copy file) and `txtf` (display file).
 
-use super::{list_supported_files, show_file_selection_menu, show_file_selection_menu_range};
+use super::{
+    list_supported_files, list_supported_files_in, show_file_selection_menu,
+    show_file_selection_menu_range,
+};
 use crate::config::Config;
 use crate::filetype::is_supported_format;
 use crate::navigator::Navigator;
@@ -10,6 +13,7 @@ use crate::output::{cat_file_with_syntax, print_error, print_success, print_warn
 use crate::report::{generate_report, ReportFormat};
 use crate::shell::helpers::show_tree_at_ex;
 use crate::t;
+use crate::teleport::TeleportManager;
 
 use colored::*;
 
@@ -66,7 +70,7 @@ fn extract_ext_filter(args: &str, cwd: &Path) -> (Vec<String>, bool, String) {
             i += 2;
             continue;
         }
-        if lower == "-ext" || lower == "--ext" {
+        if lower == "-ext" || lower == "--ext" || lower == "-e" {
             seen = true;
             remove.push((toks[i].1, toks[i].2));
             i += 1;
@@ -107,7 +111,15 @@ fn next_count(parts: &[String], i: usize) -> Option<usize> {
         .filter(|&n| n > 0)
 }
 
-/// A `view <file>` request: display the file like `txtf`.
+/// Which entries `view`/`viewf`/`viewd` render.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ViewMode {
+    All,
+    Files,
+    Dirs,
+}
+
+/// A `<view|viewf> <file>` request: display the file like `txtf`.
 /// Only `--head`/`--tail`/`--betw` may accompany a file target.
 #[derive(Debug)]
 struct FileView {
@@ -117,12 +129,30 @@ struct FileView {
     betw: Option<String>,
 }
 
-/// Split `view` args for a file target: the first bare token resolving
-/// to an existing file on disk (absolute or `nav`-relative). Returns
-/// `None` when this is not a file view (directory flow continues).
+/// Resolve a `view`/`txtf` operand: `@name[/sub...]` teleport paths or a
+/// disk path relative to the navigator's directory.
+fn resolve_view_operand(name: &str, nav: &Navigator) -> Option<PathBuf> {
+    if name.starts_with('@') {
+        return TeleportManager::resolve_subpath(name);
+    }
+    let p = Path::new(name);
+    Some(if p.is_absolute() {
+        p.to_path_buf()
+    } else {
+        nav.current_path().join(p)
+    })
+}
+
+/// Split `view`/`viewf` args for a file target: the first bare token
+/// resolving to an existing file (absolute, `nav`-relative, or `@tp/sub`).
+/// Returns `None` when this is not a file view (directory flow continues).
 /// `Some(Err(()))` means a file was targeted but flags are invalid —
 /// the caller prints usage.
-fn split_view_file_args(cleaned: &str, nav: &Navigator) -> Option<Result<FileView, ()>> {
+fn split_view_file_args(
+    cleaned: &str,
+    nav: &Navigator,
+    mode: ViewMode,
+) -> Option<Result<FileView, ()>> {
     let toks: Vec<String> = tokenize_spans(cleaned)
         .into_iter()
         .map(|(s, _, _)| s)
@@ -164,6 +194,10 @@ fn split_view_file_args(cleaned: &str, nav: &Navigator) -> Option<Result<FileVie
                 }
                 None => bad = true,
             },
+            // `-f` is a harmless no-op on a file target; `-dir` requires
+            // a directory.
+            "-f" | "--file" if mode != ViewMode::Dirs => {}
+            "-dir" | "--directory" => bad = true,
             // Any other flag (incl. a well-formed `--sort size`) is not
             // valid with a file target; consume `--sort`'s value so it
             // isn't mistaken for a second bare token.
@@ -184,14 +218,7 @@ fn split_view_file_args(cleaned: &str, nav: &Navigator) -> Option<Result<FileVie
         i += 1;
     }
     let name = file?;
-    let disk = {
-        let p = Path::new(&name);
-        if p.is_absolute() {
-            p.to_path_buf()
-        } else {
-            nav.current_path().join(p)
-        }
-    };
+    let disk = resolve_view_operand(&name, nav)?;
     if !disk.is_file() {
         return None;
     }
@@ -222,6 +249,8 @@ pub(crate) struct ViewFlags {
     pub sort: Option<crate::explorer::TreeSortKey>,
     pub head: Option<usize>,
     pub tail: Option<usize>,
+    pub file_only: bool,
+    pub dir_only: bool,
 }
 
 /// Parse `view` flag tokens. `Err((key, arg))` is a lang key plus the
@@ -307,8 +336,10 @@ pub(crate) fn parse_view_flags(parts: &[String]) -> Result<ViewFlags, (String, S
                     ));
                 }
             },
-            "-c" | "--cp" => f.copy_to_clipboard = true,
-            "--care" => f.care_sizes = true,
+            "-c" | "--care" => f.care_sizes = true,
+            "-cp" | "--copy" => f.copy_to_clipboard = true,
+            "-f" | "--file" => f.file_only = true,
+            "-dir" | "--directory" => f.dir_only = true,
             "--time" | "-t" => f.show_time = true,
             "-d" | "--depth" => {
                 if i + 1 < parts.len() {
@@ -330,42 +361,87 @@ pub(crate) fn parse_view_flags(parts: &[String]) -> Result<ViewFlags, (String, S
 }
 
 pub fn cmd_view(args: &str, nav: &mut Navigator) -> Result<bool> {
+    cmd_view_impl(ViewMode::All, args, nav)
+}
+
+pub fn cmd_viewf(args: &str, nav: &mut Navigator) -> Result<bool> {
+    cmd_view_impl(ViewMode::Files, args, nav)
+}
+
+pub fn cmd_viewd(args: &str, nav: &mut Navigator) -> Result<bool> {
+    cmd_view_impl(ViewMode::Dirs, args, nav)
+}
+
+fn view_usage_key(mode: ViewMode) -> &'static str {
+    match mode {
+        ViewMode::All => "help.view.file_usage",
+        ViewMode::Files => "help.viewf.file_usage",
+        ViewMode::Dirs => "help.viewd.usage",
+    }
+}
+
+fn view_tree_usage_key(mode: ViewMode) -> &'static str {
+    match mode {
+        ViewMode::All => "cmd.report.view_usage",
+        ViewMode::Files => "help.viewf.tree",
+        ViewMode::Dirs => "help.viewd.usage",
+    }
+}
+
+fn cmd_view_impl(mode: ViewMode, args: &str, nav: &mut Navigator) -> Result<bool> {
     let cwd = nav.current_path().to_path_buf();
-    let (exts, ext_seen, cleaned) = extract_ext_filter(args, &cwd);
+
+    // `view -` displays piped / redirected input.
+    if mode == ViewMode::All && args.trim() == "-" {
+        if let Some(text) = crate::shell::stdin::read_to_string() {
+            let show_lines = Config::global_get_show_line_numbers();
+            if show_lines {
+                for (i, line) in text.lines().enumerate() {
+                    println!("{:>5} | {}", i + 1, line);
+                }
+            } else {
+                print!("{}", text);
+                if !text.is_empty() && !text.ends_with('\n') {
+                    println!();
+                }
+            }
+            return Ok(false);
+        }
+    }
+
+    // `viewd` never filters by extension (directory rows only).
+    let (exts, ext_seen, cleaned) = if mode == ViewMode::Dirs {
+        (Vec::new(), false, args.to_string())
+    } else {
+        extract_ext_filter(args, &cwd)
+    };
     if ext_seen && exts.is_empty() {
         print_error(&t!("cmd.report.ext_usage"));
         return Ok(false);
     }
 
-    // `view <file>` displays the file like `txtf` (only display-range
-    // flags allowed). Extension filters never apply to files.
-    if !ext_seen {
-        match split_view_file_args(&cleaned, nav) {
+    // `<view|viewf> <file>` displays the file like `txtf` (only
+    // display-range flags allowed). Extension filters never apply to files.
+    if mode != ViewMode::Dirs && !ext_seen {
+        match split_view_file_args(&cleaned, nav, mode) {
             Some(Err(())) => {
-                println!("{}", t!("help.view.file_usage"));
+                println!("{}", t!(view_usage_key(mode)));
                 return Ok(false);
             }
             Some(Ok(fv)) => {
-                let range = match crate::output::parse_file_range(
-                    fv.head,
-                    fv.tail,
-                    fv.betw.as_deref(),
-                ) {
-                    Ok(r) => r,
-                    Err(()) => {
-                        print_error(&t!(
-                            "cmd.report.invalid_range",
-                            fv.betw.clone().unwrap_or_default()
-                        ));
-                        println!("{}", t!("help.view.file_usage"));
-                        return Ok(false);
-                    }
-                };
-                let label = fv
-                    .path
-                    .file_name()
-                    .and_then(|n| n.to_str())
-                    .unwrap_or("");
+                let range =
+                    match crate::output::parse_file_range(fv.head, fv.tail, fv.betw.as_deref()) {
+                        Ok(r) => r,
+                        Err(()) => {
+                            print_error(&t!(
+                                "cmd.report.invalid_range",
+                                fv.betw.clone().unwrap_or_default()
+                            ));
+                            println!("{}", t!(view_usage_key(mode)));
+                            return Ok(false);
+                        }
+                    };
+                let label = fv.path.file_name().and_then(|n| n.to_str()).unwrap_or("");
                 display_txtf_file(&fv.path, range, label)?;
                 return Ok(false);
             }
@@ -373,7 +449,11 @@ pub fn cmd_view(args: &str, nav: &mut Navigator) -> Result<bool> {
         }
     }
 
-    let parsed = match crate::shell::helpers::parse_target_arg(&cleaned, nav) {
+    let parsed = match mode {
+        ViewMode::Dirs => crate::shell::helpers::parse_target_arg(&cleaned, nav),
+        _ => crate::shell::helpers::parse_target_arg_allow_file(&cleaned, nav),
+    };
+    let parsed = match parsed {
         Ok(p) => p,
         Err(_) => return Ok(false),
     };
@@ -382,10 +462,37 @@ pub fn cmd_view(args: &str, nav: &mut Navigator) -> Result<bool> {
         Ok(f) => f,
         Err((key, arg)) => {
             print_error(&t!(key.as_str(), arg));
-            println!("{}", t!("cmd.report.view_usage"));
+            println!("{}", t!(view_tree_usage_key(mode)));
             return Ok(false);
         }
     };
+
+    let unsupported = match mode {
+        ViewMode::All => f.file_only && f.dir_only,
+        ViewMode::Files => f.dir_only || f.depth_override.is_some(),
+        ViewMode::Dirs => f.file_only || f.dir_only || f.head.is_some() || f.tail.is_some(),
+    };
+    if unsupported {
+        let flag = if f.file_only && f.dir_only {
+            "-f/-dir"
+        } else if mode == ViewMode::Files && f.depth_override.is_some() {
+            "-d"
+        } else {
+            "flag"
+        };
+        print_error(&t!("cmd.report.unknown_option", flag));
+        println!("{}", t!(view_tree_usage_key(mode)));
+        return Ok(false);
+    }
+
+    // A file target with tree-only flags (e.g. `--ext`) is a usage error.
+    if let Some(target) = &parsed.path {
+        if target.is_file() {
+            println!("{}", t!(view_usage_key(mode)));
+            return Ok(false);
+        }
+    }
+
     let (show_filesize, show_dirsize, copy_to_clipboard, care_sizes, show_time) = (
         f.show_filesize,
         f.show_dirsize,
@@ -394,8 +501,23 @@ pub fn cmd_view(args: &str, nav: &mut Navigator) -> Result<bool> {
         f.show_time,
     );
     let (file_min, dir_min, sort, head, tail) = (f.file_min, f.dir_min, f.sort, f.head, f.tail);
-
-    let max_depth = f.depth_override.unwrap_or(Config::global_get_max_depth());
+    let entry_filter = match mode {
+        ViewMode::Files => crate::explorer::TreeEntryFilter::FilesOnly,
+        ViewMode::Dirs => crate::explorer::TreeEntryFilter::DirsOnly,
+        ViewMode::All if f.file_only => crate::explorer::TreeEntryFilter::FilesOnly,
+        ViewMode::All if f.dir_only => crate::explorer::TreeEntryFilter::DirsOnly,
+        ViewMode::All => crate::explorer::TreeEntryFilter::All,
+    };
+    let max_depth = match mode {
+        ViewMode::Files => 1,
+        _ => f.depth_override.unwrap_or(Config::global_get_max_depth()),
+    };
+    // Directory sizes need the file nodes even when `viewd` hides them.
+    let need_dir_sizes = show_dirsize
+        || dir_min.is_some()
+        || care_sizes
+        || sort == Some(crate::explorer::TreeSortKey::Size);
+    let include_files = mode != ViewMode::Dirs || need_dir_sizes;
     let start = std::time::Instant::now();
     let filter = if exts.is_empty() {
         None
@@ -408,36 +530,23 @@ pub fn cmd_view(args: &str, nav: &mut Navigator) -> Result<bool> {
         sort,
         head,
         tail,
+        entry_filter,
     };
-    let matched = match &parsed.path {
-        Some(target) => show_tree_at_ex(
-            target,
-            Some(max_depth),
-            true,
-            true,
-            show_filesize,
-            show_dirsize,
-            copy_to_clipboard,
-            care_sizes,
-            filter,
-            &opts,
-        ),
-        None => {
-            let target = nav.current_path().to_path_buf();
-            show_tree_at_ex(
-                &target,
-                Some(max_depth),
-                true,
-                true,
-                show_filesize,
-                show_dirsize,
-                copy_to_clipboard,
-                care_sizes,
-                filter,
-                &opts,
-            )
-        }
-    };
+    let target = parsed
+        .path
+        .unwrap_or_else(|| nav.current_path().to_path_buf());
+    let matched = show_tree_at_ex(
+        &target,
+        Some(max_depth),
+        true,
+        include_files,
+        show_filesize,
+        show_dirsize,
+        copy_to_clipboard,
+        care_sizes,
+        filter,
+        &opts,
+    );
     if filter.is_some() && matched == 0 {
         println!(
             "{}",
@@ -596,7 +705,10 @@ pub(crate) struct TxtfArgs {
 /// offending value for `print_error(&t!(key, arg))`.
 pub(crate) fn parse_txtf_args(args: &str) -> Result<TxtfArgs, (String, String)> {
     let mut out = TxtfArgs::default();
-    let toks: Vec<String> = tokenize_spans(args).into_iter().map(|(s, _, _)| s).collect();
+    let toks: Vec<String> = tokenize_spans(args)
+        .into_iter()
+        .map(|(s, _, _)| s)
+        .collect();
     let mut i = 0;
     while i < toks.len() {
         match toks[i].as_str() {
@@ -679,21 +791,43 @@ pub fn cmd_txtf(args: &str, nav: &mut Navigator) -> Result<bool> {
             return Ok(false);
         }
     };
-    let range = match crate::output::parse_file_range(parsed.head, parsed.tail, parsed.betw.as_deref()) {
-        Ok(r) => r,
-        Err(()) => {
-            print_error(&t!(
-                "cmd.report.invalid_range",
-                parsed.betw.clone().unwrap_or_default()
-            ));
-            println!("{}", t!("help.report.txtf"));
-            return Ok(false);
-        }
-    };
+    let range =
+        match crate::output::parse_file_range(parsed.head, parsed.tail, parsed.betw.as_deref()) {
+            Ok(r) => r,
+            Err(()) => {
+                print_error(&t!(
+                    "cmd.report.invalid_range",
+                    parsed.betw.clone().unwrap_or_default()
+                ));
+                println!("{}", t!("help.report.txtf"));
+                return Ok(false);
+            }
+        };
     match parsed.file {
         Some(f) => {
-            let target = Path::new(&f);
-            display_txtf_file(target, range, &f)?;
+            let target = match resolve_view_operand(&f, nav) {
+                Some(p) => p,
+                None => {
+                    let list_name = f
+                        .strip_prefix('@')
+                        .unwrap_or(&f)
+                        .split('/')
+                        .next()
+                        .unwrap_or(&f);
+                    print_error(&t!("cmd.target.tp_not_found", list_name));
+                    return Ok(false);
+                }
+            };
+            if target.is_dir() {
+                let files = list_supported_files_in(&target)?;
+                if files.is_empty() {
+                    print_warning(&t!("cmd.report.no_files_in_dir", f));
+                    return Ok(false);
+                }
+                show_file_selection_menu_range(nav, files, false, range)?;
+            } else {
+                display_txtf_file(&target, range, &f)?;
+            }
         }
         None => {
             let files = list_supported_files(nav)?;
@@ -781,6 +915,25 @@ mod tests {
     }
 
     #[test]
+    fn parse_view_flags_copy_care_and_kind_aliases() {
+        let v = |s: &[&str]| s.iter().map(|x| x.to_string()).collect::<Vec<_>>();
+        // `-c` is care now; copy moved to `-cp`/`--copy`.
+        let f = parse_view_flags(&v(&["-c"])).unwrap();
+        assert!(f.care_sizes && !f.copy_to_clipboard);
+        let f = parse_view_flags(&v(&["-cp"])).unwrap();
+        assert!(f.copy_to_clipboard && !f.care_sizes);
+        let f = parse_view_flags(&v(&["--copy"])).unwrap();
+        assert!(f.copy_to_clipboard);
+        // Legacy `--cp` is gone.
+        assert!(parse_view_flags(&v(&["--cp"])).is_err());
+        // Exact-node kind filters.
+        let f = parse_view_flags(&v(&["-f"])).unwrap();
+        assert!(f.file_only && !f.dir_only);
+        let f = parse_view_flags(&v(&["--directory"])).unwrap();
+        assert!(f.dir_only && !f.file_only);
+    }
+
+    #[test]
     fn parse_txtf_args_file_and_flags_any_order() {
         let p = parse_txtf_args("a.txt").unwrap();
         assert_eq!(p.file.as_deref(), Some("a.txt"));
@@ -806,37 +959,94 @@ mod tests {
 
     #[test]
     fn split_view_file_args_routes_files_only() {
-        let _cwd = crate::utils::test_support::TempCwd::with_fixture(
-            &[("a.txt", "1\n2\n3\n")],
-            &["sub"],
-        );
+        let _cwd =
+            crate::utils::test_support::TempCwd::with_fixture(&[("a.txt", "1\n2\n3\n")], &["sub"]);
         let nav = Navigator::new().unwrap();
         // File with range flags, either order.
         for args in ["a.txt --head 2", "--tail 2 a.txt", "a.txt --betw 1:2"] {
-            match split_view_file_args(args, &nav) {
+            match split_view_file_args(args, &nav, ViewMode::All) {
                 Some(Ok(fv)) => assert!(fv.path.is_file()),
                 other => panic!("{} should route to file, got {:?}", args, other.is_some()),
             }
         }
         // Directories and missing paths stay in directory flow.
-        assert!(split_view_file_args("sub", &nav).is_none());
-        assert!(split_view_file_args("ghost.txt", &nav).is_none());
-        assert!(split_view_file_args("--head 5", &nav).is_none());
+        assert!(split_view_file_args("sub", &nav, ViewMode::All).is_none());
+        assert!(split_view_file_args("ghost.txt", &nav, ViewMode::All).is_none());
+        assert!(split_view_file_args("--head 5", &nav, ViewMode::All).is_none());
         // Size/sort/ext flags with a file are usage errors.
         assert!(matches!(
-            split_view_file_args("a.txt -s", &nav),
+            split_view_file_args("a.txt -s", &nav, ViewMode::All),
             Some(Err(()))
         ));
         assert!(matches!(
-            split_view_file_args("a.txt --sort size", &nav),
+            split_view_file_args("a.txt --sort size", &nav, ViewMode::All),
             Some(Err(()))
         ));
         assert!(matches!(
-            split_view_file_args("a.txt --head x", &nav),
+            split_view_file_args("a.txt --head x", &nav, ViewMode::All),
             Some(Err(()))
         ));
         // Two bare tokens: directory flow (unknown-option there).
-        assert!(split_view_file_args("a.txt sub", &nav).is_none());
+        assert!(split_view_file_args("a.txt sub", &nav, ViewMode::All).is_none());
+        // `-f` is a no-op on files; `-dir` is invalid.
+        assert!(matches!(
+            split_view_file_args("a.txt -f", &nav, ViewMode::Files),
+            Some(Ok(_))
+        ));
+        assert!(matches!(
+            split_view_file_args("a.txt -dir", &nav, ViewMode::All),
+            Some(Err(()))
+        ));
+    }
+
+    #[test]
+    fn split_view_file_args_resolves_teleport_subpaths() {
+        let _cwd = crate::utils::test_support::TempCwd::with_fixture(
+            &[("tp1/dir/file.txt", "hello"), ("tp1/top.txt", "top")],
+            &["tp1", "tp1/dir"],
+        );
+        let root = std::env::current_dir().unwrap();
+        let mut cfg = crate::config::Config::default();
+        cfg.teleports.insert("tp1".to_string(), root.join("tp1"));
+        crate::config::Config::with_test_config(cfg, || {
+            let nav = Navigator::new().unwrap();
+            match split_view_file_args("@tp1/top.txt", &nav, ViewMode::All) {
+                Some(Ok(fv)) => assert_eq!(fv.path, root.join("tp1").join("top.txt")),
+                _ => panic!("@tp1/top.txt should route to file"),
+            }
+            match split_view_file_args("@tp1/dir/file.txt", &nav, ViewMode::Files) {
+                Some(Ok(fv)) => {
+                    assert_eq!(fv.path, root.join("tp1").join("dir").join("file.txt"))
+                }
+                _ => panic!("nested teleport file should route to file"),
+            }
+            assert!(split_view_file_args("@tp1/dir", &nav, ViewMode::All).is_none());
+            assert!(split_view_file_args("@ghost/file.txt", &nav, ViewMode::All).is_none());
+        });
+    }
+
+    #[test]
+    fn txtf_resolves_disk_and_teleport_directories() {
+        let _cwd = crate::utils::test_support::TempCwd::with_fixture(
+            &[
+                ("sub/note.txt", "hello"),
+                ("tp1/dir/file.txt", "file"),
+                ("tp1/top.txt", "top"),
+            ],
+            &["sub", "tp1", "tp1/dir"],
+        );
+        let root = std::env::current_dir().unwrap();
+        let mut cfg = crate::config::Config::default();
+        cfg.teleports.insert("tp1".to_string(), root.join("tp1"));
+        crate::config::Config::with_test_config(cfg, || {
+            let nav = Navigator::new().unwrap();
+            assert!(resolve_view_operand("sub", &nav).unwrap().is_dir());
+            assert!(resolve_view_operand("@tp1", &nav).unwrap().is_dir());
+            assert!(resolve_view_operand("@tp1/dir", &nav).unwrap().is_dir());
+            assert!(resolve_view_operand("@tp1/dir/file.txt", &nav)
+                .unwrap()
+                .is_file());
+        });
     }
 
     #[test]
@@ -852,5 +1062,11 @@ mod tests {
         let (exts, seen, _) = extract_ext_filter("-ext -ds", &cwd);
         assert!(seen);
         assert!(exts.is_empty());
+
+        // `-e` is the short extension alias.
+        let (exts, seen, cleaned) = extract_ext_filter("-e rs,md", &cwd);
+        assert_eq!(exts, vec!["rs", "md"]);
+        assert!(seen);
+        assert!(!cleaned.contains("-e"));
     }
 }

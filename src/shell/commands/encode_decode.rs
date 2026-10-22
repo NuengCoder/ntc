@@ -6,6 +6,12 @@ use colored::*;
 use std::path::Path;
 
 fn resolve_target(raw: &str, cwd: &Path) -> Vec<u8> {
+    // `-` (or no target) reads the piped/redirected input.
+    if raw.is_empty() || raw == "-" {
+        if let Some(bytes) = crate::shell::stdin::take_input() {
+            return bytes;
+        }
+    }
     let path = cwd.join(raw);
     if path.is_file() {
         std::fs::read(&path).unwrap_or_else(|_| raw.as_bytes().to_vec())
@@ -268,7 +274,7 @@ pub fn cmd_encode(args: &str, _nav: &mut Navigator) -> Result<bool> {
 }
 
 fn cmd_encode_b2(args: &str, cwd: &Path) -> Result<bool> {
-    if args.is_empty() {
+    if args.is_empty() && !crate::shell::stdin::has_any_input() {
         print_error(&t!("encode.usage_cmd", "b2"));
         return Ok(false);
     }
@@ -280,7 +286,7 @@ fn cmd_encode_b2(args: &str, cwd: &Path) -> Result<bool> {
 }
 
 fn cmd_encode_b10(args: &str, cwd: &Path) -> Result<bool> {
-    if args.is_empty() {
+    if args.is_empty() && !crate::shell::stdin::has_any_input() {
         print_error(&t!("encode.usage_cmd", "b10"));
         return Ok(false);
     }
@@ -292,7 +298,7 @@ fn cmd_encode_b10(args: &str, cwd: &Path) -> Result<bool> {
 }
 
 fn cmd_encode_b64(args: &str, cwd: &Path) -> Result<bool> {
-    if args.is_empty() {
+    if args.is_empty() && !crate::shell::stdin::has_any_input() {
         print_error(&t!("encode.usage_cmd", "b64"));
         return Ok(false);
     }
@@ -304,7 +310,7 @@ fn cmd_encode_b64(args: &str, cwd: &Path) -> Result<bool> {
 }
 
 fn cmd_encode_hex(args: &str, cwd: &Path) -> Result<bool> {
-    if args.is_empty() {
+    if args.is_empty() && !crate::shell::stdin::has_any_input() {
         print_error(&t!("encode.usage_cmd", "hex"));
         return Ok(false);
     }
@@ -316,7 +322,7 @@ fn cmd_encode_hex(args: &str, cwd: &Path) -> Result<bool> {
 }
 
 fn cmd_encode_url(args: &str, cwd: &Path) -> Result<bool> {
-    if args.is_empty() {
+    if args.is_empty() && !crate::shell::stdin::has_any_input() {
         print_error(&t!("encode.usage_cmd", "url"));
         return Ok(false);
     }
@@ -351,7 +357,7 @@ pub fn cmd_decode(args: &str, _nav: &mut Navigator) -> Result<bool> {
 }
 
 fn cmd_decode_b2(args: &str, cwd: &Path) -> Result<bool> {
-    if args.is_empty() {
+    if args.is_empty() && !crate::shell::stdin::has_any_input() {
         print_error(&t!("decode.usage_cmd", "b2"));
         return Ok(false);
     }
@@ -365,7 +371,7 @@ fn cmd_decode_b2(args: &str, cwd: &Path) -> Result<bool> {
 }
 
 fn cmd_decode_b10(args: &str, cwd: &Path) -> Result<bool> {
-    if args.is_empty() {
+    if args.is_empty() && !crate::shell::stdin::has_any_input() {
         print_error(&t!("decode.usage_cmd", "b10"));
         return Ok(false);
     }
@@ -379,7 +385,7 @@ fn cmd_decode_b10(args: &str, cwd: &Path) -> Result<bool> {
 }
 
 fn cmd_decode_b64(args: &str, cwd: &Path) -> Result<bool> {
-    if args.is_empty() {
+    if args.is_empty() && !crate::shell::stdin::has_any_input() {
         print_error(&t!("decode.usage_cmd", "b64"));
         return Ok(false);
     }
@@ -393,7 +399,7 @@ fn cmd_decode_b64(args: &str, cwd: &Path) -> Result<bool> {
 }
 
 fn cmd_decode_hex(args: &str, cwd: &Path) -> Result<bool> {
-    if args.is_empty() {
+    if args.is_empty() && !crate::shell::stdin::has_any_input() {
         print_error(&t!("decode.usage_cmd", "hex"));
         return Ok(false);
     }
@@ -407,7 +413,7 @@ fn cmd_decode_hex(args: &str, cwd: &Path) -> Result<bool> {
 }
 
 fn cmd_decode_url(args: &str, cwd: &Path) -> Result<bool> {
-    if args.is_empty() {
+    if args.is_empty() && !crate::shell::stdin::has_any_input() {
         print_error(&t!("decode.usage_cmd", "url"));
         return Ok(false);
     }

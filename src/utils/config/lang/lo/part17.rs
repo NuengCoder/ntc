@@ -65,7 +65,6 @@ pub fn fill(m: &mut HashMap<String, String>) {
     m.insert("ran.section_vars".into(), "Variables:".into());
     m.insert("ran.terminated".into(), "ຄຳສັ່ງຖືກຢຸດ (Ctrl+C)".into());
     m.insert("ranfile.available_title".into(), "targets ທີ່ມີ:".into());
-    m.insert("ranfile.has_command".into(), " (ມີ command)".into());
     m.insert("ranfile.depends_on".into(), " ─▶ ຂຶ້ນກັບ: ".into());
     m.insert("ranfile.runner.hint".into(), "ເຮັດວຽກ {} ເພື່ອເບິ່ງ targets ທີ່ມີ.".into());
     m.insert("report.generating_html".into(), "\u{1F4CA} ກຳລັງສ້າງບົດລາຍງານ HTML ສຳລັບ: {}".into());

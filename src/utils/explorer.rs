@@ -549,7 +549,11 @@ pub fn prune_tree_by_min_size(
     file_min: Option<u64>,
     dir_min: Option<u64>,
 ) -> (usize, usize) {
-    fn keep(node: &mut TreeNode, file_min: Option<u64>, dir_min: Option<u64>) -> (bool, usize, usize) {
+    fn keep(
+        node: &mut TreeNode,
+        file_min: Option<u64>,
+        dir_min: Option<u64>,
+    ) -> (bool, usize, usize) {
         if !node.is_dir {
             let ok = match file_min {
                 Some(min) => node.size.unwrap_or(0) >= min,
@@ -588,6 +592,45 @@ pub fn prune_tree_by_min_size(
         keep_child
     });
     (files, dirs)
+}
+
+/// Keep only files or only directories in a rendered tree.
+/// `FilesOnly` drops every directory node (including nested files they
+/// contain); `DirsOnly` drops every file node. The root is always kept.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum TreeEntryFilter {
+    #[default]
+    All,
+    FilesOnly,
+    DirsOnly,
+}
+
+/// Prune `root` to files-only or dirs-only. Returns the number of kept
+/// non-root entries. Exact-node semantics: nested entries under a removed
+/// directory are removed with it.
+pub fn prune_tree_by_entry_filter(root: &mut TreeNode, filter: TreeEntryFilter) -> usize {
+    match filter {
+        TreeEntryFilter::All => 0,
+        TreeEntryFilter::FilesOnly => {
+            root.children.retain(|c| !c.is_dir);
+            root.children.len()
+        }
+        TreeEntryFilter::DirsOnly => {
+            fn keep_dirs(node: &mut TreeNode) -> usize {
+                let mut dirs = 0usize;
+                node.children.retain_mut(|child| {
+                    if child.is_dir {
+                        dirs += 1 + keep_dirs(child);
+                        true
+                    } else {
+                        false
+                    }
+                });
+                dirs
+            }
+            keep_dirs(root)
+        }
+    }
 }
 
 /// Recursively sort a tree's children by `key`, keeping directories
@@ -700,7 +743,11 @@ fn format_tree_inner(
         let size_str = if let Some(size) = node.size {
             human_readable_size(size)
         } else {
-            human_readable_size(std::fs::metadata(Path::new(&node.path)).map(|m| m.len()).unwrap_or(0))
+            human_readable_size(
+                std::fs::metadata(Path::new(&node.path))
+                    .map(|m| m.len())
+                    .unwrap_or(0),
+            )
         };
         format!(" ({})", size_str)
     } else {
@@ -813,6 +860,57 @@ mod tests {
         assert_eq!(src.children[0].name, "main.rs");
         assert!(root.children.iter().any(|c| c.name == "top.c"));
         assert!(!root.children.iter().any(|c| c.name == "empty"));
+    }
+
+    #[test]
+    fn prune_entry_filter_files_only_drops_dirs_exactly() {
+        let mut root = TreeNode {
+            name: "root".to_string(),
+            path: "/root".to_string(),
+            is_dir: true,
+            is_ignored: false,
+            is_supported: None,
+            children: vec![
+                dir("src", vec![file("main.rs")]),
+                file("top.c"),
+                dir("empty", vec![]),
+            ],
+            depth: 0,
+            size: None,
+        };
+        let kept = prune_tree_by_entry_filter(&mut root, TreeEntryFilter::FilesOnly);
+        assert_eq!(kept, 1);
+        assert_eq!(root.children.len(), 1);
+        assert_eq!(root.children[0].name, "top.c");
+    }
+
+    #[test]
+    fn prune_entry_filter_dirs_only_drops_files_recursively() {
+        let mut root = TreeNode {
+            name: "root".to_string(),
+            path: "/root".to_string(),
+            is_dir: true,
+            is_ignored: false,
+            is_supported: None,
+            children: vec![
+                dir(
+                    "src",
+                    vec![file("main.rs"), dir("nested", vec![file("x.rs")])],
+                ),
+                file("top.c"),
+                dir("empty", vec![]),
+            ],
+            depth: 0,
+            size: None,
+        };
+        let kept = prune_tree_by_entry_filter(&mut root, TreeEntryFilter::DirsOnly);
+        assert_eq!(kept, 3);
+        assert_eq!(root.children.len(), 2);
+        let src = root.children.iter().find(|c| c.name == "src").unwrap();
+        assert_eq!(src.children.len(), 1);
+        assert_eq!(src.children[0].name, "nested");
+        assert!(src.children[0].children.is_empty());
+        assert!(root.children.iter().any(|c| c.name == "empty"));
     }
 
     #[test]

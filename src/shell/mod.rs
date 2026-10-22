@@ -7,6 +7,9 @@ pub(crate) mod entry;
 pub(crate) mod help;
 pub(crate) mod helpers;
 mod hinter;
+pub(crate) mod pipeline;
+pub(crate) mod stdin;
+pub(crate) mod update_check;
 pub(crate) mod venv;
 
 // Re-exports for external callers (lib.rs / main.rs)

@@ -242,7 +242,7 @@ pub fn build_map() -> HashMap<String, String> {
 
     m.insert("alias.ral.hint_error".into(), "Bad completion hints ({}): alias not saved.".into());
 
-    m.insert("alias.ral.hint_usage".into(), "Hints look like: #x --hint-dir  #y --hint-tp --hint-dir  (--hint-tp|--hint-ext [list]|--hint-spf|--hint-file|--hint-dir|--hint-fd|--hint-all)  Selects look like: #x --select-dir  #x --select-ext rs,txt  (--select-dir|--select-ext [list]|--select-file|--select-fd|--select-tp)  Inline values: #x --hint [8080,5000]  Named lists: #x --hint-n port (see ral hintn)".into());
+    m.insert("alias.ral.hint_usage".into(), "Hints look like: #x --hint-dir  #y --hint-tp --hint-dir  (--hint-tp|--hint-ext [list]|--hint-ext-name [list]|--hint-spf|--hint-file|--hint-file-name|--hint-dir|--hint-fd|--hint-all)  Selects look like: #x --select-dir  #x --select-ext rs,txt  (--select-dir|--select-ext [list]|--select-ext-name [list]|--select-file|--select-file-name|--select-fd|--select-tp)  Inline values: #x --hint [8080,5000]  Named lists: #x --hint-n port (see ral hintn)".into());
 
     m.insert("alias.ral.hint_cmd".into(), " ral add <name> <command> #x --hint-dir  Complete param x as a directory".into());
 
@@ -280,9 +280,7 @@ pub fn build_map() -> HashMap<String, String> {
 
     m.insert("alias.ral.hintn_info_used_by".into(), "Used by".into());
 
-    m.insert("alias.ral.hintn_list_title_global".into(), "📌 Hint Lists (global)".into());
 
-    m.insert("alias.ral.hintn_list_title_local".into(), "📌 Hint Lists (from local ntconfig.toml)".into());
 
     m.insert("alias.ral.hintn_value_count".into(), "{} values".into());
 
@@ -293,6 +291,8 @@ pub fn build_map() -> HashMap<String, String> {
     m.insert("alias.ral.arr_sep_error".into(), "error: {} have {} char in the array {} try $x[,] or $x[c]".into());
 
     m.insert("alias.ral.example_hint_ext".into(), "ral add opimg \"image display ${x}\" #x --hint-ext png,jpeg,jpg,ico,bmp".into());
+
+    m.insert("alias.ral.example_rest".into(), "ral add hi \"echo $*{x}\"    # hi \"wow nice\" -> echo wow nice".into());
 
     m.insert("alias.ral.example_hint_array".into(), "ral add runc \"gcc -o ${o}.exe $x[] && .\\${o}.exe && rmf ${o}.exe\" #x[] --hint-ext c".into());
 
@@ -322,11 +322,8 @@ pub fn build_map() -> HashMap<String, String> {
 
     m.insert("alias.ral.list_cmd".into(), " ral list Show all aliases".into());
 
-    m.insert("alias.ral.list_title_global".into(), "\u{1F4CC} Run Aliases (global)".into());
 
-    m.insert("alias.ral.list_title_local".into(), "\u{1F4CC} Run Aliases (from local ntconfig.toml)".into());
 
-    m.insert("alias.ral.local_config_only".into(), " (local config only - global aliases are safe)".into());
 
     m.insert("alias.ral.make_cmd".into(), " ral make [name] Create alias template in CWD".into());
 
@@ -348,6 +345,8 @@ pub fn build_map() -> HashMap<String, String> {
 
     m.insert("alias.ral.param_cmd".into(), " ral add <name>(x) <command> Create parameterised alias (use $x or ${{x}} in command)".into());
 
+    m.insert("alias.ral.rest_cmd".into(), " ral add <name>(x) <command> using $*{x}  Capture one arg (spaces kept, quotes stripped)".into());
+
     m.insert("alias.ral.renamed".into(), "Renamed alias '{}' to '{}'".into());
 
     m.insert("alias.ral.rm_cmd".into(), " ral rm <name>[, <name>, ...] Remove alias(es)".into());
@@ -358,7 +357,6 @@ pub fn build_map() -> HashMap<String, String> {
 
     m.insert("alias.ral.template_info".into(), "This is a local template file. Use 'ral import' to add aliases to your config.".into());
 
-    m.insert("alias.ral.tip_local".into(), "\u{1F4A1} Tip: These aliases are project-specific (saved in ntconfig.toml)".into());
 
     m.insert("alias.ral.title".into(), "Run Alias (ral) Commands:".into());
 
@@ -1424,7 +1422,9 @@ pub fn build_map() -> HashMap<String, String> {
 
     m.insert("cmd.config.deinit.skipped".into(), "Skipped.".into());
 
-    m.insert("cmd.config.deinit.usage".into(), "Usage: deinit [--all | --ran | --local]".into());
+    m.insert("cmd.config.deinit.usage".into(), "Usage: deinit [--all | --ran | --local | --opencode] [--force]".into());
+
+    m.insert("cmd.config.deinit.opencode_not_found".into(), "No .opencode scaffold found, skipping.".into());
 
     m.insert("cmd.config.example_depth".into(), " config depth 4  # Set max tree depth to 4".into());
 
@@ -1446,7 +1446,9 @@ pub fn build_map() -> HashMap<String, String> {
 
     m.insert("cmd.config.init.local_exists".into(), "ntconfig.toml already exists, skipping.".into());
 
-    m.insert("cmd.config.init.usage".into(), "Usage: init [--all | --ran | --local]".into());
+    m.insert("cmd.config.init.usage".into(), "Usage: init [--all | --ran | --local | --opencode] [--force]".into());
+
+    m.insert("cmd.config.init.opencode_ready".into(), "OpenCode scaffold ready: {}".into());
 
     m.insert("cmd.config.lang.active".into(), "{} (active)".into());
 
@@ -1462,25 +1464,19 @@ pub fn build_map() -> HashMap<String, String> {
 
     m.insert("cmd.config.local.create_failed".into(), "Failed to create ntconfig.toml: {}".into());
 
-    m.insert("cmd.config.local.created_export".into(), "Created ntconfig.toml with current settings in: {}".into());
 
     m.insert("cmd.config.local.created_template".into(), "Created ntconfig.toml template in: {}".into());
 
     m.insert("cmd.config.local.exists_warning".into(), "\u{26a0}\u{fe0f} ntconfig.toml already exists!".into());
 
-    m.insert("cmd.config.local.export_aliases".into(), " \u{2022} Run aliases".into());
 
-    m.insert("cmd.config.local.export_extras".into(), " \u{2022} Extra supported files/extensions".into());
 
-    m.insert("cmd.config.local.export_ignores".into(), " \u{2022} Ignored directories/extensions/files".into());
 
-    m.insert("cmd.config.local.export_valid".into(), "\u{2705} Active configuration exported with valid TOML syntax:".into());
 
     m.insert("cmd.config.local.init_cancelled".into(), "Initialisation cancelled.".into());
 
     m.insert("cmd.config.local.overwrite_prompt".into(), "Overwrite? (y/N): ".into());
 
-    m.insert("cmd.config.local.template_all_hint".into(), " Or run: local init --all to export your current settings".into());
 
     m.insert("cmd.config.local.template_edit_hint".into(), " Edit the file and remove '#' from lines you want to enable".into());
 
@@ -1630,13 +1626,29 @@ pub fn build_map() -> HashMap<String, String> {
 
     m.insert("cmd.fmt.file_not_found".into(), "File not found: {}".into());
 
+    m.insert("cmd.fmt.binary_file".into(), "Binary or zip file detected. fmt only works on supported text formats.".into());
+
+    m.insert("cmd.fmt.cross_family".into(), "Cannot convert '{}' to '{}': different format families ({} vs {}).".into());
+
+    m.insert("cmd.fmt.doc_ser_err".into(), "Failed to serialize document as '{}': {}".into());
+
+    m.insert("cmd.fmt.docx_needs_output".into(), "DOCX output requires an output file (-o <file>).".into());
+
+    m.insert("cmd.fmt.pdf_needs_output".into(), "PDF output requires an output file (-o <file>).".into());
+
+    m.insert("cmd.fmt.xlsx_needs_output".into(), "XLSX output requires an output file (-o <file>).".into());
+
+    m.insert("cmd.fmt.pdf_source_unsupported".into(), "PDF input is not supported; fmt can only write PDF output (-o <file.pdf>).".into());
+
+    m.insert("cmd.fmt.xlsx_source_unsupported".into(), "XLSX input is not supported; fmt can only write XLSX output (-o <file.xlsx>).".into());
+
+    m.insert("cmd.fmt.pdf_unsupported".into(), "PDF output is not supported on this platform.".into());
+
     m.insert("cmd.fmt.invalid_json".into(), "Invalid JSON: {}".into());
 
     m.insert("cmd.fmt.invalid_toml".into(), "Invalid TOML: {}".into());
 
     m.insert("cmd.fmt.invalid_yaml".into(), "Invalid YAML: {}".into());
-
-    m.insert("cmd.fmt.json_ser_err".into(), "JSON serialization error: {}".into());
 
     m.insert("cmd.fmt.json_ser_err".into(), "JSON serialization error: {}".into());
 
@@ -1648,11 +1660,13 @@ pub fn build_map() -> HashMap<String, String> {
 
     m.insert("cmd.fmt.toml_ser_err".into(), "TOML serialization error: {}".into());
 
-    m.insert("cmd.fmt.unknown_format".into(), "Unknown format: '{}'. Use json, yaml, or toml.".into());
+    m.insert("cmd.fmt.unknown_format".into(), "Unsupported file type '{}' for fmt. Use a file with extension: json, yaml, toml, md, html, xml, docx, txt, pdf, csv, tsv, or xlsx.".into());
 
-    m.insert("cmd.fmt.unknown_target".into(), "Unknown target format: '{}'. Use json, yaml, or toml.".into());
+    m.insert("cmd.fmt.unknown_target".into(), "Unknown target format: '{}'. Use json, yaml, toml, md, html, xml, docx, txt, pdf, csv, tsv, or xlsx.".into());
 
-    m.insert("cmd.fmt.usage".into(), "Usage: fmt json|yaml|toml <file> [to json|yaml|toml] [-o <file>]".into());
+    m.insert("cmd.fmt.legacy_syntax".into(), "Syntax changed: the source format is taken from the file extension. Use: fmt <file> [to <format>] [-o <output>]".into());
+
+    m.insert("cmd.fmt.usage".into(), "Usage: fmt <file> [to json|yaml|toml|md|html|xml|docx|txt|pdf|csv|tsv|xlsx] [-o <output>]".into());
 
     m.insert("cmd.fmt.written_to".into(), "Written to: {}".into());
 
@@ -1864,49 +1878,39 @@ pub fn build_map() -> HashMap<String, String> {
 
     m.insert("cmd.igcare.unknown_subcmd".into(), "Unknown igcare subcommand: {}".into());
 
-    m.insert("cmd.igcared.combined_hint".into(), "Global + Local settings combined:".into());
 
-    m.insert("cmd.igcared.combined_hint".into(), "Global + Local settings combined:".into());
 
-    m.insert("cmd.igcared.extra_exts".into(), "Extra extensions: {:?}".into());
+    m.insert("cmd.igcared.extra_exts".into(), "Extra extensions:".into());
 
-    m.insert("cmd.igcared.extra_exts".into(), "Extra extensions: {:?}".into());
+    m.insert("cmd.igcared.extra_exts".into(), "Extra extensions:".into());
 
-    m.insert("cmd.igcared.extra_files".into(), "Extra files: {:?}".into());
+    m.insert("cmd.igcared.extra_files".into(), "Extra files:".into());
 
-    m.insert("cmd.igcared.extra_files".into(), "Extra files: {:?}".into());
+    m.insert("cmd.igcared.extra_files".into(), "Extra files:".into());
 
-    m.insert("cmd.igcared.ignored_dirs".into(), "Ignored directories: {:?}".into());
+    m.insert("cmd.igcared.ignored_dirs".into(), "Ignored directories:".into());
 
-    m.insert("cmd.igcared.ignored_dirs".into(), "Ignored directories: {:?}".into());
+    m.insert("cmd.igcared.ignored_dirs".into(), "Ignored directories:".into());
 
-    m.insert("cmd.igcared.ignored_exts".into(), "Ignored extensions: {:?}".into());
+    m.insert("cmd.igcared.ignored_exts".into(), "Ignored extensions:".into());
 
-    m.insert("cmd.igcared.ignored_exts".into(), "Ignored extensions: {:?}".into());
+    m.insert("cmd.igcared.ignored_exts".into(), "Ignored extensions:".into());
 
-    m.insert("cmd.igcared.ignored_files".into(), "Ignored files: {:?}".into());
+    m.insert("cmd.igcared.ignored_files".into(), "Ignored files:".into());
 
-    m.insert("cmd.igcared.ignored_files".into(), "Ignored files: {:?}".into());
+    m.insert("cmd.igcared.ignored_files".into(), "Ignored files:".into());
 
     m.insert("cmd.igcared.local_config".into(), "   Local config: {}".into());
 
     m.insert("cmd.igcared.local_config".into(), "   Local config: {}".into());
 
-    m.insert("cmd.igcared.local_tip".into(), "Run 'igcared' to view combined settings".into());
 
-    m.insert("cmd.igcared.local_tip2".into(), "Use 'igcared' to see current state".into());
 
-    m.insert("cmd.igcared.separator".into(), "─".into());
 
-    m.insert("cmd.igcared.separator".into(), "─".into());
 
-    m.insert("cmd.igcared.title_combined".into(), "Combined Settings".into());
 
-    m.insert("cmd.igcared.title_combined".into(), "Combined Settings".into());
 
-    m.insert("cmd.igcared.title_global".into(), "Global Settings".into());
 
-    m.insert("cmd.igcared.title_global".into(), "Global Settings".into());
 
     m.insert("cmd.ignore.applied".into(), "{} {} item(s)".into());
 
@@ -2067,6 +2071,10 @@ pub fn build_map() -> HashMap<String, String> {
     m.insert("cmd.nav.where.current_dir".into(), "\u{1f4c2} Current dir:".into());
 
     m.insert("cmd.nav.where.executable".into(), "\u{1f4c1} Executable:".into());
+
+    m.insert("cmd.nav.where.not_found".into(), "\u{2717} '{}' not found in PATH".into());
+
+    m.insert("cmd.nav.where.path_title".into(), "\u{1f50d} PATH matches for '{}':".into());
 
     m.insert("cmd.nav.where.title".into(), "ntc Location Info".into());
 
@@ -2284,6 +2292,8 @@ pub fn build_map() -> HashMap<String, String> {
 
     m.insert("cmd.report.file_not_found".into(), "File not found: {}".into());
 
+    m.insert("cmd.report.no_files_in_dir".into(), "No supported files to display in: {}".into());
+
     m.insert("cmd.report.help_docx".into(), "  report docx [path]     Generate DOCX report".into());
 
     m.insert("cmd.report.help_html".into(), "  report html [path]     Generate HTML report".into());
@@ -2477,6 +2487,10 @@ pub fn build_map() -> HashMap<String, String> {
 
     m.insert("cmd.serve.help_auth".into(), "  --auth <user:pass>    Require login for /api/* (e.g. --auth admin:secret)".into());
 
+    m.insert("cmd.serve.help_lock".into(), "  --lock                Read-only: allow download/list, block upload/edit/create/delete".into());
+
+    m.insert("cmd.serve.lock_on".into(), "Read-only mode (--lock): uploads, edits, creates and deletes are blocked".into());
+
     m.insert("cmd.serve.example_auth".into(), "  serve files 8080 --auth admin:secret   HTTP on 8080, API needs login".into());
 
     m.insert("cmd.serve.invalid_auth".into(), "Invalid --auth (use --auth <user:pass>)".into());
@@ -2619,6 +2633,39 @@ pub fn build_map() -> HashMap<String, String> {
     m.insert("cmd.nsheet.tui_no_matches".into(), "No matches".into());
     m.insert("cmd.nsheet.tui_large".into(), "Large sheet ({} rows) — navigation may be slow".into());
 
+    m.insert("cmd.nms.usage_title".into(), "Usage:".into());
+    m.insert("cmd.nms.help_play".into(), "nms play <file>                                  Fullscreen sound player (video plays audio only)".into());
+    m.insert("cmd.nms.help_scan".into(), "nms scan [-d|--depth <n>] [-s|--size] [-l|--long <dur>] [--care]  List audio + video files".into());
+    m.insert("cmd.nms.help_help".into(), "nms help                                         Show this help".into());
+    m.insert("cmd.nms.options_title".into(), "Options:".into());
+    m.insert("cmd.nms.help_depth".into(), "  -d, --depth <n>   Max recursion depth (default: from config)".into());
+    m.insert("cmd.nms.help_size".into(), "  -s, --size        Show file sizes and a total".into());
+    m.insert("cmd.nms.help_long".into(), "  -l, --long <dur>  Only list media longer than <dur> (e.g. 25s, 1mn, 1h)".into());
+    m.insert("cmd.nms.help_care".into(), "  --care            Ignore the ignore-rules (care mode)".into());
+    m.insert("cmd.nms.keys_title".into(), "Player keys:".into());
+    m.insert("cmd.nms.help_keys".into(), "  space pause/resume · ←/→ seek 5s · ↑/↓ volume · a replay · q quit".into());
+    m.insert("cmd.nms.examples_title".into(), "Examples:".into());
+    m.insert("cmd.nms.example_play".into(), "nms play song.mp3".into());
+    m.insert("cmd.nms.example_video".into(), "nms play movie.mp4".into());
+    m.insert("cmd.nms.example_scan".into(), "nms scan -d 2 -s".into());
+    m.insert("cmd.nms.example_long".into(), "nms scan -l 1mn".into());
+    m.insert("cmd.nms.play_missing_file".into(), "Missing file. Usage: nms play <file>".into());
+    m.insert("cmd.nms.file_not_found".into(), "File '{}' not found".into());
+    m.insert("cmd.nms.not_media".into(), "Not an audio/video file: '{}'".into());
+    m.insert("cmd.nms.no_sound_device".into(), "No sound device found on this machine — cannot play audio here".into());
+    m.insert("cmd.nms.play_failed".into(), "Cannot play '{}': {}".into());
+    m.insert("cmd.nms.unknown_sub".into(), "Unknown nms subcommand: {}".into());
+    m.insert("cmd.nms.unknown_option".into(), "Unknown option: {}".into());
+    m.insert("cmd.nms.depth_usage".into(), "Usage: --depth <n>".into());
+    m.insert("cmd.nms.invalid_depth".into(), "Invalid depth: '{}'".into());
+    m.insert("cmd.nms.long_usage".into(), "Usage: --long <duration> (e.g. 25s, 1mn, 1h)".into());
+    m.insert("cmd.nms.invalid_long".into(), "Invalid duration: '{}' (use e.g. 25s, 1mn, 1h)".into());
+    m.insert("cmd.nms.long_none".into(), "No media longer than {}".into());
+    m.insert("cmd.nms.no_files".into(), "No audio/video files found".into());
+    m.insert("cmd.nms.list_title".into(), "Media files (audio + video):".into());
+    m.insert("cmd.nms.total_files".into(), "{} file(s)".into());
+    m.insert("cmd.nms.total_files_size".into(), "{} file(s), {} total".into());
+
     m.insert("cmd.serve.invalid_port".into(), "Invalid port".into());
 
     m.insert("cmd.serve.invalid_port".into(), "Invalid port".into());
@@ -2700,6 +2747,34 @@ pub fn build_map() -> HashMap<String, String> {
     m.insert("cmd.smtp.decode_failed".into(), "Failed to decode stored password".into());
 
     m.insert("cmd.smtp.decode_failed".into(), "Failed to decode stored password".into());
+
+    m.insert("cmd.smtp.body_file_missing".into(), "Body file not found: {}".into());
+
+    m.insert("cmd.smtp.body_html_from_file".into(), "HTML body from file: {}".into());
+
+    m.insert("cmd.smtp.body_md_from_file".into(), "Markdown body from file: {} (rendered to HTML)".into());
+
+    m.insert("cmd.smtp.body_read_fail".into(), "Failed to read body file {}: {}".into());
+
+    m.insert("cmd.smtp.body_stdin_empty".into(), "No body received on stdin".into());
+
+    m.insert("cmd.smtp.body_text_from_file".into(), "Text body from file: {}".into());
+
+    m.insert("cmd.smtp.help_body_file".into(), "  -b letter.html | letter.md       body from a file (Markdown is rendered to HTML)".into());
+
+    m.insert("cmd.smtp.help_body_format".into(), "  --body-format auto|text|html|md  force how -b is interpreted".into());
+
+    m.insert("cmd.smtp.help_body_inline".into(), "  -b '<p style=text-align:center>Hi</p>'   inline HTML is detected automatically".into());
+
+    m.insert("cmd.smtp.help_body_stdin".into(), "  -b -                            read the body from stdin".into());
+
+    m.insert("cmd.smtp.help_body_title".into(), "Message body:".into());
+
+    m.insert("cmd.smtp.invalid_body_format".into(), "Unknown body format '{}' (use auto, text, html or md)".into());
+
+    m.insert("cmd.smtp.missing_body_file".into(), "Missing path after --body-file".into());
+
+    m.insert("cmd.smtp.missing_body_format".into(), "Missing value after --body-format".into());
 
     m.insert("cmd.smtp.help_attachments_desc".into(), "  -f accepts comma-separated file paths and directories (files are expanded recursively)".into());
 
@@ -4349,29 +4424,31 @@ pub fn build_map() -> HashMap<String, String> {
 
     m.insert("error.unsupported_shell".into(), "Unsupported shell: {}. Use: bash, zsh, fish, powershell".into());
 
-    m.insert("fmt.help_example1".into(), "  fmt json package.json to yaml".into());
+    m.insert("fmt.help_example1".into(), "  fmt package.json to yaml".into());
 
-    m.insert("fmt.help_example2".into(), "  fmt json config.json to toml -o config.toml".into());
+    m.insert("fmt.help_example2".into(), "  fmt config.json to toml -o config.toml".into());
 
-    m.insert("fmt.help_example3".into(), "  fmt yaml config.yaml to json".into());
+    m.insert("fmt.help_example3".into(), "  fmt config.yaml to json".into());
 
-    m.insert("fmt.help_example4".into(), "  fmt toml Cargo.toml to json".into());
+    m.insert("fmt.help_example4".into(), "  fmt Cargo.toml to json".into());
 
-    m.insert("fmt.help_example5".into(), "  fmt json data.json                      # pretty-print JSON".into());
+    m.insert("fmt.help_example5".into(), "  fmt data.json                      # pretty-print in its own format".into());
+
+    m.insert("fmt.help_example6".into(), "  fmt report.docx to md              # DOCX to Markdown".into());
+
+    m.insert("fmt.help_example7".into(), "  fmt readme.md to html -o out.html".into());
+
+    m.insert("fmt.help_example8".into(), "  fmt notes.txt to pdf -o notes.pdf   # text to PDF".into());
+
+    m.insert("fmt.help_example9".into(), "  fmt report.txt to docx -o report.docx".into());
+
+    m.insert("fmt.help_example10".into(), "  fmt data.csv to xlsx -o data.xlsx   # CSV to Excel".into());
 
     m.insert("fmt.help_examples".into(), "Examples:".into());
 
-    m.insert("fmt.help_json_line".into(), "  fmt json <file> [to yaml|toml] [-o <file>]    Convert JSON to YAML or TOML".into());
-
-    m.insert("fmt.help_no_target".into(), "  fmt json <file>                          Pretty-print JSON".into());
-
-    m.insert("fmt.help_no_target".into(), "  fmt json <file>                          Pretty-print JSON".into());
-
-    m.insert("fmt.help_toml_line".into(), "  fmt toml <file> [to json|yaml] [-o <file>]    Convert TOML to JSON or YAML".into());
+    m.insert("fmt.help_no_target".into(), "  fmt <file>                         Pretty-print / normalize in its own format".into());
 
     m.insert("fmt.help_usage".into(), "Usage:".into());
-
-    m.insert("fmt.help_yaml_line".into(), "  fmt yaml <file> [to json|toml] [-o <file>]    Convert YAML to JSON or TOML".into());
 
 
 
@@ -4427,6 +4504,8 @@ pub fn build_map() -> HashMap<String, String> {
     m.insert("help.alias.add".into(), "ral add <name> \"<cmd>\" ## Create alias".into());
 
     m.insert("help.alias.add_array".into(), "ral add <name>(x[],y) \"<cmd>\" ## Alias with array params".into());
+
+    m.insert("help.alias.add_rest".into(), "ral add <name>(x) \"echo $*{x}\" ## One arg with spaces (quotes stripped)".into());
 
     m.insert("help.alias.add_defaults".into(), "ral add <name>({x=a,e=txt}) \"<cmd>\" ## Alias with default values".into());
 
@@ -4532,7 +4611,6 @@ pub fn build_map() -> HashMap<String, String> {
 
     m.insert("help.config.local_init".into(), "local init ## Create ntconfig.toml template (commented)".into());
 
-    m.insert("help.config.local_init_all".into(), "local init --all ## Export current settings to ntconfig.toml".into());
 
     m.insert("help.config.opencg".into(), "opencg ## Open config.toml in editor".into());
 
@@ -4571,15 +4649,15 @@ pub fn build_map() -> HashMap<String, String> {
 
 
 
-    m.insert("help.editor.ne".into(), "ne, ntceditor <file> ## Open file in built-in text editor".into());
+    m.insert("help.editor.ne".into(), "ne, ntceditor <file> ## Open an existing file in built-in text editor".into());
 
-    m.insert("help.editor.ne_hyper".into(), "ne --hyper <name> --lang <l> ## Create C/C++ hyper project".into());
+    m.insert("help.editor.ne_hyper".into(), "ne --hyper <name> --lang <l> [-I] ## Create C/C++ hyper project (-I opens project dir)".into());
 
-    m.insert("help.editor.ne_init".into(), "ne --init <file> ## Create an empty file template".into());
+    m.insert("help.editor.ne_init".into(), "ne --init <file> [<file> ...] [-I <file>] ## Create template file(s); -I opens one".into());
 
     m.insert("help.editor.ne_line".into(), "ne, ntceditor <file>:<n> ## Open file at line <n>".into());
 
-    m.insert("help.editor.ne_super".into(), "ne --super <file> ## Create a super file template".into());
+    m.insert("help.editor.ne_super".into(), "ne --super <file> [<file> ...] [-I <file>] ## Create super template file(s); -I opens one".into());
 
     m.insert("help.editor.ne_welcome".into(), "ne, ntceditor ## Open welcome screen in current directory".into());
 
@@ -4623,13 +4701,13 @@ pub fn build_map() -> HashMap<String, String> {
 
     m.insert("help.explorer.title".into(), "FILE EXPLORER (NFE):".into());
 
-    m.insert("help.fileops.cp".into(), "cp <src|@tp> <dst|@tp> [-f] ## Copy file or dir".into());
+    m.insert("help.fileops.cp".into(), "cp <src|@tp|pattern> <dst|@tp> [-f] ## Copy file or dir (pattern src needs a dir dst)".into());
 
     m.insert("help.fileops.mkd".into(), "mkd <dir>[, ...] ## Create a new directory".into());
 
     m.insert("help.fileops.mkf".into(), "mkf <file>[, ...] ## Create a new file".into());
 
-    m.insert("help.fileops.rmd".into(), "rmd <dir>[, ...] ## Delete a directory (with confirmation)".into());
+    m.insert("help.fileops.rmd".into(), "rmd <dir>[, ...] ## Delete directories; wildcards delete every match after confirmation".into());
 
     m.insert("help.fileops.rmf".into(), "rmf <file>[, ...] ## Delete a file (with confirmation)".into());
 
@@ -4637,7 +4715,7 @@ pub fn build_map() -> HashMap<String, String> {
 
     m.insert("help.fileops.rnmf".into(), "rnmf <old> <new> ## Rename a file".into());
 
-    m.insert("help.fileops.mv".into(), "mv <src|@tp> <dst|@tp> [-f] ## Move/rename file or dir".into());
+    m.insert("help.fileops.mv".into(), "mv <src|@tp|pattern> <dst|@tp> [-f] ## Move/rename file or dir (pattern src needs a dir dst)".into());
 
     m.insert("help.fileops.title".into(), "FILE OPERATIONS:".into());
 
@@ -4729,7 +4807,7 @@ pub fn build_map() -> HashMap<String, String> {
 
     m.insert("help.nav.title".into(), "NAVIGATION COMMANDS:".into());
 
-    m.insert("help.nav.where".into(), "where ## Show ntc executable and config locations".into());
+    m.insert("help.nav.where".into(), "where [<binary>] ## Show ntc locations, or find a binary on PATH".into());
 
     m.insert("help.nav.example1".into(), "cd src ## Navigate to the src directory".into());
 
@@ -4738,6 +4816,8 @@ pub fn build_map() -> HashMap<String, String> {
     m.insert("help.nav.example3".into(), "gos ## Interactive subdirectory selection".into());
 
     m.insert("help.nav.example4".into(), "cd to web ## Teleport to 'web' savepoint".into());
+
+    m.insert("help.nav.example5".into(), "where git ## Show where a binary lives on PATH".into());
 
     m.insert("help.network.dl".into(), "dl <url> ## Download file (--progress, --resume, --stop, --cancel)".into());
 
@@ -4791,7 +4871,7 @@ pub fn build_map() -> HashMap<String, String> {
 
     m.insert("help.other.help".into(), "help ## Show this help".into());
 
-    m.insert("help.other.init".into(), "init [--ran|--local] ## Initialize project files (NTCRANFILE.toml + ntconfig.toml)".into());
+    m.insert("help.other.init".into(), "init [--ran|--local|--opencode] ## Initialize project files (NTCRANFILE.toml, ntconfig.toml, .opencode/)".into());
 
     m.insert("help.other.print".into(), "print <text> [--loop N] [-n|-t] ## Alias for say".into());
 
@@ -4894,7 +4974,7 @@ pub fn build_map() -> HashMap<String, String> {
 
     m.insert("help.report.txtc".into(), "txtc <file> ## Copy file content to clipboard".into());
 
-    m.insert("help.report.txtf".into(), "txtf [--head N|--tail N|--betw A:B] [file] ## Display file content (original line numbers)".into());
+    m.insert("help.report.txtf".into(), "txtf [--head N|--tail N|--betw A:B] [file|dir|@tp/file|@tp/dir] ## Display file content or pick a file from a directory (original line numbers)".into());
 
     m.insert("cmd.report.invalid_range".into(), "Invalid range: '{}' (expected n:m, e.g. --betw 10:20)".into());
 
@@ -4924,11 +5004,13 @@ pub fn build_map() -> HashMap<String, String> {
 
     m.insert("help.search.fsc".into(), "fsc <pattern> [-d <n>] ## Search files, pick one to display & optionally copy".into());
 
-    m.insert("help.search.gs".into(), "gs <pattern> [-d <n>] [-l <n>] ## Search file contents (simple grep)".into());
+    m.insert("help.search.gs".into(), "gs <pattern> [-p <glob>] [-s [line|path|size]] [-d <n>] [-l <n>] [-i] ## Search file contents (simple grep)".into());
 
     m.insert("help.search.gs_interactive".into(), "gs -i <pattern> [-d <n>] ## Interactive grep (10/page, Enter to open)".into());
 
     m.insert("help.search.locate".into(), "locate <pattern> [-d <n>] ## Search both files and directories".into());
+
+    m.insert("help.search.pipe".into(), "cmd | gs <pattern> ## Search piped text (qur -s <pattern> too)".into());
 
     m.insert("help.search.qur".into(), "qur <glob> [-s \"pat\"] [-rp \"new\"] [-dp] [-d <n>] ## Query files, select content, replace".into());
 
@@ -4951,6 +5033,48 @@ pub fn build_map() -> HashMap<String, String> {
     m.insert("help.syscmd.native2".into(), "all run natively alongside NTC commands.".into());
 
     m.insert("help.syscmd.title".into(), "SYSTEM COMMANDS:".into());
+
+    m.insert("help.pipe.title".into(), "PIPES & REDIRECTION:".into());
+
+    m.insert("help.pipe.pipe".into(), "a | b ## Send a's output to b as input".into());
+
+    m.insert("help.pipe.and".into(), "a && b ## Run b only if a succeeds".into());
+
+    m.insert("help.pipe.or".into(), "a || b ## Run b only if a fails".into());
+
+    m.insert("help.pipe.out".into(), "cmd > file ## Write output to file (overwrite)".into());
+
+    m.insert("help.pipe.append".into(), "cmd >> file ## Append output to file".into());
+
+    m.insert("help.pipe.in".into(), "cmd < file ## Read input from file".into());
+
+    m.insert("help.pipe.heredoc".into(), "cmd <<EOF ... EOF ## Read input until the EOF line".into());
+
+    m.insert("help.pipe.herestring".into(), "cmd <<< text ## Read input from the literal text token".into());
+
+    m.insert("help.pipe.head".into(), "head [N] [file] ## Print the first N lines (default 10)".into());
+
+    m.insert("help.pipe.tail".into(), "tail [N] [file] ## Print the last N lines (default 10)".into());
+
+    m.insert("help.pipe.betw".into(), "betw A:B [file] ## Print lines A to B (1-based inclusive)".into());
+    m.insert("help.pipe.sort".into(), "sort [-r] [-n] [-u] [-f] [file] ## Sort lines (reverse/numeric/unique/ignore-case)".into());
+
+    m.insert("help.pipe.rev".into(), "rev [file] ## Reverse the characters of each line".into());
+
+    m.insert("help.pipe.filters".into(), "cmd | head|tail|betw|gs|sort|rev|encode|qur ## Pipe filters (their flags complete too)".into());
+
+    m.insert("help.pipe.note".into(), "Operators need spaces around them; use - to read stdin".into());
+
+    m.insert("help.pipe.hint".into(), "Hints: | lists the pipe filters; >> and < list text files only; > shows none; << only EOF".into());
+
+    m.insert("help.pipe.example1".into(), "gs main > results.txt ## Save search results to a file".into());
+
+    m.insert("help.pipe.example2".into(), "view readme.md | encode b64 ## Encode a file's contents".into());
+
+    m.insert("help.pipe.example3".into(), "gs main | say ## Page-search results through say".into());
+
+    m.insert("help.pipe.example4".into(), "head 20 app.log ## First 20 lines of a file (or piped input)".into());
+    m.insert("help.pipe.example5".into(), "gs error | sort -u | head 10 ## Unique sorted matches, first 10".into());
 
     m.insert("help.teleport.add".into(), "tp add <name> ## Save current directory".into());
 
@@ -5094,9 +5218,23 @@ pub fn build_map() -> HashMap<String, String> {
     m.insert("help.nsheet.example2".into(), "nsheet view data.json --filter \"age>30\" --sort age ## Filter + sort".into());
     m.insert("help.nsheet.example3".into(), "nsheet view a.csv --export md -o out.md ## Export Markdown".into());
 
-    m.insert("help.view.care".into(), "view --care ## Show tree with care everything".into());
+    m.insert("help.nms.title".into(), "NMS COMMANDS (NTC Music):".into());
+    m.insert("help.nms.play".into(), "nms play <file> ## Fullscreen sound player (space pause · ←/→ seek · ↑/↓ volume · a replay)".into());
+    m.insert("help.nms.scan".into(), "nms scan [-d <n>] [-s] [-l <dur>] [--care] ## List audio + video files (dur: 25s, 1mn, 1h)".into());
+    m.insert("help.nms.long".into(), "nms scan -l <dur> ## Only list media longer than <dur> (e.g. 25s, 1mn, 1h)".into());
+    m.insert("help.nms.keys".into(), "Player TUI: live waveform + high/low level meter · video plays audio only · freezes when finished, press a to replay".into());
+    m.insert("help.nms.example1".into(), "nms play song.mp3 ## Play an audio file".into());
+    m.insert("help.nms.example2".into(), "nms play movie.mp4 ## Play a video's audio track".into());
+    m.insert("help.nms.example3".into(), "nms scan -d 2 -s ## List media with sizes".into());
+    m.insert("help.nms.example4".into(), "nms scan -l 1mn ## List media longer than 1 minute".into());
 
-    m.insert("help.view.cp".into(), "view -c, --cp ## Show tree and copy to clipboard".into());
+    m.insert("help.view.care".into(), "view -c, --care ## Show tree with care everything".into());
+
+    m.insert("help.view.cp".into(), "view -cp, --copy ## Show tree and copy to clipboard".into());
+
+    m.insert("help.view.file_only".into(), "view -f, --file ## Show files only (directories pruned)".into());
+
+    m.insert("help.view.dir_only".into(), "view -dir, --directory ## Show directories only (files pruned)".into());
 
     m.insert("help.view.depth".into(), "view -d, --depth <n> ## Show tree with custom depth".into());
 
@@ -5112,7 +5250,7 @@ pub fn build_map() -> HashMap<String, String> {
 
     m.insert("help.view.filesize".into(), "view -fs, --filesize [min-size] ## Show file sizes; with value, hide smaller files".into());
 
-    m.insert("help.view.path".into(), "view -p, --path <path|@tp> ## Show tree of a specific path or teleport savepoint".into());
+    m.insert("help.view.path".into(), "view -p, --path <path|@tp|@tp/sub> ## Show tree of a path or teleport path".into());
 
     m.insert("help.view.size".into(), "view -s, --size [min-size] ## Show sizes; with value (10KB, 1.5MB), hide smaller".into());
 
@@ -5120,7 +5258,7 @@ pub fn build_map() -> HashMap<String, String> {
 
     m.insert("help.view.title".into(), "VIEW COMMAND:".into());
 
-    m.insert("help.view.tree".into(), "view ## Show directory tree (uses config depth)".into());
+    m.insert("help.view.tree".into(), "view [<dir|file|@tp|@tp/file|@tp/dir/>] ## Show tree or file content".into());
 
     m.insert("help.config.example1".into(), "config output ~/Desktop ## Set output path to Desktop".into());
 
@@ -5136,7 +5274,7 @@ pub fn build_map() -> HashMap<String, String> {
 
     m.insert("help.editor.example2".into(), "ne src/main.rs:42 ## Open main.rs at line 42".into());
 
-    m.insert("help.editor.example3".into(), "ne --init newfile.md ## Create a template file".into());
+    m.insert("help.editor.example3".into(), "ne --init a.py b.html -I a.py ## Create templates and open a.py".into());
 
     m.insert("help.editor.example4".into(), "ne --hyper myproject --lang c ## Create C hyper project".into());
 
@@ -5184,7 +5322,7 @@ pub fn build_map() -> HashMap<String, String> {
 
     m.insert("help.view.example3".into(), "view -d 2 ## Show tree with depth 2".into());
 
-    m.insert("help.view.example4".into(), "view --cp ## Show tree and copy to clipboard".into());
+    m.insert("help.view.example4".into(), "view -cp ## Show tree and copy to clipboard".into());
 
     m.insert("help.view.example5".into(), "view --time ## Show tree with execution time".into());
 
@@ -5196,15 +5334,48 @@ pub fn build_map() -> HashMap<String, String> {
 
     m.insert("help.view.example9".into(), "view --sort size --head 20 ## 20 largest entries first".into());
 
-    m.insert("help.view.file_usage".into(), "view <file> [--head N|--tail N|--betw A:B] ## Display file content (same as txtf)".into());
+    m.insert("help.view.file_usage".into(), "view <file|@tp/file|@tp/dirs/file> [--head N|--tail N|--betw A:B] ## Display file content (same as txtf)".into());
 
     m.insert("help.view.example10".into(), "view main.rs --tail 30 ## Last 30 lines of main.rs".into());
 
     m.insert("help.view.example11".into(), "view main.rs --betw 10:20 ## Lines 10-20 of main.rs".into());
 
+    m.insert("help.view.example12".into(), "view @docs/readme.md ## Display a teleport savepoint file".into());
+
+    m.insert("help.viewf.title".into(), "VIEWF COMMAND (files only):".into());
+    m.insert("help.viewf.tree".into(), "viewf [<dir|@tp|@tp/dir/>] ## Show a files-only tree at depth 1".into());
+    m.insert("help.viewf.file_usage".into(), "viewf <file|@tp/file|@tp/dirs/file> [--head N|--tail N|--betw A:B] ## Display file content (same as txtf)".into());
+    m.insert("help.viewf.size".into(), "viewf -s, --size [min-size] ## Show file sizes; with value, hide smaller files".into());
+    m.insert("help.viewf.sort".into(), "viewf --sort size|char|ext ## Sort file entries".into());
+    m.insert("help.viewf.ext".into(), "viewf -e, --ext <ext...> ## Show only matching extensions".into());
+    m.insert("help.viewf.care".into(), "viewf -c, --care ## Count everything when sizing".into());
+    m.insert("help.viewf.time".into(), "viewf -t, --time ## Show execution time".into());
+    m.insert("help.viewf.copy".into(), "viewf -cp, --copy ## Copy the file list to clipboard".into());
+    m.insert("help.viewf.example1".into(), "viewf ## List files in the current directory".into());
+    m.insert("help.viewf.example2".into(), "viewf src ## List files directly inside src".into());
+    m.insert("help.viewf.example3".into(), "viewf -e rs,txt --sort size ## Files by extension, largest first".into());
+    m.insert("help.viewf.example4".into(), "viewf @docs/readme.md --head 20 ## Display a teleport file".into());
+
+    m.insert("help.viewd.title".into(), "VIEWD COMMAND (directories only):".into());
+    m.insert("help.viewd.usage".into(), "viewd [<dir|@tp|@tp/dir/>] [-d N] ## Show a directories-only tree".into());
+    m.insert("help.viewd.depth".into(), "viewd -d, --depth <n> ## Show tree with custom depth".into());
+    m.insert("help.viewd.size".into(), "viewd -s, --size [min-size] ## Show directory sizes; with value, hide smaller".into());
+    m.insert("help.viewd.care".into(), "viewd -c, --care ## Count everything when sizing".into());
+    m.insert("help.viewd.sort".into(), "viewd --sort size|char|ext ## Sort directory entries".into());
+    m.insert("help.viewd.time".into(), "viewd -t, --time ## Show execution time".into());
+    m.insert("help.viewd.copy".into(), "viewd -cp, --copy ## Copy the directory tree to clipboard".into());
+    m.insert("help.viewd.example1".into(), "viewd ## Show only directories in the current tree".into());
+    m.insert("help.viewd.example2".into(), "viewd -d 2 --size ## Two levels deep with directory sizes".into());
+    m.insert("help.viewd.example3".into(), "viewd --sort size ## Largest directories first".into());
+    m.insert("help.viewd.example4".into(), "viewd @docs/ ## Show a teleport savepoint's directories".into());
+
     m.insert("help.report.txtf_example1".into(), "txtf main.rs --head 30 ## First 30 lines of main.rs".into());
 
     m.insert("help.report.txtf_example2".into(), "txtf --betw 10:20 main.rs ## Lines 10-20 of main.rs".into());
+
+    m.insert("help.report.txtf_example3".into(), "txtf @docs/notes.txt ## Display a teleport savepoint file".into());
+
+    m.insert("help.report.txtf_example4".into(), "txtf src ## Pick a supported file from src to display".into());
 
     m.insert("help.size.example1".into(), "size ## Show current directory size".into());
 
@@ -5241,6 +5412,10 @@ pub fn build_map() -> HashMap<String, String> {
     m.insert("help.search.example5".into(), "locate README ## Search files & dirs for 'README'".into());
 
     m.insert("help.search.example6".into(), "qur *.rs -s \"TODO\" -dp ## Query glob + grep-like display".into());
+
+    m.insert("help.search.example7".into(), "gs TODO < app.log ## Search piped/redirected text".into());
+
+    m.insert("help.search.example8".into(), "gs error\\|warning ## OR search: match either term (a\\|b)".into());
 
     m.insert("help.context.qur.needs_glob".into(), "qur <glob> [-s \"pattern\"] [-rp \"new\"] [-dp] [-d <n>] [-l <n>]".into());
     m.insert("help.context.qur.select_value".into(), "qur -s <pattern>  (content pattern, case-insensitive)".into());
@@ -5630,11 +5805,21 @@ pub fn build_map() -> HashMap<String, String> {
 
     m.insert("misc.gs.example5".into(), " gs main -d 5 -l 10 # show only first 10 matches".into());
 
+    m.insert("misc.gs.example6".into(), " gs main -p \"*.rs\" # only search files matching glob".into());
+
+    m.insert("misc.gs.example7".into(), " gs main -s size # sort by file size (line|path|size, bare -s = line)".into());
+
+    m.insert("misc.gs.example8".into(), " gs error\\|warning # OR search: match either term (a\\|b)".into());
+
+    m.insert("misc.gs.no_pipe_path".into(), "gs: -p can't be used with piped input (pipe carries text, not files)".into());
+
+    m.insert("misc.gs.pipe_sort_only_line".into(), "gs: only -s line works with piped input (path/size need files)".into());
+
     m.insert("misc.gs.searching".into(), "Searching contents...".into());
 
     m.insert("misc.gs.many_results".into(), "gs: {} matches found, showing first 20,000. Narrow your search.".into());
 
-    m.insert("misc.gs.usage".into(), "Usage: gs <pattern> [-d <depth>] [-l <limit>] [-i]".into());
+    m.insert("misc.gs.usage".into(), "Usage: gs <pattern> [-d <depth>] [-l <limit>] [-i] [-p <glob>]... [-s [line|path|size]]".into());
 
     m.insert("misc.qur.usage".into(), "Usage: qur <glob> [-s \"pattern\"] [-rp \"replacement\"] [-dp] [-d <depth>] [-l <limit>]".into());
     m.insert("misc.qur.example1".into(), " qur *.* # list files matching glob (recursive)".into());
@@ -5657,6 +5842,16 @@ pub fn build_map() -> HashMap<String, String> {
     m.insert("misc.qur.display_needs_select".into(), "qur: -dp needs -s \"<pattern>\" (e.g. qur *.* -s \"foo\" -dp).".into());
     m.insert("misc.qur.empty_select".into(), "qur: -s needs a pattern (e.g. -s \"foo\").".into());
     m.insert("misc.qur.empty_replace".into(), "qur: -rp needs a replacement (e.g. -rp \"bar\").".into());
+    m.insert("misc.qur.stdin_needs_select".into(), "qur: piped input needs -s \"<pattern>\" (e.g. cmd | qur -s \"foo\").".into());
+    m.insert("misc.head.usage".into(), "Usage: head [N] [file]  (N defaults to 10; reads piped input when no file)".into());
+    m.insert("misc.tail.usage".into(), "Usage: tail [N] [file]  (N defaults to 10; reads piped input when no file)".into());
+    m.insert("misc.betw.usage".into(), "Usage: betw A:B [file]  (A:B is 1-based inclusive; reads piped input when no file)".into());
+    m.insert("misc.window.bad_arg".into(), "{}: unexpected argument '{}'".into());
+    m.insert("misc.window.no_input".into(), "{}: no input (pipe something in or give a file)".into());
+    m.insert("misc.sort.usage".into(), "Usage: sort [-r] [-n] [-u] [-f] [file]  (reads piped input when no file)".into());
+    m.insert("misc.sort.bad_arg".into(), "sort: unknown option '{}'".into());
+    m.insert("misc.rev.usage".into(), "Usage: rev [file]  (reverses each line's characters; reads piped input when no file)".into());
+    m.insert("misc.rev.bad_arg".into(), "rev: unexpected argument '{}' (usage: rev [file])".into());
 
     m.insert("misc.wi.not_dir".into(), "wi: not a directory: '{}'".into());
 
@@ -5701,6 +5896,8 @@ pub fn build_map() -> HashMap<String, String> {
         "You are already in editor".into(),
     );
 
+    m.insert("misc.ne.create_failed".into(), "Could not create template: {}".into());
+
     m.insert("misc.ne.created_hyper".into(), "Created hyper project: {}".into());
 
     m.insert("misc.ne.created_super".into(), "Created super template: {}".into());
@@ -5709,7 +5906,20 @@ pub fn build_map() -> HashMap<String, String> {
 
     m.insert("misc.ne.editor_error".into(), "Editor error: {}".into());
 
+    m.insert(
+        "misc.ne.file_missing".into(),
+        "File not found: {}. Use --init <file> or --super <file> to create it.".into(),
+    );
+
     m.insert("misc.ne.hyper_error".into(), "Hyper project error: {}".into());
+
+    m.insert("misc.ne.missing_file".into(), "ne: missing file operand".into());
+
+    m.insert("misc.ne.one_file".into(), "Only one file can be created at a time".into());
+
+    m.insert("misc.ne.open_not_created".into(), "-I file must be one of the files being created: {}".into());
+
+    m.insert("misc.ne.usage_open".into(), "Usage: -I <file> must be the last argument (exactly one file)".into());
 
     m.insert("misc.ne.opened_welcome".into(), "Opened welcome screen in {}".into());
 
@@ -5730,6 +5940,14 @@ pub fn build_map() -> HashMap<String, String> {
     m.insert("misc.rmd.not_exist".into(), "rmd: '{}' does not exist".into());
 
     m.insert("misc.rmd.removed".into(), "Removed directory: {}".into());
+
+    m.insert("misc.rmd.no_match".into(), "rmd: no directories match '{}'".into());
+
+    m.insert("misc.rmd.pattern_matches".into(), "{} dir(s) match '{}':".into());
+
+    m.insert("misc.rmd.confirm_delete".into(), "Delete {} dir(s)?".into());
+
+    m.insert("misc.rmd.cancelled".into(), "Cancelled.".into());
 
     m.insert("misc.rmf.error".into(), "rmf: {}: {}".into());
 
@@ -5787,7 +6005,13 @@ pub fn build_map() -> HashMap<String, String> {
 
     m.insert("misc.mv.not_exist".into(), "mv: source not found: '{}'".into());
 
-    m.insert("misc.mv.usage".into(), "Usage: mv <src|@tp> <dst|@tp> [-f]".into());
+    m.insert("misc.mv.no_match".into(), "mv: no files match '{}'".into());
+
+    m.insert("misc.mv.dst_dir".into(), "mv: destination must be a directory: '{}'".into());
+
+    m.insert("misc.mv.wild_done".into(), "Moved {} file(s) to '{}'".into());
+
+    m.insert("misc.mv.usage".into(), "Usage: mv <src|@tp|pattern> <dst|@tp> [-f]".into());
 
     m.insert("misc.cp.error".into(), "cp: {}".into());
 
@@ -5799,9 +6023,15 @@ pub fn build_map() -> HashMap<String, String> {
 
     m.insert("misc.cp.not_exist".into(), "cp: source not found: '{}'".into());
 
+    m.insert("misc.cp.no_match".into(), "cp: no files match '{}'".into());
+
+    m.insert("misc.cp.dst_dir".into(), "cp: destination must be a directory: '{}'".into());
+
+    m.insert("misc.cp.wild_done".into(), "Copied {} file(s) to '{}'".into());
+
     m.insert("misc.cp.same".into(), "cp: source and target are the same file: '{}'".into());
 
-    m.insert("misc.cp.usage".into(), "Usage: cp <src|@tp> <dst|@tp> [-f]".into());
+    m.insert("misc.cp.usage".into(), "Usage: cp <src|@tp|pattern> <dst|@tp> [-f]".into());
 
     m.insert("misc.say.example1".into(), " say \"hello world\" --loop 5 -n # 5 lines".into());
 
@@ -6676,8 +6906,6 @@ pub fn build_map() -> HashMap<String, String> {
 
     m.insert("ranfile.available_title".into(), "Available targets:".into());
 
-    m.insert("ranfile.has_command".into(), " (has command)".into());
-
     m.insert("ranfile.depends_on".into(), " ─▶ depends on: ".into());
 
     m.insert("ranfile.runner.hint".into(), "Run {} to see available targets.".into());
@@ -7058,6 +7286,20 @@ pub fn build_map() -> HashMap<String, String> {
 
     m.insert("help.config.dir_view".into(), "config dir_view ON|OFF ## Show/hide directory tree in shell".into());
 
+    m.insert("help.config.update_check".into(), "config update_check ON|OFF ## Show/hide daily new-release notice (alias: uc)".into());
+
+    m.insert("msg.setUC.status".into(), "Update check: {}".into());
+
+    m.insert("msg.setUC.on".into(), "Update check enabled (daily new-release notice).".into());
+
+    m.insert("msg.setUC.off".into(), "Update check disabled.".into());
+
+    m.insert("msg.setUC.error".into(), "Usage: config update_check ON|OFF".into());
+
+    m.insert("msg.showcg.label_update_check".into(), "Update check".into());
+
+    m.insert("msg.update.available".into(), "New NTC {} available (you have {}) — run 'ntc --upgrade' in {} or see {}".into());
+
     m.insert("help.config.serve".into(), "config serve [service] [--port-default N] [--bind-default ADDR] ## Per-service serve defaults (alias: serve config)".into());
 
     m.insert("cmd.config.serve.title".into(), "Serve Config (per-service defaults)".into());
@@ -7360,7 +7602,163 @@ pub fn build_map() -> HashMap<String, String> {
 
     m.insert("cmd.tmprt.sensors.debug_none".into(), "LibreHardwareMonitor is not installed - run 'tmprt sensors install' first.".into());
 
-    m
+    // ========== fake (fake data generator) ==========
+    m.insert("cmd.fake.usage_title".into(), "fake - generate fake/random data".into());
+    m.insert("cmd.fake.usage_gen".into(), "  fake gen <types> [-n N] [-f fmt] [-s seed] [-o file] [-g group] [-l locale] [-u [cols]]".into());
+    m.insert("cmd.fake.usage_types".into(), "  fake types [-s] [pattern]      List every type (fuzzy search with -s)".into());
+    m.insert("cmd.fake.usage_locales".into(), "  fake locales                   List the supported --locale codes".into());
+    m.insert("cmd.fake.usage_group".into(), "  fake group <sub>               Manage saved column groups".into());
+    m.insert("cmd.fake.usage_help".into(), "  fake help                      Show this help".into());
+    m.insert("cmd.fake.options_title".into(), "Options (fake gen):".into());
+    m.insert("cmd.fake.opt_count".into(), "  -n, --count <N>       Rows to generate (default 1)".into());
+    m.insert("cmd.fake.opt_format".into(), "  -f, --format <fmt>    json | txt | sql | csv | xlsx (default txt)".into());
+    m.insert("cmd.fake.opt_seed".into(), "  -s, --seed <N>        Seed for reproducible output".into());
+    m.insert("cmd.fake.opt_output".into(), "  -o, --output <file>   Write to a file (extension picks the format)".into());
+    m.insert("cmd.fake.opt_group".into(), "  -g, --group <name>    Generate from a saved group instead of <types>".into());
+    m.insert("cmd.fake.opt_locale".into(), "  -l, --locale <code>   Locale pools: en_US en_GB zh_CN th_TH lo_LA".into());
+    m.insert("cmd.fake.opt_unique".into(), "  -u, --unique [cols]   Make the whole row (or the named cols) unique".into());
+    m.insert("cmd.fake.examples_header".into(), "Examples:".into());
+    m.insert("cmd.fake.example1".into(), "  fake gen name,email,city -n 3".into());
+    m.insert("cmd.fake.example2".into(), "  fake gen uuid,age -f json -o rows.json".into());
+    m.insert("cmd.fake.example3".into(), "  fake group add users [username as name, year as age]".into());
+    m.insert("cmd.fake.example4".into(), "  fake gen -g users -f sql -n 10".into());
+    m.insert("cmd.fake.unknown_sub".into(), "Unknown fake subcommand: '{}'".into());
 
+    // ---- fake gen ----
+    m.insert("cmd.fake.gen.wrote".into(), "Wrote {} row(s) to {} ({})".into());
+    m.insert("cmd.fake.gen.unknown_ext".into(), "Unknown output extension '{}' (use -f to set the format)".into());
+    m.insert("cmd.fake.gen.xlsx_needs_output".into(), "xlsx output needs -o <file.xlsx> (a binary workbook cannot be printed to the terminal)".into());
+    m.insert("cmd.fake.gen.count_usage".into(), "fake gen: -n/--count needs a number".into());
+    m.insert("cmd.fake.gen.bad_count".into(), "fake gen: invalid count '{}' (must be a positive integer)".into());
+    m.insert("cmd.fake.gen.format_usage".into(), "fake gen: -f/--format needs a value".into());
+    m.insert("cmd.fake.gen.bad_format".into(), "fake gen: unknown format '{}' (json|txt|sql|csv|xlsx)".into());
+    m.insert("cmd.fake.gen.seed_usage".into(), "fake gen: -s/--seed needs a number".into());
+    m.insert("cmd.fake.gen.bad_seed".into(), "fake gen: invalid seed '{}' (must be an integer)".into());
+    m.insert("cmd.fake.gen.output_usage".into(), "fake gen: -o/--output needs a file path".into());
+    m.insert("cmd.fake.gen.group_usage".into(), "fake gen: -g/--group needs a group name".into());
+    m.insert("cmd.fake.gen.unknown_flag".into(), "fake gen: unknown option '{}'".into());
+    m.insert("cmd.fake.gen.group_and_types".into(), "fake gen: <types> and -g/--group cannot be used together".into());
+    m.insert("cmd.fake.gen.need_input".into(), "fake gen: give one or more types, or use -g/--group".into());
+    m.insert("cmd.fake.gen.unknown_type".into(), "fake gen: unknown type '{}' (run 'fake types' to list them)".into());
+    m.insert("cmd.fake.gen.unique_with_group".into(), "fake gen: --unique cannot be used with -g/--group (mark columns with a trailing '!' in the group instead)".into());
+    m.insert("cmd.fake.gen.unique_unknown_col".into(), "fake gen: --unique names unknown column '{}'".into());
+    m.insert("cmd.fake.gen.unique_exhausted".into(), "fake gen: could not generate a unique value for '{}' (the value space is too small)".into());
+    m.insert("cmd.fake.gen.locale_usage".into(), "fake gen: -l/--locale needs a locale code (en_US en_GB zh_CN th_TH lo_LA)".into());
+    m.insert("cmd.fake.gen.bad_locale".into(), "fake gen: unknown locale '{}' (en_US en_GB zh_CN th_TH lo_LA)".into());
+    m.insert("cmd.fake.gen.ref_cycle".into(), "fake gen: circular group reference through '{}'".into());
+    m.insert("cmd.fake.gen.ref_unknown_col".into(), "fake gen: referenced column '{}' not found in group '{}'".into());
+
+    // ---- fake types ----
+    m.insert("cmd.fake.types.title".into(), "Available fake types ({}):".into());
+    m.insert("cmd.fake.types.none".into(), "No type matches '{}'.".into());
+    m.insert("cmd.fake.types.matches".into(), "Types matching '{}' ({}):".into());
+    m.insert("cmd.fake.locales.title".into(), "Supported locales ({}):".into());
+    m.insert("cmd.fake.locales.note".into(), "Use with: fake gen <types> --locale <code>".into());
+
+    // ---- fake group ----
+    m.insert("cmd.fake.group.usage_title".into(), "fake group - manage saved column groups:".into());
+    m.insert("cmd.fake.group.help_add".into(), "  fake group add <name> [alias as type, ...]    Create a group".into());
+    m.insert("cmd.fake.group.help_edit".into(), "  fake group edit <name> [alias as type, ...]   Replace a group's columns".into());
+    m.insert("cmd.fake.group.help_rm".into(), "  fake group rm <name>                          Delete a group".into());
+    m.insert("cmd.fake.group.help_rnm".into(), "  fake group rnm <old> <new>                    Rename a group".into());
+    m.insert("cmd.fake.group.help_ls".into(), "  fake group ls [pattern]                       List groups (glob, e.g. u*)".into());
+    m.insert("cmd.fake.group.help_info".into(), "  fake group info <name>                        Show a group's columns".into());
+    m.insert("cmd.fake.group.help_clear".into(), "  fake group clear [-f]                         Delete every group".into());
+    m.insert("cmd.fake.group.help_export".into(), "  fake group export <name>|--all [-o file]       Share groups as .ntc_fake".into());
+    m.insert("cmd.fake.group.help_import".into(), "  fake group import <file> [--force] [--prefix p]  Load groups from a file".into());
+    m.insert("cmd.fake.group.example1".into(), "  fake group add users [username as name, email, year as age]".into());
+    m.insert("cmd.fake.group.example2".into(), "  fake gen -g users -f sql -n 10".into());
+    m.insert("cmd.fake.group.unknown_sub".into(), "Unknown 'fake group' subcommand: '{}'".into());
+    m.insert("cmd.fake.group.no_columns".into(), "give at least one column, e.g. [username as name, year as age]".into());
+    m.insert("cmd.fake.group.bad_column".into(), "could not parse column '{}' (expected 'alias as type')".into());
+    m.insert("cmd.fake.group.unknown_type".into(), "unknown type '{}' (run 'fake types' to list them)".into());
+    m.insert("cmd.fake.group.add_usage".into(), "Usage: fake group add <name> [alias as type, ...]".into());
+    m.insert("cmd.fake.group.bad_name".into(), "invalid group name '{}' (use letters, digits, '_' or '-')".into());
+    m.insert("cmd.fake.group.not_found".into(), "no fake group named '{}'".into());
+    m.insert("cmd.fake.group.exists".into(), "fake group '{}' already exists".into());
+    m.insert("cmd.fake.group.scope_local".into(), "local".into());
+    m.insert("cmd.fake.group.scope_global".into(), "global".into());
+    m.insert("cmd.fake.group.added".into(), "Added group '{}' with {} column(s) to {} config".into());
+    m.insert("cmd.fake.group.updated".into(), "Updated group '{}' with {} column(s) in {} config".into());
+    m.insert("cmd.fake.group.rm_usage".into(), "Usage: fake group rm <name>".into());
+    m.insert("cmd.fake.group.removed".into(), "Removed group '{}'".into());
+    m.insert("cmd.fake.group.rnm_usage".into(), "Usage: fake group rnm <old> <new>".into());
+    m.insert("cmd.fake.group.renamed".into(), "Renamed group '{}' to '{}'".into());
+    m.insert("cmd.fake.group.ls_empty".into(), "No fake groups saved yet.".into());
+    m.insert("cmd.fake.group.ls_none".into(), "No fake group matches '{}'.".into());
+    m.insert("cmd.fake.group.info_usage".into(), "Usage: fake group info <name>".into());
+    m.insert("cmd.fake.group.info_title".into(), "Group '{}':".into());
+    m.insert("cmd.fake.group.info_count".into(), "{} column(s)".into());
+    m.insert("cmd.fake.group.clear_empty".into(), "No fake groups to clear.".into());
+    m.insert("cmd.fake.group.clear_prompt".into(), "Remove {} fake group(s)? [y/N] ".into());
+    m.insert("cmd.fake.group.clear_cancelled".into(), "Cancelled.".into());
+    m.insert("cmd.fake.group.cleared".into(), "Cleared {} fake group(s).".into());
+    m.insert("cmd.fake.group.bad_ref".into(), "invalid reference '{}' (expected ref:<group>.<column>)".into());
+    m.insert("cmd.fake.group.ref_col_missing".into(), "referenced column '{}' not found in group '{}'".into());
+    m.insert("cmd.fake.group.export_usage".into(), "Usage: fake group export <name>|--all [-o file]".into());
+    m.insert("cmd.fake.group.import_usage".into(), "Usage: fake group import <file> [--force] [--prefix p]".into());
+    m.insert("cmd.fake.group.exported".into(), "Exported {} group(s) to {}".into());
+    m.insert("cmd.fake.group.import_ok".into(), "Imported {} group(s).".into());
+    m.insert("cmd.fake.group.import_exists".into(), "group(s) already exist: {} (use --force to overwrite)".into());
+    m.insert("cmd.fake.group.import_bad_file".into(), "could not import groups: {}".into());
+
+    // ---- help.fake ----
+    m.insert("help.fake.title".into(), "fake - generate fake/random data".into());
+    m.insert("help.fake.gen".into(), "  fake gen <types> [-n N] [-f fmt] [-s seed] [-o file]   Generate rows".into());
+    m.insert("help.fake.gen_options".into(), "  formats: json | txt | sql | csv | xlsx  (default: txt table)".into());
+    m.insert("help.fake.gen_group".into(), "  fake gen -g <group> ...                                Generate from a saved group".into());
+    m.insert("help.fake.gen_unique".into(), "  -u, --unique [cols]                                    Unique rows or named columns".into());
+    m.insert("help.fake.gen_locale".into(), "  -l, --locale <code>                                    Locale pools (en_US en_GB zh_CN th_TH lo_LA)".into());
+    m.insert("help.fake.types".into(), "  fake types                                             List every type".into());
+    m.insert("help.fake.types_search".into(), "  fake types -s <pattern>                                Fuzzy-search types".into());
+    m.insert("help.fake.locales".into(), "  fake locales                                           List --locale codes".into());
+    m.insert("help.fake.group_add".into(), "  fake group add <name> [alias as type, ...]             Create a group".into());
+    m.insert("help.fake.group_edit".into(), "  fake group edit <name> [alias as type, ...]            Replace a group's columns".into());
+    m.insert("help.fake.group_rm".into(), "  fake group rm <name>                                   Delete a group".into());
+    m.insert("help.fake.group_rnm".into(), "  fake group rnm <old> <new>                             Rename a group".into());
+    m.insert("help.fake.group_ls".into(), "  fake group ls [pattern]                                List groups (glob, e.g. u*)".into());
+    m.insert("help.fake.group_info".into(), "  fake group info <name>                                 Show a group's columns".into());
+    m.insert("help.fake.group_clear".into(), "  fake group clear [-f]                                  Delete every group".into());
+    m.insert("help.fake.group_export".into(), "  fake group export <name>|--all [-o file]               Share groups as .ntc_fake".into());
+    m.insert("help.fake.group_import".into(), "  fake group import <file> [--force] [--prefix p]        Load groups from a file".into());
+    m.insert("help.fake.group_ref".into(), "  columns: 'alias as type', 'type !' = unique, 'alias as ref:group.col'".into());
+    m.insert("help.fake.help".into(), "  fake help                                              Show this help".into());
+    m.insert("help.fake.example1".into(), "fake gen name,email,city -n 5 ## txt table".into());
+    m.insert("help.fake.example2".into(), "fake gen uuid,age -f json -o rows.json".into());
+    m.insert("help.fake.example3".into(), "fake group add users [username as name, year as age]".into());
+    m.insert("help.fake.example4".into(), "fake gen -g users -f sql -n 10 ## INSERT INTO users ...".into());
+
+
+    m.insert("alias.ral.section_global".into(), "[global]".into());
+    m.insert("alias.ral.section_local".into(), "[local]".into());
+    m.insert("alias.ral.no_local".into(), "(no local config in this directory)".into());
+    m.insert("alias.ral.none".into(), "(none)".into());
+    m.insert("alias.ral.shadowed".into(), "(shadowed by local)".into());
+    m.insert("alias.ral.shadowed_global".into(), "Global entry (shadowed by local):".into());
+    m.insert("alias.ral.global_active_again".into(), "The global alias '{}' is still defined and is active again now.".into());
+    m.insert("alias.ral.global_only_hint".into(), "Alias '{}' is only defined in the global config. Use 'ral rm -g {}' to remove it from the global config.".into());
+    m.insert("alias.ral.local_priority_note".into(), "Note: the local alias '{}' in ntconfig.toml takes priority over this global alias.".into());
+    m.insert("alias.ral.scope_local".into(), "local config".into());
+    m.insert("alias.ral.scope_global".into(), "global config".into());
+    m.insert("alias.ral.cls_target".into(), "Target: {}".into());
+    m.insert("cmd.igcared.section_global".into(), "[global]".into());
+    m.insert("cmd.igcared.section_local".into(), "[local]".into());
+    m.insert("cmd.igcared.cared_dirs".into(), "Cared directories:".into());
+    m.insert("cmd.igcared.cared_exts".into(), "Cared extensions:".into());
+    m.insert("cmd.igcared.cared_files".into(), "Cared files:".into());
+    m.insert("cmd.igcared.none".into(), "(none)".into());
+    m.insert("cmd.igcared.no_local".into(), "(no local config in this directory)".into());
+    m.insert("cmd.igcared.scope_help".into(), "Local entries take priority; global entries keep working and the global config is never changed.".into());
+    m.insert("cmd.ignore.scope_local".into(), "local config".into());
+    m.insert("cmd.ignore.scope_global".into(), "global config".into());
+    m.insert("cmd.ignore.scope_help".into(), "Use '-g' / '--global' to target the global config (inside a folder with ntconfig.toml).".into());
+    m.insert("cmd.ignore.scope_target".into(), "Target: {}".into());
+    m.insert("cmd.care.scope_help".into(), "Use '-g' / '--global' to target the global config (inside a folder with ntconfig.toml).".into());
+    m.insert("cmd.config.local.init_all_removed".into(), "'local init --all' was removed - a local config can no longer copy the global settings. Use 'local init' for the template.".into());
+    m.insert("cmd.config.local.precedence_hint".into(), "Local entries take priority; global entries keep working and the global config is never changed.".into());
+    m.insert("igcare_export.cared_dirs".into(), "Cared directories".into());
+    m.insert("igcare_export.cared_extensions".into(), "Cared extensions".into());
+    m.insert("igcare_export.cared_files".into(), "Cared files".into());
+    m
 }
 

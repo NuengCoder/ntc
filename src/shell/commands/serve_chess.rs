@@ -139,10 +139,7 @@ fn cookie_session_id(header: &str) -> Option<String> {
         let (k, v) = part.split_once('=')?;
         if k.trim() == SESSION_COOKIE {
             let id = v.trim().trim_matches('"');
-            if !id.is_empty()
-                && id.len() <= 64
-                && id.bytes().all(|b| b.is_ascii_alphanumeric())
-            {
+            if !id.is_empty() && id.len() <= 64 && id.bytes().all(|b| b.is_ascii_alphanumeric()) {
                 return Some(id.to_string());
             }
             return None;
@@ -159,7 +156,10 @@ fn inject_cookie(resp: Vec<u8>, id: &str) -> Vec<u8> {
     let pos = resp.windows(4).position(|w| w == needle);
     match pos {
         Some(i) => {
-            let line = format!("Set-Cookie: {}={}; Path=/; SameSite=Lax\r\n", SESSION_COOKIE, id);
+            let line = format!(
+                "Set-Cookie: {}={}; Path=/; SameSite=Lax\r\n",
+                SESSION_COOKIE, id
+            );
             let mut out = Vec::with_capacity(resp.len() + line.len());
             out.extend_from_slice(&resp[..i + 2]);
             out.extend_from_slice(line.as_bytes());
@@ -576,7 +576,11 @@ impl Game {
     /// No clock tick: restored clocks are authoritative, `last_tick`
     /// restarts now.
     pub fn undo(&mut self) -> Result<MoveRecord, String> {
-        let undone = self.moves.last().cloned().ok_or("nothing_to_undo".to_string())?;
+        let undone = self
+            .moves
+            .last()
+            .cloned()
+            .ok_or("nothing_to_undo".to_string())?;
         let snap = self.history.pop().ok_or("nothing_to_undo".to_string())?;
         self.pos = snap.pos;
         self.moves = snap.moves;
@@ -679,7 +683,8 @@ fn board_json(pos: &Position) -> Vec<serde_json::Value> {
     board
 }
 
-fn parse_color(s: &str) -> Option<Color> {    match s.trim().to_lowercase().as_str() {
+fn parse_color(s: &str) -> Option<Color> {
+    match s.trim().to_lowercase().as_str() {
         "w" | "white" => Some(Color::White),
         "b" | "black" => Some(Color::Black),
         _ => None,
@@ -885,9 +890,7 @@ fn handle_chess_connection(
     web: Option<PathBuf>,
     shutdown: Arc<AtomicBool>,
 ) {
-    let _ = stream.set_read_timeout(Some(std::time::Duration::from_secs(
-        KEEPALIVE_IDLE_SECS,
-    )));
+    let _ = stream.set_read_timeout(Some(std::time::Duration::from_secs(KEEPALIVE_IDLE_SECS)));
     let peer = stream
         .peer_addr()
         .map(|a| a.ip().to_string())
@@ -1017,7 +1020,11 @@ fn handle_chess_connection(
             (
                 405,
                 set_connection(
-                    super::serve::response_bytes(405, "text/plain", b"405 Method Not Allowed".to_vec()),
+                    super::serve::response_bytes(
+                        405,
+                        "text/plain",
+                        b"405 Method Not Allowed".to_vec(),
+                    ),
                     keep,
                 ),
             )
@@ -1437,7 +1444,10 @@ mod tests {
         // Board: bishop back home on f1.
         let board = state["board"].as_array().unwrap();
         assert_eq!(board[parse_sq("f1").unwrap() as usize], "wB");
-        assert_eq!(board[parse_sq("c4").unwrap() as usize], serde_json::Value::Null);
+        assert_eq!(
+            board[parse_sq("c4").unwrap() as usize],
+            serde_json::Value::Null
+        );
         // Second undo pops e5.
         let undone = g.undo().unwrap();
         assert_eq!(undone.san, "e5");
@@ -1490,40 +1500,37 @@ mod tests {
         g.do_move(parse_sq("e7").unwrap(), parse_sq("e5").unwrap(), None)
             .unwrap();
         // Ply 0 = initial: e-pawns home, white to move, no last move.
-        let p0: serde_json::Value =
-            serde_json::from_slice(&g.position_json(0).unwrap()).unwrap();
+        let p0: serde_json::Value = serde_json::from_slice(&g.position_json(0).unwrap()).unwrap();
         assert_eq!(p0["turn"], "w");
         assert!(p0["last_move"].is_null());
         let b0 = p0["board"].as_array().unwrap();
         assert_eq!(b0[parse_sq("e2").unwrap() as usize], "wP");
         // Ply 1 = after e4: e2 empty, e4 pawn, black to move.
-        let p1: serde_json::Value =
-            serde_json::from_slice(&g.position_json(1).unwrap()).unwrap();
+        let p1: serde_json::Value = serde_json::from_slice(&g.position_json(1).unwrap()).unwrap();
         assert_eq!(p1["turn"], "b");
         assert_eq!(p1["last_move"]["san"], "e4");
         assert_eq!(p1["last_move"]["from"], "e2");
         let b1 = p1["board"].as_array().unwrap();
-        assert_eq!(b1[parse_sq("e2").unwrap() as usize], serde_json::Value::Null);
+        assert_eq!(
+            b1[parse_sq("e2").unwrap() as usize],
+            serde_json::Value::Null
+        );
         assert_eq!(b1[parse_sq("e4").unwrap() as usize], "wP");
         // Ply 2 = live position (equals current board).
-        let p2: serde_json::Value =
-            serde_json::from_slice(&g.position_json(2).unwrap()).unwrap();
+        let p2: serde_json::Value = serde_json::from_slice(&g.position_json(2).unwrap()).unwrap();
         assert_eq!(p2["last_move"]["san"], "e5");
-        let live: serde_json::Value =
-            serde_json::from_slice(&g.state_json()).unwrap();
+        let live: serde_json::Value = serde_json::from_slice(&g.state_json()).unwrap();
         assert_eq!(p2["board"], live["board"]);
         // Out of range, and history shrinks on undo.
         assert!(g.position_json(3).is_none());
         g.undo().unwrap();
         assert!(g.position_json(2).is_none());
-        let p1b: serde_json::Value =
-            serde_json::from_slice(&g.position_json(1).unwrap()).unwrap();
+        let p1b: serde_json::Value = serde_json::from_slice(&g.position_json(1).unwrap()).unwrap();
         assert_eq!(p1b["last_move"]["san"], "e4");
         // Reset clears history: only ply 0 (== fresh initial) remains.
         assert!(g.reset("10+0").is_ok());
         assert!(g.position_json(1).is_none());
-        let p0b: serde_json::Value =
-            serde_json::from_slice(&g.position_json(0).unwrap()).unwrap();
+        let p0b: serde_json::Value = serde_json::from_slice(&g.position_json(0).unwrap()).unwrap();
         assert_eq!(p0b["board"].as_array().unwrap(), b0);
     }
 
@@ -1661,8 +1668,7 @@ mod tests {
         assert_ne!(id_a, id_b.unwrap());
         {
             let mut g = b.lock().unwrap_or_else(|e| e.into_inner());
-            let state: serde_json::Value =
-                serde_json::from_slice(&g.state_json()).unwrap();
+            let state: serde_json::Value = serde_json::from_slice(&g.state_json()).unwrap();
             // BUG repro: before sessions, B would have seen A's e4.
             assert_eq!(state["moves"].as_array().unwrap().len(), 0);
         }
@@ -1692,9 +1698,7 @@ mod tests {
     }
 
     /// Read one framed response: status line, headers, exact body.
-    fn read_one(
-        sock: &mut std::net::TcpStream,
-    ) -> (String, Vec<(String, String)>, Vec<u8>) {
+    fn read_one(sock: &mut std::net::TcpStream) -> (String, Vec<(String, String)>, Vec<u8>) {
         use std::io::{BufRead, BufReader, Read};
         let mut status = String::new();
         let mut headers = Vec::new();
@@ -1801,7 +1805,9 @@ mod tests {
         );
         let (st, hd, body) = read_one(&mut sock);
         assert!(st.contains("200"), "got: {}", st);
-        assert!(hd.iter().all(|(k, _)| !k.eq_ignore_ascii_case("set-cookie")));
+        assert!(hd
+            .iter()
+            .all(|(k, _)| !k.eq_ignore_ascii_case("set-cookie")));
         let v: serde_json::Value = serde_json::from_slice(&body).unwrap();
         assert_eq!(v["moves"].as_array().unwrap().len(), 1);
 

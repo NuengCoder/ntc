@@ -71,7 +71,6 @@ pub fn fill(m: &mut HashMap<String, String>) {
     m.insert("ran.section_vars".into(), "ตัวแปร:".into());
     m.insert("ran.terminated".into(), "คำสั่งสิ้นสุด (Ctrl+C)".into());
     m.insert("ranfile.available_title".into(), "target ที่มี:".into());
-    m.insert("ranfile.has_command".into(), " (มีคำสั่ง)".into());
     m.insert("ranfile.depends_on".into(), " ─▶ ขึ้นอยู่กับ: ".into());
     m.insert("ranfile.runner.hint".into(), "เรียก {} เพื่อดู target ที่มี.".into());
     m.insert("report.generating_html".into(), "\u{1F4CA} กำลังสร้างรายงาน HTML สำหรับ: {}".into());
@@ -263,6 +262,7 @@ pub fn fill(m: &mut HashMap<String, String>) {
     m.insert("help.config.git".into(), "config git ON|OFF ## เปิด/ปิด git integration (prompt + สัญลักษณ์)".into());
 
     m.insert("help.config.dir_view".into(), "config dir_view ON|OFF ## แสดง/ซ่อนแผนผังไดเรกทอรีใน shell".into());
+    m.insert("help.config.update_check".into(), "config update_check ON|OFF ## แสดง/ซ่อนแจ้งเตือนเวอร์ชันใหม่รายวัน (alias: uc)".into());
     m.insert("help.config.serve".into(), "config serve [บริการ] [--port-default พอร์ต] [--bind-default ที่อยู่] ## ค่าเริ่มต้น serve รายบริการ (alias: serve config)".into());
     m.insert("cmd.config.serve.title".into(), "การตั้งค่า Serve (ค่าเริ่มต้นรายบริการ)".into());
     m.insert("cmd.config.serve.status".into(), "  {}: {}:{}".into());
@@ -321,6 +321,11 @@ pub fn fill(m: &mut HashMap<String, String>) {
     m.insert("msg.setDV.on".into(), "เปิดใช้ Dir view แล้ว".into());
     m.insert("msg.setDV.off".into(), "ปิด Dir view แล้ว".into());
     m.insert("msg.setDV.error".into(), "การใช้งาน: config dir_view ON|OFF".into());
+    m.insert("msg.setUC.status".into(), "Update check: {}".into());
+    m.insert("msg.setUC.on".into(), "เปิดแจ้งเตือนเวอร์ชันใหม่รายวันแล้ว".into());
+    m.insert("msg.setUC.off".into(), "ปิดแจ้งเตือนเวอร์ชันใหม่แล้ว".into());
+    m.insert("msg.setUC.error".into(), "การใช้งาน: config update_check ON|OFF".into());
+    m.insert("msg.update.available".into(), "มี NTC {} ใหม่ (คุณใช้ {}) — รัน 'ntc --upgrade' ใน {} หรือดู {}".into());
     m.insert("cmd.tmprt.unknown_sub".into(), "ไม่รู้จักคำสั่งย่อยของ tmprt: {}".into());
     m.insert("cmd.spec.other".into(), "อื่นๆ".into());
     m.insert("cmd.spec.title".into(), "สเปกระบบ".into());

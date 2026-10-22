@@ -279,6 +279,20 @@ body::after {
 }
 .act-btn:hover { color: var(--accent2); background: rgba(255,110,199,.1); }
 .act-btn.del:hover { color: #ff4444; background: rgba(255,68,68,.1); }
+.act-btn:disabled { opacity: .7; cursor: wait; }
+
+.file-entry { border-bottom: 1px solid var(--border); }
+.file-entry:last-child { border-bottom: none; }
+.file-entry .file-row { border-bottom: none; }
+.dl-progress-bar-bg {
+  height: 4px; background: var(--border); border-radius: 2px; overflow: hidden;
+  margin: 0 12px 8px 44px;
+}
+.dl-progress-bar-fill {
+  height: 100%; border-radius: 2px;
+  background: linear-gradient(90deg, var(--accent), var(--accent2));
+  transition: width .15s ease;
+}
 
 .overlay {
   position: fixed; inset: 0; background: rgba(0,0,0,.7);

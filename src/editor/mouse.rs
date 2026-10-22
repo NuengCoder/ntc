@@ -81,10 +81,27 @@ impl Editor {
         Some((line_idx, byte))
     }
 
+    /// Clickable spans `(start, end)` of the tab bar in screen columns.
+    /// The final cell of each span is the close button; the rest of the
+    /// span selects that tab. Mirrors the tabs drawn by `render_tab_bar`.
+    pub(crate) fn tab_hit_zones(&self) -> Vec<(usize, usize)> {
+        let mut zones = Vec::new();
+        let right = self.term_w;
+        let mut x = self.editor_offset();
+        for tab in &self.tabs {
+            let full_w = self.tab_label(tab).chars().count() + 1;
+            if full_w > right.saturating_sub(x) {
+                break;
+            }
+            zones.push((x, x + full_w));
+            x += full_w;
+        }
+        zones
+    }
+
     pub(crate) fn handle_mouse(&mut self, m: MouseEvent) {
-        // Mouse is optional and limited to the text field and the
-        // terminal panel: tab bar, sidebar, scroll bars and panel
-        // borders intentionally ignore mouse input.
+        // Mouse is optional and covers the text field, sidebar and tab
+        // bar (tab click switches, X closes); panel borders ignore it.
         if !self.editor_cfg.mouse_enabled {
             return;
         }
@@ -107,9 +124,9 @@ impl Editor {
                     }
                 }
 
-                // Tab bar close zones only: far-right X closes all tabs,
-                // per-tab ✕ closes that tab. Tab switching stays
-                // keyboard-only (gmode); name clicks do nothing.
+                // Tab bar: far-right X closes all tabs, per-tab ✕ closes
+                // that tab, and clicking the rest of a tab switches to it
+                // without changing the current mode.
                 if (m.row as usize) < tab_bar_h && col >= eo {
                     // Close-all X button (far right of tab bar)
                     let close_all_col = self.term_w.saturating_sub(2);
@@ -122,41 +139,21 @@ impl Editor {
                         self.status_msg = Some(t!("editor.mouse_closed_all"));
                         return;
                     }
-                    let mut x = eo;
-                    for (i, tab) in self.tabs.iter().enumerate() {
-                        let tab_end = x + self.term_w.saturating_sub(eo);
-                        if x >= tab_end {
-                            break;
-                        }
-                        let name = if self.is_scratch_path(&tab.path) {
-                            t!("editor.scratch_label")
-                        } else {
-                            tab.path
-                                .file_name()
-                                .map(|n| n.to_string_lossy().into_owned())
-                                .unwrap_or_else(|| t!("editor.untitled_label"))
-                        };
-                        let mark = if tab.modified { " ●" } else { "" };
-                        let label = format!(" {} {} ", name, mark);
-                        let label_chars = label.chars().count();
-                        let close_btn_w = 1usize;
-                        let full_w = label_chars + close_btn_w;
-
-                        let remaining = tab_end.saturating_sub(x);
-                        if full_w > remaining {
-                            break;
-                        }
-
-                        // Close button area: the single "✕" character
-                        let name_end = x + label_chars;
-                        if col >= name_end && col < x + full_w {
+                    let hit = self
+                        .tab_hit_zones()
+                        .into_iter()
+                        .enumerate()
+                        .find(|(_, (start, end))| col >= *start && col < *end);
+                    if let Some((i, (_, end))) = hit {
+                        let close_start = end.saturating_sub(1);
+                        if col >= close_start {
                             if self.close_tab(i) {
                                 self.pending_quit = true;
                             }
                             self.mark_all_dirty();
-                            return;
+                        } else {
+                            self.switch_tab(i);
                         }
-                        x += full_w;
                     }
                     return;
                 }
@@ -212,8 +209,7 @@ impl Editor {
                 if self.sidebar.dragging_scroll {
                     let total = self.sidebar.nodes.len();
                     let rows = self.term_h;
-                    self.sidebar.scroll =
-                        Self::nfe_scroll_for_row(m.row as usize, total, rows);
+                    self.sidebar.scroll = Self::nfe_scroll_for_row(m.row as usize, total, rows);
                     self.mark_all_dirty();
                     return;
                 }

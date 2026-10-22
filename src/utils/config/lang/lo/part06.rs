@@ -70,6 +70,8 @@ pub fn fill(m: &mut HashMap<String, String>) {
     m.insert("cmd.nav.where.config_size".into(), "\u{1f4cf} ຂະໜາດ config:".into());
     m.insert("cmd.nav.where.current_dir".into(), "\u{1f4c2} ໄດເຣັກທໍຣີປັດຈຸບັນ:".into());
     m.insert("cmd.nav.where.executable".into(), "\u{1f4c1} Executable:".into());
+    m.insert("cmd.nav.where.not_found".into(), "\u{2717} ບໍ່ພົບ '{}' ໃນ PATH".into());
+    m.insert("cmd.nav.where.path_title".into(), "\u{1f50d} ຕຳແໜ່ງຂອງ '{}' ໃນ PATH:".into());
     m.insert("cmd.nav.where.title".into(), "ຂໍ້ມູນບ່ອນຕັ້ງ ntc".into());
     m.insert("cmd.pathman.access_denied".into(), "ປະຕິເສດການເຂົ້າເຖິງ — ຕ້ອງການສິດ administrator.".into());
     m.insert("cmd.pathman.added_to_path".into(), "ເພີ່ມໃສ່ {} ແລ້ວ: {}".into());

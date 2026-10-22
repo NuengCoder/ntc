@@ -4,6 +4,122 @@
 
 ### New Features
 
+#### 📂 txtf — Directory Picker
+- `txtf <dir>` now opens the existing file picker for that directory instead of reporting “not found”; selection displays the chosen supported file
+- Works with disk paths and teleport paths, including `txtf @tp`, `txtf @tp/subdir` and nested savepoints
+- `--head`, `--tail` and `--betw` still apply to the selected file; empty directories report a clear warning
+- Hints already traverse these directories; `help txtf` and the tutorial now document the directory form
+
+#### 📄 fmt — Plain Text, PDF and Spreadsheet Families
+- `fmt` now accepts `.txt` as a document source and target, so plain text converts to Markdown, HTML, XML, DOCX, document JSON and PDF
+- PDF output is supported via `fmt <file> to pdf -o <file.pdf>` (write-only; PDF input is rejected with a clear message)
+- New sheet family: `.csv`, `.tsv` and `.xlsx` (write-only) convert to CSV, TSV, XLSX, JSON, Markdown or HTML; sheets render as document tables for md/html
+- `fmt <file> to json` stays contextual: data files emit data JSON, documents emit document JSON, and sheets emit an array of row objects
+- Hints, `help fmt`, usage text and error messages updated in English, Chinese, Thai and Lao
+
+#### 🧭 where — PATH Lookup
+- `where <binary>` now resolves a program through `PATH` like `which`: every match is printed in PATH order, with the first one (the copy the shell would run) marked. PATHEXT is handled on Windows, and repeated PATH entries are shown once
+- Bare `where` still prints ntc's executable, config file and current directory; `--help`/`-h` are unchanged
+
+#### 🗑️ rmd — Wildcard Directory Deletion
+- `rmd *` removes every subdirectory of the current directory; other `*` patterns work too (`rmd old*`, `rmd parent/*`)
+- Bulk deletion always lists the matched directories and asks for confirmation (defaults to No), so a wildcard can never wipe the working directory silently
+- Files never match — `rmd` only ever removes directories; literal `rmd <dir>` keeps its existing one-shot behaviour
+
+#### 📁 fileops — `@tp` Savepoints for `mkf`/`mkd`/`rmf`/`rmd`
+- `mkf`, `mkd`, `rmf` and `rmd` now resolve teleport savepoints in every operand, like `cp`/`mv` already did: `mkf @proj/notes.md`, `mkd @proj/build`, `rmf @proj/*.log`, `rmd @proj/old`
+- `*` wildcard operands expand inside the savepoint (`rmf @proj/*.log`, `rmd @proj/old*`), from the savepoint root or any `@tp/sub` path
+- Completion follows suit: `mkf`/`rmf` ghost the savepoint's files (directories stay traversable), `mkd`/`rmd` ghost its directories, and every comma-separated slot completes
+
+#### 🔁 rev — Reverse-Each-Line Filter
+- New `rev [file]` pipe filter: prints every line with its characters reversed (Unix `rev`), reading an explicit file or piped/redirected input — e.g. `view app.log | rev`, `rev data.txt`
+- Line endings are preserved (a missing final newline stays missing, CRLF stays CRLF) and reversal is per Unicode character, so non-ASCII text stays intact; output is plain and ANSI-stripped on redirect
+- Registered as a pipe-stage command: `| ` now ghosts `rev`, and `rev <Tab>` completes text files; documented in `help pipe` (localized in all four languages)
+
+#### 📝 editor — Template Creation, `-I` and Multi-File `ne`
+- `ne --init|--super <file> [<file> ...]` now only creates templates; the editor is no longer launched automatically
+- Append `-I <file>` (last argument, exactly one file) to create everything and open that one file in the editor; `ne --hyper <name> -I` opens the new project directory
+- `--init` and `--super` accept multiple files (space- or comma-separated)
+- Plain `ne <file>` now requires an existing file and points at `--init` / `--super` when it is missing
+- Editor `:ne --init|--super|--hyper` creates templates/projects without opening a tab; plain `:ne <file>` keeps opening existing files only, one at a time
+- Normal `n`, gmode `n` and nfe `n` create file templates without opening a new tab
+- New `html` / `htm` templates for both `--init` and `--super`
+
+#### 🗂️ local — Local Config Precedence, `-g/--global` Scope & Split Listings
+- **The local config is finally applied**: `ral` aliases, hint specs and hint lists stored in a project's `ntconfig.toml` were written but never read back. They are now merged with the global config everywhere — alias expansion (`run`, `ral`, `ran`, `scr`), completion, `ral ls|info|rnm|cls`, `ral export` and `config watch trigger`
+- **Local wins, global keeps working**: a local entry takes priority for the same name, while every global name the local file does not define still works. A local command never modifies the global config
+- **`igcare`**: the local file can now *un-ignore* a globally ignored name through the new `cared_directory_names` / `cared_extensions` / `cared_files` lists — `care dir target` in a project works even when the global config ignores `target`, and the global config stays untouched
+- **New `-g` / `--global` scope flag** for `ral add|edit|rm|cls|rnm|hintn|import`, `ignore dir|ext|file`, `care dir|ext|file` and `igcare import`: inside a project the default target is the local file, `-g` targets the global config deliberately. The completion hints offer the flag only inside folders that have an `ntconfig.toml`
+- **`ignore` / `care` value completion**: `ignore dir|file <Tab>` and `care dir|file <Tab>` ghost the directory/file names in the working directory (bare names — the config matches them verbatim, so no trailing `/`), `ignore ext|care ext <Tab>` ghosts the extensions actually present, and every comma-separated slot completes (`ignore dir src,do<Tab>` → `src,docs`)
+- `ral ls` and `igcared` now print a `[global]` and a `[local]` section (the local one shows the file path); a name present in both is marked `(shadowed by local)`, and `igcared` lists the local "cared" rows
+- `ral rm` inside a project never removes a global alias — it points at `ral rm -g <name>` instead; `ral cls` only clears the local store
+- **`local init --all` removed** (breaking): copying the global settings into the local file replaced the global behaviour with a stale copy. `local init` writes the commented template (now with the `cared_*` blocks and the precedence rule) and shares it with `init --local`; the flag is rejected with a clear message
+
+#### 🔗 shell — Pipes, Redirection & Logical Operators
+- `a | b` pipes one command's stdout into the next command's stdin — built-in ntc commands now participate, not just system commands (e.g. `gs main | say`, `cat log.txt | encode b64`)
+- `a && b` runs `b` only when `a` succeeds, and `a || b` runs `b` only when `a` fails (bash semantics); both short-circuit
+- Redirection: `cmd > file` (overwrite), `cmd >> file` (append), `cmd < file` (read stdin), and `cmd <<EOF … EOF` heredocs (multi-line; works both interactively at a `heredoc>` prompt and one-shot as `ntc 'cmd <<EOF'` with the body on stdin); here-strings `cmd <<< text` are also supported
+- Operators must be **whitespace-delimited** standalone tokens (`cmd > file`), so data that uses `<` / `>` / `|` — e.g. `nsheet data.csv --filter age>30` — is untouched; `<<EOF` is the one exception (delimiter may be attached). Attached forms (`cmd>file`) are still handed to the OS shell for system commands
+- Redirection/piped output is captured at the OS handle level (so `println!`, `colored`, and child processes are all included), stripped of ANSI colour codes, then written to the target — redirected files stay clean, plain text
+- Shell chatter (`Executing: …`, `completed`) is suppressed while a stage is piped or redirected, so captured output is pure data
+- Commands that read stdin: `say` (no text), `math -`, `view -`, and `encode`/`decode` (empty target or `-`); piped process stdin is also consumed when ntc itself is invoked in a pipe (`echo hi | ntc encode b64`)
+- Piped/redirected input is now searchable: `cmd | gs <pattern>` and `cmd | qur -s <pattern>` treat the piped text as their content and print matching lines grep-style (case-insensitive substring, identical to normal `gs`), instead of searching the filesystem — e.g. `gs main | gs todo`, `view app.log | gs error`
+- New line-window filters `head [N] [file]`, `tail [N] [file]` and `betw A:B [file]` — they print the first/last N lines (default 10) or the inclusive A..B slice, reading an explicit file argument or piped/redirected input (file wins), so they compose in pipelines (`view app.log | head 20`, `gs error | tail 5`, `csvinfo | betw 3:7`); output is plain (no line numbers/header) and ANSI is stripped on redirect
+- New `sort [-r] [-n] [-u] [-f] [file]` line filter — sorts piped/redirected text or a file lexicographically (default) or numerically (`-n`), with reverse (`-r`), unique (`-u`) and case-insensitive (`-f`) options, so `gs error | sort -u | head 10` works; output is plain and ANSI-stripped on redirect
+- TUI/full-screen commands (`ne`, `sys`, `nms play`, menus) should not be piped or redirected
+- New `help pipe` topic (also `help redirection` / `help pipeline`) and a Pipelines section in the interactive help; localized in all four languages
+
+#### 🏃 ral — `$*{x}` One-Arg Capture (Spaces & Quotes)
+- New rest-capture placeholder `$*{x}` (also `$*{x:-default}`): binds a single argument while keeping spaces, so a quoted `hi "wow nice"` expands to `echo wow nice`; when it is the **last** placeholder in the template it also acts as a catch-all, joining every remaining argument (`hi wow nice` → `echo wow nice`)
+- Multiple `$*{}` placeholders split positionally — earlier ones bind exactly one argument, only the last consumes the rest (e.g. `-s "$*{title}" -b "$*{body}"` with `"Good Evening" "How are you"` → `-s "Good Evening" -b "How are you"`)
+- Positional args are now tokenized quote-aware (a `"…"` span is one argument with the quotes stripped, `\"` is a literal quote); existing `${x}` / `$x` / `$x[]` / `$x[sep]` behaviour is unchanged
+- Works with `ral add` defaults (`ral add hi(x=there) "echo $*{x}"` → `echo $*{x:-there}`), completion hints/selects, and is honoured everywhere aliases expand (interactive shell, `ntc <cmd>`, `run`, `ran`, `scr`); the `ral` usage/example strings are localized in all four languages
+
+#### 🧩 init — OpenCode Scaffold (`init -oc|--opencode`)
+- `init --opencode` / `init -oc` — scaffold an OpenCode workspace in the current directory: creates `.opencode/`, `.opencode/tools/` and `.opencode/agents/`, then writes the bundled `tools/ntc.ts` custom tool, the `agents/ntc-plan.md` + `agents/ntc-impl.md` agents, and `.opencode/opencode.jsonc`
+- The `ntc` tool lets OpenCode run any one-shot ntc command (search, report, tasks, git, …) in the project; the `ntc-plan` / `ntc-impl` agents are ntc-aware planning and implementation agents usable in any project
+- `init --all` (`-a`) now also scaffolds `.opencode/` alongside `NTCRANFILE.toml` and `ntconfig.toml`
+- Existing files are left untouched and reported; `--force` (`-f`) re-writes only the template files (never the directory)
+- `deinit --opencode` / `deinit -oc` removes the scaffold files and prunes the `tools/`, `agents/` and `.opencode/` directories only when empty, so user files survive; `--force` skips the confirmation
+- `init` / `deinit` completion hints updated; new usage strings localized in all four languages
+- Both scaffolded agents (`ntc-plan`, `ntc-impl`) now send a completion email via the user's `ntc send-email -s "…" -b "…"` alias as their final step (plain `[ntc-plan]` / `[ntc-impl]` subject prefix); if the send fails they stop and report that the `send-email` SMTP alias may not be set globally
+
+#### 🎲 fake — Deterministic Fake-Data Generator
+- `fake gen <types> [-n N] [-f fmt] [-s seed] [-o file] [-g group]` — generate rows from a comma-separated list of types
+- 100+ types across person / contact / address / geo / date-time / numeric / identifier / network / web / finance / company / text / security / file / misc — `name`, `email`, `username`, `city`, `country`, `latitude`, `uuid`, `ulid`, `nanoid`, `ipv4`/`ipv6`, `mac_address`, `user_agent`, `credit_card` (Luhn-valid), `iban` (checksum-valid), `btc_address`/`eth_address`, `price`, `job_title`, `password`, `otp4/6/8/12`, `color_hex`, `semver`, `hash_md5`/`hash_sha256`, `image_url`/`avatar_url`, `isbn`/`ean` (checksum-valid) and more
+- `fake types [-s|--search] [pattern]` — grouped listing of every type, with fuzzy search (`fake types emial` → `email`)
+- Output formats `json | txt | sql | csv | xlsx` (`-f`, or inferred from the `-o <file.ext>` extension); `txt` is an aligned table on stdout, `sql` emits `INSERT INTO <group> (cols) VALUES …;` and `xlsx` requires `-o`
+- `-s/--seed N` makes output reproducible; `-n/--count` defaults to 1
+- `fake group add|edit <name> [alias as type, …]` — save column groups where the alias becomes the SQL/JSON column name; plus `ls [glob]`, `info`, `rm`, `rnm <old> <new>` and `clear [-f]`
+- `fake gen -g <group> …` generates straight from a saved group (mutually exclusive with `<types>`), columns in left-to-right order
+- Groups are stored in the config like `dbal`/`ral`: merged reads (global overlaid by a local `ntconfig.toml`, local wins) and writes routed to the local file when present, else the global one
+- Password tiers `password_ez` / `password_mid` / `password_hard` with guaranteed character classes, plus the full hash family `hash_sha1` / `hash_sha224` / `hash_sha384` / `hash_sha512` / `hash_sha3_256` / `hash_sha3_512` / `hash_crc32` (random hex of the matching length)
+- `-u/--unique [cols]` — make a whole row unique (bare `-u`) or just the named columns; unsatisfiable constraints abort with a clear error. Rejected together with `-g` (declare uniqueness on the columns instead)
+- Group columns take a trailing `!` to stay unique (`contract as phone_number !`) and `ref:<group>.<column>` to borrow values from another group (generated first with the same `-n`, cycle-safe)
+- `-l/--locale <code>` — locale-aware `first_name`/`last_name`/`name`/`city`/`state`/`street`/`address`/`phone_number`/`postal_code` pools for `en_US` (default), `en_GB`, `zh_CN`, `th_TH` and `lo_LA`
+- `fake group export <name>|--all [-o file]` and `fake group import <file> [--force] [--prefix p]` — share groups as a `.ntc_fake` bundle (TOML, or JSON when the file ends `.json`)
+- `fake` / `fake help` / `help fake` usage; subcommand, group-name, type-name and locale completion hints; `fake` reserved as an alias name; fully localized in all four languages
+- `email`/`username` now derive from the same row's `name`/`first_name`/`last_name` regardless of column order — `fake gen name email` prints `Kenneth Kelly` next to `kenneth.kelly28@quill19.info`; standalone `email`/`username` still work by generating their own name
+- Non-Latin names keep their script for display types but are **romanized to ASCII** for `email`/`username` (e.g. `--locale th_TH` yields `niran.bounmee28@…`, not `นิรันดร์.บุญมี28@…`); each locale carries native+roman name pairs
+- `name` respects locale word order (e.g. `王伟` for `zh_CN` instead of `伟 王`)
+- New types: `id` (sequential 1..n row id, seed-stable) and `id_card` (locale-aware national ID with a valid check digit — Thai 13-digit mod-11, Chinese 18-char ISO 7064, `en_US` `###-##-####`, `en_GB` NINO shape, `lo_LA` 9-digit)
+- `fake locales` — list the supported `--locale` codes with a sample name/city/phone row
+- Locale pools enlarged (~30 first/last names, more cities/states/streets per locale) to cut duplicate output
+
+#### 🎵 nms — NTC Music: TUI Sound Player & Media Scan
+- `nms play <file>` — fullscreen sound player: a live waveform of bottom-anchored `O` "candles" colored by level (green low / yellow mid / red high), plus a high/low level meter, elapsed time and remaining-time countdown
+- Player keys: `space` pause/resume, `←/→` seek 5s, `↑/↓` (or `+`/`-`) volume, `a` replay from 0s, `q`/`Esc` quit
+- When a track finishes the player freezes: the waveform stops drawing `O`s and the animation halts; press `a` to replay from 0s (the screen clears and re-renders) or `q` to quit
+- Video files (`mp4`, `mkv`, `webm`, `mov`, `avi`, …) play their **audio track only** — no video is rendered; the header labels them `VIDEO · audio only`
+- Graceful on headless machines: when no sound driver/device is available the player prints a clear localized error and returns to the shell instead of crashing (`OutputStream`/device open is wrapped, never panics)
+- `nms scan [-d|--depth <n>] [-s|--size] [-l|--long <dur>] [--care]` — lists audio (mp3, wav, flac, m4a, aac, ogg, opus, wma, aiff, …) and video files under the current directory in the same style as `scan ext`, honoring the configured depth and ignore rules (`--care` overrides them)
+- `nms scan -l 25s` / `-l 1mn` / `-l 1h` — keep only media **longer than** the given duration; each file's duration is decoded in parallel and shown next to the name, and files with an unreadable/unknown duration are skipped
+- `.ts` is treated as TypeScript, not media (MPEG transport streams use `.m2ts`), so `nms scan`/`nms play` no longer pick up TypeScript sources
+- `nms` / `nms help` / `help nms` usage; `play`/`scan`/`help` completion and flag hints; `nms` reserved as an alias name; fully localized in all four languages
+- Playback is in-process via `rodio` + symphonia (default features cover mp3/wav/flac/m4a/aac/ogg/vorbis/mp4) with `cpal` output — no external player or binary
+- Player internals: streaming decode (no whole-file load), a lock-free amplitude tap feeding the UI, and a `TerminalGuard` that restores the terminal on quit or panic; command-level tests need no audio hardware
+- Build note: Linux needs ALSA headers (`libasound2-dev` + `pkg-config`); Windows (WASAPI) and macOS (CoreAudio) need nothing extra
+
 #### 📝 ne — VSCode-Style MQL Completion
 - Two-box popup for `.mq4/.mq5/.mqh` (insert mode): Box1 candidates (12 rows, kind tags) + Box2 detail, one line below the cursor, flipped above when space runs out
 - Kinds `[F]`unction `[V]`ar/type `[A]`rray `[K]`eyword/constant `[O]`bject `[S]`truct `[E]`num(+members) `[M]`acro; priority F>V>A>K>O>S>E>M with round-robin fill; user symbols first; case-insensitive prefix filter
@@ -18,11 +134,29 @@
 - Motion everywhere: `hjkl` + `awsd` + arrows (arrows-only in Insert so typing still works); Shift+direction selects in Visual; `Ctrl+J` enters Jump from all text modes
 - New `gmode` prompt (`g`, type, Enter): `t`/`T` next/prev tab, `qt`/`aqt` close tab/all, `<number>` goto line, `q` exit
 - New `nfe` keyboard sidebar (`e` to enter): `hjkl`/arrows/`wasd` move, Enter opens dirs/files in place, Esc back
-- Nfe `:` size prompt (`size full|def|N%`, persisted percent width); tab-bar ✕/close-all mouse zones restored (switching stays keyboard); Shift+direction selects in Normal; `H` opens Help; terminal/run panels take keyboard focus on open
+- Nfe `:` size prompt (`size full|def|N%`, persisted percent width); tab-bar tabs are clickable to switch buffers in Normal/Insert/Visual/Nfe without changing mode, with ✕ per tab and far-right ✕ for close-all; Shift+direction selects in Normal; `H` opens Help; terminal/run panels take keyboard focus on open
 - Visual: `a` select-all toggle, `c`/`x` copy/cut, `y` yank line, `p` paste-over-selection; quit is `:q`/`0`/gmode-`q` only
-- Mouse is now optional (`mouse_enabled` in `editor.toml`, default on) and limited to the text field + terminal panel
+- Mouse is now optional (`mouse_enabled` in `editor.toml`, default on) and covers the text field, sidebar, tab bar (click to switch/close) and terminal panel
 - Removed for redesign: hex editor (`:hex`), completion popup UI, `Ctrl+O/W/B/N/G/H`, `Ctrl+Tab` buffers, `Ctrl+PgUp/PgDn` tabs
 - Refreshed welcome screen, in-editor hint bars, help screen and tutorial for the new map (all four languages)
+
+#### 🔍 gs — OR Patterns (`a\|b`)
+- `gs` patterns now support **OR**: `gs error\|warning` matches lines containing `error` *or* `warning` (case-insensitive, same substring semantics as a single term). The escaped pipe is the shell-safe form; `gs "error|warning"` and the space-free `gs error|warning` work too, since `|` only splits a pipeline when it stands alone
+- Every alternative is highlighted in the results (and in the interactive `-i` pager); at a shared position the longest alternative wins, so `foo\|foobar` never produces nested markers
+- Applies to file searches (`search_content`, `search_content_in_files`), piped/redirected text (`cat app.log | gs error\|warning`) and `-p` glob filters keep working (`gs error\|warning -p "*.rs"`); an OR alternative is never mistaken for a path filter. Backslashes that do not precede `|` stay literal, so Windows paths still search fine
+- New `gs` usage example (and `help search` row) for OR patterns, localized in English, Chinese, Thai and Lao
+
+#### ✉️ smtp — HTML & Markdown Bodies
+- `-b` now accepts **HTML** and **Markdown** as well as plain text: `-b "<h1 style=text-align:center>Hi</h1>"` is detected as HTML automatically, `-b letter.html` / `-b letter.md` read the body from a file (Markdown is rendered to HTML with GFM tables, strikethrough, autolinks, task lists and footnotes), `-b notes.txt` sends a text file, and `-b -` reads the body from stdin
+- New `--body-file <path>` (force the file interpretation for any path) and `--body-format auto|text|html|md` (`-bf`) to force how the body is parsed; a missing body file errors out **before** the SMTP connection instead of mailing the filename
+- HTML bodies send as `multipart/alternative` (HTML + a plain-text fallback derived by stripping markup, keeping lists and table cells), so HTML clients render and **align** the body (`align` / `style=text-align` / tables) while plain clients stay readable; HTML fragments are wrapped in a styled, centered mail card, and documents that already contain `<html>`/`<body>` are sent untouched
+- Attachments still wrap everything in `multipart/mixed`, now around the alternative body; plain bodies are unchanged (`text/plain` single part)
+- `smtp help` gained a Message body section; flag completion hints include `--body-file`, `-bf` and `--body-format`; new strings localized in English, Chinese, Thai and Lao
+
+#### 🗂️ ne — Session Tabs Scoped per Directory
+- Editor tabs are now saved **per working directory**: exit `ne` from `A` with tabs open, start the shell in `A` again and those tabs come back; start it in `B` and only `B`'s own tabs (or just the requested file) appear — `A`'s tabs never leak into `B`
+- `session.toml` stores one snapshot bucket per directory (up to 24, oldest pruned), so opening another project no longer overwrites the previous project's tab set; the existing `session_max_age_hours` staleness rule and missing-file skipping still apply
+- Legacy single-snapshot `session.toml` files load fine (the old unscoped snapshot is discarded rather than shown under the wrong directory)
 
 #### 🔐 nssh — Native SSH Profiles, Shell, SFTP & Port Scan
 - `nssh add <name> --host <h> [--user u] [--port p] [--key path] [--pass-env VAR]` — profiles in `~/.config/ntc/nssh.toml` (0600 on Unix); passwords never stored, only env-var references
@@ -126,6 +260,26 @@
 - Wrong/missing credentials get `401 {"error":"Unauthorized"}` + `WWW-Authenticate: Basic realm="ntc serve"`; the check runs before any body is read, so unauthenticated uploads can't burn bandwidth or disk
 - Web UI: login dialog (`🔒 Login required` → username + password → `Unlock`), credentials kept in `sessionStorage` (cleared on tab close + `🔒 Logout` button), every fetch/XHR carries the header, downloads go through authenticated fetch-blob, any `401` re-opens the login overlay
 - No `--auth` = exactly the old behavior (additive-only); localized (`cmd.serve.*`) in English, Chinese, Thai and Lao
+
+### 🐛 Bug Fixes
+
+#### 📦 npm installer — Termux/Android install regression (2.4.5)
+- `npm install -g @nuengcoder/ntc` on Termux no longer bails out with `ntc: unsupported platform android-arm64.` Termux's Node reports `process.platform === 'android'` (not `'linux'`), which the 2.4.5 rewrite stopped matching once the explicit `android-arm64` mapping was dropped
+- Android detection now accepts both `process.platform === 'android'` and `'linux'` (plus the kernel release string, `PREFIX` and install path), and maps Node arches to the Rust target assets: `arm64` → `aarch64-linux-android`, `x64` → `x86_64-linux-android`, `arm` → `armv7-linux-androideabi`
+- Asset selection is now an ordered candidate list: the Android build first, then the same-arch Linux build. A missing/renamed manual asset on android-x64/arm falls back to the Linux one instead of hard-404ing, and a 404 no longer burns the three download retries
+- New `NTC_NPM_ASSET=<filename|url>` escape hatch to force a specific release asset, and the failure messages now print `platform` / `arch` / `os.release()` / `PREFIX` diagnostics
+- `packaging/npm/scripts/selftest.js` gains a platform→asset matrix covering Termux arm64/x64/arm, Termux reporting `linux`, Linux arm64/x64, Windows x64/arm64, macOS arm64/x64, unsupported platforms and the env override, so the 2.4.5 regression can't return silently
+
+### 🔧 Build & Packaging
+
+#### 🤖 Android — API 26 requirement for AAudio
+- The Android target now builds with `--platform 26` (Android 8.0+) instead of `--platform 23`; `cpal 0.18.2` uses AAudio and its NDK dependency requires `api-level-26`, so the linker could not find `libaaudio.so` in the older NDK sysroot
+- `sanitize_sheet_name` is now compiled only for non-Android targets, matching `write_xlsx`, which removes the Android dead-code warning
+- `android.txt` documents the NDK/API 26 prerequisite
+
+#### 🐧 Linux — ALSA build prerequisites
+- Linux builds (and `cargo deb`, which builds the release binary) require `pkg-config` and ALSA development headers for `nms` audio (`cpal` → `alsa-sys`); run `sudo apt-get install build-essential pkg-config libasound2-dev` on Debian/Ubuntu
+- `linux.txt` now lists Debian/Ubuntu, Fedora and Arch package commands, and `install.sh` fails early with the correct command instead of a pkg-config panic
 
 ## [2.4.0] - 2026-07-22
 

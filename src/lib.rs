@@ -5,6 +5,7 @@
 // Top-level modules (multi-file directories)
 pub mod cli;
 pub mod editor;
+pub mod fake;
 pub mod image2doc;
 pub mod lsp;
 pub mod math;
@@ -12,6 +13,7 @@ pub mod mql;
 pub mod ndb;
 pub mod netscan;
 pub mod nfe;
+pub mod nms;
 pub mod nsheet;
 pub mod nssh;
 pub mod ntpkg;

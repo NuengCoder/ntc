@@ -447,8 +447,7 @@ fn walk_matching(
     // contributes to each ancestor dir (single walk, no extra I/O).
     // Aggregate over ALL files (not just name-matched ones) so dir
     // sizes stay truthful regardless of the name pattern.
-    let mut dir_sizes: std::collections::HashMap<String, u64> =
-        std::collections::HashMap::new();
+    let mut dir_sizes: std::collections::HashMap<String, u64> = std::collections::HashMap::new();
     let all_files = walk_all_files(root, max_depth, care);
     for (rel, size) in &all_files {
         let mut parent = rel.as_str();
@@ -469,11 +468,7 @@ fn walk_matching(
 }
 
 /// All files under `root` (name-unfiltered) for dir-size aggregation.
-fn walk_all_files(
-    root: &std::path::Path,
-    max_depth: usize,
-    care: bool,
-) -> Vec<(String, u64)> {
+fn walk_all_files(root: &std::path::Path, max_depth: usize, care: bool) -> Vec<(String, u64)> {
     let mut files: Vec<(String, u64)> = Vec::new();
     if care {
         for entry in WalkDir::new(root)
@@ -1075,12 +1070,8 @@ mod tests {
 
     #[test]
     fn parse_name_args_pattern_and_flags() {
-        let p = parse_scan_name_args(
-            &tokenize("*.rs -d 3 -s"),
-            "cmd.scan.files_usage",
-            false,
-        )
-        .unwrap();
+        let p =
+            parse_scan_name_args(&tokenize("*.rs -d 3 -s"), "cmd.scan.files_usage", false).unwrap();
         assert_eq!(p.pattern.as_deref(), Some("*.rs"));
         assert_eq!(p.max_depth, Some(3));
         assert!(p.show_size);
@@ -1098,19 +1089,19 @@ mod tests {
 
         // Bare / `*` / `*.*` for files all mean match-all.
         for args in ["", "*", "*.*"] {
-            let p =
-                parse_scan_name_args(&tokenize(args), "cmd.scan.files_usage", false).unwrap();
+            let p = parse_scan_name_args(&tokenize(args), "cmd.scan.files_usage", false).unwrap();
             assert!(p.pattern.is_none(), "args: {:?}", args);
         }
         // `*` for dir means match-all, but `*.*` is rejected.
-        let p =
-            parse_scan_name_args(&tokenize("*"), "cmd.scan.dir_usage", true).unwrap();
+        let p = parse_scan_name_args(&tokenize("*"), "cmd.scan.dir_usage", true).unwrap();
         assert!(p.pattern.is_none());
         assert!(parse_scan_name_args(&tokenize("*.*"), "cmd.scan.dir_usage", true).is_err());
 
         // Second bare token, bad depth, unknown flag all fail.
         assert!(parse_scan_name_args(&tokenize("a* b*"), "cmd.scan.files_usage", false).is_err());
-        assert!(parse_scan_name_args(&tokenize("*.rs -d abc"), "cmd.scan.files_usage", false).is_err());
+        assert!(
+            parse_scan_name_args(&tokenize("*.rs -d abc"), "cmd.scan.files_usage", false).is_err()
+        );
         assert!(parse_scan_name_args(&tokenize("--bogus"), "cmd.scan.files_usage", false).is_err());
     }
 
@@ -1130,9 +1121,13 @@ mod tests {
         Config::with_test_config(cfg, || {
             let root = std::env::current_dir().unwrap();
             // Files: `*.rs` without care skips the ignored `target/`.
-            let found = walk_matching(&root, 10, false, false, &(|n: &str| {
-                matches_wildcard(n, "*.rs")
-            }));
+            let found = walk_matching(
+                &root,
+                10,
+                false,
+                false,
+                &(|n: &str| matches_wildcard(n, "*.rs")),
+            );
             let mut rels: Vec<&str> = found.iter().map(|(r, _)| r.as_str()).collect();
             rels.sort();
             assert_eq!(rels, vec!["keep.rs", "sub/deep.rs"]);
@@ -1140,9 +1135,13 @@ mod tests {
             let found = walk_matching(&root, 10, true, false, &(|_: &str| true));
             assert_eq!(found.len(), 4);
             // Dirs: `k*` matches only `kbox`; the root itself is never listed.
-            let found = walk_matching(&root, 10, false, true, &(|n: &str| {
-                matches_wildcard(n, "k*")
-            }));
+            let found = walk_matching(
+                &root,
+                10,
+                false,
+                true,
+                &(|n: &str| matches_wildcard(n, "k*")),
+            );
             let rels: Vec<&str> = found.iter().map(|(r, _)| r.as_str()).collect();
             assert_eq!(rels, vec!["kbox"]);
             // Dirs: match-all skips ignored `target/` without care ...

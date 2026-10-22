@@ -5,6 +5,7 @@ pub fn fill(m: &mut HashMap<String, String>) {
     m.insert("help.context.cr".into(), "<cr> กด Enter เพื่อรันคำสั่ง".into());
     m.insert("help.alias.add".into(), "ral add <ชื่อ> \"<cmd>\" ## สร้าง alias".into());
     m.insert("help.alias.add_array".into(), "ral add <ชื่อ>(x[],y) \"<cmd>\" ## Alias พร้อมพารามิเตอร์แบบ array".into());
+    m.insert("help.alias.add_rest".into(), "ral add <ชื่อ>(x) \"echo $*{x}\" ## รับหนึ่งอาร์กิวเมนต์ (คงช่องว่าง, ตัดคำพูด)".into());
     m.insert("help.alias.add_defaults".into(), "ral add <ชื่อ>({x=a,e=txt}) \"<cmd>\" ## Alias พร้อมค่าเริ่มต้น".into());
     m.insert("help.alias.add_param".into(), "ral add <ชื่อ>(x) \"<cmd>\" ## สร้าง alias แบบมีพารามิเตอร์ด้วย $x".into());
     m.insert("help.alias.cls".into(), "ral cls ## ล้าง alias ทั้งหมด (ถามยืนยัน)".into());
@@ -57,7 +58,6 @@ pub fn fill(m: &mut HashMap<String, String>) {
     m.insert("help.config.local_deinit".into(), "local deinit ## ลบ ntconfig.toml จากไดเรกทอรีปัจจุบัน".into());
     m.insert("help.config.local_help".into(), "local help ## แสดงการใช้งานคำสั่ง local".into());
     m.insert("help.config.local_init".into(), "local init ## สร้างเทมเพลต ntconfig.toml (แบบ comment)".into());
-    m.insert("help.config.local_init_all".into(), "local init --all ## ส่งออกการตั้งค่าปัจจุบันไปยัง ntconfig.toml".into());
     m.insert("help.config.opencg".into(), "opencg ## เปิด config.toml ในตัวแก้ไข".into());
     m.insert("help.config.output".into(), "config output [path] ## แสดง/ตั้งค่าเส้นทางผลลัพธ์".into());
     m.insert("help.config.qsc".into(), "config qsc \"#c 0\" ## ตั้งค่าปุ่มลัด QSC".into());
@@ -75,11 +75,11 @@ pub fn fill(m: &mut HashMap<String, String>) {
     m.insert("help.config.watch_trigger_off".into(), "config watch trigger off ## ปิดการทำงานอัตโนมัติ".into());
     m.insert("help.config.watch_limit".into(), "config watch limit <n> ## จำนวนแถวที่แสดงในกล่อง watch".into());
     m.insert("help.config.wi".into(), "wi [path] ## ฟีดการเปลี่ยนแปลงไฟล์แบบสด (q=ออก)".into());
-    m.insert("help.editor.ne".into(), "ne, ntceditor <file> ## เปิดไฟล์ในตัวแก้ไขข้อความในตัว".into());
-    m.insert("help.editor.ne_hyper".into(), "ne --hyper <ชื่อ> --lang <l> ## สร้างโปรเจกต์ hyper C/C++".into());
-    m.insert("help.editor.ne_init".into(), "ne --init <file> ## สร้างเทมเพลตไฟล์เปล่า".into());
+    m.insert("help.editor.ne".into(), "ne, ntceditor <file> ## เปิดไฟล์ที่มีอยู่แล้วในตัวแก้ไขข้อความในตัว".into());
+    m.insert("help.editor.ne_hyper".into(), "ne --hyper <ชื่อ> --lang <l> [-I] ## สร้างโปรเจกต์ hyper C/C++ (-I เปิดไดเรกทอรีโปรเจกต์)".into());
+    m.insert("help.editor.ne_init".into(), "ne --init <file> [<file> ...] [-I <file>] ## สร้างเทมเพลตไฟล์; -I เปิดไฟล์หนึ่ง".into());
     m.insert("help.editor.ne_line".into(), "ne, ntceditor <file>:<n> ## เปิดไฟล์ที่บรรทัด <n>".into());
-    m.insert("help.editor.ne_super".into(), "ne --super <file> ## สร้างเทมเพลตไฟล์ super".into());
+    m.insert("help.editor.ne_super".into(), "ne --super <file> [<file> ...] [-I <file>] ## สร้างเทมเพลต super; -I เปิดไฟล์หนึ่ง".into());
     m.insert("help.editor.ne_welcome".into(), "ne, ntceditor ## เปิดหน้าจอต้อนรับในไดเรกทอรีปัจจุบัน".into());
     m.insert("help.editor.title".into(), "คำสั่งตัวแก้ไข (EDITOR):".into());
     m.insert("help.encdec.cvcode".into(), "cvcode <จาก> <ข้อมูล> to <ถึง> ## แปลงระหว่างรูปแบบ".into());
@@ -104,7 +104,7 @@ pub fn fill(m: &mut HashMap<String, String>) {
     m.insert("help.fileops.cp".into(), "cp <src|@tp> <dst|@tp> [-f] ## คัดลอกไฟล์หรือไดเรกทอรี".into());
     m.insert("help.fileops.mkd".into(), "mkd <dir>[, ...] ## สร้างไดเรกทอรีใหม่".into());
     m.insert("help.fileops.mkf".into(), "mkf <file>[, ...] ## สร้างไฟล์ใหม่".into());
-    m.insert("help.fileops.rmd".into(), "rmd <dir>[, ...] ## ลบไดเรกทอรี (ถามยืนยัน)".into());
+    m.insert("help.fileops.rmd".into(), "rmd <dir>[, ...] ## ลบไดเรกทอรี; wildcard ลบทุกที่ตรงกันหลังยืนยัน".into());
     m.insert("help.fileops.rmf".into(), "rmf <file>[, ...] ## ลบไฟล์ (ถามยืนยัน)".into());
     m.insert("help.fileops.rnmd".into(), "rnmd <old> <new> ## เปลี่ยนชื่อไดเรกทอรี".into());
     m.insert("help.fileops.rnmf".into(), "rnmf <old> <new> ## เปลี่ยนชื่อไฟล์".into());
@@ -156,11 +156,12 @@ pub fn fill(m: &mut HashMap<String, String>) {
     m.insert("help.nav.gos".into(), "gos ## แสดงรายการไดเรกทอรีย่อยและเลือกหนึ่ง".into());
     m.insert("help.nav.gosc".into(), "gosc ## นำทางต่อเนื่อง (0 เพื่อออก v/s/vs เพื่อดู)".into());
     m.insert("help.nav.title".into(), "คำสั่งนำทาง (NAVIGATION):".into());
-    m.insert("help.nav.where".into(), "where ## แสดงตำแหน่งไฟล์ปฏิบัติการและการกำหนดค่าของ ntc".into());
+    m.insert("help.nav.where".into(), "where [<โปรแกรม>] ## แสดงตำแหน่งของ ntc หรือค้นหาโปรแกรมใน PATH".into());
     m.insert("help.nav.example1".into(), "cd src ## นำทางไปยังไดเรกทอรี src".into());
     m.insert("help.nav.example2".into(), "back ## กลับไปยังไดเรกทอรีหลัก".into());
     m.insert("help.nav.example3".into(), "gos ## เลือกไดเรกทอรีย่อยแบบโต้ตอบ".into());
     m.insert("help.nav.example4".into(), "cd to web ## เทเลพอร์ตไปยังจุดบันทึก 'web'".into());
+    m.insert("help.nav.example5".into(), "where git ## ค้นหาตำแหน่งของ git ใน PATH".into());
     m.insert("help.network.dl".into(), "dl <url> ## ดาวน์โหลดไฟล์ (--progress, --resume, --stop, --cancel)".into());
     m.insert("help.network.dns".into(), "dns <host> ## DNS lookup (-t ประเภทระเบียน: A, AAAA, ALL, MX, NS เป็นต้น)".into());
     m.insert("help.network.http".into(), "http <method> <url> ## HTTP API client (-H, -d, --json, -q, -a, --bearer, -s, -o, -v, -t)".into());
@@ -187,7 +188,7 @@ pub fn fill(m: &mut HashMap<String, String>) {
     m.insert("help.other.deinit".into(), "deinit [--ran|--local] ## ลบไฟล์โปรเจกต์".into());
     m.insert("help.other.exit".into(), "exit, quit ## ออกจาก ntc".into());
     m.insert("help.other.help".into(), "help ## แสดงความช่วยเหลือนี้".into());
-    m.insert("help.other.init".into(), "init [--ran|--local] ## เริ่มต้นไฟล์โปรเจกต์ (NTCRANFILE.toml + ntconfig.toml)".into());
+    m.insert("help.other.init".into(), "init [--ran|--local|--opencode] ## เริ่มต้นไฟล์โปรเจกต์ (NTCRANFILE.toml, ntconfig.toml, .opencode/)".into());
     m.insert("help.other.print".into(), "print <text> [--loop N] [-n|-t] ## alias ของ say".into());
     m.insert("help.other.say".into(), "say <text> [--loop N] [-n|-t] ## พิมพ์ข้อความ (ไม่จัดเส้นทางไฟล์ใหม่)".into());
     m.insert("help.other.title".into(), "คำสั่งอื่น ๆ (OTHER):".into());

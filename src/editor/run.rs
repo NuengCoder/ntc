@@ -110,9 +110,7 @@ impl Editor {
                     >= self.editor_cfg.session_auto_save_secs
             {
                 let snapshot = self.capture_full_session();
-                let mut session = crate::session::SessionState::write_global();
-                session.session_snapshot = Some(snapshot);
-                session.save();
+                crate::session::SessionState::save_snapshot(snapshot);
                 self.last_session_save = Instant::now();
             }
             // ── wait for event, polling streaming output while process runs ──

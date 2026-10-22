@@ -635,10 +635,7 @@ mod tests {
             parse_display_tail(&["--sixel", "a.png"]),
             Ok((true, Some("a.png".to_string())))
         );
-        assert_eq!(
-            parse_display_tail(&["--SIXEL"]),
-            Ok((true, None))
-        );
+        assert_eq!(parse_display_tail(&["--SIXEL"]), Ok((true, None)));
         assert_eq!(
             parse_display_tail(&["a.png"]),
             Ok((false, Some("a.png".to_string())))

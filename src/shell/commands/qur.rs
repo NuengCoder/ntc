@@ -263,7 +263,7 @@ pub(crate) fn file_matches_glob(file_name: &str, rel: &str, glob: &str) -> bool 
 /// Handles: direct file path, existing dir (search inside it), and
 /// filename / relative-path glob patterns. Binary exts are skipped here;
 /// size / UTF-8 checks happen at read time.
-fn resolve_qur_files(root: &Path, globs: &[String], max_depth: usize) -> Vec<PathBuf> {
+pub(crate) fn resolve_qur_files(root: &Path, globs: &[String], max_depth: usize) -> Vec<PathBuf> {
     let ignored_dirs = Config::get_ignored_dirs_combined();
     let fmt_cfg = FormatConfig::from_both();
     let mut out: Vec<PathBuf> = Vec::new();
@@ -385,11 +385,125 @@ fn file_size_label(path: &Path) -> String {
     }
 }
 
+/// Extract only `-s/--select` and `-l/--limit` from `qur` args for the
+/// piped-input mode. Globs, `-rp`, `-dp`, `-d` and `-h` are ignored; the
+/// select pattern is required (returns `Err` otherwise).
+pub(crate) fn parse_qur_stdin_args(
+    args: &str,
+) -> std::result::Result<(String, Option<usize>), String> {
+    let parts = tokenize_qur_args(args);
+    let mut select: Option<String> = None;
+    let mut limit: Option<usize> = None;
+
+    let mut i = 0;
+    while i < parts.len() {
+        let p = parts[i].as_str();
+        let (flag, inline_val) = match p.split_once('=') {
+            Some((f, v)) => (f, Some(v.to_string())),
+            None => (p, None),
+        };
+        match flag {
+            "-s" | "--select" => {
+                let has_inline = inline_val.is_some();
+                let val = inline_val.clone().or_else(|| {
+                    parts.get(i + 1).cloned().filter(|nxt| {
+                        !matches!(
+                            nxt.as_str(),
+                            "-s" | "--select"
+                                | "-rp"
+                                | "--replace"
+                                | "-dp"
+                                | "--display"
+                                | "-d"
+                                | "--depth"
+                                | "-l"
+                                | "--limit"
+                                | "-h"
+                                | "--help"
+                        ) && !nxt.starts_with("--limit=")
+                            && !nxt.starts_with("--select=")
+                    })
+                });
+                match val {
+                    Some(v) => {
+                        select = Some(v);
+                        if !has_inline {
+                            i += 1;
+                        }
+                    }
+                    None => return Err("empty_select".into()),
+                }
+            }
+            "-l" | "--limit" => {
+                let has_inline = inline_val.is_some();
+                let raw = inline_val.clone().or_else(|| parts.get(i + 1).cloned());
+                if let Some(v) = parse_usize_value(raw.as_ref()).filter(|v| *v > 0) {
+                    limit = Some(v);
+                    if !has_inline {
+                        i += 1;
+                    }
+                }
+            }
+            s if s.starts_with("--limit=") => {
+                if let Some(v) = s["--limit=".len()..]
+                    .parse::<usize>()
+                    .ok()
+                    .filter(|v| *v > 0)
+                {
+                    limit = Some(v);
+                }
+            }
+            _ => {}
+        }
+        i += 1;
+    }
+
+    match select {
+        Some(s) if !s.trim().is_empty() => Ok((s, limit)),
+        _ => Err("stdin_needs_select".into()),
+    }
+}
+
+/// Filter piped / redirected text by `-s <pattern>` (case-insensitive
+/// substring, same as `gs`), printing matching lines grep-style.
+fn run_qur_stdin(args: &str) -> Result<bool> {
+    let (pattern, limit) = match parse_qur_stdin_args(args) {
+        Ok(v) => v,
+        Err(_) => {
+            print_error(&t!("misc.qur.stdin_needs_select"));
+            return Ok(false);
+        }
+    };
+    let text = crate::shell::stdin::read_to_string().unwrap_or_default();
+    let mut matches = search::search_text_lines(&text, &pattern);
+    if let Some(lim) = limit {
+        if matches.len() > lim {
+            matches.truncate(lim);
+        }
+    }
+    if matches.len() > 20_000 {
+        matches.truncate(20_000);
+    }
+    print!("{}", search::format_text_matches(&matches, &pattern));
+    Ok(false)
+}
+
 pub fn cmd_qur(args: &str, nav: &mut Navigator) -> Result<bool> {
     if args.trim().is_empty() {
-        print_qur_usage();
+        // Keep stdout clean when piped (usage text would land in the pipe).
+        if crate::shell::stdin::has_input() {
+            print_error(&t!("misc.qur.stdin_needs_select"));
+        } else {
+            print_qur_usage();
+        }
         return Ok(false);
     }
+
+    // Piped / redirected input: `qur -s <pattern>` filters the provided text.
+    if crate::shell::stdin::has_input() {
+        return run_qur_stdin(args);
+    }
+
     let parsed = match parse_qur_args(args) {
         Ok(p) => p,
         Err(e) => {
@@ -652,6 +766,32 @@ mod tests {
         assert!(parse_qur_args("*.* -rp new").is_err());
         assert!(parse_qur_args("*.* -dp").is_err());
         assert!(parse_qur_args("").is_err());
+    }
+
+    #[test]
+    fn parse_stdin_args_extracts_select_and_limit() {
+        let (p, l) = parse_qur_stdin_args("-s foo").unwrap();
+        assert_eq!(p, "foo");
+        assert_eq!(l, None);
+
+        let (p, l) = parse_qur_stdin_args("-s \"foo bar\" -l 5").unwrap();
+        assert_eq!(p, "foo bar");
+        assert_eq!(l, Some(5));
+
+        let (p, l) = parse_qur_stdin_args("--select=old --limit=3").unwrap();
+        assert_eq!(p, "old");
+        assert_eq!(l, Some(3));
+
+        // Globs and replace/display flags are ignored in stdin mode.
+        let (p, l) = parse_qur_stdin_args("*.rs -s needle -l 1 -rp nope -dp").unwrap();
+        assert_eq!(p, "needle");
+        assert_eq!(l, Some(1));
+    }
+
+    #[test]
+    fn parse_stdin_args_requires_select() {
+        assert!(parse_qur_stdin_args("*.rs").is_err());
+        assert!(parse_qur_stdin_args("-l 5").is_err());
     }
 
     #[test]

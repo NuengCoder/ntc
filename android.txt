@@ -4,6 +4,10 @@ ntc Android Install Instructions
 1. Windows
    ran android
 
+   Requires an Android NDK with the API 26 platform sysroot and
+   Android 8.0 / API 26 or newer. cpal uses AAudio, so the build target is
+   API 26 (libaaudio.so is not available in older NDK platform sysroots).
+
 2. Pack into archive:
    tar -czvf ntc-v$(ver)-aarch64-linux-android.tar.gz -C target/aarch64-linux-android/release ntc
 

@@ -178,6 +178,7 @@ pub fn cmd_serve_files(args: &str, _nav: &mut Navigator) -> Result<bool> {
     let mut share_path: Option<String> = None;
     let mut no_qr = false;
     let mut want_qr = false;
+    let mut locked = false;
 
     let mut i = 0;
     while i < tokens.len() {
@@ -219,6 +220,9 @@ pub fn cmd_serve_files(args: &str, _nav: &mut Navigator) -> Result<bool> {
             }
             "--no-qr" => {
                 no_qr = true;
+            }
+            "--lock" => {
+                locked = true;
             }
             "--auth" => {
                 i += 1;
@@ -264,6 +268,9 @@ pub fn cmd_serve_files(args: &str, _nav: &mut Navigator) -> Result<bool> {
     if let Some((ref user, _)) = auth {
         print_info(&t!("cmd.serve.auth_on", user));
     }
+    if locked {
+        print_info(&t!("cmd.serve.lock_on"));
+    }
 
     if share_mode {
         print_share_block(port, &bind, share_path.as_deref(), !no_qr || want_qr);
@@ -291,7 +298,7 @@ pub fn cmd_serve_files(args: &str, _nav: &mut Navigator) -> Result<bool> {
                 let db = db.clone();
                 let web = web.clone();
                 let auth = auth.clone();
-                std::thread::spawn(move || handle_connection(stream, db, spa, web, auth));
+                std::thread::spawn(move || handle_connection(stream, db, spa, web, auth, locked));
             }
             Err(e) if e.kind() == std::io::ErrorKind::WouldBlock => {
                 std::thread::sleep(std::time::Duration::from_millis(200));
@@ -342,6 +349,96 @@ pub(crate) fn auth_matches(given: &str, expected: &str) -> bool {
         diff |= a[i] ^ b[i];
     }
     diff == 0
+}
+
+/// Short-lived download tokens so a browser-native `<a href>` download can
+/// show the browser's own progress bar even when `--auth` is on (plain links
+/// can't attach the `Authorization` header).
+///
+/// Token is bound to one file id, valid 5 min, reusable within the window
+/// (lets the browser retry). Stored in-memory only.
+const DOWNLOAD_TOKEN_TTL_SECS: u64 = 300;
+
+fn download_tokens() -> &'static std::sync::Mutex<HashMap<String, (i64, u64)>> {
+    static TOKENS: std::sync::OnceLock<std::sync::Mutex<HashMap<String, (i64, u64)>>> =
+        std::sync::OnceLock::new();
+    TOKENS.get_or_init(|| std::sync::Mutex::new(HashMap::new()))
+}
+
+fn now_epoch() -> u64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_secs()
+}
+
+fn mint_download_token(file_id: i64) -> String {
+    static CTR: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+    let n = CTR.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    let nanos = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_nanos();
+    // No extra deps: (pid, nanos, counter, file_id) hashed twice for spread.
+    use std::collections::hash_map::DefaultHasher;
+    use std::hash::{Hash, Hasher};
+    let mut h1 = DefaultHasher::new();
+    (std::process::id(), nanos, n, file_id).hash(&mut h1);
+    let a = h1.finish();
+    let mut h2 = DefaultHasher::new();
+    (
+        nanos ^ ((a as u128) << 64 | a as u128),
+        n.wrapping_mul(0x9e37_79b9_7f4a_7c15),
+    )
+        .hash(&mut h2);
+    let b = h2.finish();
+    let token = format!("{:016x}{:016x}", a, b);
+    let exp = now_epoch().saturating_add(DOWNLOAD_TOKEN_TTL_SECS);
+    if let Ok(mut m) = download_tokens().lock() {
+        // Opportunistic expiry sweep so the map can't grow unbounded.
+        let now = now_epoch();
+        m.retain(|_, (_, e)| *e > now);
+        m.insert(token.clone(), (file_id, exp));
+    }
+    token
+}
+
+fn valid_download_token(token: &str, file_id: i64) -> bool {
+    if token.is_empty() || token.len() > 128 {
+        return false;
+    }
+    let now = now_epoch();
+    match download_tokens().lock() {
+        Ok(mut m) => {
+            match m.get(token) {
+                Some((fid, exp)) if *fid == file_id && *exp > now => true,
+                Some(_) => {
+                    // Wrong file or expired — drop it if expired.
+                    let expired = m.get(token).map(|(_, e)| *e <= now).unwrap_or(false);
+                    if expired {
+                        m.remove(token);
+                    }
+                    false
+                }
+                None => false,
+            }
+        }
+        Err(_) => false,
+    }
+}
+
+/// True when `?id=..&token=..` carries a live token for that file.
+/// Used by the auth gate so `GET /api/download` via plain link works.
+fn query_has_valid_download_token(query: &str) -> bool {
+    let q = parse_query(query);
+    let id: i64 = match q.get("id").and_then(|s| s.parse().ok()) {
+        Some(i) => i,
+        None => return false,
+    };
+    match q.get("token") {
+        Some(t) => valid_download_token(t, id),
+        None => false,
+    }
 }
 
 pub(crate) fn respond_unauthorized(stream: &mut TcpStream) {
@@ -475,6 +572,7 @@ fn handle_connection(
     spa_mode: bool,
     web_dir: Option<PathBuf>,
     auth: Option<std::sync::Arc<(String, String)>>,
+    locked: bool,
 ) {
     // The accepted socket may inherit non-blocking mode from the listener;
     // restore blocking semantics so reads/writes behave predictably.
@@ -537,12 +635,20 @@ fn handle_connection(
     // `--auth` was given. Static files stay public so the login page loads;
     // the check runs before any body is read so unauthenticated uploads
     // can't burn bandwidth or disk.
+    // Exception: `GET /api/download?id=..&token=..` accepts a short-lived
+    // download token (minted via POST /api/download-token with a valid
+    // header) so plain `<a href>` links get browser-native progress bars.
     if path.starts_with("/api/") {
         if let Some(ref creds) = auth {
             let expected = basic_expectation(&creds.0, &creds.1);
             if !auth_matches(&authorization, &expected) {
-                respond_unauthorized(&mut stream);
-                return;
+                let token_ok = method == "GET"
+                    && path == "/api/download"
+                    && query_has_valid_download_token(query);
+                if !token_ok {
+                    respond_unauthorized(&mut stream);
+                    return;
+                }
             }
         }
     }
@@ -648,6 +754,7 @@ fn handle_connection(
             &boundary,
             upload_file.as_deref(),
             db,
+            locked,
         )
     } else {
         ApiResponse::Bytes(serve_static(path, spa_mode, &web_dir))
@@ -902,10 +1009,25 @@ fn handle_api(
     boundary: &str,
     upload_path: Option<&Path>,
     db: Arc<Mutex<rusqlite::Connection>>,
+    locked: bool,
 ) -> ApiResponse {
+    // `--lock`: read-only server — list + download only. Mutations return 403.
+    if locked {
+        match (method, path) {
+            ("POST", "/api/upload")
+            | ("POST", "/api/upload-chunk")
+            | ("POST", "/api/upload-finalize")
+            | ("DELETE", "/api/upload-cancel")
+            | ("POST", "/api/create-folder")
+            | ("DELETE", "/api/delete")
+            | ("PATCH", "/api/rename") => return ApiResponse::Bytes(json_error(403)),
+            _ => {}
+        }
+    }
     match (method, path) {
-        ("GET", "/api/files") => ApiResponse::Bytes(api_list_files(query, db)),
+        ("GET", "/api/files") => ApiResponse::Bytes(api_list_files(query, db, locked)),
         ("GET", "/api/download") => api_download(query, db),
+        ("POST", "/api/download-token") => ApiResponse::Bytes(api_download_token(body, db)),
         ("POST", "/api/upload") => match upload_path {
             Some(p) => api_upload(p, boundary, db),
             None => ApiResponse::Bytes(json_error(400)),
@@ -968,7 +1090,7 @@ fn lock(db: &Arc<Mutex<rusqlite::Connection>>) -> std::sync::MutexGuard<'_, rusq
 
 // ── API: List files ───────────────────────────────────────────────────────
 
-fn api_list_files(query: &str, db: Arc<Mutex<rusqlite::Connection>>) -> Vec<u8> {
+fn api_list_files(query: &str, db: Arc<Mutex<rusqlite::Connection>>, locked: bool) -> Vec<u8> {
     let q = parse_query(query);
     let p = q.get("path").map(|s| s.as_str()).unwrap_or("/");
     let db = lock(&db);
@@ -981,7 +1103,47 @@ fn api_list_files(query: &str, db: Arc<Mutex<rusqlite::Connection>>) -> Vec<u8> 
         Ok(rows) => rows.filter_map(|r| r.ok()).collect(),
         Err(_) => vec![],
     };
-    json_ok(serde_json::to_vec(&serde_json::json!({"path": p, "items": items})).unwrap())
+    json_ok(
+        serde_json::to_vec(&serde_json::json!({"path": p, "items": items, "locked": locked}))
+            .unwrap(),
+    )
+}
+
+// ── API: Download token (for browser-native progress with --auth) ───────
+
+fn api_download_token(body: &[u8], db: Arc<Mutex<rusqlite::Connection>>) -> Vec<u8> {
+    let j: serde_json::Value = match serde_json::from_slice(body) {
+        Ok(v) => v,
+        Err(_) => return json_error(400),
+    };
+    let id: i64 = match j["id"].as_i64() {
+        Some(i) => i,
+        None => return json_error(400),
+    };
+    // Token must point at a real file (not a dir) so random ids can't mint.
+    {
+        let db = lock(&db);
+        let ok: bool = db
+            .query_row(
+                "SELECT COUNT(*) FROM files WHERE id = ?1 AND is_dir = 0",
+                params![id],
+                |row| row.get::<_, i64>(0),
+            )
+            .map(|n| n > 0)
+            .unwrap_or(false);
+        if !ok {
+            return json_error(404);
+        }
+    }
+    let token = mint_download_token(id);
+    json_ok(
+        serde_json::to_vec(&serde_json::json!({
+            "token": token,
+            "url": format!("/api/download?id={}&token={}", id, token),
+            "expiresIn": DOWNLOAD_TOKEN_TTL_SECS,
+        }))
+        .unwrap(),
+    )
 }
 
 // ── API: Download ─────────────────────────────────────────────────────────
@@ -1862,6 +2024,7 @@ fn print_serve_help() {
     println!("  {}", t!("cmd.serve.help_port"));
     println!("  {}", t!("cmd.serve.help_bind"));
     println!("  {}", t!("cmd.serve.help_auth"));
+    println!("  {}", t!("cmd.serve.help_lock"));
     println!("  {}", t!("cmd.serve.help_tunnel"));
     println!("  {}", t!("cmd.serve.help_share"));
     println!("  {}", t!("cmd.serve.help_qr"));
@@ -2008,5 +2171,88 @@ mod tests {
     fn primary_lan_ip_never_panics() {
         // Environment-dependent (CI may have no route); must not panic.
         let _ = primary_lan_ip();
+    }
+
+    #[test]
+    fn download_token_bound_to_file_id() {
+        let t1 = mint_download_token(42);
+        let t2 = mint_download_token(43);
+        assert!(!t1.is_empty() && !t2.is_empty());
+        assert_ne!(t1, t2);
+        assert!(valid_download_token(&t1, 42));
+        assert!(!valid_download_token(&t1, 43));
+        assert!(!valid_download_token(&t2, 42));
+        assert!(valid_download_token(&t2, 43));
+        assert!(!valid_download_token("", 42));
+        assert!(!valid_download_token("nope", 42));
+        // Query helper wires id+token together for the auth gate.
+        let q = format!("id=42&token={}", t1);
+        assert!(query_has_valid_download_token(&q));
+        assert!(!query_has_valid_download_token("id=43&token="));
+        assert!(!query_has_valid_download_token(&format!(
+            "id=43&token={}",
+            t1
+        )));
+    }
+
+    fn locked_response_status(method: &str, path: &str) -> u16 {
+        // handle_api is behind a DB handle; locked mutations return before touching it,
+        // so an empty in-memory DB is enough to observe the 403 gate.
+        let conn = rusqlite::Connection::open_in_memory().unwrap();
+        let db = Arc::new(Mutex::new(conn));
+        let resp = handle_api(method, path, "", b"", "", None, db, true);
+        match resp {
+            ApiResponse::Bytes(b) => {
+                let head = String::from_utf8_lossy(&b);
+                head.split_whitespace()
+                    .nth(1)
+                    .and_then(|s| s.parse::<u16>().ok())
+                    .unwrap_or(0)
+            }
+            ApiResponse::Stream { .. } => 200,
+        }
+    }
+
+    #[test]
+    fn lock_blocks_mutations_but_allows_reads() {
+        // Mutations → 403.
+        for (method, path) in [
+            ("POST", "/api/upload"),
+            ("POST", "/api/upload-chunk"),
+            ("POST", "/api/upload-finalize"),
+            ("DELETE", "/api/upload-cancel"),
+            ("POST", "/api/create-folder"),
+            ("DELETE", "/api/delete"),
+            ("PATCH", "/api/rename"),
+        ] {
+            assert_eq!(
+                locked_response_status(method, path),
+                403,
+                "{} {} should be forbidden under --lock",
+                method,
+                path
+            );
+        }
+        // Reads stay open (empty DB lists fine / download-token validates body).
+        let conn = rusqlite::Connection::open_in_memory().unwrap();
+        let db = Arc::new(Mutex::new(conn));
+        let resp = handle_api("GET", "/api/files", "", b"", "", None, db, true);
+        assert!(matches!(resp, ApiResponse::Bytes(_)));
+    }
+
+    #[test]
+    fn unlocked_router_does_not_lock_gate() {
+        // Same request unlocked must NOT hit the 403 gate (it falls through to
+        // the real handler — upload without a multipart path yields 400, not 403).
+        let conn = rusqlite::Connection::open_in_memory().unwrap();
+        let db = Arc::new(Mutex::new(conn));
+        let resp = handle_api("POST", "/api/upload", "", b"", "", None, db, false);
+        match resp {
+            ApiResponse::Bytes(b) => {
+                let head = String::from_utf8_lossy(&b);
+                assert!(head.contains("400"), "expected 400, got: {}", head);
+            }
+            ApiResponse::Stream { .. } => panic!("unexpected stream"),
+        }
     }
 }

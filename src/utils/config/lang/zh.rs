@@ -242,7 +242,7 @@ pub fn build_map() -> HashMap<String, String> {
 
     m.insert("alias.ral.hint_error".into(), "补全提示有误（{}）：别名未保存。".into());
 
-    m.insert("alias.ral.hint_usage".into(), "提示形如：#x --hint-dir  #y --hint-tp --hint-dir（--hint-tp|--hint-ext [列表]|--hint-spf|--hint-file|--hint-dir|--hint-fd|--hint-all） 选择形如：#x --select-dir  #x --select-ext rs,txt（--select-dir|--select-ext [列表]|--select-file|--select-fd|--select-tp） 内联值：#x --hint [8080,5000]  命名列表：#x --hint-n port（见 ral hintn）".into());
+    m.insert("alias.ral.hint_usage".into(), "提示形如：#x --hint-dir  #y --hint-tp --hint-dir（--hint-tp|--hint-ext [列表]|--hint-ext-name [列表]|--hint-spf|--hint-file|--hint-file-name|--hint-dir|--hint-fd|--hint-all） 选择形如：#x --select-dir  #x --select-ext rs,txt（--select-dir|--select-ext [列表]|--select-ext-name [列表]|--select-file|--select-file-name|--select-fd|--select-tp） 内联值：#x --hint [8080,5000]  命名列表：#x --hint-n port（见 ral hintn）".into());
 
     m.insert("alias.ral.hint_cmd".into(), " ral add <名称> <命令> #x --hint-dir  将参数 x 按目录补全".into());
 
@@ -280,9 +280,7 @@ pub fn build_map() -> HashMap<String, String> {
 
     m.insert("alias.ral.hintn_info_used_by".into(), "被引用".into());
 
-    m.insert("alias.ral.hintn_list_title_global".into(), "📌 提示列表（全局）".into());
 
-    m.insert("alias.ral.hintn_list_title_local".into(), "📌 提示列表（本地 ntconfig.toml）".into());
 
     m.insert("alias.ral.hintn_value_count".into(), "{} 个值".into());
 
@@ -293,6 +291,8 @@ pub fn build_map() -> HashMap<String, String> {
     m.insert("alias.ral.arr_sep_error".into(), "错误：{} 有 {} 个字符在数组 {} 中，请用 $x[,] 或 $x[c]".into());
 
     m.insert("alias.ral.example_hint_ext".into(), "ral add opimg \"image display ${x}\" #x --hint-ext png,jpeg,jpg,ico,bmp".into());
+
+    m.insert("alias.ral.example_rest".into(), "ral add hi \"echo $*{x}\"    # hi \"wow nice\" -> echo wow nice".into());
 
     m.insert("alias.ral.example_hint_array".into(), "ral add runc \"gcc -o ${o}.exe $x[] && .\\${o}.exe && rmf ${o}.exe\" #x[] --hint-ext c".into());
 
@@ -322,11 +322,8 @@ pub fn build_map() -> HashMap<String, String> {
 
     m.insert("alias.ral.list_cmd".into(), " ral list 显示所有别名".into());
 
-    m.insert("alias.ral.list_title_global".into(), "\u{1F4CC} 运行别名（全局）".into());
 
-    m.insert("alias.ral.list_title_local".into(), "\u{1F4CC} 运行别名（来自本地 ntconfig.toml）".into());
 
-    m.insert("alias.ral.local_config_only".into(), " （仅本地配置 - 全局别名安全）".into());
 
     m.insert("alias.ral.make_cmd".into(), " ral make [名称] 在当前目录创建别名模板".into());
 
@@ -348,6 +345,8 @@ pub fn build_map() -> HashMap<String, String> {
 
     m.insert("alias.ral.param_cmd".into(), " ral add <名称>(x) <命令> 创建参数化别名（在命令中使用 $x 或 ${{x}}）".into());
 
+    m.insert("alias.ral.rest_cmd".into(), " ral add <名称>(x) <命令> 使用 $*{x}  捕获一个参数（保留空格，去除引号）".into());
+
     m.insert("alias.ral.renamed".into(), "别名 '{}' 已重命名为 '{}'".into());
 
     m.insert("alias.ral.rm_cmd".into(), " ral rm <名称>[, <名称>, ...] 删除别名".into());
@@ -358,7 +357,6 @@ pub fn build_map() -> HashMap<String, String> {
 
     m.insert("alias.ral.template_info".into(), "这是一个本地模板文件。使用 'ral import' 将别名添加到配置。".into());
 
-    m.insert("alias.ral.tip_local".into(), "\u{1F4A1} 提示：这些别名是项目特定的（保存在 ntconfig.toml 中）".into());
 
     m.insert("alias.ral.title".into(), "运行别名（ral）命令：".into());
 
@@ -1422,7 +1420,9 @@ pub fn build_map() -> HashMap<String, String> {
 
     m.insert("cmd.config.deinit.skipped".into(), "已跳过。".into());
 
-    m.insert("cmd.config.deinit.usage".into(), "用法：deinit [--all | --ran | --local]".into());
+    m.insert("cmd.config.deinit.usage".into(), "用法：deinit [--all | --ran | --local | --opencode] [--force]".into());
+
+    m.insert("cmd.config.deinit.opencode_not_found".into(), "未找到 .opencode 脚手架，跳过。".into());
 
     m.insert("cmd.config.example_depth".into(), " config depth 4  # 设置最大深度为4".into());
 
@@ -1444,7 +1444,9 @@ pub fn build_map() -> HashMap<String, String> {
 
     m.insert("cmd.config.init.local_exists".into(), "ntconfig.toml 已存在，跳过。".into());
 
-    m.insert("cmd.config.init.usage".into(), "用法：init [--all | --ran | --local]".into());
+    m.insert("cmd.config.init.usage".into(), "用法：init [--all | --ran | --local | --opencode] [--force]".into());
+
+    m.insert("cmd.config.init.opencode_ready".into(), "OpenCode 脚手架已就绪：{}".into());
 
     m.insert("cmd.config.lang.active".into(), "{}（活动中）".into());
 
@@ -1460,25 +1462,19 @@ pub fn build_map() -> HashMap<String, String> {
 
     m.insert("cmd.config.local.create_failed".into(), "创建 ntconfig.toml 失败：{}".into());
 
-    m.insert("cmd.config.local.created_export".into(), "已在 {} 创建 ntconfig.toml（当前设置）".into());
 
     m.insert("cmd.config.local.created_template".into(), "已在 {} 创建 ntconfig.toml 模板".into());
 
     m.insert("cmd.config.local.exists_warning".into(), "\u{26a0}\u{fe0f} ntconfig.toml 已存在！".into());
 
-    m.insert("cmd.config.local.export_aliases".into(), " \u{2022} 运行别名".into());
 
-    m.insert("cmd.config.local.export_extras".into(), " \u{2022} 额外支持的文件/扩展名".into());
 
-    m.insert("cmd.config.local.export_ignores".into(), " \u{2022} 忽略的目录/扩展名/文件".into());
 
-    m.insert("cmd.config.local.export_valid".into(), "\u{2705} 已导出有效 TOML 语法的活动配置：".into());
 
     m.insert("cmd.config.local.init_cancelled".into(), "初始化已取消。".into());
 
     m.insert("cmd.config.local.overwrite_prompt".into(), "是否覆盖？(y/N)：".into());
 
-    m.insert("cmd.config.local.template_all_hint".into(), " 或运行：local init --all 导出当前设置".into());
 
     m.insert("cmd.config.local.template_edit_hint".into(), " 编辑文件并删除想启用的行前的 '#'".into());
 
@@ -1628,13 +1624,29 @@ pub fn build_map() -> HashMap<String, String> {
 
     m.insert("cmd.fmt.file_not_found".into(), "文件未找到：{}".into());
 
+    m.insert("cmd.fmt.binary_file".into(), "检测到二进制或压缩文件。fmt 只支持文本格式。".into());
+
+    m.insert("cmd.fmt.cross_family".into(), "无法将 '{}' 转换为 '{}'：属于不同的格式家族（{} 对 {}）。".into());
+
+    m.insert("cmd.fmt.doc_ser_err".into(), "以 '{}' 序列化文档失败：{}".into());
+
+    m.insert("cmd.fmt.docx_needs_output".into(), "DOCX 输出需要指定输出文件（-o <文件>）。".into());
+
+    m.insert("cmd.fmt.pdf_needs_output".into(), "PDF 输出需要指定输出文件（-o <文件>）。".into());
+
+    m.insert("cmd.fmt.xlsx_needs_output".into(), "XLSX 输出需要指定输出文件（-o <文件>）。".into());
+
+    m.insert("cmd.fmt.pdf_source_unsupported".into(), "不支持 PDF 输入；fmt 只能输出 PDF（-o <文件.pdf>）。".into());
+
+    m.insert("cmd.fmt.xlsx_source_unsupported".into(), "不支持 XLSX 输入；fmt 只能输出 XLSX（-o <文件.xlsx>）。".into());
+
+    m.insert("cmd.fmt.pdf_unsupported".into(), "当前平台不支持 PDF 输出。".into());
+
     m.insert("cmd.fmt.invalid_json".into(), "无效的 JSON：{}".into());
 
     m.insert("cmd.fmt.invalid_toml".into(), "无效的 TOML：{}".into());
 
     m.insert("cmd.fmt.invalid_yaml".into(), "无效的 YAML：{}".into());
-
-    m.insert("cmd.fmt.json_ser_err".into(), "JSON 序列化错误：{}".into());
 
     m.insert("cmd.fmt.json_ser_err".into(), "JSON 序列化错误：{}".into());
 
@@ -1646,11 +1658,13 @@ pub fn build_map() -> HashMap<String, String> {
 
     m.insert("cmd.fmt.toml_ser_err".into(), "TOML 序列化错误：{}".into());
 
-    m.insert("cmd.fmt.unknown_format".into(), "未知格式：'{}'。请使用 json、yaml 或 toml。".into());
+    m.insert("cmd.fmt.unknown_format".into(), "不支持的文件类型：'{}'。fmt 需要以下扩展名的文件：json、yaml、toml、md、html、xml、docx、txt、pdf、csv、tsv 或 xlsx。".into());
 
-    m.insert("cmd.fmt.unknown_target".into(), "未知的目标格式：'{}'。请使用 json、yaml 或 toml。".into());
+    m.insert("cmd.fmt.unknown_target".into(), "未知的目标格式：'{}'。请使用 json、yaml、toml、md、html、xml、docx、txt、pdf、csv、tsv 或 xlsx。".into());
 
-    m.insert("cmd.fmt.usage".into(), "用法：fmt json|yaml|toml <文件> [to json|yaml|toml] [-o <文件>]".into());
+    m.insert("cmd.fmt.legacy_syntax".into(), "语法已更改：源格式取自文件扩展名。请使用：fmt <文件> [to <格式>] [-o <输出>]".into());
+
+    m.insert("cmd.fmt.usage".into(), "用法：fmt <文件> [to json|yaml|toml|md|html|xml|docx|txt|pdf|csv|tsv|xlsx] [-o <输出>]".into());
 
     m.insert("cmd.fmt.written_to".into(), "已写入：{}".into());
 
@@ -1862,9 +1876,7 @@ pub fn build_map() -> HashMap<String, String> {
 
     m.insert("cmd.igcare.unknown_subcmd".into(), "未知的 igcare 子命令：{}".into());
 
-    m.insert("cmd.igcared.combined_hint".into(), "全局 + 本地设置合并：".into());
 
-    m.insert("cmd.igcared.combined_hint".into(), "全局 + 本地设置合并：".into());
 
     m.insert("cmd.igcared.extra_exts".into(), "额外扩展名：{:?}".into());
 
@@ -1890,21 +1902,13 @@ pub fn build_map() -> HashMap<String, String> {
 
     m.insert("cmd.igcared.local_config".into(), "    本地配置：{}".into());
 
-    m.insert("cmd.igcared.local_tip".into(), "运行 'igcared' 查看合并设置".into());
 
-    m.insert("cmd.igcared.local_tip2".into(), "使用 'igcared' 查看当前状态".into());
 
-    m.insert("cmd.igcared.separator".into(), "─".into());
 
-    m.insert("cmd.igcared.separator".into(), "─".into());
 
-    m.insert("cmd.igcared.title_combined".into(), "合并设置".into());
 
-    m.insert("cmd.igcared.title_combined".into(), "合并设置".into());
 
-    m.insert("cmd.igcared.title_global".into(), "全局设置".into());
 
-    m.insert("cmd.igcared.title_global".into(), "全局设置".into());
 
     m.insert("cmd.ignore.applied".into(), "{} {} 个项目".into());
 
@@ -2065,6 +2069,10 @@ pub fn build_map() -> HashMap<String, String> {
     m.insert("cmd.nav.where.current_dir".into(), "\u{1f4c2} 当前目录：".into());
 
     m.insert("cmd.nav.where.executable".into(), "\u{1f4c1} 可执行文件：".into());
+
+    m.insert("cmd.nav.where.not_found".into(), "\u{2717} 在 PATH 中未找到 '{}'".into());
+
+    m.insert("cmd.nav.where.path_title".into(), "\u{1f50d} '{}' 在 PATH 中的匹配项：".into());
 
     m.insert("cmd.nav.where.title".into(), "ntc 位置信息".into());
 
@@ -2282,6 +2290,8 @@ pub fn build_map() -> HashMap<String, String> {
 
     m.insert("cmd.report.file_not_found".into(), "文件未找到：{}".into());
 
+    m.insert("cmd.report.no_files_in_dir".into(), "该目录中没有可显示的支持文件：{}".into());
+
     m.insert("cmd.report.help_docx".into(), "  report docx [路径]      生成 DOCX 报告".into());
 
     m.insert("cmd.report.help_html".into(), "  report html [路径]      生成 HTML 报告".into());
@@ -2476,6 +2486,10 @@ pub fn build_map() -> HashMap<String, String> {
     m.insert("cmd.serve.missing_auth".into(), "缺少 --auth 的值".into());
     m.insert("cmd.serve.auth_on".into(), "已为用户 '{}' 启用 API 登录验证".into());
 
+    m.insert("cmd.serve.help_lock".into(), "  --lock                只读：允许下载/列出，禁止上传/编辑/创建/删除".into());
+
+    m.insert("cmd.serve.lock_on".into(), "只读模式 (--lock)：已阻止上传、编辑、创建和删除".into());
+
     m.insert("cmd.nssh.usage_title".into(), "用法：".into());
     m.insert("cmd.nssh.help_add".into(), "nssh add <名称> --host <主机> [--user 用户] [--port 端口] [--key 密钥] [--pass-env 变量]".into());
     m.insert("cmd.nssh.help_ssh".into(), "nssh ssh [名称] [--cmd \"命令\"] [--trust] [--ask-pass] [--timeout 秒]".into());
@@ -2610,6 +2624,39 @@ pub fn build_map() -> HashMap<String, String> {
     m.insert("cmd.nsheet.tui_no_matches".into(), "无匹配".into());
     m.insert("cmd.nsheet.tui_large".into(), "大表格（{} 行）—— 导航可能较慢".into());
 
+    m.insert("cmd.nms.usage_title".into(), "用法：".into());
+    m.insert("cmd.nms.help_play".into(), "nms play <文件>                                 全屏声音播放器（视频仅播放音频）".into());
+    m.insert("cmd.nms.help_scan".into(), "nms scan [-d|--depth <n>] [-s|--size] [-l|--long <时长>] [--care]  列出音频 + 视频文件".into());
+    m.insert("cmd.nms.help_help".into(), "nms help                                         显示此帮助".into());
+    m.insert("cmd.nms.options_title".into(), "选项：".into());
+    m.insert("cmd.nms.help_depth".into(), "  -d, --depth <n>   最大递归深度（默认取自配置）".into());
+    m.insert("cmd.nms.help_size".into(), "  -s, --size        显示文件大小和总计".into());
+    m.insert("cmd.nms.help_long".into(), "  -l, --long <时长>  仅列出长于 <时长> 的媒体（如 25s、1mn、1h）".into());
+    m.insert("cmd.nms.help_care".into(), "  --care            忽略忽略规则（care 模式）".into());
+    m.insert("cmd.nms.keys_title".into(), "播放器按键：".into());
+    m.insert("cmd.nms.help_keys".into(), "  空格 暂停/继续 · ←/→ 快进快退 5 秒 · ↑/↓ 音量 · a 重播 · q 退出".into());
+    m.insert("cmd.nms.examples_title".into(), "示例：".into());
+    m.insert("cmd.nms.example_play".into(), "nms play song.mp3".into());
+    m.insert("cmd.nms.example_video".into(), "nms play movie.mp4".into());
+    m.insert("cmd.nms.example_scan".into(), "nms scan -d 2 -s".into());
+    m.insert("cmd.nms.example_long".into(), "nms scan -l 1mn".into());
+    m.insert("cmd.nms.play_missing_file".into(), "缺少文件。用法：nms play <文件>".into());
+    m.insert("cmd.nms.file_not_found".into(), "未找到文件 '{}'".into());
+    m.insert("cmd.nms.not_media".into(), "不是音频/视频文件：'{}'".into());
+    m.insert("cmd.nms.no_sound_device".into(), "此设备未找到声卡设备 —— 无法在此播放音频".into());
+    m.insert("cmd.nms.play_failed".into(), "无法播放 '{}'：{}".into());
+    m.insert("cmd.nms.unknown_sub".into(), "未知的 nms 子命令：{}".into());
+    m.insert("cmd.nms.unknown_option".into(), "未知选项：{}".into());
+    m.insert("cmd.nms.depth_usage".into(), "用法：--depth <n>".into());
+    m.insert("cmd.nms.invalid_depth".into(), "无效深度：'{}'".into());
+    m.insert("cmd.nms.long_usage".into(), "用法：--long <时长>（如 25s、1mn、1h）".into());
+    m.insert("cmd.nms.invalid_long".into(), "无效时长：'{}'（如 25s、1mn、1h）".into());
+    m.insert("cmd.nms.long_none".into(), "没有长于 {} 的媒体".into());
+    m.insert("cmd.nms.no_files".into(), "未找到音频/视频文件".into());
+    m.insert("cmd.nms.list_title".into(), "媒体文件（音频 + 视频）：".into());
+    m.insert("cmd.nms.total_files".into(), "{} 个文件".into());
+    m.insert("cmd.nms.total_files_size".into(), "{} 个文件，共 {}".into());
+
     m.insert("cmd.serve.help_web_dir".into(), "  --web-dir, -w <目录> 使用自定义前端目录".into());
 
     m.insert("cmd.serve.invalid_port".into(), "无效的端口".into());
@@ -2683,6 +2730,34 @@ pub fn build_map() -> HashMap<String, String> {
     m.insert("cmd.smtp.decode_failed".into(), "解码存储的密码失败".into());
 
     m.insert("cmd.smtp.decode_failed".into(), "解码存储的密码失败".into());
+
+    m.insert("cmd.smtp.body_file_missing".into(), "找不到正文文件：{}".into());
+
+    m.insert("cmd.smtp.body_html_from_file".into(), "HTML 正文来自文件：{}".into());
+
+    m.insert("cmd.smtp.body_md_from_file".into(), "Markdown 正文来自文件：{}（已渲染为 HTML）".into());
+
+    m.insert("cmd.smtp.body_read_fail".into(), "读取正文文件 {} 失败：{}".into());
+
+    m.insert("cmd.smtp.body_stdin_empty".into(), "未从标准输入收到正文".into());
+
+    m.insert("cmd.smtp.body_text_from_file".into(), "纯文本正文来自文件：{}".into());
+
+    m.insert("cmd.smtp.help_body_file".into(), "  -b letter.html | letter.md       从文件读取正文（Markdown 会渲染为 HTML）".into());
+
+    m.insert("cmd.smtp.help_body_format".into(), "  --body-format auto|text|html|md  强制指定 -b 的解析方式".into());
+
+    m.insert("cmd.smtp.help_body_inline".into(), "  -b '<p style=text-align:center>你好</p>'   自动识别内联 HTML".into());
+
+    m.insert("cmd.smtp.help_body_stdin".into(), "  -b -                            从标准输入读取正文".into());
+
+    m.insert("cmd.smtp.help_body_title".into(), "邮件正文：".into());
+
+    m.insert("cmd.smtp.invalid_body_format".into(), "未知的正文格式 '{}'（可用 auto、text、html、md）".into());
+
+    m.insert("cmd.smtp.missing_body_file".into(), "--body-file 后缺少路径".into());
+
+    m.insert("cmd.smtp.missing_body_format".into(), "--body-format 后缺少值".into());
 
     m.insert("cmd.smtp.help_attachments_desc".into(), "  -f 接受逗号分隔的文件路径和目录（目录中的文件会递归展开）".into());
 
@@ -4270,29 +4345,31 @@ pub fn build_map() -> HashMap<String, String> {
 
     m.insert("error.unsupported_shell".into(), "不支持的Shell：{}。使用：bash, zsh, fish, powershell".into());
 
-    m.insert("fmt.help_example1".into(), "  fmt json package.json to yaml".into());
+    m.insert("fmt.help_example1".into(), "  fmt package.json to yaml".into());
 
-    m.insert("fmt.help_example2".into(), "  fmt json config.json to toml -o config.toml".into());
+    m.insert("fmt.help_example2".into(), "  fmt config.json to toml -o config.toml".into());
 
-    m.insert("fmt.help_example3".into(), "  fmt yaml config.yaml to json".into());
+    m.insert("fmt.help_example3".into(), "  fmt config.yaml to json".into());
 
-    m.insert("fmt.help_example4".into(), "  fmt toml Cargo.toml to json".into());
+    m.insert("fmt.help_example4".into(), "  fmt Cargo.toml to json".into());
 
-    m.insert("fmt.help_example5".into(), "  fmt json data.json                      # 美化输出 JSON".into());
+    m.insert("fmt.help_example5".into(), "  fmt data.json                      # 按原格式美化输出".into());
+
+    m.insert("fmt.help_example6".into(), "  fmt report.docx to md              # DOCX 转 Markdown".into());
+
+    m.insert("fmt.help_example7".into(), "  fmt readme.md to html -o out.html".into());
+
+    m.insert("fmt.help_example8".into(), "  fmt notes.txt to pdf -o notes.pdf   # 文本转 PDF".into());
+
+    m.insert("fmt.help_example9".into(), "  fmt report.txt to docx -o report.docx".into());
+
+    m.insert("fmt.help_example10".into(), "  fmt data.csv to xlsx -o data.xlsx   # CSV 转 Excel".into());
 
     m.insert("fmt.help_examples".into(), "示例：".into());
 
-    m.insert("fmt.help_json_line".into(), "  fmt json <文件> [to yaml|toml] [-o <文件>]    将 JSON 转换为 YAML 或 TOML".into());
-
-    m.insert("fmt.help_no_target".into(), "  fmt json <文件>                          美化输出 JSON".into());
-
-    m.insert("fmt.help_no_target".into(), "  fmt json <文件>                          美化输出 JSON".into());
-
-    m.insert("fmt.help_toml_line".into(), "  fmt toml <文件> [to json|yaml] [-o <文件>]    将 TOML 转换为 JSON 或 YAML".into());
+    m.insert("fmt.help_no_target".into(), "  fmt <文件>                         按原格式美化 / 规范化".into());
 
     m.insert("fmt.help_usage".into(), "用法：".into());
-
-    m.insert("fmt.help_yaml_line".into(), "  fmt yaml <文件> [to json|toml] [-o <文件>]    将 YAML 转换为 JSON 或 TOML".into());
 
     m.insert("gosc.calculating_size".into(), "正在计算目录大小...".into());
 
@@ -4337,6 +4414,8 @@ pub fn build_map() -> HashMap<String, String> {
     m.insert("help.alias.add".into(), "ral add <名称> \"<命令>\" ## 创建别名".into());
 
     m.insert("help.alias.add_array".into(), "ral add <名称>(x[],y) \"<命令>\" ## 带数组参数的别名".into());
+
+    m.insert("help.alias.add_rest".into(), "ral add <名称>(x) \"echo $*{x}\" ## 捕获一个参数（保留空格，去除引号）".into());
 
     m.insert("help.alias.add_defaults".into(), "ral add <名称>({x=a,e=txt}) \"<命令>\" ## 带默认值的别名".into());
 
@@ -4442,7 +4521,6 @@ pub fn build_map() -> HashMap<String, String> {
 
     m.insert("help.config.local_init".into(), "local init ## 创建 ntconfig.toml 模板（已注释）".into());
 
-    m.insert("help.config.local_init_all".into(), "local init --all ## 将当前设置导出到 ntconfig.toml".into());
 
     m.insert("help.config.opencg".into(), "opencg ## 在编辑器中打开 config.toml".into());
 
@@ -4478,15 +4556,15 @@ pub fn build_map() -> HashMap<String, String> {
 
     m.insert("help.config.wi".into(), "wi [路径] ## 实时文件更改流（q=退出）".into());
 
-    m.insert("help.editor.ne".into(), "ne, ntceditor <文件> ## 在内置文本编辑器中打开文件".into());
+    m.insert("help.editor.ne".into(), "ne, ntceditor <文件> ## 在内置文本编辑器中打开已有文件".into());
 
-    m.insert("help.editor.ne_hyper".into(), "ne --hyper <名称> --lang <l> ## 创建C/C++ hyper项目".into());
+    m.insert("help.editor.ne_hyper".into(), "ne --hyper <名称> --lang <l> [-I] ## 创建C/C++ hyper项目（-I 打开项目目录）".into());
 
-    m.insert("help.editor.ne_init".into(), "ne --init <文件> ## 创建空文件模板".into());
+    m.insert("help.editor.ne_init".into(), "ne --init <文件> [<文件> ...] [-I <文件>] ## 创建模板文件；-I 打开其中一个".into());
 
     m.insert("help.editor.ne_line".into(), "ne, ntceditor <文件>:<n> ## 在第n行打开文件".into());
 
-    m.insert("help.editor.ne_super".into(), "ne --super <文件> ## 创建超级文件模板".into());
+    m.insert("help.editor.ne_super".into(), "ne --super <文件> [<文件> ...] [-I <文件>] ## 创建超级模板文件；-I 打开其中一个".into());
 
     m.insert("help.editor.ne_welcome".into(), "ne, ntceditor ## 在当前目录打开欢迎屏幕".into());
 
@@ -4530,13 +4608,13 @@ pub fn build_map() -> HashMap<String, String> {
 
     m.insert("help.explorer.title".into(), "文件浏览器（NFE）：".into());
 
-    m.insert("help.fileops.cp".into(), "cp <源|@tp> <目标|@tp> [-f] ## 复制文件或目录".into());
+    m.insert("help.fileops.cp".into(), "cp <源|@tp|通配符> <目标|@tp> [-f] ## 复制文件或目录（通配符源需目录目标）".into());
 
     m.insert("help.fileops.mkd".into(), "mkd <目录>[, ...] ## 创建新目录".into());
 
     m.insert("help.fileops.mkf".into(), "mkf <文件>[, ...] ## 创建新文件".into());
 
-    m.insert("help.fileops.rmd".into(), "rmd <目录>[, ...] ## 删除目录（需确认）".into());
+    m.insert("help.fileops.rmd".into(), "rmd <目录>[, ...] ## 删除目录；通配符确认后删除所有匹配项".into());
 
     m.insert("help.fileops.rmf".into(), "rmf <文件>[, ...] ## 删除文件（需确认）".into());
 
@@ -4544,7 +4622,7 @@ pub fn build_map() -> HashMap<String, String> {
 
     m.insert("help.fileops.rnmf".into(), "rnmf <旧名称> <新名称> ## 重命名文件".into());
 
-    m.insert("help.fileops.mv".into(), "mv <源|@tp> <目标|@tp> [-f] ## 移动/重命名文件或目录".into());
+    m.insert("help.fileops.mv".into(), "mv <源|@tp|通配符> <目标|@tp> [-f] ## 移动/重命名文件或目录（通配符源需目录目标）".into());
 
     m.insert("help.fileops.title".into(), "文件操作：".into());
 
@@ -4636,7 +4714,7 @@ pub fn build_map() -> HashMap<String, String> {
 
     m.insert("help.nav.title".into(), "导航命令：".into());
 
-    m.insert("help.nav.where".into(), "where ## 显示ntc可执行文件和配置位置".into());
+    m.insert("help.nav.where".into(), "where [<程序>] ## 显示ntc位置信息，或在PATH中查找程序".into());
 
     m.insert("help.nav.example1".into(), "cd src ## 导航到 src 目录".into());
 
@@ -4645,6 +4723,8 @@ pub fn build_map() -> HashMap<String, String> {
     m.insert("help.nav.example3".into(), "gos ## 交互式子目录选择".into());
 
     m.insert("help.nav.example4".into(), "cd to web ## 传送到 'web' 保存点".into());
+
+    m.insert("help.nav.example5".into(), "where git ## 在PATH中查找 git 的位置".into());
 
     m.insert("help.network.dl".into(), "dl <url> ## 下载文件（--progress, --resume, --stop, --cancel）".into());
 
@@ -4698,7 +4778,7 @@ pub fn build_map() -> HashMap<String, String> {
 
     m.insert("help.other.help".into(), "help ## 显示此帮助".into());
 
-    m.insert("help.other.init".into(), "init [--ran|--local] ## 初始化项目文件（NTCRANFILE.toml + ntconfig.toml）".into());
+    m.insert("help.other.init".into(), "init [--ran|--local|--opencode] ## 初始化项目文件（NTCRANFILE.toml、ntconfig.toml、.opencode/）".into());
 
     m.insert("help.other.print".into(), "print <文本> [--loop N] [-n|-t] ## say的别名".into());
 
@@ -4801,19 +4881,52 @@ pub fn build_map() -> HashMap<String, String> {
 
     m.insert("help.report.txtc".into(), "txtc <文件> ## 将文件内容复制到剪贴板".into());
 
-    m.insert("help.report.txtf".into(), "txtf [--head N|--tail N|--betw A:B] [文件] ## 显示文件内容（保留原始行号）".into());
+    m.insert("help.report.txtf".into(), "txtf [--head N|--tail N|--betw A:B] [文件|目录|@tp/文件|@tp/目录] ## 显示文件内容或从目录中选择文件（保留原始行号）".into());
 
     m.insert("cmd.report.invalid_range".into(), "无效的范围：'{}'（应为 n:m，如 --betw 10:20）".into());
 
-    m.insert("help.view.file_usage".into(), "view <文件> [--head N|--tail N|--betw A:B] ## 显示文件内容（同 txtf）".into());
+    m.insert("help.view.file_usage".into(), "view <文件|@tp/文件|@tp/目录/文件> [--head N|--tail N|--betw A:B] ## 显示文件内容（同 txtf）".into());
 
     m.insert("help.view.example10".into(), "view main.rs --tail 30 ## 显示 main.rs 最后 30 行".into());
 
     m.insert("help.view.example11".into(), "view main.rs --betw 10:20 ## 显示 main.rs 第 10-20 行".into());
 
+    m.insert("help.view.example12".into(), "view @docs/readme.md ## 显示传送点中的文件".into());
+
+    m.insert("help.viewf.title".into(), "VIEWF 命令（仅文件）：".into());
+    m.insert("help.viewf.tree".into(), "viewf [<目录|@tp|@tp/目录/>] ## 显示深度 1 的仅文件树".into());
+    m.insert("help.viewf.file_usage".into(), "viewf <文件|@tp/文件|@tp/目录/文件> [--head N|--tail N|--betw A:B] ## 显示文件内容（同 txtf）".into());
+    m.insert("help.viewf.size".into(), "viewf -s, --size [最小值] ## 显示文件大小；带值时隐藏更小的文件".into());
+    m.insert("help.viewf.sort".into(), "viewf --sort size|char|ext ## 排序文件项".into());
+    m.insert("help.viewf.ext".into(), "viewf -e, --ext <扩展名...> ## 仅显示匹配扩展名的文件".into());
+    m.insert("help.viewf.care".into(), "viewf -c, --care ## 计算大小时包含所有项".into());
+    m.insert("help.viewf.time".into(), "viewf -t, --time ## 显示执行时间".into());
+    m.insert("help.viewf.copy".into(), "viewf -cp, --copy ## 复制文件列表到剪贴板".into());
+    m.insert("help.viewf.example1".into(), "viewf ## 列出当前目录中的文件".into());
+    m.insert("help.viewf.example2".into(), "viewf src ## 列出 src 目录中的文件".into());
+    m.insert("help.viewf.example3".into(), "viewf -e rs,txt --sort size ## 按扩展名筛选并按大小排序".into());
+    m.insert("help.viewf.example4".into(), "viewf @docs/readme.md --head 20 ## 显示传送点文件".into());
+
+    m.insert("help.viewd.title".into(), "VIEWD 命令（仅目录）：".into());
+    m.insert("help.viewd.usage".into(), "viewd [<目录|@tp|@tp/目录/>] [-d N] ## 显示仅目录树".into());
+    m.insert("help.viewd.depth".into(), "viewd -d, --depth <n> ## 使用自定义深度".into());
+    m.insert("help.viewd.size".into(), "viewd -s, --size [最小值] ## 显示目录大小；带值时隐藏更小的目录".into());
+    m.insert("help.viewd.care".into(), "viewd -c, --care ## 计算大小时包含所有项".into());
+    m.insert("help.viewd.sort".into(), "viewd --sort size|char|ext ## 排序目录项".into());
+    m.insert("help.viewd.time".into(), "viewd -t, --time ## 显示执行时间".into());
+    m.insert("help.viewd.copy".into(), "viewd -cp, --copy ## 复制目录树到剪贴板".into());
+    m.insert("help.viewd.example1".into(), "viewd ## 仅显示当前目录树中的目录".into());
+    m.insert("help.viewd.example2".into(), "viewd -d 2 --size ## 显示两层目录及大小".into());
+    m.insert("help.viewd.example3".into(), "viewd --sort size ## 最大的目录在前".into());
+    m.insert("help.viewd.example4".into(), "viewd @docs/ ## 显示传送点中的目录".into());
+
     m.insert("help.report.txtf_example1".into(), "txtf main.rs --head 30 ## 显示 main.rs 前 30 行".into());
 
     m.insert("help.report.txtf_example2".into(), "txtf --betw 10:20 main.rs ## 显示 main.rs 第 10-20 行".into());
+
+    m.insert("help.report.txtf_example3".into(), "txtf @docs/notes.txt ## 显示传送点中的文件".into());
+
+    m.insert("help.report.txtf_example4".into(), "txtf src ## 从 src 目录中选择一个支持的文件显示".into());
 
     m.insert("help.report.xlsx".into(), "report xlsx [路径] ## 生成XLSX报告（含依赖分析）".into());
 
@@ -4841,11 +4954,13 @@ pub fn build_map() -> HashMap<String, String> {
 
     m.insert("help.search.fsc".into(), "fsc <模式> [-d <n>] ## 搜索文件，选择后显示并可选择复制".into());
 
-    m.insert("help.search.gs".into(), "gs <模式> [-d <n>] [-l <n>] ## 搜索文件内容（简单grep）".into());
+    m.insert("help.search.gs".into(), "gs <模式> [-p <glob>] [-s [line|path|size]] [-d <n>] [-l <n>] [-i] ## 搜索文件内容（简单grep）".into());
 
     m.insert("help.search.gs_interactive".into(), "gs -i <模式> [-d <n>] ## 交互式grep（每页10条，Enter打开）".into());
 
     m.insert("help.search.locate".into(), "locate <模式> [-d <n>] ## 同时搜索文件和目录".into());
+
+    m.insert("help.search.pipe".into(), "cmd | gs <模式> ## 搜索管道输入的内容（也支持 qur -s <模式>）".into());
 
     m.insert("help.search.title".into(), "搜索命令：".into());
 
@@ -4866,6 +4981,48 @@ pub fn build_map() -> HashMap<String, String> {
     m.insert("help.syscmd.native2".into(), "所有命令均可与NTC命令一起本地运行。".into());
 
     m.insert("help.syscmd.title".into(), "系统命令：".into());
+
+    m.insert("help.pipe.title".into(), "管道与重定向：".into());
+
+    m.insert("help.pipe.pipe".into(), "a | b ## 将 a 的输出作为 b 的输入".into());
+
+    m.insert("help.pipe.and".into(), "a && b ## 仅当 a 成功时运行 b".into());
+
+    m.insert("help.pipe.or".into(), "a || b ## 仅当 a 失败时运行 b".into());
+
+    m.insert("help.pipe.out".into(), "cmd > file ## 将输出写入文件（覆盖）".into());
+
+    m.insert("help.pipe.append".into(), "cmd >> file ## 将输出追加到文件".into());
+
+    m.insert("help.pipe.in".into(), "cmd < file ## 从文件读取输入".into());
+
+    m.insert("help.pipe.heredoc".into(), "cmd <<EOF ... EOF ## 读取输入直到 EOF 行".into());
+
+    m.insert("help.pipe.herestring".into(), "cmd <<< text ## 从字面文本读取输入".into());
+
+    m.insert("help.pipe.head".into(), "head [N] [file] ## 打印前 N 行（默认 10）".into());
+
+    m.insert("help.pipe.tail".into(), "tail [N] [file] ## 打印后 N 行（默认 10）".into());
+
+    m.insert("help.pipe.betw".into(), "betw A:B [file] ## 打印第 A 到 B 行（从 1 开始，含两端）".into());
+    m.insert("help.pipe.sort".into(), "sort [-r] [-n] [-u] [-f] [file] ## 排序行（倒序/数值/去重/忽略大小写）".into());
+
+    m.insert("help.pipe.rev".into(), "rev [file] ## 反转每行的字符".into());
+
+    m.insert("help.pipe.filters".into(), "cmd | head|tail|betw|gs|sort|rev|encode|qur ## 管道过滤器（其标志也可补全）".into());
+
+    m.insert("help.pipe.note".into(), "运算符两侧需要空格；使用 - 读取 stdin".into());
+
+    m.insert("help.pipe.hint".into(), "提示：| 列出管道过滤器；>> 和 < 仅列出文本文件；> 不提示；<< 只提示 EOF".into());
+
+    m.insert("help.pipe.example1".into(), "gs main > results.txt ## 将搜索结果保存到文件".into());
+
+    m.insert("help.pipe.example2".into(), "view readme.md | encode b64 ## 将文件内容编码".into());
+
+    m.insert("help.pipe.example3".into(), "gs main | say ## 通过 say 分页查看搜索结果".into());
+
+    m.insert("help.pipe.example4".into(), "head 20 app.log ## 文件（或管道输入）的前 20 行".into());
+    m.insert("help.pipe.example5".into(), "gs error | sort -u | head 10 ## 排序去重后的匹配，取前 10 行".into());
 
     m.insert("help.teleport.add".into(), "tp add <名称> ## 保存当前目录".into());
 
@@ -5005,9 +5162,23 @@ pub fn build_map() -> HashMap<String, String> {
     m.insert("help.nsheet.example2".into(), "nsheet view data.json --filter \"age>30\" --sort age ## 筛选并排序".into());
     m.insert("help.nsheet.example3".into(), "nsheet view a.csv --export md -o out.md ## 导出 Markdown".into());
 
-    m.insert("help.view.care".into(), "view --care ## 显示所有文件的树（不忽略）".into());
+    m.insert("help.nms.title".into(), "NMS 命令（NTC 音乐）：".into());
+    m.insert("help.nms.play".into(), "nms play <文件> ## 全屏声音播放器（空格暂停 · ←/→ 快进 · ↑/↓ 音量 · a 重播）".into());
+    m.insert("help.nms.scan".into(), "nms scan [-d <n>] [-s] [-l <时长>] [--care] ## 列出音频 + 视频文件（时长：25s、1mn、1h）".into());
+    m.insert("help.nms.long".into(), "nms scan -l <时长> ## 仅列出长于 <时长> 的媒体（如 25s、1mn、1h）".into());
+    m.insert("help.nms.keys".into(), "播放器界面：实时波形 + 高低电平表 · 视频仅播放音频 · 播放结束会定格，按 a 重播".into());
+    m.insert("help.nms.example1".into(), "nms play song.mp3 ## 播放音频文件".into());
+    m.insert("help.nms.example2".into(), "nms play movie.mp4 ## 播放视频的音轨".into());
+    m.insert("help.nms.example3".into(), "nms scan -d 2 -s ## 列出媒体文件及大小".into());
+    m.insert("help.nms.example4".into(), "nms scan -l 1mn ## 列出长于 1 分钟的媒体".into());
 
-    m.insert("help.view.cp".into(), "view -c, --cp ## 显示树并复制到剪贴板".into());
+    m.insert("help.view.care".into(), "view -c, --care ## 显示所有文件的树（不忽略）".into());
+
+    m.insert("help.view.cp".into(), "view -cp, --copy ## 显示树并复制到剪贴板".into());
+
+    m.insert("help.view.file_only".into(), "view -f, --file ## 仅显示文件（移除目录）".into());
+
+    m.insert("help.view.dir_only".into(), "view -dir, --directory ## 仅显示目录（移除文件）".into());
 
     m.insert("help.view.depth".into(), "view -d, --depth <n> ## 使用自定义深度显示树".into());
 
@@ -5023,7 +5194,7 @@ pub fn build_map() -> HashMap<String, String> {
 
     m.insert("help.view.filesize".into(), "view -fs, --filesize [最小值] ## 显示文件大小；带值时隐藏更小的文件".into());
 
-    m.insert("help.view.path".into(), "view -p, --path <路径|@tp> ## 显示指定路径或传送点的树".into());
+    m.insert("help.view.path".into(), "view -p, --path <路径|@tp|@tp/子路径> ## 显示指定路径或传送点路径的树".into());
 
     m.insert("help.view.size".into(), "view -s, --size [最小值] ## 显示大小；带值如 10KB、1.5MB 时隐藏更小的项".into());
 
@@ -5031,7 +5202,7 @@ pub fn build_map() -> HashMap<String, String> {
 
     m.insert("help.view.title".into(), "查看命令：".into());
 
-    m.insert("help.view.tree".into(), "view ## 显示目录树（使用配置的深度）".into());
+    m.insert("help.view.tree".into(), "view [<目录|文件|@tp|@tp/文件|@tp/目录/>] ## 显示目录树或文件内容".into());
 
     m.insert("helpers.building_tree".into(), "正在构建目录树...".into());
 
@@ -5267,11 +5438,21 @@ pub fn build_map() -> HashMap<String, String> {
 
     m.insert("misc.gs.example5".into(), " gs main -d 5 -l 10 # 仅显示前10个匹配".into());
 
+    m.insert("misc.gs.example6".into(), " gs main -p \"*.rs\" # 仅搜索匹配glob的文件".into());
+
+    m.insert("misc.gs.example7".into(), " gs main -s size # 按文件大小排序 (line|path|size, 裸-s=line)".into());
+
+    m.insert("misc.gs.example8".into(), " gs error\\|warning # 或搜索：匹配任意一个词 (a\\|b)".into());
+
+    m.insert("misc.gs.no_pipe_path".into(), "gs: -p 不能与管道输入混用 (管道传输的是文本而非文件)".into());
+
+    m.insert("misc.gs.pipe_sort_only_line".into(), "gs: 管道输入仅支持 -s line (path/size 需要文件)".into());
+
     m.insert("misc.gs.searching".into(), "正在搜索内容...".into());
 
     m.insert("misc.gs.many_results".into(), "gs：找到 {} 个匹配，显示前20,000个。请缩小搜索范围。".into());
 
-    m.insert("misc.gs.usage".into(), "用法：gs <模式> [-d <深度>] [-l <数量>] [-i]".into());
+    m.insert("misc.gs.usage".into(), "用法：gs <模式> [-d <深度>] [-l <数量>] [-i] [-p <glob>]... [-s [line|path|size]]".into());
 
     m.insert("misc.wi.not_dir".into(), "wi：不是目录：'{}'".into());
 
@@ -5311,6 +5492,8 @@ pub fn build_map() -> HashMap<String, String> {
 
     m.insert("misc.mkf.missing".into(), "mkf：缺少操作数".into());
 
+    m.insert("misc.ne.create_failed".into(), "无法创建模板：{}".into());
+
     m.insert("misc.ne.created_hyper".into(), "已创建 hyper 项目：{}".into());
 
     m.insert("misc.ne.created_super".into(), "已创建超级模板：{}".into());
@@ -5319,7 +5502,17 @@ pub fn build_map() -> HashMap<String, String> {
 
     m.insert("misc.ne.editor_error".into(), "编辑器错误：{}".into());
 
+    m.insert("misc.ne.file_missing".into(), "文件不存在：{}。使用 --init <文件> 或 --super <文件> 创建它。".into());
+
     m.insert("misc.ne.hyper_error".into(), "Hyper 项目错误：{}".into());
+
+    m.insert("misc.ne.missing_file".into(), "ne：缺少文件参数".into());
+
+    m.insert("misc.ne.one_file".into(), "一次只能创建一个文件".into());
+
+    m.insert("misc.ne.open_not_created".into(), "-I 文件必须是正在创建的文件之一：{}".into());
+
+    m.insert("misc.ne.usage_open".into(), "用法：-I <文件> 必须是最后一个参数（仅限一个文件）".into());
 
     m.insert("misc.ne.opened_welcome".into(), "已在 {} 中打开欢迎屏幕".into());
 
@@ -5340,6 +5533,14 @@ pub fn build_map() -> HashMap<String, String> {
     m.insert("misc.rmd.not_exist".into(), "rmd：'{}' 不存在".into());
 
     m.insert("misc.rmd.removed".into(), "已删除目录：{}".into());
+
+    m.insert("misc.rmd.no_match".into(), "rmd：没有匹配 '{}' 的目录".into());
+
+    m.insert("misc.rmd.pattern_matches".into(), "{} 个目录匹配 '{}'：".into());
+
+    m.insert("misc.rmd.confirm_delete".into(), "删除 {} 个目录？".into());
+
+    m.insert("misc.rmd.cancelled".into(), "已取消。".into());
 
     m.insert("misc.rmf.error".into(), "rmf：{}：{}".into());
 
@@ -5397,7 +5598,13 @@ pub fn build_map() -> HashMap<String, String> {
 
     m.insert("misc.mv.not_exist".into(), "mv：源不存在：'{}'".into());
 
-    m.insert("misc.mv.usage".into(), "用法：mv <源|@tp> <目标|@tp> [-f]".into());
+    m.insert("misc.mv.no_match".into(), "mv：没有匹配的文件：'{}'".into());
+
+    m.insert("misc.mv.dst_dir".into(), "mv：目标必须是目录：'{}'".into());
+
+    m.insert("misc.mv.wild_done".into(), "已移动 {} 个文件到 '{}'".into());
+
+    m.insert("misc.mv.usage".into(), "用法：mv <源|@tp|通配符> <目标|@tp> [-f]".into());
 
     m.insert("misc.cp.error".into(), "cp：{}".into());
 
@@ -5409,9 +5616,15 @@ pub fn build_map() -> HashMap<String, String> {
 
     m.insert("misc.cp.not_exist".into(), "cp：源不存在：'{}'".into());
 
+    m.insert("misc.cp.no_match".into(), "cp：没有匹配的文件：'{}'".into());
+
+    m.insert("misc.cp.dst_dir".into(), "cp：目标必须是目录：'{}'".into());
+
+    m.insert("misc.cp.wild_done".into(), "已复制 {} 个文件到 '{}'".into());
+
     m.insert("misc.cp.same".into(), "cp：源和目标是同一文件：'{}'".into());
 
-    m.insert("misc.cp.usage".into(), "用法：cp <源|@tp> <目标|@tp> [-f]".into());
+    m.insert("misc.cp.usage".into(), "用法：cp <源|@tp|通配符> <目标|@tp> [-f]".into());
 
     m.insert("misc.say.example1".into(), " say \"hello world\" --loop 5 -n # 5行".into());
 
@@ -5673,6 +5886,8 @@ pub fn build_map() -> HashMap<String, String> {
     m.insert("msg.showcg.label_watch_limit".into(), "监视器行数：".into());
 
     m.insert("msg.showcg.label_dir_view".into(), "目录视图：".into());
+
+    m.insert("msg.showcg.label_update_check".into(), "更新检查：".into());
 
     m.insert("msg.showcg.label_serve_files".into(), "Serve 文件服务：".into());
 
@@ -6286,8 +6501,6 @@ pub fn build_map() -> HashMap<String, String> {
 
     m.insert("ranfile.available_title".into(), "可用目标：".into());
 
-    m.insert("ranfile.has_command".into(), " (包含命令)".into());
-
     m.insert("ranfile.depends_on".into(), " ─▶ 依赖：".into());
 
     m.insert("ranfile.runner.hint".into(), "运行 {} 查看可用目标。".into());
@@ -6636,7 +6849,7 @@ pub fn build_map() -> HashMap<String, String> {
     // help editor
     m.insert("help.editor.example1".into(), "ne main.rs ## 在编辑器中打开 main.rs".into());
     m.insert("help.editor.example2".into(), "ne src/main.rs:42 ## 在 42 行打开 main.rs".into());
-    m.insert("help.editor.example3".into(), "ne --init newfile.md ## 创建模板文件".into());
+    m.insert("help.editor.example3".into(), "ne --init a.py b.html -I a.py ## 创建模板并打开 a.py".into());
     m.insert("help.editor.example4".into(), "ne --hyper myproject --lang c ## 创建 C 语言 hyper 项目".into());
 
     // help theme
@@ -6670,7 +6883,7 @@ pub fn build_map() -> HashMap<String, String> {
     m.insert("help.view.example1".into(), "view ## 显示目录树".into());
     m.insert("help.view.example2".into(), "view --size ## 显示带大小的目录树".into());
     m.insert("help.view.example3".into(), "view -d 2 ## 显示深度为 2 的目录树".into());
-    m.insert("help.view.example4".into(), "view --cp ## 显示目录树并复制到剪贴板".into());
+    m.insert("help.view.example4".into(), "view -cp ## 显示目录树并复制到剪贴板".into());
     m.insert("help.view.example5".into(), "view --time ## 显示带执行时间的目录树".into());
     m.insert("help.view.example6".into(), "view -p C:\\code\\project ## 显示指定路径的目录树".into());
     m.insert("help.view.example7".into(), "view @web ## 显示传送点的目录树".into());
@@ -6703,6 +6916,20 @@ pub fn build_map() -> HashMap<String, String> {
     m.insert("help.search.example3".into(), "fs *.rs ## 查找 .rs 文件".into());
     m.insert("help.search.example4".into(), "ds src ## 查找名为 'src' 的目录".into());
     m.insert("help.search.example5".into(), "locate README ## 搜索文件与目录中的 'README'".into());
+    m.insert("help.search.example6".into(), "qur *.rs -s \"TODO\" -dp ## query glob + 类似 grep 的显示".into());
+    m.insert("help.search.example7".into(), "gs TODO < app.log ## 搜索管道/重定向输入的内容".into());
+
+    m.insert("help.search.example8".into(), "gs error\\|warning ## 或搜索：匹配任意一个词 (a\\|b)".into());
+    m.insert("misc.qur.stdin_needs_select".into(), "qur：管道输入需要 -s \"<模式>\"（例如 cmd | qur -s \"foo\"）。".into());
+    m.insert("misc.head.usage".into(), "用法：head [N] [file]（N 默认为 10；未给文件时读取管道输入）".into());
+    m.insert("misc.tail.usage".into(), "用法：tail [N] [file]（N 默认为 10；未给文件时读取管道输入）".into());
+    m.insert("misc.betw.usage".into(), "用法：betw A:B [file]（A:B 从 1 开始，含两端；未给文件时读取管道输入）".into());
+    m.insert("misc.window.bad_arg".into(), "{}：意外的参数 '{}'".into());
+    m.insert("misc.window.no_input".into(), "{}：没有输入（请通过管道传入或指定文件）".into());
+    m.insert("misc.sort.usage".into(), "用法：sort [-r] [-n] [-u] [-f] [file]（未指定文件时读取管道输入）".into());
+    m.insert("misc.sort.bad_arg".into(), "sort：未知选项 '{}'".into());
+    m.insert("misc.rev.usage".into(), "用法：rev [file]（反转每行的字符；未指定文件时读取管道输入）".into());
+    m.insert("misc.rev.bad_arg".into(), "rev：意外的参数 '{}'（用法：rev [file]）".into());
 
     // help igcare
     m.insert("help.igcare.example1".into(), "ignore dir node_modules ## 忽略 node_modules".into());
@@ -6858,6 +7085,8 @@ pub fn build_map() -> HashMap<String, String> {
 
     m.insert("help.config.dir_view".into(), "config dir_view ON|OFF ## 在shell中显示/隐藏目录树".into());
 
+    m.insert("help.config.update_check".into(), "config update_check ON|OFF ## 显示/隐藏每日新版本提醒（别名：uc）".into());
+
     m.insert("help.config.serve".into(), "config serve [服务] [--port-default 端口] [--bind-default 地址] ## serve 各服务默认值（别名：serve config）".into());
 
     m.insert("cmd.config.serve.title".into(), "Serve 配置（各服务默认值）".into());
@@ -6973,6 +7202,16 @@ pub fn build_map() -> HashMap<String, String> {
     m.insert("msg.setDV.off".into(), "已禁用目录视图。".into());
 
     m.insert("msg.setDV.error".into(), "用法：config dir_view ON|OFF".into());
+
+    m.insert("msg.setUC.status".into(), "更新检查：{}".into());
+
+    m.insert("msg.setUC.on".into(), "已启用每日新版本提醒。".into());
+
+    m.insert("msg.setUC.off".into(), "已禁用更新检查。".into());
+
+    m.insert("msg.setUC.error".into(), "用法：config update_check ON|OFF".into());
+
+    m.insert("msg.update.available".into(), "有新的 NTC {}（你用的是 {}）— 在 {} 中运行 'ntc --upgrade' 或查看 {}".into());
 
     m.insert("cmd.tmprt.unknown_sub".into(), "未知的 tmprt 子命令：{}".into());
 
@@ -7194,9 +7433,161 @@ pub fn build_map() -> HashMap<String, String> {
     m.insert("dl.request_failed".into(), "请求 {} 失败".into());
     m.insert("dl.upload_failed".into(), "上传到 {} 失败".into());
 
+    // ========== fake（假数据生成器） ==========
+    m.insert("cmd.fake.usage_title".into(), "fake - 生成假数据/随机数据".into());
+    m.insert("cmd.fake.usage_gen".into(), "  fake gen <类型> [-n N] [-f 格式] [-s 种子] [-o 文件] [-g 分组] [-l 区域] [-u [列]]".into());
+    m.insert("cmd.fake.usage_types".into(), "  fake types [-s] [模式]         列出所有类型（-s 模糊搜索）".into());
+    m.insert("cmd.fake.usage_locales".into(), "  fake locales                   列出支持的 --locale 代码".into());
+    m.insert("cmd.fake.usage_group".into(), "  fake group <子命令>            管理已保存的列分组".into());
+    m.insert("cmd.fake.usage_help".into(), "  fake help                      显示此帮助".into());
+    m.insert("cmd.fake.options_title".into(), "选项（fake gen）：".into());
+    m.insert("cmd.fake.opt_count".into(), "  -n, --count <N>       生成的行数（默认 1）".into());
+    m.insert("cmd.fake.opt_format".into(), "  -f, --format <格式>   json | txt | sql | csv | xlsx（默认 txt）".into());
+    m.insert("cmd.fake.opt_seed".into(), "  -s, --seed <N>        随机种子，可复现输出".into());
+    m.insert("cmd.fake.opt_output".into(), "  -o, --output <文件>   写入文件（扩展名决定格式）".into());
+    m.insert("cmd.fake.opt_group".into(), "  -g, --group <名称>    从已保存的分组生成，替代 <类型>".into());
+    m.insert("cmd.fake.opt_locale".into(), "  -l, --locale <代码>   区域数据：en_US en_GB zh_CN th_TH lo_LA".into());
+    m.insert("cmd.fake.opt_unique".into(), "  -u, --unique [列]     使整行（或指定列）唯一".into());
+    m.insert("cmd.fake.examples_header".into(), "示例：".into());
+    m.insert("cmd.fake.example1".into(), "  fake gen name,email,city -n 3".into());
+    m.insert("cmd.fake.example2".into(), "  fake gen uuid,age -f json -o rows.json".into());
+    m.insert("cmd.fake.example3".into(), "  fake group add users [username as name, year as age]".into());
+    m.insert("cmd.fake.example4".into(), "  fake gen -g users -f sql -n 10".into());
+    m.insert("cmd.fake.unknown_sub".into(), "未知的 fake 子命令：'{}'".into());
+
+    m.insert("cmd.fake.gen.wrote".into(), "已写入 {} 行到 {}（{}）".into());
+    m.insert("cmd.fake.gen.unknown_ext".into(), "未知的输出扩展名 '{}'（请用 -f 指定格式）".into());
+    m.insert("cmd.fake.gen.xlsx_needs_output".into(), "xlsx 输出需要 -o <文件.xlsx>（二进制工作簿无法打印到终端）".into());
+    m.insert("cmd.fake.gen.count_usage".into(), "fake gen：-n/--count 需要一个数字".into());
+    m.insert("cmd.fake.gen.bad_count".into(), "fake gen：无效的行数 '{}'（必须为正整数）".into());
+    m.insert("cmd.fake.gen.format_usage".into(), "fake gen：-f/--format 需要一个值".into());
+    m.insert("cmd.fake.gen.bad_format".into(), "fake gen：未知格式 '{}'（json|txt|sql|csv|xlsx）".into());
+    m.insert("cmd.fake.gen.seed_usage".into(), "fake gen：-s/--seed 需要一个数字".into());
+    m.insert("cmd.fake.gen.bad_seed".into(), "fake gen：无效的种子 '{}'（必须为整数）".into());
+    m.insert("cmd.fake.gen.output_usage".into(), "fake gen：-o/--output 需要一个文件路径".into());
+    m.insert("cmd.fake.gen.group_usage".into(), "fake gen：-g/--group 需要一个分组名称".into());
+    m.insert("cmd.fake.gen.unknown_flag".into(), "fake gen：未知选项 '{}'".into());
+    m.insert("cmd.fake.gen.group_and_types".into(), "fake gen：<类型> 与 -g/--group 不能同时使用".into());
+    m.insert("cmd.fake.gen.need_input".into(), "fake gen：请给出一个或多个类型，或使用 -g/--group".into());
+    m.insert("cmd.fake.gen.unknown_type".into(), "fake gen：未知类型 '{}'（运行 'fake types' 查看全部）".into());
+    m.insert("cmd.fake.gen.unique_with_group".into(), "fake gen：--unique 不能与 -g/--group 同时使用（请在分组中给列加上尾随 '!'）".into());
+    m.insert("cmd.fake.gen.unique_unknown_col".into(), "fake gen：--unique 指定了未知列 '{}'".into());
+    m.insert("cmd.fake.gen.unique_exhausted".into(), "fake gen：无法为 '{}' 生成唯一值（取值空间太小）".into());
+    m.insert("cmd.fake.gen.locale_usage".into(), "fake gen：-l/--locale 需要一个区域代码（en_US en_GB zh_CN th_TH lo_LA）".into());
+    m.insert("cmd.fake.gen.bad_locale".into(), "fake gen：未知区域 '{}'（en_US en_GB zh_CN th_TH lo_LA）".into());
+    m.insert("cmd.fake.gen.ref_cycle".into(), "fake gen：通过 '{}' 形成循环分组引用".into());
+    m.insert("cmd.fake.gen.ref_unknown_col".into(), "fake gen：在分组 '{}' 中找不到被引用的列 '{}'".into());
+
+    m.insert("cmd.fake.types.title".into(), "可用的 fake 类型（{}）：".into());
+    m.insert("cmd.fake.types.none".into(), "没有类型匹配 '{}'。".into());
+    m.insert("cmd.fake.types.matches".into(), "匹配 '{}' 的类型（{}）：".into());
+    m.insert("cmd.fake.locales.title".into(), "支持的区域（{}）：".into());
+    m.insert("cmd.fake.locales.note".into(), "用法：fake gen <类型> --locale <代码>".into());
+
+    m.insert("cmd.fake.group.usage_title".into(), "fake group - 管理已保存的列分组：".into());
+    m.insert("cmd.fake.group.help_add".into(), "  fake group add <名称> [别名 as 类型, ...]    创建分组".into());
+    m.insert("cmd.fake.group.help_edit".into(), "  fake group edit <名称> [别名 as 类型, ...]   替换分组的列".into());
+    m.insert("cmd.fake.group.help_rm".into(), "  fake group rm <名称>                          删除分组".into());
+    m.insert("cmd.fake.group.help_rnm".into(), "  fake group rnm <旧名> <新名>                  重命名分组".into());
+    m.insert("cmd.fake.group.help_ls".into(), "  fake group ls [模式]                          列出分组（通配符，如 u*）".into());
+    m.insert("cmd.fake.group.help_info".into(), "  fake group info <名称>                        显示分组的列".into());
+    m.insert("cmd.fake.group.help_clear".into(), "  fake group clear [-f]                         删除所有分组".into());
+    m.insert("cmd.fake.group.help_export".into(), "  fake group export <名称>|--all [-o 文件]      导出分组为 .ntc_fake".into());
+    m.insert("cmd.fake.group.help_import".into(), "  fake group import <文件> [--force] [--prefix p]  从文件导入分组".into());
+    m.insert("cmd.fake.group.example1".into(), "  fake group add users [username as name, email, year as age]".into());
+    m.insert("cmd.fake.group.example2".into(), "  fake gen -g users -f sql -n 10".into());
+    m.insert("cmd.fake.group.unknown_sub".into(), "未知的 'fake group' 子命令：'{}'".into());
+    m.insert("cmd.fake.group.no_columns".into(), "至少给出一个列，例如 [username as name, year as age]".into());
+    m.insert("cmd.fake.group.bad_column".into(), "无法解析列 '{}'（应为 '别名 as 类型'）".into());
+    m.insert("cmd.fake.group.unknown_type".into(), "未知类型 '{}'（运行 'fake types' 查看全部）".into());
+    m.insert("cmd.fake.group.add_usage".into(), "用法：fake group add <名称> [别名 as 类型, ...]".into());
+    m.insert("cmd.fake.group.bad_name".into(), "无效的分组名 '{}'（请使用字母、数字、'_' 或 '-'）".into());
+    m.insert("cmd.fake.group.not_found".into(), "没有名为 '{}' 的 fake 分组".into());
+    m.insert("cmd.fake.group.exists".into(), "fake 分组 '{}' 已存在".into());
+    m.insert("cmd.fake.group.scope_local".into(), "本地".into());
+    m.insert("cmd.fake.group.scope_global".into(), "全局".into());
+    m.insert("cmd.fake.group.added".into(), "已添加分组 '{}'（{} 列）到{}配置".into());
+    m.insert("cmd.fake.group.updated".into(), "已更新分组 '{}'（{} 列）于{}配置".into());
+    m.insert("cmd.fake.group.rm_usage".into(), "用法：fake group rm <名称>".into());
+    m.insert("cmd.fake.group.removed".into(), "已删除分组 '{}'".into());
+    m.insert("cmd.fake.group.rnm_usage".into(), "用法：fake group rnm <旧名> <新名>".into());
+    m.insert("cmd.fake.group.renamed".into(), "已将分组 '{}' 重命名为 '{}'".into());
+    m.insert("cmd.fake.group.ls_empty".into(), "尚未保存任何 fake 分组。".into());
+    m.insert("cmd.fake.group.ls_none".into(), "没有分组匹配 '{}'。".into());
+    m.insert("cmd.fake.group.info_usage".into(), "用法：fake group info <名称>".into());
+    m.insert("cmd.fake.group.info_title".into(), "分组 '{}'：".into());
+    m.insert("cmd.fake.group.info_count".into(), "{} 列".into());
+    m.insert("cmd.fake.group.clear_empty".into(), "没有可清除的 fake 分组。".into());
+    m.insert("cmd.fake.group.clear_prompt".into(), "删除 {} 个 fake 分组？[y/N] ".into());
+    m.insert("cmd.fake.group.clear_cancelled".into(), "已取消。".into());
+    m.insert("cmd.fake.group.cleared".into(), "已清除 {} 个 fake 分组。".into());
+    m.insert("cmd.fake.group.bad_ref".into(), "无效引用 '{}'（应为 ref:<分组>.<列>）".into());
+    m.insert("cmd.fake.group.ref_col_missing".into(), "在分组 '{}' 中找不到被引用的列 '{}'".into());
+    m.insert("cmd.fake.group.export_usage".into(), "用法：fake group export <名称>|--all [-o 文件]".into());
+    m.insert("cmd.fake.group.import_usage".into(), "用法：fake group import <文件> [--force] [--prefix p]".into());
+    m.insert("cmd.fake.group.exported".into(), "已导出 {} 个分组到 {}".into());
+    m.insert("cmd.fake.group.import_ok".into(), "已导入 {} 个分组。".into());
+    m.insert("cmd.fake.group.import_exists".into(), "以下分组已存在：{}（使用 --force 覆盖）".into());
+    m.insert("cmd.fake.group.import_bad_file".into(), "无法导入分组：{}".into());
+
+    m.insert("help.fake.title".into(), "fake - 生成假数据/随机数据".into());
+    m.insert("help.fake.gen".into(), "  fake gen <类型> [-n N] [-f 格式] [-s 种子] [-o 文件]   生成行".into());
+    m.insert("help.fake.gen_options".into(), "  格式：json | txt | sql | csv | xlsx（默认：txt 表格）".into());
+    m.insert("help.fake.gen_group".into(), "  fake gen -g <分组> ...                          从已保存的分组生成".into());
+    m.insert("help.fake.gen_unique".into(), "  -u, --unique [列]                              整行或指定列唯一".into());
+    m.insert("help.fake.gen_locale".into(), "  -l, --locale <代码>                            区域数据（en_US en_GB zh_CN th_TH lo_LA）".into());
+    m.insert("help.fake.types".into(), "  fake types                                     列出所有类型".into());
+    m.insert("help.fake.types_search".into(), "  fake types -s <模式>                           模糊搜索类型".into());
+    m.insert("help.fake.locales".into(), "  fake locales                                   列出 --locale 代码".into());
+    m.insert("help.fake.group_add".into(), "  fake group add <名称> [别名 as 类型, ...]      创建分组".into());
+    m.insert("help.fake.group_edit".into(), "  fake group edit <名称> [别名 as 类型, ...]     替换分组的列".into());
+    m.insert("help.fake.group_rm".into(), "  fake group rm <名称>                           删除分组".into());
+    m.insert("help.fake.group_rnm".into(), "  fake group rnm <旧名> <新名>                   重命名分组".into());
+    m.insert("help.fake.group_ls".into(), "  fake group ls [模式]                           列出分组（通配符，如 u*）".into());
+    m.insert("help.fake.group_info".into(), "  fake group info <名称>                         显示分组的列".into());
+    m.insert("help.fake.group_clear".into(), "  fake group clear [-f]                          删除所有分组".into());
+    m.insert("help.fake.group_export".into(), "  fake group export <名称>|--all [-o 文件]       将分组导出为 .ntc_fake".into());
+    m.insert("help.fake.group_import".into(), "  fake group import <文件> [--force] [--prefix p]  从文件加载分组".into());
+    m.insert("help.fake.group_ref".into(), "  列语法：'别名 as 类型'，'类型 !' = 唯一，'别名 as ref:分组.列'".into());
+    m.insert("help.fake.help".into(), "  fake help                                      显示此帮助".into());
+    m.insert("help.fake.example1".into(), "fake gen name,email,city -n 5 ## txt 表格".into());
+    m.insert("help.fake.example2".into(), "fake gen uuid,age -f json -o rows.json".into());
+    m.insert("help.fake.example3".into(), "fake group add users [username as name, year as age]".into());
+    m.insert("help.fake.example4".into(), "fake gen -g users -f sql -n 10 ## INSERT INTO users ...".into());
 
 
+
+
+    m.insert("alias.ral.section_global".into(), "[全局]".into());
+    m.insert("alias.ral.section_local".into(), "[本地]".into());
+    m.insert("alias.ral.no_local".into(), "（当前目录没有本地配置）".into());
+    m.insert("alias.ral.none".into(), "（无）".into());
+    m.insert("alias.ral.shadowed".into(), "（被本地覆盖）".into());
+    m.insert("alias.ral.shadowed_global".into(), "全局条目（被本地覆盖）：".into());
+    m.insert("alias.ral.global_active_again".into(), "全局别名 '{}' 仍然存在，现在重新生效。".into());
+    m.insert("alias.ral.global_only_hint".into(), "别名 '{}' 只定义在全局配置中。使用 'ral rm -g {}' 从全局配置中删除。".into());
+    m.insert("alias.ral.local_priority_note".into(), "注意：ntconfig.toml 中的本地别名 '{}' 优先于这个全局别名。".into());
+    m.insert("alias.ral.scope_local".into(), "本地配置".into());
+    m.insert("alias.ral.scope_global".into(), "全局配置".into());
+    m.insert("alias.ral.cls_target".into(), "目标：{}".into());
+    m.insert("cmd.igcared.section_global".into(), "[全局]".into());
+    m.insert("cmd.igcared.section_local".into(), "[本地]".into());
+    m.insert("cmd.igcared.cared_dirs".into(), "关注的目录：".into());
+    m.insert("cmd.igcared.cared_exts".into(), "关注的扩展名：".into());
+    m.insert("cmd.igcared.cared_files".into(), "关注的文件：".into());
+    m.insert("cmd.igcared.none".into(), "（无）".into());
+    m.insert("cmd.igcared.no_local".into(), "（当前目录没有本地配置）".into());
+    m.insert("cmd.igcared.scope_help".into(), "本地条目优先；全局条目继续生效，全局配置不会被修改。".into());
+    m.insert("cmd.ignore.scope_local".into(), "本地配置".into());
+    m.insert("cmd.ignore.scope_global".into(), "全局配置".into());
+    m.insert("cmd.ignore.scope_help".into(), "使用 '-g' / '--global' 写入全局配置（仅在含 ntconfig.toml 的目录中）。".into());
+    m.insert("cmd.ignore.scope_target".into(), "目标：{}".into());
+    m.insert("cmd.care.scope_help".into(), "使用 '-g' / '--global' 写入全局配置（仅在含 ntconfig.toml 的目录中）。".into());
+    m.insert("cmd.config.local.init_all_removed".into(), "'local init --all' 已被移除 —— 本地配置不再复制全局设置。请使用 'local init' 生成模板。".into());
+    m.insert("cmd.config.local.precedence_hint".into(), "本地条目优先；全局条目继续生效，全局配置不会被修改。".into());
+    m.insert("igcare_export.cared_dirs".into(), "关注的目录".into());
+    m.insert("igcare_export.cared_extensions".into(), "关注的扩展名".into());
+    m.insert("igcare_export.cared_files".into(), "关注的文件".into());
     m
-
 }
 

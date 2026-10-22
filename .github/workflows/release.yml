@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: 'Version to publish (e.g. v2.4.5). Only used for manual runs.'
+        description: 'Version to publish (e.g. v2.4.6). Only used for manual runs.'
         required: false
         default: ''
 
@@ -18,10 +18,15 @@ on:
 #   ntc-v<NO_V>-macos-x86_64.tar.gz        (CI: x86_64-apple-darwin,  contains top-level `ntc`)
 #   ntc-v<NO_V>-macos-aarch64.tar.gz       (CI: aarch64-apple-darwin, contains top-level `ntc`)
 #   ntc-v<NO_V>-linux-x86_64.tar.gz        (manual: contains top-level `ntc`)
-#   ntc-v<NO_V>-linux-aarch64.tar.gz       (manual: contains top-level `ntc`)
+#   ntc-v<NO_V>-linux-aarch64.tar.gz       (manual: contains top-level `ntc`)  <-- not uploaded yet
 #   ntc-v<NO_V>-windows-x86_64.zip         (manual: contains top-level `ntc.exe`)
 #   ntc-v<NO_V>-windows-arm64.zip          (manual: contains top-level `ntc.exe`)
-#   ntc-v<NO_V>-aarch64-linux-android.tar.gz (manual Termux: contains top-level `ntc`)
+#   ntc-v<NO_V>-aarch64-linux-android.tar.gz    (manual Termux arm64: contains top-level `ntc`)
+#   ntc-v<NO_V>-x86_64-linux-android.tar.gz     (manual Termux x64:  contains top-level `ntc`)  <-- not uploaded yet
+#   ntc-v<NO_V>-armv7-linux-androideabi.tar.gz  (manual Termux arm:  contains top-level `ntc`)  <-- not uploaded yet
+# Termux (Node reports process.platform === 'android') resolves to the Android
+# asset first, then falls back to the same-arch Linux asset, so shipping only
+# one of the two is enough to keep `npm install -g @nuengcoder/ntc` working.
 # Build manually with e.g.:
 #   cargo build --release                      # then: tar -czvf ntc-vX.Y.Z-linux-x86_64.tar.gz -C target/release ntc
 #   cargo build --release --target aarch64-unknown-linux-gnu  # rename accordingly

@@ -31,16 +31,8 @@ impl Editor {
             if x >= cols {
                 break;
             }
-            let name = if self.is_scratch_path(&tab.path) {
-                "[scratch]".to_string()
-            } else {
-                tab.path
-                    .file_name()
-                    .map(|n| n.to_string_lossy().into_owned())
-                    .unwrap_or_else(|| "untitled".to_string())
-            };
-            let mark = if tab.modified { " ●" } else { "" };
-            let label = format!(" {} {} ", name, mark);
+            let name = self.tab_display_name(tab);
+            let label = self.tab_label(tab);
             let close_btn = "✕";
             let label_chars = label.chars().count();
             let full_w = label_chars + 1 + close_btn.chars().count();

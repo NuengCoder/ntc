@@ -14,8 +14,10 @@ use std::sync::RwLock;
 ///
 /// # Examples
 /// ```
-/// t!("help.nav.title")           // -> String
-/// t!("config.lang.set", "thai")  // -> String with format arg
+/// let title = ntc::t!("help.nav.title");
+/// let label = ntc::t!("config.lang.set", "thai");
+/// assert!(!title.is_empty());
+/// assert!(!label.is_empty());
 /// ```
 #[macro_export]
 macro_rules! t {
@@ -560,6 +562,17 @@ mod tests {
         assert_keys_present(super::lo::build_map(), "lao", SHARE_KEYS);
     }
 
+    /// Every `serve files --lock` key must exist in all four bundled language packs.
+    const LOCK_KEYS: &[&str] = &["cmd.serve.help_lock", "cmd.serve.lock_on"];
+
+    #[test]
+    fn lock_keys_exist_in_all_languages() {
+        assert_keys_present(super::en::build_map(), "english", LOCK_KEYS);
+        assert_keys_present(super::zh::build_map(), "chinese", LOCK_KEYS);
+        assert_keys_present(super::th::build_map(), "thai", LOCK_KEYS);
+        assert_keys_present(super::lo::build_map(), "lao", LOCK_KEYS);
+    }
+
     /// Every `serve chess` key must exist in all four bundled language packs.
     const SERVE_CHESS_KEYS: &[&str] = &[
         "cmd.serve.chess_no_auth",
@@ -793,6 +806,60 @@ mod tests {
         assert_keys_present(super::lo::build_map(), "lao", NSSH_KEYS);
     }
 
+    /// Every `nms` (NTC Music player + media scan) key must exist in all
+    /// four bundled packs.
+    const NMS_KEYS: &[&str] = &[
+        "cmd.nms.usage_title",
+        "cmd.nms.help_play",
+        "cmd.nms.help_scan",
+        "cmd.nms.help_help",
+        "cmd.nms.options_title",
+        "cmd.nms.help_depth",
+        "cmd.nms.help_size",
+        "cmd.nms.help_long",
+        "cmd.nms.help_care",
+        "cmd.nms.keys_title",
+        "cmd.nms.help_keys",
+        "cmd.nms.examples_title",
+        "cmd.nms.example_play",
+        "cmd.nms.example_video",
+        "cmd.nms.example_scan",
+        "cmd.nms.example_long",
+        "cmd.nms.play_missing_file",
+        "cmd.nms.file_not_found",
+        "cmd.nms.not_media",
+        "cmd.nms.no_sound_device",
+        "cmd.nms.play_failed",
+        "cmd.nms.unknown_sub",
+        "cmd.nms.unknown_option",
+        "cmd.nms.depth_usage",
+        "cmd.nms.invalid_depth",
+        "cmd.nms.long_usage",
+        "cmd.nms.invalid_long",
+        "cmd.nms.long_none",
+        "cmd.nms.no_files",
+        "cmd.nms.list_title",
+        "cmd.nms.total_files",
+        "cmd.nms.total_files_size",
+        "help.nms.title",
+        "help.nms.play",
+        "help.nms.scan",
+        "help.nms.long",
+        "help.nms.keys",
+        "help.nms.example1",
+        "help.nms.example2",
+        "help.nms.example3",
+        "help.nms.example4",
+    ];
+
+    #[test]
+    fn nms_keys_exist_in_all_languages() {
+        assert_keys_present(super::en::build_map(), "english", NMS_KEYS);
+        assert_keys_present(super::zh::build_map(), "chinese", NMS_KEYS);
+        assert_keys_present(super::th::build_map(), "thai", NMS_KEYS);
+        assert_keys_present(super::lo::build_map(), "lao", NMS_KEYS);
+    }
+
     /// Every `ral hintn` / inline-values / named-list key must exist in all
     /// four bundled language packs.
     const RAL_HINTN_KEYS: &[&str] = &[
@@ -812,8 +879,6 @@ mod tests {
         "alias.ral.hintn_info_name",
         "alias.ral.hintn_info_values",
         "alias.ral.hintn_info_used_by",
-        "alias.ral.hintn_list_title_global",
-        "alias.ral.hintn_list_title_local",
         "alias.ral.hintn_value_count",
         "alias.ral.unknown_hint_list",
         "alias.ral.hintn_create_hint",
@@ -829,6 +894,50 @@ mod tests {
         assert_keys_present(super::zh::build_map(), "chinese", RAL_HINTN_KEYS);
         assert_keys_present(super::th::build_map(), "thai", RAL_HINTN_KEYS);
         assert_keys_present(super::lo::build_map(), "lao", RAL_HINTN_KEYS);
+    }
+
+    /// Every local/global scope key (the `[global]` / `[local]` listings, the
+    /// `-g/--global` hints and the local "cared" lists) must exist in all four
+    /// bundled language packs.
+    const LOCAL_SCOPE_KEYS: &[&str] = &[
+        "alias.ral.section_global",
+        "alias.ral.section_local",
+        "alias.ral.none",
+        "alias.ral.no_local",
+        "alias.ral.shadowed",
+        "alias.ral.shadowed_global",
+        "alias.ral.global_active_again",
+        "alias.ral.global_only_hint",
+        "alias.ral.local_priority_note",
+        "alias.ral.scope_local",
+        "alias.ral.scope_global",
+        "alias.ral.cls_target",
+        "cmd.igcared.section_global",
+        "cmd.igcared.section_local",
+        "cmd.igcared.cared_dirs",
+        "cmd.igcared.cared_exts",
+        "cmd.igcared.cared_files",
+        "cmd.igcared.none",
+        "cmd.igcared.no_local",
+        "cmd.igcared.scope_help",
+        "cmd.ignore.scope_local",
+        "cmd.ignore.scope_global",
+        "cmd.ignore.scope_help",
+        "cmd.ignore.scope_target",
+        "cmd.care.scope_help",
+        "cmd.config.local.init_all_removed",
+        "cmd.config.local.precedence_hint",
+        "igcare_export.cared_dirs",
+        "igcare_export.cared_extensions",
+        "igcare_export.cared_files",
+    ];
+
+    #[test]
+    fn local_scope_keys_exist_in_all_languages() {
+        assert_keys_present(super::en::build_map(), "english", LOCAL_SCOPE_KEYS);
+        assert_keys_present(super::zh::build_map(), "chinese", LOCAL_SCOPE_KEYS);
+        assert_keys_present(super::th::build_map(), "thai", LOCAL_SCOPE_KEYS);
+        assert_keys_present(super::lo::build_map(), "lao", LOCAL_SCOPE_KEYS);
     }
 
     /// Every `scan files` / `scan dir` key must exist in all four bundled
@@ -881,5 +990,181 @@ mod tests {
         assert_keys_present(super::zh::build_map(), "chinese", CLI_NEW_KEYS);
         assert_keys_present(super::th::build_map(), "thai", CLI_NEW_KEYS);
         assert_keys_present(super::lo::build_map(), "lao", CLI_NEW_KEYS);
+    }
+
+    /// Every `fake` command / help key must exist in all four bundled packs.
+    const FAKE_KEYS: &[&str] = &[
+        "cmd.fake.usage_title",
+        "cmd.fake.usage_gen",
+        "cmd.fake.usage_types",
+        "cmd.fake.usage_locales",
+        "cmd.fake.usage_group",
+        "cmd.fake.usage_help",
+        "cmd.fake.options_title",
+        "cmd.fake.opt_count",
+        "cmd.fake.opt_format",
+        "cmd.fake.opt_seed",
+        "cmd.fake.opt_output",
+        "cmd.fake.opt_group",
+        "cmd.fake.opt_locale",
+        "cmd.fake.opt_unique",
+        "cmd.fake.examples_header",
+        "cmd.fake.example1",
+        "cmd.fake.example2",
+        "cmd.fake.example3",
+        "cmd.fake.example4",
+        "cmd.fake.unknown_sub",
+        "cmd.fake.gen.wrote",
+        "cmd.fake.gen.unknown_ext",
+        "cmd.fake.gen.xlsx_needs_output",
+        "cmd.fake.gen.count_usage",
+        "cmd.fake.gen.bad_count",
+        "cmd.fake.gen.format_usage",
+        "cmd.fake.gen.bad_format",
+        "cmd.fake.gen.seed_usage",
+        "cmd.fake.gen.bad_seed",
+        "cmd.fake.gen.output_usage",
+        "cmd.fake.gen.group_usage",
+        "cmd.fake.gen.unknown_flag",
+        "cmd.fake.gen.group_and_types",
+        "cmd.fake.gen.need_input",
+        "cmd.fake.gen.unknown_type",
+        "cmd.fake.gen.unique_with_group",
+        "cmd.fake.gen.unique_unknown_col",
+        "cmd.fake.gen.unique_exhausted",
+        "cmd.fake.gen.locale_usage",
+        "cmd.fake.gen.bad_locale",
+        "cmd.fake.gen.ref_cycle",
+        "cmd.fake.gen.ref_unknown_col",
+        "cmd.fake.types.title",
+        "cmd.fake.types.none",
+        "cmd.fake.types.matches",
+        "cmd.fake.locales.title",
+        "cmd.fake.locales.note",
+        "cmd.fake.group.usage_title",
+        "cmd.fake.group.help_add",
+        "cmd.fake.group.help_edit",
+        "cmd.fake.group.help_rm",
+        "cmd.fake.group.help_rnm",
+        "cmd.fake.group.help_ls",
+        "cmd.fake.group.help_info",
+        "cmd.fake.group.help_clear",
+        "cmd.fake.group.help_export",
+        "cmd.fake.group.help_import",
+        "cmd.fake.group.example1",
+        "cmd.fake.group.example2",
+        "cmd.fake.group.unknown_sub",
+        "cmd.fake.group.no_columns",
+        "cmd.fake.group.bad_column",
+        "cmd.fake.group.unknown_type",
+        "cmd.fake.group.add_usage",
+        "cmd.fake.group.bad_name",
+        "cmd.fake.group.not_found",
+        "cmd.fake.group.exists",
+        "cmd.fake.group.scope_local",
+        "cmd.fake.group.scope_global",
+        "cmd.fake.group.added",
+        "cmd.fake.group.updated",
+        "cmd.fake.group.rm_usage",
+        "cmd.fake.group.removed",
+        "cmd.fake.group.rnm_usage",
+        "cmd.fake.group.renamed",
+        "cmd.fake.group.ls_empty",
+        "cmd.fake.group.ls_none",
+        "cmd.fake.group.info_usage",
+        "cmd.fake.group.info_title",
+        "cmd.fake.group.info_count",
+        "cmd.fake.group.clear_empty",
+        "cmd.fake.group.clear_prompt",
+        "cmd.fake.group.clear_cancelled",
+        "cmd.fake.group.cleared",
+        "cmd.fake.group.bad_ref",
+        "cmd.fake.group.ref_col_missing",
+        "cmd.fake.group.export_usage",
+        "cmd.fake.group.import_usage",
+        "cmd.fake.group.exported",
+        "cmd.fake.group.import_ok",
+        "cmd.fake.group.import_exists",
+        "cmd.fake.group.import_bad_file",
+        "help.fake.title",
+        "help.fake.gen",
+        "help.fake.gen_options",
+        "help.fake.gen_group",
+        "help.fake.types",
+        "help.fake.types_search",
+        "help.fake.locales",
+        "help.fake.group_add",
+        "help.fake.group_edit",
+        "help.fake.group_rm",
+        "help.fake.group_rnm",
+        "help.fake.group_ls",
+        "help.fake.group_info",
+        "help.fake.group_clear",
+        "help.fake.group_export",
+        "help.fake.group_import",
+        "help.fake.group_ref",
+        "help.fake.help",
+        "help.fake.example1",
+        "help.fake.example2",
+        "help.fake.example3",
+        "help.fake.example4",
+    ];
+
+    #[test]
+    fn fake_keys_exist_in_all_languages() {
+        assert_keys_present(super::en::build_map(), "english", FAKE_KEYS);
+        assert_keys_present(super::zh::build_map(), "chinese", FAKE_KEYS);
+        assert_keys_present(super::th::build_map(), "thai", FAKE_KEYS);
+        assert_keys_present(super::lo::build_map(), "lao", FAKE_KEYS);
+    }
+
+    /// Every `init`/`deinit` OpenCode scaffold key must exist in all four packs.
+    const OPENCODE_INIT_KEYS: &[&str] = &[
+        "cmd.config.init.usage",
+        "cmd.config.init.opencode_ready",
+        "cmd.config.deinit.usage",
+        "cmd.config.deinit.opencode_not_found",
+        "help.other.init",
+    ];
+
+    #[test]
+    fn opencode_init_keys_exist_in_all_languages() {
+        assert_keys_present(super::en::build_map(), "english", OPENCODE_INIT_KEYS);
+        assert_keys_present(super::zh::build_map(), "chinese", OPENCODE_INIT_KEYS);
+        assert_keys_present(super::th::build_map(), "thai", OPENCODE_INIT_KEYS);
+        assert_keys_present(super::lo::build_map(), "lao", OPENCODE_INIT_KEYS);
+    }
+
+    /// `where <binary>` PATH lookup output and its help rows.
+    const WHERE_BINARY_KEYS: &[&str] = &[
+        "cmd.nav.where.not_found",
+        "cmd.nav.where.path_title",
+        "help.nav.where",
+        "help.nav.example5",
+    ];
+
+    #[test]
+    fn where_binary_keys_exist_in_all_languages() {
+        assert_keys_present(super::en::build_map(), "english", WHERE_BINARY_KEYS);
+        assert_keys_present(super::zh::build_map(), "chinese", WHERE_BINARY_KEYS);
+        assert_keys_present(super::th::build_map(), "thai", WHERE_BINARY_KEYS);
+        assert_keys_present(super::lo::build_map(), "lao", WHERE_BINARY_KEYS);
+    }
+
+    /// `rmd <wildcard>` bulk-delete listing/prompt output.
+    const RMD_WILDCARD_KEYS: &[&str] = &[
+        "misc.rmd.no_match",
+        "misc.rmd.pattern_matches",
+        "misc.rmd.confirm_delete",
+        "misc.rmd.cancelled",
+        "help.fileops.rmd",
+    ];
+
+    #[test]
+    fn rmd_wildcard_keys_exist_in_all_languages() {
+        assert_keys_present(super::en::build_map(), "english", RMD_WILDCARD_KEYS);
+        assert_keys_present(super::zh::build_map(), "chinese", RMD_WILDCARD_KEYS);
+        assert_keys_present(super::th::build_map(), "thai", RMD_WILDCARD_KEYS);
+        assert_keys_present(super::lo::build_map(), "lao", RMD_WILDCARD_KEYS);
     }
 }

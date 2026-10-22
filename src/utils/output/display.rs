@@ -10,7 +10,7 @@ use crate::t;
 /// Read a file into a Rust String, detecting UTF-8 BOM, UTF-16LE BOM,
 /// and UTF-16BE BOM. Without a BOM, tries UTF-8 first; on encoding
 /// errors, falls back to Windows-1252.
-fn read_file_as_string(path: &Path) -> Result<String> {
+pub fn read_file_as_string(path: &Path) -> Result<String> {
     let bytes =
         std::fs::read(path).with_context(|| t!("output.read_file_failed", path.display()))?;
     if bytes.is_empty() {
@@ -268,7 +268,6 @@ pub fn cat_file_with_syntax_range(
     let wanted: std::collections::HashSet<usize> =
         selected.iter().map(|(no, _)| *no).collect();
     for (i, line) in lines.iter().enumerate() {
-        let tokens = syntax.tokenize_line(i, line);
         // Original file line number, even for partial ranges.
         let no = i + 1;
         if !wanted.contains(&no) {
@@ -280,50 +279,84 @@ pub fn cat_file_with_syntax_range(
                 "{}{} {}",
                 line_num_color,
                 t!("output.line_prefix", no),
-                reset,
+                ANSI_RESET,
             );
             // Stay in the yellow-bold prefix style for the gap.
         }
 
-        // Walk char-by-char (not byte-by-byte) to stay safe on UTF-8.
-        // Group consecutive characters sharing the same token color into
-        // a single run, so we emit one ANSI prefix per run.
-        let mut current_color: Option<crossterm::style::Color> = None;
-        let mut current_text = String::new();
-
-        for (char_start, ch) in line.char_indices() {
-            let tt = tokens
-                .iter()
-                .find(|t| char_start >= t.start && char_start < t.end)
-                .map(|t| t.token_type);
-            let color = tt.map(color_for);
-
-            if color != current_color {
-                if !current_text.is_empty() {
-                    match current_color {
-                        Some(c) => print!("{}{}{}", crossterm_to_ansi(c), current_text, reset),
-                        None => print!("{}{}", reset, current_text),
-                    }
-                    current_text.clear();
-                }
-                current_color = color;
-            }
-            current_text.push(ch);
-        }
-
-        // Flush the trailing run.
-        if !current_text.is_empty() {
-            match current_color {
-                Some(c) => print!("{}{}{}", crossterm_to_ansi(c), current_text, reset),
-                None => print!("{}{}", reset, current_text),
-            }
-        }
-
-        // End the line — println! would add an extra newline for empty lines.
-        println!();
+        print_syntax_line(&mut syntax, i, line);
     }
 
     Ok(())
+}
+
+/// ANSI reset sequence used by the raw-syntax emitters.
+const ANSI_RESET: &str = "\x1b[0m";
+
+/// Emit one highlighted line: tokenize with the shared highlighter (which
+/// carries multi-line state across calls, so callers keep ONE instance per
+/// text) and print it. Consecutive characters sharing the same token color
+/// are grouped into a single run so we emit one ANSI prefix per run.
+fn print_syntax_line(syntax: &mut SyntaxHighlighter, index: usize, line: &str) {
+    let tokens = syntax.tokenize_line(index, line);
+
+    // Walk char-by-char (not byte-by-byte) to stay safe on UTF-8.
+    let mut current_color: Option<crossterm::style::Color> = None;
+    let mut current_text = String::new();
+
+    for (char_start, ch) in line.char_indices() {
+        let tt = tokens
+            .iter()
+            .find(|t| char_start >= t.start && char_start < t.end)
+            .map(|t| t.token_type);
+        let color = tt.map(color_for);
+
+        if color != current_color {
+            if !current_text.is_empty() {
+                flush_syntax_run(current_color, &current_text);
+                current_text.clear();
+            }
+            current_color = color;
+        }
+        current_text.push(ch);
+    }
+
+    // Flush the trailing run.
+    if !current_text.is_empty() {
+        flush_syntax_run(current_color, &current_text);
+    }
+
+    // End the line — println! would add an extra newline for empty lines.
+    println!();
+}
+
+fn flush_syntax_run(color: Option<crossterm::style::Color>, text: &str) {
+    match color {
+        Some(c) => print!("{}{}{}", crossterm_to_ansi(c), text, ANSI_RESET),
+        None => print!("{}{}", ANSI_RESET, text),
+    }
+}
+
+/// Print arbitrary in-memory text to stdout with syntax highlighting, as
+/// if it were a file with the extension `ext_hint` (e.g. `Some("json")`).
+/// No header, no line numbers — just the colored body. Used by `fmt`
+/// (and friends) for conversion results written to stdout.
+///
+/// Colors appear only when the global `setc` toggle is ON **and** the
+/// console can render raw ANSI (see `raw_ansi_allowed`); otherwise the
+/// text is printed verbatim, exactly like the file-writing path.
+pub fn print_syntax_text(content: &str, ext_hint: Option<&str>) {
+    let highlighted = Config::global_get_color_enabled()
+        && raw_ansi_allowed()
+        && SyntaxHighlighter::new(ext_hint).language.is_some();
+    if !highlighted {
+        print!("{}", content);
+        return;
+    }
+    let mut syntax = SyntaxHighlighter::new(ext_hint);
+    for (i, line) in content.lines().enumerate() {
+        print_syntax_line(&mut syntax, i, line);
+    }
 }
 
 #[cfg(test)]

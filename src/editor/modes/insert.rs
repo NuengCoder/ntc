@@ -144,8 +144,7 @@ impl Editor {
                     }
                     // Ctrl+; / Ctrl+: (shift folds unpredictably across
                     // terminals — accept both, like Normal mode does).
-                    (true, _, _, KeyCode::Char(':'))
-                    | (true, _, _, KeyCode::Char(';')) => {
+                    (true, _, _, KeyCode::Char(':')) | (true, _, _, KeyCode::Char(';')) => {
                         self.mode = Mode::Command;
                         self.cmd_buf.clear();
                     }

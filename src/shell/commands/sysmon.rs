@@ -701,7 +701,11 @@ mod tests {
             120 * 1024 * 1024 * 1024,
             500 * 1024 * 1024 * 1024,
         );
-        assert!(line.starts_with(" C:\\ [Windows] (NTFS SSD) "), "got: {}", line);
+        assert!(
+            line.starts_with(" C:\\ [Windows] (NTFS SSD) "),
+            "got: {}",
+            line
+        );
         assert!(line.contains("120"), "got: {}", line);
         assert!(!line.contains("USB"), "got: {}", line);
     }

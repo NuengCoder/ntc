@@ -62,6 +62,7 @@ pub fn fill(m: &mut HashMap<String, String>) {
     m.insert("msg.showcg.label_watch_limit".into(), "ขีดจำกัด watch:".into());
 
     m.insert("msg.showcg.label_dir_view".into(), "Dir View:".into());
+    m.insert("msg.showcg.label_update_check".into(), "Update check:".into());
     m.insert("msg.showcg.label_serve_files".into(), "Serve files:".into());
     m.insert("msg.showcg.label_serve_http".into(), "Serve http:".into());
     m.insert("msg.showcg.label_serve_chess".into(), "Serve chess:".into());

@@ -438,11 +438,125 @@ pub struct ContentMatch {
     pub line: String,
 }
 
+/// Sort key for `gs -s|--sort` (mirrors the CLI enum in shell commands).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ContentSort {
+    /// Match-line text, case-insensitive, then path + line.
+    Line,
+    /// File path, then line number (the default `gs` order).
+    Path,
+    /// File size ascending (small → large), then path + line.
+    Size,
+}
+
+/// Sort content matches for `gs -s|--sort`. Sizes are cached per file so a
+/// big result list stats each file once; missing files sort last.
+pub fn sort_content_matches(results: &mut [ContentMatch], sort: ContentSort) {
+    match sort {
+        ContentSort::Line => {
+            results.sort_by(|a, b| {
+                a.line
+                    .to_lowercase()
+                    .cmp(&b.line.to_lowercase())
+                    .then_with(|| a.file_path.cmp(&b.file_path))
+                    .then_with(|| a.line_number.cmp(&b.line_number))
+            });
+        }
+        ContentSort::Path => {
+            results.sort_by(|a, b| {
+                a.file_path
+                    .cmp(&b.file_path)
+                    .then_with(|| a.line_number.cmp(&b.line_number))
+            });
+        }
+        ContentSort::Size => {
+            use std::collections::HashMap;
+            use std::path::PathBuf;
+            let mut sizes: HashMap<PathBuf, u64> = HashMap::new();
+            for m in results.iter() {
+                if !sizes.contains_key(&m.file_path) {
+                    let sz = std::fs::metadata(&m.file_path)
+                        .map(|md| md.len())
+                        .unwrap_or(u64::MAX);
+                    sizes.insert(m.file_path.clone(), sz);
+                }
+            }
+            results.sort_by(|a, b| {
+                let sa = sizes.get(&a.file_path).copied().unwrap_or(u64::MAX);
+                let sb = sizes.get(&b.file_path).copied().unwrap_or(u64::MAX);
+                sa.cmp(&sb)
+                    .then_with(|| a.file_path.cmp(&b.file_path))
+                    .then_with(|| a.line_number.cmp(&b.line_number))
+            });
+        }
+    }
+}
+
 /// Max file size (bytes) scanned by content search. Larger files are skipped
 /// so a broad `gs -d <n>` waits on the spinner instead of OOM/crashing.
 pub const MAX_GS_FILE_BYTES: u64 = 8 * 1024 * 1024;
 /// Max matches kept per file so one huge generated file can't explode memory.
 const MAX_GS_MATCHES_PER_FILE: usize = 2_000;
+
+// ── OR patterns (gs `a\|b`) ──────────────────────────────────────────────────
+
+/// Split a content-search pattern into OR alternatives.
+///
+/// `gs error\|warning` (the shell-safe form — `|` is the pipeline operator)
+/// and `gs "error|warning"` (when the pipe survives quoting, or when written
+/// without spaces as `gs error|warning`) both mean "error OR warning".
+/// Alternatives are trimmed and empty ones dropped; a pattern without a
+/// separator yields exactly one term, and backslashes that do not precede `|`
+/// are kept as-is (so Windows paths still work).
+pub fn split_alternatives(pattern: &str) -> Vec<String> {
+    if pattern.is_empty() {
+        return Vec::new();
+    }
+    let mut terms: Vec<String> = Vec::new();
+    let mut cur = String::new();
+    let mut chars = pattern.chars().peekable();
+    while let Some(ch) = chars.next() {
+        match ch {
+            // `\|` is an escaped pipe: an OR separator, never literal text.
+            '\\' if chars.peek() == Some(&'|') => {
+                chars.next();
+                push_alternative(&mut terms, &mut cur);
+            }
+            '|' => push_alternative(&mut terms, &mut cur),
+            _ => cur.push(ch),
+        }
+    }
+    push_alternative(&mut terms, &mut cur);
+    // A pattern made only of separators keeps its literal meaning.
+    if terms.is_empty() {
+        terms.push(pattern.to_string());
+    }
+    terms
+}
+
+fn push_alternative(terms: &mut Vec<String>, cur: &mut String) {
+    let term = cur.trim();
+    if !term.is_empty() {
+        terms.push(term.to_string());
+    }
+    cur.clear();
+}
+
+/// Lowercased alternatives plus the shortest term length, ready for matching.
+/// `min_len` powers the cheap "line is too short to match" pre-check.
+fn compile_terms(pattern: &str) -> (Vec<String>, usize) {
+    let terms: Vec<String> = split_alternatives(pattern)
+        .iter()
+        .map(|t| t.to_lowercase())
+        .collect();
+    let min_len = terms.iter().map(|t| t.len()).min().unwrap_or(0);
+    (terms, min_len)
+}
+
+/// True when the (already lowercased) line contains any alternative.
+fn line_matches(lower_line: &str, terms: &[String]) -> bool {
+    terms.iter().any(|t| lower_line.contains(t.as_str()))
+}
 
 /// Search file contents for a pattern (case-insensitive).
 /// Only searches files that pass the ignore/care filters.
@@ -451,7 +565,10 @@ pub fn search_content(root: &Path, pattern: &str, max_depth: usize) -> Vec<Conte
     if pattern.is_empty() {
         return Vec::new();
     }
-    let pattern_lower = pattern.to_lowercase();
+    let (terms, min_len) = compile_terms(pattern);
+    if terms.is_empty() {
+        return Vec::new();
+    }
     let ignored_dirs = Config::get_ignored_dirs_combined();
     let fmt_cfg = FormatConfig::from_both();
 
@@ -475,10 +592,10 @@ pub fn search_content(root: &Path, pattern: &str, max_depth: usize) -> Vec<Conte
                     break;
                 }
                 // Cheap length pre-check before allocating lowercase string.
-                if line.len() < pattern.len() {
+                if line.len() < min_len {
                     continue;
                 }
-                if line.to_lowercase().contains(&pattern_lower) {
+                if line_matches(&line.to_lowercase(), &terms) {
                     matches.push(ContentMatch {
                         file_path: path.clone(),
                         line_number: i + 1,
@@ -511,7 +628,10 @@ pub fn search_content_in_files(files: &[PathBuf], pattern: &str) -> Vec<ContentM
     if pattern.is_empty() {
         return Vec::new();
     }
-    let pattern_lower = pattern.to_lowercase();
+    let (terms, min_len) = compile_terms(pattern);
+    if terms.is_empty() {
+        return Vec::new();
+    }
     let mut results: Vec<ContentMatch> = files
         .par_iter()
         .filter_map(|path| {
@@ -526,10 +646,10 @@ pub fn search_content_in_files(files: &[PathBuf], pattern: &str) -> Vec<ContentM
                 if matches.len() >= MAX_GS_MATCHES_PER_FILE {
                     break;
                 }
-                if line.len() < pattern.len() {
+                if line.len() < min_len {
                     continue;
                 }
-                if line.to_lowercase().contains(&pattern_lower) {
+                if line_matches(&line.to_lowercase(), &terms) {
                     matches.push(ContentMatch {
                         file_path: path.clone(),
                         line_number: i + 1,
@@ -580,38 +700,87 @@ pub fn display_content_path(path: &Path, root: &Path) -> String {
         .unwrap_or(s)
 }
 
-/// Highlight every (case-insensitive) occurrence of `pattern` in `line` red.
-/// Uses explicit ANSI codes so output is red even when piped/redirected.
+/// Byte length of `text` consumed by a case-insensitive match of `needle`
+/// starting at its first character, or `None` when it does not match there.
+fn ci_prefix_len(text: &str, needle: &str) -> Option<usize> {
+    if needle.is_empty() {
+        return None;
+    }
+    let mut consumed = 0usize;
+    let mut have = text.chars();
+    for want in needle.chars() {
+        let ch = have.next()?;
+        if ch != want && !ch.to_lowercase().eq(want.to_lowercase()) {
+            return None;
+        }
+        consumed += ch.len_utf8();
+    }
+    Some(consumed)
+}
+
+/// Split `text` into `(segment, is_match)` pairs for red pattern highlight.
+///
+/// Every alternative of an OR pattern is highlighted (`gs error\|warning`
+/// marks both words), and at any position the longest alternative wins so
+/// overlapping terms don't produce nested/misaligned highlights.
+pub fn highlight_segments<'a>(text: &'a str, pattern: &str) -> Vec<(&'a str, bool)> {
+    let terms = split_alternatives(pattern);
+    if terms.is_empty() {
+        return vec![(text, false)];
+    }
+    let mut segments: Vec<(&'a str, bool)> = Vec::new();
+    let mut plain_start = 0usize;
+    let mut i = 0usize;
+    while i < text.len() {
+        let mut best: Option<usize> = None;
+        for term in &terms {
+            if let Some(len) = ci_prefix_len(&text[i..], term) {
+                if best.map_or(true, |b| len > b) {
+                    best = Some(len);
+                }
+            }
+        }
+        match best {
+            Some(len) => {
+                if plain_start < i {
+                    segments.push((&text[plain_start..i], false));
+                }
+                segments.push((&text[i..i + len], true));
+                i += len;
+                plain_start = i;
+            }
+            None => {
+                let ch = text[i..].chars().next().unwrap_or('\u{0}');
+                i += ch.len_utf8();
+            }
+        }
+    }
+    if plain_start < text.len() {
+        segments.push((&text[plain_start..], false));
+    }
+    if segments.is_empty() {
+        segments.push((text, false));
+    }
+    segments
+}
+
+/// Highlight every (case-insensitive) occurrence of `pattern` in `line` red,
+/// including every alternative of an OR pattern. Uses explicit ANSI codes so
+/// output is red even when piped/redirected.
 pub fn highlight_pattern(line: &str, pattern: &str) -> String {
     if pattern.is_empty() {
         return line.to_string();
     }
     const RED: &str = "\x1b[31m";
     const RESET: &str = "\x1b[0m";
-    let lower_line = line.to_lowercase();
-    let lower_pat = pattern.to_lowercase();
     let mut out = String::with_capacity(line.len() + 16);
-    let mut i = 0usize;
-    while i < line.len() {
-        if lower_line[i..].starts_with(&lower_pat) {
-            let end = (i + pattern.len()).min(line.len());
-            // Keep char-boundary safety for non-ASCII text.
-            let mut e = end;
-            while e < line.len() && !line.is_char_boundary(e) {
-                e += 1;
-            }
-            let mut s = i;
-            while s < e && !line.is_char_boundary(s) {
-                s += 1;
-            }
+    for (segment, is_match) in highlight_segments(line, pattern) {
+        if is_match {
             out.push_str(RED);
-            out.push_str(&line[s..e]);
+            out.push_str(segment);
             out.push_str(RESET);
-            i = e;
         } else {
-            let ch = line[i..].chars().next().unwrap();
-            out.push(ch);
-            i += ch.len_utf8();
+            out.push_str(segment);
         }
     }
     out
@@ -678,6 +847,51 @@ pub fn format_content_results(
     }
 
     output
+}
+
+/// A match found in piped/redirected text (no file context).
+#[derive(Debug, Clone)]
+pub struct TextMatch {
+    pub line_number: usize,
+    pub line: String,
+}
+
+/// Search in-memory text for a pattern using the same case-insensitive
+/// substring semantics as [`search_content`]. Used when a command receives
+/// its content from a pipe or a `<`/`<<` redirect instead of the filesystem.
+pub fn search_text_lines(text: &str, pattern: &str) -> Vec<TextMatch> {
+    if pattern.is_empty() {
+        return Vec::new();
+    }
+    let (terms, min_len) = compile_terms(pattern);
+    if terms.is_empty() {
+        return Vec::new();
+    }
+    let mut matches: Vec<TextMatch> = Vec::new();
+    for (i, line) in text.lines().enumerate() {
+        // Cheap length pre-check before allocating a lowercase string.
+        if line.len() < min_len {
+            continue;
+        }
+        if line_matches(&line.to_lowercase(), &terms) {
+            matches.push(TextMatch {
+                line_number: i + 1,
+                line: line.to_string(),
+            });
+        }
+    }
+    matches
+}
+
+/// Format piped-text matches grep-style: one matching line per row with the
+/// pattern highlighted. No header/count, so the output stays pipe-friendly.
+pub fn format_text_matches(matches: &[TextMatch], pattern: &str) -> String {
+    let mut out = String::new();
+    for m in matches {
+        out.push_str(&highlight_pattern(&m.line, pattern));
+        out.push('\n');
+    }
+    out
 }
 
 // ============================================================================
@@ -950,5 +1164,207 @@ mod tests {
     fn test_format_results_empty() {
         let output = format_search_results(&[], "ghost.c", 2, true);
         assert!(output.contains("No matches found"));
+    }
+
+    #[test]
+    fn split_alternatives_handles_escaped_and_bare_pipes() {
+        assert_eq!(split_alternatives("error\\|warning"), vec!["error", "warning"]);
+        assert_eq!(split_alternatives("error|warning"), vec!["error", "warning"]);
+        assert_eq!(split_alternatives(" a \\| b \\| c "), vec!["a", "b", "c"]);
+        assert_eq!(split_alternatives("plain"), vec!["plain"]);
+        assert_eq!(split_alternatives("foo bar"), vec!["foo bar"]);
+        // Backslashes that are not escaping a pipe stay literal (Windows paths).
+        assert_eq!(split_alternatives("C:\\src\\main"), vec!["C:\\src\\main"]);
+        // Separators with no terms keep their literal meaning instead of
+        // turning the search into "match everything".
+        assert_eq!(split_alternatives("|"), vec!["|"]);
+        assert!(split_alternatives("").is_empty());
+    }
+
+    #[test]
+    fn search_content_matches_either_alternative() {
+        let dir = tempdir().unwrap();
+        std::fs::write(
+            dir.path().join("log.txt"),
+            "ERROR boom\nwarning: low\nnothing here\nError again\n",
+        )
+        .unwrap();
+
+        let escaped = search_content(dir.path(), "error\\|warning", 1);
+        assert_eq!(escaped.len(), 3, "ERROR, warning and Error all match");
+        assert_eq!(
+            escaped.iter().map(|m| m.line_number).collect::<Vec<_>>(),
+            vec![1, 2, 4]
+        );
+
+        // Bare pipe (quoted or written without spaces) means the same.
+        let bare = search_content(dir.path(), "error|warning", 1);
+        assert_eq!(bare.len(), escaped.len());
+
+        // A single term still behaves like the old substring search.
+        assert_eq!(search_content(dir.path(), "warning", 1).len(), 1);
+        assert!(search_content(dir.path(), "missing\\|ghost", 1).is_empty());
+    }
+
+    #[test]
+    fn search_text_lines_supports_or() {
+        let text = "alpha\nbeta\ngamma\nALPHA beta\n";
+        let hits = search_text_lines(text, "alpha\\|gamma");
+        assert_eq!(hits.len(), 3);
+        assert_eq!(hits[0].line_number, 1);
+        assert_eq!(hits[1].line_number, 3);
+        assert_eq!(hits[2].line_number, 4);
+    }
+
+    #[test]
+    fn highlight_marks_every_alternative() {
+        let out = highlight_pattern("one ERROR and a warning", "error\\|warning");
+        assert!(out.contains("\x1b[31mERROR\x1b[0m"));
+        assert!(out.contains("\x1b[31mwarning\x1b[0m"));
+
+        // Longest alternative wins at a shared position (no nested marks).
+        let segments = highlight_segments("foobar", "foo\\|foobar");
+        assert_eq!(segments, vec![("foobar", true)]);
+    }
+
+    #[test]
+    fn highlight_segments_cover_the_whole_line() {
+        let text = "pre foo mid bar post";
+        let segs = highlight_segments(text, "foo\\|bar");
+        assert_eq!(
+            segs,
+            vec![
+                ("pre ", false),
+                ("foo", true),
+                (" mid ", false),
+                ("bar", true),
+                (" post", false),
+            ]
+        );
+        // Reassembling the segments returns the original text.
+        assert_eq!(segs.iter().map(|(s, _)| *s).collect::<String>(), text);
+    }
+
+    #[test]
+    fn search_text_lines_matches_case_insensitively() {
+        let text = "Alpha\nbeta\nALPHA gamma\n";
+        let hits = search_text_lines(text, "alpha");
+        assert_eq!(hits.len(), 2);
+        assert_eq!(hits[0].line_number, 1);
+        assert_eq!(hits[0].line, "Alpha");
+        assert_eq!(hits[1].line_number, 3);
+        assert_eq!(hits[1].line, "ALPHA gamma");
+    }
+
+    #[test]
+    fn search_text_lines_handles_crlf_and_no_match() {
+        let hits = search_text_lines("one\r\ntwo\r\n", "two");
+        assert_eq!(hits.len(), 1);
+        assert_eq!(hits[0].line, "two"); // \r stripped by str::lines
+        assert_eq!(hits[0].line_number, 2);
+        assert!(search_text_lines("nothing here", "zzz").is_empty());
+        assert!(search_text_lines("anything", "").is_empty());
+    }
+
+    #[test]
+    fn sort_content_matches_orders_by_line_and_path() {
+        let mut matches = vec![
+            ContentMatch {
+                file_path: PathBuf::from("z.rs"),
+                line_number: 1,
+                line: "Beta".to_string(),
+            },
+            ContentMatch {
+                file_path: PathBuf::from("b.rs"),
+                line_number: 2,
+                line: "alpha".to_string(),
+            },
+            ContentMatch {
+                file_path: PathBuf::from("a.rs"),
+                line_number: 3,
+                line: "ALPHA".to_string(),
+            },
+        ];
+
+        sort_content_matches(&mut matches, ContentSort::Line);
+        assert_eq!(
+            matches
+                .iter()
+                .map(|m| (m.line.as_str(), m.file_path.as_path(), m.line_number))
+                .collect::<Vec<_>>(),
+            vec![
+                ("ALPHA", Path::new("a.rs"), 3),
+                ("alpha", Path::new("b.rs"), 2),
+                ("Beta", Path::new("z.rs"), 1),
+            ]
+        );
+
+        sort_content_matches(&mut matches, ContentSort::Path);
+        assert_eq!(
+            matches
+                .iter()
+                .map(|m| m.file_path.as_path())
+                .collect::<Vec<_>>(),
+            vec![Path::new("a.rs"), Path::new("b.rs"), Path::new("z.rs")]
+        );
+    }
+
+    #[test]
+    fn sort_content_matches_orders_by_file_size_then_path_and_line() {
+        let dir = tempdir().unwrap();
+        let small = dir.path().join("b.txt");
+        let large = dir.path().join("a.txt");
+        std::fs::write(&small, "x").unwrap();
+        std::fs::write(&large, "longer").unwrap();
+        let missing = dir.path().join("missing.txt");
+        let mut matches = vec![
+            ContentMatch {
+                file_path: large.clone(),
+                line_number: 2,
+                line: "hit".to_string(),
+            },
+            ContentMatch {
+                file_path: small.clone(),
+                line_number: 3,
+                line: "hit".to_string(),
+            },
+            ContentMatch {
+                file_path: small.clone(),
+                line_number: 1,
+                line: "hit".to_string(),
+            },
+            ContentMatch {
+                file_path: missing.clone(),
+                line_number: 1,
+                line: "hit".to_string(),
+            },
+        ];
+
+        sort_content_matches(&mut matches, ContentSort::Size);
+        assert_eq!(
+            matches
+                .iter()
+                .map(|m| (m.file_path.as_path(), m.line_number))
+                .collect::<Vec<_>>(),
+            vec![
+                (small.as_path(), 1),
+                (small.as_path(), 3),
+                (large.as_path(), 2),
+                (missing.as_path(), 1),
+            ]
+        );
+    }
+
+    #[test]
+    fn format_text_matches_prints_one_line_per_match() {
+        let hits = search_text_lines("foo bar\nbaz\nfood\n", "foo");
+        let out = format_text_matches(&hits, "foo");
+        // Two matching lines, each terminated by a newline.
+        assert_eq!(out.matches('\n').count(), 2);
+        // Highlight wraps only the matched substring, so the untouched tails
+        // remain contiguous and the highlighted "foo" is present.
+        assert!(out.contains("bar"));
+        assert!(out.contains("\x1b[31mfoo\x1b[0md")); // "food" with "foo" highlighted
+        assert!(out.contains("\x1b[31m"));
     }
 }

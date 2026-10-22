@@ -59,24 +59,59 @@ export function listFiles(path: string): Promise<FilesResponse> {
   return api(`/api/files?path=${encodeURIComponent(p)}`)
 }
 
-export async function downloadFile(id: number, filename: string): Promise<void> {
-  // Fetched (not a plain <a href>) so the Basic header is attached when
-  // the server requires login.
-  const res = await fetch(API + `/api/download?id=${id}`, { headers: authHeaders() })
-  if (!res.ok) {
-    const text = await res.text()
-    if (res.status === 401) notifyUnauthorized()
-    throw new ApiError(parseErr(text, res.status), res.status)
+export function downloadFile(id: number, filename: string, onProgress?: (pct: number) => void): Promise<void> {
+  // XHR (not fetch-blob) so download progress is visible in the Files UI.
+  // Sends the Basic header when `serve --auth` is on; server always sends
+  // Content-Length so e.total is known.
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest()
+    xhr.open('GET', API + `/api/download?id=${id}`)
+    xhr.responseType = 'blob'
+    const creds = sessionStorage.getItem(CRED_KEY)
+    if (creds) xhr.setRequestHeader('Authorization', `Basic ${creds}`)
+    xhr.onprogress = (e) => {
+      if (e.lengthComputable && onProgress) {
+        onProgress(Math.round((e.loaded / e.total) * 100))
+      }
+    }
+    xhr.onload = () => {
+      if (xhr.status === 401) notifyUnauthorized()
+      if (xhr.status < 200 || xhr.status >= 300) {
+        const text = typeof xhr.response === 'string' ? xhr.response : `HTTP ${xhr.status}`
+        reject(new ApiError(typeof text === 'string' ? text : `HTTP ${xhr.status}`, xhr.status))
+        return
+      }
+      const blob = xhr.response as Blob
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = filename
+      document.body.appendChild(a)
+      a.click()
+      a.remove()
+      setTimeout(() => URL.revokeObjectURL(url), 5000)
+      if (onProgress) onProgress(100)
+      resolve()
+    }
+    xhr.onerror = () => reject(new Error('Network error'))
+    xhr.ontimeout = () => reject(new Error('Download timed out'))
+    xhr.send()
+  })
+}
+
+// Plain-link URL for browser-native progress (download tray).
+// Without --auth it's just /api/download?id=..; with --auth it mints a
+// short-lived ?token=.. so the link works without the Basic header.
+export async function getNativeDownloadUrl(id: number): Promise<string> {
+  if (!hasCredentials()) {
+    return API + `/api/download?id=${id}`
   }
-  const blob = await res.blob()
-  const url = URL.createObjectURL(blob)
-  const a = document.createElement('a')
-  a.href = url
-  a.download = filename
-  document.body.appendChild(a)
-  a.click()
-  a.remove()
-  setTimeout(() => URL.revokeObjectURL(url), 5000)
+  const res = await api<{ token: string; url: string }>(`/api/download-token`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ id }),
+  })
+  return API + res.url
 }
 
 const CHUNK_SIZE = 80 * 1024 * 1024 // 80 MB, keeps each request under the tunnel's ~100 MB cap

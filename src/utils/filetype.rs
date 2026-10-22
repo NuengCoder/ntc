@@ -124,11 +124,12 @@ impl FormatConfig {
     /// Load all four sets combining both global AND local (ntconfig.toml) configs.
     /// Local config stays independent — its values are never written into global.
     pub fn from_both() -> Self {
+        let eff = Config::effective_igcare();
         Self {
-            ignored_files: Config::get_ignored_files_combined(),
-            extra_files: Config::get_extra_supported_files_combined(),
-            ignored_extensions: Config::get_ignored_extensions_combined(),
-            extra_extensions: Config::get_extra_supported_extensions_combined(),
+            ignored_files: eff.ignored_files,
+            extra_files: eff.extra_supported_files,
+            ignored_extensions: eff.ignored_extensions,
+            extra_extensions: eff.extra_supported_extensions,
         }
     }
 }
@@ -195,10 +196,11 @@ pub fn is_supported_format_with_config(path: &Path, cfg: &FormatConfig) -> bool 
 }
 
 /// Convenience wrapper for single-file checks (e.g. `txt <file>` in the
-/// shell). Fetches config from the global lock on every call — fine for
-/// one-off checks, but use `is_supported_format_with_config` inside walks.
+/// shell). Fetches the effective config (global + local ntconfig.toml) from
+/// the global lock on every call — fine for one-off checks, but use
+/// `is_supported_format_with_config` inside walks.
 pub fn is_supported_format(path: &Path) -> bool {
-    let cfg = FormatConfig::from_global();
+    let cfg = FormatConfig::from_both();
     is_supported_format_with_config(path, &cfg)
 }
 
@@ -286,18 +288,6 @@ pub fn is_known_unsupported_format(path: &Path) -> bool {
     } else {
         false
     }
-}
-
-/// True when a bare `file_name` (no directory check — the caller decides
-/// about directories) ends with a known-unsupported extension, e.g.
-/// `setup.exe`, `backup.zip`, `photo.png`. Multi-dot filters match
-/// naturally (`data.tar.gz` matches `gz`… and `tar.gz`-style entries).
-/// Used by the shell hinter so `txtc`/`txtf` only suggest readable files.
-pub(crate) fn is_known_unsupported_file_name(file_name: &str) -> bool {
-    let lower = file_name.to_lowercase();
-    KNOWN_UNSUPPORTED_EXTENSIONS
-        .iter()
-        .any(|e| lower.ends_with(&format!(".{}", e)))
 }
 
 /// True when `path` should be hidden from the editor file finder:
@@ -464,11 +454,11 @@ mod tests {
             "app.apk",
             "lib.dll",
         ] {
-            assert!(is_known_unsupported_file_name(name), "{}", name);
+            assert!(is_finder_hidden(Path::new(name)), "{}", name);
         }
         // Text sources, extensionless names and bare words pass through.
         for name in ["main.rs", "Makefile", "Cargo.toml", "notes", "img", "a.txt"] {
-            assert!(!is_known_unsupported_file_name(name), "{}", name);
+            assert!(!is_finder_hidden(Path::new(name)), "{}", name);
         }
     }
 

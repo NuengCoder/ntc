@@ -57,58 +57,49 @@ pub fn edit_file_with_session(
         }
     }
 
-    let has_session_snapshot = {
+    // Tabs are scoped to the directory the editor was started from: another
+    // directory's saved tabs must never appear here.
+    let session_cwd = crate::session::editor_cwd();
+    let stored_snapshot = {
         let session = crate::session::SessionState::read_global();
-        session.session_snapshot.is_some()
+        crate::session::snapshot_for_restore(
+            &session,
+            &session_cwd,
+            editor.editor_cfg.session_max_age_hours,
+        )
     };
-    if has_session_snapshot {
-        let snapshot = crate::session::SessionState::read_global()
-            .session_snapshot
-            .clone()
-            .unwrap();
-        let max_age_hours = editor.editor_cfg.session_max_age_hours;
-        let is_recent =
-            chrono::NaiveDateTime::parse_from_str(&snapshot.timestamp, "%Y-%m-%d %H:%M:%S")
-                .ok()
-                .map(|dt| {
-                    let now = chrono::Local::now().naive_local();
-                    let age = now.signed_duration_since(dt).num_hours();
-                    age < max_age_hours as i64
-                })
-                .unwrap_or(false);
-        if is_recent && !snapshot.tabs.is_empty() {
-            // Rebuild tabs to mirror the snapshot (path-matched, so ordering and
-            // missing files can never shift state onto the wrong buffer).
-            let mut focus_tab: Option<usize> = None;
-            for tab_snap in &snapshot.tabs {
-                if !tab_snap.path.exists() {
-                    continue;
-                }
-                match editor.find_tab_by_path(&tab_snap.path) {
-                    Some(i) => editor.restore_tab_from_snapshot_path(i, tab_snap),
-                    None => {
-                        editor.open_file(&tab_snap.path);
-                        if let Some(i) = editor.find_tab_by_path(&tab_snap.path) {
-                            editor.restore_tab_from_snapshot_path(i, tab_snap);
-                        }
+    if let Some(snapshot) = stored_snapshot {
+        // Rebuild tabs to mirror the snapshot (path-matched, so ordering and
+        // missing files can never shift state onto the wrong buffer).
+        let mut focus_tab: Option<usize> = None;
+        for tab_snap in &snapshot.tabs {
+            if !tab_snap.path.exists() {
+                continue;
+            }
+            match editor.find_tab_by_path(&tab_snap.path) {
+                Some(i) => editor.restore_tab_from_snapshot_path(i, tab_snap),
+                None => {
+                    editor.open_file(&tab_snap.path);
+                    if let Some(i) = editor.find_tab_by_path(&tab_snap.path) {
+                        editor.restore_tab_from_snapshot_path(i, tab_snap);
                     }
                 }
-                if tab_snap.path == path {
-                    focus_tab = editor.find_tab_by_path(path);
-                }
             }
-            // The requested file must always end up open and focused, even
-            // when it is not part of the snapshot: the rebuild loop above
-            // leaves the buffer on the last snapshot file, so without this
-            // `ne <file>` would show stale cache instead of the request.
-            // `open_file` no-ops to a tab switch when already present.
-            let focus = focus_tab.or_else(|| editor.find_tab_by_path(path));
-            match focus {
-                Some(i) => editor.switch_tab(i),
-                None => editor.open_file(path),
+            if tab_snap.path == path {
+                focus_tab = editor.find_tab_by_path(path);
             }
-            editor.sidebar.open = snapshot.sidebar_open;
         }
+        // The requested file must always end up open and focused, even
+        // when it is not part of the snapshot: the rebuild loop above
+        // leaves the buffer on the last snapshot file, so without this
+        // `ne <file>` would show stale cache instead of the request.
+        // `open_file` no-ops to a tab switch when already present.
+        let focus = focus_tab.or_else(|| editor.find_tab_by_path(path));
+        match focus {
+            Some(i) => editor.switch_tab(i),
+            None => editor.open_file(path),
+        }
+        editor.sidebar.open = snapshot.sidebar_open;
     }
 
     let goto = crate::editor::GOTO_LINE.swap(0, std::sync::atomic::Ordering::SeqCst);
@@ -135,9 +126,7 @@ pub fn edit_file_with_session(
 
     if !result {
         let snapshot = editor.capture_full_session();
-        let mut session = crate::session::SessionState::write_global();
-        session.session_snapshot = Some(snapshot);
-        session.save();
+        crate::session::SessionState::save_snapshot(snapshot);
     }
 
     Ok((result, captured))

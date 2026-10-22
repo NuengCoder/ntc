@@ -19,7 +19,7 @@
 [vars]
 # CC = "gcc"
 # FLAGS = "-O2"
-ver = "2.4.5"
+ver = "2.4.6"
 lux = "ntc-v$(ver)-linux-x86_64.tar.gz"
 adb = "ntc-v$(ver)-aarch64-linux-android.tar.gz"
 win = "ntc-v$(ver)-windows-x86_64.zip"
@@ -80,7 +80,9 @@ cmd = "packaging\\build_win32.cmd"
 
 [targets.android]
 deps = []
-cmd = "cargo ndk --target aarch64-linux-android --platform 23 build --release"
+# cpal 0.18.2 uses AAudio on Android (ndk feature api-level-26), and the NDK
+# only ships libaaudio.so in the 26+ sysroot. API 26 = Android 8.0+.
+cmd = "cargo ndk --target aarch64-linux-android --platform 26 build --release"
 
 [targets.debian]
 deps = []
@@ -128,11 +130,11 @@ cmd = "cp $(deb_w) ."
 
 [targets.cpwin]
 deps = []
-cmd = "cp $(wini_w) . && arc create $(winiz) $(wini)"
+cmd = "cp $(wini_w) . && arc create $(winiz) $(wini) && rmf $(wini)"
 
 [targets.cpwin7]
 deps = []
-cmd = "cp $(wini7_w) . && arc create $(winiz7) $(wini7)"
+cmd = "cp $(wini7_w) . && arc create $(winiz7) $(wini7) && rmf $(wini7)"
 
 [targets.setpack]
 deps = ["tar","zip","zip_arm","zip_win7amd","zip_win7arm","cpdeb","cpwin","cpwin7"]
@@ -140,7 +142,7 @@ cmd = "echo pack setup completed!"
 
 [targets.rmpack]
 deps = []
-cmd = "rmf $(lux) ,  $(adb) ,  $(win) ,  $(deb) ,  $(wini) ,  $(wini7) ,  $(win_arm) ,  $(win7amd) , $(win7arm) , $(winiz) , $(winiz7)"
+cmd = "rmf $(lux) ,  $(adb) ,  $(win) ,  $(deb) ,  $(win_arm) ,  $(win7amd) , $(win7arm) , $(winiz) , $(winiz7)"
 
 [targets.padb]
 deps = []

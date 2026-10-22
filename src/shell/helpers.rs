@@ -1,4 +1,4 @@
-use crate::config::Config;
+use crate::config::{Config, ConfigScope};
 use crate::explorer::{
     calculate_total_size, format_tree, format_tree_with_sizes, generate_tree, human_readable_size,
 };
@@ -132,30 +132,25 @@ pub(crate) fn resolve_target_spec(spec: &str, nav: &Navigator) -> Result<PathBuf
 /// Same as [`resolve_target_spec`] but also accepts files.
 /// Used by `size` (and CLI `--size`) so `size Cargo.toml` works.
 /// `view`/`report` keep using the dir-only variant.
-pub(crate) fn resolve_target_spec_allow_file(
-    spec: &str,
-    nav: &Navigator,
-) -> Result<PathBuf> {
+pub(crate) fn resolve_target_spec_allow_file(spec: &str, nav: &Navigator) -> Result<PathBuf> {
     resolve_target_spec_inner(spec, nav, true)
 }
 
-fn resolve_target_spec_inner(
-    spec: &str,
-    nav: &Navigator,
-    allow_file: bool,
-) -> Result<PathBuf> {
+fn resolve_target_spec_inner(spec: &str, nav: &Navigator, allow_file: bool) -> Result<PathBuf> {
     let name = spec.strip_prefix('@').unwrap_or(spec);
 
     if spec.starts_with('@') {
-        if let Some(p) = TeleportManager::get_path(name) {
+        if let Some(p) = TeleportManager::resolve_subpath(spec) {
             if allow_file || p.is_dir() || !p.exists() {
                 return Ok(p);
             }
             print_error(&t!("cmd.target.not_dir", strip_unc_prefix(&p)));
             bail!(t!("cmd.target.not_dir", strip_unc_prefix(&p)));
         }
-        print_error(&t!("cmd.target.tp_not_found", name));
-        bail!(t!("cmd.target.tp_not_found", name));
+        // Report the savepoint part (before any `/sub`) for a clean error.
+        let list_name = name.split('/').next().unwrap_or(name);
+        print_error(&t!("cmd.target.tp_not_found", list_name));
+        bail!(t!("cmd.target.tp_not_found", list_name));
     }
 
     let p = Path::new(spec);
@@ -197,18 +192,11 @@ pub(crate) fn parse_target_arg(args: &str, nav: &Navigator) -> Result<TargetArg>
 
 /// Same as [`parse_target_arg`] but the target may be a file or directory.
 /// Used by the `size` command so `size <file>` works.
-pub(crate) fn parse_target_arg_allow_file(
-    args: &str,
-    nav: &Navigator,
-) -> Result<TargetArg> {
+pub(crate) fn parse_target_arg_allow_file(args: &str, nav: &Navigator) -> Result<TargetArg> {
     parse_target_arg_inner(args, nav, true)
 }
 
-fn parse_target_arg_inner(
-    args: &str,
-    nav: &Navigator,
-    allow_file: bool,
-) -> Result<TargetArg> {
+fn parse_target_arg_inner(args: &str, nav: &Navigator, allow_file: bool) -> Result<TargetArg> {
     let (spec, rest) = extract_target_spec(
         args,
         &["-d", "--depth", "--head", "--tail", "--sort", "--betw"],
@@ -323,6 +311,8 @@ pub(crate) struct TreeViewOpts {
     pub head: Option<usize>,
     /// Keep last N tree lines.
     pub tail: Option<usize>,
+    /// Keep only files or only directories (exact-node pruning).
+    pub entry_filter: crate::explorer::TreeEntryFilter,
 }
 
 /// Extended tree render honoring [`TreeViewOpts`]: size thresholds prune
@@ -412,6 +402,9 @@ pub(crate) fn show_tree_at_ex(
     }
     if thresholds {
         crate::explorer::prune_tree_by_min_size(&mut tree, opts.file_min, opts.dir_min);
+    }
+    if opts.entry_filter != crate::explorer::TreeEntryFilter::All {
+        crate::explorer::prune_tree_by_entry_filter(&mut tree, opts.entry_filter);
     }
     if let Some(key) = opts.sort {
         crate::explorer::sort_tree_by_key(&mut tree, key);
@@ -738,7 +731,7 @@ fn export_path(name: &str, ext: &str) -> std::path::PathBuf {
 }
 
 pub(crate) fn ral_export_all(name: &str) -> Result<()> {
-    let aliases = Config::global_get_run_aliases();
+    let aliases = Config::get_run_aliases_merged();
     if aliases.is_empty() {
         print_warning(&t!("helpers.no_ral_to_export"));
         return Ok(());
@@ -750,7 +743,7 @@ pub(crate) fn ral_export_all(name: &str) -> Result<()> {
 }
 
 pub(crate) fn ral_export_select(nav: &mut Navigator, name: &str) -> Result<()> {
-    let aliases = Config::global_get_run_aliases();
+    let aliases = Config::get_run_aliases_merged();
     if aliases.is_empty() {
         print_warning(&t!("helpers.no_ral_to_export"));
         return Ok(());
@@ -883,12 +876,7 @@ fn referenced_hint_lists(
     aliases: &std::collections::HashMap<String, String>,
 ) -> std::collections::HashMap<String, Vec<String>> {
     use crate::shell::alias::spec_referenced_lists;
-    let mut specs = Config::global_get_run_alias_hints();
-    if let Some(local) = Config::get_local_config() {
-        if let Some(map) = local.run_alias_hints {
-            specs.extend(map);
-        }
-    }
+    let specs = Config::get_run_alias_hints_merged();
     let mut names: Vec<String> = Vec::new();
     for alias in aliases.keys() {
         if let Some(spec) = specs.get(alias) {
@@ -922,7 +910,7 @@ fn write_ral_file(
     }
 
     // Completion hint/select specs (`#param --hint-*` / `#param --select-*`), one section for the file.
-    let hints = Config::global_get_run_alias_hints();
+    let hints = Config::get_run_alias_hints_merged();
     let mut hsorted: Vec<(&String, &String)> = hints
         .iter()
         .filter(|(name, _)| aliases.contains_key(*name))
@@ -955,13 +943,13 @@ fn write_ral_file(
     Ok(())
 }
 
-pub(crate) fn ral_import(path_str: &str) -> Result<()> {
+pub(crate) fn ral_import(path_str: &str, scope: ConfigScope) -> Result<()> {
     let path = std::path::Path::new(path_str);
     if !path.exists() {
         print_error(&t!("helpers.file_not_found", path.display()));
         return Ok(());
     }
-    Config::import_run_aliases_from_file(path)
+    Config::import_run_aliases_from_file(path, scope)
         .map_err(|e| anyhow::anyhow!("Failed to import: {}", e))?;
     Config::reload_global();
     print_success(&t!("helpers.imported_ral", path.display()));
@@ -971,16 +959,27 @@ pub(crate) fn ral_import(path_str: &str) -> Result<()> {
 pub(crate) fn igcare_export_all(name: &str) -> Result<()> {
     let path = export_path(name, "ntc.igcare");
     // Export combined (global + local) settings
-    let combined = CombinedIgcare {
-        ignored_directory_names: Config::get_ignored_dirs_combined(),
-        ignored_extensions: Config::get_ignored_extensions_combined(),
-        extra_supported_extensions: Config::get_extra_supported_extensions_combined(),
-        ignored_files: Config::get_ignored_files_combined(),
-        extra_supported_files: Config::get_extra_supported_files_combined(),
-    };
+    let combined = combined_igcare();
     write_igcare_file(&path, &combined)?;
     print_success(&t!("helpers.exported_igcare_all", path.display()));
     Ok(())
+}
+
+/// Effective (global + local) ignore/care sets, including the local "cared"
+/// lists so an export round-trips the un-ignore overrides.
+fn combined_igcare() -> CombinedIgcare {
+    let eff = Config::effective_igcare();
+    let local = Config::local_igcare_sets();
+    CombinedIgcare {
+        ignored_directory_names: eff.ignored_directory_names,
+        ignored_extensions: eff.ignored_extensions,
+        extra_supported_extensions: eff.extra_supported_extensions,
+        ignored_files: eff.ignored_files,
+        extra_supported_files: eff.extra_supported_files,
+        cared_directory_names: local.cared_directory_names,
+        cared_extensions: local.cared_extensions,
+        cared_files: local.cared_files,
+    }
 }
 
 struct CombinedIgcare {
@@ -989,17 +988,14 @@ struct CombinedIgcare {
     extra_supported_extensions: HashSet<String>,
     ignored_files: HashSet<String>,
     extra_supported_files: HashSet<String>,
+    cared_directory_names: HashSet<String>,
+    cared_extensions: HashSet<String>,
+    cared_files: HashSet<String>,
 }
 
 pub(crate) fn igcare_export_select(name: &str) -> Result<()> {
     // Use combined (global + local) settings for export
-    let combined = CombinedIgcare {
-        ignored_directory_names: Config::get_ignored_dirs_combined(),
-        ignored_extensions: Config::get_ignored_extensions_combined(),
-        extra_supported_extensions: Config::get_extra_supported_extensions_combined(),
-        ignored_files: Config::get_ignored_files_combined(),
-        extra_supported_files: Config::get_extra_supported_files_combined(),
-    };
+    let combined = combined_igcare();
 
     let category_labels = [
         t!("igcare_export.ignored_dirs"),
@@ -1007,14 +1003,20 @@ pub(crate) fn igcare_export_select(name: &str) -> Result<()> {
         t!("igcare_export.extra_supported_extensions"),
         t!("igcare_export.ignored_files"),
         t!("igcare_export.extra_supported_files"),
+        t!("igcare_export.cared_dirs"),
+        t!("igcare_export.cared_extensions"),
+        t!("igcare_export.cared_files"),
     ];
 
-    let category_fields: [&std::collections::HashSet<String>; 5] = [
+    let category_fields: [&std::collections::HashSet<String>; 8] = [
         &combined.ignored_directory_names,
         &combined.ignored_extensions,
         &combined.extra_supported_extensions,
         &combined.ignored_files,
         &combined.extra_supported_files,
+        &combined.cared_directory_names,
+        &combined.cared_extensions,
+        &combined.cared_files,
     ];
 
     let total = category_fields.len();
@@ -1169,9 +1171,18 @@ fn write_igcare_file(path: &std::path::Path, cfg: &CombinedIgcare) -> Result<()>
         format_set(&cfg.ignored_files)
     ));
     content.push_str(&format!(
-        "extra_supported_files = {}\n",
+        "extra_supported_files = {}\n\n",
         format_set(&cfg.extra_supported_files)
     ));
+    content.push_str(&format!(
+        "cared_directory_names = {}\n\n",
+        format_set(&cfg.cared_directory_names)
+    ));
+    content.push_str(&format!(
+        "cared_extensions = {}\n\n",
+        format_set(&cfg.cared_extensions)
+    ));
+    content.push_str(&format!("cared_files = {}\n", format_set(&cfg.cared_files)));
 
     std::fs::write(path, &content)?;
     Ok(())
@@ -1191,6 +1202,9 @@ fn write_igcare_file_selective(
         ),
         ("ignored_files", &cfg.ignored_files),
         ("extra_supported_files", &cfg.extra_supported_files),
+        ("cared_directory_names", &cfg.cared_directory_names),
+        ("cared_extensions", &cfg.cared_extensions),
+        ("cared_files", &cfg.cared_files),
     ];
 
     let mut content = String::from("# ntc ignore/care settings export (selected categories)\n");
@@ -1207,13 +1221,13 @@ fn write_igcare_file_selective(
     Ok(())
 }
 
-pub(crate) fn igcare_import(path_str: &str) -> Result<()> {
+pub(crate) fn igcare_import(path_str: &str, scope: ConfigScope) -> Result<()> {
     let path = std::path::Path::new(path_str);
     if !path.exists() {
         print_error(&t!("helpers.file_not_found", path.display()));
         return Ok(());
     }
-    Config::import_igcare_from_file(path)
+    Config::import_igcare_from_file(path, scope)
         .map_err(|e| anyhow::anyhow!("Failed to import: {}", e))?;
     Config::reload_global();
     print_success(&t!("helpers.imported_igcare", path.display()));
@@ -1283,17 +1297,19 @@ mod tests {
         );
         // Unreferenced lists still export with --all semantics (caller passes
         // the full map); selective export filters via referenced_hint_lists.
-        cfg.run_hint_lists.insert(
-            "unused".to_string(),
-            vec!["x".to_string()],
-        );
+        cfg.run_hint_lists
+            .insert("unused".to_string(), vec!["x".to_string()]);
         Config::with_test_config(cfg, || {
             let path = dir.path().join("out.ntc.ral");
             let aliases = Config::global_get_run_aliases();
             write_ral_file(&path, &aliases, &Config::get_run_hint_lists_merged(), None).unwrap();
             let content = std::fs::read_to_string(&path).unwrap();
             assert!(content.contains("[run_hint_lists]"), "got:\n{}", content);
-            assert!(content.contains("port = [\"8080\", \"5050\"]"), "got:\n{}", content);
+            assert!(
+                content.contains("port = [\"8080\", \"5050\"]"),
+                "got:\n{}",
+                content
+            );
             // Selective export keeps only referenced lists.
             let path2 = dir.path().join("sel.ntc.ral");
             write_ral_file(&path2, &aliases, &referenced_hint_lists(&aliases), Some(1)).unwrap();
@@ -1322,10 +1338,8 @@ mod tests {
         let _cwd = tsupport::TempCwd::with_fixture(&[("tp1/file.txt", "hello")], &["tp1", "tp2"]);
         let root = std::env::current_dir().unwrap();
         let mut cfg = Config::default();
-        cfg.teleports
-            .insert("tp1".to_string(), root.join("tp1"));
-        cfg.teleports
-            .insert("tp2".to_string(), root.join("tp2"));
+        cfg.teleports.insert("tp1".to_string(), root.join("tp1"));
+        cfg.teleports.insert("tp2".to_string(), root.join("tp2"));
         Config::with_test_config(cfg, || {
             let nav = Navigator::new().unwrap();
             assert_eq!(

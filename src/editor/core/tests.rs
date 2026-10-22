@@ -602,10 +602,7 @@ mod tests {
     fn gmode_i_v_e_switch_modes() {
         let mut editor = test_editor(&["one"]);
         let mut out = stdout_sink();
-        for (keys, want) in [
-            (vec!['i'], Mode::Insert),
-            (vec!['v'], Mode::Visual),
-        ] {
+        for (keys, want) in [(vec!['i'], Mode::Insert), (vec!['v'], Mode::Visual)] {
             editor.mode = Mode::Gmode;
             editor.prev_mode = Mode::Normal;
             editor.gmode_buf.clear();
@@ -705,6 +702,34 @@ mod tests {
             .handle_normal_event(press(KeyCode::Char('m')), &mut out)
             .unwrap();
         assert_eq!(editor.create_kind, Some(crate::editor::CreateKind::Dir));
+    }
+
+    #[test]
+    fn normal_n_creates_template_without_opening_tab() {
+        let _cwd = crate::utils::test_support::TempCwd::with_fixture(&[("probe.txt", "x")], &[]);
+        let mut editor = Editor::new(std::path::Path::new("probe.txt")).unwrap();
+        editor.init_tabs();
+        let tabs_before = editor.tabs.len();
+        let mut out = stdout_sink();
+        editor.mode = Mode::Normal;
+        editor
+            .handle_normal_event(press(KeyCode::Char('n')), &mut out)
+            .unwrap();
+        for c in "new.rs".chars() {
+            editor
+                .handle_normal_event(press(KeyCode::Char(c)), &mut out)
+                .unwrap();
+        }
+        editor
+            .handle_normal_event(press(KeyCode::Enter), &mut out)
+            .unwrap();
+        assert!(std::path::Path::new("new.rs").is_file());
+        assert!(std::fs::read_to_string("new.rs")
+            .unwrap()
+            .contains("fn main"));
+        assert_eq!(editor.tabs.len(), tabs_before);
+        assert_eq!(editor.path, std::path::Path::new("probe.txt"));
+        assert_eq!(editor.mode, Mode::Normal);
     }
 
     #[test]
@@ -1138,19 +1163,14 @@ mod tests {
 
     #[test]
     fn gmode_n_m_create_file_and_dir() {
-        let dir = std::env::temp_dir().join("ntc_gmode_create_test");
-        let _ = std::fs::remove_dir_all(&dir);
-        std::fs::create_dir_all(&dir).unwrap();
+        let _cwd = crate::utils::test_support::TempCwd::with_fixture(&[("probe.txt", "x")], &[]);
+        let dir = std::env::current_dir().unwrap();
         let probe = dir.join("probe.txt");
-        std::fs::write(&probe, "x").unwrap();
-        // Run creation with CWD pointed at the temp dir.
-        let old_cwd = std::env::current_dir().unwrap();
-        std::env::set_current_dir(&dir).unwrap();
         let mut editor = Editor::new(&probe).unwrap();
         let mut out = stdout_sink();
         editor.mode = Mode::Gmode;
         editor.prev_mode = Mode::Normal;
-        for c in "n fresh.txt".chars() {
+        for c in "n fresh.rs".chars() {
             editor
                 .handle_gmode_event(press(KeyCode::Char(c)), &mut out)
                 .unwrap();
@@ -1158,7 +1178,11 @@ mod tests {
         editor
             .handle_gmode_event(press(KeyCode::Enter), &mut out)
             .unwrap();
-        assert!(dir.join("fresh.txt").is_file());
+        assert!(dir.join("fresh.rs").is_file());
+        assert!(std::fs::read_to_string(dir.join("fresh.rs"))
+            .unwrap()
+            .contains("fn main"));
+        assert!(editor.tabs.is_empty());
         assert_eq!(editor.mode, Mode::Normal);
         editor.mode = Mode::Gmode;
         editor.prev_mode = Mode::Normal;
@@ -1181,8 +1205,54 @@ mod tests {
             .handle_gmode_event(press(KeyCode::Enter), &mut out)
             .unwrap();
         assert_eq!(editor.mode, Mode::Gmode);
-        std::env::set_current_dir(&old_cwd).unwrap();
-        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn command_ne_creates_templates_without_opening_tabs() {
+        let _cwd = crate::utils::test_support::TempCwd::with_fixture(&[("probe.txt", "x")], &[]);
+        let mut editor = Editor::new(std::path::Path::new("probe.txt")).unwrap();
+        editor.init_tabs();
+        let tabs_before = editor.tabs.len();
+        let mut out = stdout_sink();
+
+        editor
+            .execute_command("ne --init new.rs", &mut out)
+            .unwrap();
+        assert!(std::path::Path::new("new.rs").is_file());
+        assert!(std::fs::read_to_string("new.rs")
+            .unwrap()
+            .contains("fn main"));
+        assert_eq!(editor.tabs.len(), tabs_before);
+        assert_eq!(editor.path, std::path::Path::new("probe.txt"));
+
+        editor
+            .execute_command("ne --super rich.rs", &mut out)
+            .unwrap();
+        assert!(std::path::Path::new("rich.rs").is_file());
+        assert_eq!(editor.tabs.len(), tabs_before);
+
+        editor.execute_command("ne --init a b", &mut out).unwrap();
+        assert!(!std::path::Path::new("a b").exists());
+        assert!(editor.status_msg.is_some());
+    }
+
+    #[test]
+    fn command_ne_missing_file_gives_guidance() {
+        let _cwd = crate::utils::test_support::TempCwd::with_fixture(&[("probe.txt", "x")], &[]);
+        let mut editor = Editor::new(std::path::Path::new("probe.txt")).unwrap();
+        let mut out = stdout_sink();
+        editor.execute_command("ne missing.rs", &mut out).unwrap();
+        assert!(!std::path::Path::new("missing.rs").exists());
+        assert!(editor
+            .status_msg
+            .as_deref()
+            .unwrap_or("")
+            .contains("--init"));
+        assert!(editor
+            .status_msg
+            .as_deref()
+            .unwrap_or("")
+            .contains("--super"));
     }
 
     #[test]
@@ -1592,6 +1662,8 @@ mod tests {
     #[test]
     fn sidebar_click_selects_and_opens() {
         use crossterm::event::{MouseButton, MouseEvent, MouseEventKind};
+        let _cwd =
+            crate::utils::test_support::TempCwd::with_fixture(&[("file.txt", "x")], &["sub"]);
         let mut editor = test_editor(&["one"]);
         editor.term_h = 24;
         editor.term_w = 100;
@@ -1604,8 +1676,13 @@ mod tests {
             row,
             modifiers: KeyModifiers::empty(),
         };
-        // click a directory row toggles expansion
-        let dir_idx = editor.sidebar.nodes.iter().position(|n| n.is_dir).unwrap();
+        // click a directory row toggles expansion (skip the ".." parent)
+        let dir_idx = editor
+            .sidebar
+            .nodes
+            .iter()
+            .position(|n| n.is_dir && n.name != "..")
+            .unwrap();
         let was_expanded = editor.sidebar.nodes[dir_idx].expanded;
         editor.handle_mouse(click(dir_idx as u16));
         assert_eq!(editor.sidebar.selected, dir_idx);
@@ -1616,6 +1693,69 @@ mod tests {
         editor.handle_mouse(click(file_idx as u16));
         assert_eq!(editor.sidebar.selected, file_idx);
         assert_eq!(editor.path, wanted);
+    }
+
+    fn mouse_tab_editor() -> (Editor, std::path::PathBuf, std::path::PathBuf) {
+        let dir = std::env::temp_dir().join("ntc_editor_mouse_tabs");
+        let _ = std::fs::create_dir_all(&dir);
+        let path_a = dir.join("alpha.txt");
+        let path_b = dir.join("bravo.txt");
+        std::fs::write(&path_a, "alpha\nsecond").unwrap();
+        std::fs::write(&path_b, "bravo\nline2").unwrap();
+        let mut editor = Editor::new(&path_a).unwrap();
+        editor.init_tabs();
+        editor.open_file(&path_b);
+        editor.switch_tab(0);
+        editor.term_w = 120;
+        editor.term_h = 24;
+        editor.sidebar.open = false;
+        (editor, path_a, path_b)
+    }
+
+    fn mouse_click(column: u16, row: u16) -> crossterm::event::MouseEvent {
+        crossterm::event::MouseEvent {
+            kind: crossterm::event::MouseEventKind::Down(crossterm::event::MouseButton::Left),
+            column,
+            row,
+            modifiers: KeyModifiers::empty(),
+        }
+    }
+
+    #[test]
+    fn mouse_tab_click_switches_and_preserves_mode() {
+        for mode in [Mode::Normal, Mode::Insert, Mode::Visual, Mode::Nfe] {
+            let (mut editor, path_a, path_b) = mouse_tab_editor();
+            editor.mode = mode.clone();
+            editor.sidebar.open = mode == Mode::Nfe;
+            assert_eq!(editor.active_tab, 0);
+
+            let zones = editor.tab_hit_zones();
+            assert_eq!(zones.len(), 2);
+            editor.handle_mouse(mouse_click((zones[1].0 + 1) as u16, 0));
+            assert_eq!(editor.active_tab, 1);
+            assert_eq!(editor.path, path_b);
+            assert_eq!(editor.lines[0], "bravo");
+            assert_eq!(editor.mode, mode);
+
+            let zones = editor.tab_hit_zones();
+            editor.handle_mouse(mouse_click((zones[0].0 + 1) as u16, 0));
+            assert_eq!(editor.active_tab, 0);
+            assert_eq!(editor.path, path_a);
+            assert_eq!(editor.lines[0], "alpha");
+            assert_eq!(editor.mode, mode);
+        }
+    }
+
+    #[test]
+    fn mouse_tab_close_button_closes_clicked_tab() {
+        let (mut editor, _, path_b) = mouse_tab_editor();
+        editor.mode = Mode::Insert;
+        let zones = editor.tab_hit_zones();
+        let (_, end) = zones[0];
+        editor.handle_mouse(mouse_click((end - 1) as u16, 0));
+        assert_eq!(editor.tabs.len(), 1);
+        assert_eq!(editor.path, path_b);
+        assert_eq!(editor.mode, Mode::Insert);
     }
 
     #[test]

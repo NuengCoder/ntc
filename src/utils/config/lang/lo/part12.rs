@@ -1,185 +1,833 @@
 use std::collections::HashMap;
 
 pub fn fill(m: &mut HashMap<String, String>) {
-    m.insert("help.igcare.export_select".into(), "igcare export --select <n> ## ເລືອກປະເພດເພື່ອສົ່ງອອກ".into());
-    m.insert("help.igcare.ignore_dir".into(), "ignore dir <name>[, ...] ## ບໍ່ສົນໃຈໄດເຣັກທໍຣີຕາມຊື່".into());
-    m.insert("help.igcare.ignore_ext".into(), "ignore ext <ext>[, ...] ## ບໍ່ສົນໃຈນາມສະກຸນໄຟລ໌".into());
-    m.insert("help.igcare.ignore_file".into(), "ignore file <name>[, ...] ## ບໍ່ສົນໃຈໄຟລ໌ສະເພາະ".into());
-    m.insert("help.igcare.import".into(), "igcare import <file> ## ນຳເຂົ້າການຕັ້ງຄ່າຈາກໄຟລ໌ .ntc.igcare".into());
-    m.insert("help.igcare.make".into(), "igcare make [name] ## ສ້າງ igcare template ໃນ CWD".into());
-    m.insert("help.igcare.show".into(), "igcared ## ສະແດງການຕັ້ງຄ່າ ignore/care ທັງໝົດ".into());
+    m.insert(
+        "help.igcare.export_select".into(),
+        "igcare export --select <n> ## ເລືອກປະເພດເພື່ອສົ່ງອອກ".into(),
+    );
+    m.insert(
+        "help.igcare.ignore_dir".into(),
+        "ignore dir <name>[, ...] ## ບໍ່ສົນໃຈໄດເຣັກທໍຣີຕາມຊື່".into(),
+    );
+    m.insert(
+        "help.igcare.ignore_ext".into(),
+        "ignore ext <ext>[, ...] ## ບໍ່ສົນໃຈນາມສະກຸນໄຟລ໌".into(),
+    );
+    m.insert(
+        "help.igcare.ignore_file".into(),
+        "ignore file <name>[, ...] ## ບໍ່ສົນໃຈໄຟລ໌ສະເພາະ".into(),
+    );
+    m.insert(
+        "help.igcare.import".into(),
+        "igcare import <file> ## ນຳເຂົ້າການຕັ້ງຄ່າຈາກໄຟລ໌ .ntc.igcare".into(),
+    );
+    m.insert(
+        "help.igcare.make".into(),
+        "igcare make [name] ## ສ້າງ igcare template ໃນ CWD".into(),
+    );
+    m.insert(
+        "help.igcare.show".into(),
+        "igcared ## ສະແດງການຕັ້ງຄ່າ ignore/care ທັງໝົດ".into(),
+    );
     m.insert("help.igcare.title".into(), "ຄຳສັ່ງ IGNORE / CARE:".into());
-    m.insert("help.image.convert".into(), "image <path> to <fmt> ## ແປງ ແລະ ສະແດງຜົນລັບ (json|md|html|txt|desc)".into());
-    m.insert("help.image.display".into(), "image display <path> ## ສະແດງຮູບໃນ terminal ໂດຍກົງ".into());
-    m.insert("help.image.show".into(), "image show <path> ## ສະແດງຮູບໃນ terminal ໂດຍກົງ".into());
+    m.insert(
+        "help.image.convert".into(),
+        "image <path> to <fmt> ## ແປງ ແລະ ສະແດງຜົນລັບ (json|md|html|txt|desc)".into(),
+    );
+    m.insert(
+        "help.image.display".into(),
+        "image display <path> ## ສະແດງຮູບໃນ terminal ໂດຍກົງ".into(),
+    );
+    m.insert(
+        "help.image.show".into(),
+        "image show <path> ## ສະແດງຮູບໃນ terminal ໂດຍກົງ".into(),
+    );
 
-    m.insert("help.image.sixel".into(), "image display <path> --sixel ## ບັງຄັບ render ແບບ sixel".into());
+    m.insert(
+        "help.image.sixel".into(),
+        "image display <path> --sixel ## ບັງຄັບ render ແບບ sixel".into(),
+    );
 
-    m.insert("cmd.image.sixel_forced_warn".into(), "ກຳລັງບັງຄັບ sixel output (ກວດພົບ: {}) — terminal ນີ້ອາດສະແດງບໍ່ຖືກຕ້ອງ".into());
-    m.insert("help.image.interactive".into(), "image ## ເຄື່ອງມືແປງຮູບ interactive (ເລືອກຈາກໄດເຣັກທໍຣີປັດຈຸບັນ)".into());
-    m.insert("help.image.layout".into(), "image <path> --layout ## ເປີດການກວດຈັບ UI layout".into());
-    m.insert("help.image.ocr".into(), "image <path> --ocr ## ເປີດການສະກັດຂໍ້ຄວາມ OCR".into());
-    m.insert("help.image.open".into(), "image <path> ## ເປີດຮູບພາບໃນ viewer ເລີ່ມຕົ້ນ".into());
-    m.insert("help.image.save".into(), "image <path> out <fmt> ## ແປງ ແລະ ບັນທຶກໄປທີ່ path ທີ່ຕັ້ງໄວ້".into());
+    m.insert(
+        "cmd.image.sixel_forced_warn".into(),
+        "ກຳລັງບັງຄັບ sixel output (ກວດພົບ: {}) — terminal ນີ້ອາດສະແດງບໍ່ຖືກຕ້ອງ".into(),
+    );
+    m.insert(
+        "help.image.interactive".into(),
+        "image ## ເຄື່ອງມືແປງຮູບ interactive (ເລືອກຈາກໄດເຣັກທໍຣີປັດຈຸບັນ)".into(),
+    );
+    m.insert(
+        "help.image.layout".into(),
+        "image <path> --layout ## ເປີດການກວດຈັບ UI layout".into(),
+    );
+    m.insert(
+        "help.image.ocr".into(),
+        "image <path> --ocr ## ເປີດການສະກັດຂໍ້ຄວາມ OCR".into(),
+    );
+    m.insert(
+        "help.image.open".into(),
+        "image <path> ## ເປີດຮູບພາບໃນ viewer ເລີ່ມຕົ້ນ".into(),
+    );
+    m.insert(
+        "help.image.save".into(),
+        "image <path> out <fmt> ## ແປງ ແລະ ບັນທຶກໄປທີ່ path ທີ່ຕັ້ງໄວ້".into(),
+    );
     m.insert("help.image.title".into(), "ຄຳສັ່ງ IMAGE:".into());
-    m.insert("help.math.eval".into(), "math <expr> ## ຄຳນວນພົດການຄິດໄລ່".into());
-    m.insert("help.math.file".into(), "math file.ntc.math ## ຄອມໄພ້ ແລະ ເຮັດວຽກໄຟລ໌ math".into());
-    m.insert("help.math.fun".into(), "math fun add/rm/edit/info/ls ## ຈັດການຟັງຊັນ math ທີ່ກຳນົດເອງ".into());
-    m.insert("help.math.timer".into(), "math timer [sec] ## lap timer ຫຼື ນັບຖອຍຫຼັງພ້ອມສຽງ".into());
+    m.insert(
+        "help.math.eval".into(),
+        "math <expr> ## ຄຳນວນພົດການຄິດໄລ່".into(),
+    );
+    m.insert(
+        "help.math.file".into(),
+        "math file.ntc.math ## ຄອມໄພ້ ແລະ ເຮັດວຽກໄຟລ໌ math".into(),
+    );
+    m.insert(
+        "help.math.fun".into(),
+        "math fun add/rm/edit/info/ls ## ຈັດການຟັງຊັນ math ທີ່ກຳນົດເອງ".into(),
+    );
+    m.insert(
+        "help.math.timer".into(),
+        "math timer [sec] ## lap timer ຫຼື ນັບຖອຍຫຼັງພ້ອມສຽງ".into(),
+    );
     m.insert("help.math.title".into(), "ຄຳສັ່ງ MATH:".into());
-    m.insert("help.mode.admin".into(), "mode admin ## ອອກ ແລະ ເລີ່ມ ntc ໃໝ່ເປັນ Administrator".into());
-    m.insert("help.mode.normal".into(), "mode normal ## ອອກ ແລະ ເລີ່ມ ntc ໃໝ່ໂດຍບໍ່ມີ elevation".into());
+    m.insert(
+        "help.mode.admin".into(),
+        "mode admin ## ອອກ ແລະ ເລີ່ມ ntc ໃໝ່ເປັນ Administrator".into(),
+    );
+    m.insert(
+        "help.mode.normal".into(),
+        "mode normal ## ອອກ ແລະ ເລີ່ມ ntc ໃໝ່ໂດຍບໍ່ມີ elevation".into(),
+    );
     m.insert("help.mode.title".into(), "WINDOWS MODE (Windows):".into());
-    m.insert("help.nav.back".into(), "back [n] ## ກັບໄປໄດເຣັກທໍຣີແມ່ (ຫຼື n ລະດັບ)".into());
+    m.insert(
+        "help.nav.back".into(),
+        "back [n] ## ກັບໄປໄດເຣັກທໍຣີແມ່ (ຫຼື n ລະດັບ)".into(),
+    );
     m.insert("help.nav.cd".into(), "cd <path> ## ນຳທາງໄປໄດເຣັກທໍຣີ".into());
-    m.insert("help.nav.cd_tp".into(), "cd to <tp_name> ## Teleport ໄປຈຸດທີ່ບັນທຶກໄວ້".into());
-    m.insert("help.nav.fgo".into(), "fgo <pattern> [-d <n>] ## ຊອກຫາໄຟລ໌, ນຳທາງໄປ parent dir ຂອງໄຟລ໌ທີ່ເລືອກ".into());
-    m.insert("help.nav.godrive".into(), "godrive ## ລາຍຊື່ ແລະ ເລືອກ Windows drives".into());
-    m.insert("help.nav.gos".into(), "gos ## ລາຍຊື່ subdirectories ແລະ ເລືອກ".into());
-    m.insert("help.nav.gosc".into(), "gosc ## ນຳທາງຕໍ່ເນື່ອງ (0 ເພື່ອອອກ, v/s/vs ເພື່ອເບິ່ງ)".into());
+    m.insert(
+        "help.nav.cd_tp".into(),
+        "cd to <tp_name> ## Teleport ໄປຈຸດທີ່ບັນທຶກໄວ້".into(),
+    );
+    m.insert(
+        "help.nav.fgo".into(),
+        "fgo <pattern> [-d <n>] ## ຊອກຫາໄຟລ໌, ນຳທາງໄປ parent dir ຂອງໄຟລ໌ທີ່ເລືອກ".into(),
+    );
+    m.insert(
+        "help.nav.godrive".into(),
+        "godrive ## ລາຍຊື່ ແລະ ເລືອກ Windows drives".into(),
+    );
+    m.insert(
+        "help.nav.gos".into(),
+        "gos ## ລາຍຊື່ subdirectories ແລະ ເລືອກ".into(),
+    );
+    m.insert(
+        "help.nav.gosc".into(),
+        "gosc ## ນຳທາງຕໍ່ເນື່ອງ (0 ເພື່ອອອກ, v/s/vs ເພື່ອເບິ່ງ)".into(),
+    );
     m.insert("help.nav.title".into(), "ຄຳສັ່ງ NAVIGATION:".into());
-    m.insert("help.nav.where".into(), "where ## ສະແດງຕຳແໜ່ງ executable ແລະ config ຂອງ ntc".into());
-    m.insert("help.nav.example1".into(), "cd src ## ນຳທາງໄປທີ່ໄດເຣັກທໍຣີ src".into());
+    m.insert(
+        "help.nav.where".into(),
+        "where [<ໂປຣແກຣມ>] ## ສະແດງຕຳແໜ່ງຂອງ ntc ຫຼື ຄົ້ນຫາໂປຣແກຣມໃນ PATH".into(),
+    );
+    m.insert(
+        "help.nav.example1".into(),
+        "cd src ## ນຳທາງໄປທີ່ໄດເຣັກທໍຣີ src".into(),
+    );
     m.insert("help.nav.example2".into(), "back ## ກັບໄປໄດເຣັກທໍຣີແມ່".into());
-    m.insert("help.nav.example3".into(), "gos ## ການເລືອກ subdirectory ແບບ interactive".into());
-    m.insert("help.nav.example4".into(), "cd to web ## Teleport ໄປຈຸດບັນທຶກ 'web'".into());
-    m.insert("help.network.dl".into(), "dl <url> ## ດາວໂຫຼດໄຟລ໌ (--progress, --resume, --stop, --cancel)".into());
-    m.insert("help.network.dns".into(), "dns <host> ## DNS lookup (-t ປະເພດ record: A, AAAA, ALL, MX, NS, ອື່ນໆ)".into());
-    m.insert("help.network.http".into(), "http <method> <url> ## HTTP API client (-H, -d, --json, -q, -a, --bearer, -s, -o, -v, -t)".into());
-    m.insert("help.network.ping".into(), "ping <host> ## ICMP ping (-c count)".into());
-    m.insert("help.network.ipcfg".into(), "ipcfg [ຊື່] ## ສະແດງ adapters ແບບ ipconfig/ifconfig".into());
-    m.insert("help.network.serve".into(), "serve files|http-server|config ## ບໍລິການ: file-drive, ເຊີເວີ CWD, ຄ່າເລີ່ມຕົ້ນລາຍບໍລິການ".into());
-    m.insert("help.network.smtp".into(), "smtp ## SMTP email client (--id, -i, -u, -pwd, -s, -b, -f, --to)".into());
-    m.insert("help.network.spec".into(), "spec ## ສະແດງສະເປັກຄອມພິວເຕີ/ລະບົບ (CPU, GPU, RAM, ບ່ອນເກັບຂໍ້ມູນ, OS, ເລກຊີຣຽວ)".into());
-    m.insert("help.network.sys".into(), "sys, top ## ຕິດຕາມລະບົບແບບສົດ (CPU, memory, disk, processes)".into());
+    m.insert(
+        "help.nav.example3".into(),
+        "gos ## ການເລືອກ subdirectory ແບບ interactive".into(),
+    );
+    m.insert(
+        "help.nav.example4".into(),
+        "cd to web ## Teleport ໄປຈຸດບັນທຶກ 'web'".into(),
+    );
+    m.insert(
+        "help.nav.example5".into(),
+        "where git ## ຄົ້ນຫາຕຳແໜ່ງຂອງ git ໃນ PATH".into(),
+    );
+    m.insert(
+        "help.network.dl".into(),
+        "dl <url> ## ດາວໂຫຼດໄຟລ໌ (--progress, --resume, --stop, --cancel)".into(),
+    );
+    m.insert(
+        "help.network.dns".into(),
+        "dns <host> ## DNS lookup (-t ປະເພດ record: A, AAAA, ALL, MX, NS, ອື່ນໆ)".into(),
+    );
+    m.insert(
+        "help.network.http".into(),
+        "http <method> <url> ## HTTP API client (-H, -d, --json, -q, -a, --bearer, -s, -o, -v, -t)"
+            .into(),
+    );
+    m.insert(
+        "help.network.ping".into(),
+        "ping <host> ## ICMP ping (-c count)".into(),
+    );
+    m.insert(
+        "help.network.ipcfg".into(),
+        "ipcfg [ຊື່] ## ສະແດງ adapters ແບບ ipconfig/ifconfig".into(),
+    );
+    m.insert(
+        "help.network.serve".into(),
+        "serve files|http-server|config ## ບໍລິການ: file-drive, ເຊີເວີ CWD, ຄ່າເລີ່ມຕົ້ນລາຍບໍລິການ".into(),
+    );
+    m.insert(
+        "help.network.smtp".into(),
+        "smtp ## SMTP email client (--id, -i, -u, -pwd, -s, -b, -f, --to)".into(),
+    );
+    m.insert(
+        "help.network.spec".into(),
+        "spec ## ສະແດງສະເປັກຄອມພິວເຕີ/ລະບົບ (CPU, GPU, RAM, ບ່ອນເກັບຂໍ້ມູນ, OS, ເລກຊີຣຽວ)".into(),
+    );
+    m.insert(
+        "help.network.sys".into(),
+        "sys, top ## ຕິດຕາມລະບົບແບບສົດ (CPU, memory, disk, processes)".into(),
+    );
     m.insert("help.network.title".into(), "ຄຳສັ່ງ SYSTEM & NETWORK:".into());
-    m.insert("help.network.up".into(), "up <file> <url> ## ອັບໂຫຼດໄຟລ໌ (--post, -H, -d)".into());
-    m.insert("help.ntpkg.available".into(), "ntpkg available [lang] ## ລາຍຊື່ພາສາ ຫຼື ເວີຊັນທີ່ດາວໂຫຼດໄດ້".into());
-    m.insert("help.ntpkg.help".into(), "ntpkg help ## ສະແດງການໃຊ້ງານ ntpkg".into());
-    m.insert("help.ntpkg.info".into(), "ntpkg info <lang> ## ສະແດງຂໍ້ມູນ package (version, location, binaries)".into());
-    m.insert("help.ntpkg.install".into(), "ntpkg install <lang> [ver] ## ດາວໂຫຼດ ແລະ ຕິດຕັ້ງ runtime".into());
-    m.insert("help.ntpkg.list".into(), "ntpkg list ## ສະແດງ runtimes ທີ່ຕິດຕັ້ງ".into());
-    m.insert("help.ntpkg.ntpx".into(), "ntpx <pkg> [bin] [args] ## ເຮັດວຽກ binary ຂອງ package ທີ່ຕິດຕັ້ງ".into());
-    m.insert("help.ntpkg.search".into(), "ntpkg search [keyword] ## ຄົ້ນຫາ packages ທີ່ມີ".into());
-    m.insert("help.ntpkg.title".into(), "PACKAGE MANAGER (ntpkg) + ntpx:".into());
-    m.insert("help.ntpkg.uninstall".into(), "ntpkg uninstall <lang> [ver] ## ຖອນ runtime ທີ່ຕິດຕັ້ງ".into());
-    m.insert("help.ntpkg.use".into(), "ntpkg use <lang> <ver> ## ເປີດໃຊ້ເວີຊັນສະເພາະ".into());
-    m.insert("help.ntpkg.which".into(), "ntpkg which <lang> ## ສະແດງ path ຂອງ runtime ທີ່ໃຊ້ຢູ່".into());
+    m.insert(
+        "help.network.up".into(),
+        "up <file> <url> ## ອັບໂຫຼດໄຟລ໌ (--post, -H, -d)".into(),
+    );
+    m.insert(
+        "help.ntpkg.available".into(),
+        "ntpkg available [lang] ## ລາຍຊື່ພາສາ ຫຼື ເວີຊັນທີ່ດາວໂຫຼດໄດ້".into(),
+    );
+    m.insert(
+        "help.ntpkg.help".into(),
+        "ntpkg help ## ສະແດງການໃຊ້ງານ ntpkg".into(),
+    );
+    m.insert(
+        "help.ntpkg.info".into(),
+        "ntpkg info <lang> ## ສະແດງຂໍ້ມູນ package (version, location, binaries)".into(),
+    );
+    m.insert(
+        "help.ntpkg.install".into(),
+        "ntpkg install <lang> [ver] ## ດາວໂຫຼດ ແລະ ຕິດຕັ້ງ runtime".into(),
+    );
+    m.insert(
+        "help.ntpkg.list".into(),
+        "ntpkg list ## ສະແດງ runtimes ທີ່ຕິດຕັ້ງ".into(),
+    );
+    m.insert(
+        "help.ntpkg.ntpx".into(),
+        "ntpx <pkg> [bin] [args] ## ເຮັດວຽກ binary ຂອງ package ທີ່ຕິດຕັ້ງ".into(),
+    );
+    m.insert(
+        "help.ntpkg.search".into(),
+        "ntpkg search [keyword] ## ຄົ້ນຫາ packages ທີ່ມີ".into(),
+    );
+    m.insert(
+        "help.ntpkg.title".into(),
+        "PACKAGE MANAGER (ntpkg) + ntpx:".into(),
+    );
+    m.insert(
+        "help.ntpkg.uninstall".into(),
+        "ntpkg uninstall <lang> [ver] ## ຖອນ runtime ທີ່ຕິດຕັ້ງ".into(),
+    );
+    m.insert(
+        "help.ntpkg.use".into(),
+        "ntpkg use <lang> <ver> ## ເປີດໃຊ້ເວີຊັນສະເພາະ".into(),
+    );
+    m.insert(
+        "help.ntpkg.which".into(),
+        "ntpkg which <lang> ## ສະແດງ path ຂອງ runtime ທີ່ໃຊ້ຢູ່".into(),
+    );
     m.insert("help.other.clear".into(), "clear ## ລ້າງໜ້າຈໍ".into());
-    m.insert("help.other.deinit".into(), "deinit [--ran|--local] ## ລຶບໄຟລ໌ໂຄງການ".into());
+    m.insert(
+        "help.other.deinit".into(),
+        "deinit [--ran|--local] ## ລຶບໄຟລ໌ໂຄງການ".into(),
+    );
     m.insert("help.other.exit".into(), "exit, quit ## ອອກຈາກ ntc".into());
     m.insert("help.other.help".into(), "help ## ສະແດງຄຳຊ່ວຍເຫຼືອນີ້".into());
-    m.insert("help.other.init".into(), "init [--ran|--local] ## ສ້າງໄຟລ໌ໂຄງການ (NTCRANFILE.toml + ntconfig.toml)".into());
-    m.insert("help.other.print".into(), "print <text> [--loop N] [-n|-t] ## alias ຂອງ say".into());
-    m.insert("help.other.say".into(), "say <text> [--loop N] [-n|-t] ## ພິມຂໍ້ຄວາມ (ບໍ່ redirect ໄຟລ໌)".into());
+    m.insert("help.other.init".into(), "init [--ran|--local|--opencode] ## ສ້າງໄຟລ໌ໂຄງການ (NTCRANFILE.toml, ntconfig.toml, .opencode/)".into());
+    m.insert(
+        "help.other.print".into(),
+        "print <text> [--loop N] [-n|-t] ## alias ຂອງ say".into(),
+    );
+    m.insert(
+        "help.other.say".into(),
+        "say <text> [--loop N] [-n|-t] ## ພິມຂໍ້ຄວາມ (ບໍ່ redirect ໄຟລ໌)".into(),
+    );
     m.insert("help.other.title".into(), "ຄຳສັ່ງ OTHER:".into());
-    m.insert("help.other.tutorial".into(), "tutorial ## ເລີ່ມ tutorial ຂັ້ນຕອນ interactive".into());
-    m.insert("help.unknown_topic".into(), "ບໍ່ພົບຫົວຂໍ້ຊ່ວຍເຫຼືອ: '{}'. ໃຊ້ 'help' ເພື່ອເບິ່ງທັງໝົດ".into());
+    m.insert(
+        "help.other.tutorial".into(),
+        "tutorial ## ເລີ່ມ tutorial ຂັ້ນຕອນ interactive".into(),
+    );
+    m.insert(
+        "help.unknown_topic".into(),
+        "ບໍ່ພົບຫົວຂໍ້ຊ່ວຍເຫຼືອ: '{}'. ໃຊ້ 'help' ເພື່ອເບິ່ງທັງໝົດ".into(),
+    );
     m.insert("help.other.ui".into(), "ui ## ສະແດງໂໝດ UI ປັດຈຸບັນ".into());
     m.insert("help.other.version".into(), "version ## ສະແດງເວີຊັນ".into());
-    m.insert("help.pathman.syspath_add".into(), "syspath add <path> ## ເພີ່ມໄດເຣັກທໍຣີໃສ່ system PATH".into());
-    m.insert("help.pathman.syspath_add_cwd".into(), "syspath add --cwd | --here ## ເພີ່ມໄດເຣັກທໍຣີປັດຈຸບັນໃສ່ system PATH".into());
-    m.insert("help.pathman.syspath_move".into(), "syspath move <n> <m> ## ຍ້າຍ entry #n ໄປຕຳແໜ່ງ #m".into());
-    m.insert("help.pathman.syspath_rm".into(), "syspath rm <path-or-number> ## ລຶບຈາກ system PATH (ຕາມ path ຫຼື index)".into());
-    m.insert("help.pathman.syspath_show".into(), "syspath show ## ສະແດງ PATH entries ລະດັບລະບົບ".into());
-    m.insert("help.pathman.title".into(), "PATH MANAGER (Windows):".into());
-    m.insert("help.pathman.usrpath_add".into(), "usrpath add <path> ## ເພີ່ມໄດເຣັກທໍຣີໃສ່ user PATH".into());
-    m.insert("help.pathman.usrpath_add_cwd".into(), "usrpath add --cwd | --here ## ເພີ່ມໄດເຣັກທໍຣີປັດຈຸບັນໃສ່ user PATH".into());
-    m.insert("help.pathman.usrpath_move".into(), "usrpath move <n> <m> ## ຍ້າຍ entry #n ໄປຕຳແໜ່ງ #m".into());
-    m.insert("help.pathman.usrpath_rm".into(), "usrpath rm <path-or-number> ## ລຶບຈາກ user PATH (ຕາມ path ຫຼື index)".into());
-    m.insert("help.pathman.usrpath_show".into(), "usrpath show ## ສະແດງ user-level PATH entries".into());
-    m.insert("help.python.activate".into(), "py_activate ## ເປີດໃຊ້ Python virtual environment (auto-detect)".into());
-    m.insert("help.python.activate_path".into(), "py_activate <path> ## ເປີດໃຊ້ venv path ສະເພາະ".into());
-    m.insert("help.python.deactivate".into(), "py_deactivate ## ປິດໃຊ້ງານ virtual environment ປັດຈຸບັນ".into());
+    m.insert(
+        "help.pathman.syspath_add".into(),
+        "syspath add <path> ## ເພີ່ມໄດເຣັກທໍຣີໃສ່ system PATH".into(),
+    );
+    m.insert(
+        "help.pathman.syspath_add_cwd".into(),
+        "syspath add --cwd | --here ## ເພີ່ມໄດເຣັກທໍຣີປັດຈຸບັນໃສ່ system PATH".into(),
+    );
+    m.insert(
+        "help.pathman.syspath_move".into(),
+        "syspath move <n> <m> ## ຍ້າຍ entry #n ໄປຕຳແໜ່ງ #m".into(),
+    );
+    m.insert(
+        "help.pathman.syspath_rm".into(),
+        "syspath rm <path-or-number> ## ລຶບຈາກ system PATH (ຕາມ path ຫຼື index)".into(),
+    );
+    m.insert(
+        "help.pathman.syspath_show".into(),
+        "syspath show ## ສະແດງ PATH entries ລະດັບລະບົບ".into(),
+    );
+    m.insert(
+        "help.pathman.title".into(),
+        "PATH MANAGER (Windows):".into(),
+    );
+    m.insert(
+        "help.pathman.usrpath_add".into(),
+        "usrpath add <path> ## ເພີ່ມໄດເຣັກທໍຣີໃສ່ user PATH".into(),
+    );
+    m.insert(
+        "help.pathman.usrpath_add_cwd".into(),
+        "usrpath add --cwd | --here ## ເພີ່ມໄດເຣັກທໍຣີປັດຈຸບັນໃສ່ user PATH".into(),
+    );
+    m.insert(
+        "help.pathman.usrpath_move".into(),
+        "usrpath move <n> <m> ## ຍ້າຍ entry #n ໄປຕຳແໜ່ງ #m".into(),
+    );
+    m.insert(
+        "help.pathman.usrpath_rm".into(),
+        "usrpath rm <path-or-number> ## ລຶບຈາກ user PATH (ຕາມ path ຫຼື index)".into(),
+    );
+    m.insert(
+        "help.pathman.usrpath_show".into(),
+        "usrpath show ## ສະແດງ user-level PATH entries".into(),
+    );
+    m.insert(
+        "help.python.activate".into(),
+        "py_activate ## ເປີດໃຊ້ Python virtual environment (auto-detect)".into(),
+    );
+    m.insert(
+        "help.python.activate_path".into(),
+        "py_activate <path> ## ເປີດໃຊ້ venv path ສະເພາະ".into(),
+    );
+    m.insert(
+        "help.python.deactivate".into(),
+        "py_deactivate ## ປິດໃຊ້ງານ virtual environment ປັດຈຸບັນ".into(),
+    );
     m.insert("help.python.title".into(), "ຄຳສັ່ງ PYTHON:".into());
-    m.insert("help.qr.decode".into(), "qr decode <image> ## ຖອດລະຫັດ QR ຈາກຮູບພາບ".into());
-    m.insert("help.qr.encode".into(), "qr <text> ## ເຂົ້າລະຫັດຂໍ້ຄວາມ ແລະ ສະແດງ QR ໃນ terminal".into());
-    m.insert("help.qr.save".into(), "qr encode <text> -o <file> ## ບັນທຶກ QR ເປັນຮູບ PNG".into());
-    m.insert("help.qr.image".into(), "qr encode <image> -o <file> ## ເຂົ້າລະຫັດຮູບພາບໃສ່ QR (scan ເພື່ອເບິ່ງຮູບ)".into());
+    m.insert(
+        "help.qr.decode".into(),
+        "qr decode <image> ## ຖອດລະຫັດ QR ຈາກຮູບພາບ".into(),
+    );
+    m.insert(
+        "help.qr.encode".into(),
+        "qr <text> ## ເຂົ້າລະຫັດຂໍ້ຄວາມ ແລະ ສະແດງ QR ໃນ terminal".into(),
+    );
+    m.insert(
+        "help.qr.save".into(),
+        "qr encode <text> -o <file> ## ບັນທຶກ QR ເປັນຮູບ PNG".into(),
+    );
+    m.insert(
+        "help.qr.image".into(),
+        "qr encode <image> -o <file> ## ເຂົ້າລະຫັດຮູບພາບໃສ່ QR (scan ເພື່ອເບິ່ງຮູບ)".into(),
+    );
     m.insert("help.qr.title".into(), "ຄຳສັ່ງ QR CODE:".into());
-    m.insert("help.qsc.listen".into(), "qsc listen ## ເລີ່ມ QSC daemon (background process)".into());
-    m.insert("help.qsc.off".into(), "config qsc off ## ປິດ QSC hotkey".into());
-    m.insert("help.qsc.set".into(), "config qsc \"#c 0\" ## ຕັ້ງ hotkey (Ctrl+0)".into());
-    m.insert("help.qsc.set_cs".into(), "config qsc \"#c #s a\" ## ຕັ້ງ hotkey (Ctrl+Shift+A)".into());
-    m.insert("help.qsc.startup".into(), "qsc startup on|off ## ລົງທະບຽນ/ຍົກເລີກເປັນ startup app".into());
-    m.insert("help.qsc.status".into(), "qsc status ## ກວດວ່າ QSC daemon ເຮັດວຽກຢູ່ຫຼືບໍ່".into());
+    m.insert(
+        "help.qsc.listen".into(),
+        "qsc listen ## ເລີ່ມ QSC daemon (background process)".into(),
+    );
+    m.insert(
+        "help.qsc.off".into(),
+        "config qsc off ## ປິດ QSC hotkey".into(),
+    );
+    m.insert(
+        "help.qsc.set".into(),
+        "config qsc \"#c 0\" ## ຕັ້ງ hotkey (Ctrl+0)".into(),
+    );
+    m.insert(
+        "help.qsc.set_cs".into(),
+        "config qsc \"#c #s a\" ## ຕັ້ງ hotkey (Ctrl+Shift+A)".into(),
+    );
+    m.insert(
+        "help.qsc.startup".into(),
+        "qsc startup on|off ## ລົງທະບຽນ/ຍົກເລີກເປັນ startup app".into(),
+    );
+    m.insert(
+        "help.qsc.status".into(),
+        "qsc status ## ກວດວ່າ QSC daemon ເຮັດວຽກຢູ່ຫຼືບໍ່".into(),
+    );
     m.insert("help.qsc.stop".into(), "qsc stop ## ຢຸດ QSC daemon".into());
     m.insert("help.qsc.title".into(), "ຄຳສັ່ງ QSC (GLOBAL HOTKEY):".into());
-    m.insert("help.ran.deinit".into(), "ran deinit ## ລຶບ NTCRANFILE.toml".into());
-    m.insert("help.ran.help".into(), "ran help ## ສະແດງການໃຊ້ງານ ran".into());
-    m.insert("help.ran.init".into(), "ran init ## ສ້າງ NTCRANFILE.toml template".into());
-    m.insert("help.ran.list".into(), "ran list ## ລາຍຊື່ targets ທັງໝົດໃນ NTCRANFILE.toml".into());
-    m.insert("help.ran.run".into(), "ran ## ເຮັດວຽກ target 'standalone' (default)".into());
-    m.insert("help.ran.target".into(), "ran <target> ## ເຮັດວຽກ target ສະເພາະຈາກ NTCRANFILE.toml".into());
+    m.insert(
+        "help.ran.deinit".into(),
+        "ran deinit ## ລຶບ NTCRANFILE.toml".into(),
+    );
+    m.insert(
+        "help.ran.help".into(),
+        "ran help ## ສະແດງການໃຊ້ງານ ran".into(),
+    );
+    m.insert(
+        "help.ran.init".into(),
+        "ran init ## ສ້າງ NTCRANFILE.toml template".into(),
+    );
+    m.insert(
+        "help.ran.list".into(),
+        "ran list ## ລາຍຊື່ targets ທັງໝົດໃນ NTCRANFILE.toml".into(),
+    );
+    m.insert(
+        "help.ran.run".into(),
+        "ran ## ເຮັດວຽກ target 'standalone' (default)".into(),
+    );
+    m.insert(
+        "help.ran.target".into(),
+        "ran <target> ## ເຮັດວຽກ target ສະເພາະຈາກ NTCRANFILE.toml".into(),
+    );
     m.insert("help.ran.title".into(), "ຄຳສັ່ງ RAN / TASK RUNNER:".into());
-    m.insert("help.report.cp".into(), "report <fmt> --cp ## ສຳເນົາບົດລາຍງານໃສ່ clipboard ແທນການບັນທຶກ".into());
-    m.insert("help.report.docx".into(), "report docx [path] ## ສ້າງບົດລາຍງານ DOCX".into());
-    m.insert("help.report.html".into(), "report html [path] ## ສ້າງບົດລາຍງານ HTML".into());
-    m.insert("help.report.json".into(), "report json [path] ## ສ້າງບົດລາຍງານ JSON".into());
-    m.insert("help.report.md".into(), "report md [path] ## ສ້າງບົດລາຍງານ Markdown".into());
-    m.insert("help.report.pdf".into(), "report pdf [path] ## ສ້າງບົດລາຍງານ PDF".into());
+    m.insert(
+        "help.report.cp".into(),
+        "report <fmt> --cp ## ສຳເນົາບົດລາຍງານໃສ່ clipboard ແທນການບັນທຶກ".into(),
+    );
+    m.insert(
+        "help.report.docx".into(),
+        "report docx [path] ## ສ້າງບົດລາຍງານ DOCX".into(),
+    );
+    m.insert(
+        "help.report.html".into(),
+        "report html [path] ## ສ້າງບົດລາຍງານ HTML".into(),
+    );
+    m.insert(
+        "help.report.json".into(),
+        "report json [path] ## ສ້າງບົດລາຍງານ JSON".into(),
+    );
+    m.insert(
+        "help.report.md".into(),
+        "report md [path] ## ສ້າງບົດລາຍງານ Markdown".into(),
+    );
+    m.insert(
+        "help.report.pdf".into(),
+        "report pdf [path] ## ສ້າງບົດລາຍງານ PDF".into(),
+    );
     m.insert("help.report.title".into(), "ຄຳສັ່ງ REPORT:".into());
-    m.insert("help.report.txt".into(), "report txt [path] ## ສ້າງບົດລາຍງານ TXT".into());
-    m.insert("help.report.txtc".into(), "txtc <file> ## ສຳເນົາເນື້ອໃນໄຟລ໌ໃສ່ clipboard".into());
-    m.insert("help.report.txtf".into(), "txtf [--head N|--tail N|--betw A:B] [file] ## ສະແດງເນື້ອໃນໄຟລ໌ (ເລກແຖວເດີມ)".into());
-    m.insert("cmd.report.invalid_range".into(), "Invalid range: '{}' (expected n:m, e.g. --betw 10:20)".into());
-    m.insert("help.view.file_usage".into(), "view <file> [--head N|--tail N|--betw A:B] ## ສະແດງເນື້ອໃນໄຟລ໌ (ຄື txtf)".into());
-    m.insert("help.view.example10".into(), "view main.rs --tail 30 ## 30 ແຖວສຸດທ້າຍຂອງ main.rs".into());
-    m.insert("help.view.example11".into(), "view main.rs --betw 10:20 ## ແຖວ 10-20 ຂອງ main.rs".into());
-    m.insert("help.report.txtf_example1".into(), "txtf main.rs --head 30 ## 30 ແຖວທຳອິດຂອງ main.rs".into());
-    m.insert("help.report.txtf_example2".into(), "txtf --betw 10:20 main.rs ## ແຖວ 10-20 ຂອງ main.rs".into());
-    m.insert("help.report.xlsx".into(), "report xlsx [path] ## ສ້າງບົດລາຍງານ XLSX (ພ້ອມການວິເຄາະ dependency)".into());
-    m.insert("help.scr.continue".into(), "scr -c <file.ntc> [args...] ## ແລ່ນສະຄຣິບ ສືບຕໍ່ຫຼັງມີຂໍ້ຜິດພາດ".into());
-    m.insert("help.scr.example1".into(), "scr deploy.ntc ## ແລ່ນ deploy.ntc".into());
-    m.insert("help.scr.example2".into(), "scr build.ntc dev prod ## ສົ່ງ args $1=dev, $2=prod".into());
-    m.insert("help.scr.example3".into(), "scr -c setup.ntc ## ແລ່ນແລະສືບຕໍ່ຫຼັງຂໍ້ຜິດພາດ".into());
-    m.insert("help.scr.help".into(), "scr help ## ສະແດງການໃຊ້ງານ scr".into());
-    m.insert("help.scr.init".into(), "scr init [name] ## ສ້າງ template ສະຄຣິບ".into());
-    m.insert("help.scr.ls".into(), "scr ls ## ລາຍຊື່ *.ntc ໃນໄດເຣັກທໍຣີປັດຈຸບັນ".into());
-    m.insert("help.scr.run".into(), "scr <file.ntc> [args...] ## ແລ່ນສະຄຣິບອັດຕະໂນມັດ".into());
+    m.insert(
+        "help.report.txt".into(),
+        "report txt [path] ## ສ້າງບົດລາຍງານ TXT".into(),
+    );
+    m.insert(
+        "help.report.txtc".into(),
+        "txtc <file> ## ສຳເນົາເນື້ອໃນໄຟລ໌ໃສ່ clipboard".into(),
+    );
+    m.insert("help.report.txtf".into(), "txtf [--head N|--tail N|--betw A:B] [file|dir|@tp/file|@tp/dir] ## ສະແດງເນື້ອໃນໄຟລ໌ ຫຼື ເລືອກໄຟລ໌ຈາກ directory (ເລກແຖວເດີມ)".into());
+    m.insert(
+        "cmd.report.invalid_range".into(),
+        "Invalid range: '{}' (expected n:m, e.g. --betw 10:20)".into(),
+    );
+    m.insert("help.view.file_usage".into(), "view <file|@tp/file|@tp/dir/file> [--head N|--tail N|--betw A:B] ## ສະແດງເນື້ອໃນໄຟລ໌ (ຄື txtf)".into());
+    m.insert(
+        "help.view.example10".into(),
+        "view main.rs --tail 30 ## 30 ແຖວສຸດທ້າຍຂອງ main.rs".into(),
+    );
+    m.insert(
+        "help.view.example11".into(),
+        "view main.rs --betw 10:20 ## ແຖວ 10-20 ຂອງ main.rs".into(),
+    );
+    m.insert(
+        "help.view.example12".into(),
+        "view @docs/readme.md ## ສະແດງໄຟລ໌ໃນ teleport".into(),
+    );
+    m.insert("help.viewf.title".into(), "ຄຳສັ່ງ VIEWF (ສະເພາະໄຟລ໌):".into());
+    m.insert(
+        "help.viewf.tree".into(),
+        "viewf [<dir|@tp|@tp/dir/>] ## ສະແດງ tree ສະເພາະໄຟລ໌ທີ່ depth 1".into(),
+    );
+    m.insert("help.viewf.file_usage".into(), "viewf <file|@tp/file|@tp/dir/file> [--head N|--tail N|--betw A:B] ## ສະແດງເນື້ອໃນໄຟລ໌ (ຄື txtf)".into());
+    m.insert(
+        "help.viewf.size".into(),
+        "viewf -s, --size [min-size] ## ສະແດງຂະໜາດໄຟລ໌; ໃສ່ຄ່າຈະເຊື່ອງໄຟລ໌ນ້ອຍກວ່າ".into(),
+    );
+    m.insert(
+        "help.viewf.sort".into(),
+        "viewf --sort size|char|ext ## ຈັດລຳດັບລາຍການໄຟລ໌".into(),
+    );
+    m.insert(
+        "help.viewf.ext".into(),
+        "viewf -e, --ext <ext...> ## ສະແດງສະເພາະນາມສະກຸນທີ່ຕົງ".into(),
+    );
+    m.insert(
+        "help.viewf.care".into(),
+        "viewf -c, --care ## ນັບທຸກຢ່າງເມື່ອຄິດຂະໜາດ".into(),
+    );
+    m.insert(
+        "help.viewf.time".into(),
+        "viewf -t, --time ## ສະແດງເວລາດຳເນີນການ".into(),
+    );
+    m.insert(
+        "help.viewf.copy".into(),
+        "viewf -cp, --copy ## ສຳເນົາລາຍການໄຟລ໌ໃສ່ clipboard".into(),
+    );
+    m.insert(
+        "help.viewf.example1".into(),
+        "viewf ## ສະແດງໄຟລ໌ໃນ directory ປັດຈຸບັນ".into(),
+    );
+    m.insert(
+        "help.viewf.example2".into(),
+        "viewf src ## ສະແດງໄຟລ໌ໃນ src".into(),
+    );
+    m.insert(
+        "help.viewf.example3".into(),
+        "viewf -e rs,txt --sort size ## ກັ່ນນາມສະກຸນແລະຈັດຕາມຂະໜາດ".into(),
+    );
+    m.insert(
+        "help.viewf.example4".into(),
+        "viewf @docs/readme.md --head 20 ## ສະແດງໄຟລ໌ໃນ teleport".into(),
+    );
+    m.insert(
+        "help.viewd.title".into(),
+        "ຄຳສັ່ງ VIEWD (ສະເພາະ directory):".into(),
+    );
+    m.insert(
+        "help.viewd.usage".into(),
+        "viewd [<dir|@tp|@tp/dir/>] [-d N] ## ສະແດງ tree ສະເພາະ directory".into(),
+    );
+    m.insert(
+        "help.viewd.depth".into(),
+        "viewd -d, --depth <n> ## ສະແດງ tree ດ້ວຍ depth ກຳນົດເອງ".into(),
+    );
+    m.insert(
+        "help.viewd.size".into(),
+        "viewd -s, --size [min-size] ## ສະແດງຂະໜາດ directory; ໃສ່ຄ່າຈະເຊື່ອງທີ່ນ້ອຍກວ່າ".into(),
+    );
+    m.insert(
+        "help.viewd.care".into(),
+        "viewd -c, --care ## ນັບທຸກຢ່າງເມື່ອຄິດຂະໜາດ".into(),
+    );
+    m.insert(
+        "help.viewd.sort".into(),
+        "viewd --sort size|char|ext ## ຈັດລຳດັບລາຍການ directory".into(),
+    );
+    m.insert(
+        "help.viewd.time".into(),
+        "viewd -t, --time ## ສະແດງເວລາດຳເນີນການ".into(),
+    );
+    m.insert(
+        "help.viewd.copy".into(),
+        "viewd -cp, --copy ## ສຳເນົາ directory tree ໃສ່ clipboard".into(),
+    );
+    m.insert(
+        "help.viewd.example1".into(),
+        "viewd ## ສະແດງສະເພາະ directory ໃນ tree ປັດຈຸບັນ".into(),
+    );
+    m.insert(
+        "help.viewd.example2".into(),
+        "viewd -d 2 --size ## ສອງຊັ້ນພ້ອມຂະໜາດ directory".into(),
+    );
+    m.insert(
+        "help.viewd.example3".into(),
+        "viewd --sort size ## directory ໃຫຍ່ສຸດກ່ອນ".into(),
+    );
+    m.insert(
+        "help.viewd.example4".into(),
+        "viewd @docs/ ## ສະແດງ directory ຂອງ teleport".into(),
+    );
+    m.insert(
+        "help.report.txtf_example1".into(),
+        "txtf main.rs --head 30 ## 30 ແຖວທຳອິດຂອງ main.rs".into(),
+    );
+    m.insert(
+        "help.report.txtf_example2".into(),
+        "txtf --betw 10:20 main.rs ## ແຖວ 10-20 ຂອງ main.rs".into(),
+    );
+    m.insert(
+        "help.report.txtf_example3".into(),
+        "txtf @docs/notes.txt ## ສະແດງໄຟລ໌ໃນ teleport".into(),
+    );
+    m.insert(
+        "help.report.txtf_example4".into(),
+        "txtf src ## ເລືອກໄຟລ໌ທີ່ຮອງຮັບຈາກ directory src ເພື່ອສະແດງ".into(),
+    );
+    m.insert(
+        "help.report.xlsx".into(),
+        "report xlsx [path] ## ສ້າງບົດລາຍງານ XLSX (ພ້ອມການວິເຄາະ dependency)".into(),
+    );
+    m.insert(
+        "help.scr.continue".into(),
+        "scr -c <file.ntc> [args...] ## ແລ່ນສະຄຣິບ ສືບຕໍ່ຫຼັງມີຂໍ້ຜິດພາດ".into(),
+    );
+    m.insert(
+        "help.scr.example1".into(),
+        "scr deploy.ntc ## ແລ່ນ deploy.ntc".into(),
+    );
+    m.insert(
+        "help.scr.example2".into(),
+        "scr build.ntc dev prod ## ສົ່ງ args $1=dev, $2=prod".into(),
+    );
+    m.insert(
+        "help.scr.example3".into(),
+        "scr -c setup.ntc ## ແລ່ນແລະສືບຕໍ່ຫຼັງຂໍ້ຜິດພາດ".into(),
+    );
+    m.insert(
+        "help.scr.help".into(),
+        "scr help ## ສະແດງການໃຊ້ງານ scr".into(),
+    );
+    m.insert(
+        "help.scr.init".into(),
+        "scr init [name] ## ສ້າງ template ສະຄຣິບ".into(),
+    );
+    m.insert(
+        "help.scr.ls".into(),
+        "scr ls ## ລາຍຊື່ *.ntc ໃນໄດເຣັກທໍຣີປັດຈຸບັນ".into(),
+    );
+    m.insert(
+        "help.scr.run".into(),
+        "scr <file.ntc> [args...] ## ແລ່ນສະຄຣິບອັດຕະໂນມັດ".into(),
+    );
     m.insert("help.scr.title".into(), "ຄຳສັ່ງ SCR / ສະຄຣິບອັດຕະໂນມັດ:".into());
-    m.insert("help.search.ds".into(), "ds <pattern> [-d <n>] ## ຄົ້ນຫາໄດເຣັກທໍຣີຕາມຊື່".into());
-    m.insert("help.search.fs".into(), "fs <pattern> [-d <n>] ## ຄົ້ນຫາໄຟລ໌ຕາມຊື່ (fuzzy fallback)".into());
-    m.insert("help.search.fsc".into(), "fsc <pattern> [-d <n>] ## ຄົ້ນຫາໄຟລ໌, ເລືອກເພື່ອສະແດງ ແລະ ສຳເນົາໄດ້".into());
-    m.insert("help.search.gs".into(), "gs <pattern> [-d <n>] [-l <n>] ## ຄົ້ນຫາເນື້ອໃນໄຟລ໌ (grep ງ່າຍໆ)".into());
-    m.insert("help.search.gs_interactive".into(), "gs -i <pattern> [-d <n>] ## grep interactive (10 ລາຍການ/ໜ້າ, Enter ເພື່ອເປີດ)".into());
-    m.insert("help.search.locate".into(), "locate <pattern> [-d <n>] ## ຄົ້ນຫາທັງໄຟລ໌ ແລະ ໄດເຣັກທໍຣີ".into());
+    m.insert(
+        "help.search.ds".into(),
+        "ds <pattern> [-d <n>] ## ຄົ້ນຫາໄດເຣັກທໍຣີຕາມຊື່".into(),
+    );
+    m.insert(
+        "help.search.fs".into(),
+        "fs <pattern> [-d <n>] ## ຄົ້ນຫາໄຟລ໌ຕາມຊື່ (fuzzy fallback)".into(),
+    );
+    m.insert(
+        "help.search.fsc".into(),
+        "fsc <pattern> [-d <n>] ## ຄົ້ນຫາໄຟລ໌, ເລືອກເພື່ອສະແດງ ແລະ ສຳເນົາໄດ້".into(),
+    );
+    m.insert("help.search.gs".into(), "gs <pattern> [-p <glob>] [-s [line|path|size]] [-d <n>] [-l <n>] [-i] ## ຄົ້ນຫາເນື້ອໃນໄຟລ໌ (grep ງ່າຍໆ)".into());
+    m.insert(
+        "help.search.gs_interactive".into(),
+        "gs -i <pattern> [-d <n>] ## grep interactive (10 ລາຍການ/ໜ້າ, Enter ເພື່ອເປີດ)".into(),
+    );
+    m.insert(
+        "help.search.locate".into(),
+        "locate <pattern> [-d <n>] ## ຄົ້ນຫາທັງໄຟລ໌ ແລະ ໄດເຣັກທໍຣີ".into(),
+    );
+    m.insert(
+        "help.search.pipe".into(),
+        "cmd | gs <pattern> ## ຄົ້ນຫາເນື້ອໃນທີ່ pipe ເຂົ້າມາ (qur -s <pattern> ກໍໄດ້)".into(),
+    );
     m.insert("help.search.title".into(), "ຄຳສັ່ງ SEARCH:".into());
-    m.insert("help.size.care".into(), "size --care ## ຄຳນວນຂະໜາດລວມທຸກຢ່າງ (ໂໝດ care)".into());
-    m.insert("help.size.path".into(), "size -p, --path <path|@tp> ## ສະແດງຂະໜາດຂອງໄຟລ໌, path ຫຼື teleport savepoint ທີ່ລະບຸ".into());
-    m.insert("help.size.size".into(), "size ## ສະແດງຂະໜາດໄດເຣັກທໍຣີປັດຈຸບັນ".into());
-    m.insert("help.size.time".into(), "size -t, --time ## ສະແດງເວລາທີ່ໃຊ້".into());
+    m.insert(
+        "help.size.care".into(),
+        "size --care ## ຄຳນວນຂະໜາດລວມທຸກຢ່າງ (ໂໝດ care)".into(),
+    );
+    m.insert(
+        "help.size.path".into(),
+        "size -p, --path <path|@tp> ## ສະແດງຂະໜາດຂອງໄຟລ໌, path ຫຼື teleport savepoint ທີ່ລະບຸ".into(),
+    );
+    m.insert(
+        "help.size.size".into(),
+        "size ## ສະແດງຂະໜາດໄດເຣັກທໍຣີປັດຈຸບັນ".into(),
+    );
+    m.insert(
+        "help.size.time".into(),
+        "size -t, --time ## ສະແດງເວລາທີ່ໃຊ້".into(),
+    );
     m.insert("help.size.title".into(), "ຄຳສັ່ງ SIZE:".into());
-    m.insert("help.syscmd.any".into(), "<ຄຳສັ່ງໃດໆ> ## NTC ສົ່ງຄຳສັ່ງທີ່ບໍ່ຮູ້ຈັກໄປຍັງລະບົບຂອງທ່ານ".into());
-    m.insert("help.syscmd.native".into(), "shell -- echo, git, dir/ls, ping, ອື່ນໆ.".into());
-    m.insert("help.syscmd.native2".into(), "all ເຮັດວຽກ native ພ້ອມກັບຄຳສັ່ງ NTC.".into());
+    m.insert(
+        "help.syscmd.any".into(),
+        "<ຄຳສັ່ງໃດໆ> ## NTC ສົ່ງຄຳສັ່ງທີ່ບໍ່ຮູ້ຈັກໄປຍັງລະບົບຂອງທ່ານ".into(),
+    );
+    m.insert(
+        "help.syscmd.native".into(),
+        "shell -- echo, git, dir/ls, ping, ອື່ນໆ.".into(),
+    );
+    m.insert(
+        "help.syscmd.native2".into(),
+        "all ເຮັດວຽກ native ພ້ອມກັບຄຳສັ່ງ NTC.".into(),
+    );
     m.insert("help.syscmd.title".into(), "ຄຳສັ່ງ SYSTEM:".into());
-    m.insert("help.teleport.add".into(), "tp add <name> ## ບັນທຶກໄດເຣັກທໍຣີປັດຈຸບັນ".into());
-    m.insert("help.teleport.add_path".into(), "tp add <name> <path> ## ບັນທຶກ path ສະເພາະ".into());
-    m.insert("help.teleport.at".into(), "@<name> ## ທາງລັດ teleport ດ່ວນ".into());
-    m.insert("help.teleport.cls".into(), "tp cls ## ລຶບ savepoints ທັງໝົດ".into());
-    m.insert("help.teleport.info".into(), "tp info <name> ## ສະແດງລາຍລະອຽດ savepoint".into());
-    m.insert("help.teleport.jump".into(), "tp jump <name> ## Teleport ໄປຕຳແໜ່ງທີ່ບັນທຶກ".into());
-    m.insert("help.teleport.jump_num".into(), "tp jump <number> ## Teleport ຕາມເບີ".into());
-    m.insert("help.teleport.list".into(), "tp list ## ລາຍຊື່ຈຸດ teleport ທັງໝົດ".into());
+    m.insert(
+        "help.pipe.title".into(),
+        "PIPE ແລະ ການປ່ຽນເສັ້ນທາງ (PIPES & REDIRECTION):".into(),
+    );
+    m.insert(
+        "help.pipe.pipe".into(),
+        "a | b ## ສົ່ງ output ຂອງ a ເປັນ input ຂອງ b".into(),
+    );
+    m.insert(
+        "help.pipe.and".into(),
+        "a && b ## ແລ່ນ b ຖ້າ a ສຳເລັດເທົ່ານັ້ນ".into(),
+    );
+    m.insert(
+        "help.pipe.or".into(),
+        "a || b ## ແລ່ນ b ຖ້າ a ລົ້ມເຫຼວເທົ່ານັ້ນ".into(),
+    );
+    m.insert(
+        "help.pipe.out".into(),
+        "cmd > file ## ຂຽນ output ລົງໄຟລ໌ (ຂຽນທັບ)".into(),
+    );
+    m.insert(
+        "help.pipe.append".into(),
+        "cmd >> file ## ຕໍ່ທ້າຍ output ລົງໄຟລ໌".into(),
+    );
+    m.insert(
+        "help.pipe.in".into(),
+        "cmd < file ## ອ່ານ input ຈາກໄຟລ໌".into(),
+    );
+    m.insert(
+        "help.pipe.heredoc".into(),
+        "cmd <<EOF ... EOF ## ອ່ານ input ຈົນຮອດແຖວ EOF".into(),
+    );
+    m.insert(
+        "help.pipe.herestring".into(),
+        "cmd <<< text ## ອ່ານ input ຈາກຂໍ້ຄວາມໂດຍກົງ".into(),
+    );
+    m.insert(
+        "help.pipe.head".into(),
+        "head [N] [file] ## ສະແດງ N ແຖວທຳອິດ (ຄ່າເລີ່ມຕົ້ນ 10)".into(),
+    );
+    m.insert(
+        "help.pipe.tail".into(),
+        "tail [N] [file] ## ສະແດງ N ແຖວສຸດທ້າຍ (ຄ່າເລີ່ມຕົ້ນ 10)".into(),
+    );
+    m.insert(
+        "help.pipe.betw".into(),
+        "betw A:B [file] ## ສະແດງແຖວ A ຫາ B (ເລີ່ມທີ່ 1 ລວມປາຍ)".into(),
+    );
+    m.insert(
+        "help.pipe.sort".into(),
+        "sort [-r] [-n] [-u] [-f] [file] ## ຈັດລຳດັບແຖວ (ຍ້ອນກັບ/ຕົວເລກ/ບໍ່ຊ້ຳ/ບໍ່ສົນຕົວພິມ)".into(),
+    );
+    m.insert(
+        "help.pipe.rev".into(),
+        "rev [file] ## ຍ້ອນຕົວອັກສອນຂອງແຕ່ລະແຖວ".into(),
+    );
+    m.insert(
+        "help.pipe.filters".into(),
+        "cmd | head|tail|betw|gs|sort|rev|encode|qur ## ຕົວກອງ pipe (ເຕີມ flag ໄດ້)".into(),
+    );
+    m.insert(
+        "help.pipe.note".into(),
+        "ຕົວດຳເນີນການຕ້ອງມີຊ່ອງຫວ່າງສອງຂ້າງ; ໃຊ້ - ເພື່ອອ່ານ stdin".into(),
+    );
+    m.insert(
+        "help.pipe.hint".into(),
+        "ຄຳແນະນຳ: | ສະແດງຕົວກອງ pipe; >> ແລະ < ສະແດງສະເພາະໄຟລ໌ຂໍ້ຄວາມ; > ບໍ່ສະແດງ; << ສະແດງສະເພາະ EOF"
+            .into(),
+    );
+    m.insert(
+        "help.pipe.example1".into(),
+        "gs main > results.txt ## ບັນທຶກຜົນການຄົ້ນຫາລົງໄຟລ໌".into(),
+    );
+    m.insert(
+        "help.pipe.example2".into(),
+        "view readme.md | encode b64 ## ເຂົ້າລະຫັດເນື້ອໃນໄຟລ໌".into(),
+    );
+    m.insert(
+        "help.pipe.example3".into(),
+        "gs main | say ## ເບິ່ງຜົນການຄົ້ນຫາຜ່ານ say".into(),
+    );
+    m.insert(
+        "help.pipe.example4".into(),
+        "head 20 app.log ## 20 ແຖວທຳອິດຂອງໄຟລ໌ (ຫຼື input ທີ່ pipe ເຂົ້າມາ)".into(),
+    );
+    m.insert(
+        "help.pipe.example5".into(),
+        "gs error | sort -u | head 10 ## ຈັດລຳດັບຜົນທີ່ບໍ່ຊ້ຳ ແລ້ວເອົາ 10 ແຖວທຳອິດ".into(),
+    );
+    m.insert(
+        "help.teleport.add".into(),
+        "tp add <name> ## ບັນທຶກໄດເຣັກທໍຣີປັດຈຸບັນ".into(),
+    );
+    m.insert(
+        "help.teleport.add_path".into(),
+        "tp add <name> <path> ## ບັນທຶກ path ສະເພາະ".into(),
+    );
+    m.insert(
+        "help.teleport.at".into(),
+        "@<name> ## ທາງລັດ teleport ດ່ວນ".into(),
+    );
+    m.insert(
+        "help.teleport.cls".into(),
+        "tp cls ## ລຶບ savepoints ທັງໝົດ".into(),
+    );
+    m.insert(
+        "help.teleport.info".into(),
+        "tp info <name> ## ສະແດງລາຍລະອຽດ savepoint".into(),
+    );
+    m.insert(
+        "help.teleport.jump".into(),
+        "tp jump <name> ## Teleport ໄປຕຳແໜ່ງທີ່ບັນທຶກ".into(),
+    );
+    m.insert(
+        "help.teleport.jump_num".into(),
+        "tp jump <number> ## Teleport ຕາມເບີ".into(),
+    );
+    m.insert(
+        "help.teleport.list".into(),
+        "tp list ## ລາຍຊື່ຈຸດ teleport ທັງໝົດ".into(),
+    );
     m.insert("help.teleport.menu".into(), "tp ## ເມນູ interactive".into());
-    m.insert("help.teleport.rm".into(), "tp rm <name> ## ລຶບຈຸດ teleport".into());
-    m.insert("help.teleport.rnm".into(), "tp rnm <old> to <new> ## ປ່ຽນຊື່ savepoint".into());
+    m.insert(
+        "help.teleport.rm".into(),
+        "tp rm <name> ## ລຶບຈຸດ teleport".into(),
+    );
+    m.insert(
+        "help.teleport.rnm".into(),
+        "tp rnm <old> to <new> ## ປ່ຽນຊື່ savepoint".into(),
+    );
     m.insert("help.teleport.title".into(), "ຄຳສັ່ງ TELEPORT:".into());
-    m.insert("help.teleport.tpb".into(), "tpb ## Teleport ກັບໄປຕຳແໜ່ງກ່ອນໜ້າ (undo tp)".into());
-    m.insert("help.teleport.tpb_clear".into(), "tpb clear ## ລຶບ teleport history".into());
-    m.insert("help.teleport.tpb_history".into(), "tpb history ## ສະແດງ teleport navigation history".into());
-    m.insert("help.theme.add".into(), "theme add <name> ## ສ້າງ theme ໃໝ່ (ເປີດໃນ editor)".into());
-    m.insert("help.theme.current".into(), "theme current ## ສະແດງຊື່ ແລະ ລາຍລະອຽດ theme ປັດຈຸບັນ".into());
-    m.insert("help.theme.edit".into(), "theme edit [name] ## ແກ້ໄຂ theme (ຫຼື ເປີດໄດເຣັກທໍຣີ theme)".into());
-    m.insert("help.theme.export".into(), "theme export <name> ## ສົ່ງອອກ theme ເປັນໄຟລ໌ .ntc_theme".into());
-    m.insert("help.theme.import".into(), "theme import <file> ## ນຳເຂົ້າ theme ຈາກໄຟລ໌ .ntc_theme".into());
-    m.insert("help.theme.info".into(), "theme info <name> ## ສະແດງ metadata theme ແລະ ຈຳນວນສີ".into());
-    m.insert("help.theme.interactive".into(), "theme ## ຕົວຈັດການ theme interactive (ເມນູ)".into());
-    m.insert("help.theme.list".into(), "theme list ## ລາຍຊື່ themes ທີ່ມີທັງໝົດ".into());
-    m.insert("help.theme.make".into(), "theme make [name] ## ສ້າງ theme template ໃນ CWD".into());
-    m.insert("help.theme.reload".into(), "theme reload ## ໂຫຼດ themes ຄືນໃໝ່ຈາກ disk".into());
+    m.insert(
+        "help.teleport.tpb".into(),
+        "tpb ## Teleport ກັບໄປຕຳແໜ່ງກ່ອນໜ້າ (undo tp)".into(),
+    );
+    m.insert(
+        "help.teleport.tpb_clear".into(),
+        "tpb clear ## ລຶບ teleport history".into(),
+    );
+    m.insert(
+        "help.teleport.tpb_history".into(),
+        "tpb history ## ສະແດງ teleport navigation history".into(),
+    );
+    m.insert(
+        "help.theme.add".into(),
+        "theme add <name> ## ສ້າງ theme ໃໝ່ (ເປີດໃນ editor)".into(),
+    );
+    m.insert(
+        "help.theme.current".into(),
+        "theme current ## ສະແດງຊື່ ແລະ ລາຍລະອຽດ theme ປັດຈຸບັນ".into(),
+    );
+    m.insert(
+        "help.theme.edit".into(),
+        "theme edit [name] ## ແກ້ໄຂ theme (ຫຼື ເປີດໄດເຣັກທໍຣີ theme)".into(),
+    );
+    m.insert(
+        "help.theme.export".into(),
+        "theme export <name> ## ສົ່ງອອກ theme ເປັນໄຟລ໌ .ntc_theme".into(),
+    );
+    m.insert(
+        "help.theme.import".into(),
+        "theme import <file> ## ນຳເຂົ້າ theme ຈາກໄຟລ໌ .ntc_theme".into(),
+    );
+    m.insert(
+        "help.theme.info".into(),
+        "theme info <name> ## ສະແດງ metadata theme ແລະ ຈຳນວນສີ".into(),
+    );
+    m.insert(
+        "help.theme.interactive".into(),
+        "theme ## ຕົວຈັດການ theme interactive (ເມນູ)".into(),
+    );
+    m.insert(
+        "help.theme.list".into(),
+        "theme list ## ລາຍຊື່ themes ທີ່ມີທັງໝົດ".into(),
+    );
+    m.insert(
+        "help.theme.make".into(),
+        "theme make [name] ## ສ້າງ theme template ໃນ CWD".into(),
+    );
+    m.insert(
+        "help.theme.reload".into(),
+        "theme reload ## ໂຫຼດ themes ຄືນໃໝ່ຈາກ disk".into(),
+    );
     m.insert("help.theme.rm".into(), "theme rm <name> ## ລຶບ theme".into());
-    m.insert("help.theme.rnm".into(), "theme rnm <old> to <new> ## ປ່ຽນຊື່ theme".into());
-    m.insert("help.theme.switch".into(), "theme <name> ## ສະຫຼັບໄປ theme ຕາມຊື່".into());
+    m.insert(
+        "help.theme.rnm".into(),
+        "theme rnm <old> to <new> ## ປ່ຽນຊື່ theme".into(),
+    );
+    m.insert(
+        "help.theme.switch".into(),
+        "theme <name> ## ສະຫຼັບໄປ theme ຕາມຊື່".into(),
+    );
 }

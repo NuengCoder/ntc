@@ -1,6 +1,7 @@
 #!/bin/bash
 # install.sh - Build ntc from source after git clone
 # Requires: Rust (cargo) installed
+#           On regular Linux: pkg-config + ALSA headers (see below)
 
 set -e
 
@@ -11,6 +12,17 @@ if ! command -v cargo &> /dev/null; then
     echo "❌ Rust/Cargo not found. Please install Rust first:"
     echo "   curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh"
     exit 1
+fi
+
+# cpal/alsa-sys needs ALSA headers to build the `nms` audio player.
+if [ "$(uname -s)" = "Linux" ] && ! command -v termux-info &> /dev/null; then
+    if ! command -v pkg-config &> /dev/null || ! pkg-config --exists alsa; then
+        echo "❌ Linux audio build dependencies are missing (ALSA headers)."
+        echo "   Debian/Ubuntu: sudo apt-get install build-essential pkg-config libasound2-dev"
+        echo "   Fedora:        sudo dnf install gcc pkg-config alsa-lib-devel"
+        echo "   Arch:          sudo pacman -S --needed base-devel pkgconf alsa-lib"
+        exit 1
+    fi
 fi
 
 # Build release binary

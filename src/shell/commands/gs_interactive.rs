@@ -112,42 +112,11 @@ impl GsInteractive {
     }
 
     /// Split `text` into (segment, is_match) for red pattern highlight.
+    ///
+    /// Shares [`crate::utils::search::highlight_segments`] with `gs` output, so
+    /// every alternative of an OR pattern (`a\|b`) is highlighted here too.
     fn match_segments<'a>(&self, text: &'a str) -> Vec<(&'a str, bool)> {
-        if self.pattern.is_empty() {
-            return vec![(text, false)];
-        }
-        let lower = text.to_lowercase();
-        let pat = self.pattern.to_lowercase();
-        let mut segs = Vec::new();
-        let mut i = 0usize;
-        while i < text.len() {
-            if lower[i..].starts_with(pat.as_str()) {
-                let mut e = (i + self.pattern.len()).min(text.len());
-                while e < text.len() && !text.is_char_boundary(e) {
-                    e += 1;
-                }
-                let mut s = i;
-                while s < e && !text.is_char_boundary(s) {
-                    s += 1;
-                }
-                segs.push((&text[s..e], true));
-                i = e;
-            } else {
-                // Extend current non-match run by one char.
-                let ch_len = text[i..].chars().next().map(|c| c.len_utf8()).unwrap_or(1);
-                if let Some((_, true)) = segs.last() {
-                    segs.push((&text[i..i + ch_len], false));
-                } else if let Some(last) = segs.last_mut() {
-                    let start = text.as_ptr() as usize;
-                    let cur_end = last.0.as_ptr() as usize + last.0.len() - start;
-                    last.0 = &text[cur_end - last.0.len()..i + ch_len];
-                } else {
-                    segs.push((&text[i..i + ch_len], false));
-                }
-                i += ch_len;
-            }
-        }
-        segs
+        crate::utils::search::highlight_segments(text, &self.pattern)
     }
 
     fn truncate_chars(s: &str, max: usize) -> &str {

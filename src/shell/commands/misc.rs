@@ -1,15 +1,15 @@
 use super::{execute_system_command, parse_search_args};
 use crate::config::Config;
-use crate::explorer::{
-    calculate_target_size, format_duration, human_readable_size,
-};
+use crate::explorer::{calculate_target_size, format_duration, human_readable_size};
 use crate::filetype::{is_supported_format, strip_unc_prefix};
 use crate::navigator::{clear_screen, Navigator};
 use crate::output::{cat_file, print_error, print_info, print_success, print_warning};
 use crate::search;
 use crate::session::SessionState;
 use crate::shell::help::{print_interactive_help, print_tp_help};
-use crate::shell::helpers::{parse_target_arg_allow_file, resolve_file_operand, run_with_spinner, show_tree};
+use crate::shell::helpers::{
+    parse_target_arg_allow_file, resolve_file_operand, run_with_spinner, show_tree,
+};
 use crate::shell::venv::clear_venv_environment;
 use crate::teleport::TeleportManager;
 use crate::watcher;
@@ -78,7 +78,14 @@ pub fn cmd_clear(_args: &str, nav: &mut Navigator) -> Result<bool> {
 }
 
 pub fn cmd_math(args: &str, _nav: &mut Navigator) -> Result<bool> {
-    crate::math::run(args)?;
+    let mut expr = args.trim().to_string();
+    // `math -` (or bare `math`) evaluates piped / redirected input.
+    if expr.is_empty() || expr == "-" {
+        if let Some(s) = crate::shell::stdin::read_to_string() {
+            expr = s.trim().to_string();
+        }
+    }
+    crate::math::run(&expr)?;
     Ok(false)
 }
 
@@ -120,69 +127,162 @@ pub fn cmd_exit(_args: &str, _nav: &mut Navigator) -> Result<bool> {
     Ok(true)
 }
 
-pub fn cmd_ne(args: &str, nav: &mut Navigator) -> Result<bool> {
-    // Refuse nested editors inside the editor's embedded ntc shell
-    // (spawned with `NTC_IN_EDITOR=1`).
-    if std::env::var("NTC_IN_EDITOR").is_ok() {
-        print_error(&t!("misc.ne.already_in_editor"));
-        return Ok(false);
-    }
-    let args = args.trim();
-    let raw_path = if let Some(hyper_args) = args.strip_prefix("--hyper ") {
-        let mut parts = hyper_args.trim().splitn(3, ' ');
-        let name = parts.next().unwrap_or("").trim();
-        let mut lang = "c";
-        if let Some(p) = parts.next() {
-            if p == "--lang" {
-                if let Some(l) = parts.next() {
-                    lang = l.trim();
-                }
-            }
-        }
-        if name.is_empty() || name.contains('.') {
-            print_error(&t!("misc.ne.usage_hyper"));
-            return Ok(false);
-        }
-        match crate::editor::init_hyper_project(name, lang) {
-            Ok(_) => eprintln!("{}", t!("misc.ne.created_hyper", name)),
-            Err(e) => print_error(&t!("misc.ne.hyper_error", e)),
-        }
-        return Ok(false);
-    } else if let Some(super_path) = args.strip_prefix("--super ") {
-        let p = std::path::PathBuf::from(super_path.trim());
-        let _ = crate::editor::init_super_file(&p);
-        eprintln!("{}", t!("misc.ne.created_super", p.display()));
-        p
-    } else if let Some(init_path) = args.strip_prefix("--init ") {
-        let p = std::path::PathBuf::from(init_path.trim());
-        let _ = crate::editor::init_file(&p);
-        eprintln!("{}", t!("misc.ne.created_template", p.display()));
-        p
-    } else if args.is_empty() || args == "." {
-        let cwd = nav.current_path();
-        let welcome = cwd.join("welcome.ntcEditor");
-        let _ = crate::editor::refresh_welcome_file(&welcome);
-        print_info(&t!("misc.ne.opened_welcome", nav.current_path().display()));
-        welcome
+#[derive(Debug, PartialEq, Eq)]
+enum NeCreateKind {
+    Init,
+    Super,
+}
+
+#[derive(Debug, PartialEq, Eq)]
+enum NeError {
+    MissingCreateTarget,
+    UsageOpen,
+    OpenNotCreated(String),
+    HyperUsage,
+}
+
+#[derive(Debug, PartialEq, Eq)]
+enum NeAction {
+    Welcome,
+    Open {
+        path: PathBuf,
+        line: Option<usize>,
+    },
+    Create {
+        kind: NeCreateKind,
+        targets: Vec<PathBuf>,
+        open: Option<usize>,
+    },
+    Hyper {
+        name: String,
+        lang: String,
+        open: bool,
+    },
+    Error(NeError),
+}
+
+fn ne_flag_rest<'a>(args: &'a str, flag: &str) -> Option<&'a str> {
+    let rest = args.strip_prefix(flag)?;
+    if rest.is_empty() {
+        Some("")
+    } else if rest.starts_with(' ') || rest.starts_with('\t') {
+        Some(rest.trim_start())
     } else {
-        // Support "file:line" syntax (e.g. main.rs:42, src/main.rs:42)
-        let trimmed = args.trim();
-        if let Some((file_part, line_part)) = trimmed.rsplit_once(':') {
-            if let Ok(line) = line_part.parse::<usize>() {
-                if line > 0 {
-                    let p = std::path::PathBuf::from(file_part);
-                    crate::editor::GOTO_LINE.store(line, std::sync::atomic::Ordering::SeqCst);
-                    p
-                } else {
-                    std::path::PathBuf::from(trimmed)
-                }
-            } else {
-                std::path::PathBuf::from(trimmed)
+        None
+    }
+}
+
+fn parse_open_spec(raw: &str) -> (PathBuf, Option<usize>) {
+    if let Some((file_part, line_part)) = raw.rsplit_once(':') {
+        if let Ok(line) = line_part.parse::<usize>() {
+            if line > 0 {
+                return (PathBuf::from(file_part), Some(line));
             }
-        } else {
-            std::path::PathBuf::from(trimmed)
         }
+    }
+    (PathBuf::from(raw), None)
+}
+
+fn parse_ne_create(kind: NeCreateKind, rest: &str) -> NeAction {
+    let tokens = tokenize_quoted(rest);
+    if tokens.is_empty() {
+        return NeAction::Error(NeError::MissingCreateTarget);
+    }
+    let mut targets = Vec::new();
+    let mut open_name: Option<String> = None;
+    let mut i = 0;
+    while i < tokens.len() {
+        if tokens[i] == "-I" {
+            if i + 1 >= tokens.len() || i + 2 != tokens.len() {
+                return NeAction::Error(NeError::UsageOpen);
+            }
+            open_name = Some(tokens[i + 1].clone());
+            break;
+        }
+        for part in tokens[i].split(',') {
+            let part = part.trim();
+            if !part.is_empty() {
+                targets.push(PathBuf::from(part));
+            }
+        }
+        i += 1;
+    }
+    if targets.is_empty() {
+        return NeAction::Error(NeError::MissingCreateTarget);
+    }
+    let open = match open_name {
+        Some(name) => {
+            let target = PathBuf::from(&name);
+            match targets.iter().position(|p| p == &target) {
+                Some(idx) => Some(idx),
+                None => return NeAction::Error(NeError::OpenNotCreated(name)),
+            }
+        }
+        None => None,
     };
+    NeAction::Create {
+        kind,
+        targets,
+        open,
+    }
+}
+
+fn parse_ne_hyper(rest: &str) -> NeAction {
+    let tokens = tokenize_quoted(rest);
+    if tokens.is_empty() {
+        return NeAction::Error(NeError::HyperUsage);
+    }
+    let name = tokens[0].clone();
+    if name.is_empty() || name.contains('.') {
+        return NeAction::Error(NeError::HyperUsage);
+    }
+    let mut lang = "c".to_string();
+    let mut open = false;
+    let mut i = 1;
+    while i < tokens.len() {
+        match tokens[i].as_str() {
+            "--lang" => {
+                if i + 1 >= tokens.len() {
+                    return NeAction::Error(NeError::HyperUsage);
+                }
+                lang = tokens[i + 1].clone();
+                i += 2;
+            }
+            "-I" => {
+                if open || i + 1 != tokens.len() {
+                    return NeAction::Error(NeError::UsageOpen);
+                }
+                open = true;
+                i += 1;
+            }
+            _ => return NeAction::Error(NeError::HyperUsage),
+        }
+    }
+    NeAction::Hyper { name, lang, open }
+}
+
+fn parse_ne_action(args: &str) -> NeAction {
+    let args = args.trim();
+    if args.is_empty() || args == "." {
+        return NeAction::Welcome;
+    }
+    if let Some(rest) = ne_flag_rest(args, "--hyper") {
+        return parse_ne_hyper(rest);
+    }
+    if let Some(rest) = ne_flag_rest(args, "--init") {
+        return parse_ne_create(NeCreateKind::Init, rest);
+    }
+    if let Some(rest) = ne_flag_rest(args, "--super") {
+        return parse_ne_create(NeCreateKind::Super, rest);
+    }
+    let (path, line) = parse_open_spec(args);
+    NeAction::Open { path, line }
+}
+
+fn launch_ne_editor(raw_path: PathBuf, line: Option<usize>) {
+    if let Some(line) = line {
+        crate::editor::GOTO_LINE.store(line, std::sync::atomic::Ordering::SeqCst);
+    }
     let path = if raw_path.is_dir() {
         let welcome = raw_path.join("welcome.ntcEditor");
         let _ = crate::editor::refresh_welcome_file(&welcome);
@@ -197,6 +297,94 @@ pub fn cmd_ne(args: &str, nav: &mut Navigator) -> Result<bool> {
             SessionState::save_global();
         }
         Err(e) => print_error(&t!("misc.ne.editor_error", e)),
+    }
+}
+
+pub fn cmd_ne(args: &str, nav: &mut Navigator) -> Result<bool> {
+    // Refuse nested editors inside the editor's embedded ntc shell
+    // (spawned with `NTC_IN_EDITOR=1`).
+    if std::env::var("NTC_IN_EDITOR").is_ok() {
+        print_error(&t!("misc.ne.already_in_editor"));
+        return Ok(false);
+    }
+    match parse_ne_action(args) {
+        NeAction::Welcome => {
+            let cwd = nav.current_path();
+            let welcome = cwd.join("welcome.ntcEditor");
+            let _ = crate::editor::refresh_welcome_file(&welcome);
+            print_info(&t!("misc.ne.opened_welcome", nav.current_path().display()));
+            launch_ne_editor(welcome, None);
+        }
+        NeAction::Open { path, line } => {
+            if !path.exists() {
+                print_error(&t!("misc.ne.file_missing", path.display()));
+                return Ok(false);
+            }
+            launch_ne_editor(path, line);
+        }
+        NeAction::Create {
+            kind,
+            targets,
+            open,
+        } => {
+            for target in &targets {
+                if target.exists() {
+                    print_warning(&t!("misc.mkf.exists", target.display()));
+                    continue;
+                }
+                let created = match kind {
+                    NeCreateKind::Init => crate::editor::init_file(target),
+                    NeCreateKind::Super => crate::editor::init_super_file(target),
+                };
+                match created {
+                    Ok(true) => {
+                        let msg = match kind {
+                            NeCreateKind::Init => {
+                                t!("misc.ne.created_template", target.display())
+                            }
+                            NeCreateKind::Super => {
+                                t!("misc.ne.created_super", target.display())
+                            }
+                        };
+                        eprintln!("{}", msg);
+                    }
+                    Ok(false) => {
+                        print_error(&t!("misc.ne.create_failed", target.display()));
+                    }
+                    Err(e) => {
+                        print_error(&t!(
+                            "misc.ne.create_failed",
+                            format!("{}: {}", target.display(), e)
+                        ));
+                    }
+                }
+            }
+            if let Some(idx) = open {
+                if let Some(target) = targets.get(idx) {
+                    if target.exists() {
+                        launch_ne_editor(target.clone(), None);
+                    }
+                }
+            }
+        }
+        NeAction::Hyper { name, lang, open } => {
+            eprintln!("{}", t!("editor.hyper_creating", name));
+            match crate::editor::init_hyper_project(&name, &lang) {
+                Ok(_) => {
+                    eprintln!("{}", t!("editor.hyper_created", name));
+                    if open {
+                        launch_ne_editor(PathBuf::from(&name), None);
+                    }
+                }
+                Err(e) => print_error(&t!("misc.ne.hyper_error", e)),
+            }
+        }
+        NeAction::Error(err) => match err {
+            NeError::MissingCreateTarget => print_error(&t!("misc.ne.missing_file")),
+            NeError::UsageOpen => print_error(&t!("misc.ne.usage_open")),
+            NeError::OpenNotCreated(name) => print_error(&t!("misc.ne.open_not_created", name)),
+            NeError::HyperUsage => print_error(&t!("misc.ne.usage_hyper")),
+        },
     }
     Ok(false)
 }
@@ -239,7 +427,9 @@ pub fn cmd_size(args: &str, nav: &mut Navigator) -> Result<bool> {
             calculate_target_size(&target, true)
         })
     } else {
-        run_with_spinner(&t!("misc.size.calculating"), || calculate_target_size(&target, false))
+        run_with_spinner(&t!("misc.size.calculating"), || {
+            calculate_target_size(&target, false)
+        })
     };
     let elapsed = start.elapsed();
     let bytes_str = format!("{}", total);
@@ -451,11 +641,17 @@ pub fn cmd_tp(args: &str, nav: &mut Navigator) -> Result<bool> {
 pub fn cmd_gs(args: &str, nav: &mut Navigator) -> Result<bool> {
     if args.trim().is_empty() {
         print_error(&t!("misc.gs.usage"));
-        println!("{}", t!("misc.gs.example1"));
-        println!("{}", t!("misc.gs.example2"));
-        println!("{}", t!("misc.gs.example3"));
-        println!("{}", t!("misc.gs.example4"));
-        println!("{}", t!("misc.gs.example5"));
+        // When piped, keep stdout clean (examples would land in the pipe/file).
+        if !crate::shell::stdin::has_input() {
+            println!("{}", t!("misc.gs.example1"));
+            println!("{}", t!("misc.gs.example2"));
+            println!("{}", t!("misc.gs.example3"));
+            println!("{}", t!("misc.gs.example4"));
+            println!("{}", t!("misc.gs.example5"));
+            println!("{}", t!("misc.gs.example6"));
+            println!("{}", t!("misc.gs.example7"));
+            println!("{}", t!("misc.gs.example8"));
+        }
         return Ok(false);
     }
     let parsed = super::parse_gs_args(args);
@@ -465,14 +661,69 @@ pub fn cmd_gs(args: &str, nav: &mut Navigator) -> Result<bool> {
     }
     let pattern = parsed.pattern;
     let max_depth = parsed.max_depth;
+
+    // `-p` scopes the filesystem walk — it makes no sense on piped text.
+    if crate::shell::stdin::has_input() && !parsed.paths.is_empty() {
+        print_error(&t!("misc.gs.no_pipe_path"));
+        return Ok(false);
+    }
+
+    // Piped / redirected input: search the provided text (same
+    // case-insensitive substring semantics as the file search) and print the
+    // matching lines grep-style, instead of walking the filesystem.
+    if crate::shell::stdin::has_input() {
+        let text = crate::shell::stdin::read_to_string().unwrap_or_default();
+        let mut matches = crate::search::search_text_lines(&text, &pattern);
+        if let Some(sort) = parsed.sort {
+            match sort {
+                // `-s path|size` need file metadata that piped text lacks.
+                super::GsSort::Path | super::GsSort::Size => {
+                    print_error(&t!("misc.gs.pipe_sort_only_line"));
+                    return Ok(false);
+                }
+                super::GsSort::Line => {
+                    matches.sort_by(|a, b| {
+                        a.line
+                            .to_lowercase()
+                            .cmp(&b.line.to_lowercase())
+                            .then_with(|| a.line_number.cmp(&b.line_number))
+                    });
+                }
+            }
+        }
+        if let Some(lim) = parsed.limit {
+            if matches.len() > lim {
+                matches.truncate(lim);
+            }
+        }
+        if matches.len() > 20_000 {
+            matches.truncate(20_000);
+        }
+        print!("{}", crate::search::format_text_matches(&matches, &pattern));
+        return Ok(false);
+    }
+
     let root = nav.current_path().to_path_buf();
     // Spinner in background thread so broad `-d` searches show progress
     // instead of looking crashed. Heavy-file guards live in search_content.
     let results = run_with_spinner(&t!("misc.gs.searching"), || {
-        crate::search::search_content(&root, &pattern, max_depth)
+        if parsed.paths.is_empty() {
+            crate::search::search_content(&root, &pattern, max_depth)
+        } else {
+            let files = super::qur::resolve_qur_files(&root, &parsed.paths, max_depth);
+            crate::search::search_content_in_files(&files, &pattern)
+        }
     });
-    let total_found = results.len();
     let mut results = results;
+    if let Some(sort) = parsed.sort {
+        let content_sort = match sort {
+            super::GsSort::Line => crate::search::ContentSort::Line,
+            super::GsSort::Path => crate::search::ContentSort::Path,
+            super::GsSort::Size => crate::search::ContentSort::Size,
+        };
+        crate::search::sort_content_matches(&mut results, content_sort);
+    }
+    let total_found = results.len();
     if results.len() > 20_000 {
         print_warning(&t!("misc.gs.many_results", results.len()));
         results.truncate(20_000);
@@ -682,14 +933,19 @@ fn split_args(args: &str) -> Vec<String> {
         .collect()
 }
 
-pub fn cmd_mkf(args: &str, _nav: &mut Navigator) -> Result<bool> {
+/// `mkf <file>[,…]` — create empty files (parent directories included).
+/// Every operand accepts teleport savepoints (`mkf @tp1/notes.md`).
+pub fn cmd_mkf(args: &str, nav: &mut Navigator) -> Result<bool> {
     let items = split_args(args);
     if items.is_empty() {
         print_error(&t!("misc.mkf.missing"));
         return Ok(false);
     }
     for item in &items {
-        let path = std::path::Path::new(item);
+        let path = match resolve_file_operand(item, nav) {
+            Ok(p) => p,
+            Err(_) => continue,
+        };
         if path.exists() {
             print_warning(&t!("misc.mkf.exists", item));
             continue;
@@ -699,7 +955,7 @@ pub fn cmd_mkf(args: &str, _nav: &mut Navigator) -> Result<bool> {
                 let _ = std::fs::create_dir_all(parent);
             }
         }
-        match std::fs::write(path, "") {
+        match std::fs::write(&path, "") {
             Ok(()) => print_success(&t!("misc.mkf.created", item)),
             Err(e) => print_error(&t!("misc.mkf.error", item, e)),
         }
@@ -707,14 +963,20 @@ pub fn cmd_mkf(args: &str, _nav: &mut Navigator) -> Result<bool> {
     Ok(false)
 }
 
-pub fn cmd_mkd(args: &str, _nav: &mut Navigator) -> Result<bool> {
+/// `mkd <dir>[,…]` — create directories (nested paths included).
+/// Every operand accepts teleport savepoints (`mkd @tp1/build`).
+pub fn cmd_mkd(args: &str, nav: &mut Navigator) -> Result<bool> {
     let items = split_args(args);
     if items.is_empty() {
         print_error(&t!("misc.mkd.missing"));
         return Ok(false);
     }
     for item in &items {
-        if let Err(e) = std::fs::create_dir_all(std::path::Path::new(item)) {
+        let path = match resolve_file_operand(item, nav) {
+            Ok(p) => p,
+            Err(_) => continue,
+        };
+        if let Err(e) = std::fs::create_dir_all(&path) {
             print_error(&t!("misc.mkd.error", item, e));
         } else {
             print_success(&t!("misc.mkd.created", item));
@@ -723,19 +985,28 @@ pub fn cmd_mkd(args: &str, _nav: &mut Navigator) -> Result<bool> {
     Ok(false)
 }
 
-pub fn cmd_rmd(args: &str, _nav: &mut Navigator) -> Result<bool> {
+/// `rmd <dir>[,…]` — remove directories (`*` patterns supported).
+/// Every operand accepts teleport savepoints (`rmd @tp1/old`, `rmd @tp1/old*`).
+pub fn cmd_rmd(args: &str, nav: &mut Navigator) -> Result<bool> {
     let items = split_args(args);
     if items.is_empty() {
         print_error(&t!("misc.rmd.missing"));
         return Ok(false);
     }
     for item in &items {
-        let path = std::path::Path::new(item);
+        if item.contains('*') {
+            remove_rmd_pattern(item, nav)?;
+            continue;
+        }
+        let path = match resolve_file_operand(item, nav) {
+            Ok(p) => p,
+            Err(_) => continue,
+        };
         if !path.exists() {
             print_error(&t!("misc.rmd.not_exist", item));
         } else if !path.is_dir() {
             print_error(&t!("misc.rmd.not_dir", item));
-        } else if let Err(e) = std::fs::remove_dir_all(path) {
+        } else if let Err(e) = std::fs::remove_dir_all(&path) {
             print_error(&t!("misc.rmd.error", item, e));
         } else {
             print_success(&t!("misc.rmd.removed", item));
@@ -744,29 +1015,21 @@ pub fn cmd_rmd(args: &str, _nav: &mut Navigator) -> Result<bool> {
     Ok(false)
 }
 
-/// Expand one `rmf` operand containing `*` wildcards (`*.log`,
-/// `test*`, `dir/*.tmp`) into the matching files. Directories never
-/// match — `rmf` only removes files. Pure for testability.
-fn expand_rmf_pattern(item: &str, cwd: &Path) -> Vec<PathBuf> {
-    let raw = Path::new(item);
-    let (base, pat) = match raw.parent().filter(|p| !p.as_os_str().is_empty()) {
-        Some(dir) => {
-            let base = if dir.is_absolute() {
-                dir.to_path_buf()
-            } else {
-                cwd.join(dir)
-            };
-            let pat = raw.file_name().and_then(|n| n.to_str()).unwrap_or(item);
-            (base, pat.to_string())
-        }
-        None => (cwd.to_path_buf(), item.to_string()),
-    };
-    // End-anchored so `*.log` means "ends with .log", not "contains".
+/// Match the `*`-wildcard name pattern `pat` against the entries directly
+/// inside `base`, keeping files (`want_dirs == false`) or directories.
+/// The pattern is end-anchored so `*.log` means "ends with .log", not
+/// "contains". Sorted. Pure for testability.
+fn expand_glob_in_dir_filtered(base: &Path, pat: &str, want_dirs: bool) -> Vec<PathBuf> {
     let anchored = format!("{}$", pat);
     let mut out = Vec::new();
-    if let Ok(entries) = std::fs::read_dir(&base) {
+    if let Ok(entries) = std::fs::read_dir(base) {
         for entry in entries.flatten() {
-            if !entry.file_type().map(|t| t.is_file()).unwrap_or(false) {
+            let keep = match entry.file_type() {
+                Ok(t) if want_dirs => t.is_dir(),
+                Ok(t) => t.is_file(),
+                Err(_) => false,
+            };
+            if !keep {
                 continue;
             }
             let name = match entry.file_name().into_string() {
@@ -782,11 +1045,114 @@ fn expand_rmf_pattern(item: &str, cwd: &Path) -> Vec<PathBuf> {
     out
 }
 
+/// Match the `*`-wildcard file-name pattern `pat` against the files
+/// directly inside `base`. Directories never match — patterns only ever
+/// target files. Sorted. Pure for testability.
+fn expand_glob_in_dir(base: &Path, pat: &str) -> Vec<PathBuf> {
+    expand_glob_in_dir_filtered(base, pat, false)
+}
+
+/// Expand one `rmd` operand containing `*` wildcards (`*`, `old*`,
+/// `parent/*`, `@tp1/old*`) into the matching directories. Files never
+/// match — `rmd` only removes directories. The parent part goes through
+/// `resolve_file_operand`, so plain paths and teleport savepoints both
+/// expand from the right base. Pure for testability.
+fn expand_rmd_pattern(item: &str, nav: &Navigator) -> Vec<PathBuf> {
+    let raw = Path::new(item);
+    match raw.parent().filter(|p| !p.as_os_str().is_empty()) {
+        Some(dir) => {
+            let base = match resolve_file_operand(&dir.to_string_lossy(), nav) {
+                Ok(p) => p,
+                Err(_) => return Vec::new(),
+            };
+            let pat = raw.file_name().and_then(|n| n.to_str()).unwrap_or(item);
+            expand_glob_in_dir_filtered(&base, pat, true)
+        }
+        None => expand_glob_in_dir_filtered(nav.current_path(), item, true),
+    }
+}
+
+/// Delete the directories matched by one `rmd` wildcard operand. A bulk
+/// delete always lists the matches and asks for confirmation first, so
+/// `rmd *` can never wipe the working directory in one keystroke.
+fn remove_rmd_pattern(item: &str, nav: &Navigator) -> Result<()> {
+    let matches = expand_rmd_pattern(item, nav);
+    if matches.is_empty() {
+        print_error(&t!("misc.rmd.no_match", item));
+        return Ok(());
+    }
+    println!();
+    println!(
+        "{}",
+        t!("misc.rmd.pattern_matches", matches.len(), item)
+            .yellow()
+            .bold()
+    );
+    for (i, p) in matches.iter().enumerate() {
+        println!("  {}. {}", (i + 1).to_string().yellow(), p.display());
+    }
+    println!();
+    let ok = crate::utils::interactive::prompt_yes_no(
+        &t!("misc.rmd.confirm_delete", matches.len()),
+        false,
+    )
+    .unwrap_or(false);
+    if !ok {
+        println!("{}", t!("misc.rmd.cancelled").dimmed());
+        return Ok(());
+    }
+    for path in &matches {
+        match std::fs::remove_dir_all(path) {
+            Ok(()) => print_success(&t!("misc.rmd.removed", path.display())),
+            Err(e) => print_error(&t!("misc.rmd.error", path.display(), e)),
+        }
+    }
+    Ok(())
+}
+
+/// Expand one `rmf` operand containing `*` wildcards (`*.log`,
+/// `test*`, `dir/*.tmp`, `@tp1/*.log`) into the matching files.
+/// Directories never match — `rmf` only removes files. The parent part goes
+/// through `resolve_file_operand`, so savepoints expand from the right base.
+/// Pure for testability.
+fn expand_rmf_pattern(item: &str, nav: &Navigator) -> Vec<PathBuf> {
+    let raw = Path::new(item);
+    match raw.parent().filter(|p| !p.as_os_str().is_empty()) {
+        Some(dir) => {
+            let base = match resolve_file_operand(&dir.to_string_lossy(), nav) {
+                Ok(p) => p,
+                Err(_) => return Vec::new(),
+            };
+            let pat = raw.file_name().and_then(|n| n.to_str()).unwrap_or(item);
+            expand_glob_in_dir(&base, pat)
+        }
+        None => expand_glob_in_dir(nav.current_path(), item),
+    }
+}
+
+/// Expand a `cp`/`mv` src operand containing a `*` wildcard. The parent
+/// directory is resolved through `resolve_file_operand` so plain paths
+/// (`dir/*.py`), CWD-relative patterns (`*.py`) and teleport subpaths
+/// (`@tp/*.py`) all expand from the right base.
+fn expand_operand_pattern(spec: &str, nav: &Navigator) -> Vec<PathBuf> {
+    let raw = Path::new(spec);
+    match raw.parent().filter(|p| !p.as_os_str().is_empty()) {
+        Some(dir) => {
+            let base = match resolve_file_operand(&dir.to_string_lossy(), nav) {
+                Ok(p) => p,
+                Err(_) => return Vec::new(),
+            };
+            let pat = raw.file_name().and_then(|n| n.to_str()).unwrap_or(spec);
+            expand_glob_in_dir(&base, pat)
+        }
+        None => expand_glob_in_dir(nav.current_path(), spec),
+    }
+}
+
 /// Delete the files matched by one `rmf` wildcard operand: single match
 /// goes directly, multiple matches list + confirm first.
-fn remove_rmf_pattern(item: &str) -> Result<()> {
-    let cwd = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
-    let matches = expand_rmf_pattern(item, &cwd);
+fn remove_rmf_pattern(item: &str, nav: &Navigator) -> Result<()> {
+    let matches = expand_rmf_pattern(item, nav);
     if matches.is_empty() {
         print_error(&t!("misc.rmf.no_match", item));
         return Ok(());
@@ -822,7 +1188,10 @@ fn remove_rmf_pattern(item: &str) -> Result<()> {
     Ok(())
 }
 
-pub fn cmd_rmf(args: &str, _nav: &mut Navigator) -> Result<bool> {
+/// `rmf <file>[,…]` — remove files (`*` patterns supported).
+/// Every operand accepts teleport savepoints (`rmf @tp1/old.log`,
+/// `rmf @tp1/*.log`).
+pub fn cmd_rmf(args: &str, nav: &mut Navigator) -> Result<bool> {
     let items = split_args(args);
     if items.is_empty() {
         print_error(&t!("misc.rmf.missing"));
@@ -830,16 +1199,19 @@ pub fn cmd_rmf(args: &str, _nav: &mut Navigator) -> Result<bool> {
     }
     for item in &items {
         if item.contains('*') {
-            remove_rmf_pattern(item)?;
+            remove_rmf_pattern(item, nav)?;
             continue;
         }
-        let path = std::path::Path::new(item);
+        let path = match resolve_file_operand(item, nav) {
+            Ok(p) => p,
+            Err(_) => continue,
+        };
         if !path.exists() {
             print_error(&t!("misc.rmf.not_exist", item));
         } else if path.is_dir() {
             print_error(&t!("misc.rmf.is_dir", item));
         } else {
-            match std::fs::remove_file(path) {
+            match std::fs::remove_file(&path) {
                 Ok(()) => print_success(&t!("misc.rmf.removed", item)),
                 Err(e) => print_error(&t!("misc.rmf.error", item, e)),
             }
@@ -921,6 +1293,9 @@ pub fn cmd_ui(_args: &str, _nav: &mut Navigator) -> Result<bool> {
 /// Both operands accept teleport savepoints (`mv @tp1/report.pdf @docs`,
 /// `mv @tp1 ./here`); `dst` inside an existing directory keeps the source
 /// file name (`mv report.pdf @docs`).
+/// A `*` wildcard source expands to the matching files (files only,
+/// non-recursive) and requires `dst` to be a directory (created when
+/// missing): `mv *.py out/`.
 /// Quoted paths with spaces supported; `-f/--force` overwrites the target.
 /// Falls back to copy+delete when `rename` fails (e.g. cross-device).
 pub fn cmd_mv(args: &str, nav: &mut Navigator) -> Result<bool> {
@@ -928,6 +1303,15 @@ pub fn cmd_mv(args: &str, nav: &mut Navigator) -> Result<bool> {
     if operands.len() < 2 {
         print_error(&t!("misc.mv.missing"));
         println!("{}", t!("misc.mv.usage"));
+        return Ok(false);
+    }
+    // `mv <pattern> <dir>`: expand the wildcard; dst must be a directory.
+    if operands[0].contains('*') {
+        let dst = match resolve_file_operand(&operands[1], nav) {
+            Ok(p) => p,
+            Err(_) => return Ok(false),
+        };
+        move_wildcard_batch(&operands[0], &operands[1], &dst, force, nav);
         return Ok(false);
     }
     let src = match resolve_file_operand(&operands[0], nav) {
@@ -987,12 +1371,24 @@ pub fn cmd_mv(args: &str, nav: &mut Navigator) -> Result<bool> {
 /// Both operands accept teleport savepoints (`cp @tp1/report.pdf @docs`,
 /// `cp @tp1 ./here`); `dst` inside an existing directory keeps the source
 /// file name (`cp report.pdf @docs`).
+/// A `*` wildcard source expands to the matching files (files only,
+/// non-recursive) and requires `dst` to be a directory (created when
+/// missing): `cp *.py out/`.
 /// Quoted paths with spaces supported; `-f/--force` overwrites the target.
 pub fn cmd_cp(args: &str, nav: &mut Navigator) -> Result<bool> {
     let (operands, force) = parse_mv_args(args);
     if operands.len() < 2 {
         print_error(&t!("misc.cp.missing"));
         println!("{}", t!("misc.cp.usage"));
+        return Ok(false);
+    }
+    // `cp <pattern> <dir>`: expand the wildcard; dst must be a directory.
+    if operands[0].contains('*') {
+        let dst = match resolve_file_operand(&operands[1], nav) {
+            Ok(p) => p,
+            Err(_) => return Ok(false),
+        };
+        copy_wildcard_batch(&operands[0], &operands[1], &dst, force, nav);
         return Ok(false);
     }
     let src = match resolve_file_operand(&operands[0], nav) {
@@ -1106,6 +1502,124 @@ fn copy_dir_all(src: &Path, dst: &Path) -> std::io::Result<()> {
         }
     }
     Ok(())
+}
+
+/// Shared wildcard prelude for `cp`/`mv`: expand `src_pat` into files and
+/// require `dst` to be a directory (created when missing). Returns the
+/// destination directory and the matched sources, or `None` after printing
+/// a localized error (`no_match_key` / `dst_dir_key`).
+fn expand_wildcard_src(
+    src_pat: &str,
+    dst: &Path,
+    nav: &Navigator,
+    no_match_key: &str,
+    dst_dir_key: &str,
+) -> Option<(PathBuf, Vec<PathBuf>)> {
+    let sources = expand_operand_pattern(src_pat, nav);
+    if sources.is_empty() {
+        print_error(&t!(no_match_key, src_pat));
+        return None;
+    }
+    if dst.is_dir() {
+        return Some((dst.to_path_buf(), sources));
+    }
+    if dst.exists() {
+        print_error(&t!(dst_dir_key, dst.display()));
+        return None;
+    }
+    if std::fs::create_dir_all(dst).is_err() {
+        print_error(&t!(dst_dir_key, dst.display()));
+        return None;
+    }
+    Some((dst.to_path_buf(), sources))
+}
+
+/// `cp <pattern> <dir>`: copy every file matched by a `*` source into
+/// `dst_spec` (which must be, or become, a directory). `-f` overwrites an
+/// existing target file; a target directory is never replaced by a file.
+fn copy_wildcard_batch(src_pat: &str, dst_spec: &str, dst: &Path, force: bool, nav: &Navigator) {
+    let Some((dst_dir, sources)) =
+        expand_wildcard_src(src_pat, dst, nav, "misc.cp.no_match", "misc.cp.dst_dir")
+    else {
+        return;
+    };
+    let mut done = 0usize;
+    for src in sources {
+        let name = match src.file_name() {
+            Some(n) => n,
+            None => continue,
+        };
+        let target = dst_dir.join(name);
+        if same_file(&src, &target) {
+            print_error(&t!("misc.cp.same", src.display()));
+            continue;
+        }
+        if target.exists() && !force {
+            print_error(&t!("misc.cp.exists", target.display()));
+            continue;
+        }
+        if force && target.exists() {
+            if target.is_dir() {
+                // Never replace a directory with a file.
+                print_error(&t!("misc.cp.error", "cannot overwrite directory with file"));
+                continue;
+            }
+            if std::fs::remove_file(&target).is_err() {
+                print_error(&t!("misc.cp.error", "cannot clear existing target"));
+                continue;
+            }
+        }
+        match copy_path(&src, &target) {
+            Ok(()) => done += 1,
+            Err(e) => print_error(&t!("misc.cp.error", e)),
+        }
+    }
+    if done > 0 {
+        print_success(&t!("misc.cp.wild_done", done, dst_spec));
+    }
+}
+
+/// `mv <pattern> <dir>`: move every file matched by a `*` source into
+/// `dst_spec` (which must be, or become, a directory). Mirrors
+/// `copy_wildcard_batch`'s overwrite rules, with a copy+delete fallback.
+fn move_wildcard_batch(src_pat: &str, dst_spec: &str, dst: &Path, force: bool, nav: &Navigator) {
+    let Some((dst_dir, sources)) =
+        expand_wildcard_src(src_pat, dst, nav, "misc.mv.no_match", "misc.mv.dst_dir")
+    else {
+        return;
+    };
+    let mut done = 0usize;
+    for src in sources {
+        let name = match src.file_name() {
+            Some(n) => n,
+            None => continue,
+        };
+        let target = dst_dir.join(name);
+        if target.exists() && !force {
+            print_error(&t!("misc.mv.exists", target.display()));
+            continue;
+        }
+        if force && target.exists() {
+            if target.is_dir() {
+                print_error(&t!("misc.mv.error", "cannot overwrite directory with file"));
+                continue;
+            }
+            if std::fs::remove_file(&target).is_err() {
+                print_error(&t!("misc.mv.error", "cannot clear existing target"));
+                continue;
+            }
+        }
+        match std::fs::rename(&src, &target) {
+            Ok(()) => done += 1,
+            Err(_) => match move_by_copy(&src, &target) {
+                Ok(()) => done += 1,
+                Err(e) => print_error(&t!("misc.mv.error", e)),
+            },
+        }
+    }
+    if done > 0 {
+        print_success(&t!("misc.mv.wild_done", done, dst_spec));
+    }
 }
 
 /// Split `mv` args into operands + force flag.
@@ -1469,6 +1983,14 @@ pub fn cmd_say(args: &str, _nav: &mut Navigator) -> Result<bool> {
     }
 
     if text.is_empty() {
+        // No text given → read piped/redirected input and echo it.
+        if let Some(input) = crate::shell::stdin::read_to_string() {
+            print!("{}", input);
+            if !input.is_empty() && !input.ends_with('\n') {
+                println!();
+            }
+            return Ok(false);
+        }
         print_error(&t!("misc.say.usage"));
         print_info(&t!("misc.say.example1"));
         print_info(&t!("misc.say.example2"));
@@ -1543,6 +2065,82 @@ mod tests {
     }
 
     #[test]
+    fn ne_parser_create_modes() {
+        assert_eq!(
+            parse_ne_action("--init a.py b.html -I a.py"),
+            NeAction::Create {
+                kind: NeCreateKind::Init,
+                targets: vec![PathBuf::from("a.py"), PathBuf::from("b.html")],
+                open: Some(0),
+            }
+        );
+        assert_eq!(
+            parse_ne_action("--super a.py,b.html -I b.html"),
+            NeAction::Create {
+                kind: NeCreateKind::Super,
+                targets: vec![PathBuf::from("a.py"), PathBuf::from("b.html")],
+                open: Some(1),
+            }
+        );
+        assert_eq!(
+            parse_ne_action("--init a b"),
+            NeAction::Create {
+                kind: NeCreateKind::Init,
+                targets: vec![PathBuf::from("a"), PathBuf::from("b")],
+                open: None,
+            }
+        );
+    }
+
+    #[test]
+    fn ne_parser_open_flag_errors() {
+        assert_eq!(
+            parse_ne_action("--init a b -I"),
+            NeAction::Error(NeError::UsageOpen)
+        );
+        assert_eq!(
+            parse_ne_action("--init a b -I a b"),
+            NeAction::Error(NeError::UsageOpen)
+        );
+        assert_eq!(
+            parse_ne_action("--init a b -I c"),
+            NeAction::Error(NeError::OpenNotCreated("c".to_string()))
+        );
+        assert_eq!(
+            parse_ne_action("--init"),
+            NeAction::Error(NeError::MissingCreateTarget)
+        );
+    }
+
+    #[test]
+    fn ne_parser_hyper_and_plain_open() {
+        assert_eq!(
+            parse_ne_action("--hyper demo --lang c -I"),
+            NeAction::Hyper {
+                name: "demo".to_string(),
+                lang: "c".to_string(),
+                open: true,
+            }
+        );
+        assert_eq!(
+            parse_ne_action("--hyper demo -I extra"),
+            NeAction::Error(NeError::UsageOpen)
+        );
+        assert_eq!(
+            parse_ne_action("--hyper demo extra"),
+            NeAction::Error(NeError::HyperUsage)
+        );
+        assert_eq!(
+            parse_ne_action("src/main.rs:42"),
+            NeAction::Open {
+                path: PathBuf::from("src/main.rs"),
+                line: Some(42),
+            }
+        );
+        assert_eq!(parse_ne_action("."), NeAction::Welcome);
+    }
+
+    #[test]
     fn parse_mv_args_needs_two_operands() {
         let (ops, _) = parse_mv_args("only-one");
         assert_eq!(ops.len(), 1);
@@ -1552,10 +2150,7 @@ mod tests {
 
     /// Fixture with two savepoints (`tp1` holding files, empty `tp2`) in a
     /// temp cwd. Returns the fixture root; the caller seeds `cfg.teleports`.
-    fn tp_pair_fixture() -> (
-        crate::utils::test_support::TempCwd,
-        std::path::PathBuf,
-    ) {
+    fn tp_pair_fixture() -> (crate::utils::test_support::TempCwd, std::path::PathBuf) {
         let cwd = crate::utils::test_support::TempCwd::with_fixture(
             &[("tp1/file.txt", "hello"), ("tp1/sub/deep.txt", "deep")],
             &["tp1", "tp1/sub", "tp2"],
@@ -1566,10 +2161,8 @@ mod tests {
 
     fn tp_pair_config(root: &std::path::Path) -> crate::config::Config {
         let mut cfg = crate::config::Config::default();
-        cfg.teleports
-            .insert("tp1".to_string(), root.join("tp1"));
-        cfg.teleports
-            .insert("tp2".to_string(), root.join("tp2"));
+        cfg.teleports.insert("tp1".to_string(), root.join("tp1"));
+        cfg.teleports.insert("tp2".to_string(), root.join("tp2"));
         cfg
     }
 
@@ -1608,8 +2201,7 @@ mod tests {
                 b"hello"
             );
             assert_eq!(
-                std::fs::read(root.join("tp2").join("new").join("sub").join("deep.txt"))
-                    .unwrap(),
+                std::fs::read(root.join("tp2").join("new").join("sub").join("deep.txt")).unwrap(),
                 b"deep"
             );
             assert!(root.join("tp1").exists());
@@ -1666,6 +2258,28 @@ mod tests {
     }
 
     #[test]
+    fn mkf_mkd_rmf_rmd_accept_teleport_savepoints() {
+        let (_cwd, root) = tp_pair_fixture();
+        crate::config::Config::with_test_config(tp_pair_config(&root), || {
+            let mut nav = Navigator::new().unwrap();
+            // mkd / mkf create inside the savepoint.
+            assert!(cmd_mkd("@tp2/build", &mut nav).is_ok());
+            assert!(root.join("tp2").join("build").is_dir());
+            assert!(cmd_mkf("@tp2/build/notes.md", &mut nav).is_ok());
+            assert!(root.join("tp2").join("build").join("notes.md").is_file());
+            // rmf removes a savepoint file and expands a `*` pattern there.
+            std::fs::write(root.join("tp2").join("build").join("a.log"), "a").unwrap();
+            assert!(cmd_rmf("@tp2/build/*.log", &mut nav).is_ok());
+            assert!(!root.join("tp2").join("build").join("a.log").exists());
+            assert!(cmd_rmf("@tp2/build/notes.md", &mut nav).is_ok());
+            assert!(!root.join("tp2").join("build").join("notes.md").exists());
+            // rmd removes the directory inside the savepoint.
+            assert!(cmd_rmd("@tp2/build", &mut nav).is_ok());
+            assert!(!root.join("tp2").join("build").exists());
+        });
+    }
+
+    #[test]
     fn rmf_pattern_expands_to_matching_files_only() {
         let dir = tempfile::tempdir().unwrap();
         std::fs::write(dir.path().join("a.log"), "a").unwrap();
@@ -1673,21 +2287,143 @@ mod tests {
         std::fs::write(dir.path().join("c.txt"), "c").unwrap();
         std::fs::create_dir(dir.path().join("d.log")).unwrap();
 
+        let nav = Navigator::for_test(dir.path());
+
         // `*.log` matches files only — the `d.log` directory is skipped.
-        let got = expand_rmf_pattern("*.log", dir.path());
+        let got = expand_rmf_pattern("*.log", &nav);
         assert_eq!(
             got,
             vec![dir.path().join("a.log"), dir.path().join("b.log"),]
         );
         // Prefix form and no-match form.
-        assert_eq!(expand_rmf_pattern("a*", dir.path()).len(), 1);
-        assert!(expand_rmf_pattern("*.zzz", dir.path()).is_empty());
+        assert_eq!(expand_rmf_pattern("a*", &nav).len(), 1);
+        assert!(expand_rmf_pattern("*.zzz", &nav).is_empty());
 
         // `sub/*.log` scopes into a subdirectory.
         std::fs::create_dir(dir.path().join("sub")).unwrap();
         std::fs::write(dir.path().join("sub/e.log"), "e").unwrap();
-        let got = expand_rmf_pattern("sub/*.log", dir.path());
+        let got = expand_rmf_pattern("sub/*.log", &nav);
         assert_eq!(got, vec![dir.path().join("sub/e.log")]);
+    }
+
+    #[test]
+    fn cp_pattern_copies_matches_into_dirs() {
+        let _cwd = crate::utils::test_support::TempCwd::with_fixture(
+            &[
+                ("a.py", "a"),
+                ("b.py", "b"),
+                ("c.txt", "c"),
+                ("sub/d.py", "d"),
+            ],
+            &["out"],
+        );
+        let mut nav = Navigator::new().unwrap();
+        // New dst directory is auto-created; only matching files move in.
+        assert!(cmd_cp("*.py newdir", &mut nav).is_ok());
+        assert_eq!(std::fs::read("newdir/a.py").unwrap(), b"a");
+        assert_eq!(std::fs::read("newdir/b.py").unwrap(), b"b");
+        assert!(!std::path::Path::new("newdir/c.txt").exists());
+        // `<dir>/*.py` scopes into a subdirectory.
+        assert!(cmd_cp("sub/*.py out", &mut nav).is_ok());
+        assert_eq!(std::fs::read("out/d.py").unwrap(), b"d");
+        // Sources stay in place for `cp`.
+        assert!(std::path::Path::new("a.py").exists());
+        assert!(std::path::Path::new("sub/d.py").exists());
+    }
+
+    #[test]
+    fn mv_pattern_moves_matches_into_dir() {
+        let _cwd = crate::utils::test_support::TempCwd::with_fixture(
+            &[("a.py", "a"), ("b.py", "b")],
+            &["dest"],
+        );
+        let mut nav = Navigator::new().unwrap();
+        assert!(cmd_mv("*.py dest", &mut nav).is_ok());
+        assert!(!std::path::Path::new("a.py").exists());
+        assert!(!std::path::Path::new("b.py").exists());
+        assert_eq!(std::fs::read("dest/a.py").unwrap(), b"a");
+        assert_eq!(std::fs::read("dest/b.py").unwrap(), b"b");
+    }
+
+    #[test]
+    fn cp_pattern_dst_must_be_a_dir() {
+        let _cwd = crate::utils::test_support::TempCwd::with_fixture(
+            &[("a.py", "a"), ("dst.txt", "x")],
+            &[],
+        );
+        let mut nav = Navigator::new().unwrap();
+        // A plain file destination is refused; nothing is copied.
+        assert!(cmd_cp("*.py dst.txt", &mut nav).is_ok());
+        assert_eq!(std::fs::read("dst.txt").unwrap(), b"x");
+        assert!(std::path::Path::new("a.py").exists());
+    }
+
+    #[test]
+    fn cp_pattern_no_match_creates_nothing() {
+        let _cwd = crate::utils::test_support::TempCwd::with_fixture(&[("a.py", "a")], &[]);
+        let mut nav = Navigator::new().unwrap();
+        assert!(cmd_cp("*.zzz out", &mut nav).is_ok());
+        // No match → no destination directory is created.
+        assert!(!std::path::Path::new("out").exists());
+    }
+
+    #[test]
+    fn cp_pattern_force_overwrites_targets() {
+        let _cwd = crate::utils::test_support::TempCwd::with_fixture(
+            &[("a.py", "new"), ("out/a.py", "old")],
+            &["out"],
+        );
+        let mut nav = Navigator::new().unwrap();
+        // Without -f the existing target is skipped.
+        assert!(cmd_cp("*.py out", &mut nav).is_ok());
+        assert_eq!(std::fs::read("out/a.py").unwrap(), b"old");
+        // With -f it is overwritten.
+        assert!(cmd_cp("*.py out -f", &mut nav).is_ok());
+        assert_eq!(std::fs::read("out/a.py").unwrap(), b"new");
+    }
+
+    #[test]
+    fn rmd_star_expands_to_subdirectories_only() {
+        let tmp = tempfile::tempdir().unwrap();
+        for d in ["alpha", "beta"] {
+            std::fs::create_dir(tmp.path().join(d)).unwrap();
+        }
+        std::fs::write(tmp.path().join("notes.txt"), "x").unwrap();
+
+        let nav = Navigator::for_test(tmp.path());
+        let got = expand_rmd_pattern("*", &nav);
+        assert_eq!(got.len(), 2, "got: {got:?}");
+        assert!(got.iter().all(|p| p.is_dir()), "got: {got:?}");
+        assert!(got.iter().any(|p| p.ends_with("alpha")));
+        assert!(got.iter().any(|p| p.ends_with("beta")));
+        assert!(!got.iter().any(|p| p.ends_with("notes.txt")));
+    }
+
+    #[test]
+    fn rmd_pattern_accepts_a_parent_directory() {
+        let tmp = tempfile::tempdir().unwrap();
+        std::fs::create_dir_all(tmp.path().join("keep/one")).unwrap();
+        std::fs::create_dir_all(tmp.path().join("keep/two")).unwrap();
+        std::fs::create_dir_all(tmp.path().join("other/three")).unwrap();
+
+        let nav = Navigator::for_test(tmp.path());
+        let pattern = format!("{}/*", tmp.path().join("keep").display());
+        let got = expand_rmd_pattern(&pattern, &nav);
+        assert_eq!(got.len(), 2, "got: {got:?}");
+        let keep = tmp.path().join("keep");
+        assert!(got.iter().all(|p| p.parent() == Some(keep.as_path())));
+    }
+
+    #[test]
+    fn rmd_pattern_ignores_files_named_like_the_stub() {
+        let tmp = tempfile::tempdir().unwrap();
+        std::fs::create_dir(tmp.path().join("old_dir")).unwrap();
+        std::fs::write(tmp.path().join("old_file.txt"), "x").unwrap();
+
+        let nav = Navigator::for_test(tmp.path());
+        let got = expand_rmd_pattern("old*", &nav);
+        assert_eq!(got.len(), 1, "got: {got:?}");
+        assert!(got[0].ends_with("old_dir"));
     }
 
     #[test]

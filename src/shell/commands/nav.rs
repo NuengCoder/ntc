@@ -1,4 +1,5 @@
-//! Navigation commands: `cd`, `back`, `godrive`, `gos`, `gosc`, `fgo`, `where`.
+//! Navigation commands: `cd`, `back`, `godrive`, `gos`, `gosc`, `fgo`, `where`
+//! (`where <binary>` resolves programs through PATH).
 
 use super::parse_search_args;
 use crate::explorer::human_readable_size;
@@ -126,7 +127,13 @@ pub fn cmd_back(args: &str, nav: &mut Navigator) -> Result<bool> {
     Ok(false)
 }
 
-pub fn cmd_where(nav: &mut Navigator) -> Result<bool> {
+pub fn cmd_where(args: &str, nav: &mut Navigator) -> Result<bool> {
+    // `where <binary>` resolves a program through PATH (like `which`);
+    // bare `where` keeps printing ntc's own locations.
+    if let Some(binary) = where_query(args) {
+        return where_binary(binary);
+    }
+
     let exe = std::env::current_exe().unwrap_or_default();
     let config_path = dirs::config_dir()
         .map(|d| d.join("ntc").join("config.toml"))
@@ -180,6 +187,77 @@ pub fn cmd_where(nav: &mut Navigator) -> Result<bool> {
         }
     } else {
         println!("  {}", t!("cmd.nav.where.config_missing").yellow());
+    }
+    println!();
+    Ok(false)
+}
+
+/// Trim surrounding whitespace/quotes from a `where` argument.
+/// `None` means "no binary given" (show ntc locations instead).
+fn where_query(args: &str) -> Option<&str> {
+    let trimmed = args.trim();
+    let unquoted = trimmed
+        .strip_prefix('"')
+        .and_then(|s| s.strip_suffix('"'))
+        .or_else(|| {
+            trimmed
+                .strip_prefix('\'')
+                .and_then(|s| s.strip_suffix('\''))
+        })
+        .unwrap_or(trimmed)
+        .trim();
+    if unquoted.is_empty() {
+        None
+    } else {
+        Some(unquoted)
+    }
+}
+
+/// Every path on `PATH` that provides `binary`, in PATH order. The first
+/// entry is the one the OS shell would run. PATHEXT/extension handling is
+/// delegated to the `which` crate; repeated PATH entries are reported once.
+fn search_path(binary: &str) -> Vec<PathBuf> {
+    let mut found: Vec<PathBuf> = Vec::new();
+    if let Ok(paths) = which::which_all(binary) {
+        for path in paths {
+            if !found.iter().any(|seen| same_path(seen, &path)) {
+                found.push(path);
+            }
+        }
+    }
+    found
+}
+
+/// PATH comparison: Windows paths are case-insensitive.
+fn same_path(a: &Path, b: &Path) -> bool {
+    #[cfg(windows)]
+    {
+        a.to_string_lossy()
+            .eq_ignore_ascii_case(&b.to_string_lossy())
+    }
+    #[cfg(not(windows))]
+    {
+        a == b
+    }
+}
+
+fn where_binary(binary: &str) -> Result<bool> {
+    let matches = search_path(binary);
+
+    if matches.is_empty() {
+        print_error(&t!("cmd.nav.where.not_found", binary));
+        return Ok(false);
+    }
+
+    println!();
+    println!("{}", t!("cmd.nav.where.path_title", binary).cyan().bold());
+    for (i, path) in matches.iter().enumerate() {
+        let marker = if i == 0 {
+            "✓".green().bold()
+        } else {
+            "•".dimmed()
+        };
+        println!("  {} {}", marker, path.display().to_string().cyan());
     }
     println!();
     Ok(false)
@@ -279,4 +357,25 @@ pub fn cmd_fgo(args: &str, nav: &mut Navigator) -> Result<bool> {
         print_error(&t!("cmd.nav.invalid_input"));
     }
     Ok(false)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{search_path, where_query};
+
+    #[test]
+    fn where_query_requires_a_binary_name() {
+        assert_eq!(where_query(""), None);
+        assert_eq!(where_query("   "), None);
+        assert_eq!(where_query("\"\""), None);
+        assert_eq!(where_query("git"), Some("git"));
+        assert_eq!(where_query("  git  "), Some("git"));
+        assert_eq!(where_query("\"git\""), Some("git"));
+        assert_eq!(where_query("'node'"), Some("node"));
+    }
+
+    #[test]
+    fn search_path_finds_nothing_for_an_unknown_binary() {
+        assert!(search_path("ntc-no-such-binary-xyzzy").is_empty());
+    }
 }

@@ -121,17 +121,17 @@ impl Editor {
                     self.status_msg = Some(t!("editor.nfe_create_exists", name));
                     return;
                 }
-                if let Some(parent) = path.parent() {
-                    if let Err(e) = std::fs::create_dir_all(parent) {
+                match crate::editor::init_file(&path) {
+                    Ok(true) => {}
+                    Ok(false) => {
+                        self.status_msg = Some(t!("editor.nfe_create_failed", name));
+                        return;
+                    }
+                    Err(e) => {
                         self.status_msg = Some(t!("editor.nfe_create_failed", e));
                         return;
                     }
                 }
-                if let Err(e) = std::fs::write(&path, "") {
-                    self.status_msg = Some(t!("editor.nfe_create_failed", e));
-                    return;
-                }
-                self.open_file(&path);
                 self.mode = Mode::Nfe;
                 self.sidebar.rebuild_tree();
                 self.nfe_select_path(&path);
@@ -523,7 +523,9 @@ fn parse_nfe_size(arg: &str) -> Option<Option<u8>> {
 mod tests {
     use super::{parse_nfe_size, resolve_new_path};
     use crate::editor::Mode;
-    use crossterm::event::{Event, KeyCode, KeyEvent, KeyModifiers, MouseButton, MouseEvent, MouseEventKind};
+    use crossterm::event::{
+        Event, KeyCode, KeyEvent, KeyModifiers, MouseButton, MouseEvent, MouseEventKind,
+    };
 
     fn nfe_test_editor(root: &std::path::Path) -> crate::editor::Editor {
         let path = root.join("probe.txt");
@@ -565,13 +567,18 @@ mod tests {
     }
 
     #[test]
-    fn nfe_prompt_creates_and_opens_file() {
+    fn nfe_prompt_creates_template_without_opening_tab() {
         let root = temp_root("file");
         let mut editor = nfe_test_editor(&root);
-        editor.nfe_cmd = Some("n hello.txt".to_string());
-        editor.run_nfe_command("n hello.txt");
-        assert!(root.join("hello.txt").is_file());
-        assert_eq!(editor.path, root.join("hello.txt"));
+        let original_path = editor.path.clone();
+        editor.nfe_cmd = Some("n hello.rs".to_string());
+        editor.run_nfe_command("n hello.rs");
+        assert!(root.join("hello.rs").is_file());
+        assert!(std::fs::read_to_string(root.join("hello.rs"))
+            .unwrap()
+            .contains("fn main"));
+        assert_eq!(editor.path, original_path);
+        assert!(editor.tabs.is_empty());
         assert!(editor.nfe_cmd.is_none());
     }
 
@@ -737,12 +744,16 @@ mod tests {
         let root = temp_root("keys");
         let mut editor = nfe_focused_editor(&root, 2);
         let mut out = std::io::stdout();
-        editor.handle_nfe_event(nfe_key(KeyCode::Char('i')), &mut out).unwrap();
+        editor
+            .handle_nfe_event(nfe_key(KeyCode::Char('i')), &mut out)
+            .unwrap();
         assert_eq!(editor.mode, Mode::Insert);
         assert!(!editor.sidebar.open);
 
         let mut editor = nfe_focused_editor(&root, 2);
-        editor.handle_nfe_event(nfe_key(KeyCode::Char('V')), &mut out).unwrap();
+        editor
+            .handle_nfe_event(nfe_key(KeyCode::Char('V')), &mut out)
+            .unwrap();
         assert_eq!(editor.mode, Mode::Visual);
         assert!(!editor.sidebar.open);
     }

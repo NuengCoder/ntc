@@ -211,16 +211,17 @@ pub(crate) fn list_targets(ranfile: &Ranfile) {
     println!();
     for name in names {
         let target = &ranfile.targets[name];
-        let has_cmd = if target.cmd.is_empty() {
-            String::new()
-        } else {
-            t!("ranfile.has_command")
-        };
         let dep_str = if target.deps.is_empty() {
             String::new()
         } else {
             format!("{}{}", t!("ranfile.depends_on"), target.deps.join(", "))
         };
-        println!("  {}{}{}", name.green(), dep_str.yellow(), has_cmd.dimmed());
+        println!("  {}{}", name.green(), dep_str.yellow());
+
+        // Show the actual command (with variables expanded), indented below the target.
+        if !target.cmd.is_empty() {
+            let cmd = expand_vars(&target.cmd, &ranfile.vars);
+            println!("    {}", cmd.dimmed());
+        }
     }
 }

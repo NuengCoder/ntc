@@ -30,6 +30,7 @@ pub fn cmd_config(args: &str, _nav: &mut Navigator) -> Result<bool> {
         "watch" | "w" => config_watch(subargs),
         "git" => config_git(subargs),
         "dir_view" | "dv" => config_dir_view(subargs),
+        "update_check" | "uc" => config_update_check(subargs),
         "qsc" => config_qsc(subargs),
         "serve" => config_serve(subargs),
         "lang" | "language" => config_lang(subargs),
@@ -44,6 +45,7 @@ pub fn cmd_config(args: &str, _nav: &mut Navigator) -> Result<bool> {
             println!("  {}", t!("help.config.autosuggest"));
             println!("  {}", t!("help.config.git"));
             println!("  {}", t!("help.config.dir_view"));
+            println!("  {}", t!("help.config.update_check"));
             println!("  {}", t!("help.config.threads"));
             println!("  {}", t!("help.config.history"));
             println!("  {}", t!("help.config.watch"));
@@ -60,7 +62,6 @@ pub fn cmd_config(args: &str, _nav: &mut Navigator) -> Result<bool> {
             println!("  {}", t!("help.config.resetcg"));
             println!("  {}", t!("help.config.restorecg"));
             println!("  {}", t!("help.config.local_init"));
-            println!("  {}", t!("help.config.local_init_all"));
             println!("  {}", t!("help.config.local_deinit"));
             println!("  {}", t!("help.config.local_help"));
             println!("  {}", t!("help.config.showenv"));
@@ -222,6 +223,31 @@ fn config_dir_view(args: &str) -> Result<bool> {
                 print_warning(&t!("msg.setDV.off"));
             }
             _ => print_error(&t!("msg.setDV.error")),
+        }
+    }
+    Ok(false)
+}
+
+fn config_update_check(args: &str) -> Result<bool> {
+    if args.is_empty() {
+        let state = if Config::global_get_update_check_enabled() {
+            "ON"
+        } else {
+            "OFF"
+        };
+        println!("{}", t!("msg.setUC.status", state));
+    } else {
+        let upper = args.to_uppercase();
+        match upper.as_str() {
+            "ON" => {
+                Config::global_set_update_check_enabled(true);
+                print_success(&t!("msg.setUC.on"));
+            }
+            "OFF" => {
+                Config::global_set_update_check_enabled(false);
+                print_warning(&t!("msg.setUC.off"));
+            }
+            _ => print_error(&t!("msg.setUC.error")),
         }
     }
     Ok(false)
@@ -417,7 +443,7 @@ fn config_watch(args: &str) -> Result<bool> {
                     Config::global_set_watch_trigger_alias(None);
                     print_success(&t!("cmd.config.watch.trigger_cleared"));
                 } else {
-                    let aliases = Config::global_get_run_aliases();
+                    let aliases = Config::get_run_aliases_merged();
                     if aliases.contains_key(&target.to_lowercase()) {
                         Config::global_set_watch_trigger_alias(Some(target.to_lowercase()));
                         print_success(&t!("cmd.config.watch.trigger_set", target));
@@ -615,6 +641,15 @@ pub fn cmd_showcg(_args: &str, _nav: &mut Navigator) -> Result<bool> {
         "│ {:<20} {:<42} │",
         t!("msg.showcg.label_dir_view"),
         if Config::global_get_dir_view_enabled() {
+            t!("status.on").green()
+        } else {
+            t!("status.off").red()
+        }
+    );
+    println!(
+        "│ {:<20} {:<42} │",
+        t!("msg.showcg.label_update_check"),
+        if Config::global_get_update_check_enabled() {
             t!("status.on").green()
         } else {
             t!("status.off").red()
@@ -962,112 +997,25 @@ pub fn cmd_local(args: &str, nav: &mut Navigator) -> Result<bool> {
     }
 }
 
-fn cmd_local_init(args: &str, nav: &mut Navigator) -> Result<bool> {
-    let current_dir = nav.current_path();
-    let ntconfig_path = current_dir.join("ntconfig.toml");
-    let export_all = args == "--all" || args == "-a";
-
-    if ntconfig_path.exists() {
-        println!();
-        println!("{}", t!("cmd.config.local.exists_warning").yellow().bold());
-        println!("Path: {}", ntconfig_path.display().to_string().cyan());
-        println!();
-        print!("{} ", t!("cmd.config.local.overwrite_prompt").red());
-        io::stdout().flush()?;
-
-        let mut input = String::new();
-        io::stdin().read_line(&mut input)?;
-        let input = input.trim().to_lowercase();
-
-        if input != "y" && input != "yes" {
-            println!("{}", t!("cmd.config.local.init_cancelled").dimmed());
-            return Ok(false);
-        }
-    }
-
-    let toml_content = if export_all {
-        let current_cfg = Config::read_global();
-
-        fn format_toml_array(items: &std::collections::HashSet<String>) -> String {
-            if items.is_empty() {
-                return "[]".to_string();
-            }
-            let mut sorted: Vec<&String> = items.iter().collect();
-            sorted.sort();
-            let mut result = String::new();
-            result.push_str("[\n");
-            for (i, item) in sorted.iter().enumerate() {
-                let comma = if i == sorted.len() - 1 { "" } else { "," };
-                result.push_str(&format!("    \"{}\"{}\n", item, comma));
-            }
-            result.push(']');
-            result
-        }
-
-        let ignored_dirs_str = format_toml_array(&current_cfg.ignored_directory_names);
-        let ignored_exts_str = format_toml_array(&current_cfg.ignored_extensions);
-        let extra_exts_str = format_toml_array(&current_cfg.extra_supported_extensions);
-        let ignored_files_str = format_toml_array(&current_cfg.ignored_files);
-        let extra_files_str = format_toml_array(&current_cfg.extra_supported_files);
-
-        let mut run_aliases_toml = String::new();
-        if !current_cfg.run_aliases.is_empty() {
-            run_aliases_toml.push_str("\n# Run aliases for this project\n");
-            run_aliases_toml.push_str("[run_aliases]\n");
-            let mut sorted_aliases: Vec<_> = current_cfg.run_aliases.iter().collect();
-            sorted_aliases.sort_by(|a, b| a.0.cmp(b.0));
-            for (name, cmd) in sorted_aliases {
-                run_aliases_toml.push_str(&format!(
-                    "{} = \"{}\"\n",
-                    name,
-                    cmd.replace('"', "\\\"")
-                ));
-            }
-        } else {
-            run_aliases_toml.push_str("\n# Run aliases for this project\n");
-            run_aliases_toml.push_str("# [run_aliases]\n");
-            run_aliases_toml.push_str("# test = \"cargo test\"\n");
-            run_aliases_toml.push_str("# build = \"cargo build --release\"\n");
-        }
-
-        format!(
-            r#"# ntc local configuration file
-# This file overrides global ignore/care and run alias settings for this directory only
-# Remove or comment out any line to use the global/default value
-
-# Ignored directories (case-insensitive)
-ignored_directory_names = {}
-
-# Ignored file extensions
-ignored_extensions = {}
-
-# Extra supported extensions (treat as text files)
-extra_supported_extensions = {}
-
-# Ignored specific files
-ignored_files = {}
-
-# Extra supported specific files
-extra_supported_files = {}
-{}"#,
-            ignored_dirs_str,
-            ignored_exts_str,
-            extra_exts_str,
-            ignored_files_str,
-            extra_files_str,
-            run_aliases_toml
-        )
-    } else {
-        r#"# ntc local configuration file
-# Place this file in any directory to override global ignore/care and run alias settings
-# 
+/// Commented template written by `local init` (and `init --local`).
+///
+/// The local file is a thin layer on top of the global config: local entries
+/// take priority, the global entries keep working for everything the local
+/// file does not mention, and the global config is never modified.
+const LOCAL_CONFIG_TEMPLATE: &str = r#"# ntc local configuration file
+# Place this file in any directory to add project-specific ignore/care and
+# run alias settings.
+#
 # INSTRUCTIONS:
 # 1. Remove the '#' from lines you want to enable
 # 2. Add your project-specific values
 # 3. Run 'ntc' in this directory to activate
 #
-# For quick setup, run: local init --all  (copies your current global settings)
-
+# PRECEDENCE:
+# - Local entries win over the global ones with the same name
+# - Global entries keep working for everything not listed here
+# - The global config is never changed by this file
+#
 # Ignored directories (case-insensitive)
 # ignored_directory_names = [
 #     "target",
@@ -1100,39 +1048,68 @@ extra_supported_files = {}
 #     "Dockerfile",
 # ]
 
+# Cared names are never ignored here, even when the global config ignores
+# them (the global config itself stays untouched).
+# cared_directory_names = [
+#     "target",
+# ]
+#
+# cared_extensions = [
+#     "log",
+# ]
+#
+# cared_files = [
+#     "Cargo.lock",
+# ]
+
 # Run aliases for this project only
 # [run_aliases]
 # test = "cargo test"
 # build = "cargo build --release"
 # fb = "flutter clean && flutter pub get"
 # py = "python $x.py"   # parameterised: call as py(filename)
-"#
-        .to_string()
-    };
+"#;
 
-    match std::fs::write(&ntconfig_path, toml_content) {
+fn cmd_local_init(args: &str, nav: &mut Navigator) -> Result<bool> {
+    let current_dir = nav.current_path();
+    let ntconfig_path = current_dir.join("ntconfig.toml");
+
+    // `--all` used to copy the global settings into the local file, which
+    // replaced the global behaviour with a stale copy. It is gone: a local
+    // config can no longer shadow the global one wholesale.
+    if args == "--all" || args == "-a" {
+        print_error(&t!("cmd.config.local.init_all_removed"));
+        return Ok(false);
+    }
+
+    if ntconfig_path.exists() {
+        println!();
+        println!("{}", t!("cmd.config.local.exists_warning").yellow().bold());
+        println!("Path: {}", ntconfig_path.display().to_string().cyan());
+        println!();
+        print!("{} ", t!("cmd.config.local.overwrite_prompt").red());
+        io::stdout().flush()?;
+
+        let mut input = String::new();
+        io::stdin().read_line(&mut input)?;
+        let input = input.trim().to_lowercase();
+
+        if input != "y" && input != "yes" {
+            println!("{}", t!("cmd.config.local.init_cancelled").dimmed());
+            return Ok(false);
+        }
+    }
+
+    match std::fs::write(&ntconfig_path, LOCAL_CONFIG_TEMPLATE) {
         Ok(_) => {
-            if export_all {
-                print_success(&t!(
-                    "cmd.config.local.created_export",
-                    current_dir.display()
-                ));
-                println!();
-                println!("{}", t!("cmd.config.local.export_valid").green());
-                println!("  {}", t!("cmd.config.local.export_ignores"));
-                println!("  {}", t!("cmd.config.local.export_extras"));
-                println!("  {}", t!("cmd.config.local.export_aliases"));
-                Config::reload_global();
-            } else {
-                print_success(&t!(
-                    "cmd.config.local.created_template",
-                    current_dir.display()
-                ));
-                println!();
-                println!("{}", t!("cmd.config.local.template_hint").yellow());
-                println!("{}", t!("cmd.config.local.template_edit_hint").dimmed());
-                println!("{}", t!("cmd.config.local.template_all_hint").dimmed());
-            }
+            print_success(&t!(
+                "cmd.config.local.created_template",
+                current_dir.display()
+            ));
+            println!();
+            println!("{}", t!("cmd.config.local.template_hint").yellow());
+            println!("{}", t!("cmd.config.local.template_edit_hint").dimmed());
+            println!("{}", t!("cmd.config.local.precedence_hint").dimmed());
             println!();
             println!("{}", t!("cmd.config.local.tip_global").dimmed());
         }
@@ -1196,26 +1173,163 @@ fn cmd_local_help() {
     );
     println!();
     println!("  local init                 Create a commented ntconfig.toml template");
-    println!("  local init --all           Export current global settings to ntconfig.toml");
     println!("  local deinit               Remove ntconfig.toml from current directory");
     println!("  local help                 Show this help");
     println!();
-    println!("The local ntconfig.toml overrides global ignore/care and run alias settings");
-    println!("for the current directory only. It does NOT affect teleports, output path,");
-    println!("max depth, or other global settings.");
+    println!("The local ntconfig.toml adds project-specific ignore/care and run alias");
+    println!("settings for the current directory only. Local entries take priority;");
+    println!("global entries keep working for everything the local file does not");
+    println!("define, and the global config is never modified.");
+    println!();
+    println!("Use '-g' / '--global' on 'ral', 'ignore', 'care' and 'igcare import' to");
+    println!("write to the global config from inside a project directory.");
     println!();
 }
 
-// ── top-level init: create both NTCRANFILE.toml and ntconfig.toml ─────────
+// ── OpenCode scaffold (`init --opencode` / `deinit --opencode`) ───────────
+//
+// Template files live under `src/shell/commands/opencode_template/` and are
+// embedded into the binary, so `ntc init --opencode` can scaffold a project
+// (`.opencode/` + tools/agents/opencode.jsonc) without any external files.
+
+/// Files written by `init --opencode`, as `(path relative to .opencode/, contents)`.
+const OPENCODE_TEMPLATES: &[(&str, &str)] = &[
+    ("tools/ntc.ts", include_str!("opencode_template/ntc.ts")),
+    (
+        "agents/ntc-plan.md",
+        include_str!("opencode_template/ntc-plan.md"),
+    ),
+    (
+        "agents/ntc-impl.md",
+        include_str!("opencode_template/ntc-impl.md"),
+    ),
+    (
+        "opencode.jsonc",
+        include_str!("opencode_template/opencode.jsonc"),
+    ),
+];
+
+/// Prompt for destructive confirmation unless `force` is set. Returns `true`
+/// when the caller may proceed.
+fn confirm_delete(path: &Path, force: bool) -> Result<bool> {
+    if force {
+        return Ok(true);
+    }
+    print!(
+        "{} {}",
+        "⚠".red().bold(),
+        t!("cmd.config.deinit.confirm", path.display()).yellow()
+    );
+    io::stdout().flush()?;
+    let mut input = String::new();
+    io::stdin().read_line(&mut input)?;
+    Ok(input.trim().to_lowercase() == "y" || input.trim().to_lowercase() == "yes")
+}
+
+/// Create `.opencode/` with `tools/`, `agents/` and the bundled templates.
+/// Existing files are skipped unless `force` is set (which overwrites only the
+/// template files, never the directory or any unrelated file).
+fn cmd_init_opencode(force: bool) {
+    let cwd = match std::env::current_dir() {
+        Ok(d) => d,
+        Err(e) => {
+            print_error(&t!("cmd.config.init.create_failed", "current directory", e));
+            return;
+        }
+    };
+    let base = cwd.join(".opencode");
+
+    for (rel, _) in OPENCODE_TEMPLATES {
+        let path = base.join(rel);
+        if let Some(parent) = path.parent() {
+            if let Err(e) = std::fs::create_dir_all(parent) {
+                print_error(&t!("cmd.config.init.create_failed", parent.display(), e));
+            }
+        }
+    }
+
+    for (rel, contents) in OPENCODE_TEMPLATES {
+        let path = base.join(rel);
+        if path.exists() && !force {
+            print_warning(&t!("cmd.config.init.exists_warn", path.display()));
+            continue;
+        }
+        match std::fs::write(&path, contents) {
+            Ok(_) => print_success(&t!("cmd.config.init.created", path.display())),
+            Err(e) => print_error(&t!("cmd.config.init.create_failed", path.display(), e)),
+        }
+    }
+
+    print_success(&t!("cmd.config.init.opencode_ready", base.display()));
+}
+
+/// Remove the bundled OpenCode scaffold files, then prune the `tools/`,
+/// `agents/` and `.opencode/` directories only if they are empty. Files added
+/// by the user (and their directories) are left untouched.
+fn cmd_deinit_opencode(force: bool) -> Result<()> {
+    let cwd = match std::env::current_dir() {
+        Ok(d) => d,
+        Err(e) => {
+            print_error(&t!(
+                "cmd.config.deinit.remove_failed",
+                "current directory",
+                e
+            ));
+            return Ok(());
+        }
+    };
+    let base = cwd.join(".opencode");
+    if !base.exists() {
+        print_warning(&t!("cmd.config.deinit.opencode_not_found"));
+        return Ok(());
+    }
+
+    if !confirm_delete(&base, force)? {
+        println!("{}", t!("cmd.config.deinit.skipped").dimmed());
+        return Ok(());
+    }
+
+    for (rel, _) in OPENCODE_TEMPLATES {
+        let path = base.join(rel);
+        if !path.exists() {
+            continue;
+        }
+        match std::fs::remove_file(&path) {
+            Ok(_) => print_success(&t!("cmd.config.deinit.removed", path.display())),
+            Err(e) => print_error(&t!("cmd.config.deinit.remove_failed", path.display(), e)),
+        }
+    }
+
+    // `remove_dir` only succeeds when the directory is empty, so user files
+    // survive and keep their parent directory in place.
+    for rel in ["tools", "agents", ""] {
+        let dir = if rel.is_empty() {
+            base.clone()
+        } else {
+            base.join(rel)
+        };
+        if dir.is_dir() {
+            let _ = std::fs::remove_dir(&dir);
+        }
+    }
+
+    Ok(())
+}
+
+// ── top-level init: create NTCRANFILE.toml, ntconfig.toml, .opencode/ ─────
 
 use crate::ranfile::parser::{RANFILE_NAME, RANFILE_TEMPLATE};
 
 pub fn cmd_init(args: &str, nav: &mut Navigator) -> Result<bool> {
-    let args = args.trim().to_lowercase();
-    let do_ran = args.is_empty() || args == "--all" || args == "-a" || args == "--ran";
-    let do_local = args.is_empty() || args == "--all" || args == "-a" || args == "--local";
+    let tokens: Vec<String> = args.split_whitespace().map(|s| s.to_lowercase()).collect();
+    let empty = tokens.is_empty();
+    let has = |flag: &str| tokens.iter().any(|t| t == flag);
+    let force = has("--force") || has("-f");
+    let do_ran = empty || has("--all") || has("-a") || has("--ran");
+    let do_local = empty || has("--all") || has("-a") || has("--local");
+    let do_opencode = has("--all") || has("-a") || has("--opencode") || has("-oc");
 
-    if !do_ran && !do_local {
+    if !do_ran && !do_local && !do_opencode {
         print_error(&t!("cmd.config.init.usage"));
         return Ok(false);
     }
@@ -1246,58 +1360,15 @@ pub fn cmd_init(args: &str, nav: &mut Navigator) -> Result<bool> {
         if ntconfig_path.exists() {
             print_warning(&t!("cmd.config.init.local_exists"));
         } else {
-            let toml_content = r#"# ntc local configuration file
-# Place this file in any directory to override global ignore/care and run alias settings
-#
-# INSTRUCTIONS:
-# 1. Remove the '#' from lines you want to enable
-# 2. Add your project-specific values
-#
-# For quick setup, run: local init --all  (copies your current global settings)
-
-# Ignored directories (case-insensitive)
-# ignored_directory_names = [
-#     "target",
-#     "node_modules",
-#     ".git",
-# ]
-
-# Ignored file extensions
-# ignored_extensions = [
-#     "log",
-#     "tmp",
-#     "bak",
-# ]
-
-# Extra supported extensions (treat as text files)
-# extra_supported_extensions = [
-#     "myext",
-#     "custom",
-# ]
-
-# Ignored specific files
-# ignored_files = [
-#     "Cargo.lock",
-#     "package-lock.json",
-# ]
-
-# Extra supported specific files
-# extra_supported_files = [
-#     ".env",
-#     "Dockerfile",
-# ]
-
-# Run aliases for this project only
-# [run_aliases]
-# test = "cargo test"
-# build = "cargo build --release"
-"#;
-
-            match std::fs::write(&ntconfig_path, toml_content) {
+            match std::fs::write(&ntconfig_path, LOCAL_CONFIG_TEMPLATE) {
                 Ok(_) => print_success(&format!("Created {}", ntconfig_path.display())),
                 Err(e) => print_error(&format!("Failed to create ntconfig.toml: {}", e)),
             }
         }
+    }
+
+    if do_opencode {
+        cmd_init_opencode(force);
     }
 
     Ok(false)
@@ -1306,11 +1377,15 @@ pub fn cmd_init(args: &str, nav: &mut Navigator) -> Result<bool> {
 // ── top-level deinit: remove both NTCRANFILE.toml and ntconfig.toml ──────
 
 pub fn cmd_deinit(args: &str, _nav: &mut Navigator) -> Result<bool> {
-    let args = args.trim().to_lowercase();
-    let do_ran = args.is_empty() || args == "--all" || args == "-a" || args == "--ran";
-    let do_local = args.is_empty() || args == "--all" || args == "-a" || args == "--local";
+    let tokens: Vec<String> = args.split_whitespace().map(|s| s.to_lowercase()).collect();
+    let empty = tokens.is_empty();
+    let has = |flag: &str| tokens.iter().any(|t| t == flag);
+    let force = has("--force") || has("-f");
+    let do_ran = empty || has("--all") || has("-a") || has("--ran");
+    let do_local = empty || has("--all") || has("-a") || has("--local");
+    let do_opencode = has("--all") || has("-a") || has("--opencode") || has("-oc");
 
-    if !do_ran && !do_local {
+    if !do_ran && !do_local && !do_opencode {
         print_error(&t!("cmd.config.deinit.usage"));
         return Ok(false);
     }
@@ -1330,25 +1405,13 @@ pub fn cmd_deinit(args: &str, _nav: &mut Navigator) -> Result<bool> {
         let path = cwd.join(RANFILE_NAME);
         if !path.exists() {
             print_warning(&t!("cmd.config.deinit.not_found", RANFILE_NAME));
-        } else {
-            print!(
-                "{} {}",
-                "⚠".red().bold(),
-                t!("cmd.config.deinit.confirm", path.display()).yellow()
-            );
-            io::stdout().flush()?;
-            let mut input = String::new();
-            io::stdin().read_line(&mut input)?;
-            if input.trim().to_lowercase() == "y" || input.trim().to_lowercase() == "yes" {
-                match std::fs::remove_file(&path) {
-                    Ok(_) => print_success(&t!("cmd.config.deinit.removed", path.display())),
-                    Err(e) => {
-                        print_error(&t!("cmd.config.deinit.remove_failed", path.display(), e))
-                    }
-                }
-            } else {
-                println!("{}", t!("cmd.config.deinit.skipped").dimmed());
+        } else if confirm_delete(&path, force)? {
+            match std::fs::remove_file(&path) {
+                Ok(_) => print_success(&t!("cmd.config.deinit.removed", path.display())),
+                Err(e) => print_error(&t!("cmd.config.deinit.remove_failed", path.display(), e)),
             }
+        } else {
+            println!("{}", t!("cmd.config.deinit.skipped").dimmed());
         }
     }
 
@@ -1367,27 +1430,21 @@ pub fn cmd_deinit(args: &str, _nav: &mut Navigator) -> Result<bool> {
         let path = cwd.join("ntconfig.toml");
         if !path.exists() {
             print_warning(&t!("cmd.config.deinit.local_not_found"));
-        } else {
-            print!(
-                "{} {}",
-                "⚠".red().bold(),
-                t!("cmd.config.deinit.confirm", path.display()).yellow()
-            );
-            io::stdout().flush()?;
-            let mut input = String::new();
-            io::stdin().read_line(&mut input)?;
-            if input.trim().to_lowercase() == "y" || input.trim().to_lowercase() == "yes" {
-                match std::fs::remove_file(&path) {
-                    Ok(_) => {
-                        print_success(&t!("cmd.config.deinit.local_removed"));
-                        Config::reload_global();
-                    }
-                    Err(e) => print_error(&t!("cmd.config.deinit.local_remove_failed", e)),
+        } else if confirm_delete(&path, force)? {
+            match std::fs::remove_file(&path) {
+                Ok(_) => {
+                    print_success(&t!("cmd.config.deinit.local_removed"));
+                    Config::reload_global();
                 }
-            } else {
-                println!("{}", t!("cmd.config.deinit.skipped").dimmed());
+                Err(e) => print_error(&t!("cmd.config.deinit.local_remove_failed", e)),
             }
+        } else {
+            println!("{}", t!("cmd.config.deinit.skipped").dimmed());
         }
+    }
+
+    if do_opencode {
+        cmd_deinit_opencode(force)?;
     }
 
     Ok(false)
@@ -1396,6 +1453,39 @@ pub fn cmd_deinit(args: &str, _nav: &mut Navigator) -> Result<bool> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// `local init` writes the commented template; `local init --all` is
+    /// rejected and writes nothing.
+    #[test]
+    fn local_init_writes_template_and_rejects_all() {
+        let _cwd = crate::utils::test_support::TempCwd::with_fixture(&[], &[]);
+        let mut nav = Navigator::new().unwrap();
+
+        // The removed flag must not create a file.
+        cmd_local_init("--all", &mut nav).unwrap();
+        assert!(!std::path::Path::new("ntconfig.toml").exists());
+
+        cmd_local_init("", &mut nav).unwrap();
+        let content = std::fs::read_to_string("ntconfig.toml").unwrap();
+        assert!(content.contains("run_aliases"), "got:\n{}", content);
+        // The template stays fully commented out.
+        assert!(
+            !content
+                .lines()
+                .any(|l| l.starts_with("ignored_directory_names")),
+            "got:\n{}",
+            content
+        );
+        assert!(
+            !content
+                .lines()
+                .any(|l| l.starts_with("cared_directory_names")),
+            "got:\n{}",
+            content
+        );
+        // The old "copy the global settings" hint is gone.
+        assert!(!content.contains("local init --all"), "got:\n{}", content);
+    }
 
     #[test]
     fn serve_config_rejects_unknown_service() {
@@ -1410,17 +1500,15 @@ mod tests {
 
     #[test]
     fn serve_config_set_then_show_roundtrip() {
-        // The setter path persists via save() to the real config.toml
-        // (no other test writes it). Back it up and restore afterwards
-        // so the suite never leaves residue behind. The file restore runs
-        // INSIDE the serial guard so a parallel test's save() can never
-        // land after our restore (a stale-default write was once observed
-        // clobbering a live [serve.chess] table).
-        let cfg_path = dirs::config_dir().map(|d| d.join("ntc").join("config.toml"));
-        let backup: Option<(PathBuf, Option<Vec<u8>>)> = cfg_path.clone().map(|p| {
-            let prev = std::fs::read(&p).ok();
-            (p, prev)
-        });
+        // The setter path persists via save() to the test config file
+        // (tests never write the real config.toml). Back it up and restore
+        // afterwards so the suite never leaves residue behind. The file
+        // restore runs INSIDE the serial guard so a parallel test's save()
+        // can never land after our restore (a stale-default write was once
+        // observed clobbering a live [serve.chess] table).
+        let cfg_path = crate::config::test_config_file();
+        let backup: Option<(PathBuf, Option<Vec<u8>>)> =
+            Some((cfg_path.clone(), std::fs::read(&cfg_path).ok()));
         fn restore(backup: &Option<(PathBuf, Option<Vec<u8>>)>) {
             if let Some((p, prev)) = backup {
                 match prev {
@@ -1460,5 +1548,65 @@ mod tests {
         });
         // Best-effort outer restore (covers a panic inside the guard).
         restore(&backup);
+    }
+
+    #[test]
+    fn opencode_scaffold_create_skip_and_force() {
+        let _cwd = crate::utils::test_support::TempCwd::with_fixture(&[], &[]);
+        let base = std::env::current_dir().unwrap().join(".opencode");
+
+        cmd_init_opencode(false);
+        assert!(base.join("tools/ntc.ts").is_file());
+        assert!(base.join("agents/ntc-plan.md").is_file());
+        assert!(base.join("agents/ntc-impl.md").is_file());
+        assert!(base.join("opencode.jsonc").is_file());
+        assert_eq!(
+            std::fs::read_to_string(base.join("opencode.jsonc")).unwrap(),
+            include_str!("opencode_template/opencode.jsonc")
+        );
+
+        // User edits survive a re-run without --force.
+        std::fs::write(base.join("tools/ntc.ts"), "custom").unwrap();
+        cmd_init_opencode(false);
+        assert_eq!(
+            std::fs::read_to_string(base.join("tools/ntc.ts")).unwrap(),
+            "custom"
+        );
+
+        // --force restores the bundled template (files only).
+        cmd_init_opencode(true);
+        assert_eq!(
+            std::fs::read_to_string(base.join("tools/ntc.ts")).unwrap(),
+            include_str!("opencode_template/ntc.ts")
+        );
+    }
+
+    #[test]
+    fn opencode_deinit_prunes_only_scaffold() {
+        let _cwd = crate::utils::test_support::TempCwd::with_fixture(&[], &[]);
+        let base = std::env::current_dir().unwrap().join(".opencode");
+
+        // Scenario 1: a pure scaffold is removed completely.
+        cmd_init_opencode(false);
+        cmd_deinit_opencode(true).unwrap();
+        assert!(!base.exists(), "pure scaffold should be fully removed");
+
+        // Scenario 2: a user file keeps its directory (and .opencode/) alive.
+        cmd_init_opencode(false);
+        std::fs::write(base.join("tools/mine.ts"), "x").unwrap();
+        cmd_deinit_opencode(true).unwrap();
+
+        assert!(!base.join("agents/ntc-plan.md").exists());
+        assert!(
+            !base.join("agents").exists(),
+            "empty agents/ should be pruned"
+        );
+        assert!(!base.join("opencode.jsonc").exists());
+        assert!(
+            base.join("tools/mine.ts").is_file(),
+            "user file must survive"
+        );
+        assert!(base.join("tools").is_dir(), "dir with a user file stays");
+        assert!(base.exists(), ".opencode/ stays while a user file remains");
     }
 }

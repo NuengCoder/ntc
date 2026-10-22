@@ -762,9 +762,9 @@ fn attacks_square(pos: &Position, from: u8, sq: u8) -> bool {
     let dr = tr - rf;
     match piece.kind {
         Kind::Pawn => dr == piece.color.pawn_dir() && df.abs() == 1,
-        Kind::Knight => {
-            KNIGHT_STEPS.iter().any(|(sdf, sdr)| *sdf == df && *sdr == dr)
-        }
+        Kind::Knight => KNIGHT_STEPS
+            .iter()
+            .any(|(sdf, sdr)| *sdf == df && *sdr == dr),
         Kind::King => df.abs() <= 1 && dr.abs() <= 1,
         Kind::Bishop | Kind::Rook | Kind::Queen => {
             let straight = df == 0 || dr == 0;
@@ -811,10 +811,7 @@ fn attacks_square(pos: &Position, from: u8, sq: u8) -> bool {
 fn battery_aligned(kind: Kind, straight: bool) -> bool {
     matches!(
         (straight, kind),
-        (true, Kind::Rook)
-            | (true, Kind::Queen)
-            | (false, Kind::Bishop)
-            | (false, Kind::Queen)
+        (true, Kind::Rook) | (true, Kind::Queen) | (false, Kind::Bishop) | (false, Kind::Queen)
     )
 }
 
@@ -886,9 +883,7 @@ fn attackers_of(
                         {
                             break;
                         }
-                    } else if battery_aligned(piece.kind, straight)
-                        && !pins.contains_key(&s)
-                    {
+                    } else if battery_aligned(piece.kind, straight) && !pins.contains_key(&s) {
                         out.push(piece.kind);
                     } else if direct_credit(pos, s, sq, piece, pins).is_none() {
                         // Own blocker that takes no part in the exchange
@@ -934,9 +929,7 @@ pub fn pinned_map(pos: &Position) -> std::collections::HashMap<u8, u8> {
                             nf += df;
                             nr += dr;
                         }
-                        Some(piece)
-                            if piece.color == king_color && piece.kind != Kind::King =>
-                        {
+                        Some(piece) if piece.color == king_color && piece.kind != Kind::King => {
                             break Some(s)
                         }
                         // Own king (impossible — kings can't be adjacent... the
@@ -1121,10 +1114,7 @@ fn value_triggered(victim: Kind, attacker: Kind) -> bool {
     match victim {
         Kind::Pawn | Kind::King => false,
         Kind::Knight | Kind::Bishop => attacker == Kind::Pawn,
-        Kind::Rook => matches!(
-            attacker,
-            Kind::Pawn | Kind::Knight | Kind::Bishop
-        ),
+        Kind::Rook => matches!(attacker, Kind::Pawn | Kind::Knight | Kind::Bishop),
         Kind::Queen => matches!(
             attacker,
             Kind::Pawn | Kind::Knight | Kind::Bishop | Kind::Rook
@@ -1166,10 +1156,7 @@ pub fn hanging_squares(pos: &Position) -> Vec<u8> {
         if attackers.is_empty() {
             continue;
         }
-        if attackers
-            .iter()
-            .any(|a| value_triggered(piece.kind, *a))
-        {
+        if attackers.iter().any(|a| value_triggered(piece.kind, *a)) {
             if !out.contains(&sq) {
                 out.push(sq);
             }
@@ -1959,7 +1946,10 @@ mod tests {
         });
         put(&mut pos, "e2", Kind::Knight, Color::White);
         let pins = pinned_map(&pos);
-        assert_eq!(pins.get(&parse_sq("e2").unwrap()), Some(&parse_sq("e8").unwrap()));
+        assert_eq!(
+            pins.get(&parse_sq("e2").unwrap()),
+            Some(&parse_sq("e8").unwrap())
+        );
         assert_eq!(pinned_squares(&pos), vec![parse_sq("e2").unwrap()]);
         put(&mut pos, "e3", Kind::Pawn, Color::White);
         assert!(pinned_map(&pos).is_empty());
@@ -2018,7 +2008,10 @@ mod tests {
         put(&mut pos, "a5", Kind::Bishop, Color::Black);
         put(&mut pos, "e3", Kind::Knight, Color::Black);
         let pins = pinned_map(&pos);
-        assert_eq!(pins.get(&parse_sq("d2").unwrap()), Some(&parse_sq("a5").unwrap()));
+        assert_eq!(
+            pins.get(&parse_sq("d2").unwrap()),
+            Some(&parse_sq("a5").unwrap())
+        );
         let hot = hanging_squares(&pos);
         assert!(
             hot.contains(&parse_sq("a5").unwrap()),

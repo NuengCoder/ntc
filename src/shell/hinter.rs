@@ -23,10 +23,17 @@ fn builtin_commands() -> Vec<&'static str> {
         "back",
         "b",
         "view",
+        "viewf",
+        "viewd",
         "ls",
         "report",
         "txtc",
         "txtf",
+        "head",
+        "tail",
+        "betw",
+        "sort",
+        "rev",
         "config",
         "clear",
         "version",
@@ -115,8 +122,10 @@ fn builtin_commands() -> Vec<&'static str> {
         "tmprt",
         "git",
         "ndb",
+        "nms",
         "nsheet",
         "nssh",
+        "fake",
         "mkf",
         "mkd",
         "rmf",
@@ -199,12 +208,12 @@ pub(crate) fn alias_names_for_command(parts: &[&str]) -> Vec<String> {
 
     match parts[1].to_lowercase().as_str() {
         "rm" | "remove" | "info" | "edit" => {
-            let aliases = Config::global_get_run_aliases();
+            let aliases = Config::get_run_aliases_merged();
             aliases.into_keys().collect()
         }
         "rnm" | "rename" => {
             // rnm <old> to <new> — suggest alias names for the first argument
-            let aliases = Config::global_get_run_aliases();
+            let aliases = Config::get_run_aliases_merged();
             aliases.into_keys().collect()
         }
         _ => vec![],
@@ -234,37 +243,105 @@ pub(crate) fn hint_list_names_for_command(parts: &[&str]) -> Vec<String> {
     }
 }
 
-/// Content completion for `@tp/rest` in an `mv`/`move`/`cp` src slot:
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum TpEntryMode {
+    All,
+    Files,
+    Dirs,
+}
+
+/// Which entry kinds a `@tp/sub` completion should list for `cmd`.
+fn tp_entry_mode_for(cmd: &str, parent_parts: &[&str]) -> TpEntryMode {
+    match cmd {
+        "viewf" | "txtf" => TpEntryMode::Files,
+        "viewd" => TpEntryMode::Dirs,
+        "view" => {
+            let file = parent_parts
+                .iter()
+                .any(|t| matches!(t.to_lowercase().as_str(), "-f" | "--file"));
+            let dir = parent_parts
+                .iter()
+                .any(|t| matches!(t.to_lowercase().as_str(), "-dir" | "--directory"));
+            match (file, dir) {
+                (true, false) => TpEntryMode::Files,
+                (false, true) => TpEntryMode::Dirs,
+                _ => TpEntryMode::All,
+            }
+        }
+        _ => TpEntryMode::All,
+    }
+}
+
+/// True when `txtf`'s optional file slot is still open.
+fn txtf_file_slot_open(parent_parts: &[&str]) -> bool {
+    if let Some(last) = parent_parts.last().map(|s| s.to_lowercase()) {
+        if last == "--head" || last == "--tail" || last == "--betw" {
+            return false;
+        }
+    }
+    let mut i = 1;
+    while i < parent_parts.len() {
+        let lower = parent_parts[i].to_lowercase();
+        if lower == "--head" || lower == "--tail" || lower == "--betw" {
+            i += 2; // skip the flag and its value
+            continue;
+        }
+        if !parent_parts[i].starts_with('-') {
+            return false;
+        }
+        i += 1;
+    }
+    true
+}
+
+/// Content completion for `@tp/rest`:
 /// longest savepoint-name prefix (mirrors `resolve_subpath`), remaining
 /// path listed from the savepoint root (files plain, dirs with `/`).
 /// Returns `None` when this frag is not a subpath shape, the slot is not
-/// an mv/cp src slot, or no savepoint prefix matches (caller falls back
-/// to savepoint-name completion).
+/// open, or no savepoint prefix matches (caller falls back to
+/// savepoint-name completion).
 fn tp_subpath_candidates(
     parent_parts: &[&str],
     last_frag: &str,
     tp_part: &str,
 ) -> Option<Vec<String>> {
-    if !tp_part.contains('/') {
+    if !tp_part.contains('/') || parent_parts.is_empty() {
         return None;
     }
-    if parent_parts.is_empty()
-        || !matches!(
-            parent_parts[0].to_lowercase().as_str(),
-            "mv" | "move" | "cp"
-        )
-    {
-        return None;
-    }
-    // Src slot only: zero non-flag operands so far (`-f`/`--force`
-    // skipped like `parse_mv_args`). Dst keeps existing behavior.
-    let operands_given = parent_parts[1..]
-        .iter()
-        .filter(|t| !t.starts_with('-'))
-        .count();
-    if operands_given > 0 {
-        return None;
-    }
+    let cmd = parent_parts[0].to_lowercase();
+    let mode = match cmd.as_str() {
+        // mv/cp src slot only: zero non-flag operands so far
+        // (`-f`/`--force` skipped like `parse_mv_args`).
+        "mv" | "move" | "cp" => {
+            let operands_given = parent_parts[1..]
+                .iter()
+                .filter(|t| !t.starts_with('-'))
+                .count();
+            if operands_given > 0 {
+                return None;
+            }
+            TpEntryMode::All
+        }
+        // Target path is already filled (flags/values don't count).
+        "view" | "viewf" | "viewd" => {
+            if in_ext_slot(parent_parts) || view_path_taken(&parent_parts[1..]) {
+                return None;
+            }
+            tp_entry_mode_for(&cmd, parent_parts)
+        }
+        "txtf" => {
+            if !txtf_file_slot_open(parent_parts) {
+                return None;
+            }
+            TpEntryMode::Files
+        }
+        // `mkf`/`rmf` take file lists and `mkd`/`rmd` directory lists; every
+        // comma-separated operand slot resolves `@tp/sub` (files mode still
+        // offers directories with a trailing `/` so sub-paths stay reachable).
+        "mkf" | "rmf" => TpEntryMode::Files,
+        "mkd" | "rmd" => TpEntryMode::Dirs,
+        _ => return None,
+    };
     let names = TeleportManager::get_all();
     // Split positions, longest head first (`@a/b/c` prefers savepoint
     // `a/b` over `a` — same rule as `resolve_subpath`).
@@ -300,7 +377,13 @@ fn tp_subpath_candidates(
                         Some(n) => n.to_string(),
                         None => continue,
                     };
-                    if entry.file_type().map(|t| t.is_dir()).unwrap_or(false) {
+                    let is_dir = entry.file_type().map(|t| t.is_dir()).unwrap_or(false);
+                    // Files mode still offers directories with a trailing
+                    // slash so users can traverse to a target directory.
+                    if mode == TpEntryMode::Dirs && !is_dir {
+                        continue;
+                    }
+                    if is_dir {
                         out.push(format!("{}{}/", display_base, name));
                     } else {
                         out.push(format!("{}{}", display_base, name));
@@ -359,6 +442,25 @@ fn cwd_dirs() -> Vec<String> {
     out
 }
 
+/// Stems of CWD files matching `exts` (empty = all files), sorted/deduped.
+/// Shared stem rule: see `crate::shell::alias::file_stem_matching`.
+fn cwd_file_stems(exts: &[String]) -> Vec<String> {
+    let names = cwd_files(|n| {
+        exts.is_empty() || {
+            let lower = n.to_lowercase();
+            exts.iter()
+                .any(|e| lower == *e || lower.ends_with(&format!(".{}", e)))
+        }
+    });
+    let mut out: Vec<String> = names
+        .iter()
+        .filter_map(|n| crate::shell::alias::file_stem_matching(n, exts))
+        .collect();
+    out.sort();
+    out.dedup();
+    out
+}
+
 /// Candidates for one `#param --hint-*` group (union over its kinds).
 fn hint_kind_candidates(kinds: &[crate::shell::alias::ParamHintKind]) -> Vec<String> {
     use crate::shell::alias::ParamHintKind as K;
@@ -374,6 +476,8 @@ fn hint_kind_candidates(kinds: &[crate::shell::alias::ParamHintKind]) -> Vec<Str
                 }));
             }
             K::Ext(_) | K::File => out.extend(cwd_files(|_| true)),
+            K::ExtName(exts) => out.extend(cwd_file_stems(exts)),
+            K::FileName => out.extend(cwd_file_stems(&[])),
             K::Spf => out.extend(cwd_files(|n| {
                 crate::filetype::is_supported_format(std::path::Path::new(n))
             })),
@@ -395,7 +499,7 @@ fn hint_kind_candidates(kinds: &[crate::shell::alias::ParamHintKind]) -> Vec<Str
                 out.extend(cwd_dirs());
                 out.extend(cwd_files(|_| true));
                 out.extend(TeleportManager::get_all().into_keys());
-                out.extend(Config::global_get_run_aliases().into_keys());
+                out.extend(Config::get_run_aliases_merged().into_keys());
             }
         }
     }
@@ -419,6 +523,8 @@ fn select_kind_candidates(kinds: &[crate::shell::alias::ParamSelectKind]) -> Vec
                 }));
             }
             K::Ext(_) | K::File => out.extend(cwd_files(|_| true)),
+            K::ExtName(exts) => out.extend(cwd_file_stems(exts)),
+            K::FileName => out.extend(cwd_file_stems(&[])),
             K::Values(vals) => out.extend(vals.iter().cloned()),
             K::Named(name) => {
                 out.extend(crate::shell::alias::named_list_values(name));
@@ -459,11 +565,11 @@ pub(crate) fn alias_arg_candidates_for(
         return None;
     }
     let (alias, index, head) = alias_slot(parent_parts, last_frag, trailing_space)?;
-    let aliases = Config::global_get_run_aliases();
+    let aliases = Config::get_run_aliases_merged();
     let template = aliases.get(&alias)?;
     let order = crate::shell::alias::placeholder_idents(template);
     let (pname, _) = order.get(index)?;
-    let hints = Config::global_get_run_alias_hints();
+    let hints = Config::get_run_alias_hints_merged();
     let spec = hints.get(&alias)?;
     let groups = crate::shell::alias::parse_hint_spec(spec);
     let group = groups.iter().find(|g| g.param == *pname)?;
@@ -549,8 +655,10 @@ fn alias_slot(
 const HINT_FLAGS: &[&str] = &[
     "--hint-tp",
     "--hint-ext",
+    "--hint-ext-name",
     "--hint-spf",
     "--hint-file",
+    "--hint-file-name",
     "--hint-dir",
     "--hint-fd",
     "--hint-all",
@@ -561,7 +669,9 @@ const HINT_FLAGS: &[&str] = &[
 const SELECT_FLAGS: &[&str] = &[
     "--select-dir",
     "--select-ext",
+    "--select-ext-name",
     "--select-file",
+    "--select-file-name",
     "--select-fd",
     "--select-tp",
     "--select",
@@ -570,9 +680,7 @@ const SELECT_FLAGS: &[&str] = &[
 
 /// Names of all named hint value lists (`ral hintn` store, merged).
 fn hint_list_names() -> Vec<String> {
-    let mut names: Vec<String> = Config::get_run_hint_lists_merged()
-        .into_keys()
-        .collect();
+    let mut names: Vec<String> = Config::get_run_hint_lists_merged().into_keys().collect();
     names.sort();
     names
 }
@@ -765,10 +873,74 @@ fn installed_package_names(depth: usize) -> Vec<String> {
     }
 }
 
+/// Returns group names (for `fake gen -g` / `fake group <name>`) or type
+/// names (for `fake gen <types>` / `fake group add|edit` columns).
+pub(crate) fn fake_names_for_command(parts: &[&str], _frag: &str) -> Vec<String> {
+    if parts.is_empty() || parts[0].to_lowercase() != "fake" {
+        return vec![];
+    }
+    let group_names = || crate::fake::group::group_names();
+    let type_names = || -> Vec<String> {
+        crate::fake::types::TYPES
+            .iter()
+            .map(|t| t.name.to_string())
+            .collect()
+    };
+
+    // `fake gen -g <TAB>` (or `--group`) completes saved group names.
+    if let Some(last) = parts.last() {
+        let l = last.to_lowercase();
+        if l == "-g" || l == "--group" {
+            return group_names();
+        }
+        if l == "-l" || l == "--locale" {
+            return crate::fake::locale::Locale::all()
+                .iter()
+                .map(|x| x.code().to_string())
+                .collect();
+        }
+    }
+
+    if parts.len() < 2 {
+        return vec![];
+    }
+    match parts[1].to_lowercase().as_str() {
+        "gen" | "generate" | "g" => type_names(),
+        "types" | "type" | "t" => type_names(),
+        "group" | "grp" | "groups" => {
+            if parts.len() < 3 {
+                return vec![];
+            }
+            match parts[2].to_lowercase().as_str() {
+                "rm" | "remove" | "delete" | "info" | "show" | "rnm" | "rename" => group_names(),
+                // `group add|edit <name> <cols>`: the name is free text, the
+                // column spec takes type names.
+                "add" | "a" | "edit" | "ed" if parts.len() >= 4 => type_names(),
+                _ => vec![],
+            }
+        }
+        _ => vec![],
+    }
+}
+
 /// Returns possible subcommand completions for a command path.
 /// `parts` is the prefix path (the words before the one being typed).
 ///   - If `parts.len() == 1` (e.g. `["ral"]`), returns the subcommands of `ral`.
 ///   - If `parts.len() >= 2` (e.g. `["ral", "export"]`), drills deeper.
+/// `-g` / `--global` hints.
+///
+/// Only offered inside a directory that has an `ntconfig.toml`: there the
+/// default target of a write is the local file, so the flag is the explicit
+/// way to reach the global config. Outside such a directory the default is
+/// already the global config and the flag would be noise.
+fn global_scope_flags() -> Vec<&'static str> {
+    if Config::get_local_config_path().is_some() {
+        vec!["-g", "--global"]
+    } else {
+        vec![]
+    }
+}
+
 pub(crate) fn subcommands_for(parts: &[&str]) -> Vec<&'static str> {
     if parts.is_empty() {
         return vec![];
@@ -789,14 +961,19 @@ pub(crate) fn subcommands_for(parts: &[&str]) -> Vec<&'static str> {
                 match parts[1].to_lowercase().as_str() {
                     "export" => vec!["--all", "-a", "--select", "-s"],
                     "info" => vec!["--edit", "-e"],
+                    "add" | "edit" | "rm" | "remove" | "cls" | "clear" | "rnm" | "rename"
+                    | "import" => global_scope_flags(),
                     "hintn" => {
                         if parts.len() == 2 {
-                            vec![
-                                "add", "rm", "remove", "rnm", "rename", "info", "list", "ls",
-                            ]
+                            vec!["add", "rm", "remove", "rnm", "rename", "info", "list", "ls"]
                         } else {
                             match parts[2].to_lowercase().as_str() {
-                                "rm" | "remove" => vec!["--force", "-f"],
+                                "rm" | "remove" => {
+                                    let mut flags = vec!["--force", "-f"];
+                                    flags.extend(global_scope_flags());
+                                    flags
+                                }
+                                "add" | "rnm" | "rename" => global_scope_flags(),
                                 _ => vec![],
                             }
                         }
@@ -847,6 +1024,7 @@ pub(crate) fn subcommands_for(parts: &[&str]) -> Vec<&'static str> {
             "--share",
             "--qr",
             "--no-qr",
+            "--lock",
             "--spa",
             "--web-dir",
             "-w",
@@ -859,6 +1037,62 @@ pub(crate) fn subcommands_for(parts: &[&str]) -> Vec<&'static str> {
                 vec!["files", "http-server", "chess", "help"]
             } else {
                 vec!["--port-default", "--bind-default"]
+            }
+        }
+        // `gs <pattern> [-p <glob>] [-s [line|path|size]] [-d] [-l] [-i]`:
+        // flags only — pattern/path values are free text.
+        "gs" => vec!["-p", "--path", "-s", "--sort", "-d", "-l", "--limit", "-i"],
+        "serve" if parts.len() >= 2 && parts[1].eq_ignore_ascii_case("files") => {
+            vec![
+                "--port",
+                "-p",
+                "--bind",
+                "-b",
+                "--auth",
+                "--lock",
+                "--tunnel",
+                "-t",
+                "--share",
+                "--qr",
+                "--no-qr",
+                "--spa",
+                "--web-dir",
+                "-w",
+                "--help",
+                "-h",
+            ]
+        }
+        // fake gen / fake types / fake group ...
+        //   fake group add|edit|rm|rnm|ls|info|clear
+        "fake" => {
+            if parts.len() == 1 {
+                vec!["gen", "types", "locales", "group", "help"]
+            } else {
+                match parts[1].to_lowercase().as_str() {
+                    "gen" | "generate" | "g" => vec![
+                        "-n", "--count", "-f", "--format", "-s", "--seed", "-o", "--output", "-g",
+                        "--group", "-l", "--locale", "-u", "--unique",
+                    ],
+                    "types" | "type" | "t" => vec!["-s", "--search"],
+                    "locales" | "locale" | "loc" => vec![],
+                    "group" | "grp" | "groups" => {
+                        if parts.len() == 2 {
+                            vec![
+                                "add", "edit", "rm", "remove", "rnm", "rename", "ls", "list",
+                                "info", "clear", "export", "import", "help",
+                            ]
+                        } else {
+                            match parts[2].to_lowercase().as_str() {
+                                "add" | "a" | "edit" | "ed" => vec![],
+                                "rm" | "remove" | "delete" => vec!["--force", "-f"],
+                                "export" | "exp" => vec!["--all", "-a", "-o", "--output"],
+                                "import" | "imp" => vec!["--force", "-f", "--prefix", "-p"],
+                                _ => vec![],
+                            }
+                        }
+                    }
+                    _ => vec![],
+                }
             }
         }
         // ran init / ran deinit / ran list
@@ -915,6 +1149,8 @@ pub(crate) fn subcommands_for(parts: &[&str]) -> Vec<&'static str> {
                     "git",
                     "dir_view",
                     "dv",
+                    "update_check",
+                    "uc",
                 ]
             } else {
                 match parts[1].to_lowercase().as_str() {
@@ -925,6 +1161,7 @@ pub(crate) fn subcommands_for(parts: &[&str]) -> Vec<&'static str> {
                     }
                     "git" if parts.len() == 2 => vec!["ON", "OFF"],
                     "dir_view" | "dv" if parts.len() == 2 => vec!["ON", "OFF"],
+                    "update_check" | "uc" if parts.len() == 2 => vec!["ON", "OFF"],
                     "serve" if parts.len() == 2 => {
                         vec!["files", "http-server", "chess", "help"]
                     }
@@ -958,14 +1195,40 @@ pub(crate) fn subcommands_for(parts: &[&str]) -> Vec<&'static str> {
         "report" if parts.len() == 1 => vec!["txt", "json", "md", "html", "pdf", "docx", "xlsx"],
         // ignore dir / ignore ext / ignore file
         "ignore" if parts.len() == 1 => vec!["dir", "ext", "file"],
+        // ignore dir <name> / ignore ext <ext> / ignore file <name>
+        "ignore" if parts.len() >= 2 && matches!(parts[1], "dir" | "ext" | "file") => {
+            global_scope_flags()
+        }
         // care dir / care ext / care file
         "care" if parts.len() == 1 => vec!["dir", "ext", "file"],
+        // care dir <name> / care ext <ext> / care file <name>
+        "care" if parts.len() >= 2 && matches!(parts[1], "dir" | "ext" | "file") => {
+            global_scope_flags()
+        }
         // local init/deinit/help
-        "local" => vec!["init", "--all", "-a", "deinit", "help"],
+        "local" => vec!["init", "deinit", "help"],
         // init --all / init --ran / init --local
-        "init" if parts.len() == 1 => vec!["--all", "-a", "--ran", "--local"],
+        "init" if parts.len() == 1 => vec![
+            "--all",
+            "-a",
+            "--ran",
+            "--local",
+            "--opencode",
+            "-oc",
+            "--force",
+            "-f",
+        ],
         // deinit --all / deinit --ran / deinit --local
-        "deinit" if parts.len() == 1 => vec!["--all", "-a", "--ran", "--local"],
+        "deinit" if parts.len() == 1 => vec![
+            "--all",
+            "-a",
+            "--ran",
+            "--local",
+            "--opencode",
+            "-oc",
+            "--force",
+            "-f",
+        ],
         // showenv --all / showenv -d
         "showenv" if parts.len() == 1 => vec!["--all", "-a", "-d", "--depth"],
         // size --care / size -p <path> / size --path <path>
@@ -984,9 +1247,14 @@ pub(crate) fn subcommands_for(parts: &[&str]) -> Vec<&'static str> {
             "--tail",
             "--betw",
             "--sort",
+            "-f",
+            "--file",
+            "-dir",
+            "--directory",
             "-c",
-            "--cp",
             "--care",
+            "-cp",
+            "--copy",
             "-d",
             "--depth",
             "-t",
@@ -995,6 +1263,7 @@ pub(crate) fn subcommands_for(parts: &[&str]) -> Vec<&'static str> {
             "--path",
             "-ext",
             "--ext",
+            "-e",
         ],
         // ui (now a no-op after modern mode removal)
         "ui" => vec!["classic"],
@@ -1048,6 +1317,11 @@ pub(crate) fn subcommands_for(parts: &[&str]) -> Vec<&'static str> {
                     "--limit",
                 ]
             }
+        }
+        // nms play / scan / help + scan flags (must match cmd_nms's parser).
+        "nms" if parts.len() == 1 => vec!["play", "scan", "help"],
+        "nms" if parts.len() >= 2 && parts[1].to_lowercase() == "scan" => {
+            vec!["-d", "--depth", "-s", "--size", "-l", "--long", "--care"]
         }
         // nsheet open / view + flags (must match cmd_nsheet's parser)
         "nsheet" => vec![
@@ -1149,6 +1423,9 @@ pub(crate) fn subcommands_for(parts: &[&str]) -> Vec<&'static str> {
             "--subject",
             "-b",
             "--body",
+            "--body-file",
+            "-bf",
+            "--body-format",
             "-f",
             "--attach",
             "-h",
@@ -1181,9 +1458,12 @@ pub(crate) fn subcommands_for(parts: &[&str]) -> Vec<&'static str> {
             "-h",
             "--help",
         ],
-        // ne --init <file> / ne --super <file> / ne --hyper <name> --lang <lang>
+        // ne --init|--super <file> [...] [-I <file>] / ne --hyper <name> --lang <lang> [-I]
         "ne" | "ntceditor" if parts.len() == 1 => vec!["--init", "--super", "--hyper"],
-        "ne" | "ntceditor" if parts.len() >= 2 && parts[1] == "--hyper" => vec!["--lang"],
+        "ne" | "ntceditor" if parts.len() >= 2 && parts[1] == "--hyper" => vec!["--lang", "-I"],
+        "ne" | "ntceditor" if parts.len() >= 2 && matches!(parts[1], "--init" | "--super") => {
+            vec!["-I"]
+        }
         // clip list / select / clear
         "clip" if parts.len() == 1 => vec!["list", "ls", "select", "sel", "clear", "cl"],
         // qsc listen / stop / status
@@ -1220,6 +1500,7 @@ pub(crate) fn subcommands_for(parts: &[&str]) -> Vec<&'static str> {
                 || last == "--tail"
                 || last == "--betw"
                 || last == "--sort"
+                || last == "-e"
             {
                 vec![]
             } else {
@@ -1234,9 +1515,14 @@ pub(crate) fn subcommands_for(parts: &[&str]) -> Vec<&'static str> {
                     "--tail",
                     "--betw",
                     "--sort",
+                    "-f",
+                    "--file",
+                    "-dir",
+                    "--directory",
                     "-c",
-                    "--cp",
                     "--care",
+                    "-cp",
+                    "--copy",
                     "-d",
                     "--depth",
                     "-t",
@@ -1245,6 +1531,113 @@ pub(crate) fn subcommands_for(parts: &[&str]) -> Vec<&'static str> {
                     "--path",
                     "-ext",
                     "--ext",
+                    "-e",
+                ]
+            }
+        }
+        // viewf flags (fixed depth 1, files only).
+        "viewf" if parts.len() == 1 => vec![
+            "-s",
+            "--size",
+            "-fs",
+            "--filesize",
+            "--sort",
+            "-e",
+            "-ext",
+            "--ext",
+            "-c",
+            "--care",
+            "-cp",
+            "--copy",
+            "-t",
+            "--time",
+            "-p",
+            "--path",
+            "--head",
+            "--tail",
+            "--betw",
+        ],
+        "viewf" if parts.len() >= 2 => {
+            let last = parts[parts.len() - 1].to_lowercase();
+            if last == "--head"
+                || last == "--tail"
+                || last == "--betw"
+                || last == "--sort"
+                || last == "-e"
+                || last == "-ext"
+                || last == "--ext"
+                || last == "-p"
+                || last == "--path"
+            {
+                vec![]
+            } else {
+                vec![
+                    "-s",
+                    "--size",
+                    "-fs",
+                    "--filesize",
+                    "--sort",
+                    "-e",
+                    "-ext",
+                    "--ext",
+                    "-c",
+                    "--care",
+                    "-cp",
+                    "--copy",
+                    "-t",
+                    "--time",
+                    "-p",
+                    "--path",
+                    "--head",
+                    "--tail",
+                    "--betw",
+                ]
+            }
+        }
+        // viewd flags (directories only).
+        "viewd" if parts.len() == 1 => vec![
+            "-d",
+            "--depth",
+            "-s",
+            "--size",
+            "-ds",
+            "--dirsize",
+            "-c",
+            "--care",
+            "--sort",
+            "-t",
+            "--time",
+            "-cp",
+            "--copy",
+            "-p",
+            "--path",
+        ],
+        "viewd" if parts.len() >= 2 => {
+            let last = parts[parts.len() - 1].to_lowercase();
+            if last == "-d"
+                || last == "--depth"
+                || last == "--sort"
+                || last == "-p"
+                || last == "--path"
+            {
+                vec![]
+            } else {
+                vec![
+                    "-d",
+                    "--depth",
+                    "-s",
+                    "--size",
+                    "-ds",
+                    "--dirsize",
+                    "-c",
+                    "--care",
+                    "--sort",
+                    "-t",
+                    "--time",
+                    "-cp",
+                    "--copy",
+                    "-p",
+                    "--path",
                 ]
             }
         }
@@ -1264,11 +1657,9 @@ pub(crate) fn subcommands_for(parts: &[&str]) -> Vec<&'static str> {
         // scan port [host] [--top N | --ports <spec> | --all] [--timeout MS]
         // scan ip [cidr] [--top N | --ports <spec>] [--timeout MS]
         "scan" if parts.len() == 1 => vec!["ext", "files", "dir", "port", "ip", "help"],
-        "scan" if parts.len() >= 2
-            && matches!(
-                parts[1].to_lowercase().as_str(),
-                "ext" | "files" | "dir"
-            ) =>
+        "scan"
+            if parts.len() >= 2
+                && matches!(parts[1].to_lowercase().as_str(), "ext" | "files" | "dir") =>
         {
             vec!["-d", "--depth", "-s", "--size", "--care"]
         }
@@ -1282,22 +1673,31 @@ pub(crate) fn subcommands_for(parts: &[&str]) -> Vec<&'static str> {
         "encode" if parts.len() == 1 => vec!["b2", "b10", "b64", "base64", "hex", "url"],
         // decode b2 / b10 / b64 / hex / url
         "decode" if parts.len() == 1 => vec!["b2", "b10", "b64", "base64", "hex", "url"],
-        // fmt json / yaml / toml
-        "fmt" if parts.len() == 1 => vec!["json", "yaml", "toml"],
+        // encode/decode <codec> <text|file>: the output-path flag.
+        "encode" | "decode" if parts.len() >= 2 => vec!["-o", "--output"],
+        // fmt <file> … : after the source file, offer the keyword/flag
+        // slots (`to <ext>` conversion, `-o` output path).
+        "fmt" if parts.len() == 2 => vec!["to", "-o", "--output"],
+        // fmt … to <ext>: the conversion-target slot.
+        "fmt" if parts.len() >= 3 && parts[parts.len() - 1].to_lowercase() == "to" => {
+            vec![
+                "json", "yaml", "toml", "md", "html", "xml", "docx", "txt", "pdf", "csv", "tsv",
+                "xlsx",
+            ]
+        }
         // qr encode / decode
         "qr" if parts.len() == 1 => vec!["encode", "en", "decode", "de"],
         // image display / show / to / out / --ocr / --layout / --sixel
         "image" | "img" if parts.len() == 1 => {
-            vec!["display", "show", "to", "out", "--ocr", "--layout", "--sixel"]
+            vec![
+                "display", "show", "to", "out", "--ocr", "--layout", "--sixel",
+            ]
         }
         // image display|show [--sixel] [<path> [--sixel]]: the only flag
         // the display tail accepts (cf. parse_display_tail in image.rs).
         "image" | "img"
             if parts.len() >= 2
-                && matches!(
-                    parts[1].to_lowercase().as_str(),
-                    "display" | "show"
-                ) =>
+                && matches!(parts[1].to_lowercase().as_str(), "display" | "show") =>
         {
             vec!["--sixel"]
         }
@@ -1313,6 +1713,17 @@ pub(crate) fn subcommands_for(parts: &[&str]) -> Vec<&'static str> {
         // autoup subcommands
         "autoup" if parts.len() == 1 => vec![
             "list", "ls", "add", "rm", "remove", "disable", "enable", "help",
+        ],
+        // sort flags
+        "sort" if parts.len() == 1 => vec![
+            "--reverse",
+            "-r",
+            "--numeric",
+            "-n",
+            "--unique",
+            "-u",
+            "--ignore-case",
+            "-f",
         ],
         // say flags
         "say" | "print" if parts.len() == 1 => vec!["--loop", "-n", "-t"],
@@ -1357,6 +1768,7 @@ pub(crate) fn subcommands_for(parts: &[&str]) -> Vec<&'static str> {
             "scan",
             "other",
             "syscmd",
+            "pipe",
             "fileops",
             "tl",
             "ntpkg",
@@ -1371,8 +1783,10 @@ pub(crate) fn subcommands_for(parts: &[&str]) -> Vec<&'static str> {
             "fmt",
             "image",
             "ndb",
+            "nms",
             "nsheet",
             "nssh",
+            "fake",
         ],
         // Default: no known subcommands
         _ => vec![],
@@ -1424,27 +1838,15 @@ impl NtcHinter {
         }
     }
 
-    /// Text after the last `&&` outside double quotes: the segment
-    /// being typed in a chained line (`ran reset && tl …` → `" tl "`).
-    /// Untrimmed — the trailing space tells a filled slot (`ran `)
-    /// apart from a half-typed word (`ran`). Single `&`, quoted `&&`
-    /// and unclosed quotes all mean "no chain": the whole line.
-    pub(crate) fn chain_tail(typed: &str) -> &str {
-        let mut in_quotes = false;
-        let mut last_sep: Option<usize> = None;
-        let mut it = typed.char_indices().peekable();
-        while let Some((i, c)) = it.next() {
-            if c == '"' {
-                in_quotes = !in_quotes;
-            } else if c == '&' && !in_quotes {
-                if matches!(it.peek(), Some((_, '&'))) {
-                    last_sep = Some(i);
-                }
-            }
-        }
-        match last_sep {
-            Some(i) => &typed[i + 2..],
-            None => typed,
+    /// Tail of the line after the last top-level operator, plus that
+    /// operator (`&&`, `||`, `|`, `>`, `>>`, `<`, `<<`, `<<<`). Untrimmed —
+    /// the trailing space tells a filled slot (`ran `) apart from a
+    /// half-typed word (`ran`). Operators inside quotes or `[...]` arrays,
+    /// and unspaced ones (`a|b`), do not split.
+    pub(crate) fn stage_tail(typed: &str) -> (&str, Option<&'static str>) {
+        match super::pipeline::active_operator(typed) {
+            Some((op, tail)) => (tail, Some(op)),
+            None => (typed, None),
         }
     }
 
@@ -1454,8 +1856,24 @@ impl NtcHinter {
         if typed.is_empty() {
             return vec![];
         }
-        // Chained lines (`a && b`): complete the active segment only.
-        let typed = Self::chain_tail(typed);
+        // Complete only the active segment/slot after the last operator.
+        let (tail, op) = Self::stage_tail(typed);
+        match op {
+            // `>` takes a free-form output path: never hint it.
+            Some(">") => return vec![],
+            // `>>`/`<` append to / read from an existing text file.
+            Some(">>") | Some("<") => return redirect_target_candidates(tail),
+            // Heredocs use the EOF delimiter; here-strings take free text.
+            Some("<<") => return heredoc_delim_candidates(tail),
+            Some("<<<") => return vec![],
+            Some("|") => {
+                if let Some(cands) = pipe_stage_commands(tail) {
+                    return cands;
+                }
+            }
+            _ => {}
+        }
+        let typed = tail;
         if typed.is_empty() {
             return vec![];
         }
@@ -1544,10 +1962,11 @@ impl NtcHinter {
             if is_bare_cd {
                 return vec![];
             }
-            // `@tp/rest` after `mv`/`move`/`cp` in the src slot lists the
-            // savepoint's contents (files plain, dirs with trailing `/`).
-            // Dst slots and other commands keep the savepoint-name behavior
-            // below — their resolvers accept no `@tp/sub` paths.
+            // `@tp/rest` lists the savepoint's contents (files plain, dirs
+            // with trailing `/`) for the commands whose resolvers accept
+            // sub-paths: `mv`/`move`/`cp` src, `view`/`viewf`/`viewd`,
+            // `txtf`, and `mkf`/`mkd`/`rmf`/`rmd`. Other commands and their
+            // filled slots keep the savepoint-name behavior below.
             if let Some(cands) = tp_subpath_candidates(parent_parts, last_frag, tp_part) {
                 return dedup_sorted(cands);
             }
@@ -1599,6 +2018,14 @@ impl NtcHinter {
             ext_names_for_command(parent_parts, last_frag),
             last_frag,
         ));
+        out.extend(filter_prefix(
+            fake_names_for_command(parent_parts, last_frag),
+            last_frag,
+        ));
+        out.extend(filter_prefix(
+            fmt_output_candidates_for(parent_parts, last_frag),
+            last_frag,
+        ));
         // godrive/god completes drive letters
         if parent_parts.len() == 1
             && matches!(parent_parts[0].to_lowercase().as_str(), "godrive" | "god")
@@ -1622,6 +2049,12 @@ impl NtcHinter {
             ral_hint_candidates_for(parent_parts, last_frag),
             last_frag,
         ));
+        // `ignore`/`care` value slots complete the names they store: dirs,
+        // files or the extensions present in the working directory.
+        if let Some(cands) = igcare_value_candidates_for(parent_parts, last_frag) {
+            return dedup_sorted(cands);
+        }
+
         // Alias invocations with `#param --hint-*` annotations complete
         // the hinted slot; unhinted slots (or non-aliases) keep the
         // default filesystem behavior.
@@ -1739,12 +2172,58 @@ const ARCHIVE_EXTS: &[&str] = &[".zip", ".tar.gz", ".tgz", ".tar"];
 /// Sheet extensions completed for `nsheet open|view <file>` (bare `nsheet <file>` too).
 const SHEET_EXTS: &[&str] = &[".csv", ".tsv", ".json", ".jsonl", ".ndjson", ".txt"];
 
+/// Extensions completed for `fmt <file>`'s source-file slot. `pdf` and
+/// `xlsx` are output-only, so they are not offered as inputs.
+const FMT_SOURCE_EXTS: &[&str] = &[
+    ".json",
+    ".yml",
+    ".yaml",
+    ".toml",
+    ".md",
+    ".markdown",
+    ".html",
+    ".htm",
+    ".xml",
+    ".docx",
+    ".txt",
+    ".csv",
+    ".tsv",
+];
+
+/// Extension palette offered by the `-o`/`--output` filename slot.
+const FMT_EXTS: &[&str] = &[
+    ".json",
+    ".yml",
+    ".yaml",
+    ".toml",
+    ".md",
+    ".markdown",
+    ".html",
+    ".htm",
+    ".xml",
+    ".docx",
+    ".txt",
+    ".pdf",
+    ".csv",
+    ".tsv",
+    ".xlsx",
+];
+
 /// Image extensions completed for `image|img <file>` and
 /// `image|img display|show <file>`. Directories always pass so
 /// `dir/<Tab>` traversal keeps working (handled by the `ext_filter`
 /// logic in `fs_candidates_for`); non-image files are suppressed.
 const IMAGE_EXTS: &[&str] = &[
     ".png", ".jpg", ".jpeg", ".gif", ".bmp", ".ico", ".tiff", ".tif", ".webp",
+];
+
+/// Audio + video extensions completed for `nms play <file>`.
+///
+/// `.ts` is deliberately omitted (it clashes with TypeScript); `.m2ts` stays.
+const MEDIA_EXTS: &[&str] = &[
+    ".mp3", ".wav", ".wave", ".flac", ".m4a", ".aac", ".ogg", ".oga", ".opus", ".wma", ".aiff",
+    ".aif", ".aifc", ".mka", ".weba", ".mp4a", ".mp4", ".m4v", ".mkv", ".webm", ".mov", ".avi",
+    ".mpg", ".mpeg", ".wmv", ".flv", ".3gp", ".m2ts",
 ];
 
 /// True when `view`'s optional target-path slot is already filled by a bare
@@ -1758,7 +2237,7 @@ fn view_path_taken(args: &[&str]) -> bool {
         "-d", "--depth", "-p", "--path", "--head", "--tail", "--betw", "--sort",
     ];
     const OPTIONAL_SIZE_FLAGS: &[&str] = &["-s", "--size", "-fs", "--filesize", "-ds", "--dirsize"];
-    const MULTI_FLAGS: &[&str] = &["-ext", "--ext"];
+    const MULTI_FLAGS: &[&str] = &["-ext", "--ext", "-e"];
     let cwd = std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from("."));
     let mut i = 0;
     while i < args.len() {
@@ -1782,11 +2261,11 @@ fn view_path_taken(args: &[&str]) -> bool {
             continue;
         }
         let tok = args[i];
-        if tok.starts_with('-') || tok.starts_with('@') || tok.is_empty() {
+        if tok.starts_with('-') || tok.is_empty() {
             i += 1;
             continue;
         }
-        return true; // bare path token
+        return true; // bare path token (including `@tp/sub`)
     }
     false
 }
@@ -1856,8 +2335,8 @@ fn in_ext_slot(parts: &[&str]) -> bool {
     let mut i = parts.len() - 1;
     loop {
         let l = parts[i].to_lowercase();
-        if l == "-ext" || l == "--ext" {
-            return root == "view";
+        if l == "-ext" || l == "--ext" || l == "-e" {
+            return matches!(root.as_str(), "view" | "viewf");
         }
         if l == "ext" && i == 1 && (root == "scan" || root == "tl") {
             return true;
@@ -1892,6 +2371,102 @@ pub(crate) fn ext_names_for_command(parts: &[&str], frag: &str) -> Vec<String> {
         .into_iter()
         .filter(|e| e.starts_with(&lower) && e.len() > stub.len())
         .map(|e| format!("{}{}", prefix, e))
+        .collect()
+}
+
+/// Value hints for `ignore|care dir|file <name>` and `ignore|care ext <ext>`.
+///
+/// Names are listed bare — never with a trailing `/`, since the config stores
+/// directory and file names verbatim and a `src/` entry would never match —
+/// and a comma inside one token completes its next element
+/// (`ignore dir src,do<Tab>` → `src,docs`). `ext`
+/// offers the extensions of the files in the working directory (the useful
+/// palette when choosing what to ignore), lowercased like the stored value.
+///
+/// `ignore` only offers items that are not ignored yet; `care` only offers
+/// items that already are (the effective global + local ignore sets), so the
+/// two commands never hint a no-op. `None` when the line is not an
+/// ignore/care value slot.
+fn igcare_value_candidates_for(parts: &[&str], frag: &str) -> Option<Vec<String>> {
+    if parts.len() < 2 || !matches!(parts[0].to_lowercase().as_str(), "ignore" | "care") {
+        return None;
+    }
+    let ignoring = parts[0].eq_ignore_ascii_case("ignore");
+    let kind = parts[1].to_lowercase();
+    if !matches!(kind.as_str(), "dir" | "file" | "ext") {
+        return None;
+    }
+    // Comma-separated lists: keep everything up to the last comma as prefix.
+    let (prefix, stub) = match frag.rfind(',') {
+        Some(idx) => (&frag[..idx + 1], frag[idx + 1..].trim_start()),
+        None => ("", frag),
+    };
+    let lower = stub.to_lowercase();
+    let cwd = std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from("."));
+    let names: Vec<String> = match kind.as_str() {
+        "ext" => {
+            let ignored = Config::get_ignored_extensions_combined();
+            dir_extensions(&cwd, &lower)
+                .into_iter()
+                .filter(|e| ignored.contains(e) != ignoring)
+                .collect()
+        }
+        "dir" => {
+            let ignored = Config::get_ignored_dirs_combined();
+            cwd_dirs()
+                .into_iter()
+                .filter(|d| ignored.contains(&d.to_lowercase()) != ignoring)
+                .collect()
+        }
+        _ => {
+            let ignored = Config::get_ignored_files_combined();
+            cwd_files(|_| true)
+                .into_iter()
+                .filter(|f| ignored.contains(f) != ignoring)
+                .collect()
+        }
+    };
+    Some(
+        names
+            .into_iter()
+            .filter(|n| {
+                let l = n.to_lowercase();
+                l.starts_with(&lower) && l.len() > stub.len()
+            })
+            .map(|n| format!("{}{}", prefix, n))
+            .collect(),
+    )
+}
+
+/// Output-filename candidates for `fmt … -o <name>` / `fmt … --output <name>`
+/// (the word slot immediately after the flag). Returns full last-word
+/// replacements that keep the typed basename and only grow the extension:
+/// `o.j` → `o.json …`; a dotless stub `j` → `j.json …`; a bare `-o <Tab>`
+/// suggests a default name, `out.json …`.
+pub(crate) fn fmt_output_candidates_for(parts: &[&str], frag: &str) -> Vec<String> {
+    let in_output_slot = parts.len() >= 2
+        && parts[0].to_lowercase() == "fmt"
+        && matches!(
+            parts[parts.len() - 1].to_lowercase().as_str(),
+            "-o" | "--output"
+        );
+    if !in_output_slot {
+        return vec![];
+    }
+    // Everything up to the last dot stays as the basename; the stub after
+    // it filters the extension palette.
+    let (stem, partial) = match frag.rfind('.') {
+        Some(idx) => (frag[..idx].to_string(), frag[idx + 1..].to_lowercase()),
+        None => (
+            if frag.is_empty() { "out" } else { frag }.to_string(),
+            String::new(),
+        ),
+    };
+    FMT_EXTS
+        .iter()
+        .map(|e| e.trim_start_matches('.'))
+        .filter(|e| e.starts_with(&partial))
+        .map(|e| format!("{}.{}", stem, e))
         .collect()
 }
 
@@ -1961,7 +2536,31 @@ pub(crate) fn fs_candidates_for(parent_parts: &[&str], last_frag: &str) -> Vec<S
                 if view_path_taken(&parent_parts[1..]) {
                     return vec![];
                 }
+                let file = parent_parts[1..]
+                    .iter()
+                    .any(|t| matches!(t.to_lowercase().as_str(), "-f" | "--file"));
+                let dir = parent_parts[1..]
+                    .iter()
+                    .any(|t| matches!(t.to_lowercase().as_str(), "-dir" | "--directory"));
+                match (file, dir) {
+                    (true, false) => (false, true, None, false),
+                    (false, true) => (true, false, None, false),
+                    _ => (false, false, None, false),
+                }
+            }
+            // `viewf` takes a file or directory target (fixed depth 1).
+            "viewf" => {
+                if in_ext_slot(parent_parts) || view_path_taken(&parent_parts[1..]) {
+                    return vec![];
+                }
                 (false, false, None, false)
+            }
+            // `viewd` takes a directory target.
+            "viewd" => {
+                if view_path_taken(&parent_parts[1..]) {
+                    return vec![];
+                }
+                (true, false, None, false)
             }
             // `txtc`/`txtf <file>` display readable files: suppress known
             // binaries/archives (`.exe`, `.zip`, …); dirs pass for traversal.
@@ -1994,6 +2593,34 @@ pub(crate) fn fs_candidates_for(parent_parts: &[&str], last_frag: &str) -> Vec<S
                     i += 1;
                 }
                 if bare > 0 {
+                    return vec![];
+                }
+                (false, false, None, true)
+            }
+            // `head`/`tail`/`betw` take an optional count/range then an
+            // optional file; offer files until that file slot is filled.
+            "head" | "tail" | "betw" => {
+                let mut bare = 0;
+                for tok in parent_parts.iter().skip(1) {
+                    if !tok.starts_with('-') {
+                        bare += 1;
+                    }
+                }
+                if bare >= 2 {
+                    return vec![];
+                }
+                (false, false, None, true)
+            }
+            // `sort`/`rev` take an optional single file; offer files until it
+            // is given (flags are skipped).
+            "sort" | "rev" => {
+                let mut bare = 0;
+                for tok in parent_parts.iter().skip(1) {
+                    if !tok.starts_with('-') {
+                        bare += 1;
+                    }
+                }
+                if bare >= 1 {
                     return vec![];
                 }
                 (false, false, None, true)
@@ -2086,6 +2713,14 @@ pub(crate) fn fs_candidates_for(parent_parts: &[&str], last_frag: &str) -> Vec<S
                     return vec![];
                 }
             }
+            // `nms play <file>` completes audio/video media files.
+            "nms" => {
+                if parent_parts.len() == 2 && parent_parts[1].to_lowercase() == "play" {
+                    (false, false, Some(MEDIA_EXTS), false)
+                } else {
+                    return vec![];
+                }
+            }
             // `image <TAB>` and `image display|show <TAB>` complete
             // image files + dirs; deeper positions (flags/values)
             // complete nothing.
@@ -2102,8 +2737,30 @@ pub(crate) fn fs_candidates_for(parent_parts: &[&str], last_frag: &str) -> Vec<S
             "image" | "img" => {
                 return vec![];
             }
-            // General path-takers accept files and dirs.
-            "size" | "report" | "explorer" | "nfe" | "mv" | "move" | "cp" | "ne" | "ntceditor" => {
+            // `fmt <TAB>` completes the source-file slot with the
+            // supported formats; deeper positions (keyword/flag slots)
+            // are handled by `subcommands_for` / the `-o` slot helper.
+            "fmt" => {
+                if parent_parts.len() == 1 {
+                    (false, false, Some(FMT_SOURCE_EXTS), false)
+                } else {
+                    return vec![];
+                }
+            }
+            // General path-takers accept files and dirs. For `cp`/`mv` only
+            // the src slot completes (dst is a free-form name/dir) and
+            // `-f`/`--force` flags never consume it.
+            "mv" | "move" | "cp" => {
+                let operands = parent_parts[1..]
+                    .iter()
+                    .filter(|t| !t.starts_with('-'))
+                    .count();
+                if operands > 0 {
+                    return vec![];
+                }
+                (false, false, None, false)
+            }
+            "size" | "report" | "explorer" | "nfe" | "ne" | "ntceditor" => {
                 if parent_parts.len() > 1 {
                     return vec![];
                 }
@@ -2133,14 +2790,41 @@ pub(crate) fn fs_candidates_for(parent_parts: &[&str], last_frag: &str) -> Vec<S
 
     // `rmf *.<Tab>`: complete `*.<ext>` delete patterns from the file
     // extensions present in the listed directory (`*.log`, `sub/*.tmp`).
-    // Plain `*` stays literal — only the `*.` form triggers this.
-    if root == "rmf" && file_part.starts_with("*.") {
-        return star_ext_candidates(&base, dir_part, &file_part[2..]);
+    // `cp`/`mv` pattern sources (`cp *.py <Tab>`) behave the same, and a
+    // bare `*` also offers `*` itself so Tab cycles `*` → `*.py` → ….
+    if matches!(root.as_str(), "rmf" | "mv" | "move" | "cp")
+        && (file_part == "*" || file_part.starts_with("*."))
+    {
+        return star_pattern_candidates(&base, dir_part, file_part);
     }
 
+    list_path_candidates(
+        &base,
+        dir_part,
+        file_part,
+        dirs_only,
+        files_only,
+        ext_filter,
+        readable_only,
+    )
+}
+
+/// Shared directory listing for command slots and `>>`/`<` redirect
+/// targets. `base` must be an existing directory; names are filtered by
+/// `file_part`, the per-command options, and (when `readable_only`) hidden
+/// when they are binaries, images, audio/video or archives.
+fn list_path_candidates(
+    base: &std::path::Path,
+    dir_part: &str,
+    file_part: &str,
+    dirs_only: bool,
+    files_only: bool,
+    ext_filter: Option<&[&str]>,
+    readable_only: bool,
+) -> Vec<String> {
     let lower = file_part.to_lowercase();
     let mut out = Vec::new();
-    if let Ok(entries) = std::fs::read_dir(&base) {
+    if let Ok(entries) = std::fs::read_dir(base) {
         for entry in entries.flatten() {
             let name = match entry.file_name().into_string() {
                 Ok(n) => n,
@@ -2167,7 +2851,7 @@ pub(crate) fn fs_candidates_for(parent_parts: &[&str], last_frag: &str) -> Vec<S
                     continue;
                 }
             }
-            if readable_only && !is_dir && crate::filetype::is_known_unsupported_file_name(&name) {
+            if readable_only && !is_dir && crate::filetype::is_finder_hidden(&entry.path()) {
                 continue;
             }
             let display = if dir_part.is_empty() {
@@ -2185,12 +2869,120 @@ pub(crate) fn fs_candidates_for(parent_parts: &[&str], last_frag: &str) -> Vec<S
     out
 }
 
-/// `*.<ext>` pattern candidates for `rmf` from the extensions of the
-/// files inside `base`. `stub` is the text after `*.` (`""` for bare
-/// `*.`). Returns full last-word replacements; exact-length matches are
-/// excluded so the ghost only ever shows an untyped remainder.
-fn star_ext_candidates(base: &std::path::Path, dir_part: &str, stub: &str) -> Vec<String> {
-    let lower_stub = stub.to_lowercase();
+/// Commands offered at the start of a piped stage (`cmd | `), in ghost
+/// order. Only these are completed after a pipe — no other command falls
+/// back to generic completion.
+const PIPE_FILTER_COMMANDS: &[&str] =
+    &["head", "tail", "betw", "gs", "sort", "rev", "encode", "qur"];
+
+/// Pipe-stage command completion. `Some` means the stage is still in its
+/// command slot (or names an unsupported command), so the caller must not
+/// fall back to generic completion. `None` means one of the seven filters
+/// is already present and its own flags/files should complete normally.
+fn pipe_stage_commands(tail: &str) -> Option<Vec<String>> {
+    let trimmed = tail.trim();
+    if trimmed.is_empty() {
+        return Some(PIPE_FILTER_COMMANDS.iter().map(|s| s.to_string()).collect());
+    }
+    let first = trimmed.split_whitespace().next().unwrap_or("");
+    let command_given =
+        tail.ends_with(' ') || tail.ends_with('\t') || trimmed.split_whitespace().count() > 1;
+    if !command_given {
+        // Still typing the command name: prefix-match in declared order.
+        return Some(filter_prefix(
+            PIPE_FILTER_COMMANDS.iter().map(|s| s.to_string()).collect(),
+            first,
+        ));
+    }
+    if PIPE_FILTER_COMMANDS.contains(&first.to_lowercase().as_str()) {
+        None
+    } else {
+        Some(vec![])
+    }
+}
+
+/// Completion for `>>` (append) and `<` (input) targets. Readable files
+/// only — binary, image, audio, video and archive files are hidden — plus
+/// directories so `sub/<Tab>` traversal keeps working. Nothing once the
+/// single target token is already present.
+fn redirect_target_candidates(tail: &str) -> Vec<String> {
+    let trimmed = tail.trim();
+    let target_given = !trimmed.is_empty()
+        && (tail.ends_with(' ') || tail.ends_with('\t') || trimmed.split_whitespace().count() > 1);
+    if target_given {
+        return vec![];
+    }
+    let (dir_part, file_part) = match trimmed.rfind('/') {
+        Some(idx) => (&trimmed[..idx], &trimmed[idx + 1..]),
+        None => ("", trimmed),
+    };
+    let cwd = match std::env::current_dir() {
+        Ok(d) => d,
+        Err(_) => return vec![],
+    };
+    let base = if dir_part.is_empty() {
+        cwd
+    } else {
+        let p = cwd.join(dir_part);
+        if !p.is_dir() {
+            return vec![];
+        }
+        p
+    };
+    list_path_candidates(&base, dir_part, file_part, false, false, None, true)
+}
+
+/// Completion for the `<<` heredoc delimiter: `EOF` only.
+fn heredoc_delim_candidates(tail: &str) -> Vec<String> {
+    let trimmed = tail.trim();
+    if trimmed.is_empty() {
+        return vec!["EOF".to_string()];
+    }
+    if tail.ends_with(' ') || tail.ends_with('\t') || trimmed.split_whitespace().count() > 1 {
+        return vec![];
+    }
+    filter_prefix(vec!["EOF".to_string()], trimmed)
+}
+
+/// `*`-pattern candidates for `rmf`/`cp`/`mv` from the extensions of the
+/// files inside `base`. `frag` is the typed last word (`*`, `*.`, `*.py`).
+/// Returns full last-word replacements. A bare `*` also offers `*` itself so
+/// Tab cycles `*` → `*.py` → …; exact-length matches are excluded so the
+/// ghost only ever shows an untyped remainder.
+fn star_pattern_candidates(base: &std::path::Path, dir_part: &str, frag: &str) -> Vec<String> {
+    let render = |ext: &str| {
+        if dir_part.is_empty() {
+            format!("*.{}", ext)
+        } else {
+            format!("{}/*.{}", dir_part, ext)
+        }
+    };
+    let mut out: Vec<String> = Vec::new();
+    // Bare `*`: offer `*` plus every `*.<ext>` present.
+    if frag == "*" {
+        out.push(if dir_part.is_empty() {
+            "*".to_string()
+        } else {
+            format!("{}/*", dir_part)
+        });
+        for ext in dir_extensions(base, "") {
+            out.push(render(&ext));
+        }
+        return out;
+    }
+    // `*.` / `*.stub`: only matching extensions.
+    let stub = frag.strip_prefix("*.").unwrap_or("").to_lowercase();
+    for ext in dir_extensions(base, &stub) {
+        out.push(render(&ext));
+    }
+    out
+}
+
+/// Sorted, deduped extensions of the non-hidden files directly inside
+/// `base`, filtered by `stub` (empty = all). Extensions are lowercased and
+/// exact-stub-length matches are dropped so a fully-typed pattern ghosts
+/// nothing.
+fn dir_extensions(base: &std::path::Path, stub: &str) -> Vec<String> {
     let mut exts: Vec<String> = Vec::new();
     if let Ok(entries) = std::fs::read_dir(base) {
         for entry in entries.flatten() {
@@ -2208,7 +3000,7 @@ fn star_ext_candidates(base: &std::path::Path, dir_part: &str, stub: &str) -> Ve
                 continue;
             };
             let ext = name[dot + 1..].to_lowercase();
-            if ext.is_empty() || !ext.starts_with(&lower_stub) {
+            if ext.is_empty() || !ext.starts_with(stub) {
                 continue;
             }
             // Exact-length matches ghost nothing — skip them.
@@ -2221,15 +3013,7 @@ fn star_ext_candidates(base: &std::path::Path, dir_part: &str, stub: &str) -> Ve
         }
     }
     exts.sort();
-    exts.into_iter()
-        .map(|e| {
-            if dir_part.is_empty() {
-                format!("*.{}", e)
-            } else {
-                format!("{}/*.{}", dir_part, e)
-            }
-        })
-        .collect()
+    exts
 }
 
 fn build_command_set() -> HashSet<String> {
@@ -2237,7 +3021,7 @@ fn build_command_set() -> HashSet<String> {
         .into_iter()
         .map(|s| s.to_string())
         .collect();
-    let aliases = Config::global_get_run_aliases();
+    let aliases = Config::get_run_aliases_merged();
     for name in aliases.keys() {
         cmds.insert(name.clone());
     }
@@ -2280,16 +3064,35 @@ impl Hinter for NtcHinter {
             cands[(cyc.index.rem_euclid(cands.len() as isize)) as usize].clone()
         };
 
-        // The ghost is the remainder after the word already typed.
-        let frag: &str = if typed.ends_with(' ') || typed.ends_with('\t') {
-            ""
+        // The ghost is the remainder after the active word, computed from
+        // the current segment so `cmd |` ghosts `" head"` (space included).
+        ghost_remainder(typed, &pick)
+    }
+}
+
+/// Ghost text for `pick`: the part after the word already typed in the
+/// active segment. When the cursor sits right after an operator (`cmd |`),
+/// the ghost carries the separating space so accepting it produces a valid
+/// operator token.
+fn ghost_remainder(typed: &str, pick: &str) -> Option<String> {
+    let (tail, _) = NtcHinter::stage_tail(typed);
+    if tail.is_empty() || tail.ends_with(' ') || tail.ends_with('\t') {
+        let sep = if tail.is_empty()
+            && !typed.is_empty()
+            && !typed.ends_with(' ')
+            && !typed.ends_with('\t')
+        {
+            " "
         } else {
-            typed.split_whitespace().last().unwrap_or("")
+            ""
         };
-        match pick.get(frag.len()..) {
-            Some(rest) if !rest.is_empty() => Some(rest.to_string()),
-            _ => None,
-        }
+        let out = format!("{}{}", sep, pick);
+        return if out.is_empty() { None } else { Some(out) };
+    }
+    let frag = tail.split_whitespace().last().unwrap_or("");
+    match pick.get(frag.len()..) {
+        Some(rest) if !rest.is_empty() => Some(rest.to_string()),
+        _ => None,
     }
 }
 
@@ -2307,6 +3110,44 @@ mod tests {
         assert!(c.contains(&"todo".to_string()));
         // Exact-length matches are excluded (ghost only shows the remainder).
         assert!(!c.iter().any(|x| x == "t"));
+    }
+
+    #[test]
+    fn gs_flags_are_suggested() {
+        let h = NtcHinter::new();
+        let c = h.candidates_for("gs -");
+        for flag in ["-p", "--path", "-s", "--sort", "-d", "-l", "--limit", "-i"] {
+            assert!(c.contains(&flag.to_string()), "missing {flag}: {c:?}");
+        }
+    }
+
+    /// `-g` / `--global` is only offered inside a folder that has an
+    /// `ntconfig.toml` (there the default target is the local file).
+    #[test]
+    fn global_scope_flag_is_hinted_only_inside_a_local_dir() {
+        {
+            let _cwd = crate::utils::test_support::TempCwd::with_fixture(&[], &[]);
+            let flags = subcommands_for(&["ral", "add"]);
+            assert!(!flags.contains(&"-g"), "{flags:?}");
+            assert!(!flags.contains(&"--global"), "{flags:?}");
+            let flags = subcommands_for(&["ignore", "dir"]);
+            assert!(!flags.contains(&"-g"), "{flags:?}");
+        }
+        {
+            let _cwd =
+                crate::utils::test_support::TempCwd::with_fixture(&[("ntconfig.toml", "")], &[]);
+            let flags = subcommands_for(&["ral", "add"]);
+            assert!(flags.contains(&"-g"), "{flags:?}");
+            assert!(flags.contains(&"--global"), "{flags:?}");
+            let flags = subcommands_for(&["ral", "rm"]);
+            assert!(flags.contains(&"-g"), "{flags:?}");
+            let flags = subcommands_for(&["ral", "hintn", "add"]);
+            assert!(flags.contains(&"-g"), "{flags:?}");
+            let flags = subcommands_for(&["ignore", "dir"]);
+            assert!(flags.contains(&"-g"), "{flags:?}");
+            let flags = subcommands_for(&["care", "ext"]);
+            assert!(flags.contains(&"-g"), "{flags:?}");
+        }
     }
 
     #[test]
@@ -2416,17 +3257,19 @@ mod tests {
         );
         let root = std::env::current_dir().unwrap();
         let mut cfg = hint_test_config();
-        cfg.teleports
-            .insert("tp1".to_string(), root.join("tp1"));
-        cfg.teleports
-            .insert("tp2".to_string(), root.join("tp2"));
+        cfg.teleports.insert("tp1".to_string(), root.join("tp1"));
+        cfg.teleports.insert("tp2".to_string(), root.join("tp2"));
         Config::with_test_config(cfg, || {
             let h = NtcHinter::new();
             // `@tp/` lists files plain and dirs with trailing `/`.
             let c = h.candidates_for("cp @tp1/");
             assert!(c.contains(&"@tp1/file.txt".to_string()), "got: {:?}", c);
             assert!(c.contains(&"@tp1/sub/".to_string()), "got: {:?}", c);
-            assert!(!c.contains(&"@tp1/sub/deep.txt".to_string()), "got: {:?}", c);
+            assert!(
+                !c.contains(&"@tp1/sub/deep.txt".to_string()),
+                "got: {:?}",
+                c
+            );
             // Partial name filters.
             let c = h.candidates_for("cp @tp1/f");
             assert!(c.contains(&"@tp1/file.txt".to_string()), "got: {:?}", c);
@@ -2448,12 +3291,78 @@ mod tests {
     }
 
     #[test]
-    fn mv_cp_at_savepoints_and_first_slot() {        let _cwd = TempCwd::with_repo_fixture();
-        let mut cfg = hint_test_config();
-        cfg.teleports.insert(
-            "docs".to_string(),
-            std::path::PathBuf::from("C:/docs"),
+    fn view_and_txtf_tp_subpaths_respect_entry_modes() {
+        let _cwd = TempCwd::with_fixture(
+            &[("tp1/file.txt", "hello"), ("tp1/sub/deep.txt", "deep")],
+            &["tp1", "tp1/sub"],
         );
+        let root = std::env::current_dir().unwrap();
+        let mut cfg = hint_test_config();
+        cfg.teleports.insert("tp1".to_string(), root.join("tp1"));
+        Config::with_test_config(cfg, || {
+            let h = NtcHinter::new();
+            // viewf / txtf offer files (dirs stay traversable).
+            for line in ["viewf @tp1/", "txtf @tp1/", "txtf --head 5 @tp1/"] {
+                let c = h.candidates_for(line);
+                assert!(
+                    c.contains(&"@tp1/file.txt".to_string()),
+                    "got: {:?} for {}",
+                    c,
+                    line
+                );
+            }
+            // Directory traversal stays available for txtf's picker mode.
+            let c = h.candidates_for("txtf @tp1/");
+            assert!(c.contains(&"@tp1/sub/".to_string()), "got: {:?}", c);
+            let c = fs_candidates_for(&["txtf"], "tp1/");
+            assert!(c.contains(&"tp1/sub/".to_string()), "got: {:?}", c);
+            assert!(c.contains(&"tp1/file.txt".to_string()), "got: {:?}", c);
+            // viewd hides files but keeps directories.
+            let c = h.candidates_for("viewd @tp1/");
+            assert!(c.contains(&"@tp1/sub/".to_string()), "got: {:?}", c);
+            assert!(!c.contains(&"@tp1/file.txt".to_string()), "got: {:?}", c);
+            // Filled slots offer only flags, never more paths.
+            for line in ["viewf @tp1/file.txt ", "txtf @tp1/file.txt "] {
+                let c = h.candidates_for(line);
+                assert!(
+                    !c.iter().any(|s| s.starts_with("@tp1/")),
+                    "got: {:?} for {}",
+                    c,
+                    line
+                );
+            }
+        });
+    }
+
+    #[test]
+    fn view_variants_offer_their_flags() {
+        let h = NtcHinter::new();
+        for line in ["viewf --", "viewd --"] {
+            let c = h.candidates_for(line);
+            assert!(
+                c.contains(&"--care".to_string()),
+                "got: {:?} for {}",
+                c,
+                line
+            );
+            assert!(
+                c.contains(&"--copy".to_string()),
+                "got: {:?} for {}",
+                c,
+                line
+            );
+        }
+        assert!(h
+            .candidates_for("view --")
+            .contains(&"--directory".to_string()));
+    }
+
+    #[test]
+    fn mv_cp_at_savepoints_and_first_slot() {
+        let _cwd = TempCwd::with_repo_fixture();
+        let mut cfg = hint_test_config();
+        cfg.teleports
+            .insert("docs".to_string(), std::path::PathBuf::from("C:/docs"));
         cfg.teleports
             .insert("dl".to_string(), std::path::PathBuf::from("C:/dl"));
         Config::with_test_config(cfg, || {
@@ -2476,7 +3385,8 @@ mod tests {
     }
 
     #[test]
-    fn scan_files_dir_subcommands_and_flags() {        let h = NtcHinter::new();
+    fn scan_files_dir_subcommands_and_flags() {
+        let h = NtcHinter::new();
         // New subcommands complete after `scan`.
         let c = h.candidates_for("scan ");
         assert!(c.contains(&"files".to_string()), "got: {:?}", c);
@@ -2485,9 +3395,24 @@ mod tests {
         // Same flag set as `scan ext`.
         for cmd in ["scan files --", "scan dir --", "scan ext --"] {
             let c = h.candidates_for(cmd);
-            assert!(c.contains(&"--care".to_string()), "got: {:?} for {}", c, cmd);
-            assert!(c.contains(&"--depth".to_string()), "got: {:?} for {}", c, cmd);
-            assert!(c.contains(&"--size".to_string()), "got: {:?} for {}", c, cmd);
+            assert!(
+                c.contains(&"--care".to_string()),
+                "got: {:?} for {}",
+                c,
+                cmd
+            );
+            assert!(
+                c.contains(&"--depth".to_string()),
+                "got: {:?} for {}",
+                c,
+                cmd
+            );
+            assert!(
+                c.contains(&"--size".to_string()),
+                "got: {:?} for {}",
+                c,
+                cmd
+            );
         }
         // Pattern slots do NOT get ext-name ghosts.
         assert!(!in_ext_slot(&["scan", "files"]));
@@ -2608,7 +3533,7 @@ mod tests {
                 continue;
             }
             assert!(
-                !crate::filetype::is_known_unsupported_file_name(x),
+                !crate::filetype::is_finder_hidden(std::path::Path::new(x)),
                 "binary offered: {}",
                 x
             );
@@ -2656,6 +3581,100 @@ mod tests {
     }
 
     #[test]
+    fn igcare_values_complete_bare_names() {
+        // `ignore`/`care` store plain names, so no `src/` trailing slash.
+        let _cwd = TempCwd::with_fixture(
+            &[
+                ("Cargo.toml", "[package]\nname = \"fixture\"\n"),
+                ("app.toml", "x = 1\n"),
+                ("notes.txt", "hello\n"),
+                ("photo.png", "fakepng"),
+                ("src/main.rs", "fn main() {}\n"),
+            ],
+            &["src", "docs", "target"],
+        );
+        let mut cfg = Config::default();
+        cfg.ignored_extensions.insert("toml".into());
+        cfg.ignored_files.insert("notes.txt".into());
+        Config::with_test_config(cfg, || {
+            let h = NtcHinter::new();
+            let c = h.candidates_for("ignore dir s");
+            assert!(c.contains(&"src".to_string()), "got: {:?}", c);
+            assert!(!c.iter().any(|x| x == "src/"), "got: {:?}", c);
+            // Bare slots list everything that is not ignored yet.
+            let c = h.candidates_for("ignore dir ");
+            assert!(c.contains(&"docs".to_string()), "got: {:?}", c);
+            assert!(!c.contains(&"target".to_string()), "got: {:?}", c);
+            // `care` offers only the already-ignored items.
+            let c = h.candidates_for("care dir ");
+            assert!(c.contains(&"target".to_string()), "got: {:?}", c);
+            assert!(!c.contains(&"src".to_string()), "got: {:?}", c);
+            // Files and extensions follow the same split.
+            let c = h.candidates_for("ignore file ");
+            assert!(c.contains(&"Cargo.toml".to_string()), "got: {:?}", c);
+            assert!(!c.contains(&"notes.txt".to_string()), "got: {:?}", c);
+            let c = h.candidates_for("care file no");
+            assert!(c.contains(&"notes.txt".to_string()), "got: {:?}", c);
+            let c = h.candidates_for("ignore ext t");
+            assert!(c.contains(&"txt".to_string()), "got: {:?}", c);
+            assert!(!c.contains(&"toml".to_string()), "got: {:?}", c);
+            let c = h.candidates_for("care ext t");
+            assert!(c.contains(&"toml".to_string()), "got: {:?}", c);
+            assert!(!c.contains(&"txt".to_string()), "got: {:?}", c);
+            // Comma-separated slots keep the typed prefix.
+            let c = h.candidates_for("ignore dir src,d");
+            assert!(c.contains(&"src,docs".to_string()), "got: {:?}", c);
+            // Non-value slots stay untouched.
+            assert!(igcare_value_candidates_for(&["ignore"], "").is_none());
+            assert!(igcare_value_candidates_for(&["ignore", "foo"], "").is_none());
+            assert!(igcare_value_candidates_for(&["fs"], "").is_none());
+        });
+    }
+
+    #[test]
+    fn fileops_tp_subpaths_respect_entry_modes() {
+        let _cwd = TempCwd::with_fixture(
+            &[("tp1/file.txt", "hello"), ("tp1/sub/deep.txt", "deep")],
+            &["tp1", "tp1/sub"],
+        );
+        let root = std::env::current_dir().unwrap();
+        let mut cfg = hint_test_config();
+        cfg.teleports.insert("tp1".to_string(), root.join("tp1"));
+        Config::with_test_config(cfg, || {
+            let h = NtcHinter::new();
+            // mkf / rmf offer files; directories stay traversable.
+            for line in ["mkf @tp1/", "rmf @tp1/", "mkf a.txt, @tp1/"] {
+                let c = h.candidates_for(line);
+                assert!(
+                    c.contains(&"@tp1/file.txt".to_string()),
+                    "got: {:?} for {}",
+                    c,
+                    line
+                );
+            }
+            // mkd / rmd offer directories only.
+            for line in ["mkd @tp1/", "rmd @tp1/"] {
+                let c = h.candidates_for(line);
+                assert!(
+                    c.contains(&"@tp1/sub/".to_string()),
+                    "got: {:?} for {}",
+                    c,
+                    line
+                );
+                assert!(
+                    !c.contains(&"@tp1/file.txt".to_string()),
+                    "got: {:?} for {}",
+                    c,
+                    line
+                );
+            }
+            // Nested traversal.
+            let c = h.candidates_for("rmf @tp1/sub/d");
+            assert!(c.contains(&"@tp1/sub/deep.txt".to_string()), "got: {:?}", c);
+        });
+    }
+
+    #[test]
     fn rmf_star_dot_completes_extensions() {
         // `rmf *.<Tab>` offers `*.<ext>` for extensions present in the dir
         // (fixture has `.toml`, `.rs`, …); a typed stub filters them.
@@ -2678,16 +3697,57 @@ mod tests {
     }
 
     #[test]
-    fn chain_tail_splits_unquoted_ampersands() {
-        assert_eq!(NtcHinter::chain_tail("ran reset && tl "), " tl ");
-        assert_eq!(NtcHinter::chain_tail("ran reset && tl"), " tl");
-        assert_eq!(NtcHinter::chain_tail("tl"), "tl");
-        // Single `&` is literal, quoted `&&` is literal, unclosed
-        // quotes swallow the rest — all mean "no chain".
-        assert_eq!(NtcHinter::chain_tail("a & b"), "a & b");
-        assert_eq!(NtcHinter::chain_tail("say \"a && b"), "say \"a && b");
-        assert_eq!(NtcHinter::chain_tail("say \"a && b\" && tl "), " tl ");
-        assert_eq!(NtcHinter::chain_tail("&&"), "");
+    fn mv_cp_star_completes_extensions() {
+        // `cp *` offers `*` itself plus every `*.<ext>` present, so Tab
+        // cycles `*` -> `*.toml` -> `*.txt` -> ….
+        let _cwd = TempCwd::with_repo_fixture();
+        let c = fs_candidates_for(&["cp"], "*");
+        assert!(c.contains(&"*".to_string()), "got: {:?}", c);
+        assert!(c.contains(&"*.toml".to_string()), "got: {:?}", c);
+        assert!(c.contains(&"*.txt".to_string()), "got: {:?}", c);
+        assert!(c.contains(&"*.png".to_string()), "got: {:?}", c);
+        // A typed stub filters and drops the bare `*`.
+        let c2 = fs_candidates_for(&["mv"], "*.t");
+        assert!(!c2.contains(&"*".to_string()), "got: {:?}", c2);
+        assert!(c2.contains(&"*.toml".to_string()), "got: {:?}", c2);
+        assert!(c2.contains(&"*.txt".to_string()), "got: {:?}", c2);
+        // Fully-typed pattern, dst slot and non-pattern forms stay quiet.
+        assert!(fs_candidates_for(&["cp"], "*.toml").is_empty());
+        assert!(fs_candidates_for(&["cp", "a.txt"], "*.py").is_empty());
+        assert!(fs_candidates_for(&["cp"], "*a").is_empty());
+        // End-to-end through the hinter, with a leading flag.
+        let h = NtcHinter::new();
+        let c = h.candidates_for("cp -f *");
+        assert!(c.contains(&"*".to_string()), "got: {:?}", c);
+        assert!(c.contains(&"*.toml".to_string()), "got: {:?}", c);
+    }
+
+    #[test]
+    fn stage_tail_splits_top_level_operators() {
+        assert_eq!(NtcHinter::stage_tail("ran reset && tl ").0, " tl ");
+        assert_eq!(NtcHinter::stage_tail("ran reset && tl").0, " tl");
+        assert_eq!(NtcHinter::stage_tail("tl").0, "tl");
+        // Pipes and redirects split too; the operator is reported.
+        assert_eq!(NtcHinter::stage_tail("gs main | sort").0, " sort");
+        assert_eq!(NtcHinter::stage_tail("gs main | sort").1, Some("|"));
+        assert_eq!(NtcHinter::stage_tail("a || b").1, Some("||"));
+        assert_eq!(NtcHinter::stage_tail("a > out.txt").1, Some(">"));
+        assert_eq!(NtcHinter::stage_tail("a >> out.txt").1, Some(">>"));
+        assert_eq!(NtcHinter::stage_tail("a < in.txt").1, Some("<"));
+        assert_eq!(NtcHinter::stage_tail("a <<EOF").0, "EOF");
+        assert_eq!(NtcHinter::stage_tail("a <<< hi").1, Some("<<<"));
+        // Single `&` is literal, quoted operators are literal, unclosed
+        // quotes swallow the rest — all mean "no operator".
+        assert_eq!(NtcHinter::stage_tail("a & b").0, "a & b");
+        assert_eq!(NtcHinter::stage_tail("say \"a && b").0, "say \"a && b");
+        assert_eq!(NtcHinter::stage_tail("say \"a && b\" && tl ").0, " tl ");
+        assert_eq!(NtcHinter::stage_tail("&&").0, "");
+        // Unspaced operators are data, exactly like the executor.
+        assert_eq!(NtcHinter::stage_tail("math a|b").0, "math a|b");
+        assert_eq!(
+            NtcHinter::stage_tail("nsheet x --filter age>30").0,
+            "nsheet x --filter age>30"
+        );
     }
 
     #[test]
@@ -2828,6 +3888,14 @@ mod tests {
             .candidates_for("serve --")
             .contains(&"--https".to_string()));
         assert!(h.candidates_for("serve --ht").is_empty());
+        // `--lock` (serve files read-only) completes on both arms.
+        assert!(h.candidates_for("serve --").contains(&"--lock".to_string()));
+        assert!(h
+            .candidates_for("serve files --")
+            .contains(&"--lock".to_string()));
+        assert!(h
+            .candidates_for("serve files --l")
+            .contains(&"--lock".to_string()));
     }
 
     #[test]
@@ -3105,13 +4173,10 @@ mod tests {
         });
         // Dangling named refs complete nothing (no fallback leak).
         let mut cfg2 = hint_test_config();
-        cfg2
-            .run_aliases
+        cfg2.run_aliases
             .insert("dangle".to_string(), "ssh $p".to_string());
-        cfg2.run_alias_hints.insert(
-            "dangle".to_string(),
-            "#p --hint-n ghost".into(),
-        );
+        cfg2.run_alias_hints
+            .insert("dangle".to_string(), "#p --hint-n ghost".into());
         Config::with_test_config(cfg2, || {
             let c = alias_arg_candidates_for(&["dangle"], "", true).unwrap();
             assert!(c.is_empty(), "got: {:?}", c);
@@ -3141,16 +4206,31 @@ mod tests {
         // Array placeholders keep their brackets.
         let c = h.candidates_for("ral edit runc \"gcc $x[]\" #");
         assert!(c.contains(&"#x[]".to_string()), "got: {:?}", c);
-        // `--hint` prefix → the seven flags.
+        // `--hint` prefix → the hint flags.
         let c = h.candidates_for("ral add tld \"tl dir $x\" #x --hint-");
         for f in [
             "--hint-tp",
             "--hint-ext",
+            "--hint-ext-name",
             "--hint-spf",
             "--hint-file",
+            "--hint-file-name",
             "--hint-dir",
             "--hint-fd",
             "--hint-all",
+        ] {
+            assert!(c.contains(&f.to_string()), "missing {} in {:?}", f, c);
+        }
+        // `--select` prefix → the select flags.
+        let c = h.candidates_for("ral add tld \"tl dir $x\" #x --select-");
+        for f in [
+            "--select-dir",
+            "--select-ext",
+            "--select-ext-name",
+            "--select-file",
+            "--select-file-name",
+            "--select-fd",
+            "--select-tp",
         ] {
             assert!(c.contains(&f.to_string()), "missing {} in {:?}", f, c);
         }
@@ -3163,6 +4243,28 @@ mod tests {
         // Non add/edit roots stay quiet.
         let c = h.candidates_for("ral list #");
         assert!(!c.iter().any(|s| s.starts_with('#')), "got: {:?}", c);
+    }
+
+    #[test]
+    fn hint_name_kinds_yield_file_stems() {
+        use crate::shell::alias::ParamHintKind as K;
+        let _cwd = TempCwd::with_repo_fixture();
+        // `--hint-file-name` = stems of every CWD file.
+        let c = hint_kind_candidates(&[K::FileName]);
+        assert_eq!(c, vec!["Cargo", "app", "notes", "photo"]);
+        // `--hint-ext-name toml` = stems of matching files only.
+        let c = hint_kind_candidates(&[K::ExtName(vec!["toml".into()])]);
+        assert_eq!(c, vec!["Cargo", "app"]);
+        // Multi-extension union, sorted/deduped.
+        let c = hint_kind_candidates(&[K::ExtName(vec!["txt".into(), "png".into()])]);
+        assert_eq!(c, vec!["notes", "photo"]);
+        // Non-matching extension → empty.
+        assert!(hint_kind_candidates(&[K::ExtName(vec!["rs".into()])]).is_empty());
+        // Bare `--hint-ext-name` behaves like `--hint-file-name`.
+        assert_eq!(
+            hint_kind_candidates(&[K::ExtName(vec![])]),
+            vec!["Cargo", "app", "notes", "photo"]
+        );
     }
 
     #[test]
@@ -3206,6 +4308,127 @@ mod tests {
         // Deeper positions (flags/values) complete nothing.
         assert!(fs_candidates_for(&["image", "a.png", "to"], "").is_empty());
         assert!(fs_candidates_for(&["image", "display", "a.png"], "").is_empty());
+    }
+
+    #[test]
+    fn fmt_source_slot_offers_convertible_files_only() {
+        // Directories plus fmt-supported files only.
+        let _cwd = TempCwd::with_fixture(
+            &[
+                ("README.md", "# hi\n"),
+                ("Cargo.toml", "[package]\n"),
+                ("notes.txt", "hello\n"),
+                ("data.docx", "fake"),
+                ("book.pdf", "fake"),
+                ("book.xlsx", "fake"),
+                ("image.png", "fake"),
+                ("docs/raw.bin", "fake"),
+            ],
+            &["docs"],
+        );
+        let c = fs_candidates_for(&["fmt"], "");
+        assert!(
+            c.iter().any(|x| x == "README.md"),
+            "md file must be offered: {:?}",
+            c
+        );
+        assert!(
+            c.iter().any(|x| x == "Cargo.toml"),
+            "toml file must be offered: {:?}",
+            c
+        );
+        assert!(
+            c.iter().any(|x| x == "data.docx"),
+            "docx file must be offered: {:?}",
+            c
+        );
+        assert!(
+            c.iter().any(|x| x == "notes.txt"),
+            "txt file must be offered: {:?}",
+            c
+        );
+        assert!(
+            !c.iter().any(|x| x == "image.png"),
+            "unsupported ext must be suppressed: {:?}",
+            c
+        );
+        assert!(
+            !c.iter().any(|x| x == "book.pdf" || x == "book.xlsx"),
+            "write-only formats must not be offered as sources: {:?}",
+            c
+        );
+        assert!(
+            c.iter().any(|x| x == "docs/"),
+            "dirs must pass for traversal: {:?}",
+            c
+        );
+        // `fmt docs/` traversal filters inside the directory too.
+        let c = fs_candidates_for(&["fmt"], "docs/");
+        assert!(
+            !c.iter().any(|x| x.ends_with(".bin")),
+            "unsupported file listed inside traversal: {:?}",
+            c
+        );
+        // Deeper positions (keyword/flag slots) complete no filesystem paths.
+        assert!(fs_candidates_for(&["fmt", "x.md", "to"], "").is_empty());
+        assert!(fs_candidates_for(&["fmt", "x.md", "-o"], "").is_empty());
+    }
+
+    #[test]
+    fn fmt_to_keyword_and_target_slots() {
+        let h = NtcHinter::new();
+        // After the source file: the keyword/flag slots.
+        let c = h.candidates_for("fmt README.md ");
+        assert!(c.contains(&"to".to_string()), "got: {:?}", c);
+        assert!(c.contains(&"-o".to_string()), "got: {:?}", c);
+        assert!(c.contains(&"--output".to_string()), "got: {:?}", c);
+        // While typing the keyword.
+        assert!(h
+            .candidates_for("fmt README.md t")
+            .contains(&"to".to_string()));
+        // The `to` target slot lists every conversion format…
+        for fmt_ in [
+            "json", "yaml", "toml", "md", "html", "xml", "docx", "txt", "pdf", "csv", "tsv", "xlsx",
+        ] {
+            assert!(
+                h.candidates_for("fmt README.md to ")
+                    .contains(&fmt_.to_string()),
+                "missing {fmt_}: got {:?}",
+                h.candidates_for("fmt README.md to ")
+            );
+        }
+        // …with prefix filtering.
+        let c = h.candidates_for("fmt README.md to j");
+        assert_eq!(c, vec!["json".to_string()]);
+        // No filesystem paths in the `to` slot.
+        assert!(!h
+            .candidates_for("fmt README.md to ")
+            .contains(&"README.md".to_string()));
+    }
+
+    #[test]
+    fn fmt_output_slot_completes_full_names() {
+        let h = NtcHinter::new();
+        // Bare `-o ` suggests `out.<ext>` filenames.
+        let c = h.candidates_for("fmt x.md to json -o ");
+        assert!(c.contains(&"out.json".to_string()), "got: {:?}", c);
+        assert!(c.contains(&"out.docx".to_string()), "got: {:?}", c);
+        assert!(c.contains(&"out.pdf".to_string()), "got: {:?}", c);
+        assert!(c.contains(&"out.xlsx".to_string()), "got: {:?}", c);
+        // A dotless stub grows a dot with the whole palette.
+        let c = h.candidates_for("fmt x.md to json -o j");
+        assert!(c.contains(&"j.json".to_string()), "got: {:?}", c);
+        // Partial extension keeps the typed basename.
+        let c = h.candidates_for("fmt x.md to json -o o.j");
+        assert!(c.contains(&"o.json".to_string()), "got: {:?}", c);
+        assert!(!c.contains(&"o.html".to_string()), "got: {:?}", c);
+        // `md` prefix matches both `.md` and `.markdown` (case-insensitive).
+        let c = h.candidates_for("fmt x.md to json --output n.m");
+        assert!(c.contains(&"n.md".to_string()), "got: {:?}", c);
+        assert!(c.contains(&"n.markdown".to_string()), "got: {:?}", c);
+        // Slotted after other words? Never outside the fmt root or the
+        // flag slot.
+        assert!(h.candidates_for("scan src -o ").is_empty());
     }
 
     #[test]
@@ -3292,18 +4515,248 @@ mod tests {
         let h = NtcHinter::new();
         let c = h.candidates_for("help ");
         for t in [
-            "nav", "config", "image", "arc", "scan", "teleport", "nssh", "nsheet",
+            "nav", "config", "image", "arc", "scan", "teleport", "nssh", "nsheet", "nms", "pipe",
+            "fake",
         ] {
             assert!(c.contains(&t.to_string()), "missing topic {}: {:?}", t, c);
         }
         // Aliases are not suggested — canonical names only.
         assert!(!c.contains(&"cd".to_string()), "got: {:?}", c);
         assert!(!c.contains(&"img".to_string()), "got: {:?}", c);
+        assert!(!c.contains(&"pipes".to_string()), "got: {:?}", c);
         // Prefix + case-insensitive filtering.
         assert_eq!(h.candidates_for("help im"), vec!["image".to_string()]);
         assert_eq!(h.candidates_for("help IM"), vec!["image".to_string()]);
         assert_eq!(h.candidates_for("help ar"), vec!["arc".to_string()]);
+        assert_eq!(h.candidates_for("help pi"), vec!["pipe".to_string()]);
+        assert_eq!(h.candidates_for("help PI"), vec!["pipe".to_string()]);
+        assert_eq!(h.candidates_for("help fa"), vec!["fake".to_string()]);
         // Topic filled: no further hints.
         assert!(h.candidates_for("help image ").is_empty());
+        assert!(h.candidates_for("help pipe ").is_empty());
+    }
+
+    #[test]
+    fn fake_completions_offer_subcommands_and_types() {
+        let subs = subcommands_for(&["fake"]);
+        for s in ["gen", "types", "locales", "group", "help"] {
+            assert!(subs.contains(&s), "fake missing subcommand {s}: {subs:?}");
+        }
+        let gen_flags = subcommands_for(&["fake", "gen"]);
+        assert!(gen_flags.contains(&"-n"));
+        assert!(gen_flags.contains(&"--group"));
+        assert!(gen_flags.contains(&"--unique"));
+        assert!(gen_flags.contains(&"--locale"));
+
+        let group_subs = subcommands_for(&["fake", "group"]);
+        assert!(group_subs.contains(&"export"));
+        assert!(group_subs.contains(&"import"));
+
+        let types = fake_names_for_command(&["fake", "gen"], "");
+        assert!(types.iter().any(|t| t == "name"), "got: {types:?}");
+        assert!(types.iter().any(|t| t == "email"), "got: {types:?}");
+
+        let locales = fake_names_for_command(&["fake", "gen", "-l"], "");
+        assert!(locales.iter().any(|l| l == "en_US"), "got: {locales:?}");
+        assert!(locales.iter().any(|l| l == "th_TH"), "got: {locales:?}");
+
+        // `fake gen -g <TAB>` / `fake group rm <TAB>` suggest saved group
+        // names; the count depends on config, so only assert they don't panic.
+        let _ = fake_names_for_command(&["fake", "gen", "-g"], "");
+        let _ = fake_names_for_command(&["fake", "group", "rm"], "");
+    }
+
+    #[test]
+    fn pipe_stage_offers_only_the_pipe_filters() {
+        let h = NtcHinter::new();
+        let filters = vec![
+            "head".to_string(),
+            "tail".to_string(),
+            "betw".to_string(),
+            "gs".to_string(),
+            "sort".to_string(),
+            "rev".to_string(),
+            "encode".to_string(),
+            "qur".to_string(),
+        ];
+        assert_eq!(h.candidates_for("gs main | "), filters);
+        // Cursor immediately after the pipe (no trailing space) still lists them.
+        assert_eq!(h.candidates_for("gs main |"), filters);
+        assert_eq!(h.candidates_for("gs main | s"), vec!["sort".to_string()]);
+        assert_eq!(h.candidates_for("gs main | r"), vec!["rev".to_string()]);
+        assert_eq!(h.candidates_for("gs main | be"), vec!["betw".to_string()]);
+        assert_eq!(h.candidates_for("gs main | e"), vec!["encode".to_string()]);
+        assert_eq!(h.candidates_for("gs main | q"), vec!["qur".to_string()]);
+        // No fallback for other commands (they never complete in a pipe).
+        assert!(h.candidates_for("gs main | say ").is_empty());
+        assert!(h.candidates_for("gs main | sa").is_empty());
+        assert!(h.candidates_for("gs main | view a").is_empty());
+        assert!(h.candidates_for("gs main | -").is_empty());
+    }
+
+    #[test]
+    fn pipe_stage_filters_complete_their_flags_and_files() {
+        let h = NtcHinter::new();
+        for flag in [
+            "-r",
+            "--reverse",
+            "-n",
+            "--numeric",
+            "-u",
+            "--unique",
+            "-f",
+            "--ignore-case",
+        ] {
+            assert!(
+                h.candidates_for("gs main | sort -")
+                    .contains(&flag.to_string()),
+                "sort missing {flag}"
+            );
+        }
+        for flag in ["-p", "--path", "-s", "--sort", "-d", "-l", "--limit", "-i"] {
+            assert!(
+                h.candidates_for("gs main | gs -")
+                    .contains(&flag.to_string()),
+                "gs missing {flag}"
+            );
+        }
+        for flag in [
+            "-s",
+            "--select",
+            "-rp",
+            "--replace",
+            "-dp",
+            "--display",
+            "-d",
+            "--depth",
+            "-l",
+            "--limit",
+        ] {
+            assert!(
+                h.candidates_for("gs main | qur -")
+                    .contains(&flag.to_string()),
+                "qur missing {flag}"
+            );
+        }
+        for codec in ["b2", "b10", "b64", "base64", "hex", "url"] {
+            assert!(
+                h.candidates_for("gs main | encode ")
+                    .contains(&codec.to_string()),
+                "encode missing {codec}"
+            );
+        }
+        assert!(h
+            .candidates_for("gs main | encode b64 -")
+            .contains(&"-o".to_string()));
+        assert!(h
+            .candidates_for("gs main | encode b64 -")
+            .contains(&"--output".to_string()));
+        // Head/tail/betw/sort take files; `head`/`tail`/`betw` have no flags.
+        assert!(h
+            .candidates_for("gs main | head -")
+            .contains(&"--help".to_string()));
+        assert!(!h
+            .candidates_for("gs main | head --")
+            .contains(&"--tail".to_string()));
+    }
+
+    #[test]
+    fn pipe_stage_files_use_existing_command_completion() {
+        let _cwd = TempCwd::with_repo_fixture();
+        let h = NtcHinter::new();
+        assert!(h
+            .candidates_for("gs main | head ")
+            .contains(&"notes.txt".to_string()));
+        assert!(h
+            .candidates_for("gs main | sort ")
+            .contains(&"Cargo.toml".to_string()));
+        assert!(h
+            .candidates_for("gs main | qur ")
+            .contains(&"Cargo.toml".to_string()));
+    }
+
+    #[test]
+    fn output_redirect_never_hints() {
+        let _cwd = TempCwd::with_repo_fixture();
+        let h = NtcHinter::new();
+        assert!(h.candidates_for("gs main > ").is_empty());
+        assert!(h.candidates_for("gs main > out").is_empty());
+        assert!(h.candidates_for("gs main >").is_empty());
+    }
+
+    #[test]
+    fn append_and_input_redirects_hint_text_files_only() {
+        let _cwd = TempCwd::with_repo_fixture();
+        let h = NtcHinter::new();
+        for prefix in ["gs main >> ", "gs main < ", "gs main >>", "gs main <"] {
+            let c = h.candidates_for(prefix);
+            assert!(
+                c.contains(&"Cargo.toml".to_string()),
+                "{prefix} missing text file: {c:?}"
+            );
+            assert!(
+                c.contains(&"docs/".to_string()),
+                "{prefix} missing traversal dir: {c:?}"
+            );
+            assert!(
+                !c.iter().any(|x| x == "photo.png"),
+                "{prefix} offered an image: {c:?}"
+            );
+        }
+        // Prefix filtering and nested traversal.
+        assert_eq!(
+            h.candidates_for("gs main >> no"),
+            vec!["notes.txt".to_string()]
+        );
+        assert!(h
+            .candidates_for("gs main < src/")
+            .contains(&"src/main.rs".to_string()));
+        // Slot filled: nothing more to hint.
+        assert!(h.candidates_for("gs main >> notes.txt ").is_empty());
+        assert!(h.candidates_for("gs main < notes.txt ").is_empty());
+    }
+
+    #[test]
+    fn heredoc_delimiter_is_always_eof() {
+        let h = NtcHinter::new();
+        assert_eq!(h.candidates_for("say << "), vec!["EOF".to_string()]);
+        assert_eq!(h.candidates_for("say <<"), vec!["EOF".to_string()]);
+        assert_eq!(h.candidates_for("say <<E"), vec!["EOF".to_string()]);
+        assert_eq!(h.candidates_for("say <<EOF"), Vec::<String>::new());
+        assert_eq!(h.candidates_for("say <<EOF "), Vec::<String>::new());
+        assert!(h.candidates_for("say <<XYZ").is_empty());
+        // Here-strings take free text: no hint.
+        assert!(h.candidates_for("say <<< ").is_empty());
+        assert!(h.candidates_for("say <<< hi").is_empty());
+    }
+
+    #[test]
+    fn ghost_remainder_adds_a_space_after_a_bare_operator() {
+        assert_eq!(
+            ghost_remainder("gs main |", "head"),
+            Some(" head".to_string())
+        );
+        assert_eq!(
+            ghost_remainder("gs main | ", "head"),
+            Some("head".to_string())
+        );
+        assert_eq!(
+            ghost_remainder("gs main | s", "sort"),
+            Some("ort".to_string())
+        );
+        assert_eq!(ghost_remainder("say <<", "EOF"), Some(" EOF".to_string()));
+        assert_eq!(
+            ghost_remainder("ran reset &&", "tl"),
+            Some(" tl".to_string())
+        );
+    }
+
+    #[test]
+    fn double_pipe_segments_complete_commands() {
+        let h = NtcHinter::new();
+        assert!(h
+            .candidates_for("gs main || tl ")
+            .contains(&"ext".to_string()));
+        assert_eq!(h.candidates_for("gs main || tl d"), vec!["dir".to_string()]);
     }
 }

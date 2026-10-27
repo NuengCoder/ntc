@@ -115,6 +115,14 @@ impl Editor {
         let num_visible = rows.min(nodes.len().saturating_sub(scroll));
         let total_nodes = nodes.len();
         let sb_col = sw.saturating_sub(1);
+        // Node numbers are 1-based positions in the flattened tree, so
+        // expanding/collapsing a directory renumbers everything below it.
+        let num_w = total_nodes.to_string().len().max(2);
+        let num_fg = if use_color {
+            theme.editor.gutter_text.to_crossterm()
+        } else {
+            theme.editor.sidebar_selected.to_crossterm()
+        };
 
         let vscroll_thumb_start: Option<usize>;
         let vscroll_thumb_height: usize;
@@ -149,7 +157,22 @@ impl Editor {
                 let node = &nodes[idx];
                 let is_open = node.path == self.path;
 
-                let mut x = 1 + node.depth * 2;
+                if sw > num_w {
+                    let label = format!("{:>width$} ", idx + 1, width = num_w);
+                    queue!(
+                        stdout,
+                        MoveTo(1, sy as u16),
+                        SetForegroundColor(if is_selected && use_color {
+                            theme.editor.sidebar_selected.to_crossterm()
+                        } else {
+                            num_fg
+                        }),
+                        Print(label),
+                    )?;
+                }
+
+                // 1 margin + number field + its trailing space.
+                let mut x = 2 + num_w + node.depth * 2;
                 if x < sw {
                     if node.is_dir {
                         let ind = if node.expanded { "▼" } else { "▶" };

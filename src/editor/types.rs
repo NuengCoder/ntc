@@ -99,6 +99,138 @@ impl CreateKind {
     }
 }
 
+/// What the nfe input box is for.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub(crate) enum NfeBoxKind {
+    NewFile,
+    NewDir,
+    Rename,
+}
+
+/// Pending `d`-delete confirmation in nfe. `y` executes, `n`/Esc cancels.
+#[derive(Clone, Debug)]
+pub(crate) struct NfeConfirm {
+    /// Full path of the entry to remove.
+    pub(crate) path: std::path::PathBuf,
+    /// Whether the entry is a directory (whole subtree removed).
+    pub(crate) is_dir: bool,
+}
+
+/// VSCode-style input box opened from the nfe explorer (`n`, `m`, `r`).
+/// Drawn as a centred box over the top of the text area; Esc cancels,
+/// Enter applies (an empty line cancels too).
+#[derive(Clone, Debug)]
+pub(crate) struct NfeBox {
+    pub(crate) kind: NfeBoxKind,
+    /// Directory the new entry goes into (`NewFile`/`NewDir`).
+    pub(crate) base: std::path::PathBuf,
+    /// Entry being renamed (`Rename`).
+    pub(crate) target: Option<std::path::PathBuf>,
+    pub(crate) buf: String,
+    /// Caret byte offset inside `buf`.
+    pub(crate) cursor: usize,
+}
+
+impl NfeBox {
+    pub(crate) fn new_file(base: std::path::PathBuf) -> Self {
+        Self {
+            kind: NfeBoxKind::NewFile,
+            base,
+            target: None,
+            buf: String::new(),
+            cursor: 0,
+        }
+    }
+
+    pub(crate) fn new_dir(base: std::path::PathBuf) -> Self {
+        Self {
+            kind: NfeBoxKind::NewDir,
+            base,
+            target: None,
+            buf: String::new(),
+            cursor: 0,
+        }
+    }
+
+    pub(crate) fn rename(target: std::path::PathBuf) -> Self {
+        let buf = target
+            .file_name()
+            .map(|n| n.to_string_lossy().into_owned())
+            .unwrap_or_default();
+        Self {
+            kind: NfeBoxKind::Rename,
+            base: target.parent().map(|p| p.to_path_buf()).unwrap_or_default(),
+            target: Some(target),
+            cursor: buf.len(),
+            buf,
+        }
+    }
+
+    /// Clamp the caret to the buffer and a char boundary.
+    pub(crate) fn pos(&self) -> usize {
+        let mut p = self.cursor.min(self.buf.len());
+        while p > 0 && !self.buf.is_char_boundary(p) {
+            p -= 1;
+        }
+        p
+    }
+
+    pub(crate) fn insert(&mut self, text: &str) {
+        let p = self.pos();
+        self.buf.insert_str(p, text);
+        self.cursor = p + text.len();
+    }
+
+    pub(crate) fn backspace(&mut self) {
+        let p = self.pos();
+        if p == 0 {
+            return;
+        }
+        let mut prev = p - 1;
+        while prev > 0 && !self.buf.is_char_boundary(prev) {
+            prev -= 1;
+        }
+        self.buf.replace_range(prev..p, "");
+        self.cursor = prev;
+    }
+
+    pub(crate) fn delete(&mut self) {
+        let p = self.pos();
+        if p >= self.buf.len() {
+            return;
+        }
+        let mut next = p + 1;
+        while next < self.buf.len() && !self.buf.is_char_boundary(next) {
+            next += 1;
+        }
+        self.buf.replace_range(p..next, "");
+    }
+
+    pub(crate) fn move_left(&mut self) {
+        let p = self.pos();
+        if p == 0 {
+            return;
+        }
+        let mut prev = p - 1;
+        while prev > 0 && !self.buf.is_char_boundary(prev) {
+            prev -= 1;
+        }
+        self.cursor = prev;
+    }
+
+    pub(crate) fn move_right(&mut self) {
+        let p = self.pos();
+        if p >= self.buf.len() {
+            return;
+        }
+        let mut next = p + 1;
+        while next < self.buf.len() && !self.buf.is_char_boundary(next) {
+            next += 1;
+        }
+        self.cursor = next;
+    }
+}
+
 // ── snapshot for undo/redo ────────────────────────────────────────────────────
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
@@ -185,6 +317,8 @@ pub(crate) struct ScrollState {
     pub(crate) x: usize,
     /// Help screen scroll offset (was `help_scroll`)
     pub(crate) help: usize,
+    /// Help screen horizontal pan offset (columns)
+    pub(crate) help_x: usize,
     /// Run panel scroll offset (was `run_scroll`)
     pub(crate) run: usize,
     /// Terminal panel horizontal scroll offset
@@ -199,6 +333,7 @@ impl ScrollState {
             offset: 0,
             x: 0,
             help: 0,
+            help_x: 0,
             run: 0,
             terminal_scroll_x: 0,
             dragging_vscroll: false,
@@ -286,8 +421,8 @@ impl Sidebar {
         }
     }
 
-    /// Invalidate all cached directory listings.
-    #[allow(dead_code)]
+    /// Invalidate all cached directory listings (after creating, renaming
+    /// or removing entries the cached rows are stale).
     pub(crate) fn invalidate_cache(&mut self) {
         self.dir_cache.clear();
     }
@@ -390,9 +525,6 @@ impl Sidebar {
             };
             if let Ok(ft) = entry.file_type() {
                 let name = entry.file_name().to_string_lossy().to_string();
-                if name.starts_with('.') {
-                    continue;
-                }
                 let path = entry.path();
                 if ft.is_dir() {
                     dirs.push(FileNode {
@@ -753,6 +885,26 @@ pub(crate) struct Editor {
     // Command mode buffer.
     pub(crate) cmd_buf: String,
 
+    // Caret position (byte offset) inside whichever prompt buffer is open
+    // (`:`, `nfe:`, gmode, query). Shared by all four: they are never
+    // open at the same time and each one starts empty.
+    pub(crate) prompt_cursor: usize,
+    /// Index of the Tab-completion candidate last inserted, for cycling
+    /// through ambiguous matches (`usize::MAX` = not cycling).
+    pub(crate) prompt_cycle: usize,
+    /// Candidates and token offset captured by the last Tab, so a second
+    /// Tab keeps cycling through the same matches.
+    pub(crate) prompt_cycle_tokens: Vec<String>,
+    pub(crate) prompt_cycle_start: usize,
+
+    /// Selections kept alive by Visual `d` (next occurrence): drawn like a
+    /// search match and dropped when Visual mode is left or `w` is pressed.
+    pub(crate) visual_marks: Vec<((usize, usize), (usize, usize))>,
+
+    /// Set when a tab/file switch was blocked because the buffer has
+    /// unsaved edits: pressing the same key again goes through anyway.
+    pub(crate) unsaved_guard: Option<String>,
+
     // Dirty region tracking
     pub(crate) dirty_start: usize,
     pub(crate) dirty_end: usize,
@@ -795,6 +947,12 @@ pub(crate) struct Editor {
     // Inline create prompt (Normal `n`/`m`): None = closed.
     pub(crate) create_kind: Option<CreateKind>,
     pub(crate) create_buf: String,
+
+    // nfe input box (`n`/`m`/`r` in the sidebar): None = closed.
+    pub(crate) nfe_box: Option<NfeBox>,
+
+    // nfe pending delete confirmation (`d` then `y`/`n`): None = closed.
+    pub(crate) nfe_confirm: Option<NfeConfirm>,
 
     // Run mode state
     pub(crate) run_lines: Vec<String>,
@@ -894,8 +1052,7 @@ impl Editor {
         };
         let (tw, th) = crate::editor::helpers::term_size();
         let editor_cfg = EditorConfig::load();
-        let mut syntax =
-            crate::syntax::SyntaxHighlighter::new(path.extension().and_then(|e| e.to_str()));
+        let mut syntax = crate::syntax::SyntaxHighlighter::for_path(path);
         syntax.resize_cache(lines.len());
         // Pre-tokenize entire file if small enough for instant scrolling
         if editor_cfg.syntax_enabled && lines.len() <= 5000 {
@@ -913,6 +1070,12 @@ impl Editor {
             mode: Mode::Normal,
             status_msg: None,
             cmd_buf: String::new(),
+            prompt_cursor: 0,
+            prompt_cycle: usize::MAX,
+            prompt_cycle_tokens: Vec::new(),
+            prompt_cycle_start: 0,
+            visual_marks: Vec::new(),
+            unsaved_guard: None,
             dirty_start: 0,
             dirty_end: 0,
             cursor: CursorState::new(),
@@ -933,6 +1096,8 @@ impl Editor {
             qal_aliases: HashMap::new(),
             create_kind: None,
             create_buf: String::new(),
+            nfe_box: None,
+            nfe_confirm: None,
             run_lines: Vec::new(),
             run_cmd_buf: String::new(),
             run_executing: None,
@@ -1285,5 +1450,34 @@ impl Editor {
         if changed {
             self.mark_all_dirty();
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::Sidebar;
+
+    #[test]
+    fn read_children_lists_dotfiles_and_dot_dirs() {
+        let dir = std::env::temp_dir().join(format!(
+            "ntc_sidebar_dot_{}_{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map(|d| d.as_nanos())
+                .unwrap_or(0)
+        ));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(dir.join(".github")).unwrap();
+        std::fs::create_dir_all(dir.join("src")).unwrap();
+        std::fs::write(dir.join(".env"), "A=1").unwrap();
+        std::fs::write(dir.join("main.rs"), "fn main() {}").unwrap();
+
+        let (dirs, files) = Sidebar::read_children(&dir, 0);
+        assert!(dirs.iter().any(|n| n.name == ".github"), "{:?}", dirs.len());
+        assert!(dirs.iter().any(|n| n.name == "src"));
+        assert!(files.iter().any(|n| n.name == ".env"));
+        assert!(files.iter().any(|n| n.name == "main.rs"));
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }

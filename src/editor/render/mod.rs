@@ -65,6 +65,13 @@ impl Editor {
                         }
                     }
                 }
+                // Selections kept alive by Visual `d`: drawn like search hits
+                // so the trail of visited matches stays visible.
+                let marks: Vec<((usize, usize), (usize, usize))> = if self.mode == Mode::Visual {
+                    self.visual_marks.clone()
+                } else {
+                    Vec::new()
+                };
 
                 for i in ds..de {
                     let sy = content_y + i;
@@ -193,6 +200,20 @@ impl Editor {
                             false
                         };
 
+                        let in_mark = marks.iter().any(|&((sy, sb), (ey, eb))| {
+                            if idx < sy || idx > ey {
+                                false
+                            } else if idx == sy && idx == ey {
+                                byte_start >= sb && byte_start < eb
+                            } else if idx == sy {
+                                byte_start >= sb
+                            } else if idx == ey {
+                                byte_start < eb
+                            } else {
+                                true
+                            }
+                        });
+
                         let in_gs_jump = self.gs_jump_highlight == Some(idx);
 
                         queue!(stdout, MoveTo(abs_x as u16, sy as u16))?;
@@ -217,6 +238,14 @@ impl Editor {
                             queue!(
                                 stdout,
                                 SetBackgroundColor(theme.editor.selection_bg.to_crossterm()),
+                                SetForegroundColor(theme.editor.status_text.to_crossterm()),
+                                Print(ch),
+                                ResetColor
+                            )?;
+                        } else if in_mark {
+                            queue!(
+                                stdout,
+                                SetBackgroundColor(theme.editor.search_match_bg.to_crossterm()),
                                 SetForegroundColor(theme.editor.status_text.to_crossterm()),
                                 Print(ch),
                                 ResetColor
@@ -492,6 +521,10 @@ impl Editor {
         // ── Overlays that draw on top of everything ──
         if matches!(self.mode, Mode::FileFinder) {
             self.render_file_finder(stdout)?;
+        }
+
+        if self.nfe_box.is_some() {
+            self.render_nfe_box(stdout)?;
         }
 
         // Overlays drawn on top of everything are painted above; flush all queued

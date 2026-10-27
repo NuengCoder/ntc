@@ -259,9 +259,31 @@ pub struct Config {
     #[serde(default = "default_dir_view_enabled")]
     pub dir_view_enabled: bool,
 
+    /// Whether files are included in the automatic navigation tree
+    #[serde(default)]
+    pub file_view_enabled: bool,
+
+    /// File format used by the `todo` command (`future_todo.<ext>`).
+    /// One of: txt, md, json, toml, yaml, html.
+    #[serde(default = "default_todo_format")]
+    pub todo_format: String,
+
+    /// Whether file sizes are auto-calculated in the navigation tree
+    #[serde(default)]
+    pub auto_size_files: bool,
+
+    /// Whether directory sizes are auto-calculated in the navigation tree
+    #[serde(default)]
+    pub auto_size_dirs: bool,
+
     /// Whether the daily new-release notice is shown at shell startup
     #[serde(default = "default_update_check_enabled")]
     pub update_check_enabled: bool,
+
+    /// Whether the shell intro is shown at startup (ntc logo, ntpkg info,
+    /// watcher info). Turn off with `config intro_view off`.
+    #[serde(default = "default_intro_view_enabled")]
+    pub intro_view_enabled: bool,
 
     /// Per-service `serve` defaults (port + bind), see `ServeConfig`
     #[serde(default = "default_serve_config")]
@@ -276,18 +298,19 @@ pub fn validate_alias_name(name: &str) -> bool {
         "cd",
         "godrive",
         "god",
-        "go",
         "back",
         "b",
         "view",
         "viewf",
         "viewd",
-        "ls",
+        "views",
+        "count",
         "report",
         "txtc",
         "txtf",
         "txt",
         "config",
+        "cfg",
         "clear",
         "version",
         "where",
@@ -307,9 +330,10 @@ pub fn validate_alias_name(name: &str) -> bool {
         "size",
         "tp",
         "opencg",
+        "editcfg",
+        "editcg",
         "resetcg",
         "restorecg",
-        "setc",
         "local",
         "ne",
         "ntceditor",
@@ -330,7 +354,6 @@ pub fn validate_alias_name(name: &str) -> bool {
         "init",
         "deinit",
         "diff",
-        "bkup",
         "tl",
         "image",
         "img",
@@ -339,6 +362,8 @@ pub fn validate_alias_name(name: &str) -> bool {
         "python_showenv",
         "smtp",
         "clip",
+        "todo",
+        "td",
         "qsc",
         "tmprt",
         "git",
@@ -347,6 +372,7 @@ pub fn validate_alias_name(name: &str) -> bool {
         "nsheet",
         "nssh",
         "fake",
+        "deadlock",
     ];
 
     if name.trim().is_empty() || name.contains(' ') {
@@ -404,7 +430,17 @@ fn default_dir_view_enabled() -> bool {
     true
 }
 
+pub const VALID_TODO_FORMATS: &[&str] = &["txt", "md", "json", "toml", "yaml", "html"];
+
+fn default_todo_format() -> String {
+    "txt".to_string()
+}
+
 fn default_update_check_enabled() -> bool {
+    true
+}
+
+fn default_intro_view_enabled() -> bool {
     true
 }
 
@@ -477,7 +513,12 @@ impl Config {
             openweather_api_key: None,
             openweather_default_city: None,
             dir_view_enabled: default_dir_view_enabled(),
+            file_view_enabled: false,
+            todo_format: default_todo_format(),
+            auto_size_files: false,
+            auto_size_dirs: false,
             update_check_enabled: default_update_check_enabled(),
+            intro_view_enabled: default_intro_view_enabled(),
             serve: default_serve_config(),
         }
     }
@@ -846,9 +887,7 @@ impl Config {
         let old = std::mem::replace(&mut *guard, config);
         drop(guard);
         let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(f));
-        *Self::global()
-            .write()
-            .unwrap_or_else(|e| e.into_inner()) = old;
+        *Self::global().write().unwrap_or_else(|e| e.into_inner()) = old;
         match result {
             Ok(v) => v,
             Err(e) => std::panic::resume_unwind(e),
@@ -917,8 +956,8 @@ mod tests {
     #[test]
     fn test_validate_alias_name_rejects_reserved() {
         for cmd in [
-            "go", "cd", "help", "exit", "quit", "run", "r", "ral", "math", "setc", "diff",
-            "bkup", "view", "txt",
+            "go", "cd", "help", "exit", "quit", "run", "r", "ral", "math", "setc", "diff", "bkup",
+            "view", "txt",
         ] {
             assert!(
                 !validate_alias_name(cmd),
@@ -969,6 +1008,9 @@ mod tests {
         assert!(cfg.ignored_directory_names.contains("target"));
         assert!(cfg.ignored_directory_names.contains(".git"));
         assert!(cfg.ignored_directory_names.contains("node_modules"));
+        assert!(!cfg.file_view_enabled);
+        assert!(!cfg.auto_size_files);
+        assert!(!cfg.auto_size_dirs);
     }
 
     #[test]
@@ -995,10 +1037,7 @@ mod tests {
     fn test_serve_service_parse() {
         assert_eq!(ServeService::parse("files"), Some(ServeService::Files));
         assert_eq!(ServeService::parse("FILES"), Some(ServeService::Files));
-        assert_eq!(
-            ServeService::parse("http-server"),
-            Some(ServeService::Http)
-        );
+        assert_eq!(ServeService::parse("http-server"), Some(ServeService::Http));
         assert_eq!(ServeService::parse("http"), Some(ServeService::Http));
         assert_eq!(ServeService::parse("chess"), Some(ServeService::Chess));
         assert_eq!(ServeService::parse("CHESS"), Some(ServeService::Chess));
@@ -1018,14 +1057,8 @@ mod tests {
         assert_eq!(cfg.serve.http_server.bind, "0.0.0.0");
         assert_eq!(cfg.serve.chess.port, 8080);
         assert_eq!(cfg.serve.chess.bind, "0.0.0.0");
-        assert_eq!(
-            cfg.serve.for_service(ServeService::Files).port,
-            8080
-        );
-        assert_eq!(
-            cfg.serve.for_service(ServeService::Http).bind,
-            "0.0.0.0"
-        );
+        assert_eq!(cfg.serve.for_service(ServeService::Files).port, 8080);
+        assert_eq!(cfg.serve.for_service(ServeService::Http).bind, "0.0.0.0");
     }
 
     #[test]

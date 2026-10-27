@@ -1,0 +1,497 @@
+use std::collections::HashMap;
+
+pub fn fill(m: &mut HashMap<String, String>) {
+    m.insert("ndb.banner".into(), "ndb {} - ເຊລຖານຂໍູ້ນ NTC".into());
+
+    m.insert("ndb.cwd_line".into(), "ດເຣັກທໍຣີປັດຈຸບັນ: {}".into());
+
+    m.insert("ndb.no_db_files".into(), "ໍ່ົບຟລ໌ .db ໃນໄດເຣັກທໍຣີປັດຈຸບັນ.".into());
+
+    m.insert(
+        "ndb.no_db_files_hint".into(),
+        "າງໄລ໌ານຂໍູ້ນຢູ່ນີ້ ຫຼ cd ໄປໂຟນເດີທີ່ມີຟລຖານໍູ້ນ.".into(),
+    );
+
+    m.insert("ndb.db_files_header".into(), "ຖານຂໍ້ມູນີ່ຊ້ດ້ ({}):".into());
+
+    m.insert("ndb.tables_count".into(), "{} ຕາຕະລາງ".into());
+
+    m.insert("ndb.not_a_db".into(), "ບໍ່ແມ່ນຖານໍູ້ນ".into());
+
+    m.insert("ndb.pick_db".into(), "ເລືອກຖານຂໍ້ມູນທີຈະປີດ".into());
+
+    m.insert("ndb.pick_table".into(), "ເລືອກຕາຕະລາງທີ່ຈະສະດງ".into());
+
+    m.insert("ndb.pick_prompt".into(), "້ອນາຍເລກ (1-{}) ຫຼື 0: ".into());
+
+    m.insert("ndb.open_failed".into(), "ເີດ '{}' ບ່ສເລດ: {}".into());
+
+    m.insert("ndb.opened".into(), "ເປີດຖານຂໍູ້ນແລ້ວ: {} (ອານເົ່າັ້ນ)".into());
+
+    m.insert(
+        "ndb.hint_next".into(),
+        "ໃຊ້ 'tables', 'viewf', 'tablef <table>', 'schema <table>', 'sql <query>', 'exit'.".into(),
+    );
+
+    m.insert("ndb.no_tables".into(), "ານຂ້ມນນີບໍມີາຕະລາງ.".into());
+
+    m.insert("ndb.query_failed".into(), "ຄິວຣີລົ້ມຫຼວ: {}".into());
+
+    m.insert("ndb.unknown_cmd".into(), "ໍູ່້ຈັກຄຳສັ່ງ ndb: '{}'".into());
+
+    m.insert("ndb.hint_help".into(), "ພິມ 'help' ເພື່ອເບິງທກຄສັງ ndb.".into());
+
+    m.insert(
+        "ndb.interface_usage".into(),
+        "ການໃຊ້: interface <file.db>  (ຫຼື 'view' ເພື່ອສະດງານຂໍູ້ນ)".into(),
+    );
+
+    m.insert(
+        "ndb.sql_needs_db".into(),
+        "ເປີດຖານຂໍ້ມູນກອນ: interface <file.db>".into(),
+    );
+
+    m.insert(
+        "ndb.sql_usage".into(),
+        "ການໃຊ້: sql <query>   ເຊັ່ນ sql SELECT * FROM users".into(),
+    );
+
+    m.insert(
+        "ndb.sql_blocked".into(),
+        "ndb ເປັນແບອານເົ່າັ້ນ: ອະນຸາດສະເພາະ SELECT, PRAGMA, EXPLAIN, WITH ແະ VALUES".into(),
+    );
+
+    m.insert("ndb.sql_error".into(), "ຂໍ້ຜດພາ SQL: {}".into());
+
+    m.insert("ndb.table_not_found".into(), "ບໍ່ພົບຕາຕະລາງ: {}".into());
+
+    m.insert("ndb.schema_header".into(), "ໂຄງສາງຂງ '{}':".into());
+
+    m.insert("ndb.schema_usage".into(), "ານໃ້: schema <table>".into());
+
+    m.insert("ndb.showing_table".into(), "ຕາຕລາງ: {} (ອານເົ່າັ້ນ)".into());
+
+    m.insert("ndb.editor_fail".into(), "້າງ editor ບໍ່ຳເັດ: {}".into());
+
+    m.insert(
+        "ndb.start_hint".into(),
+        "ພິມ 'help' ເພື່ອບິ່ງຄຳສັ່ງ, 'exit' ເພື່ອກັບໄປ ntc shell.".into(),
+    );
+
+    m.insert("ndb.closed_db".into(), "ປິດຖານຂໍູ້ນແລ້ວ.".into());
+
+    m.insert("ndb.bye".into(), "ອກາກ ndb shell ແລ້.".into());
+
+    m.insert(
+        "ndb.no_args".into(),
+        "ານໃ້: ndb   (ເປີດ ndb database shell)".into(),
+    );
+
+    m.insert("ndb.null".into(), "NULL".into());
+
+    m.insert("ndb.kind_view".into(), "ວິວ".into());
+
+    m.insert("ndb.kind_table".into(), "ຕາຕະລາງ".into());
+
+    m.insert("ndb.columns_count".into(), "{} ັນ".into());
+
+    m.insert("ndb.rows_count".into(), "{} ແຖວ".into());
+
+    m.insert("ndb.rows_empty".into(), "0 ແຖວ".into());
+
+    m.insert("ndb.rows_shown".into(), "ະແດງ {} ແຖວ".into());
+
+    m.insert(
+        "ndb.rows_truncated".into(),
+        "ສະແດງສະເພາະ {} ແຖວທຳອິດ - ໃຊ້ --all ຫຼື -l <n> ພືອເິ່ງພີມ.".into(),
+    );
+
+    m.insert("ndb.no_columns".into(), "ຄຳັ່ນີ້ບໍ່ສົ່ງຄາຖັນ.".into());
+
+    m.insert("ndb.col_name".into(), "ຊື່".into());
+
+    m.insert("ndb.col_kind".into(), "ຊະນິດ".into());
+
+    m.insert("ndb.col_columns".into(), "ຖັນ".into());
+
+    m.insert("ndb.col_rows".into(), "ຖວ".into());
+
+    m.insert("ndb.col_type".into(), "ປະເພດ".into());
+
+    m.insert("ndb.col_constraints".into(), "ເງື່ອນໄຂ".into());
+
+    m.insert(
+        "ndb.help_root_title".into(),
+        "NDB - ຊລຖານຂ້ມູນ (ຍັງບໍ່ດ້ປີຖານໍູ້ນ):".into(),
+    );
+
+    m.insert(
+        "ndb.help_root_help".into(),
+        "help | h | ?               ສະແດງລາຍການຄຳສັ່ງນີ້".into(),
+    );
+
+    m.insert(
+        "ndb.help_root_view".into(),
+        "view | ls                  ສະແດງໄຟລ .db ໃນດເຣັກທໍຣີປັດຈຸບັນ".into(),
+    );
+
+    m.insert(
+        "ndb.help_root_interface".into(),
+        "interface <file.db>       ເປີດຖານໍູ້ນ (prompt ກາຍເປັນ ndb [file.db]>)".into(),
+    );
+
+    m.insert(
+        "ndb.help_root_sql".into(),
+        "sql                        ໃຊ້ໄດ້ຼັງເປີດຖານຂໍ້ມູນ (interface ກ່ນ)".into(),
+    );
+
+    m.insert(
+        "ndb.help_root_clear".into(),
+        "clear | cls                ລ້າງຈໍແລ້ວສະແດງຖານຂໍ້ມູນອີກ".into(),
+    );
+
+    m.insert(
+        "ndb.help_root_exit".into(),
+        "exit | q                   ກັບໄປ ntc shell".into(),
+    );
+
+    m.insert(
+        "ndb.help_db_title".into(),
+        "NDB - ເຊລຖານຂໍ້ມູນ (່ານເທົ່ານັ້ນ):".into(),
+    );
+
+    m.insert(
+        "ndb.help_db_help".into(),
+        "help | h | ?               ສະແດງລາຍການຄຳສັ່ນີ້".into(),
+    );
+
+    m.insert(
+        "ndb.help_db_viewf".into(),
+        "viewf | v                  ສະດງຄງສາງ (ຕາຕະລາງ + ຖັນ)".into(),
+    );
+
+    m.insert(
+        "ndb.help_db_tables".into(),
+        "tables [pattern]          ສະດງື່າຕະາງ ແລະ ິວ (ກອງໄດ້)".into(),
+    );
+
+    m.insert(
+        "ndb.help_db_tablef".into(),
+        "tablef <table>             ສະດງຖວອງາຕະາງ (ື txtf)".into(),
+    );
+
+    m.insert(
+        "ndb.help_db_schema".into(),
+        "schema <table>             ສະດງ CREATE SQL, ຖັນ, ດັດຊະນີ, ຄີ".into(),
+    );
+
+    m.insert(
+        "ndb.help_db_sql".into(),
+        "sql <query>                ເຮັຄິຣີແບບອານເົ່າັ້ນ (-l N, --all)".into(),
+    );
+
+    m.insert(
+        "ndb.help_db_write".into(),
+        "write YES <stmt>           ເຮັດການຂຽນໜຶ່ງຄຳສັງ (INSERT/UPDATE/DELETE, ຕ້ອງ edit on)".into(),
+    );
+
+    m.insert(
+        "ndb.help_db_edit".into(),
+        "edit on|off               ອະນຸຍາດຫຼືບລັອກການຂຽນຖານຂໍ້ມູນນີ້".into(),
+    );
+
+    m.insert(
+        "ndb.help_db_backup".into(),
+        "backup                     ຄັດລອກໄຟລ .db ໄວ້ຂ້າງໆ".into(),
+    );
+
+    m.insert(
+        "ndb.help_db_more".into(),
+        "more | next              ສະດງຫາຖັດໄປອງຄິຣີລ່າຸດ".into(),
+    );
+
+    m.insert(
+        "ndb.help_db_indexes".into(),
+        "indexes [table]          ສະດງດັດຊະນີ (ທັງໝົດຫຼືສະເພາະຕາຕະລາງ)".into(),
+    );
+
+    m.insert(
+        "ndb.help_db_info".into(),
+        "info                     ສະດງໄຟລ ເນຈິນ ແລະ ຈຳນວນວັດຖຸ".into(),
+    );
+
+    m.insert(
+        "ndb.help_db_interface".into(),
+        "interface <file.db>       ປ່ຽນໄປຖານຂໍ້ມູນອ່ນ".into(),
+    );
+
+    m.insert("ndb.info_title".into(), "ຂໍ້ມູນຖານຂໍ້ມູນ: {}".into());
+
+    m.insert("ndb.col_property".into(), "ຄຸນສົມບັດ".into());
+
+    m.insert("ndb.col_value".into(), "ຄ່າ".into());
+
+    m.insert("ndb.info_file".into(), "ໄຟລ".into());
+
+    m.insert("ndb.info_size".into(), "ຂະໜາດ".into());
+
+    m.insert("ndb.info_sqlite".into(), "SQLite".into());
+
+    m.insert("ndb.info_page".into(), "ຂະໜາດໜ້າ".into());
+
+    m.insert("ndb.info_pages".into(), "ຈຳນວນໜ້າ".into());
+
+    m.insert("ndb.info_tables".into(), "ຕາຕະລາງ".into());
+
+    m.insert("ndb.info_views".into(), "ວິວ".into());
+
+    m.insert("ndb.info_indexes".into(), "ດັດຊະນີ".into());
+
+    m.insert("ndb.info_triggers".into(), "ທຣິກເກີ".into());
+
+    m.insert("ndb.indexes_title".into(), "ດັດຊະນີ ({}):".into());
+
+    m.insert("ndb.no_indexes".into(), "ບໍ່ພົບດັດຊະນີ".into());
+
+    m.insert("ndb.col_table".into(), "ຕາຕະລາງ".into());
+
+    m.insert("ndb.col_unique".into(), "ເອກະລັກ".into());
+
+    m.insert("ndb.col_from".into(), "ຈາກ".into());
+
+    m.insert("ndb.col_to".into(), "ອ້າງເຖິງ".into());
+
+    m.insert("ndb.fkeys_title".into(), "ຄີນອກ:".into());
+
+    m.insert("ndb.triggers_title".into(), "ທຣິກເກີ:".into());
+
+    m.insert("ndb.query_time".into(), "ຄິຣີໃຊ້ເວລາ {} ms".into());
+
+    m.insert("ndb.more_empty".into(), "ບໍ່ມີແຖວເພີ່ມເຕີມ".into());
+
+    m.insert(
+        "ndb.no_query_yet".into(),
+        "ເຮັ 'sql <query>' ຫຼື 'tablef <table>' ກ່ອນ ແລ້ວຄ່ອຍ 'more'".into(),
+    );
+
+    m.insert(
+        "ndb.multiline_hint".into(),
+        "ປ້ອນ SQL ລົງທ້າຍດ້ວຍ ';' (Ctrl-C ເພື່ອຍົກເລີກ):".into(),
+    );
+
+    m.insert("ndb.yes".into(), "ແມ່ນ".into());
+
+    m.insert("ndb.no".into(), "ບໍ່".into());
+
+    m.insert(
+        "ndb.help_db_clear".into(),
+        "clear | cls                ລ້າງຈໍແລ້ວສະແດງຕາຕະລາງອີກ".into(),
+    );
+
+    m.insert(
+        "ndb.help_db_exit".into(),
+        "exit | q                   ປິດຖານຂໍ້ມູນ, ກັໄປ ndb [cwd]>".into(),
+    );
+
+    m.insert(
+        "ndb.help_dbal".into(),
+        "dbal                        ຈັດການຄິຣີທີ່ບັນທຶກໄວ້ (db alias)".into(),
+    );
+
+    m.insert(
+        "ndb.dbal_title".into(),
+        "DBAL - ນາມແຝງຖານຂໍ້ມູນ (ຄິຣີອ່ານເທົ່ານັ້ນທີ່ບັນທຶກໄວ້):".into(),
+    );
+
+    m.insert(
+        "ndb.dbal_add".into(),
+        "dbal add <ຊື່> \"<SELECT ...>\"   ບັນທຶກຄິຣີ".into(),
+    );
+
+    m.insert(
+        "ndb.dbal_edit".into(),
+        "dbal edit <ຊື່> \"<SELECT ...>\"  ອັບເດດຄິຣີທີ່ບັນທຶກໄວ້".into(),
+    );
+
+    m.insert(
+        "ndb.dbal_rnm".into(),
+        "dbal rnm <ເກົ່າ> to <ໃໝ່>       ປ່ຽນຊື່ alias".into(),
+    );
+
+    m.insert(
+        "ndb.dbal_rm".into(),
+        "dbal rm <ຊື່>                ລົບ alias".into(),
+    );
+
+    m.insert(
+        "ndb.dbal_info".into(),
+        "dbal info <ຊື່>              ສະແດງເນື້ອໃນ alias".into(),
+    );
+
+    m.insert(
+        "ndb.dbal_list".into(),
+        "dbal list                   ສະແດງຄິຣີທີ່ບັນທຶກໄວ້".into(),
+    );
+
+    m.insert(
+        "ndb.dbal_run".into(),
+        "dbal run <ຊື່> [args] [-l N|--all]  ເຮັດຄິຣີທີ່ບັນທຶກໄວ້ ($params)".into(),
+    );
+
+    m.insert(
+        "ndb.dbal_cls".into(),
+        "dbal cls --force             ລົບ alias ທັງໝົດ".into(),
+    );
+
+    m.insert(
+        "ndb.dbal_exec".into(),
+        "<ຊື່>                        ເຮັດຄິຣີທີ່ບັນທຶກໄວ້ໂດຍກົງ".into(),
+    );
+
+    m.insert("ndb.dbal_note".into(), "alias ເກັບສະເພາະຄິຣີອ່ານເທົ່ານັ້ນ; ການຂຽນຖືກປະຕິເສດ ພິມຊື່ alias ເພື່ອເຮັດ ຄ່າແທນທີ່ຕາມຕົວອັກສອນ — ໃສ່ເຄື່ອງໝາຍຄຳເວົ້າສຳລັບສະຕຣິງເອງ: dbal run q \"'2026-01-01'\"".into());
+
+    m.insert("ndb.dbal_params".into(), "ພາຣາມິເຕີ: {}".into());
+
+    m.insert("ndb.dbal_missing_args".into(), "ຂາດຄ່າພາຣາມິເຕີ: {}".into());
+
+    m.insert(
+        "ndb.dbal_single_only".into(),
+        "dbal alias ເກັບໄດ້ເທື່ອລະຄຳສັງ — ໃຊ້ && ເພື່ອເຮັດຫຼາຍຄຳສັງ".into(),
+    );
+
+    m.insert(
+        "ndb.dbal_add_usage".into(),
+        "ວິທີໃຊ້: dbal add <ຊື່> \"<SELECT ...>\"".into(),
+    );
+
+    m.insert(
+        "ndb.dbal_edit_usage".into(),
+        "ວິທີໃຊ້: dbal edit <ຊື່> \"<SELECT ...>\"".into(),
+    );
+
+    m.insert(
+        "ndb.dbal_rnm_usage".into(),
+        "ວິທີໃຊ້: dbal rnm <ເກົ່າ> to <ໃໝ່>".into(),
+    );
+
+    m.insert("ndb.dbal_rm_usage".into(), "ວິທີໃຊ້: dbal rm <ຊື່>".into());
+
+    m.insert("ndb.dbal_info_usage".into(), "ວິທີໃຊ້: dbal info <ຊື່>".into());
+
+    m.insert(
+        "ndb.dbal_run_usage".into(),
+        "ວິທີໃຊ້: dbal run <ຊື່> [-l N | --all]".into(),
+    );
+
+    m.insert(
+        "ndb.dbal_cls_usage".into(),
+        "ວິທີໃຊ້: dbal cls --force (ລົບ db alias ທັງໝົດ)".into(),
+    );
+
+    m.insert("ndb.dbal_added".into(), "ເພີ່ມ alias '{}' ແລ້ວ ({})".into());
+
+    m.insert("ndb.dbal_updated".into(), "ອັບເດດ alias '{}' ແລ້ວ".into());
+
+    m.insert("ndb.dbal_removed".into(), "ລົບ alias '{}' ແລ້ວ".into());
+
+    m.insert("ndb.dbal_renamed".into(), "ປ່ຽນຊື່ '{}' ເປັນ '{}' ແລ້ວ".into());
+
+    m.insert(
+        "ndb.dbal_cleared".into(),
+        "ລ້າງ db alias {} ລາຍການແລ້ວ ({})".into(),
+    );
+
+    m.insert("ndb.dbal_not_found".into(), "ບໍ່ພົບ alias '{}'".into());
+
+    m.insert(
+        "ndb.dbal_invalid_name".into(),
+        "ຊື່ alias ບໍ່ຖືກຕ້ອງ: '{}'".into(),
+    );
+
+    m.insert(
+        "ndb.dbal_name_rules".into(),
+        "ຊື່ຕ້ອງບໍ່ແມ່ຄຳສັງ ndb ແລະ ຕ້ອງບໍ່ມີຊ່ອງຫວ່າງຫຼືເຄື່ອງໝາຍຄຳເວົ້າ".into(),
+    );
+
+    m.insert(
+        "ndb.dbal_blocked".into(),
+        "dbal ເກັບສະເພາະຄິຣີອ່ານເທົ່ານັ້ນ: ອະນຸຍາດສະເພາະ SELECT, PRAGMA, EXPLAIN, WITH ແລະ VALUES".into(),
+    );
+
+    m.insert("ndb.dbal_unknown_sub".into(), "ຄຳສັງ dbal ບໍ່ຮູ້ຈັກ: '{}'".into());
+
+    m.insert(
+        "ndb.dbal_no_aliases".into(),
+        "ຍັງບໍ່ມີ db alias ເພີ່ມເລີຍ: dbal add <ຊື່> \"<SELECT ...>\"".into(),
+    );
+
+    m.insert("ndb.dbal_scope_local".into(), "ໂລຄັນ".into());
+
+    m.insert("ndb.dbal_scope_global".into(), "ໂກບັນ".into());
+
+    m.insert("ndb.col_sql".into(), "SQL".into());
+
+    m.insert(
+        "ndb.help_note".into(),
+        "ທຸຖານໍູ້ນປີແບອ່ານເົ່າັ້ນ; ndb ບໍ່ແກ້ໄຂໄຟລ໌ຂອງທານ".into(),
+    );
+
+    m.insert(
+        "ndb.help_readonly".into(),
+        "ອ່ານເທົ່ານັ້ນ: ເັດະເພາະ SELECT, PRAGMA, EXPLAIN, WITH ແລະ VALUES".into(),
+    );
+
+    m.insert(
+        "ndb.help_limit".into(),
+        "ຈຳກັດແຖວ: ເລີ່ມຕົ້ນ 50 (-l <n> ເພື່ອປ່ຽນ, --all ຳລັບທຸກຖວ)".into(),
+    );
+
+    m.insert("ndb.edit_on".into(), "ເປີດໂໝດແກ້ໄຂສຳລັບ {} ແລ້ວ (ຂຽນໄດ້)".into());
+
+    m.insert(
+        "ndb.edit_warn".into(),
+        "ການຂຽນຕ້ອງຢືນຢັນຊັດເຈນ: write YES <INSERT|UPDATE|DELETE|REPLACE ...>".into(),
+    );
+
+    m.insert("ndb.edit_failed".into(), "ເປີດໂໝດແກ້ໄຂບໍ່ສຳເລັດ: {}".into());
+
+    m.insert("ndb.edit_off".into(), "ປິດໂໝດແກ້ໄຂແລ້ວ (ອ່ານເທົ່ານັ້ນ)".into());
+
+    m.insert("ndb.edit_status".into(), "ໂໝດແກ້ໄຂ: {}".into());
+
+    m.insert("ndb.edit_state_on".into(), "ເປີດ".into());
+
+    m.insert("ndb.edit_state_off".into(), "ປິດ".into());
+
+    m.insert("ndb.edit_usage".into(), "ວິທີໃຊ້: edit on|off".into());
+
+    m.insert(
+        "ndb.write_needs_edit".into(),
+        "ການຂຽນຖືກປິດຢູ່: ເຮັດ `edit on` ກ່ອນ".into(),
+    );
+
+    m.insert(
+        "ndb.write_usage".into(),
+        "ວິທີໃຊ້: write YES <INSERT|UPDATE|DELETE|REPLACE ...>".into(),
+    );
+
+    m.insert(
+        "ndb.write_blocked".into(),
+        "`write` ອະນຸຍາດສະເພາະ INSERT, UPDATE, DELETE ແລະ REPLACE".into(),
+    );
+
+    m.insert("ndb.write_confirm".into(), "ກຳລັງຈະເຮັດ: {}".into());
+
+    m.insert(
+        "ndb.write_confirm_hint".into(),
+        "ເຮັດຊ້ຳພ້ອມ YES ເພື່ອຢືນຢັນ: write YES <ຄຳສັງ>".into(),
+    );
+
+    m.insert("ndb.write_done".into(), "ຂຽນສຳເລັດ: ກະທົບ {} ແຖວ".into());
+
+    m.insert("ndb.write_failed".into(), "ຂຽນບໍ່ສຳເລັດ: {}".into());
+
+    m.insert("ndb.backup_done".into(), "ບັນທຶກສຳຮອງແລ້ວ: {}".into());
+
+    m.insert("ndb.backup_failed".into(), "ສຳຮອງບໍ່ສຳເລັດ: {}".into());
+}

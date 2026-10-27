@@ -6,6 +6,15 @@ use crossterm::terminal::{Clear, ClearType};
 use super::super::{byte_to_col, gutter_width, Editor, ALL_ENCODINGS};
 use crate::t;
 
+/// Help text starts `offset` columns in (the horizontal pan). Lines shorter
+/// than the offset render empty instead of repeating.
+fn help_line_from(line: &str, offset: usize) -> &str {
+    match line.char_indices().nth(offset) {
+        Some((i, _)) => &line[i..],
+        None => "",
+    }
+}
+
 impl Editor {
     pub(crate) fn render_help_screen(&self, stdout: &mut std::io::Stdout) -> std::io::Result<()> {
         let theme = crate::utils::theme::ThemeManager::current();
@@ -26,6 +35,13 @@ impl Editor {
         let total_lines = help_lines.len();
         let max_scroll = total_lines.saturating_sub(rows);
         let help_scroll = self.sv.help.min(max_scroll);
+        // Pan offset, clamped to the widest line so the view never runs away.
+        let widest = help_lines
+            .iter()
+            .map(|l| l.chars().count())
+            .max()
+            .unwrap_or(0);
+        let help_x = self.sv.help_x.min(widest.saturating_sub(1));
 
         // Vertical scrollbar
         if total_lines > rows {
@@ -41,7 +57,7 @@ impl Editor {
                     stdout,
                     MoveTo(eo as u16, sy as u16),
                     SetForegroundColor(theme.syntax.normal.to_crossterm()),
-                    Print(line),
+                    Print(help_line_from(line, help_x)),
                     ResetColor,
                     Clear(ClearType::UntilNewLine),
                 )?;
@@ -70,7 +86,7 @@ impl Editor {
                     stdout,
                     MoveTo(eo as u16, sy as u16),
                     SetForegroundColor(theme.syntax.normal.to_crossterm()),
-                    Print(line),
+                    Print(help_line_from(line, help_x)),
                     ResetColor,
                     Clear(ClearType::UntilNewLine),
                 )?;
@@ -211,6 +227,8 @@ impl Editor {
                     }
                     let (ref name, ref path, _, _) = self.ff_results[i];
                     let is_selected = i == self.ff_idx;
+                    // 1-based row number so `name.ext:<n>` can pick it.
+                    let number = format!(" {}  ", i + 1);
                     let duplicated =
                         name_counts.get(&name.to_lowercase()).copied().unwrap_or(0) > 1;
                     let suffix =
@@ -220,14 +238,16 @@ impl Editor {
                     } else {
                         format!("{}  {}", name, suffix)
                     };
-                    let display = if full.chars().count() > editor_cols.saturating_sub(4) {
+                    let avail = editor_cols.saturating_sub(4 + number.chars().count());
+                    let body = if full.chars().count() > avail {
                         full.chars()
-                            .take(editor_cols.saturating_sub(5))
+                            .take(avail.saturating_sub(1))
                             .collect::<String>()
                             + "…"
                     } else {
                         full
                     };
+                    let display = format!("{}{}", number, body);
                     if is_selected {
                         queue!(
                             stdout,
@@ -494,6 +514,127 @@ impl Editor {
                 Clear(ClearType::UntilNewLine),
             )?;
         }
+        Ok(())
+    }
+
+    /// VSCode-style input box for the nfe explorer's `n`/`m`/`r` actions:
+    /// a centred bordered box over the top rows of the text area, with the
+    /// editable line and its caret in the middle.
+    pub(crate) fn render_nfe_box(&self, stdout: &mut std::io::Stdout) -> std::io::Result<()> {
+        let Some(b) = self.nfe_box.as_ref() else {
+            return Ok(());
+        };
+        let theme = crate::utils::theme::ThemeManager::current();
+        let eo = self.editor_offset();
+        let editor_cols = self.term_w.saturating_sub(eo);
+        if editor_cols < 16 || self.term_h < 8 {
+            return Ok(());
+        }
+        let label = match b.kind {
+            crate::editor::NfeBoxKind::NewFile => t!("editor.nfe_box_new_file"),
+            crate::editor::NfeBoxKind::NewDir => t!("editor.nfe_box_new_dir"),
+            crate::editor::NfeBoxKind::Rename => t!("editor.nfe_box_rename"),
+        };
+        let rel_base = b
+            .base
+            .strip_prefix(&self.sidebar.root)
+            .ok()
+            .map(|p| p.to_string_lossy().replace('\\', "/"))
+            .unwrap_or_default();
+        let title = if rel_base.is_empty() || b.kind == crate::editor::NfeBoxKind::Rename {
+            format!(" {} ", label)
+        } else {
+            format!(" {}  {} ", label, rel_base)
+        };
+
+        let width = editor_cols
+            .saturating_sub(6)
+            .min(64)
+            .max(title.chars().count() + 4)
+            .min(editor_cols.saturating_sub(2));
+        let left = eo + (editor_cols.saturating_sub(width)) / 2;
+        let top = 1;
+        let inner = width.saturating_sub(2);
+        let bg = theme.editor.sidebar_selected_bg.to_crossterm();
+        let fg = theme.editor.status_text.to_crossterm();
+        let bd = theme.editor.border.to_crossterm();
+
+        // ── top border with the title ──
+        let mut head = title.clone();
+        if head.chars().count() > inner.saturating_sub(2) {
+            head = head
+                .chars()
+                .take(inner.saturating_sub(3))
+                .collect::<String>()
+                + "… ";
+        }
+        let head_w = head.chars().count();
+        let bar = format!("┌{}{}┐", head, "─".repeat(inner.saturating_sub(head_w)));
+        queue!(
+            stdout,
+            MoveTo(left as u16, top as u16),
+            SetBackgroundColor(bg),
+            SetForegroundColor(bd),
+            Print(bar),
+            ResetColor,
+        )?;
+
+        // ── editable line, with a block caret ──
+        let pos = b.pos();
+        let room = inner.saturating_sub(2);
+        let mut text: String = b.buf.clone();
+        if text.chars().count() > room {
+            text = text.chars().take(room).collect();
+        }
+        let cut = pos.min(text.len());
+        let (before, after) = text.split_at(text.floor_char_boundary(cut));
+        let (caret_ch, rest) = match after.chars().next() {
+            Some(c) => (c.to_string(), after[c.len_utf8()..].to_string()),
+            None => (" ".to_string(), String::new()),
+        };
+        let used = 2 + before.chars().count() + 1 + rest.chars().count();
+        queue!(
+            stdout,
+            MoveTo(left as u16, (top + 1) as u16),
+            SetBackgroundColor(bg),
+            SetForegroundColor(bd),
+            Print("│"),
+            SetForegroundColor(fg),
+            Print(" "),
+            Print(before),
+            SetBackgroundColor(theme.editor.cursor_bg.to_crossterm()),
+            SetForegroundColor(theme.editor.cursor_text.to_crossterm()),
+            Print(caret_ch),
+            SetBackgroundColor(bg),
+            SetForegroundColor(fg),
+            Print(rest),
+            Print(" ".repeat(inner.saturating_sub(used))),
+            SetForegroundColor(bd),
+            Print("│"),
+            ResetColor,
+        )?;
+
+        // ── bottom border with the key hints ──
+        let hint = format!(" {} ", t!("editor.nfe_box_actions"));
+        let hint_w = hint.chars().count();
+        let hint = if hint_w > inner.saturating_sub(2) {
+            String::new()
+        } else {
+            hint
+        };
+        let hint_w = hint.chars().count();
+        queue!(
+            stdout,
+            MoveTo(left as u16, (top + 2) as u16),
+            SetBackgroundColor(bg),
+            SetForegroundColor(bd),
+            Print(format!(
+                "└{}{}┘",
+                "─".repeat(inner.saturating_sub(hint_w)),
+                hint
+            )),
+            ResetColor,
+        )?;
         Ok(())
     }
 

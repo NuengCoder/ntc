@@ -191,7 +191,9 @@ impl NfeState {
             selected: 0,
             scroll: 0,
             preview_scroll: 0,
-            show_hidden: false,
+            // Dotfiles/dot-dirs are first-class entries: `.env`, `.github`,
+            // `.bashrc`, … show unless the user hides them with `i`.
+            show_hidden: true,
             sort_mode: SortMode::Name,
             sort_desc: false,
             filter: String::new(),
@@ -1261,6 +1263,22 @@ mod tests {
         let s = NfeState::new(Some(&root));
         assert!(s.current_dir.is_absolute(), "{:?}", s.current_dir);
         assert!(s.entries.iter().any(|e| e.name == "src"));
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn dotfiles_and_dot_dirs_are_visible_by_default() {
+        let root = tree("dotfiles");
+        std::fs::write(root.join(".env"), "A=1").unwrap();
+        std::fs::create_dir_all(root.join(".github")).unwrap();
+        let s = NfeState::new(Some(&root));
+        assert!(s.show_hidden);
+        assert!(s.entries.iter().any(|e| e.name == ".env"));
+        assert!(
+            s.entries.iter().any(|e| e.name == ".github" && e.is_dir),
+            "{:?}",
+            s.entries.iter().map(|e| &e.name).collect::<Vec<_>>()
+        );
         let _ = std::fs::remove_dir_all(&root);
     }
 

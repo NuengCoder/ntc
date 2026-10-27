@@ -96,13 +96,15 @@ impl Drop for TempCwd {
     }
 }
 
-/// Isolate the `nssh` profile store (`~/.config/ntc/nssh.toml`) by pointing
-/// XDG/APPDATA at a tempdir. Holds the global lock (env vars are global).
+/// Isolate the `nssh` profile store (`~/.config/ntc/nssh.toml`) and the
+/// `deadlock` vault by pointing XDG/APPDATA/NTC_CONFIG_HOME at a tempdir.
+/// Holds the global lock (env vars are global).
 pub(crate) struct IsolatedConfigHome {
     _lock: MutexGuard<'static, ()>,
     _tmp: tempfile::TempDir,
     old_xdg: Option<String>,
     old_appdata: Option<String>,
+    old_ntc_config_home: Option<String>,
 }
 
 impl IsolatedConfigHome {
@@ -111,16 +113,26 @@ impl IsolatedConfigHome {
         let tmp = tempfile::tempdir().expect("tempdir failed");
         let old_xdg = std::env::var("XDG_CONFIG_HOME").ok();
         let old_appdata = std::env::var("APPDATA").ok();
-        // `dirs::config_dir` honors XDG_CONFIG_HOME on Linux and APPDATA on
-        // Windows; setting both covers every platform.
+        let old_ntc_config_home = std::env::var("NTC_CONFIG_HOME").ok();
+        // `dirs::config_dir` honors XDG_CONFIG_HOME on Linux, but on Windows
+        // it calls the Known Folder API and ignores both XDG and APPDATA.
+        // `NTC_CONFIG_HOME` is read by `utils::paths::config_home`, which the
+        // on-disk stores use, so isolation also works on Windows.
         std::env::set_var("XDG_CONFIG_HOME", tmp.path());
         std::env::set_var("APPDATA", tmp.path());
+        std::env::set_var("NTC_CONFIG_HOME", tmp.path());
         Self {
             _lock: lock,
             _tmp: tmp,
             old_xdg,
             old_appdata,
+            old_ntc_config_home,
         }
+    }
+
+    /// Temporary config root used while this guard is alive.
+    pub(crate) fn path(&self) -> &Path {
+        self._tmp.path()
     }
 }
 
@@ -133,6 +145,10 @@ impl Drop for IsolatedConfigHome {
         match &self.old_appdata {
             Some(v) => std::env::set_var("APPDATA", v),
             None => std::env::remove_var("APPDATA"),
+        }
+        match &self.old_ntc_config_home {
+            Some(v) => std::env::set_var("NTC_CONFIG_HOME", v),
+            None => std::env::remove_var("NTC_CONFIG_HOME"),
         }
     }
 }

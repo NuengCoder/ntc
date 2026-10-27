@@ -1,0 +1,8 @@
+this happen (i already input the correct password and sometimes after i restart computer or anything it just appear this)
+ntc [ntc ~ (main*)]> deadlock
+master-pass:
+x vault file is not valid TOML: TOML parse error at line 1, column 7
+  |
+1 | dummy vault content
+  |       ^
+expected `.`, `=`

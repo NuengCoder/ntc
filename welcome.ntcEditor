@@ -14,17 +14,17 @@ Modes (Normal is home — Esc always walks back to it):
            Alt+hjkl/arrows moves selection (j/k) or indents it (h/l)
 
 Normal mode:
-  i / v / q      Insert / Visual / Query panel
-  x / e / b      Save / file explorer / file finder
-  n / m          New file / new directory (Enter accepts, Esc cancels)
-  f / t / u      Search / terminal panel / encoding picker
-  g / Ctrl+J     g-mode menu / jump to line
-  : then cmd     Command (:w :q :q! :wq :e! :u :r :! :ne :cd :run)
-  ? / 0          Help screen / quit
-  h j k l        move (also a s w d, arrows)
-  Shift+dir      extend selection
-  Ctrl+h/l/a/d   word motion (also Ctrl+Left/Right)
-  Home/End       line start/end      PgUp/PgDn  page scroll
+ i / v / q      Insert / Visual / Query panel
+ x / e / b      Save / file explorer / file finder
+ n / m          New file / new directory (Enter accepts, Esc cancels)
+ f / t / u      Search / terminal panel / encoding picker
+ g / Ctrl+J     g-mode menu / jump to line
+ : then cmd     Command (:w :q :q! :wq :e! :u :r :! :ne :cd :run)
+ ? / 0          Help screen / quit
+ h j k l        move (also a s w d, arrows)
+ Shift+dir      extend selection
+ Ctrl+h/l/a/d   word motion (also Ctrl+Left/Right)
+ Home/End       line start/end      PgUp/PgDn  page scroll
 
 Insert mode:
   Esc / Ctrl+Q   back to Normal (Esc first dismisses popups)

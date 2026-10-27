@@ -1,0 +1,572 @@
+use std::collections::HashMap;
+
+pub fn fill(m: &mut HashMap<String, String>) {
+    m.insert("ntpkg.add_to_path".into(), "ເພີ່ມໃສ່ PATH ຂອງທ່ານ:".into());
+
+    m.insert(
+        "ntpkg.add_to_sys_path".into(),
+        "ເພີ່ມໃສ່ system PATH (ຕ້ອງການ admin):".into(),
+    );
+
+    m.insert(
+        "ntpkg.add_to_user_path".into(),
+        "ເພີ່ມໃສ່ user PATH ຂອງທ່ານ:".into(),
+    );
+
+    m.insert("ntpkg.already_installed".into(), "{} {} ຕິດຕັ້ງແລ້ວທີ່ {}".into());
+
+    m.insert(
+        "ntpkg.available_hint".into(),
+        " ໃຊ້ 'ntpkg available <language>' ເພື່ອລາຍຊື່ເວີຊັນ.".into(),
+    );
+
+    m.insert(
+        "ntpkg.configuring".into(),
+        "ກຳລັງ config (./configure)...".into(),
+    );
+
+    m.insert("ntpkg.downloading".into(), "ກຳລັງດາວໂຫຼດ {}".into());
+
+    m.insert("ntpkg.enter_number".into(), "ປ້ອນເບີ (1-{}) ຫຼື 0: ".into());
+
+    m.insert("ntpkg.extracting".into(), "ກຳລັງ unzip...".into());
+
+    m.insert("ntpkg.extracting_indent".into(), " ກຳລັງ unzip...".into());
+
+    m.insert(
+        "ntpkg.extracting_source".into(),
+        "ກຳລັງ unzip source tarball...".into(),
+    );
+
+    m.insert("ntpkg.filter_label".into(), "(filter: \"{}\")".into());
+
+    m.insert(
+        "ntpkg.git_not_found".into(),
+        "ບໍ່ພົບ Git ເທິງ PATH. ກຳລັງດາວໂຫຼດ MinGit...".into(),
+    );
+
+    m.insert(
+        "ntpkg.help_usage".into(),
+        "ntpkg \u{2014} ຕົວຈັດການ package ຂອງ ntc ສຳລັບ runtimes ພາສາ".into(),
+    );
+
+    m.insert("ntpkg.help_usage_title".into(), "  Usage:".into());
+
+    m.insert(
+        "ntpkg.help_install".into(),
+        "    ntpkg install <language> [version]   ດາວໂຫຼດ ແລະ ຕິດຕັ້ງ runtime".into(),
+    );
+
+    m.insert(
+        "ntpkg.help_uninstall".into(),
+        "    ntpkg uninstall <language> [version]  ລຶບ runtime ທີ່ຕິດຕັ້ງ".into(),
+    );
+
+    m.insert(
+        "ntpkg.help_list".into(),
+        "    ntpkg list                           ສະແດງ runtimes ທີ່ຕິດຕັ້ງ".into(),
+    );
+
+    m.insert(
+        "ntpkg.help_use".into(),
+        "    ntpkg use <language> <version>        ເປີດໃຊ້ເວີຊັນສະເພາະ".into(),
+    );
+
+    m.insert(
+        "ntpkg.help_which".into(),
+        "    ntpkg which <language>                ສະແດງ path ຂອງ runtime ທີ່ໃຊ້ຢູ່".into(),
+    );
+
+    m.insert(
+        "ntpkg.help_available".into(),
+        "    ntpkg available [language]             ລາຍຊື່ພາສາ ຫຼື ເວີຊັນທີ່ດາວໂຫຼດໄດ້".into(),
+    );
+
+    m.insert(
+        "ntpkg.help_help".into(),
+        "    ntpkg help                            ສະແດງຄຳຊ່ວຍເຫຼືອນີ້".into(),
+    );
+
+    m.insert(
+        "ntpkg.ntpx_header".into(),
+        "  ntpx \u{2014} ເຮັດວຽກ binary ຂອງ package ທີ່ຕິດຕັ້ງໃດໆ".into(),
+    );
+
+    m.insert(
+        "ntpkg.ntpx_usage_line".into(),
+        "    ntpx <package> [binary] [args...]".into(),
+    );
+
+    m.insert("ntpkg.help_examples_title".into(), "  ຕົວຢ່າງ:".into());
+
+    m.insert(
+        "ntpkg.help_ex_ntpx_go".into(),
+        "    ntpx go version              # ເຮັດວຽກ 'go version'".into(),
+    );
+
+    m.insert(
+        "ntpkg.help_ex_ntpx_py".into(),
+        "    ntpx python --version        # ເຮັດວຽກ 'python --version'".into(),
+    );
+
+    m.insert(
+        "ntpkg.help_ex_ntpx_msys2".into(),
+        "    ntpx msys2 gcc --version     # ເຮັດວຽກ 'gcc --version' (binary ຊັດເຈນ)".into(),
+    );
+
+    m.insert("ntpkg.available_title".into(), "packages ທີ່ມີ".into());
+
+    m.insert("ntpkg.package_info_title".into(), "ຂໍ້ມູນ package: {}".into());
+
+    m.insert("ntpkg.active_label".into(), "Active:".into());
+
+    m.insert("ntpkg.installed_label".into(), "Installed:".into());
+
+    m.insert("ntpkg.location_label".into(), "Location:".into());
+
+    m.insert("ntpkg.binaries_label".into(), "Binaries:".into());
+
+    m.insert("ntpkg.not_set".into(), "(ບໍ່ໄດ້ຕັ້ງ)".into());
+
+    m.insert("ntpkg.none".into(), "(ບໍ່ມີ)".into());
+
+    m.insert("ntpkg.active_marker".into(), " (active)".into());
+
+    m.insert(
+        "ntpkg.info_usage".into(),
+        "Usage: ntpkg info <language>".into(),
+    );
+
+    m.insert("ntpkg.install_failed".into(), "ການຕິດຕັ້ງລົ້ມເຫຼວ: {}".into());
+
+    m.insert("ntpkg.install_loc".into(), "ຕຳແໜ່ງຕິດຕັ້ງ: {}".into());
+
+    m.insert(
+        "ntpkg.install_usage".into(),
+        "Usage: ntpkg install <language> [version]".into(),
+    );
+
+    m.insert("ntpkg.installed_msg".into(), "{} {} ຕິດຕັ້ງແລ້ວ!".into());
+
+    m.insert(
+        "ntpkg.installing".into(),
+        "ກຳລັງຕິດຕັ້ງ (make install)...".into(),
+    );
+
+    m.insert("ntpkg.latest_suffix".into(), "(latest)".into());
+
+    m.insert(
+        "ntpkg.launch_installer".into(),
+        "ກຳລັງເປີດ installer. ສຳເລັດການຕັ້ງຄ່າ, ຈາກນັ້ນປິດ window installer...".into(),
+    );
+
+    m.insert("ntpkg.magick_macos".into(), "ImageMagick ເທິງ macOS:".into());
+
+    m.insert(
+        "ntpkg.magick_manual_reg".into(),
+        "ຖ້າຕິດຕັ້ງແລ້ວ, ລົງທະບຽນດ້ວຍຕົນເອງ: ntpkg use imagemagick <version>".into(),
+    );
+
+    m.insert(
+        "ntpkg.magick_not_found".into(),
+        "ກວດຫາ magick.exe ອັດຕະໂນມັດບໍ່ພົບຫຼັງຈາກຕິດຕັ້ງ.".into(),
+    );
+
+    m.insert(
+        "ntpkg.msys2_gcc_incomplete".into(),
+        "ການຕິດຕັ້ງ GCC ອາດຍັງບໍ່ສຳເລັດ. ທ່ານສາມາດຕິດຕັ້ງພາຍຫຼັງຜ່ານ pacman.".into(),
+    );
+
+    m.insert(
+        "ntpkg.msys2_gcc_not_found".into(),
+        "ຍັງບໍ່ພົບ GCC. ເຮັດວຽກ pacman ເພື່ອຕິດຕັ້ງ:".into(),
+    );
+
+    m.insert(
+        "ntpkg.msys2_installed".into(),
+        "ຕິດຕັ້ງ MSYS2 ແລ້ວ! ຕິດຕັ້ງ packages ເລືອກຜ່ານ pacman:".into(),
+    );
+
+    m.insert(
+        "ntpkg.msys2_linux_gcc".into(),
+        "ເທິງ platform ນີ້, ຕິດຕັ້ງ GCC ດ້ວຍ package manager ຂອງທ່ານ:".into(),
+    );
+
+    m.insert(
+        "ntpkg.msys2_running_pacman".into(),
+        "ກຳລັງເຮັດວຽກ: pacman -S mingw-w64-ucrt-x86_64-gcc".into(),
+    );
+
+    m.insert(
+        "ntpkg.no_active_version".into(),
+        "ບໍ່ມີເວີຊັນ active ສຳລັບ '{}' ແລະ ບໍ່ໄດ້ລະບຸເວີຊັນ".into(),
+    );
+
+    m.insert("ntpkg.no_match".into(), "ບໍ່ມີ packages ກົງກັບ '{}'".into());
+
+    m.insert(
+        "ntpkg.no_packages".into(),
+        "ບໍ່ມີ packages ທີ່ຕິດຕັ້ງ. ໃຊ້ 'ntpkg install <language>'".into(),
+    );
+
+    m.insert("ntpkg.no_versions".into(), "ບໍ່ມີເວີຊັນທີ່ຕິດຕາມສຳລັບ '{}'".into());
+
+    m.insert("ntpkg.no_versions_for".into(), "ບໍ່ມີເວີຊັນທີ່ມີສຳລັບ '{}'".into());
+
+    m.insert("ntpkg.not_installed".into(), "{} {} ຍັງບໍ່ໄດ້ຕິດຕັ້ງ".into());
+
+    m.insert("ntpkg.now_using".into(), "ກຳລັງໃຊ້ {} {}".into());
+
+    m.insert(
+        "ntpkg.npm_bin_in_path".into(),
+        "npm global bin ຢູ່ໃນ PATH".into(),
+    );
+
+    m.insert("ntpkg.npm_detected".into(), "ພົບ Node.js ແລະ npm".into());
+
+    m.insert("ntpkg.npm_not_detected".into(), "ບໍ່ພົບ Node.js/npm.".into());
+
+    m.insert(
+        "ntpkg.npm_section_node_first".into(),
+        "  ── ຕິດຕັ້ງ Node.js ກ່ອນ ──".into(),
+    );
+
+    m.insert(
+        "ntpkg.npm_node_found_at".into(),
+        "  ✓ ພົບ Node.js ທີ່: {}".into(),
+    );
+
+    m.insert("ntpkg.npm_node_not_found".into(), "  ✗ ບໍ່ພົບ Node.js".into());
+
+    m.insert("ntpkg.npm_install_via_pkg".into(), "  ຕິດຕັ້ງຜ່ານ pkg:".into());
+
+    m.insert(
+        "ntpkg.npm_install_via_ntpkg".into(),
+        "  ຕິດຕັ້ງຜ່ານ ntpkg:".into(),
+    );
+
+    m.insert("ntpkg.npm_ntpkg_cmd".into(), "    ntpkg install {}".into());
+
+    m.insert("ntpkg.npm_cmd".into(), "    npm i -g {}".into());
+
+    m.insert(
+        "ntpkg.npm_or_download_nodejs".into(),
+        "  ຫຼືດາວໂຫຼດຈາກ: https://nodejs.org".into(),
+    );
+
+    m.insert(
+        "ntpkg.npm_or_fnm_nvm_volta".into(),
+        "  ຫຼືຕິດຕັ້ງຜ່ານ fnm/nvm/volta".into(),
+    );
+
+    m.insert("ntpkg.npm_found_at".into(), "  ✓ ພົບ npm ທີ່: {}".into());
+
+    m.insert("ntpkg.npm_not_found".into(), "  ✗ ບໍ່ພົບ npm".into());
+
+    m.insert("ntpkg.npm_then_run".into(), "  ຈາກນັ້ນຮັນ:".into());
+
+    m.insert("ntpkg.npm_then_rerun".into(), "  ຈາກນັ້ນຮັນອີກຄັ້ງ:".into());
+
+    m.insert(
+        "ntpkg.npm_bin_not_in_path".into(),
+        "npm global bin ບໍ່ຢູ່ໃນ PATH ({})".into(),
+    );
+
+    m.insert("ntpkg.path_add_label".into(), "  ເພີ່ມໃສ່ PATH:".into());
+
+    m.insert("ntpkg.npm_install_section".into(), "  ── ຕິດຕັ້ງ {} ──".into());
+
+    m.insert("ntpkg.npm_run_cmd_label".into(), "  ຮັນຄຳສັ່ງນີ້:".into());
+
+    m.insert(
+        "ntpkg.ntpx_usage".into(),
+        "Usage: ntpx <package> [binary] [args...]".into(),
+    );
+
+    m.insert("ntpkg.package_count".into(), "{} packages".into());
+
+    m.insert(
+        "ntpkg.php_skip_register".into(),
+        "ຂ້າມການລົງທະບຽນ PHP ກັບ ntpkg.".into(),
+    );
+
+    m.insert("ntpkg.removed_msg".into(), "ລຶບ {} {} ແລ້ວ".into());
+
+    m.insert("ntpkg.select_jdk_version".into(), "ເລືອກເວີຊັນ JDK {}".into());
+
+    m.insert("ntpkg.select_version".into(), "ເລືອກເວີຊັນ {}".into());
+
+    m.insert(
+        "ntpkg.skip_register".into(),
+        "ຂ້າມການລົງທະບຽນ {} ກັບ ntpkg.".into(),
+    );
+
+    m.insert(
+        "ntpkg.termux_use_pkg".into(),
+        "ເທິງ Termux, ຄວນຕິດຕັ້ງຜ່ານ pkg ແທນ ntpkg:".into(),
+    );
+
+    m.insert("ntpkg.termux_cmd".into(), "    pkg install {}".into());
+
+    m.insert(
+        "ntpkg.termux_no_pkg".into(),
+        "ບໍ່ມີ package pkg ຂອງ Termux ສຳລັບ '{}'.".into(),
+    );
+
+    m.insert(
+        "ntpkg.src_act".into(),
+        "act - ເຮັດວຽກ GitHub Actions ທ້ອງຖິ່ນ".into(),
+    );
+
+    m.insert(
+        "ntpkg.src_cloudflare".into(),
+        "cloudflared - Cloudflare Tunnel client".into(),
+    );
+
+    m.insert(
+        "ntpkg.src_devops_tool".into(),
+        "Azure DevOps CLI tool".into(),
+    );
+
+    m.insert(
+        "ntpkg.src_docker".into(),
+        "Docker - Container runtime".into(),
+    );
+
+    m.insert(
+        "ntpkg.src_docker_compose".into(),
+        "Docker Compose - ການຈັດການ multi-container".into(),
+    );
+
+    m.insert(
+        "ntpkg.src_dotnet".into(),
+        ".NET SDK - ການພັດທະນາຂ້າມ platform".into(),
+    );
+
+    m.insert("ntpkg.src_ffmpeg".into(), "FFmpeg - ຕົວແປງສື່".into());
+
+    m.insert(
+        "ntpkg.src_freebuff".into(),
+        "Freebuff - ຕົວແທນ AI coding ຟຣີ".into(),
+    );
+
+    m.insert("ntpkg.src_flutter".into(), "Flutter - UI toolkit".into());
+
+    m.insert(
+        "ntpkg.src_gh".into(),
+        "GitHub CLI - GitHub ຈາກ terminal".into(),
+    );
+
+    m.insert("ntpkg.src_git".into(), "Git - ການຄວບຄຸມເວີຊັນ".into());
+
+    m.insert("ntpkg.src_go".into(), "Go - ພາສາການຂຽນໂປຣແກຣມ".into());
+
+    m.insert(
+        "ntpkg.src_helm".into(),
+        "Helm - ຕົວຈັດການ package Kubernetes".into(),
+    );
+
+    m.insert(
+        "ntpkg.src_imagemagick".into(),
+        "ImageMagick - ການປະມວນຜົນຮູບພາບ".into(),
+    );
+
+    m.insert("ntpkg.src_java".into(), "Java - ສະພາບແວດລ້ອມ runtime".into());
+
+    m.insert("ntpkg.src_kilocode".into(), "Kiloc - ຕົວຊ່ວຍ code AI".into());
+
+    m.insert(
+        "ntpkg.src_kind".into(),
+        "kind - Kubernetes ໃນ Docker".into(),
+    );
+
+    m.insert(
+        "ntpkg.src_kotlin".into(),
+        "Kotlin - ພາສາການຂຽນໂປຣແກຣມ".into(),
+    );
+
+    m.insert(
+        "ntpkg.src_kubectl".into(),
+        "kubectl - Kubernetes CLI".into(),
+    );
+
+    m.insert(
+        "ntpkg.src_kustomize".into(),
+        "Kustomize - ການປັບແຕ່ງ config Kubernetes".into(),
+    );
+
+    m.insert("ntpkg.src_lua".into(), "Lua - ພາສາສະຄຣິບ".into());
+
+    m.insert(
+        "ntpkg.src_mimocode".into(),
+        "Mimic - ຕົວແທນ AI coding".into(),
+    );
+
+    m.insert(
+        "ntpkg.src_msys2".into(),
+        "MSYS2 - ແພລັດຟອມການແຈກຈ່າຍ ແລະ ສ້າງ software".into(),
+    );
+
+    m.insert("ntpkg.src_nim".into(), "Nim - ພາສາການຂຽນໂປຣແກຣມ".into());
+
+    m.insert(
+        "ntpkg.src_node".into(),
+        "Node.js - JavaScript runtime".into(),
+    );
+
+    m.insert(
+        "ntpkg.src_omniroute".into(),
+        "OmniRoute - ເຄື່ອງມື visualization".into(),
+    );
+
+    m.insert(
+        "ntpkg.src_opencode".into(),
+        "opencode - CLI coding agent".into(),
+    );
+
+    m.insert("ntpkg.src_php".into(), "PHP - ພາສາສະຄຣິບ".into());
+
+    m.insert(
+        "ntpkg.src_python".into(),
+        "Python - ພາສາການຂຽນໂປຣແກຣມ".into(),
+    );
+
+    m.insert("ntpkg.src_ruby".into(), "Ruby - ພາສາການຂຽນໂປຣແກຣມ".into());
+
+    m.insert(
+        "ntpkg.src_rust".into(),
+        "Rust - ພາສາການຂຽນໂປຣແກຣມລະບົບ".into(),
+    );
+
+    m.insert("ntpkg.src_scala".into(), "Scala - ພາສາການຂຽນໂປຣແກຣມ".into());
+
+    m.insert("ntpkg.src_sqlite".into(), "SQLite - ຖານຂໍ້ມູນ embedded".into());
+
+    m.insert(
+        "ntpkg.src_sqlitestudio".into(),
+        "SQLiteStudio - ຕົວຈັດການ SQLite".into(),
+    );
+
+    m.insert("ntpkg.src_swift".into(), "Swift - ພາສາການຂຽນໂປຣແກຣມ".into());
+
+    m.insert(
+        "ntpkg.src_vscode".into(),
+        "VS Code - ໂປຣແກຣມແກ້ໄຂ code".into(),
+    );
+
+    m.insert("ntpkg.src_zig".into(), "Zig - ພາສາການຂຽນໂປຣແກຣມ".into());
+
+    m.insert(
+        "ntpkg.src_tesseract".into(),
+        "Tesseract - ເຄື່ອງຈັກ OCR".into(),
+    );
+
+    m.insert(
+        "ntpkg.tesseract_running_installer".into(),
+        "ກຳລັງເຮັດວຽກ Tesseract installer ແບບ silent (elevated)...".into(),
+    );
+
+    m.insert("ntpkg.tesseract_not_found".into(), "ກວດຫາ tesseract.exe ອັດຕະໂນມັດບໍ່ພົບຫຼັງຈາກຕິດຕັ້ງ. ເພີ່ມໂຟນເດີຂອງມັນໃສ່ PATH ດ້ວຍ: usrpath add <dir> (ຈາກນັ້ນ 'mode admin' + 'syspath add <dir>').".into());
+
+    m.insert(
+        "ntpkg.tesseract_linux".into(),
+        "ຕິດຕັ້ງ Tesseract ເທິງ Linux ຜ່ານ package manager ຂອງທ່ານ:".into(),
+    );
+
+    m.insert(
+        "ntpkg.tesseract_macos".into(),
+        "ຕິດຕັ້ງ Tesseract ເທິງ macOS ຜ່ານ Homebrew:".into(),
+    );
+
+    m.insert(
+        "ntpkg.tesseract_unsupported".into(),
+        "ການຕິດຕັ້ງ Tesseract ບໍ່ຮອງຮັບເທິງ platform ນີ້.".into(),
+    );
+
+    m.insert(
+        "ntpkg.src_nginx".into(),
+        "nginx - Web server / reverse proxy".into(),
+    );
+
+    m.insert(
+        "ntpkg.nginx_unsupported".into(),
+        "ການຕິດຕັ້ງ nginx ບໍ່ຮອງຮັບເທິງ platform ນີ້.".into(),
+    );
+
+    m.insert(
+        "ntpkg.nginx_system_hint_linux".into(),
+        "ຕິດຕັ້ງ nginx ເທິງ Linux ຜ່ານ package manager ຂອງທ່ານ:".into(),
+    );
+
+    m.insert(
+        "ntpkg.nginx_system_hint_macos".into(),
+        "ຕິດຕັ້ງ nginx ເທິງ macOS ຜ່ານ Homebrew:".into(),
+    );
+
+    m.insert(
+        "ntpkg.nginx_termux".into(),
+        "ຕິດຕັ້ງ nginx ເທິງ Termux ຜ່ານ package manager ຂອງມັນ:".into(),
+    );
+
+    m.insert(
+        "ntpkg.nginx_choose_method".into(),
+        "ບໍ່ມີ prebuilt binary Linux/macOS ຢ່າງເປັນທາງການ. ເລືອກວິທີການຕິດຕັ້ງ:".into(),
+    );
+
+    m.insert(
+        "ntpkg.nginx_option_source".into(),
+        "ສ້າງຈາກ source (ດາວໂຫຼດ nginx source tarball)".into(),
+    );
+
+    m.insert(
+        "ntpkg.nginx_option_system".into(),
+        "ຕິດຕັ້ງຜ່ານ system package manager".into(),
+    );
+
+    m.insert(
+        "ntpkg.nginx_run_commands_system".into(),
+        "ຕິດຕັ້ງ nginx ດ້ວຍຄຳສັ່ງ package-manager ທີ່ສະແດງຂ້າງເທິງ (ບໍ່ຕິດຕາມໂດຍ ntpkg).".into(),
+    );
+
+    m.insert("ntpkg.nginx_build_confirm".into(), "ສ້າງ nginx {} ຈາກ source ເຂົ້າໂຟນເດີ packages ntpkg ບໍ? ຕ້ອງການ make/gcc + packages dev PCRE/Zlib/OpenSSL.".into());
+
+    m.insert(
+        "ntpkg.nginx_build_deps".into(),
+        "hint deps build: build-essential libpcre2-dev zlib1g-dev libssl-dev (Debian/Ubuntu)."
+            .into(),
+    );
+
+    m.insert(
+        "ntpkg.nginx_configuring".into(),
+        "ກຳລັງເຮັດວຽກ ./configure...".into(),
+    );
+
+    m.insert("ntpkg.nginx_compiling".into(), "ກຳລັງ compile...".into());
+
+    m.insert("ntpkg.supported_langs".into(), " ພາສາທີ່ຮອງຮັບ:".into());
+
+    m.insert(
+        "ntpkg.uninstall_failed".into(),
+        "ການຖອນຕິດຕັ້ງລົ້ມເຫຼວ: {}".into(),
+    );
+
+    m.insert(
+        "ntpkg.uninstall_usage".into(),
+        "Usage: ntpkg uninstall <language> [version]".into(),
+    );
+
+    m.insert(
+        "ntpkg.unknown_subcmd".into(),
+        "ntpkg subcommand ບໍ່ຮູ້ຈັກ: '{}'. ໃຊ້ 'ntpkg help'".into(),
+    );
+
+    m.insert(
+        "ntpkg.use_usage".into(),
+        "Usage: ntpkg use <language> <version>".into(),
+    );
+
+    m.insert(
+        "ntpkg.which_usage".into(),
+        "Usage: ntpkg which <language> [version]".into(),
+    );
+}

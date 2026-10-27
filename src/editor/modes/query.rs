@@ -40,12 +40,18 @@ impl Editor {
                         self.close_all_tabs();
                         self.mode = Mode::Normal;
                     }
+                    // Ctrl+E accepts the ghost hint, like End.
+                    (true, KeyCode::Char('e')) => {
+                        self.prompt_accept_or_end();
+                        self.status_msg = None;
+                    }
                     _ => match code {
                         // Esc alone exits: plain `q` must stay typeable
                         // (`qal …`, `/quit`). The result message goes away
                         // too so Normal doesn't inherit a stale `✦`.
                         KeyCode::Esc => {
                             self.query_buf.clear();
+                            self.prompt_cursor = 0;
                             self.status_msg = None;
                             self.mode = self.prev_mode.clone();
                             self.mark_all_dirty();
@@ -57,17 +63,38 @@ impl Editor {
                             self.mark_all_dirty();
                         }
                         KeyCode::Backspace => {
-                            self.query_buf.pop();
+                            self.prompt_backspace();
                             // Composing the next command retires the
                             // previous result message.
                             self.status_msg = None;
                         }
+                        KeyCode::Delete => {
+                            self.prompt_delete();
+                            self.status_msg = None;
+                        }
+                        // The prompt has a caret: Left/Right move it, Right
+                        // also accepts the hint when the caret is at the end.
+                        KeyCode::Left => {
+                            self.prompt_move_left();
+                            self.status_msg = None;
+                        }
+                        KeyCode::Right => {
+                            self.prompt_accept_or_right();
+                            self.status_msg = None;
+                        }
+                        KeyCode::Home => self.prompt_home(),
+                        KeyCode::End => self.prompt_accept_or_end(),
+                        KeyCode::Tab => {
+                            self.prompt_tab();
+                            self.status_msg = None;
+                        }
                         KeyCode::Up if !self.qal_aliases.is_empty() => {
                             self.query_buf.clear();
+                            self.prompt_cursor = 0;
                             self.status_msg = None;
                         }
                         KeyCode::Char(c) => {
-                            self.query_buf.push(c);
+                            self.prompt_push(c);
                             self.status_msg = None;
                         }
                         _ => {}
@@ -104,7 +131,7 @@ impl Editor {
     /// Verbs that can never become qal aliases (case-insensitive).
     /// Bare words matching these always dispatch as commands, so the
     /// leading `/` is optional everywhere.
-    const RESERVED_VERBS: &[&str] = &[
+    pub(crate) const RESERVED_VERBS: &[&str] = &[
         "s", "l", "sa", "sal", "sl", "rp", "c", "cs", "add", "rm", "set", "z", "upper", "up",
         "lower", "low", "undo", "redo", "exit", "quit", "help", "qal",
     ];
@@ -350,7 +377,7 @@ impl Editor {
 
     /// `/s "text"`: select the next occurrence after the cursor,
     /// wrapping to the top. Bare `/s` selects the word under the cursor.
-    fn cmd_select_next(&mut self, args: &str) {
+    pub(crate) fn cmd_select_next(&mut self, args: &str) {
         let pat = Self::unquote(args);
         if pat.is_empty() {
             match self.select_word_under_cursor() {

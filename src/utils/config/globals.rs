@@ -1416,6 +1416,16 @@ impl Config {
         cfg.save();
     }
 
+    pub fn global_get_intro_view_enabled() -> bool {
+        Self::read_global().intro_view_enabled
+    }
+
+    pub fn global_set_intro_view_enabled(enabled: bool) {
+        let mut cfg = Self::write_global();
+        cfg.intro_view_enabled = enabled;
+        cfg.save();
+    }
+
     pub fn global_get_dir_view_enabled() -> bool {
         Self::read_global().dir_view_enabled
     }
@@ -1423,6 +1433,41 @@ impl Config {
     pub fn global_set_dir_view_enabled(enabled: bool) {
         let mut cfg = Self::write_global();
         cfg.dir_view_enabled = enabled;
+        cfg.save();
+    }
+
+    pub fn global_get_file_view_enabled() -> bool {
+        Self::read_global().file_view_enabled
+    }
+
+    pub fn global_set_file_view_enabled(enabled: bool) {
+        let mut cfg = Self::write_global();
+        cfg.file_view_enabled = enabled;
+        cfg.save();
+    }
+
+    pub fn global_get_todo_format() -> String {
+        Self::read_global().todo_format.clone()
+    }
+
+    pub fn global_set_todo_format(format: &str) {
+        let mut cfg = Self::write_global();
+        cfg.todo_format = format.to_string();
+        cfg.save();
+    }
+
+    pub fn global_get_auto_size_files() -> bool {
+        Self::read_global().auto_size_files
+    }
+
+    pub fn global_get_auto_size_dirs() -> bool {
+        Self::read_global().auto_size_dirs
+    }
+
+    pub fn global_set_auto_size(files: bool, dirs: bool) {
+        let mut cfg = Self::write_global();
+        cfg.auto_size_files = files;
+        cfg.auto_size_dirs = dirs;
         cfg.save();
     }
 

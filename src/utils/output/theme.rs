@@ -1,5 +1,3 @@
-
-
 fn icon(unicode: &'static str, ascii: &'static str) -> &'static str {
     if crate::utils::terminal::is_ascii_mode() {
         ascii
@@ -56,7 +54,11 @@ pub fn print_success(msg: &str) {
     let theme = crate::utils::theme::ThemeManager::current();
     let c = theme.shell.success.clone();
     drop(theme);
-    println!("{} {}", c.paint_ansi_bold(icon("✓", "+")), c.paint_ansi(msg));
+    println!(
+        "{} {}",
+        c.paint_ansi_bold(icon("✓", "+")),
+        c.paint_ansi(msg)
+    );
 }
 
 /// Print error message using theme color (unified raw-ANSI on every OS).
@@ -64,7 +66,11 @@ pub fn print_error(msg: &str) {
     let theme = crate::utils::theme::ThemeManager::current();
     let c = theme.shell.error.clone();
     drop(theme);
-    eprintln!("{} {}", c.paint_ansi_bold(icon("✗", "x")), c.paint_ansi(msg));
+    eprintln!(
+        "{} {}",
+        c.paint_ansi_bold(icon("✗", "x")),
+        c.paint_ansi(msg)
+    );
 }
 
 /// Print info message using theme color (unified raw-ANSI on every OS).

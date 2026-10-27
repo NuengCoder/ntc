@@ -92,6 +92,53 @@ pub(crate) fn stop_daemon() -> std::io::Result<()> {
     Ok(())
 }
 
+/// Is the process with this PID still alive?
+fn pid_alive(pid: u32) -> std::io::Result<bool> {
+    #[cfg(windows)]
+    {
+        let out = std::process::Command::new("tasklist")
+            .args(["/FI", &format!("PID eq {}", pid), "/NH"])
+            .stdout(std::process::Stdio::piped())
+            .output()?;
+        Ok(String::from_utf8_lossy(&out.stdout).contains(&pid.to_string()))
+    }
+    #[cfg(not(windows))]
+    {
+        let status = std::process::Command::new("kill")
+            .args(["-0", &pid.to_string()])
+            .status()?;
+        Ok(status.success())
+    }
+}
+
+/// Register this process as the running daemon in the PID file.
+///
+/// `spawn_daemon` writes the file from the parent, but a daemon started
+/// directly — the `HKCU\...\Run` entry at logon, or `ntc qsc daemon` typed
+/// by hand — has no parent to do it. The loop treats a missing PID file as
+/// the stop signal, so without claiming the file such a daemon exits on its
+/// very first iteration and QSC never survives a reboot.
+///
+/// Returns `false` when another live daemon already owns the file.
+fn claim_pid_file() -> std::io::Result<bool> {
+    let path = pid_path();
+    if let Some(parent) = path.parent() {
+        let _ = std::fs::create_dir_all(parent);
+    }
+    if let Ok(existing) = std::fs::read_to_string(&path) {
+        if let Ok(pid) = existing.trim().parse::<u32>() {
+            if pid == std::process::id() {
+                return Ok(true);
+            }
+            if pid_alive(pid)? {
+                return Ok(false);
+            }
+        }
+    }
+    std::fs::write(&path, std::process::id().to_string())?;
+    Ok(true)
+}
+
 /// Check if the daemon is running.
 pub(crate) fn daemon_status() -> std::io::Result<bool> {
     let path = pid_path();
@@ -100,27 +147,8 @@ pub(crate) fn daemon_status() -> std::io::Result<bool> {
     }
     if let Ok(pid_str) = std::fs::read_to_string(&path) {
         if let Ok(pid) = pid_str.trim().parse::<u32>() {
-            #[cfg(windows)]
-            {
-                let out = std::process::Command::new("tasklist")
-                    .args(["/FI", &format!("PID eq {}", pid), "/NH"])
-                    .stdout(std::process::Stdio::piped())
-                    .output()?;
-                let stdout = String::from_utf8_lossy(&out.stdout);
-                if stdout.contains(&pid.to_string()) {
-                    return Ok(true);
-                }
-            }
-            #[cfg(not(windows))]
-            {
-                let s = std::process::Command::new("kill")
-                    .args(["-0", &pid.to_string()])
-                    .status();
-                if let Ok(status) = s {
-                    if status.success() {
-                        return Ok(true);
-                    }
-                }
+            if pid_alive(pid)? {
+                return Ok(true);
             }
         }
     }
@@ -616,6 +644,12 @@ pub(crate) fn run() -> ! {
         // Detach console as early as possible to prevent window flash at boot.
         // (Also done inside the platform loop, but this is an extra safety net.)
         let _ = FreeConsole();
+    }
+    // Take ownership of the PID file before the loop: the daemon may have
+    // been started by the startup registration, where nobody else writes it.
+    if let Ok(false) = claim_pid_file() {
+        // Another live daemon already owns the hotkey.
+        std::process::exit(0);
     }
     platform::run_daemon_loop()
 }

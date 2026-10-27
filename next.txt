@@ -1,0 +1,9 @@
+VIEWS COMMAND (short, flat listing):
+  views [<dir|@tp|@tp/dir/>]             List one directory level, flat like ls
+  views -s, --size [min-size]            Show sizes; with value (1024, 10KB, 5MB), hide smaller
+  views --sort <name|ext|size>           Sort entries (default: name)
+  views -n                               One entry per line instead of the flowing groups
+  No [Directory]/[ignored] tags - colours show the kind. Depth is fixed at 1 and sizes are always computed with --care semantics. Use --size to display sizes.
+Examples:
+    views                                  # Flat listing of the current directory
+    views src --size 1KB --sort size       # Entries >= 1KB, largest first, sizes shown

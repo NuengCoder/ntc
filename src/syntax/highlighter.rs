@@ -1,10 +1,11 @@
-use super::types::detect_language;
+use super::types::{detect_language, detect_language_for_path};
 use crate::syntax::language::{
-    has_annotation_at, has_block_comments, has_css_at_rules, has_pascal_comments, has_preprocessor,
-    has_ps_block_comments, has_regex_literals, has_tag_syntax, has_toml_fields, has_xml_comments,
-    is_builtin, is_char_literal_supported, is_constant, is_css_at_rule, is_css_property,
-    is_function_call, is_ident_continue, is_ident_start, is_keyword, is_rust_attr_start,
-    is_type_name, is_type_name_upper_heuristic, line_comment_prefix,
+    has_annotation_at, has_block_comments, has_css_at_rules, has_fsharp_block_comments,
+    has_pascal_comments, has_preprocessor, has_ps_block_comments, has_regex_literals,
+    has_tag_syntax, has_toml_fields, has_xml_comments, is_builtin, is_char_literal_supported,
+    is_constant, is_css_at_rule, is_css_property, is_function_call, is_ident_continue,
+    is_ident_start, is_keyword, is_rust_attr_start, is_type_name, is_type_name_upper_heuristic,
+    line_comment_prefix,
 };
 use crate::syntax::types::{SyntaxLanguage, Token, TokenType};
 
@@ -16,6 +17,7 @@ pub struct SyntaxHighlighter {
     in_ps_comment: bool,
     in_pascal_brace_comment: bool,
     in_pascal_paren_comment: bool,
+    in_fsharp_comment: bool,
     in_regex: bool,
     token_cache: Vec<Option<Vec<Token>>>,
 }
@@ -30,9 +32,24 @@ impl SyntaxHighlighter {
             in_ps_comment: false,
             in_pascal_brace_comment: false,
             in_pascal_paren_comment: false,
+            in_fsharp_comment: false,
             in_regex: false,
             token_cache: Vec::new(),
         }
+    }
+
+    /// Build a highlighter for a real file path: known dotfile names
+    /// (`.bashrc`, `.vimrc`, `.env`, …) win over the extension.
+    pub fn for_path(path: &std::path::Path) -> Self {
+        let mut highlighter = Self::new(None);
+        highlighter.language = detect_language_for_path(path);
+        highlighter
+    }
+
+    /// Switch language for a file path (name first, then extension).
+    pub fn set_language_for_path(&mut self, path: &std::path::Path) {
+        self.set_language(None);
+        self.language = detect_language_for_path(path);
     }
 
     pub fn set_language(&mut self, ext: Option<&str>) {
@@ -42,6 +59,7 @@ impl SyntaxHighlighter {
         self.in_ps_comment = false;
         self.in_pascal_brace_comment = false;
         self.in_pascal_paren_comment = false;
+        self.in_fsharp_comment = false;
         self.in_regex = false;
         self.token_cache.clear();
     }
@@ -65,6 +83,7 @@ impl SyntaxHighlighter {
         self.in_ps_comment = false;
         self.in_pascal_brace_comment = false;
         self.in_pascal_paren_comment = false;
+        self.in_fsharp_comment = false;
         self.in_regex = false;
     }
 
@@ -148,6 +167,12 @@ impl SyntaxHighlighter {
         } else {
             None
         };
+        // Vim uses `"` both for comments (start of line) and strings.
+        let vim_first_non_ws = if matches!(lang, SyntaxLanguage::Vim) {
+            bytes.iter().position(|b| !b.is_ascii_whitespace())
+        } else {
+            None
+        };
 
         if self.in_xml_comment && has_xml_comments(lang) {
             let start = 0;
@@ -224,6 +249,36 @@ impl SyntaxHighlighter {
             }
         }
 
+        // F# `(* … *)` — MUST come before the Pascal `(* … *)` branch below,
+        // because both use the same delimiters. The two languages are disjoint
+        // (`has_fsharp_block_comments` only returns true for `FSharp`,
+        // `has_pascal_comments` only for `InnoSetup`), so order here is a
+        // belt-and-braces guarantee rather than a functional necessity.
+        if self.in_fsharp_comment && has_fsharp_block_comments(lang) {
+            let start = 0;
+            while i + 1 < len {
+                if bytes[i] == b'*' && bytes[i + 1] == b')' {
+                    tokens.push(Token {
+                        start,
+                        end: i + 2,
+                        token_type: TokenType::Comment,
+                    });
+                    i += 2;
+                    self.in_fsharp_comment = false;
+                    break;
+                }
+                i += 1;
+            }
+            if self.in_fsharp_comment {
+                tokens.push(Token {
+                    start,
+                    end: len,
+                    token_type: TokenType::Comment,
+                });
+                return tokens;
+            }
+        }
+
         if self.in_pascal_brace_comment && has_pascal_comments(lang) {
             let start = 0;
             while i < len {
@@ -278,6 +333,15 @@ impl SyntaxHighlighter {
             if bytes[i].is_ascii_whitespace() {
                 i += 1;
                 continue;
+            }
+
+            if vim_first_non_ws == Some(i) && bytes[i] == b'"' {
+                tokens.push(Token {
+                    start: i,
+                    end: len,
+                    token_type: TokenType::Comment,
+                });
+                return tokens;
             }
 
             if !lc_prefix.is_empty()
@@ -470,6 +534,51 @@ impl SyntaxHighlighter {
                         token_type: TokenType::Comment,
                     });
                     self.in_block_comment = true;
+                    return tokens;
+                }
+                continue;
+            }
+
+            // F# `(* … *)` — must be checked before the Pascal block, since
+            // they share the same opening delimiter.
+            if has_fsharp_block_comments(lang)
+                && i + 1 < len
+                && bytes[i] == b'('
+                && bytes[i + 1] == b'*'
+            {
+                let start = i;
+                i += 2;
+                let mut depth: usize = 1;
+                let mut closed = false;
+                while i < len {
+                    if i + 1 < len && bytes[i] == b'(' && bytes[i + 1] == b'*' {
+                        depth += 1;
+                        i += 2;
+                        continue;
+                    }
+                    if i + 1 < len && bytes[i] == b'*' && bytes[i + 1] == b')' {
+                        depth -= 1;
+                        i += 2;
+                        if depth == 0 {
+                            tokens.push(Token {
+                                start,
+                                end: i,
+                                token_type: TokenType::Comment,
+                            });
+                            closed = true;
+                            break;
+                        }
+                        continue;
+                    }
+                    i += 1;
+                }
+                if !closed {
+                    tokens.push(Token {
+                        start,
+                        end: len,
+                        token_type: TokenType::Comment,
+                    });
+                    self.in_fsharp_comment = true;
                     return tokens;
                 }
                 continue;
@@ -1045,5 +1154,116 @@ mod tests {
         let t = toks("say \"a # b\"");
         assert!(!t.iter().any(|(_, _, tt)| *tt == TokenType::Comment));
         assert!(t.iter().any(|(_, _, tt)| *tt == TokenType::String));
+    }
+
+    fn toks_path(name: &str, line: &str) -> Vec<(usize, usize, TokenType)> {
+        let mut h = SyntaxHighlighter::for_path(std::path::Path::new(name));
+        h.tokenize_line(0, line)
+            .iter()
+            .map(|t| (t.start, t.end, t.token_type))
+            .collect()
+    }
+
+    #[test]
+    fn dotfile_paths_pick_a_language() {
+        for name in [".vimrc", ".nvimrc", ".gvimrc", "init.vim"] {
+            assert_eq!(
+                SyntaxHighlighter::for_path(std::path::Path::new(name)).language,
+                Some(SyntaxLanguage::Vim),
+                "{}",
+                name
+            );
+        }
+        for name in [".bashrc", ".zshrc", ".profile"] {
+            assert_eq!(
+                SyntaxHighlighter::for_path(std::path::Path::new(name)).language,
+                Some(SyntaxLanguage::Bash),
+                "{}",
+                name
+            );
+        }
+        for name in [".env", ".env.local", ".gitignore"] {
+            assert_eq!(
+                SyntaxHighlighter::for_path(std::path::Path::new(name)).language,
+                Some(SyntaxLanguage::Dotenv),
+                "{}",
+                name
+            );
+        }
+        assert_eq!(
+            SyntaxHighlighter::for_path(std::path::Path::new("main.rs")).language,
+            Some(SyntaxLanguage::Rust)
+        );
+    }
+
+    #[test]
+    fn vim_leading_quote_comments_but_keeps_strings() {
+        let t = toks_path(".vimrc", "  \" set number");
+        assert_eq!(t.len(), 1);
+        assert_eq!(t[0].2, TokenType::Comment);
+
+        let t = toks_path(".vimrc", "let g:name = \"value\"");
+        assert!(t.iter().any(|(_, _, tt)| *tt == TokenType::Keyword));
+        assert!(t.iter().any(|(_, _, tt)| *tt == TokenType::String));
+        assert!(!t.iter().any(|(_, _, tt)| *tt == TokenType::Comment));
+    }
+
+    #[test]
+    fn bashrc_dotfile_uses_hash_comments() {
+        let t = toks_path(".bashrc", "# export PATH");
+        assert_eq!(t.len(), 1);
+        assert_eq!(t[0].2, TokenType::Comment);
+        let t = toks_path(".bashrc", "if [ -f file ]; then");
+        assert!(t.iter().any(|(_, _, tt)| *tt == TokenType::Keyword));
+        assert!(!t.iter().any(|(_, _, tt)| *tt == TokenType::Comment));
+    }
+
+    // ---- F# block comments ----
+
+    #[test]
+    fn fsharp_inline_block_comment() {
+        let mut h = SyntaxHighlighter::new(Some("fs"));
+        let t: Vec<_> = h
+            .tokenize_line(0, "let x = 1 (* note *) + 2")
+            .iter()
+            .map(|t| (t.start, t.end, t.token_type))
+            .collect();
+        assert!(t.iter().any(|(_, _, tt)| *tt == TokenType::Comment));
+        assert!(!h.in_fsharp_comment);
+    }
+
+    #[test]
+    fn fsharp_multiline_block_comment() {
+        let mut h = SyntaxHighlighter::new(Some("fs"));
+        let t0: Vec<_> = h
+            .tokenize_line(0, "(* start")
+            .iter()
+            .map(|t| (t.start, t.end, t.token_type))
+            .collect();
+        assert_eq!(t0.len(), 1);
+        assert_eq!(t0[0].2, TokenType::Comment);
+        assert!(h.in_fsharp_comment);
+
+        let t1: Vec<_> = h
+            .tokenize_line(1, "still inside *)")
+            .iter()
+            .map(|t| (t.start, t.end, t.token_type))
+            .collect();
+        assert_eq!(t1.len(), 1);
+        assert_eq!(t1[0].2, TokenType::Comment);
+        assert!(!h.in_fsharp_comment);
+    }
+
+    #[test]
+    fn fsharp_nested_block_comments() {
+        let mut h = SyntaxHighlighter::new(Some("fs"));
+        let t: Vec<_> = h
+            .tokenize_line(0, "(* outer (* inner *) still outer *) let y = 2")
+            .iter()
+            .map(|t| (t.start, t.end, t.token_type))
+            .collect();
+        // The whole nested comment is one Comment token.
+        assert!(t.iter().any(|(_, _, tt)| *tt == TokenType::Comment));
+        assert!(!h.in_fsharp_comment);
     }
 }

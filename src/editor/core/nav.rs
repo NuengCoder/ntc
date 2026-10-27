@@ -1,5 +1,6 @@
 use crate::editor::{
-    byte_to_col, gutter_width, next_char_byte, prev_char_byte, sel_range, set_status_bar, Editor,
+    byte_to_col, gutter_width, next_char_byte, next_word_byte, prev_char_byte, prev_word_byte,
+    sel_range, set_status_bar, Editor,
 };
 use crate::t;
 use crossterm::style::Color;
@@ -293,6 +294,41 @@ impl Editor {
     pub(crate) fn extend_right(&mut self) {
         self.start_or_extend_selection();
         self.move_right_charwise();
+    }
+
+    /// Ctrl+Shift+Left / Ctrl+Shift+h: select word by word to the left.
+    pub(crate) fn extend_word_left(&mut self) {
+        self.start_or_extend_selection();
+        if self.cursor.byte > 0 {
+            self.cursor.byte = prev_word_byte(self.current(), self.cursor.byte);
+        } else if self.cursor.y > 0 {
+            self.cursor.y -= 1;
+            self.cursor.byte = self.lines[self.cursor.y].len();
+        }
+    }
+
+    /// Ctrl+Shift+Right / Ctrl+Shift+l: select word by word to the right.
+    pub(crate) fn extend_word_right(&mut self) {
+        self.start_or_extend_selection();
+        let line = self.current();
+        if self.cursor.byte < line.len() {
+            self.cursor.byte = next_word_byte(line, self.cursor.byte);
+        } else if self.cursor.y + 1 < self.lines.len() {
+            self.cursor.y += 1;
+            self.cursor.byte = 0;
+        }
+    }
+
+    /// Shift+Home: extend the selection back to the start of the line.
+    pub(crate) fn extend_line_start(&mut self) {
+        self.start_or_extend_selection();
+        self.cursor.byte = 0;
+    }
+
+    /// Shift+End: extend the selection to the end of the line.
+    pub(crate) fn extend_line_end(&mut self) {
+        self.start_or_extend_selection();
+        self.cursor.byte = self.current().len();
     }
 
     pub(crate) fn extend_up(&mut self) {

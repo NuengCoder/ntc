@@ -1,11 +1,11 @@
 use crate::config::Config;
 use crate::syntax::{color_for, SyntaxHighlighter};
+use crate::t;
 use anyhow::{Context, Result};
 use colored::*;
 use std::fs;
 use std::io::Write;
 use std::path::{Path, PathBuf};
-use crate::t;
 
 /// Read a file into a Rust String, detecting UTF-8 BOM, UTF-16LE BOM,
 /// and UTF-16BE BOM. Without a BOM, tries UTF-8 first; on encoding
@@ -132,7 +132,12 @@ pub fn cat_file_range(
 
     println!(
         "{}",
-        t!("output.filename_header", file_path.file_name().unwrap_or_default().to_string_lossy()).cyan().bold()
+        t!(
+            "output.filename_header",
+            file_path.file_name().unwrap_or_default().to_string_lossy()
+        )
+        .cyan()
+        .bold()
     );
 
     let lines: Vec<&str> = content.lines().collect();
@@ -162,8 +167,7 @@ pub fn cat_file_range(
 /// fails, emitting `\x1b[...` prints `[91m` garbage, so we must stay plain
 /// even if the user has `setc ON`.
 pub fn raw_ansi_allowed() -> bool {
-    Config::global_get_color_enabled()
-        && colored::control::SHOULD_COLORIZE.should_colorize()
+    Config::global_get_color_enabled() && colored::control::SHOULD_COLORIZE.should_colorize()
 }
 
 /// Convert a `crossterm::style::Color` to a raw ANSI foreground-color
@@ -228,8 +232,8 @@ pub fn cat_file_with_syntax_range(
     if !raw_ansi_allowed() {
         return cat_file_range(file_path, show_lines, range);
     }
-    let ext = file_path.extension().and_then(|e| e.to_str());
-    let mut syntax = SyntaxHighlighter::new(ext);
+    // Name first (`.vimrc`, `.bashrc`, `.env`, …), then the extension.
+    let mut syntax = SyntaxHighlighter::for_path(file_path);
     let lang_detected = syntax.language.is_some();
 
     // No language detected — fall back to the existing line-numbered /
@@ -250,7 +254,10 @@ pub fn cat_file_with_syntax_range(
     print!(
         "{}{}{}",
         header_color,
-        t!("output.filename_header", file_path.file_name().unwrap_or_default().to_string_lossy()),
+        t!(
+            "output.filename_header",
+            file_path.file_name().unwrap_or_default().to_string_lossy()
+        ),
         reset
     );
     println!();
@@ -265,8 +272,7 @@ pub fn cat_file_with_syntax_range(
         println!("{}", t!("output.range_past_eof").dimmed());
         return Ok(());
     }
-    let wanted: std::collections::HashSet<usize> =
-        selected.iter().map(|(no, _)| *no).collect();
+    let wanted: std::collections::HashSet<usize> = selected.iter().map(|(no, _)| *no).collect();
     for (i, line) in lines.iter().enumerate() {
         // Original file line number, even for partial ranges.
         let no = i + 1;
@@ -450,8 +456,7 @@ pub fn cat_file_with_line_numbers(file_path: &Path, show_lines: bool) -> Result<
 /// Write content to a file, creating parent directories if needed.
 pub fn write_file(file_path: &Path, content: &str) -> Result<()> {
     if let Some(parent) = file_path.parent() {
-        fs::create_dir_all(parent)
-            .with_context(|| t!("output.mkdir_failed", parent.display()))?;
+        fs::create_dir_all(parent).with_context(|| t!("output.mkdir_failed", parent.display()))?;
     }
 
     let mut file = fs::File::create(file_path)

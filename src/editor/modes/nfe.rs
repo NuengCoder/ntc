@@ -1,7 +1,7 @@
 use anyhow::Result;
 use crossterm::event::{Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 
-use crate::editor::{Editor, Mode};
+use crate::editor::{Editor, Mode, NfeBox, NfeBoxKind, NfeConfirm};
 use crate::t;
 
 impl Editor {
@@ -13,6 +13,7 @@ impl Editor {
         }
         self.mode = Mode::Nfe;
         self.status_msg = None;
+        self.nfe_confirm = None;
         self.nfe_ensure_visible();
         self.mark_all_dirty();
     }
@@ -24,6 +25,7 @@ impl Editor {
         self.mode = prev;
         self.sidebar.open = false;
         self.status_msg = None;
+        self.nfe_confirm = None;
         self.mark_all_dirty();
     }
 
@@ -66,9 +68,61 @@ impl Editor {
     }
 
     /// Run one `nfe:` prompt line: `size full|def|N%`, `n <file>`,
-    /// `m <dir>`, `rmd`/`rmf`, `i` (insert), `v` (visual). Clears the
-    /// prompt on success so navigation resumes; leaves it open on error.
+    /// `m <dir>`, `rmd`/`rmf`, `i` (insert), `v` (visual), `qt`/`aqt`
+    /// (close tabs, like gmode), `t`/`T`/`t<n>`/`T<n>` (switch tabs), or a
+    /// bare number to jump to the sidebar entry with that number. Clears
+    /// the prompt on success so navigation resumes; leaves it open on error.
     fn run_nfe_command(&mut self, cmd: &str) {
+        let cmd = cmd.trim();
+        match cmd {
+            "qt" => {
+                self.close_current_tab();
+                self.nfe_cmd = None;
+                self.mark_all_dirty();
+                return;
+            }
+            "aqt" => {
+                self.close_all_tabs();
+                self.nfe_cmd = None;
+                self.mark_all_dirty();
+                return;
+            }
+            _ => {}
+        }
+        for (prefix, back) in [('t', false), ('T', true)] {
+            let Some(n) = Editor::parse_tab_command(cmd, prefix) else {
+                continue;
+            };
+            let jumped = if n == 0 {
+                if back {
+                    self.prev_tab();
+                } else {
+                    self.next_tab();
+                }
+                true
+            } else {
+                self.goto_tab(n)
+            };
+            if jumped {
+                self.nfe_cmd = None;
+            }
+            self.mark_all_dirty();
+            return;
+        }
+        if let Ok(n) = cmd.parse::<usize>() {
+            let total = self.sidebar.nodes.len();
+            if n >= 1 && n <= total {
+                self.sidebar.selected = n - 1;
+                let name = self.sidebar.nodes[n - 1].name.clone();
+                self.status_msg = Some(t!("editor.nfe_jumped", n, name));
+                self.nfe_cmd = None;
+                self.nfe_ensure_visible();
+            } else {
+                self.status_msg = Some(t!("editor.nfe_jump_range", n, total));
+            }
+            self.mark_all_dirty();
+            return;
+        }
         let mut parts = cmd.split_whitespace();
         match (parts.next(), parts.next(), parts.next()) {
             (Some("size"), Some(arg), None) => match parse_nfe_size(arg) {
@@ -133,6 +187,7 @@ impl Editor {
                     }
                 }
                 self.mode = Mode::Nfe;
+                self.sidebar.invalidate_cache();
                 self.sidebar.rebuild_tree();
                 self.nfe_select_path(&path);
                 self.status_msg = Some(t!("editor.nfe_created_file", name));
@@ -161,6 +216,7 @@ impl Editor {
                     self.status_msg = Some(t!("editor.nfe_create_failed", e));
                     return;
                 }
+                self.sidebar.invalidate_cache();
                 self.sidebar.rebuild_tree();
                 self.nfe_select_path(&path);
                 self.status_msg = Some(t!("editor.nfe_created_dir", name));
@@ -169,6 +225,97 @@ impl Editor {
                 self.mark_all_dirty();
             }
         }
+    }
+
+    /// Delete the selected sidebar entry: sets a `y`/`n` confirmation state.
+    /// While a confirm is pending, all keys route through
+    /// [`Editor::handle_nfe_confirm_key`].
+    fn request_nfe_delete(&mut self) -> bool {
+        if self.sidebar.nodes.is_empty() {
+            return false;
+        }
+        let idx = self.sidebar.selected.min(self.sidebar.nodes.len() - 1);
+        let node = self.sidebar.nodes[idx].clone();
+        if node.name == ".." {
+            self.status_msg = Some(t!("editor.nfe_rm_root"));
+            self.mark_all_dirty();
+            return false;
+        }
+        self.nfe_confirm = Some(NfeConfirm {
+            path: node.path.clone(),
+            is_dir: node.is_dir,
+        });
+        self.status_msg = Some(t!("editor.nfe_confirm", node.name));
+        self.mark_all_dirty();
+        true
+    }
+
+    /// Keys while a delete confirmation is pending: `y` deletes, `n`/Esc
+    /// cancels, anything else is ignored.
+    fn handle_nfe_confirm_key(&mut self, code: KeyCode, ctrl: bool) {
+        if ctrl {
+            return;
+        }
+        match code {
+            KeyCode::Esc => {
+                self.nfe_confirm = None;
+                self.status_msg = None;
+            }
+            KeyCode::Char('y') | KeyCode::Char('Y') => {
+                if let Some(c) = self.nfe_confirm.take() {
+                    self.nfe_remove_path(&c.path, c.is_dir);
+                }
+            }
+            KeyCode::Char('n') | KeyCode::Char('N') => {
+                self.nfe_confirm = None;
+                self.status_msg = None;
+            }
+            _ => {}
+        }
+    }
+
+    /// Remove a file or directory tree, closing tabs with unsaved edits.
+    fn nfe_remove_path(&mut self, path: &std::path::Path, is_dir: bool) {
+        let root = self.sidebar.root.clone();
+        let name = path
+            .strip_prefix(&root)
+            .map(|p| p.to_string_lossy().to_string())
+            .unwrap_or_else(|_| {
+                path.file_name()
+                    .map(|n| n.to_string_lossy().to_string())
+                    .unwrap_or_else(|| path.display().to_string())
+            });
+        if !path.exists() {
+            self.status_msg = Some(t!("editor.nfe_rm_not_exist", &name));
+            return;
+        }
+        if is_dir && !path.is_dir() {
+            self.status_msg = Some(t!("editor.nfe_rmd_not_dir", &name));
+            return;
+        }
+        if !is_dir && path.is_dir() {
+            self.status_msg = Some(t!("editor.nfe_rmf_is_dir", &name));
+            return;
+        }
+        if !self.nfe_close_affected_tabs(path, is_dir) {
+            return;
+        }
+        let result = if is_dir {
+            std::fs::remove_dir_all(path)
+        } else {
+            std::fs::remove_file(path)
+        };
+        if let Err(e) = result {
+            self.status_msg = Some(t!("editor.nfe_rm_failed", e));
+            return;
+        }
+        self.sidebar.invalidate_cache();
+        self.sidebar.rebuild_tree();
+        self.clamp_nfe_selection();
+        self.status_msg = Some(t!("editor.nfe_removed", &name));
+        self.nfe_cmd = None;
+        self.nfe_ensure_visible();
+        self.mark_all_dirty();
     }
 
     /// Remove a directory tree relative to the sidebar root (`rmd`).
@@ -199,6 +346,7 @@ impl Editor {
             self.status_msg = Some(t!("editor.nfe_rm_failed", e));
             return;
         }
+        self.sidebar.invalidate_cache();
         self.sidebar.rebuild_tree();
         self.clamp_nfe_selection();
         self.status_msg = Some(t!("editor.nfe_removed", name));
@@ -234,6 +382,7 @@ impl Editor {
             self.status_msg = Some(t!("editor.nfe_rm_failed", e));
             return;
         }
+        self.sidebar.invalidate_cache();
         self.sidebar.rebuild_tree();
         self.clamp_nfe_selection();
         self.status_msg = Some(t!("editor.nfe_removed", name));
@@ -334,8 +483,21 @@ impl Editor {
                 kind: KeyEventKind::Press,
                 ..
             }) => {
+                // The input box for `n`/`m`/`r` takes every key while open.
+                if self.nfe_box.is_some() {
+                    let ctrl = modifiers.contains(KeyModifiers::CONTROL);
+                    self.handle_nfe_box_key(code, ctrl);
+                    self.mark_all_dirty();
+                    return Ok(());
+                }
                 // Command-prompt input capture takes over all keys.
                 if self.nfe_cmd.is_some() {
+                    // Ctrl+E accepts the ghost hint, like End.
+                    if modifiers.contains(KeyModifiers::CONTROL) && code == KeyCode::Char('e') {
+                        self.prompt_accept_or_end();
+                        self.mark_all_dirty();
+                        return Ok(());
+                    }
                     match code {
                         KeyCode::Esc => {
                             self.nfe_cmd = None;
@@ -351,18 +513,23 @@ impl Editor {
                                 self.run_nfe_command(cmd.trim());
                             }
                         }
-                        KeyCode::Backspace => {
-                            if let Some(buf) = self.nfe_cmd.as_mut() {
-                                buf.pop();
-                            }
-                        }
-                        KeyCode::Char(c) => {
-                            if let Some(buf) = self.nfe_cmd.as_mut() {
-                                buf.push(c);
-                            }
-                        }
+                        KeyCode::Backspace => self.prompt_backspace(),
+                        KeyCode::Delete => self.prompt_delete(),
+                        KeyCode::Left => self.prompt_move_left(),
+                        KeyCode::Right => self.prompt_accept_or_right(),
+                        KeyCode::Home => self.prompt_home(),
+                        KeyCode::End => self.prompt_accept_or_end(),
+                        KeyCode::Tab => self.prompt_tab(),
+                        KeyCode::Char(c) => self.prompt_push(c),
                         _ => {}
                     }
+                    self.mark_all_dirty();
+                    return Ok(());
+                }
+                // Pending delete confirmation takes over all keys.
+                if self.nfe_confirm.is_some() {
+                    let ctrl = modifiers.contains(KeyModifiers::CONTROL);
+                    self.handle_nfe_confirm_key(code, ctrl);
                     self.mark_all_dirty();
                     return Ok(());
                 }
@@ -390,6 +557,26 @@ impl Editor {
                         self.mark_all_dirty();
                     }
                     (false, KeyCode::Enter) => self.nfe_activate(),
+                    (false, KeyCode::Char('n')) | (false, KeyCode::Char('N')) => {
+                        let base = self.nfe_box_base_dir();
+                        self.open_nfe_box(NfeBox::new_file(base));
+                    }
+                    (false, KeyCode::Char('m')) | (false, KeyCode::Char('M')) => {
+                        let base = self.nfe_box_base_dir();
+                        self.open_nfe_box(NfeBox::new_dir(base));
+                    }
+                    (false, KeyCode::Char('r')) | (false, KeyCode::Char('R')) => {
+                        match self.sidebar.nodes.get(self.sidebar.selected) {
+                            Some(node) if node.name != ".." => {
+                                let path = node.path.clone();
+                                self.open_nfe_box(NfeBox::rename(path));
+                            }
+                            _ => {
+                                self.status_msg = Some(t!("editor.nfe_rename_root"));
+                                self.mark_all_dirty();
+                            }
+                        }
+                    }
                     (false, KeyCode::Char('k'))
                     | (false, KeyCode::Char('K'))
                     | (false, KeyCode::Char('w'))
@@ -419,10 +606,12 @@ impl Editor {
                     }
                     (false, KeyCode::Char('l'))
                     | (false, KeyCode::Char('L'))
-                    | (false, KeyCode::Char('d'))
-                    | (false, KeyCode::Char('D'))
                     | (false, KeyCode::Right) => {
                         self.nfe_activate();
+                    }
+                    (false, KeyCode::Char('d')) | (false, KeyCode::Char('D')) => {
+                        // Delete selected entry (with confirm; `l` moves).
+                        self.request_nfe_delete();
                     }
                     (false, KeyCode::Home) => {
                         self.sidebar.selected = 0;
@@ -459,6 +648,186 @@ impl Editor {
             _ => {}
         }
         Ok(())
+    }
+
+    /// Directory a box-created entry goes into: the selected directory,
+    /// else the selected file's parent, else the sidebar root.
+    fn nfe_box_base_dir(&self) -> std::path::PathBuf {
+        if let Some(node) = self.sidebar.nodes.get(self.sidebar.selected) {
+            // The `..` pseudo-entry creates in the sidebar root, not above it.
+            if node.name == ".." {
+                return self.sidebar.root.clone();
+            }
+            if node.is_dir {
+                return node.path.clone();
+            }
+            if let Some(parent) = node.path.parent() {
+                return parent.to_path_buf();
+            }
+        }
+        self.sidebar.root.clone()
+    }
+
+    /// Show the `n`/`m`/`r` input box.
+    fn open_nfe_box(&mut self, b: NfeBox) {
+        self.nfe_box = Some(b);
+        self.status_msg = None;
+        self.mark_all_dirty();
+    }
+
+    /// Keys while the input box is open: Esc cancels, Enter applies (or
+    /// cancels when the line is blank), the rest edit the line.
+    fn handle_nfe_box_key(&mut self, code: KeyCode, ctrl: bool) {
+        match code {
+            KeyCode::Esc => {
+                self.nfe_box = None;
+                self.status_msg = None;
+                return;
+            }
+            KeyCode::Enter => {
+                let blank = self
+                    .nfe_box
+                    .as_ref()
+                    .map(|b| b.buf.trim().is_empty())
+                    .unwrap_or(true);
+                if blank {
+                    self.nfe_box = None;
+                    self.status_msg = None;
+                } else {
+                    self.accept_nfe_box();
+                }
+                return;
+            }
+            _ => {}
+        }
+        let Some(b) = self.nfe_box.as_mut() else {
+            return;
+        };
+        match code {
+            KeyCode::Backspace => b.backspace(),
+            KeyCode::Delete => b.delete(),
+            KeyCode::Left => b.move_left(),
+            KeyCode::Right => b.move_right(),
+            KeyCode::Home => b.cursor = 0,
+            KeyCode::End => b.cursor = b.buf.len(),
+            KeyCode::Char(c) if !ctrl => {
+                let mut small = [0u8; 4];
+                b.insert(c.encode_utf8(&mut small));
+            }
+            _ => {}
+        }
+    }
+
+    /// Apply the input box: create a file/dir (files get the `ne --init`
+    /// template) or rename the selected entry. Failures leave the box open
+    /// so the name can be fixed.
+    fn accept_nfe_box(&mut self) {
+        let Some(b) = self.nfe_box.take() else {
+            return;
+        };
+        let name = b.buf.trim().to_string();
+        match b.kind {
+            NfeBoxKind::NewFile | NfeBoxKind::NewDir => {
+                let path = match resolve_new_path(&b.base, &name) {
+                    Ok(p) => p,
+                    Err(msg) => {
+                        self.status_msg = Some(msg);
+                        self.nfe_box = Some(b);
+                        return;
+                    }
+                };
+                if path.exists() {
+                    self.status_msg = Some(t!("editor.nfe_create_exists", name));
+                    self.nfe_box = Some(b);
+                    return;
+                }
+                let is_file = b.kind == NfeBoxKind::NewFile;
+                let created = if is_file {
+                    matches!(crate::editor::init_file(&path), Ok(true))
+                } else {
+                    std::fs::create_dir_all(&path).is_ok()
+                };
+                if !created {
+                    self.status_msg = Some(t!("editor.nfe_create_failed", name));
+                    self.nfe_box = Some(b);
+                    return;
+                }
+                self.sidebar.invalidate_cache();
+                self.sidebar.rebuild_tree();
+                self.nfe_select_path(&path);
+                self.status_msg = Some(if is_file {
+                    t!("editor.nfe_created_file", name)
+                } else {
+                    t!("editor.nfe_created_dir", name)
+                });
+            }
+            NfeBoxKind::Rename => {
+                let Some(old) = b.target.clone() else {
+                    return;
+                };
+                if !old.exists() {
+                    self.status_msg = Some(t!("editor.nfe_rm_not_exist", name));
+                    return;
+                }
+                let new = match resolve_new_path(&b.base, &name) {
+                    Ok(p) => p,
+                    Err(msg) => {
+                        self.status_msg = Some(msg);
+                        self.nfe_box = Some(b);
+                        return;
+                    }
+                };
+                if new == old {
+                    return;
+                }
+                if new.exists() {
+                    self.status_msg = Some(t!("editor.nfe_create_exists", name));
+                    self.nfe_box = Some(b);
+                    return;
+                }
+                if let Err(e) = std::fs::rename(&old, &new) {
+                    self.status_msg = Some(t!("editor.nfe_rename_failed", e));
+                    self.nfe_box = Some(b);
+                    return;
+                }
+                self.rename_tab_paths(&old, &new);
+                self.sidebar.invalidate_cache();
+                self.sidebar.rebuild_tree();
+                self.nfe_select_path(&new);
+                self.status_msg = Some(t!("editor.nfe_renamed", name));
+            }
+        }
+        self.nfe_ensure_visible();
+        self.mark_all_dirty();
+    }
+
+    /// Keep open tabs pointing at a renamed entry (and everything below a
+    /// renamed directory). Buffers, cursors and undo stacks are untouched.
+    fn rename_tab_paths(&mut self, old: &std::path::Path, new: &std::path::Path) {
+        fn rewrite(
+            p: &std::path::Path,
+            old: &std::path::Path,
+            new: &std::path::Path,
+        ) -> Option<std::path::PathBuf> {
+            if p == old {
+                return Some(new.to_path_buf());
+            }
+            p.strip_prefix(old).ok().map(|rest| new.join(rest))
+        }
+        let mut active_moved = false;
+        if let Some(p) = rewrite(&self.path, old, new) {
+            self.path = p;
+            active_moved = true;
+        }
+        for tab in &mut self.tabs {
+            if let Some(p) = rewrite(&tab.path, old, new) {
+                tab.path = p;
+            }
+        }
+        // A rename can change the extension: re-pick the syntax language.
+        if active_moved {
+            self.syntax = crate::syntax::SyntaxHighlighter::for_path(&self.path);
+        }
     }
 
     /// Collapse the current node (or jump to its parent directory).
@@ -522,7 +891,7 @@ fn parse_nfe_size(arg: &str) -> Option<Option<u8>> {
 #[cfg(test)]
 mod tests {
     use super::{parse_nfe_size, resolve_new_path};
-    use crate::editor::Mode;
+    use crate::editor::{Mode, NfeBox};
     use crossterm::event::{
         Event, KeyCode, KeyEvent, KeyModifiers, MouseButton, MouseEvent, MouseEventKind,
     };
@@ -756,6 +1125,271 @@ mod tests {
             .unwrap();
         assert_eq!(editor.mode, Mode::Visual);
         assert!(!editor.sidebar.open);
+    }
+
+    #[test]
+    fn nfe_prompt_number_jumps_to_entry() {
+        let root = temp_root("jump-number");
+        let mut editor = nfe_focused_editor(&root, 4);
+        let total = editor.sidebar.nodes.len();
+        assert!(total > 2);
+        editor.nfe_cmd = Some(String::new());
+        editor.run_nfe_command("2");
+        assert_eq!(editor.sidebar.selected, 1);
+        assert!(editor.nfe_cmd.is_none());
+        assert!(editor.status_msg.is_some());
+        // Out-of-range numbers keep the prompt open for a fix.
+        editor.nfe_cmd = Some(String::new());
+        let too_big = (total + 1).to_string();
+        editor.run_nfe_command(&too_big);
+        assert!(editor.nfe_cmd.is_some());
+        assert_eq!(editor.sidebar.selected, 1);
+    }
+
+    #[test]
+    fn nfe_prompt_tab_cycles_and_right_accepts_the_hint() {
+        let root = temp_root("tab-hint");
+        let mut editor = nfe_focused_editor(&root, 2);
+        let mut out = std::io::stdout();
+        editor.nfe_cmd = Some("si".to_string());
+        editor.prompt_cursor = 2;
+        editor
+            .handle_nfe_event(nfe_key(KeyCode::Tab), &mut out)
+            .unwrap();
+        // Tab only moves the hint; Right commits it.
+        assert_eq!(editor.nfe_cmd.as_deref(), Some("si"));
+        assert_eq!(editor.prompt_ghost(), Some("ze ".to_string()));
+        editor
+            .handle_nfe_event(nfe_key(KeyCode::Right), &mut out)
+            .unwrap();
+        assert_eq!(editor.nfe_cmd.as_deref(), Some("size "));
+    }
+
+    /// The sidebar tree rebuilds from CWD (a process-global the rest of the
+    /// suite shares), so box tests build the box directly against a temp
+    /// root instead of relying on the selected row.
+    fn box_editor() -> (std::path::PathBuf, crate::editor::Editor) {
+        let root = temp_root("box");
+        let mut editor = nfe_test_editor(&root);
+        std::fs::write(root.join("f00.txt"), "x").unwrap();
+        editor.sidebar.root = root.clone();
+        editor.mode = Mode::Nfe;
+        editor.sidebar.open = true;
+        (root, editor)
+    }
+
+    #[test]
+    fn nfe_box_edits_multibyte_names() {
+        let mut b = NfeBox::new_file(std::path::PathBuf::from("."));
+        b.insert("αβ");
+        b.insert("γ");
+        assert_eq!(b.buf, "αβγ");
+        b.move_left();
+        b.backspace();
+        assert_eq!(b.buf, "αγ");
+        b.delete();
+        assert_eq!(b.buf, "α");
+        b.insert("x");
+        assert_eq!(b.buf, "αx");
+    }
+
+    #[test]
+    fn nfe_box_keys_open_the_right_box() {
+        let root = temp_root("box-keys");
+        let mut editor = nfe_focused_editor(&root, 2);
+        let mut out = std::io::stdout();
+        editor
+            .handle_nfe_event(nfe_key(KeyCode::Char('n')), &mut out)
+            .unwrap();
+        assert_eq!(
+            editor.nfe_box.as_ref().map(|b| b.kind),
+            Some(crate::editor::NfeBoxKind::NewFile)
+        );
+        // While the box is open, letters edit it instead of opening another.
+        editor
+            .handle_nfe_event(nfe_key(KeyCode::Char('m')), &mut out)
+            .unwrap();
+        assert_eq!(
+            editor.nfe_box.as_ref().map(|b| b.kind),
+            Some(crate::editor::NfeBoxKind::NewFile)
+        );
+        assert_eq!(editor.nfe_box.as_ref().map(|b| b.buf.as_str()), Some("m"));
+        editor.nfe_box = None;
+        editor
+            .handle_nfe_event(nfe_key(KeyCode::Char('m')), &mut out)
+            .unwrap();
+        assert_eq!(
+            editor.nfe_box.as_ref().map(|b| b.kind),
+            Some(crate::editor::NfeBoxKind::NewDir)
+        );
+        // The `..` row cannot be renamed.
+        editor.nfe_box = None;
+        editor.sidebar.selected = 0;
+        editor
+            .handle_nfe_event(nfe_key(KeyCode::Char('r')), &mut out)
+            .unwrap();
+        assert!(editor.nfe_box.is_none());
+        assert!(editor.status_msg.is_some());
+    }
+
+    #[test]
+    fn nfe_box_creates_file_with_template() {
+        let (root, mut editor) = box_editor();
+        let mut out = std::io::stdout();
+        editor.nfe_box = Some(NfeBox::new_file(root.clone()));
+        for c in "new_box.rs".chars() {
+            editor
+                .handle_nfe_event(nfe_key(KeyCode::Char(c)), &mut out)
+                .unwrap();
+        }
+        assert_eq!(
+            editor.nfe_box.as_ref().map(|b| b.buf.as_str()),
+            Some("new_box.rs")
+        );
+        editor
+            .handle_nfe_event(nfe_key(KeyCode::Enter), &mut out)
+            .unwrap();
+        assert!(
+            editor.nfe_box.is_none(),
+            "box: {:?} status: {:?}",
+            editor
+                .nfe_box
+                .as_ref()
+                .map(|b| (b.base.clone(), b.buf.clone())),
+            editor.status_msg
+        );
+        let created = root.join("new_box.rs");
+        assert!(created.is_file(), "status: {:?}", editor.status_msg);
+        // `ne --init` template behavior: the file is not empty.
+        assert!(!std::fs::read_to_string(&created).unwrap().is_empty());
+    }
+
+    #[test]
+    fn nfe_box_cancel_paths_and_errors() {
+        let (root, mut editor) = box_editor();
+        let mut out = std::io::stdout();
+        // Esc cancels.
+        editor
+            .handle_nfe_event(nfe_key(KeyCode::Char('n')), &mut out)
+            .unwrap();
+        editor
+            .handle_nfe_event(nfe_key(KeyCode::Char('x')), &mut out)
+            .unwrap();
+        editor
+            .handle_nfe_event(nfe_key(KeyCode::Esc), &mut out)
+            .unwrap();
+        assert!(editor.nfe_box.is_none());
+        assert!(!root.join("x").exists());
+        // An empty Enter cancels too.
+        editor
+            .handle_nfe_event(nfe_key(KeyCode::Char('m')), &mut out)
+            .unwrap();
+        editor
+            .handle_nfe_event(nfe_key(KeyCode::Enter), &mut out)
+            .unwrap();
+        assert!(editor.nfe_box.is_none());
+        assert!(!root.join("mydir").exists());
+        // A name that already exists keeps the box open with a message.
+        editor
+            .handle_nfe_event(nfe_key(KeyCode::Char('n')), &mut out)
+            .unwrap();
+        for c in "f00.txt".chars() {
+            editor
+                .handle_nfe_event(nfe_key(KeyCode::Char(c)), &mut out)
+                .unwrap();
+        }
+        editor
+            .handle_nfe_event(nfe_key(KeyCode::Enter), &mut out)
+            .unwrap();
+        assert!(editor.nfe_box.is_some());
+        assert!(editor.status_msg.is_some());
+        // Typing a dir name creates a directory.
+        editor.nfe_box = None;
+        editor
+            .handle_nfe_event(nfe_key(KeyCode::Char('m')), &mut out)
+            .unwrap();
+        for c in "mydir".chars() {
+            editor
+                .handle_nfe_event(nfe_key(KeyCode::Char(c)), &mut out)
+                .unwrap();
+        }
+        editor
+            .handle_nfe_event(nfe_key(KeyCode::Enter), &mut out)
+            .unwrap();
+        assert!(root.join("mydir").is_dir());
+    }
+
+    #[test]
+    fn nfe_box_rename_updates_files_and_tabs() {
+        let (root, mut editor) = box_editor();
+        editor.init_tabs();
+        editor.open_file(&root.join("f00.txt"));
+        let old = root.join("f00.txt");
+        let mut out = std::io::stdout();
+        editor.nfe_box = Some(NfeBox::rename(old.clone()));
+        let b = editor.nfe_box.as_ref().expect("rename box open");
+        // The box starts with the current name, caret at the end.
+        assert_eq!(b.buf, "f00.txt");
+        assert_eq!(b.cursor, 7);
+        for _ in 0..7 {
+            editor
+                .handle_nfe_event(nfe_key(KeyCode::Backspace), &mut out)
+                .unwrap();
+        }
+        for c in "renamed.txt".chars() {
+            editor
+                .handle_nfe_event(nfe_key(KeyCode::Char(c)), &mut out)
+                .unwrap();
+        }
+        editor
+            .handle_nfe_event(nfe_key(KeyCode::Enter), &mut out)
+            .unwrap();
+        assert!(editor.nfe_box.is_none());
+        assert!(!old.exists());
+        let new = root.join("renamed.txt");
+        assert!(new.is_file());
+        // Open tabs follow the rename; the buffer keeps its contents.
+        assert_eq!(editor.path, new);
+        assert!(editor.tabs.iter().any(|t| t.path == new));
+        assert!(editor.tabs.iter().all(|t| t.path != old));
+    }
+
+    #[test]
+    fn nfe_prompt_tab_commands_and_close() {
+        let root = temp_root("tab-cmds");
+        let mut editor = nfe_test_editor(&root);
+        std::fs::write(root.join("t1.txt"), "1").unwrap();
+        std::fs::write(root.join("t2.txt"), "2").unwrap();
+        editor.init_tabs();
+        editor.open_file(&root.join("t1.txt"));
+        editor.open_file(&root.join("t2.txt"));
+        let last = editor.tabs.len() - 1;
+        assert_eq!(editor.active_tab, last);
+
+        editor.nfe_cmd = Some(String::new());
+        editor.run_nfe_command("t1");
+        assert_eq!(editor.active_tab, 0);
+        assert!(editor.nfe_cmd.is_none());
+
+        editor.nfe_cmd = Some(String::new());
+        editor.run_nfe_command("t");
+        assert_eq!(editor.active_tab, 1);
+        editor.nfe_cmd = Some(String::new());
+        editor.run_nfe_command("T");
+        assert_eq!(editor.active_tab, 0);
+
+        // Out of range keeps the prompt open for a fix.
+        editor.nfe_cmd = Some(String::new());
+        editor.run_nfe_command("t9");
+        assert!(editor.nfe_cmd.is_some());
+        assert_eq!(editor.active_tab, 0);
+
+        // `qt` closes the current tab, like gmode.
+        let before = editor.tabs.len();
+        editor.nfe_cmd = Some(String::new());
+        editor.run_nfe_command("qt");
+        assert_eq!(editor.tabs.len(), before - 1);
+        assert!(editor.nfe_cmd.is_none());
     }
 
     #[test]

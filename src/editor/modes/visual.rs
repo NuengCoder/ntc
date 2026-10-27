@@ -1,12 +1,18 @@
-use crate::editor::{next_word_byte, prev_word_byte, Editor};
+use crate::editor::{next_word_byte, prev_word_byte, sel_range, Editor};
+use crate::t;
 use anyhow::Result;
 use crossterm::event::{Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 
 impl Editor {
     /// Vim-style Visual mode: plain hjkl/awsd/arrows move the cursor,
-    /// Shift+direction selects, single-letter verbs act on the selection.
-    /// Alt+hjkl/arrows moves the selected block (j/k) or indents it (h/l).
-    /// `:`/Esc leave; quit is `:q` / `0` from Normal only.
+    /// Shift+direction selects, Ctrl+Shift+direction selects by word,
+    /// single-letter verbs act on the selection. Alt+jk moves the selected
+    /// block, Alt+h/l indents it and Alt+Left/Right slides the selection
+    /// one character. Space inserts, Backspace removes a space before the
+    /// selection. `s` saves, Ctrl+L selects the current line, `d` hops to
+    /// the next occurrence of the selection while keeping the previous one
+    /// highlighted, `w` drops those highlights, `q` opens Query with the
+    /// selection intact. `:`/Esc leave; quit is `:q` / `0` from Normal only.
     pub(crate) fn handle_visual_event(
         &mut self,
         ev: Event,
@@ -22,12 +28,33 @@ impl Editor {
                 let ctrl = modifiers.contains(KeyModifiers::CONTROL);
                 let alt = modifiers.contains(KeyModifiers::ALT);
                 let shift = modifiers.contains(KeyModifiers::SHIFT);
-                let _ = stdout;
                 match (ctrl, alt, code) {
                     // ── leave ──
                     (false, false, KeyCode::Esc) => {
                         self.clear_selection();
+                        self.clear_visual_marks();
                         self.mode = crate::editor::Mode::Normal;
+                    }
+                    // ── save the buffer without leaving Visual ──
+                    (false, false, KeyCode::Char('s')) | (false, false, KeyCode::Char('S')) => {
+                        self.save_with_status(stdout);
+                    }
+                    // ── Query keeps the selection (and the marks) ──
+                    (false, false, KeyCode::Char('q')) | (false, false, KeyCode::Char('Q')) => {
+                        self.prev_mode = crate::editor::Mode::Visual;
+                        self.query_buf.clear();
+                        self.prompt_cursor = 0;
+                        self.mode = crate::editor::Mode::Query;
+                        self.status_msg = None;
+                        self.mark_all_dirty();
+                    }
+                    // ── `w`: drop the `d` highlights, stay in Visual ──
+                    (false, false, KeyCode::Char('w')) | (false, false, KeyCode::Char('W')) => {
+                        self.clear_visual_marks();
+                    }
+                    // ── Ctrl+L: select the whole line under the cursor ──
+                    (true, false, KeyCode::Char('l')) => {
+                        self.select_line();
                     }
                     // ── verbs ──
                     (false, false, KeyCode::Char('a')) => {
@@ -114,6 +141,60 @@ impl Editor {
                         self.jump_buf.clear();
                         self.status_msg = None;
                     }
+                    // ── Space / Backspace: insert / remove a space and
+                    // keep the selection following the edit. ──
+                    (false, _, KeyCode::Char(' ')) => {
+                        self.visual_insert_space();
+                    }
+                    (false, _, KeyCode::Backspace) => {
+                        if !self.visual_backspace_space() {
+                            self.status_msg = Some(t!("editor.visual_backspace_no_space"));
+                        }
+                    }
+                    // ── Ctrl+Shift+arrows: select word by word (before the
+                    // Ctrl-only word motion below: same key codes). ──
+                    (true, false, KeyCode::Left) if shift => {
+                        self.extend_word_left();
+                    }
+                    (true, false, KeyCode::Right) if shift => {
+                        self.extend_word_right();
+                    }
+                    (true, false, KeyCode::Up) if shift => {
+                        self.extend_up();
+                    }
+                    (true, false, KeyCode::Down) if shift => {
+                        self.extend_down();
+                    }
+                    (true, false, KeyCode::Char('H')) | (true, false, KeyCode::Char('A'))
+                        if shift =>
+                    {
+                        self.extend_word_left();
+                    }
+                    (true, false, KeyCode::Char('L')) | (true, false, KeyCode::Char('D'))
+                        if shift =>
+                    {
+                        self.extend_word_right();
+                    }
+                    // Ctrl+Shift+Home/End select to the buffer edges.
+                    (true, false, KeyCode::Home) if shift => {
+                        self.start_or_extend_selection();
+                        self.cursor.y = 0;
+                        self.cursor.byte = 0;
+                        self.scroll_visible();
+                    }
+                    (true, false, KeyCode::End) if shift => {
+                        self.start_or_extend_selection();
+                        self.cursor.y = self.lines.len().saturating_sub(1);
+                        self.cursor.byte = self.current().len();
+                        self.scroll_visible();
+                    }
+                    // ── Shift+Home/End: select from the cursor to the edge.
+                    (false, _, KeyCode::Home) if shift => {
+                        self.extend_line_start();
+                    }
+                    (false, _, KeyCode::End) if shift => {
+                        self.extend_line_end();
+                    }
                     // ── Shift+arrows select (before plain: same codes) ──
                     (false, false, KeyCode::Left) if shift => {
                         self.extend_left();
@@ -133,21 +214,21 @@ impl Editor {
                         self.clear_selection();
                         self.move_left_charwise();
                     }
-                    (false, false, KeyCode::Char('l'))
-                    | (false, false, KeyCode::Char('d'))
-                    | (false, false, KeyCode::Right) => {
+                    // `l` / Right move one character (Ctrl+L selects the
+                    // line). `d` keeps the selection highlighted and hops
+                    // to the next occurrence of it.
+                    (false, false, KeyCode::Char('l')) | (false, false, KeyCode::Right) => {
                         self.clear_selection();
                         self.move_right_charwise();
                     }
-                    (false, false, KeyCode::Char('k'))
-                    | (false, false, KeyCode::Char('w'))
-                    | (false, false, KeyCode::Up) => {
+                    (false, false, KeyCode::Char('d')) => {
+                        self.visual_next_occurrence();
+                    }
+                    (false, false, KeyCode::Char('k')) | (false, false, KeyCode::Up) => {
                         self.clear_selection();
                         self.move_up_line();
                     }
-                    (false, false, KeyCode::Char('j'))
-                    | (false, false, KeyCode::Char('s'))
-                    | (false, false, KeyCode::Down) => {
+                    (false, false, KeyCode::Char('j')) | (false, false, KeyCode::Down) => {
                         self.clear_selection();
                         self.move_down_line();
                     }
@@ -158,10 +239,10 @@ impl Editor {
                     (false, false, KeyCode::Char('L')) | (false, false, KeyCode::Char('D')) => {
                         self.extend_right();
                     }
-                    (false, false, KeyCode::Char('K')) | (false, false, KeyCode::Char('W')) => {
+                    (false, false, KeyCode::Char('K')) => {
                         self.extend_up();
                     }
-                    (false, false, KeyCode::Char('J')) | (false, false, KeyCode::Char('S')) => {
+                    (false, false, KeyCode::Char('J')) => {
                         self.extend_down();
                     }
                     // ── Ctrl+word motion (h/l, a/d, arrows): move, never selects.
@@ -178,9 +259,7 @@ impl Editor {
                             self.cursor.byte = self.current().len();
                         }
                     }
-                    (true, false, KeyCode::Char('l'))
-                    | (true, false, KeyCode::Char('L'))
-                    | (true, false, KeyCode::Char('d'))
+                    (true, false, KeyCode::Char('d'))
                     | (true, false, KeyCode::Char('D'))
                     | (true, false, KeyCode::Right) => {
                         self.clear_selection();
@@ -209,19 +288,23 @@ impl Editor {
                             self.move_selected_block_down();
                         }
                     }
-                    (false, true, KeyCode::Char('h'))
-                    | (false, true, KeyCode::Char('H'))
-                    | (false, true, KeyCode::Left) => {
+                    // Alt+h/l indent and dedent the selected block; the
+                    // arrow twins slide the selection instead.
+                    (false, true, KeyCode::Char('h')) | (false, true, KeyCode::Char('H')) => {
                         if self.has_selection() {
                             self.dedent_selected_block_strict();
                         }
                     }
-                    (false, true, KeyCode::Char('l'))
-                    | (false, true, KeyCode::Char('L'))
-                    | (false, true, KeyCode::Right) => {
+                    (false, true, KeyCode::Char('l')) | (false, true, KeyCode::Char('L')) => {
                         if self.has_selection() {
                             self.indent_lines();
                         }
+                    }
+                    (false, true, KeyCode::Left) => {
+                        self.move_selection_char_left();
+                    }
+                    (false, true, KeyCode::Right) => {
+                        self.move_selection_char_right();
                     }
                     (false, _, KeyCode::Home) => {
                         self.clear_selection();
@@ -250,5 +333,35 @@ impl Editor {
             _ => {}
         }
         Ok(())
+    }
+
+    /// Drop the selections kept alive by Visual `d` (also happens whenever
+    /// Visual mode is left).
+    pub(crate) fn clear_visual_marks(&mut self) {
+        if !self.visual_marks.is_empty() {
+            self.visual_marks.clear();
+            self.mark_all_dirty();
+        }
+    }
+
+    /// Keep the current selection highlighted, then move the selection to
+    /// the next occurrence of the same text (wrapping to the top). Unlike
+    /// Insert `Ctrl+D` this never adds cursors: the old match simply stays
+    /// lit until `w` or leaving Visual.
+    pub(crate) fn visual_next_occurrence(&mut self) {
+        if !self.has_selection() {
+            return;
+        }
+        let text = self.selected_text();
+        if text.is_empty() || text.contains('\n') {
+            return;
+        }
+        if let Some((ay, ab)) = self.cursor.selection_anchor {
+            let range = sel_range(self.cursor.y, self.cursor.byte, ay, ab);
+            if !self.visual_marks.contains(&range) {
+                self.visual_marks.push(range);
+            }
+        }
+        self.cmd_select_next(&text);
     }
 }

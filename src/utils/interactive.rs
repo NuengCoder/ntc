@@ -1,6 +1,6 @@
+use crate::t;
 use anyhow::Result;
 use colored::*;
-use crate::t;
 use std::io::{self, Write};
 
 pub struct InteractiveMenu<'a> {

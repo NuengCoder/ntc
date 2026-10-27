@@ -12,6 +12,23 @@ impl Editor {
         self.ff_query.starts_with("gs:")
     }
 
+    /// Split a trailing `:<n>` off the finder query, so `mod.rs:2`
+    /// filters on `mod.rs` and selects the 2nd listed match (same-named
+    /// files in different directories are numbered). Returns the query to
+    /// match plus the 1-based result number (`None` when absent/malformed).
+    pub(crate) fn ff_query_and_index(query: &str) -> (&str, Option<usize>) {
+        if let Some((base, num)) = query.rsplit_once(':') {
+            if !base.is_empty() && !num.is_empty() && num.chars().all(|c| c.is_ascii_digit()) {
+                if let Ok(n) = num.parse::<usize>() {
+                    if n > 0 {
+                        return (base, Some(n));
+                    }
+                }
+            }
+        }
+        (query, None)
+    }
+
     pub(crate) fn handle_file_finder_event(&mut self, ev: Event) -> Result<()> {
         match ev {
             Event::Key(KeyEvent {
@@ -294,7 +311,9 @@ pub(crate) fn finder_dup_suffix(
 
 impl Editor {
     fn rebuild_ff_results(&mut self) {
-        if self.ff_query.is_empty() {
+        // `mod.rs:2` filters on `mod.rs`; the number picks the 2nd match.
+        let (query, wanted) = Self::ff_query_and_index(&self.ff_query);
+        if query.is_empty() {
             self.ff_results.clear();
             return;
         }
@@ -316,7 +335,7 @@ impl Editor {
             self.file_index = Some((std::time::Instant::now(), files));
         }
 
-        let q = self.ff_query.to_lowercase();
+        let q = query.to_lowercase().replace('\\', "/");
         let mut exact: Vec<(String, std::path::PathBuf, f64, usize)> = Vec::with_capacity(64);
         let mut partial: Vec<(String, std::path::PathBuf, f64, usize)> = Vec::with_capacity(128);
         let mut fuzzy: Vec<(String, std::path::PathBuf, f64, usize)> = Vec::new();
@@ -324,10 +343,20 @@ impl Editor {
         if let Some((_, ref files)) = self.file_index {
             for (name, path) in files {
                 let name_lower = name.to_lowercase();
-                if name_lower == q {
+                // A path fragment (`src/mod.rs`) picks the right duplicate.
+                let rel = path
+                    .strip_prefix(&root)
+                    .unwrap_or(path)
+                    .to_string_lossy()
+                    .to_lowercase()
+                    .replace('\\', "/");
+                if name_lower == q || rel == q {
                     exact.push((name.clone(), path.clone(), 1.0, 0));
                 } else if name_lower.contains(&q) {
                     let score = q.len() as f64 / name_lower.len() as f64;
+                    partial.push((name.clone(), path.clone(), score, 0));
+                } else if rel.contains(&q) {
+                    let score = q.len() as f64 / rel.len() as f64;
                     partial.push((name.clone(), path.clone(), score, 0));
                 } else {
                     let score = crate::fuzzy::jaro_winkler(&name_lower, &q);
@@ -359,7 +388,14 @@ impl Editor {
             fuzzy.truncate(20);
             self.ff_results = fuzzy;
         }
-        self.ff_idx = 0;
+        // `name:n` moves the highlight to the n-th listed match (1-based);
+        // an out-of-range number keeps the last match selected.
+        self.ff_idx = match wanted {
+            Some(n) if !self.ff_results.is_empty() => {
+                (n - 1).min(self.ff_results.len().saturating_sub(1))
+            }
+            _ => 0,
+        };
     }
 }
 
@@ -367,6 +403,59 @@ impl Editor {
 mod tests {
     use super::*;
     use std::path::PathBuf;
+
+    #[test]
+    fn query_index_suffix_splits_only_on_real_numbers() {
+        assert_eq!(Editor::ff_query_and_index("mod.rs:2"), ("mod.rs", Some(2)));
+        assert_eq!(Editor::ff_query_and_index("mod.rs"), ("mod.rs", None));
+        // Zero, non-numeric and empty bases are not result requests.
+        assert_eq!(Editor::ff_query_and_index("mod.rs:0"), ("mod.rs:0", None));
+        assert_eq!(Editor::ff_query_and_index("mod.rs:x"), ("mod.rs:x", None));
+        assert_eq!(Editor::ff_query_and_index(":12"), (":12", None));
+        assert_eq!(Editor::ff_query_and_index("c:"), ("c:", None));
+        assert_eq!(Editor::ff_query_and_index(""), ("", None));
+    }
+
+    #[test]
+    fn query_index_selects_the_numbered_duplicate() {
+        let dir = std::env::temp_dir().join("ntc_ff_index_test");
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(dir.join("a")).unwrap();
+        std::fs::create_dir_all(dir.join("b")).unwrap();
+        let a = dir.join("a").join("mod.rs");
+        let b = dir.join("b").join("mod.rs");
+        std::fs::write(&a, "1\n2\n3").unwrap();
+        std::fs::write(&b, "x\ny\nz").unwrap();
+
+        let mut editor = Editor::new(&a).unwrap();
+        editor.file_index = Some((
+            std::time::Instant::now(),
+            vec![
+                ("mod.rs".to_string(), a.clone()),
+                ("mod.rs".to_string(), b.clone()),
+            ],
+        ));
+        editor.mode = Mode::FileFinder;
+        editor.ff_query = "mod.rs".to_string();
+        editor.rebuild_ff_results();
+        assert_eq!(editor.ff_results.len(), 2);
+        assert_eq!(editor.ff_idx, 0);
+        // `mod.rs:2` keeps both matches but highlights the second one.
+        editor.ff_query = "mod.rs:2".to_string();
+        editor.rebuild_ff_results();
+        assert_eq!(editor.ff_results.len(), 2);
+        assert_eq!(editor.ff_idx, 1);
+        // Enter opens that file — it is not a line jump.
+        editor
+            .handle_file_finder_event(Event::Key(KeyEvent::new(
+                KeyCode::Enter,
+                KeyModifiers::NONE,
+            )))
+            .unwrap();
+        assert_eq!(editor.path, b);
+        assert_eq!(editor.cursor.y, 0);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
 
     #[test]
     fn dup_suffix_unique_is_bare() {

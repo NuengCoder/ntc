@@ -12,11 +12,12 @@ pub mod git;
 pub mod interactive;
 pub mod navigator;
 pub mod output;
+pub mod paths;
 pub mod qsc;
 pub mod search;
 pub mod session;
-pub mod terminal;
 pub mod teleport;
+pub mod terminal;
 #[cfg(test)]
 pub mod test_support;
 pub mod theme;

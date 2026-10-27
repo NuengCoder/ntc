@@ -1,17 +1,29 @@
+use crate::config::Config;
 use crate::navigator::Navigator;
 use crate::output::{print_error, print_info, print_success, print_warning};
 use crate::t;
 use anyhow::{anyhow, bail, Result};
 use colored::*;
+use serde::{Deserialize, Serialize};
 use std::io::{self, Write};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 struct Task {
+    #[serde(default)]
     done: bool,
     /// 0 = normal, 1 = `!`, 2 = `!!`
+    #[serde(default)]
     priority: u8,
     text: String,
+}
+
+/// Top-level wrapper used by JSON/TOML/YAML. TOML requires a table at the
+/// document root, so all three share this shape.
+#[derive(Debug, Default, Serialize, Deserialize)]
+struct TaskFile {
+    #[serde(default)]
+    tasks: Vec<Task>,
 }
 
 fn strip_priority_suffix(text: &str) -> (String, u8) {
@@ -85,28 +97,191 @@ fn format_line(task: &Task) -> String {
     format!("- [{}] {}{}", mark, task.text, prio)
 }
 
-fn todo_file_path(cwd: &Path) -> std::path::PathBuf {
-    cwd.join("future_todo.txt")
+fn html_escape(s: &str) -> String {
+    s.replace('&', "&amp;")
+        .replace('<', "&lt;")
+        .replace('>', "&gt;")
+        .replace('"', "&quot;")
+        .replace('\'', "&#39;")
 }
 
-fn load_tasks(cwd: &Path) -> Result<Vec<Task>> {
-    let path = todo_file_path(cwd);
+fn html_unescape(s: &str) -> String {
+    s.replace("&lt;", "<")
+        .replace("&gt;", ">")
+        .replace("&quot;", "\"")
+        .replace("&#39;", "'")
+        .replace("&amp;", "&")
+}
+
+fn attr_value<'a>(attrs: &'a str, name: &str) -> Option<&'a str> {
+    let idx = attrs.find(name)?;
+    let after = attrs[idx + name.len()..].trim_start();
+    let after = after.strip_prefix('=')?.trim_start();
+    let quote = after.chars().next()?;
+    if quote != '"' && quote != '\'' {
+        return None;
+    }
+    let after = &after[1..];
+    let end = after.find(quote)?;
+    Some(&after[..end])
+}
+
+fn format_html(tasks: &[Task]) -> String {
+    let mut out = String::from(
+        "<!DOCTYPE html>\n<html>\n<head>\n<meta charset=\"utf-8\">\n\
+         <title>future_todo</title>\n</head>\n<body>\n<h1>future_todo</h1>\n<ul>\n",
+    );
+    for task in tasks {
+        out.push_str(&format!(
+            "  <li data-done=\"{}\" data-priority=\"{}\">{}</li>\n",
+            task.done,
+            task.priority,
+            html_escape(&task.text)
+        ));
+    }
+    out.push_str("</ul>\n</body>\n</html>\n");
+    out
+}
+
+fn parse_html(content: &str) -> Vec<Task> {
+    let mut tasks = Vec::new();
+    let mut rest = content;
+    while let Some(start) = rest.find("<li") {
+        let after = &rest[start..];
+        let Some(open_end) = after.find('>') else {
+            break;
+        };
+        let attrs = &after[..open_end];
+        let body = &after[open_end + 1..];
+        let Some(close) = body.find("</li>") else {
+            break;
+        };
+        let text = html_unescape(body[..close].trim());
+        if !text.is_empty() {
+            let done = attr_value(attrs, "data-done")
+                .map(|v| v.eq_ignore_ascii_case("true"))
+                .unwrap_or(false);
+            let priority = attr_value(attrs, "data-priority")
+                .and_then(|v| v.parse().ok())
+                .unwrap_or(0u8);
+            tasks.push(Task {
+                done,
+                priority,
+                text,
+            });
+        }
+        rest = &body[close + 5..];
+    }
+    tasks
+}
+
+/// Extension used for a todo format (`yaml` stays `.yaml`).
+fn todo_extension(format: &str) -> &str {
+    match format {
+        "md" => "md",
+        "json" => "json",
+        "toml" => "toml",
+        "yaml" => "yaml",
+        "html" => "html",
+        _ => "txt",
+    }
+}
+
+fn todo_file_path(cwd: &Path, format: &str) -> PathBuf {
+    cwd.join(format!("future_todo.{}", todo_extension(format)))
+}
+
+fn serialize_tasks(format: &str, tasks: &[Task]) -> Result<String> {
+    match format {
+        "txt" | "md" => {
+            if tasks.is_empty() {
+                Ok(String::new())
+            } else {
+                Ok(tasks.iter().map(format_line).collect::<Vec<_>>().join("\n") + "\n")
+            }
+        }
+        "json" => Ok(serde_json::to_string_pretty(&TaskFile {
+            tasks: tasks.to_vec(),
+        })? + "\n"),
+        "toml" => Ok(toml::to_string_pretty(&TaskFile {
+            tasks: tasks.to_vec(),
+        })?),
+        "yaml" => Ok(serde_yaml::to_string(&TaskFile {
+            tasks: tasks.to_vec(),
+        })?),
+        "html" => Ok(format_html(tasks)),
+        _ => bail!("{}", t!("cmd.todo.unknown_format", format)),
+    }
+}
+
+fn parse_tasks(format: &str, content: &str) -> Result<Vec<Task>> {
+    match format {
+        "txt" | "md" => Ok(content.lines().filter_map(parse_line).collect()),
+        "json" => {
+            if let Ok(file) = serde_json::from_str::<TaskFile>(content) {
+                Ok(file.tasks)
+            } else if let Ok(tasks) = serde_json::from_str::<Vec<Task>>(content) {
+                Ok(tasks)
+            } else {
+                bail!("{}", t!("cmd.todo.parse_failed", "JSON"))
+            }
+        }
+        "toml" => Ok(toml::from_str::<TaskFile>(content)?.tasks),
+        "yaml" => {
+            if let Ok(file) = serde_yaml::from_str::<TaskFile>(content) {
+                Ok(file.tasks)
+            } else if let Ok(tasks) = serde_yaml::from_str::<Vec<Task>>(content) {
+                Ok(tasks)
+            } else {
+                bail!("{}", t!("cmd.todo.parse_failed", "YAML"))
+            }
+        }
+        "html" => Ok(parse_html(content)),
+        _ => bail!("{}", t!("cmd.todo.unknown_format", format)),
+    }
+}
+
+fn load_tasks_with(cwd: &Path, format: &str) -> Result<Vec<Task>> {
+    let path = todo_file_path(cwd, format);
     if !path.exists() {
         return Ok(Vec::new());
     }
     let content = std::fs::read_to_string(&path)?;
-    Ok(content.lines().filter_map(parse_line).collect())
+    parse_tasks(format, &content)
+}
+
+/// Load the configured file. When switching away from `txt`, a legacy
+/// `future_todo.txt` is parsed and written in the new format once.
+fn load_tasks_migrating(cwd: &Path, format: &str) -> Result<Vec<Task>> {
+    let path = todo_file_path(cwd, format);
+    if path.exists() {
+        return load_tasks_with(cwd, format);
+    }
+    if format != "txt" {
+        let legacy = cwd.join("future_todo.txt");
+        if legacy.exists() {
+            let content = std::fs::read_to_string(&legacy)?;
+            let tasks: Vec<Task> = content.lines().filter_map(parse_line).collect();
+            let _ = save_tasks_with(cwd, format, &tasks);
+            return Ok(tasks);
+        }
+    }
+    Ok(Vec::new())
+}
+
+fn load_tasks(cwd: &Path) -> Result<Vec<Task>> {
+    load_tasks_migrating(cwd, &Config::global_get_todo_format())
+}
+
+fn save_tasks_with(cwd: &Path, format: &str, tasks: &[Task]) -> Result<()> {
+    let path = todo_file_path(cwd, format);
+    let content = serialize_tasks(format, tasks)?;
+    std::fs::write(&path, content)?;
+    Ok(())
 }
 
 fn save_tasks(cwd: &Path, tasks: &[Task]) -> Result<()> {
-    let path = todo_file_path(cwd);
-    if tasks.is_empty() {
-        std::fs::write(&path, "")?;
-        return Ok(());
-    }
-    let content = tasks.iter().map(format_line).collect::<Vec<_>>().join("\n") + "\n";
-    std::fs::write(&path, content)?;
-    Ok(())
+    save_tasks_with(cwd, &Config::global_get_todo_format(), tasks)
 }
 
 fn priority_tag(priority: u8) -> String {
@@ -249,6 +424,7 @@ fn print_usage() {
     println!("  {}", t!("cmd.todo.help_edit"));
     println!("  {}", t!("cmd.todo.help_rm"));
     println!("  {}", t!("cmd.todo.help_clear"));
+    println!("  {}", t!("cmd.todo.help_format"));
 }
 
 fn cmd_info(args: &str, cwd: &Path) -> Result<bool> {
@@ -550,5 +726,57 @@ mod tests {
         let tasks = load_tasks(dir.path()).unwrap();
         assert_eq!(tasks[0].text, "New");
         assert_eq!(tasks[0].priority, 2);
+    }
+
+    fn sample_tasks() -> Vec<Task> {
+        vec![
+            Task {
+                done: false,
+                priority: 0,
+                text: "plain".into(),
+            },
+            Task {
+                done: true,
+                priority: 2,
+                text: "urgent & <done>".into(),
+            },
+        ]
+    }
+
+    #[test]
+    fn roundtrip_all_formats() {
+        for format in ["txt", "md", "json", "toml", "yaml", "html"] {
+            let dir = tempfile::tempdir().unwrap();
+            save_tasks_with(dir.path(), format, &sample_tasks()).unwrap();
+            let loaded = load_tasks_with(dir.path(), format).unwrap();
+            assert_eq!(loaded, sample_tasks(), "format={format}");
+        }
+    }
+
+    #[test]
+    fn empty_documents_reload_as_empty() {
+        for format in ["txt", "md", "json", "toml", "yaml", "html"] {
+            let dir = tempfile::tempdir().unwrap();
+            save_tasks_with(dir.path(), format, &[]).unwrap();
+            let loaded = load_tasks_with(dir.path(), format).unwrap();
+            assert!(loaded.is_empty(), "format={format}");
+        }
+    }
+
+    #[test]
+    fn migrates_legacy_txt_once() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(
+            dir.path().join("future_todo.txt"),
+            "- [ ] legacy\n- [x] old !!\n",
+        )
+        .unwrap();
+        let tasks = load_tasks_migrating(dir.path(), "md").unwrap();
+        assert_eq!(tasks.len(), 2);
+        assert!(tasks[0].text == "legacy");
+        assert!(dir.path().join("future_todo.md").exists());
+        // Second load reads the migrated file, not the legacy one.
+        let again = load_tasks_migrating(dir.path(), "md").unwrap();
+        assert_eq!(again, tasks);
     }
 }

@@ -51,6 +51,10 @@ pub(crate) struct TerminalState {
     pub last_blink: Instant,
     pub selection_anchor: Option<(usize, usize)>,
     pub selection_active: Option<(usize, usize)>,
+    /// True while the embedded shell is executing a command (reported via
+    /// the private `OSC 1337;ntc-busy` / `ntc-idle` markers). Esc keeps the
+    /// panel visible while this is set.
+    pub busy: bool,
     parser: vte::Parser,
     performer: VtePerformer,
 }
@@ -73,6 +77,8 @@ struct VtePerformer {
     /// App-requested cursor hide (`CSI ? 25 l`).
     app_cursor_hidden: bool,
     scrollback: Vec<Vec<TermCell>>,
+    /// Set by the embedded shell around each command (`OSC 1337`).
+    busy: bool,
 }
 
 impl Default for VtePerformer {
@@ -91,6 +97,7 @@ impl Default for VtePerformer {
             current_bold: false,
             app_cursor_hidden: false,
             scrollback: Vec::new(),
+            busy: false,
         }
     }
 }
@@ -405,7 +412,18 @@ impl vte::Perform for VtePerformer {
         }
     }
 
-    fn osc_dispatch(&mut self, _params: &[&[u8]], _bell_terminated: bool) {}
+    /// `OSC 1337;ntc-busy` / `OSC 1337;ntc-idle` come from the embedded
+    /// ntc shell and mark whether a command is currently running.
+    fn osc_dispatch(&mut self, params: &[&[u8]], _bell_terminated: bool) {
+        if params.first() != Some(&b"1337".as_slice()) {
+            return;
+        }
+        match params.get(1) {
+            Some(&b"ntc-busy") => self.busy = true,
+            Some(&b"ntc-idle") => self.busy = false,
+            _ => {}
+        }
+    }
     fn hook(&mut self, _params: &vte::Params, _intermediates: &[u8], _ignore: bool, _action: char) {
     }
     fn put(&mut self, _byte: u8) {}
@@ -587,6 +605,7 @@ impl TerminalState {
             last_blink: Instant::now(),
             selection_anchor: None,
             selection_active: None,
+            busy: false,
             parser: vte::Parser::new(),
             performer,
         })
@@ -610,6 +629,7 @@ impl TerminalState {
             self.cursor_y = self.performer.cursor_y;
             self.scrollback = self.performer.scrollback.clone();
             self.app_cursor_hidden = self.performer.app_cursor_hidden;
+            self.busy = self.performer.busy;
             // Fullscreen-app enter/exit invalidates scroll + selection
             // (alt grid has no scrollback; indices don't transfer).
             let is_alt = self.performer.alt_active();
@@ -626,6 +646,11 @@ impl TerminalState {
     /// True while a fullscreen app owns the alternate screen.
     pub fn is_alt_screen(&self) -> bool {
         self.performer.alt_active()
+    }
+
+    /// True while the embedded shell is running a command.
+    pub fn is_busy(&self) -> bool {
+        self.busy
     }
 
     /// Absolute cursor line index in `total_lines()`/`get_line()` space:
@@ -892,6 +917,21 @@ mod tests {
         let sb_len = p.scrollback.len();
         feed(&mut p, &mut parser, b"\x1b[?1049h\x1b[2J\x1b[?1049l");
         assert_eq!(p.scrollback.len(), sb_len);
+    }
+
+    #[test]
+    fn shell_busy_markers_toggle_busy() {
+        let mut p = VtePerformer::default();
+        let mut parser = vte::Parser::new();
+        assert!(!p.busy);
+        feed(&mut p, &mut parser, b"\x1b]1337;ntc-busy\x07");
+        assert!(p.busy);
+        feed(&mut p, &mut parser, b"\x1b]1337;ntc-idle\x07");
+        assert!(!p.busy);
+        // Other OSC titles/params must not touch the flag.
+        feed(&mut p, &mut parser, b"\x1b]1337;ntc-busy\x07");
+        feed(&mut p, &mut parser, b"\x1b]0;some title\x07");
+        assert!(p.busy);
     }
 
     #[test]

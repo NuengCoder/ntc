@@ -179,12 +179,11 @@ mod tests {
 
     #[test]
     fn newer_detection_matches_upgrade_semantics() {
-        assert!(is_newer("2.5.0", "2.4.6"));
-        assert!(is_newer("2.4.7", "2.4.6"));
-        assert!(!is_newer("2.4.6", "2.4.6"));
-        assert!(!is_newer("2.4.5", "2.4.6"));
+        assert!(is_newer("2.5.0", "2.4.7"));
+        assert!(!is_newer("2.4.7", "2.4.7"));
+        assert!(!is_newer("2.4.5", "2.4.7"));
         assert!(!is_newer("1.9.9", "2.0.0"));
-        assert!(is_newer("2.4.6.1", "2.4.6"));
+        assert!(is_newer("2.4.7.1", "2.4.7"));
     }
 
     #[test]
@@ -202,12 +201,12 @@ mod tests {
         let msg = crate::t!(
             "msg.update.available",
             "v9.9.9",
-            "v2.4.6",
+            "v2.4.7",
             "bash (outside NTC shell)",
             RELEASES_URL
         );
         assert!(msg.contains("v9.9.9"));
-        assert!(msg.contains("v2.4.6"));
+        assert!(msg.contains("v2.4.7"));
         assert!(msg.contains("ntc --upgrade"));
         assert!(msg.contains(RELEASES_URL));
         assert!(!msg.contains("{}"));

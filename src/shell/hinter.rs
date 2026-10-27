@@ -25,6 +25,7 @@ fn builtin_commands() -> Vec<&'static str> {
         "view",
         "viewf",
         "viewd",
+        "views",
         "ls",
         "report",
         "txtc",
@@ -34,7 +35,10 @@ fn builtin_commands() -> Vec<&'static str> {
         "betw",
         "sort",
         "rev",
+        "count",
+        "trim",
         "config",
+        "cfg",
         "clear",
         "version",
         "where",
@@ -120,12 +124,14 @@ fn builtin_commands() -> Vec<&'static str> {
         "say",
         "print",
         "tmprt",
+        "time",
         "git",
         "ndb",
         "nms",
         "nsheet",
         "nssh",
         "fake",
+        "deadlock",
         "mkf",
         "mkd",
         "rmf",
@@ -137,7 +143,15 @@ fn builtin_commands() -> Vec<&'static str> {
         "reset-config",
         "restore-config",
         "editcfg",
+        "editcg",
     ]
+}
+
+/// True when `name` is one of the shell's built-in commands.
+pub(crate) fn is_builtin_command(name: &str) -> bool {
+    builtin_commands()
+        .iter()
+        .any(|command| command.eq_ignore_ascii_case(name))
 }
 
 /// Returns the list of nssh profile names for commands that accept them
@@ -323,7 +337,7 @@ fn tp_subpath_candidates(
             TpEntryMode::All
         }
         // Target path is already filled (flags/values don't count).
-        "view" | "viewf" | "viewd" => {
+        "view" | "viewf" | "viewd" | "views" => {
             if in_ext_slot(parent_parts) || view_path_taken(&parent_parts[1..]) {
                 return None;
             }
@@ -1099,6 +1113,17 @@ pub(crate) fn subcommands_for(parts: &[&str]) -> Vec<&'static str> {
         "ran" if parts.len() == 1 => vec!["init", "deinit", "help", "list", "ls"],
         // scr init / scr ls / scr help
         "scr" | "script" if parts.len() == 1 => vec!["init", "ls", "list", "help"],
+        // deadlock ls / add / rmpw / master-pass / forget / destroy / help / exit
+        "deadlock" if parts.len() == 1 => vec![
+            "ls",
+            "add",
+            "rmpw",
+            "master-pass",
+            "forget",
+            "destroy",
+            "help",
+            "exit",
+        ],
         // nssh add / ssh / cp / scan / ls / info / rm / edit / keygen
         "nssh" if parts.len() == 1 => vec![
             "add", "ssh", "cp", "scan", "ls", "list", "info", "rm", "edit", "keygen",
@@ -1122,7 +1147,7 @@ pub(crate) fn subcommands_for(parts: &[&str]) -> Vec<&'static str> {
             _ => vec![],
         },
         // config output / config depth / config linenumbers / config color / config autosuggest / config threads / config history / config watch
-        "config" => {
+        "config" | "cfg" => {
             if parts.len() == 1 {
                 vec![
                     "output",
@@ -1149,8 +1174,16 @@ pub(crate) fn subcommands_for(parts: &[&str]) -> Vec<&'static str> {
                     "git",
                     "dir_view",
                     "dv",
+                    "file_view",
+                    "fv",
+                    "todo",
+                    "td",
+                    "size",
+                    "s",
                     "update_check",
                     "uc",
+                    "intro_view",
+                    "iv",
                 ]
             } else {
                 match parts[1].to_lowercase().as_str() {
@@ -1161,7 +1194,17 @@ pub(crate) fn subcommands_for(parts: &[&str]) -> Vec<&'static str> {
                     }
                     "git" if parts.len() == 2 => vec!["ON", "OFF"],
                     "dir_view" | "dv" if parts.len() == 2 => vec!["ON", "OFF"],
+                    "file_view" | "fv" if parts.len() == 2 => vec!["ON", "OFF"],
+                    "todo" | "td" if parts.len() == 2 => vec!["format", "fmt"],
+                    "todo" | "td" if parts.len() == 3 => {
+                        vec!["txt", "md", "json", "toml", "yaml", "html"]
+                    }
+                    "size" | "s" if parts.len() == 2 => {
+                        vec!["ON", "OFF", "all", "file", "dir"]
+                    }
+                    "size" | "s" if parts.len() == 3 => vec!["ON", "OFF"],
                     "update_check" | "uc" if parts.len() == 2 => vec!["ON", "OFF"],
+                    "intro_view" | "iv" if parts.len() == 2 => vec!["ON", "OFF"],
                     "serve" if parts.len() == 2 => {
                         vec!["files", "http-server", "chess", "help"]
                     }
@@ -1191,8 +1234,19 @@ pub(crate) fn subcommands_for(parts: &[&str]) -> Vec<&'static str> {
         "backup" if parts.len() >= 2 && matches!(parts[1], "recreate" | "re") => {
             vec!["--force", "-f"]
         }
-        // report txt / report json / report md / report html / report pdf / report docx / report xlsx
-        "report" if parts.len() == 1 => vec!["txt", "json", "md", "html", "pdf", "docx", "xlsx"],
+        // report project <fmt> ... / report clip <n>
+        "report" if parts.len() == 1 => vec!["project", "clip"],
+        // report clip <n> - no inline completions
+        "report" if parts.len() == 2 && parts[1] == "clip" => vec![],
+        // report project <fmt> [path] [--name <file>]
+        "report" if parts.len() >= 2 && parts[1] == "project" => {
+            let mut out = Vec::new();
+            if parts.len() == 2 {
+                out.extend(["txt", "json", "md", "html", "pdf", "docx", "xlsx"]);
+            }
+            out.extend(["--name", "-n"]);
+            out
+        }
         // ignore dir / ignore ext / ignore file
         "ignore" if parts.len() == 1 => vec!["dir", "ext", "file"],
         // ignore dir <name> / ignore ext <ext> / ignore file <name>
@@ -1265,6 +1319,16 @@ pub(crate) fn subcommands_for(parts: &[&str]) -> Vec<&'static str> {
             "--ext",
             "-e",
         ],
+        // views flags (flat ls-style listing)
+        "views" if parts.len() == 1 => vec!["-n", "-s", "--size", "--sort"],
+        "views" if parts.len() >= 2 => {
+            let last = parts[parts.len() - 1].to_lowercase();
+            if last == "-s" || last == "--size" || last == "--sort" {
+                vec![]
+            } else {
+                vec!["-n", "-s", "--size", "--sort"]
+            }
+        }
         // ui (now a no-op after modern mode removal)
         "ui" => vec!["classic"],
         // ntpkg install / ntpkg uninstall / ntpkg list / ntpkg use / ntpkg which / ntpkg available / ntpkg search / ntpkg info
@@ -1413,6 +1477,7 @@ pub(crate) fn subcommands_for(parts: &[&str]) -> Vec<&'static str> {
             "--id",
             "--id-ls",
             "--id-info",
+            "--deadlock",
             "--id-rm",
             "-t",
             "--to",
@@ -1469,7 +1534,7 @@ pub(crate) fn subcommands_for(parts: &[&str]) -> Vec<&'static str> {
         // qsc listen / stop / status
         "qsc" if parts.len() == 1 => vec!["listen", "start", "stop", "status", "stat", "startup"],
         // todo info / add / rm / clear
-        "todo" if parts.len() == 1 => {
+        "todo" | "td" if parts.len() == 1 => {
             vec![
                 "info", "add", "done", "undo", "edit", "rm", "remove", "clear", "cl", "list", "ls",
             ]
@@ -1648,7 +1713,7 @@ pub(crate) fn subcommands_for(parts: &[&str]) -> Vec<&'static str> {
             if last == "--head" || last == "--tail" || last == "--betw" {
                 vec![]
             } else {
-                vec!["--head", "--tail", "--betw"]
+                vec!["--head", "--tail", "--betw", "--line", "--no-line"]
             }
         }
         // scan ext <ext...> [-d|--depth <n>] [-s|--size] [--care]
@@ -1735,6 +1800,14 @@ pub(crate) fn subcommands_for(parts: &[&str]) -> Vec<&'static str> {
         "tmprt" if parts.len() >= 2 && matches!(parts[1], "sensors" | "sensor") => {
             vec!["status", "install", "uninstall", "debug"]
         }
+        // time command forms
+        "time" if parts.len() == 1 => vec![
+            "run", "-r", "--run", "compare", "bench", "count", "help", "--help",
+        ],
+        "time" if parts.len() == 2 && parts[1] == "compare" => {
+            vec!["-w", "--ignore-whitespace", "--with"]
+        }
+        "time" if parts.len() == 2 && parts[1] == "bench" => vec!["-n", "--runs"],
         // git subcommands
         "git" if parts.len() == 1 => vec![
             "status", "st", "branch", "b", "log", "l", "diff", "d", "add", "a", "commit", "push",
@@ -1760,6 +1833,7 @@ pub(crate) fn subcommands_for(parts: &[&str]) -> Vec<&'static str> {
             "igcare",
             "network",
             "tmprt",
+            "time",
             "git",
             "clipboard",
             "qsc",
@@ -1787,6 +1861,7 @@ pub(crate) fn subcommands_for(parts: &[&str]) -> Vec<&'static str> {
             "nsheet",
             "nssh",
             "fake",
+            "deadlock",
         ],
         // Default: no known subcommands
         _ => vec![],
@@ -2562,6 +2637,21 @@ pub(crate) fn fs_candidates_for(parent_parts: &[&str], last_frag: &str) -> Vec<S
                 }
                 (true, false, None, false)
             }
+            // `views` takes one directory target after its flags.
+            "views" => {
+                if view_path_taken(&parent_parts[1..]) {
+                    return vec![];
+                }
+                let awaiting = parent_parts
+                    .last()
+                    .map(|t| matches!(t.to_lowercase().as_str(), "--sort" | "-s" | "--size"))
+                    .unwrap_or(false)
+                    && parent_parts.len() > 1;
+                if awaiting {
+                    return vec![];
+                }
+                (true, false, None, false)
+            }
             // `txtc`/`txtf <file>` display readable files: suppress known
             // binaries/archives (`.exe`, `.zip`, …); dirs pass for traversal.
             "txtc" => {
@@ -2872,12 +2962,13 @@ fn list_path_candidates(
 /// Commands offered at the start of a piped stage (`cmd | `), in ghost
 /// order. Only these are completed after a pipe — no other command falls
 /// back to generic completion.
-const PIPE_FILTER_COMMANDS: &[&str] =
-    &["head", "tail", "betw", "gs", "sort", "rev", "encode", "qur"];
+const PIPE_FILTER_COMMANDS: &[&str] = &[
+    "head", "tail", "betw", "gs", "sort", "rev", "count", "trim", "encode", "qur", "clip",
+];
 
 /// Pipe-stage command completion. `Some` means the stage is still in its
 /// command slot (or names an unsupported command), so the caller must not
-/// fall back to generic completion. `None` means one of the seven filters
+/// fall back to generic completion. `None` means one of the pipe filters
 /// is already present and its own flags/files should complete normally.
 fn pipe_stage_commands(tail: &str) -> Option<Vec<String>> {
     let trimmed = tail.trim();
@@ -4516,7 +4607,7 @@ mod tests {
         let c = h.candidates_for("help ");
         for t in [
             "nav", "config", "image", "arc", "scan", "teleport", "nssh", "nsheet", "nms", "pipe",
-            "fake",
+            "fake", "time",
         ] {
             assert!(c.contains(&t.to_string()), "missing topic {}: {:?}", t, c);
         }
@@ -4534,6 +4625,18 @@ mod tests {
         // Topic filled: no further hints.
         assert!(h.candidates_for("help image ").is_empty());
         assert!(h.candidates_for("help pipe ").is_empty());
+    }
+
+    #[test]
+    fn time_completions_offer_command_modes() {
+        let h = NtcHinter::new();
+        for candidate in ["run", "-r", "--run", "count", "help"] {
+            assert!(
+                h.candidates_for("time ").contains(&candidate.to_string()),
+                "missing {candidate}"
+            );
+        }
+        assert!(h.candidates_for("time c").contains(&"count".to_string()));
     }
 
     #[test]
@@ -4576,8 +4679,11 @@ mod tests {
             "gs".to_string(),
             "sort".to_string(),
             "rev".to_string(),
+            "count".to_string(),
+            "trim".to_string(),
             "encode".to_string(),
             "qur".to_string(),
+            "clip".to_string(),
         ];
         assert_eq!(h.candidates_for("gs main | "), filters);
         // Cursor immediately after the pipe (no trailing space) still lists them.
@@ -4585,6 +4691,7 @@ mod tests {
         assert_eq!(h.candidates_for("gs main | s"), vec!["sort".to_string()]);
         assert_eq!(h.candidates_for("gs main | r"), vec!["rev".to_string()]);
         assert_eq!(h.candidates_for("gs main | be"), vec!["betw".to_string()]);
+        assert_eq!(h.candidates_for("gs main | tr"), vec!["trim".to_string()]);
         assert_eq!(h.candidates_for("gs main | e"), vec!["encode".to_string()]);
         assert_eq!(h.candidates_for("gs main | q"), vec!["qur".to_string()]);
         // No fallback for other commands (they never complete in a pipe).

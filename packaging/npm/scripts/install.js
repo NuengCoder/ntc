@@ -334,7 +334,25 @@ function ensureExecutable(binaryPath) {
 
 function printPathHint() {
   // Print-only (never mutate shell rc from postinstall): tell the user how
-  // to put the npm global bin dir on PATH when `ntc` is not found.
+  // to put ntc on PATH. Termux and Linux get exact commands because the npm
+  // prefix differs from the usual bin dir there.
+  const rcHint = 'ntc: (append that line to ~/.bashrc or ~/.profile, then restart your shell)';
+
+  if (isAndroidTermux()) {
+    console.log('ntc: to run ntc from any shell, add it to PATH:');
+    console.log('ntc:   export PATH="/data/data/com.termux/files/usr/lib/node_modules/@nuengcoder/ntc:$PATH"');
+    console.log(rcHint);
+    return;
+  }
+
+  if (process.platform === 'linux') {
+    console.log('ntc: to run ntc from any shell, add it to PATH:');
+    console.log('ntc:   export PATH="/usr/lib/node_modules/@nuengcoder/ntc:$PATH"');
+    console.log('ntc:   export PATH="~/.npm-global/lib/node_modules/@nuengcoder/ntc:$PATH"');
+    console.log(rcHint);
+    return;
+  }
+
   try {
     const { execSync } = require('child_process');
     const prefix = execSync('npm prefix -g', { encoding: 'utf8' }).trim();
@@ -353,7 +371,7 @@ function printPathHint() {
       console.log(`ntc: or in this shell: $env:Path += ";${binDir}"`);
     } else {
       console.log(`ntc: add it with: export PATH="${binDir}:$PATH"`);
-      console.log(`ntc: (append that line to ~/.bashrc or ~/.profile, then restart your shell)`);
+      console.log(rcHint);
     }
   } catch {}
 }
@@ -393,6 +411,7 @@ async function main() {
   if (fs.existsSync(binaryPath)) {
     // A previous install may have lost the exec bit (bad umask / copy).
     try { ensureExecutable(binaryPath); } catch {}
+    printPathHint();
     return;
   }
 

@@ -78,6 +78,21 @@ pub struct TreeNode {
     pub size: Option<u64>,
 }
 
+/// True when a file is excluded by the effective ignore lists (filename or
+/// extension). Used to annotate ignored files instead of dropping them.
+fn file_matches_ignore(
+    name: &str,
+    path: &Path,
+    ignored_files: &HashSet<String>,
+    ignored_extensions: &HashSet<String>,
+) -> bool {
+    ignored_files.contains(name)
+        || path
+            .extension()
+            .map(|ext| ignored_extensions.contains(&ext.to_string_lossy().to_lowercase()))
+            .unwrap_or(false)
+}
+
 /// Generate a hierarchical tree.
 /// Previously this used a `HashMap<PathBuf, *mut TreeNode>` to build the tree
 /// in a single pass. That caused undefined behaviour: pushing to a child's
@@ -113,7 +128,7 @@ pub fn generate_tree(
         .unwrap_or_default()
         .to_string_lossy()
         .to_string();
-    let ignored_dirs = Config::get_ignored_dirs_combined();
+    let igcare = Config::effective_igcare();
     // Fetch format config once for the entire walk — avoids 4 lock acquisitions per file.
     let fmt_cfg = FormatConfig::from_both();
     struct FlatNode {
@@ -146,7 +161,7 @@ pub fn generate_tree(
         .max_depth(max_depth)
         .sort_by(|a, b| a.file_name().cmp(b.file_name()))
         .into_iter()
-        .filter_entry(make_ignored_dir_filter(&ignored_dirs));
+        .filter_entry(make_ignored_dir_filter(&igcare.ignored_directory_names));
 
     for entry in walker {
         if let Some(pb) = pb {
@@ -181,13 +196,20 @@ pub fn generate_tree(
         } else {
             Some(is_supported_format_with_config(entry.path(), &fmt_cfg))
         };
+        let is_ignored = !is_dir
+            && file_matches_ignore(
+                &name,
+                entry.path(),
+                &igcare.ignored_files,
+                &igcare.ignored_extensions,
+            );
 
         let idx = flat.len();
         flat.push(FlatNode {
-            name,
+            name: name.clone(),
             path: path_str.clone(),
             is_dir,
-            is_ignored: false,
+            is_ignored,
             is_supported,
             depth,
             parent_idx,
@@ -249,18 +271,17 @@ pub fn generate_tree(
         };
     };
 
-    // ---- Phase 3: sort children (dirs first, then alpha) ----
+    // ---- Phase 3: sort children (dirs, files, ignored dirs, ignored files) ----
     fn sort_children(nodes: &mut [TreeNode]) {
-        nodes.par_sort_by(|a, b| match (a.is_dir, b.is_dir) {
-            (true, false) => std::cmp::Ordering::Less,
-            (false, true) => std::cmp::Ordering::Greater,
-            _ => a.name.to_lowercase().cmp(&b.name.to_lowercase()),
+        nodes.par_sort_by(|a, b| {
+            tree_group_rank(a)
+                .cmp(&tree_group_rank(b))
+                .then_with(|| a.name.to_lowercase().cmp(&b.name.to_lowercase()))
         });
         for child in nodes.iter_mut() {
             sort_children(&mut child.children);
         }
     }
-    sort_children(&mut root_node.children);
 
     // Inject ignored directories at root depth so users can see they exist
     if let Ok(entries) = std::fs::read_dir(Path::new(root_path)) {
@@ -268,7 +289,7 @@ pub fn generate_tree(
             if let Ok(ft) = entry.file_type() {
                 if ft.is_dir() {
                     let name_lower = entry.file_name().to_string_lossy().to_lowercase();
-                    if ignored_dirs.contains(&name_lower) {
+                    if igcare.ignored_directory_names.contains(&name_lower) {
                         let name_orig = entry.file_name().to_string_lossy().to_string();
                         root_node.children.push(TreeNode {
                             name: name_orig,
@@ -286,11 +307,57 @@ pub fn generate_tree(
         }
     }
 
+    // Sort after injection so the groups stay ordered as dirs, files,
+    // ignored dirs, ignored files.
+    sort_children(&mut root_node.children);
+
     // Cache the result for fast repeated lookups
     set_cached_tree(cache_key, root_node.clone());
 
     // Return the root node of the assembled tree
     root_node
+}
+
+/// Display group rank for tree children: normal directories, normal files,
+/// ignored directories, ignored files.
+fn tree_group_rank(node: &TreeNode) -> u8 {
+    match (node.is_ignored, node.is_dir) {
+        (false, true) => 0,
+        (false, false) => 1,
+        (true, true) => 2,
+        (true, false) => 3,
+    }
+}
+
+/// Sort every level by display group (dirs, files, ignored dirs, ignored
+/// files). When `dirs_by_size` / `files_by_size` is set, entries of that
+/// kind sort largest size first (children without a computed size count as
+/// 0); otherwise they stay alphabetical. Used by the automatic navigation
+/// tree when `config size` is ON.
+pub fn sort_tree_by_size_groups(root: &mut TreeNode, dirs_by_size: bool, files_by_size: bool) {
+    fn sort_level(children: &mut [TreeNode], dirs_by_size: bool, files_by_size: bool) {
+        children.sort_by(|a, b| {
+            let rank = tree_group_rank(a).cmp(&tree_group_rank(b));
+            if rank != std::cmp::Ordering::Equal {
+                return rank;
+            }
+            let by_size = if a.is_dir {
+                dirs_by_size
+            } else {
+                files_by_size
+            };
+            let size = if by_size {
+                b.size.unwrap_or(0).cmp(&a.size.unwrap_or(0))
+            } else {
+                std::cmp::Ordering::Equal
+            };
+            size.then_with(|| a.name.to_lowercase().cmp(&b.name.to_lowercase()))
+        });
+        for child in children.iter_mut() {
+            sort_level(&mut child.children, dirs_by_size, files_by_size);
+        }
+    }
+    sort_level(&mut root.children, dirs_by_size, files_by_size);
 }
 
 /// Prune a tree in place so only files matching `exts` (see
@@ -715,30 +782,31 @@ fn format_tree_inner(
         _ if is_last => "└── ",
         _ => "├── ",
     };
-    let suffix = if node.is_dir && node.depth > 0 && node.is_ignored && !care {
-        " [ignored]".to_string()
-    } else if node.is_dir && node.depth > 0 {
-        if show_dirsize {
-            let size_str = if let Some(size) = node.size {
-                if let Some(pb) = pb {
-                    pb.inc(1);
-                }
-                human_readable_size(size)
-            } else {
-                let size = if care {
-                    calculate_total_size(Path::new(&node.path))
-                } else {
-                    calculate_dir_size(Path::new(&node.path))
-                };
-                if let Some(pb) = pb {
-                    pb.inc(1);
-                }
-                human_readable_size(size)
-            };
-            format!(" [Directory] ({})", size_str)
+    let mut suffix = String::new();
+    if node.is_dir && node.depth > 0 {
+        suffix.push_str(" [Directory]");
+    }
+    if node.depth > 0 && node.is_ignored {
+        suffix.push_str(" [ignored]");
+    }
+    if node.is_dir && node.depth > 0 && show_dirsize {
+        let size_str = if let Some(size) = node.size {
+            if let Some(pb) = pb {
+                pb.inc(1);
+            }
+            human_readable_size(size)
         } else {
-            " [Directory]".to_string()
-        }
+            let size = if care {
+                calculate_total_size(Path::new(&node.path))
+            } else {
+                calculate_dir_size(Path::new(&node.path))
+            };
+            if let Some(pb) = pb {
+                pb.inc(1);
+            }
+            human_readable_size(size)
+        };
+        suffix.push_str(&format!(" ({})", size_str));
     } else if !node.is_dir && show_filesize {
         let size_str = if let Some(size) = node.size {
             human_readable_size(size)
@@ -749,10 +817,9 @@ fn format_tree_inner(
                     .unwrap_or(0),
             )
         };
-        format!(" ({})", size_str)
-    } else {
-        String::new()
-    };
+        suffix.push_str(&format!(" ({})", size_str));
+    }
+
     output.push_str(&format!("{}{}{}{}\n", prefix, connector, node.name, suffix));
 
     for (i, child) in node.children.iter().enumerate() {
@@ -1052,5 +1119,137 @@ mod tests {
         assert_eq!(prune_tree_by_exts(&mut root, &["zzz".to_string()]), 0);
         assert!(root.children.is_empty());
         assert_eq!(root.name, "root");
+    }
+
+    #[test]
+    fn file_matches_ignore_detects_name_and_extension() {
+        let ignored_files = HashSet::from(["Cargo.lock".to_string()]);
+        let ignored_extensions = HashSet::from(["log".to_string()]);
+        assert!(file_matches_ignore(
+            "Cargo.lock",
+            Path::new("Cargo.lock"),
+            &ignored_files,
+            &ignored_extensions
+        ));
+        assert!(file_matches_ignore(
+            "app.log",
+            Path::new("app.log"),
+            &ignored_files,
+            &ignored_extensions
+        ));
+        assert!(!file_matches_ignore(
+            "main.rs",
+            Path::new("main.rs"),
+            &ignored_files,
+            &ignored_extensions
+        ));
+    }
+
+    #[test]
+    fn ignored_entries_sort_after_normal_entries_in_combined_tree() {
+        let tmp = tempfile::tempdir().unwrap();
+        std::fs::create_dir(tmp.path().join("src")).unwrap();
+        std::fs::create_dir(tmp.path().join(".git")).unwrap();
+        std::fs::write(tmp.path().join("main.rs"), "x").unwrap();
+        std::fs::write(tmp.path().join("Cargo.lock"), "x").unwrap();
+        let root_path = tmp.path().to_string_lossy().to_string();
+
+        let mut cfg = Config::new();
+        cfg.ignored_files.insert("Cargo.lock".to_string());
+        let tree = Config::with_test_config(cfg, || generate_tree(&root_path, Some(1), true, None));
+        let names: Vec<&str> = tree.children.iter().map(|c| c.name.as_str()).collect();
+        // dirs -> files -> ignored dirs -> ignored files
+        assert_eq!(names, vec!["src", "main.rs", ".git", "Cargo.lock"]);
+        assert!(!tree.children[0].is_ignored);
+        assert!(!tree.children[1].is_ignored);
+        assert!(tree.children[2].is_ignored);
+        assert!(tree.children[3].is_ignored);
+    }
+
+    #[test]
+    fn sort_tree_by_size_groups_keeps_groups_and_orders_largest_first() {
+        let mut ignored_dir = sized_dir(".git", 60, vec![]);
+        ignored_dir.is_ignored = true;
+        let mut ignored_file = sized_file("secret.env", 25);
+        ignored_file.is_ignored = true;
+        let mut root = TreeNode {
+            name: "root".to_string(),
+            path: "/root".to_string(),
+            is_dir: true,
+            is_ignored: false,
+            is_supported: None,
+            children: vec![
+                sized_file("small.rs", 10),
+                ignored_file,
+                sized_dir("big", 500, vec![]),
+                ignored_dir,
+                sized_file("large.bin", 900),
+                sized_dir("small", 100, vec![]),
+            ],
+            depth: 0,
+            size: None,
+        };
+        sort_tree_by_size_groups(&mut root, true, true);
+        let names: Vec<&str> = root.children.iter().map(|c| c.name.as_str()).collect();
+        assert_eq!(
+            names,
+            vec![
+                "big",
+                "small",
+                "large.bin",
+                "small.rs",
+                ".git",
+                "secret.env"
+            ]
+        );
+    }
+
+    #[test]
+    fn format_tree_keeps_ignored_marker_with_size() {
+        let ignored_dir = TreeNode {
+            name: ".git".to_string(),
+            path: "/root/.git".to_string(),
+            is_dir: true,
+            is_ignored: true,
+            is_supported: None,
+            children: vec![],
+            depth: 1,
+            size: Some(59_400_000),
+        };
+        let ignored_file = TreeNode {
+            name: "secret.env".to_string(),
+            path: "/root/secret.env".to_string(),
+            is_dir: false,
+            is_ignored: true,
+            is_supported: None,
+            children: vec![],
+            depth: 1,
+            size: Some(25),
+        };
+        let normal_dir = TreeNode {
+            name: "src".to_string(),
+            path: "/root/src".to_string(),
+            is_dir: true,
+            is_ignored: false,
+            is_supported: None,
+            children: vec![],
+            depth: 1,
+            size: Some(6_200_000),
+        };
+        let root = TreeNode {
+            name: "root".to_string(),
+            path: "/root".to_string(),
+            is_dir: true,
+            is_ignored: false,
+            is_supported: None,
+            children: vec![normal_dir, ignored_dir, ignored_file],
+            depth: 0,
+            size: None,
+        };
+
+        let out = format_tree_with_sizes(&root, "", true, true, true, true, None);
+        assert!(out.contains(".git [Directory] [ignored] ("));
+        assert!(out.contains("secret.env [ignored] ("));
+        assert!(out.contains("src [Directory] ("));
     }
 }

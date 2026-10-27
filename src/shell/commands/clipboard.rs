@@ -1,18 +1,17 @@
 use crate::navigator::Navigator;
-use crate::output::{print_error, print_info, print_success};
+use crate::output::{print_error, print_info, print_success, print_warning};
 use crate::t;
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use std::fs;
-use std::io::{self, Write};
 use std::path::PathBuf;
 
 const MAX_ENTRIES: usize = 6;
 
-#[derive(Debug, Serialize, Deserialize)]
-struct ClipEntry {
-    content: String,
-    ts: u64,
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ClipEntry {
+    pub content: String,
+    pub ts: u64,
 }
 
 fn clip_data_path() -> PathBuf {
@@ -31,6 +30,10 @@ fn load_history() -> Vec<ClipEntry> {
         .ok()
         .and_then(|s| serde_json::from_str(&s).ok())
         .unwrap_or_default()
+}
+
+pub fn load_history_public() -> Vec<ClipEntry> {
+    load_history()
 }
 
 fn save_history(entries: &[ClipEntry]) -> Result<()> {
@@ -70,6 +73,20 @@ pub fn push_clip(content: &str) {
 pub fn cmd_clip(args: &str, _nav: &mut Navigator) -> Result<bool> {
     let parts: Vec<&str> = args.split_whitespace().collect();
     let subcmd = parts.first().copied().unwrap_or("");
+
+    // `cmd | clip` (no subcommand): copy the piped input to the clipboard.
+    if subcmd.is_empty() && crate::shell::stdin::has_any_input() {
+        let content = crate::shell::stdin::read_to_string()
+            .ok_or_else(|| anyhow::anyhow!("Failed to read stdin"))?;
+        let content = crate::output::normalize_newlines(&content);
+        if content.trim().is_empty() {
+            print_info(&t!("cmd.clipboard.empty"));
+            return Ok(false);
+        }
+        crate::output::copy_to_clipboard(&content, "TXT")?;
+        print_success(&t!("cmd.clipboard.copied_piped"));
+        return Ok(false);
+    }
 
     match subcmd {
         "" | "list" | "ls" => cmd_list(),
@@ -118,12 +135,21 @@ fn cmd_list() -> Result<bool> {
             .map(|dt| dt.format("%Y-%m-%d %H:%M:%S").to_string())
             .unwrap_or_else(|| "?".to_string());
         let one_line = entry.content.lines().next().unwrap_or("");
-        let preview = if one_line.len() > 60 {
-            &one_line[..60]
+        // Char-safe truncation (multibyte content must not panic).
+        let preview: String = if one_line.chars().count() > 60 {
+            let mut s: String = one_line.chars().take(60).collect();
+            s.push_str("…");
+            s
         } else {
-            one_line
+            one_line.to_string()
         };
-        println!("  {}. [{}] {}", i + 1, date, preview);
+        let line_count = entry.content.lines().count();
+        let suffix = if line_count > 1 {
+            format!(" ({} lines)", line_count)
+        } else {
+            String::new()
+        };
+        println!("  {}. [{}] {}{}", i + 1, date, preview, suffix);
     }
     Ok(false)
 }
@@ -148,7 +174,7 @@ fn cmd_select(n: usize) -> Result<bool> {
     }
     #[cfg(target_os = "android")]
     {
-        use std::io::Write as _;
+        use std::io::Write;
         let mut child = std::process::Command::new("termux-clipboard-set")
             .stdin(std::process::Stdio::piped())
             .spawn()
@@ -172,12 +198,23 @@ fn cmd_clear() -> Result<bool> {
         print_info(&t!("cmd.clipboard.already_empty"));
         return Ok(false);
     }
-    print!("  {}", t!("cmd.clipboard.clear_prompt", entries.len()));
-    io::stdout().flush()?;
-    let mut input = String::new();
-    io::stdin().read_line(&mut input)?;
-    if matches!(input.trim().to_lowercase().as_str(), "y" | "yes") {
+    if crate::utils::interactive::prompt_yes_no(
+        &t!("cmd.clipboard.clear_prompt", entries.len()),
+        true,
+    )? {
         save_history(&[])?;
+        // Clear the system clipboard too, so the next auto-capture does not
+        // resurrect the just-cleared content.
+        #[cfg(not(target_os = "android"))]
+        if let Err(e) = crate::output::set_clipboard_text("") {
+            print_warning(&t!("cmd.clipboard.clear_error", e));
+        }
+        // Android has no `arboard` clipboard: Termux's `termux-clipboard-set`
+        // is the only way in, and an empty payload clears it.
+        #[cfg(target_os = "android")]
+        if let Err(e) = crate::output::copy_to_clipboard_termux("") {
+            print_warning(&t!("cmd.clipboard.clear_error", e));
+        }
         print_success(&t!("cmd.clipboard.cleared"));
     } else {
         print_info(&t!("cmd.clipboard.clear_cancelled"));

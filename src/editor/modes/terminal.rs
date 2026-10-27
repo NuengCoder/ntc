@@ -139,7 +139,20 @@ impl Editor {
                 let alt = modifiers.contains(KeyModifiers::ALT);
                 match (ctrl, shift, code) {
                     // Esc / Ctrl+Q fully hide the panel (not just unfocus).
-                    (false, false, KeyCode::Esc) | (true, false, KeyCode::Char('q')) => {
+                    // A command still running keeps the panel: Esc only
+                    // moves focus back so its output is not lost.
+                    (false, false, KeyCode::Esc) => {
+                        let busy = self.terminal.as_ref().map(|t| t.is_busy()).unwrap_or(false);
+                        if busy {
+                            self.focus = Focus::Editor;
+                            self.status_msg = Some(t!("editor.mode_term_busy_esc"));
+                        } else {
+                            self.terminal = None;
+                            self.focus = Focus::Editor;
+                        }
+                        self.mark_all_dirty();
+                    }
+                    (true, false, KeyCode::Char('q')) => {
                         self.terminal = None;
                         self.focus = Focus::Editor;
                         self.mark_all_dirty();

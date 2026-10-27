@@ -6,7 +6,6 @@ use crate::config::ServeService;
 use crate::config::VALID_LANGUAGES;
 use crate::navigator::Navigator;
 use crate::output::{print_error, print_info, print_success, print_warning};
-use crate::shell::helpers::open_with_fallback;
 use crate::t;
 
 use anyhow::Result;
@@ -30,7 +29,11 @@ pub fn cmd_config(args: &str, _nav: &mut Navigator) -> Result<bool> {
         "watch" | "w" => config_watch(subargs),
         "git" => config_git(subargs),
         "dir_view" | "dv" => config_dir_view(subargs),
+        "file_view" | "fv" => config_file_view(subargs),
+        "todo" | "td" => config_todo(subargs),
+        "size" | "s" => config_size(subargs),
         "update_check" | "uc" => config_update_check(subargs),
+        "intro_view" | "iv" => config_intro_view(subargs),
         "qsc" => config_qsc(subargs),
         "serve" => config_serve(subargs),
         "lang" | "language" => config_lang(subargs),
@@ -45,7 +48,11 @@ pub fn cmd_config(args: &str, _nav: &mut Navigator) -> Result<bool> {
             println!("  {}", t!("help.config.autosuggest"));
             println!("  {}", t!("help.config.git"));
             println!("  {}", t!("help.config.dir_view"));
+            println!("  {}", t!("help.config.file_view"));
+            println!("  {}", t!("help.config.todo"));
+            println!("  {}", t!("help.config.size"));
             println!("  {}", t!("help.config.update_check"));
+            println!("  {}", t!("help.config.intro_view"));
             println!("  {}", t!("help.config.threads"));
             println!("  {}", t!("help.config.history"));
             println!("  {}", t!("help.config.watch"));
@@ -203,6 +210,30 @@ fn config_git(args: &str) -> Result<bool> {
     Ok(false)
 }
 
+fn config_intro_view(args: &str) -> Result<bool> {
+    if args.trim().is_empty() {
+        let state = if Config::global_get_intro_view_enabled() {
+            "ON"
+        } else {
+            "OFF"
+        };
+        println!("{}", t!("msg.setIV.status", state));
+    } else {
+        match Config::parse_on_off(args) {
+            Some(state) => {
+                Config::global_set_intro_view_enabled(state);
+                if state {
+                    print_success(&t!("msg.setIV.on"));
+                } else {
+                    print_warning(&t!("msg.setIV.off"));
+                }
+            }
+            None => print_error(&t!("msg.setIV.error")),
+        }
+    }
+    Ok(false)
+}
+
 fn config_dir_view(args: &str) -> Result<bool> {
     if args.is_empty() {
         let state = if Config::global_get_dir_view_enabled() {
@@ -226,6 +257,183 @@ fn config_dir_view(args: &str) -> Result<bool> {
         }
     }
     Ok(false)
+}
+
+fn config_file_view(args: &str) -> Result<bool> {
+    if args.trim().is_empty() {
+        println!(
+            "{}",
+            t!(
+                "msg.setFV.status",
+                on_off(Config::global_get_file_view_enabled())
+            )
+        );
+    } else {
+        match Config::parse_on_off(args.trim()) {
+            Some(state) => {
+                Config::global_set_file_view_enabled(state);
+                if state {
+                    print_success(&t!("msg.setFV.on"));
+                } else {
+                    print_warning(&t!("msg.setFV.off"));
+                }
+            }
+            None => print_error(&t!("msg.setFV.error")),
+        }
+    }
+    Ok(false)
+}
+
+fn config_todo(args: &str) -> Result<bool> {
+    let mut parts = args.split_whitespace();
+    let action = parts.next().unwrap_or("");
+    if action.is_empty() {
+        println!(
+            "{}",
+            t!("msg.setTD.status", Config::global_get_todo_format())
+        );
+        return Ok(false);
+    }
+    if !matches!(action, "format" | "fmt") {
+        print_error(&t!("msg.setTD.error"));
+        return Ok(false);
+    }
+    let Some(fmt) = parts.next() else {
+        print_error(&t!("msg.setTD.error"));
+        return Ok(false);
+    };
+    if parts.next().is_some() {
+        print_error(&t!("msg.setTD.error"));
+        return Ok(false);
+    }
+    let fmt = fmt.to_lowercase();
+    if !crate::config::VALID_TODO_FORMATS.contains(&fmt.as_str()) {
+        print_error(&t!("cmd.todo.unknown_format", fmt));
+        return Ok(false);
+    }
+    Config::global_set_todo_format(&fmt);
+    print_success(&t!("msg.setTD.set", fmt, fmt));
+    Ok(false)
+}
+
+fn config_size(args: &str) -> Result<bool> {
+    let mut files = Config::global_get_auto_size_files();
+    let mut dirs = Config::global_get_auto_size_dirs();
+
+    match parse_size_action(args) {
+        Some(SizeAction::ShowAll) => {
+            println!("{}", t!("msg.setSZ.status", on_off(files), on_off(dirs)));
+            println!("  {}", t!("msg.setSZ.usage"));
+        }
+        Some(SizeAction::ShowTarget(target)) => {
+            let state = match target {
+                SizeTarget::All => files && dirs,
+                SizeTarget::Files => files,
+                SizeTarget::Dirs => dirs,
+            };
+            println!(
+                "{}",
+                t!("msg.setSZ.target_status", target.label(), on_off(state))
+            );
+        }
+        Some(SizeAction::Set { target, state }) => {
+            let prev_files = files;
+            let prev_dirs = dirs;
+            let enabled_now = match target {
+                SizeTarget::All => {
+                    files = state;
+                    dirs = state;
+                    state && (!prev_files || !prev_dirs)
+                }
+                SizeTarget::Files => {
+                    files = state;
+                    state && !prev_files
+                }
+                SizeTarget::Dirs => {
+                    dirs = state;
+                    state && !prev_dirs
+                }
+            };
+            Config::global_set_auto_size(files, dirs);
+            if state {
+                print_success(&t!("msg.setSZ.on", target.label()));
+            } else {
+                print_warning(&t!("msg.setSZ.off", target.label()));
+            }
+            if enabled_now {
+                print_warning(&t!("msg.setSZ.slow_warn"));
+            }
+        }
+        None => print_error(&t!("msg.setSZ.error")),
+    }
+    Ok(false)
+}
+
+fn on_off(state: bool) -> &'static str {
+    if state {
+        "ON"
+    } else {
+        "OFF"
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum SizeTarget {
+    All,
+    Files,
+    Dirs,
+}
+
+impl SizeTarget {
+    fn label(self) -> &'static str {
+        match self {
+            SizeTarget::All => "all",
+            SizeTarget::Files => "file",
+            SizeTarget::Dirs => "dir",
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum SizeAction {
+    ShowAll,
+    ShowTarget(SizeTarget),
+    Set { target: SizeTarget, state: bool },
+}
+
+fn parse_size_target(token: &str) -> Option<SizeTarget> {
+    match token.to_lowercase().as_str() {
+        "all" | "both" => Some(SizeTarget::All),
+        "file" | "files" => Some(SizeTarget::Files),
+        "dir" | "dirs" | "directory" | "directories" => Some(SizeTarget::Dirs),
+        _ => None,
+    }
+}
+
+fn parse_size_action(args: &str) -> Option<SizeAction> {
+    let tokens: Vec<String> = args
+        .split_whitespace()
+        .map(|token| token.to_lowercase())
+        .collect();
+    match tokens.as_slice() {
+        [] => Some(SizeAction::ShowAll),
+        [one] => {
+            if let Some(state) = Config::parse_on_off(one) {
+                Some(SizeAction::Set {
+                    target: SizeTarget::All,
+                    state,
+                })
+            } else {
+                parse_size_target(one).map(SizeAction::ShowTarget)
+            }
+        }
+        [target, state] => {
+            let target = parse_size_target(target)?;
+            let state = Config::parse_on_off(state)?;
+            Some(SizeAction::Set { target, state })
+        }
+        _ => None,
+    }
 }
 
 fn config_update_check(args: &str) -> Result<bool> {
@@ -648,8 +856,35 @@ pub fn cmd_showcg(_args: &str, _nav: &mut Navigator) -> Result<bool> {
     );
     println!(
         "│ {:<20} {:<42} │",
+        t!("msg.showcg.label_file_view"),
+        if Config::global_get_file_view_enabled() {
+            t!("status.on").green()
+        } else {
+            t!("status.off").red()
+        }
+    );
+    println!(
+        "│ {:<20} {:<42} │",
+        t!("msg.showcg.label_auto_size"),
+        t!(
+            "msg.showcg.auto_size_value",
+            on_off(Config::global_get_auto_size_files()),
+            on_off(Config::global_get_auto_size_dirs())
+        )
+    );
+    println!(
+        "│ {:<20} {:<42} │",
         t!("msg.showcg.label_update_check"),
         if Config::global_get_update_check_enabled() {
+            t!("status.on").green()
+        } else {
+            t!("status.off").red()
+        }
+    );
+    println!(
+        "│ {:<20} {:<42} │",
+        t!("msg.showcg.label_intro_view"),
+        if Config::global_get_intro_view_enabled() {
             t!("status.on").green()
         } else {
             t!("status.off").red()
@@ -741,28 +976,14 @@ pub fn cmd_opencg(_args: &str, _nav: &mut Navigator) -> Result<bool> {
         print_info(&t!("cmd.config.opencg.created", config_path.display()));
     }
 
-    let editor = std::env::var("EDITOR").or_else(|_| std::env::var("VISUAL"));
-
-    match editor {
-        Ok(editor_cmd) => {
-            let parts: Vec<&str> = editor_cmd.split_whitespace().collect();
-            if parts.is_empty() {
-                open_with_fallback(&config_path);
-            } else {
-                let mut cmd = std::process::Command::new(parts[0]);
-                for arg in &parts[1..] {
-                    cmd.arg(arg);
-                }
-                cmd.arg(&config_path);
-
-                match cmd.status() {
-                    Ok(_) => print_success(&t!("cmd.config.opencg.opening", config_path.display())),
-                    Err(_) => open_with_fallback(&config_path),
-                }
-            }
-        }
-        Err(_) => open_with_fallback(&config_path),
+    // The built-in editor is the supported way to edit config now.
+    // Refuse nesting inside the editor's embedded ntc shell.
+    if std::env::var("NTC_IN_EDITOR").is_ok() {
+        print_error(&t!("misc.ne.already_in_editor"));
+        return Ok(false);
     }
+    print_success(&t!("cmd.config.opencg.opening", config_path.display()));
+    crate::shell::commands::misc::launch_ne_editor(config_path, None);
     Ok(false)
 }
 
@@ -1608,5 +1829,84 @@ mod tests {
         );
         assert!(base.join("tools").is_dir(), "dir with a user file stays");
         assert!(base.exists(), ".opencode/ stays while a user file remains");
+    }
+
+    #[test]
+    fn parse_size_show_all_when_empty() {
+        assert_eq!(parse_size_action(""), Some(SizeAction::ShowAll));
+        assert_eq!(parse_size_action("   "), Some(SizeAction::ShowAll));
+    }
+
+    #[test]
+    fn parse_size_set_all_on_off() {
+        assert_eq!(
+            parse_size_action("on"),
+            Some(SizeAction::Set {
+                target: SizeTarget::All,
+                state: true
+            })
+        );
+        assert_eq!(
+            parse_size_action("off"),
+            Some(SizeAction::Set {
+                target: SizeTarget::All,
+                state: false
+            })
+        );
+        assert_eq!(
+            parse_size_action("ON"),
+            Some(SizeAction::Set {
+                target: SizeTarget::All,
+                state: true
+            })
+        );
+    }
+
+    #[test]
+    fn parse_size_set_target() {
+        assert_eq!(
+            parse_size_action("file on"),
+            Some(SizeAction::Set {
+                target: SizeTarget::Files,
+                state: true
+            })
+        );
+        assert_eq!(
+            parse_size_action("dirs off"),
+            Some(SizeAction::Set {
+                target: SizeTarget::Dirs,
+                state: false
+            })
+        );
+        assert_eq!(
+            parse_size_action("all off"),
+            Some(SizeAction::Set {
+                target: SizeTarget::All,
+                state: false
+            })
+        );
+    }
+
+    #[test]
+    fn parse_size_show_target() {
+        assert_eq!(
+            parse_size_action("file"),
+            Some(SizeAction::ShowTarget(SizeTarget::Files))
+        );
+        assert_eq!(
+            parse_size_action("dir"),
+            Some(SizeAction::ShowTarget(SizeTarget::Dirs))
+        );
+        assert_eq!(
+            parse_size_action("all"),
+            Some(SizeAction::ShowTarget(SizeTarget::All))
+        );
+    }
+
+    #[test]
+    fn parse_size_rejects_invalid() {
+        assert_eq!(parse_size_action("bogus"), None);
+        assert_eq!(parse_size_action("file maybe"), None);
+        assert_eq!(parse_size_action("all on extra"), None);
     }
 }

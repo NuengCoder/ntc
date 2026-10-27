@@ -95,12 +95,21 @@ impl WatchSummary {
         let max_events = Config::global_get_watch_limit().max(1);
         let a = |s: &str| crate::utils::terminal::asciify(s);
         println!();
-        println!("  {}", a("╔════════════════════════════════════════════════╗"));
         println!(
             "  {}",
-            a(&format!("║{:^48}", t!("watcher.file_changed").cyan().bold()))
+            a("╔════════════════════════════════════════════════╗")
         );
-        println!("  {}", a("╠════════════════════════════════════════════════╣"));
+        println!(
+            "  {}",
+            a(&format!(
+                "║{:^48}",
+                t!("watcher.file_changed").cyan().bold()
+            ))
+        );
+        println!(
+            "  {}",
+            a("╠════════════════════════════════════════════════╣")
+        );
         let display_events = &self.events[..self.events.len().min(max_events)];
         for ev in display_events {
             let plain = format!("[{}] {}  {}", ev.kind.label(), ev.name, ev.file_type);
@@ -119,21 +128,39 @@ impl WatchSummary {
         if self.events.len() > max_events {
             let msg = t!("watcher.more_events", self.events.len() - max_events);
             let pad = INNER.saturating_sub(msg.len());
-            println!("  {}  {}{}  {}", a("║"), msg.dimmed(), " ".repeat(pad), a("║"));
+            println!(
+                "  {}  {}{}  {}",
+                a("║"),
+                msg.dimmed(),
+                " ".repeat(pad),
+                a("║")
+            );
         }
 
-        println!("  {}", a("╚════════════════════════════════════════════════╝"));
+        println!(
+            "  {}",
+            a("╚════════════════════════════════════════════════╝")
+        );
     }
 
     /// Print the "tree refreshed" footer.
     pub fn print_refresh_box(&self) {
         let a = |s: &str| crate::utils::terminal::asciify(s);
-        println!("  {}", a("╔════════════════════════════════════════════════╗"));
         println!(
             "  {}",
-            a(&format!("║{:^48}", t!("watcher.tree_refreshed").green().bold()))
+            a("╔════════════════════════════════════════════════╗")
         );
-        println!("  {}", a("╚════════════════════════════════════════════════╝"));
+        println!(
+            "  {}",
+            a(&format!(
+                "║{:^48}",
+                t!("watcher.tree_refreshed").green().bold()
+            ))
+        );
+        println!(
+            "  {}",
+            a("╚════════════════════════════════════════════════╝")
+        );
     }
 }
 

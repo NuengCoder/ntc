@@ -1,4 +1,6 @@
-use super::{ci_find, is_ctrl_char, prev_char_byte, sel_range, CreateKind, CursorPos, Editor};
+use super::{
+    ci_find, is_ctrl_char, next_char_byte, prev_char_byte, sel_range, CreateKind, CursorPos, Editor,
+};
 use crate::t;
 
 impl Editor {
@@ -511,6 +513,7 @@ impl Editor {
                 }
                 self.create_kind = None;
                 self.create_buf.clear();
+                self.sidebar.invalidate_cache();
                 self.status_msg = Some(match kind {
                     CreateKind::File => t!("editor.nfe_created_file", name),
                     CreateKind::Dir => t!("editor.nfe_created_dir", name),
@@ -683,6 +686,191 @@ impl Editor {
         self.search.mark_dirty();
         self.save_if_auto();
         true
+    }
+
+    /// Rows of a multi-line ("box") selection, inclusive. `None` when
+    /// nothing is selected or the selection sits on a single line.
+    fn visual_block_rows(&self) -> Option<(usize, usize)> {
+        let (ay, _) = self.cursor.selection_anchor?;
+        if !self.has_selection() {
+            return None;
+        }
+        let ((sy, _), (ey, _)) = sel_range(self.cursor.y, self.cursor.byte, ay, 0);
+        let ey = ey.min(self.lines.len().saturating_sub(1));
+        if sy >= ey {
+            return None;
+        }
+        Some((sy, ey))
+    }
+
+    /// Visual Space: insert one space at the cursor position. The
+    /// selection follows the space (the anchor shifts when the cursor
+    /// sits at its left edge).
+    ///
+    /// With a multi-line (box) selection the space is added at the home
+    /// column of every selected line instead.
+    pub(crate) fn visual_insert_space(&mut self) {
+        if let Some((sy, ey)) = self.visual_block_rows() {
+            self.snapshot();
+            for row in sy..=ey {
+                self.lines[row].insert(0, ' ');
+                self.mark_dirty(row);
+                self.syntax.invalidate_line(row);
+            }
+            self.cursor.byte += 1;
+            if let Some((ay, ab)) = self.cursor.selection_anchor {
+                self.cursor.selection_anchor = Some((ay, ab + 1));
+            }
+            self.modified = true;
+            self.search.mark_dirty();
+            self.save_if_auto();
+            return;
+        }
+        self.snapshot();
+        let y = self.cursor.y;
+        let at = self.cursor.byte.min(self.current().len());
+        self.current_mut().insert(at, ' ');
+        self.cursor.byte = at + 1;
+        if let Some((ay, ab)) = self.cursor.selection_anchor {
+            if ay == y && ab >= at {
+                self.cursor.selection_anchor = Some((ay, ab + 1));
+            }
+        }
+        self.mark_dirty(y);
+        self.syntax.invalidate_line(y);
+        self.modified = true;
+        self.search.mark_dirty();
+        self.save_if_auto();
+    }
+
+    /// Visual Backspace: remove a single space immediately before the
+    /// selection (or before the cursor when nothing is selected). The
+    /// selection shifts left with it. Returns false when there is no
+    /// space to remove, leaving the buffer untouched.
+    ///
+    /// With a multi-line (box) selection it strips one leading space at
+    /// the home column of every selected line that has one.
+    pub(crate) fn visual_backspace_space(&mut self) -> bool {
+        if let Some((sy, ey)) = self.visual_block_rows() {
+            let rows: Vec<usize> = (sy..=ey)
+                .filter(|&row| self.lines[row].starts_with(' '))
+                .collect();
+            if rows.is_empty() {
+                return false;
+            }
+            self.snapshot();
+            for row in rows {
+                self.lines[row].drain(..1);
+                self.mark_dirty(row);
+                self.syntax.invalidate_line(row);
+            }
+            self.cursor.byte = self.cursor.byte.saturating_sub(1);
+            if let Some((ay, ab)) = self.cursor.selection_anchor {
+                self.cursor.selection_anchor = Some((ay, ab.saturating_sub(1)));
+            }
+            self.modified = true;
+            self.search.mark_dirty();
+            self.save_if_auto();
+            return true;
+        }
+        let left = match self.cursor.selection_anchor {
+            Some((ay, ab)) if (ay, ab) != (self.cursor.y, self.cursor.byte) => {
+                sel_range(self.cursor.y, self.cursor.byte, ay, ab).0
+            }
+            _ => (self.cursor.y, self.cursor.byte),
+        };
+        let (y, b) = left;
+        if b == 0 || !self.lines[y][..b].ends_with(' ') {
+            return false;
+        }
+        self.snapshot();
+        self.lines[y].drain(b - 1..b);
+        if self.cursor.y == y && self.cursor.byte >= b {
+            self.cursor.byte -= 1;
+        }
+        if let Some((ay, ab)) = self.cursor.selection_anchor {
+            if ay == y && ab >= b {
+                self.cursor.selection_anchor = Some((ay, ab - 1));
+            }
+        }
+        self.mark_dirty(y);
+        self.syntax.invalidate_line(y);
+        self.modified = true;
+        self.search.mark_dirty();
+        self.save_if_auto();
+        true
+    }
+
+    /// Visual Alt+Left: move a single-line selection one character left,
+    /// swapping it with the character it overtakes. The selection moves
+    /// with the text. No-op without a selection, on multi-line selections
+    /// or at the start of the line.
+    pub(crate) fn move_selection_char_left(&mut self) {
+        let (ay, ab) = match self.cursor.selection_anchor {
+            Some(anchor) => anchor,
+            None => return,
+        };
+        if !self.has_selection() {
+            return;
+        }
+        let ((sy, sb), (ey, eb)) = sel_range(self.cursor.y, self.cursor.byte, ay, ab);
+        if sy != ey || sb == 0 {
+            return;
+        }
+        let pb = prev_char_byte(&self.lines[sy], sb);
+        let delta = sb - pb;
+        let before = self.lines[sy][pb..sb].to_string();
+        let selected = self.lines[sy][sb..eb].to_string();
+        self.snapshot();
+        self.lines[sy].replace_range(pb..eb, &format!("{}{}", selected, before));
+        self.move_selection_offsets(sy, -(delta as isize));
+        self.mark_dirty(sy);
+        self.syntax.invalidate_line(sy);
+        self.modified = true;
+        self.search.mark_dirty();
+        self.save_if_auto();
+    }
+
+    /// Visual Alt+Right: move a single-line selection one character right,
+    /// swapping it with the character it overtakes. The selection moves
+    /// with the text. No-op at the end of the line.
+    pub(crate) fn move_selection_char_right(&mut self) {
+        let (ay, ab) = match self.cursor.selection_anchor {
+            Some(anchor) => anchor,
+            None => return,
+        };
+        if !self.has_selection() {
+            return;
+        }
+        let ((sy, sb), (ey, eb)) = sel_range(self.cursor.y, self.cursor.byte, ay, ab);
+        if sy != ey || eb >= self.lines[sy].len() {
+            return;
+        }
+        let nb = next_char_byte(&self.lines[sy], eb);
+        let delta = nb - eb;
+        let after = self.lines[sy][eb..nb].to_string();
+        let selected = self.lines[sy][sb..eb].to_string();
+        self.snapshot();
+        self.lines[sy].replace_range(sb..nb, &format!("{}{}", after, selected));
+        self.move_selection_offsets(sy, delta as isize);
+        self.mark_dirty(sy);
+        self.syntax.invalidate_line(sy);
+        self.modified = true;
+        self.search.mark_dirty();
+        self.save_if_auto();
+    }
+
+    /// Shift both selection endpoints horizontally after a selection move.
+    fn move_selection_offsets(&mut self, y: usize, delta: isize) {
+        let shift = |b: usize| (b as isize + delta).max(0) as usize;
+        if self.cursor.y == y {
+            self.cursor.byte = shift(self.cursor.byte);
+        }
+        if let Some((ay, ab)) = self.cursor.selection_anchor {
+            if ay == y {
+                self.cursor.selection_anchor = Some((ay, shift(ab)));
+            }
+        }
     }
 
     /// Dedent selected lines or current line (Shift+Tab).

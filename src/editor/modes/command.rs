@@ -50,6 +50,8 @@ impl Editor {
                         self.close_all_tabs();
                         self.mode = Mode::Normal;
                     }
+                    // Ctrl+E accepts the ghost hint, like End.
+                    (true, KeyCode::Char('e')) => self.prompt_accept_or_end(),
                     _ => match code {
                         KeyCode::Esc => {
                             self.mode = Mode::Normal;
@@ -65,12 +67,16 @@ impl Editor {
                                 self.mode = Mode::Normal;
                             }
                         }
-                        KeyCode::Backspace => {
-                            self.cmd_buf.pop();
-                        }
-                        KeyCode::Char(c) => {
-                            self.cmd_buf.push(c);
-                        }
+                        KeyCode::Backspace => self.prompt_backspace(),
+                        KeyCode::Delete => self.prompt_delete(),
+                        // The prompt has a caret: Left/Right move it, Right
+                        // also accepts the hint when the caret is at the end.
+                        KeyCode::Left => self.prompt_move_left(),
+                        KeyCode::Right => self.prompt_accept_or_right(),
+                        KeyCode::Home => self.prompt_home(),
+                        KeyCode::End => self.prompt_accept_or_end(),
+                        KeyCode::Tab => self.prompt_tab(),
+                        KeyCode::Char(c) => self.prompt_push(c),
                         _ => {}
                     },
                 }

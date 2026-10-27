@@ -60,11 +60,11 @@ pub(crate) fn mark_failed() {
     FAILED.store(true, Ordering::SeqCst);
 }
 
-fn reset_failed() {
+pub(crate) fn reset_failed() {
     FAILED.store(false, Ordering::SeqCst);
 }
 
-fn take_failed() -> bool {
+pub(crate) fn take_failed() -> bool {
     FAILED.swap(false, Ordering::SeqCst)
 }
 
@@ -230,7 +230,7 @@ fn unquote(t: &str) -> String {
 
 /// Remove ANSI escape sequences from captured output so redirected files and
 /// piped data stay clean.
-fn strip_ansi_bytes(input: &[u8]) -> Vec<u8> {
+pub(crate) fn strip_ansi_bytes(input: &[u8]) -> Vec<u8> {
     let mut out = Vec::with_capacity(input.len());
     let mut i = 0;
     while i < input.len() {
@@ -439,12 +439,12 @@ pub(crate) fn has_heredoc(input: &str) -> bool {
 // ── execution ───────────────────────────────────────────────────────────────
 
 /// Run a full command line, handling `&&` / `||` sequencing and pipelines.
-/// Returns `true` when the shell should exit.
+/// Returns `(exit_shell, success)`.
 pub(crate) fn run(
     input: &str,
     nav: &mut Navigator,
     watcher_handle: &Option<Arc<watcher::WatcherHandle>>,
-) -> Result<bool> {
+) -> Result<(bool, bool)> {
     let segments = parse(input);
     let mut prev_ok = true;
 
@@ -467,10 +467,10 @@ pub(crate) fn run(
         let (exit, ok) = run_segment(stages, nav, watcher_handle)?;
         prev_ok = ok;
         if exit {
-            return Ok(true);
+            return Ok((true, ok));
         }
     }
-    Ok(false)
+    Ok((false, prev_ok))
 }
 
 fn run_segment(

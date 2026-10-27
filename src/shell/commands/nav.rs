@@ -5,7 +5,7 @@ use super::parse_search_args;
 use crate::explorer::human_readable_size;
 use crate::navigator::{clear_screen, Navigator};
 use crate::output::{print_error, print_success};
-use crate::shell::helpers::{gosc_loop, show_tree};
+use crate::shell::helpers::{gosc_loop, show_nav_view};
 use crate::t;
 use crate::teleport::TeleportManager;
 
@@ -27,8 +27,6 @@ pub fn cmd_cd(args: &str, nav: &mut Navigator) -> Result<bool> {
             let tp_name = parts[1];
             if TeleportManager::get_all().contains_key(&tp_name.to_lowercase()) {
                 TeleportManager::jump_by_name(nav, tp_name)?;
-                clear_screen();
-                show_tree(nav, Some(1), false, false, false, false, false, false);
             } else {
                 print_error(&t!("cmd.nav.cd.tp_not_found", tp_name));
                 println!("{}", t!("cmd.nav.cd.tp_list"));
@@ -37,7 +35,7 @@ pub fn cmd_cd(args: &str, nav: &mut Navigator) -> Result<bool> {
             nav.go_to(Path::new(args))?;
             clear_screen();
             print_success(&t!("cmd.nav.cd.navigated", nav.display_path()));
-            show_tree(nav, Some(1), false, false, false, false, false, false);
+            show_nav_view(nav);
         }
     }
     Ok(false)
@@ -68,12 +66,12 @@ pub fn cmd_godrive(args: &str, nav: &mut Navigator) -> Result<bool> {
         } else if choice.len() == 1 && choice.chars().next().unwrap().is_alphabetic() {
             nav.go_drive(choice.chars().next().unwrap())?;
             clear_screen();
-            show_tree(nav, Some(1), false, false, false, false, false, false);
+            show_nav_view(nav);
         } else if let Ok(num) = choice.parse::<usize>() {
             if num > 0 && num <= drives.len() {
                 nav.go_drive(drives[num - 1])?;
                 clear_screen();
-                show_tree(nav, Some(1), false, false, false, false, false, false);
+                show_nav_view(nav);
             } else {
                 print_error(&t!("cmd.nav.invalid_drive"));
             }
@@ -84,7 +82,7 @@ pub fn cmd_godrive(args: &str, nav: &mut Navigator) -> Result<bool> {
         let letter = args.chars().next().unwrap_or('C');
         nav.go_drive(letter)?;
         clear_screen();
-        show_tree(nav, Some(1), false, false, false, false, false, false);
+        show_nav_view(nav);
     }
     Ok(false)
 }
@@ -94,7 +92,7 @@ pub fn cmd_back(args: &str, nav: &mut Navigator) -> Result<bool> {
         match nav.go_back() {
             Ok(()) => {
                 clear_screen();
-                show_tree(nav, Some(1), false, false, false, false, false, false);
+                show_nav_view(nav);
             }
             Err(e) => print_error(&format!("{}", e)),
         }
@@ -118,7 +116,7 @@ pub fn cmd_back(args: &str, nav: &mut Navigator) -> Result<bool> {
                 }
                 if success {
                     clear_screen();
-                    show_tree(nav, Some(1), false, false, false, false, false, false);
+                    show_nav_view(nav);
                 }
             }
             _ => print_error(&t!("cmd.nav.back.invalid_number", args)),
@@ -290,7 +288,7 @@ pub fn cmd_gos(nav: &mut Navigator) -> Result<bool> {
             nav.go_to(&new_path)?;
             clear_screen();
             print_success(&t!("cmd.nav.cd.navigated", nav.display_path()));
-            show_tree(nav, Some(1), false, false, false, false, false, false);
+            show_nav_view(nav);
         } else {
             print_error(&t!("cmd.nav.invalid_number"));
         }
@@ -302,7 +300,7 @@ pub fn cmd_gos(nav: &mut Navigator) -> Result<bool> {
 
 pub fn cmd_gosc(nav: &mut Navigator) -> Result<bool> {
     gosc_loop(nav)?;
-    show_tree(nav, Some(1), false, false, false, false, false, false);
+    show_nav_view(nav);
     Ok(false)
 }
 
@@ -349,7 +347,7 @@ pub fn cmd_fgo(args: &str, nav: &mut Navigator) -> Result<bool> {
             nav.go_to(parent)?;
             clear_screen();
             print_success(&t!("cmd.nav.cd.navigated", nav.display_path()));
-            show_tree(nav, Some(1), false, false, false, false, false, false);
+            show_nav_view(nav);
         } else {
             print_error(&t!("cmd.nav.invalid_selection"));
         }

@@ -8,7 +8,8 @@ use crate::search;
 use crate::session::SessionState;
 use crate::shell::help::{print_interactive_help, print_tp_help};
 use crate::shell::helpers::{
-    parse_target_arg_allow_file, resolve_file_operand, run_with_spinner, show_tree,
+    parse_target_arg_allow_file, resolve_file_operand, run_with_spinner, show_nav_view,
+    suppress_watch_refresh,
 };
 use crate::shell::venv::clear_venv_environment;
 use crate::teleport::TeleportManager;
@@ -22,10 +23,74 @@ use std::io::{self, Write};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
+/// True when running as root (Unix) or Administrator (Windows).
+fn is_root_or_admin() -> bool {
+    #[cfg(unix)]
+    {
+        // SAFETY: `geteuid` takes no arguments, cannot fail and has no
+        // preconditions, so calling it is always sound.
+        return unsafe { libc::geteuid() } == 0;
+    }
+    #[cfg(windows)]
+    {
+        // `net session` succeeds only when elevated.
+        return std::process::Command::new("net")
+            .args(["session"])
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null())
+            .status()
+            .map(|s| s.success())
+            .unwrap_or(false);
+    }
+    #[cfg(not(any(unix, windows)))]
+    {
+        false
+    }
+}
+
+/// `deadlock.vault` removal is restricted to root/administrator.
+fn is_deadlock_vault(path: &Path) -> bool {
+    let candidates = [
+        crate::deadlock::vault::vault_path(),
+        crate::deadlock::vault::legacy_vault_path(),
+    ];
+    // Direct match (same type / path).
+    if candidates.iter().any(|vault| path == vault) {
+        return true;
+    }
+    // Canonicalize both sides so different CWDs, relative paths and symlinks
+    // all resolve to the real file location.
+    let canon = match path.canonicalize() {
+        Ok(c) => c,
+        Err(_) => return false,
+    };
+    candidates
+        .iter()
+        .filter_map(|vault| vault.canonicalize().ok())
+        .any(|vault| canon == vault)
+}
+
+/// True when `path` is the dedicated directory that holds the deadlock vault.
+fn is_deadlock_vault_dir(path: &Path) -> bool {
+    let vault = crate::deadlock::vault::vault_path();
+    let Some(vault_dir) = vault.parent() else {
+        return false;
+    };
+    match (path.canonicalize(), vault_dir.canonicalize()) {
+        (Ok(dir), Ok(vault_dir)) => dir == vault_dir,
+        _ => false,
+    }
+}
+
 pub fn cmd_clear(_args: &str, nav: &mut Navigator) -> Result<bool> {
+    // `clear` redraws the whole view itself, so the shell must not print a
+    // file-watcher change box / refresh the tree after this command.
+    suppress_watch_refresh();
     clear_screen();
     println!();
-    if Config::global_get_dir_view_enabled() {
+    let show_header =
+        Config::global_get_dir_view_enabled() || Config::global_get_file_view_enabled();
+    if show_header {
         #[cfg(not(target_os = "android"))]
         {
             use colored::Colorize;
@@ -70,10 +135,10 @@ pub fn cmd_clear(_args: &str, nav: &mut Navigator) -> Result<bool> {
             );
         }
     }
-    println!("{}", t!("misc.clear.type_help").dimmed());
-    if Config::global_get_dir_view_enabled() {
-        show_tree(nav, Some(1), false, false, false, false, false, false);
+    if show_header {
+        println!("{}", t!("misc.clear.type_help").dimmed());
     }
+    show_nav_view(nav);
     Ok(false)
 }
 
@@ -124,6 +189,12 @@ pub fn cmd_tutorial(_args: &str, nav: &mut Navigator) -> Result<bool> {
 }
 
 pub fn cmd_exit(_args: &str, _nav: &mut Navigator) -> Result<bool> {
+    // The embedded shell (editor terminal) must never close itself: the
+    // editor owns that PTY, so exiting here would strand the panel.
+    if std::env::var("NTC_IN_EDITOR").is_ok() {
+        print_error(&t!("misc.exit.in_editor"));
+        return Ok(false);
+    }
     Ok(true)
 }
 
@@ -279,7 +350,7 @@ fn parse_ne_action(args: &str) -> NeAction {
     NeAction::Open { path, line }
 }
 
-fn launch_ne_editor(raw_path: PathBuf, line: Option<usize>) {
+pub(crate) fn launch_ne_editor(raw_path: PathBuf, line: Option<usize>) {
     if let Some(line) = line {
         crate::editor::GOTO_LINE.store(line, std::sync::atomic::Ordering::SeqCst);
     }
@@ -1006,10 +1077,18 @@ pub fn cmd_rmd(args: &str, nav: &mut Navigator) -> Result<bool> {
             print_error(&t!("misc.rmd.not_exist", item));
         } else if !path.is_dir() {
             print_error(&t!("misc.rmd.not_dir", item));
-        } else if let Err(e) = std::fs::remove_dir_all(&path) {
-            print_error(&t!("misc.rmd.error", item, e));
+        } else if is_deadlock_vault_dir(&path) && !is_root_or_admin() {
+            print_error(&t!("misc.rmd.deadlock_vault_admin_only", item));
         } else {
-            print_success(&t!("misc.rmd.removed", item));
+            if is_deadlock_vault_dir(&path) {
+                // Root/administrator: lift the OS-level deletion barrier.
+                let _ = crate::deadlock::protect::unprotect(&crate::deadlock::vault::vault_path());
+            }
+            if let Err(e) = std::fs::remove_dir_all(&path) {
+                print_error(&t!("misc.rmd.error", item, e));
+            } else {
+                print_success(&t!("misc.rmd.removed", item));
+            }
         }
     }
     Ok(false)
@@ -1102,6 +1181,14 @@ fn remove_rmd_pattern(item: &str, nav: &Navigator) -> Result<()> {
         return Ok(());
     }
     for path in &matches {
+        if is_deadlock_vault_dir(path) {
+            if !is_root_or_admin() {
+                print_error(&t!("misc.rmd.deadlock_vault_admin_only", path.display()));
+                continue;
+            }
+            // Root/administrator: lift the OS-level deletion barrier.
+            let _ = crate::deadlock::protect::unprotect(&crate::deadlock::vault::vault_path());
+        }
         match std::fs::remove_dir_all(path) {
             Ok(()) => print_success(&t!("misc.rmd.removed", path.display())),
             Err(e) => print_error(&t!("misc.rmd.error", path.display(), e)),
@@ -1180,6 +1267,15 @@ fn remove_rmf_pattern(item: &str, nav: &Navigator) -> Result<()> {
         }
     }
     for path in &matches {
+        if is_deadlock_vault(path) {
+            if !is_root_or_admin() {
+                print_error(&t!("misc.rmf.deadlock_vault_admin_only", path.display()));
+                continue;
+            }
+            // Root/administrator may remove it, but the OS-level barrier
+            // (deny-DELETE ACE / immutable flag) must be lifted first.
+            let _ = crate::deadlock::protect::unprotect(path);
+        }
         match std::fs::remove_file(path) {
             Ok(()) => print_success(&t!("misc.rmf.removed", path.display())),
             Err(e) => print_error(&t!("misc.rmf.error", path.display(), e)),
@@ -1210,7 +1306,13 @@ pub fn cmd_rmf(args: &str, nav: &mut Navigator) -> Result<bool> {
             print_error(&t!("misc.rmf.not_exist", item));
         } else if path.is_dir() {
             print_error(&t!("misc.rmf.is_dir", item));
+        } else if is_deadlock_vault(&path) && !is_root_or_admin() {
+            print_error(&t!("misc.rmf.deadlock_vault_admin_only", item));
         } else {
+            if is_deadlock_vault(&path) {
+                // Root/administrator: lift the OS-level deletion barrier.
+                let _ = crate::deadlock::protect::unprotect(&path);
+            }
             match std::fs::remove_file(&path) {
                 Ok(()) => print_success(&t!("misc.rmf.removed", item)),
                 Err(e) => print_error(&t!("misc.rmf.error", item, e)),
@@ -2052,6 +2154,19 @@ mod tests {
     use super::*;
 
     #[test]
+    fn cmd_clear_suppresses_watch_refresh() {
+        let _g = crate::utils::test_support::lock_globals();
+        let mut nav = Navigator::new().unwrap();
+        let _ = crate::shell::helpers::take_watch_refresh_suppressed();
+        let mut cfg = Config::default();
+        cfg.dir_view_enabled = false;
+        Config::with_test_config(cfg, || {
+            cmd_clear("", &mut nav).unwrap();
+        });
+        assert!(crate::shell::helpers::take_watch_refresh_suppressed());
+    }
+
+    #[test]
     fn parse_mv_args_basic_and_force() {
         let (ops, force) = parse_mv_args("a.txt b.txt");
         assert_eq!(ops, vec!["a.txt", "b.txt"]);
@@ -2435,5 +2550,86 @@ mod tests {
         std::env::remove_var("NTC_IN_EDITOR");
         assert!(result.is_ok());
         assert!(!result.unwrap());
+    }
+
+    #[test]
+    fn is_deadlock_vault_matches_canonical_path() {
+        // Isolate first: this test creates files next to `vault_path()`, which
+        // must never be the real user vault.
+        let home = crate::utils::test_support::IsolatedConfigHome::new();
+        let vault = crate::deadlock::vault::vault_path();
+        assert!(
+            vault.starts_with(home.path()),
+            "test isolation failed: {} is outside {}",
+            vault.display(),
+            home.path().display()
+        );
+        // Direct path equality.
+        assert!(is_deadlock_vault(&vault));
+        std::fs::create_dir_all(vault.parent().unwrap()).unwrap();
+        std::fs::write(&vault, "x").ok();
+        assert!(is_deadlock_vault(&vault));
+        // A different file is not the vault.
+        let other = vault.with_file_name("not_the_vault.txt");
+        std::fs::write(&other, "x").ok();
+        assert!(!is_deadlock_vault(&other));
+    }
+
+    #[test]
+    fn deadlock_vault_path_is_isolated_in_tests() {
+        let home = crate::utils::test_support::IsolatedConfigHome::new();
+        let vault = crate::deadlock::vault::vault_path();
+        assert!(
+            vault.starts_with(home.path()),
+            "vault path escaped the temp config home: {}",
+            vault.display()
+        );
+        // And it must not point into the real user config directory, even
+        // though `dirs::config_dir()` ignores NTC_CONFIG_HOME on Windows.
+        if let Some(real) = dirs::config_dir() {
+            let real_vault_dir = real.join("ntc").join("deadlock");
+            assert!(
+                !vault.starts_with(&real_vault_dir),
+                "vault path resolves to real user data: {}",
+                vault.display()
+            );
+        }
+    }
+
+    #[test]
+    fn cmd_rmf_refuses_deadlock_vault_for_non_root() {
+        let home = crate::utils::test_support::IsolatedConfigHome::new();
+        // Only meaningful when NOT root/admin (root can remove anything).
+        if is_root_or_admin() {
+            eprintln!("skipped: running as root/admin");
+            return;
+        }
+        let vault = crate::deadlock::vault::vault_path();
+        // Hard safety net: never write test garbage into the real vault.
+        assert!(
+            vault.starts_with(home.path()),
+            "refusing to run: {} is outside the isolated config home",
+            vault.display()
+        );
+        std::fs::create_dir_all(vault.parent().unwrap()).ok();
+        std::fs::write(&vault, "dummy vault content").ok();
+        assert!(vault.exists());
+
+        let mut nav = Navigator::new().unwrap();
+        let result = cmd_rmf(&vault.to_string_lossy(), &mut nav);
+        assert!(result.is_ok());
+        // The vault must survive the attempt.
+        assert!(vault.exists());
+
+        // Also blocked via wildcard pattern.
+        let glob = vault
+            .parent()
+            .unwrap()
+            .join("deadlock.*")
+            .to_string_lossy()
+            .to_string();
+        let result = cmd_rmf(&glob, &mut nav);
+        assert!(result.is_ok());
+        assert!(vault.exists());
     }
 }

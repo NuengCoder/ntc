@@ -151,8 +151,29 @@ impl Editor {
         }
     }
 
+    /// Two-step guard for leaving a buffer with unsaved edits: the first
+    /// attempt only recommends saving, repeating the same action goes
+    /// through without saving.
+    pub(crate) fn unsaved_guard(&mut self, action: &str) -> bool {
+        if !self.modified {
+            self.unsaved_guard = None;
+            return true;
+        }
+        if self.unsaved_guard.as_deref() == Some(action) {
+            self.unsaved_guard = None;
+            return true;
+        }
+        self.unsaved_guard = Some(action.to_string());
+        self.status_msg = Some(t!("editor.unsaved_switch", self.path.display()));
+        self.mark_all_dirty();
+        false
+    }
+
     pub(crate) fn switch_tab(&mut self, idx: usize) {
         if idx == self.active_tab || idx >= self.tabs.len() {
+            return;
+        }
+        if !self.unsaved_guard(&format!("tab:{}", idx)) {
             return;
         }
         if self.mode == Mode::InsertMulti {
@@ -209,12 +230,35 @@ impl Editor {
         }
     }
 
-    /// Label drawn for a tab in the tab bar, including the modified marker.
+    /// Label drawn for a tab in the tab bar, including the modified marker
+    /// and the relative tab number (the active tab shows its own 1-based
+    /// position, the others their distance from it, like `relativenumber`).
     /// Shared by rendering and mouse hit-testing so both agree on widths.
-    pub(crate) fn tab_label(&self, tab: &Tab) -> String {
+    pub(crate) fn tab_label(&self, idx: usize) -> String {
+        let tab = match self.tabs.get(idx) {
+            Some(t) => t,
+            None => return String::new(),
+        };
         let name = self.tab_display_name(tab);
         let mark = if tab.modified { " ●" } else { "" };
-        format!(" {} {} ", name, mark)
+        let num = if idx == self.active_tab {
+            idx + 1
+        } else {
+            idx.abs_diff(self.active_tab)
+        };
+        format!(" {} {} {} ", num, name, mark)
+    }
+
+    /// `t<n>` / `T<n>`: jump to the n-th tab (1-based). Out of range sets a
+    /// message and changes nothing. Switching keeps the unsaved guard.
+    /// See [`parse_tab_command`] for the gmode/nfe spelling.
+    pub(crate) fn goto_tab(&mut self, idx: usize) -> bool {
+        if idx == 0 || idx > self.tabs.len() {
+            self.status_msg = Some(t!("editor.tab_jump_range", idx, self.tabs.len()));
+            return false;
+        }
+        self.switch_tab(idx - 1);
+        self.active_tab == idx - 1
     }
 
     pub(crate) fn open_scratch_tab(&mut self) {
@@ -295,6 +339,11 @@ impl Editor {
     }
 
     pub(crate) fn load_file(&mut self, path: &Path) -> bool {
+        // Opening another file over unsaved edits: recommend saving first
+        // (repeat the action to go ahead without saving).
+        if self.path != path && !self.unsaved_guard(&format!("open:{}", path.display())) {
+            return false;
+        }
         let (content, enc) = if path.exists() {
             match read_file_lines(path) {
                 Ok((content, enc)) => (content, enc),
@@ -327,8 +376,7 @@ impl Editor {
         self.undo_stack.clear();
         self.redo_stack.clear();
         self.cursor.extra_cursors.clear();
-        self.syntax
-            .set_language(path.extension().and_then(|e| e.to_str()));
+        self.syntax.set_language_for_path(path);
         self.syntax.resize_cache(self.lines.len());
         if self.editor_cfg.syntax_enabled && self.lines.len() <= 5000 {
             let lines = self.lines.clone();
@@ -378,6 +426,16 @@ impl Editor {
 
     pub(crate) fn current(&self) -> &str {
         &self.lines[self.cursor.y]
+    }
+
+    /// Parse `t` / `t<n>` / `T` / `T<n>`: `Some(0)` for the bare letter,
+    /// `Some(n)` for an explicit 1-based tab number, `None` otherwise.
+    pub(crate) fn parse_tab_command(cmd: &str, prefix: char) -> Option<usize> {
+        let rest = cmd.strip_prefix(prefix)?.trim();
+        if rest.is_empty() {
+            return Some(0);
+        }
+        rest.parse::<usize>().ok().filter(|n| *n > 0)
     }
 
     pub(crate) fn current_mut(&mut self) -> &mut String {

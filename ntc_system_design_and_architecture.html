@@ -1,0 +1,2524 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="dark">
+<meta name="description" content="NTC 2.4.7 system design and architecture: layers, command lifecycle, modules, state, concurrency, trust boundaries, recovery, and extension points.">
+<title>NTC 2.4.7 — System Design &amp; Architecture</title>
+<style>
+:root{
+  --bg:#080b0e;
+  --bg-soft:#0c1117;
+  --panel:#10161d;
+  --panel-2:#141c25;
+  --panel-3:#18222d;
+  --line:#23303d;
+  --line-bright:#33465a;
+  --text:#e7eef5;
+  --muted:#91a0b2;
+  --dim:#647386;
+  --cyan:#52e0d1;
+  --green:#9be36d;
+  --amber:#ffc86b;
+  --purple:#c3a8ff;
+  --red:#ff7b72;
+  --blue:#7dc4ff;
+  --shadow:0 22px 70px rgba(0,0,0,.45);
+  --radius:16px;
+  --mono:ui-monospace,SFMono-Regular,"Cascadia Code","Cascadia Mono",Consolas,"Liberation Mono",monospace;
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth;scroll-padding-top:92px}
+body{
+  margin:0;
+  background:
+    radial-gradient(900px 520px at 8% -8%,rgba(82,224,209,.09),transparent 60%),
+    radial-gradient(820px 540px at 96% 3%,rgba(125,196,255,.075),transparent 58%),
+    linear-gradient(180deg,#080b0e 0%,#090d12 62%,#080b0e 100%);
+  color:var(--text);
+  font-family:var(--mono);
+  font-size:15px;
+  line-height:1.62;
+  -webkit-font-smoothing:antialiased;
+}
+body::before{
+  content:"";
+  position:fixed;
+  inset:0;
+  pointer-events:none;
+  background-image:
+    linear-gradient(rgba(255,255,255,.017) 1px,transparent 1px),
+    linear-gradient(90deg,rgba(255,255,255,.017) 1px,transparent 1px);
+  background-size:48px 48px;
+  mask-image:linear-gradient(180deg,rgba(0,0,0,.72),transparent 78%);
+  z-index:-1;
+}
+a{color:var(--cyan);text-decoration:none}
+a:hover{text-decoration:underline}
+button,input{font:inherit}
+button{color:inherit}
+::selection{background:rgba(82,224,209,.25);color:#fff}
+.wrap{width:min(1320px,calc(100% - 40px));margin:0 auto}
+.mono{font-family:var(--mono)}
+.muted{color:var(--muted)}
+.dim{color:var(--dim)}
+.accent{color:var(--cyan)}
+.green{color:var(--green)}
+.amber{color:var(--amber)}
+.purple{color:var(--purple)}
+.red{color:var(--red)}
+.blue{color:var(--blue)}
+.skip{position:absolute;left:-9999px;top:0;z-index:200;background:var(--cyan);color:#04100e;padding:8px 12px;border-radius:0 0 8px 0}
+.skip:focus{left:0}
+:focus-visible{outline:2px solid var(--cyan);outline-offset:3px}
+
+.progress-track{position:fixed;top:0;left:0;right:0;height:2px;z-index:80;background:transparent;pointer-events:none}
+.progress-bar{height:100%;width:0;background:linear-gradient(90deg,var(--cyan),var(--blue),var(--purple));box-shadow:0 0 12px rgba(82,224,209,.55)}
+
+.site-header{
+  position:sticky;
+  top:0;
+  z-index:70;
+  border-bottom:1px solid rgba(35,48,61,.8);
+  background:rgba(8,11,14,.84);
+  backdrop-filter:blur(18px);
+}
+.header-inner{display:flex;align-items:center;gap:22px;min-height:66px}
+.brand{display:flex;align-items:center;gap:10px;color:var(--text);font-weight:700;letter-spacing:.02em;white-space:nowrap}
+.brand:hover{text-decoration:none}
+.brand-mark{
+  display:grid;place-items:center;width:32px;height:32px;
+  border:1px solid rgba(82,224,209,.38);border-radius:9px;
+  background:linear-gradient(145deg,rgba(82,224,209,.15),rgba(82,224,209,.02));
+  color:var(--cyan);box-shadow:inset 0 0 18px rgba(82,224,209,.08);
+}
+.brand-mark svg{width:19px;height:19px}
+.brand-text{display:flex;flex-direction:column;line-height:1.05}
+.brand-text small{color:var(--dim);font-size:10px;letter-spacing:.2em;text-transform:uppercase;font-weight:500}
+.nav{display:flex;align-items:center;gap:4px;margin-left:auto}
+.nav a{color:var(--muted);padding:7px 10px;border-radius:7px;font-size:12.5px}
+.nav a:hover{color:var(--text);background:rgba(255,255,255,.04);text-decoration:none}
+.nav a.active{color:var(--cyan);background:rgba(82,224,209,.07)}
+.version-pill{
+  display:inline-flex;align-items:center;gap:7px;margin-left:10px;
+  border:1px solid var(--line);border-radius:999px;padding:6px 11px;
+  color:var(--muted);font-size:11.5px;white-space:nowrap;
+}
+.dot{width:6px;height:6px;border-radius:50%;background:var(--green);box-shadow:0 0 10px rgba(155,227,109,.8)}
+.menu-toggle{display:none;margin-left:auto;background:transparent;border:1px solid var(--line);border-radius:8px;padding:7px 9px;cursor:pointer}
+
+.hero{position:relative;padding:86px 0 42px;overflow:hidden}
+.hero::after{
+  content:"";position:absolute;width:620px;height:620px;right:-190px;top:-230px;border-radius:50%;
+  background:radial-gradient(circle,rgba(82,224,209,.11),transparent 66%);pointer-events:none;
+}
+.hero-grid{display:grid;grid-template-columns:minmax(0,1.12fr) minmax(360px,.88fr);gap:50px;align-items:center}
+.kicker{display:inline-flex;align-items:center;gap:9px;color:var(--cyan);font-size:11px;letter-spacing:.18em;text-transform:uppercase;margin-bottom:20px}
+.kicker::before{content:"";width:28px;height:1px;background:linear-gradient(90deg,transparent,var(--cyan))}
+h1{margin:0;font-size:clamp(42px,6vw,78px);line-height:1.02;letter-spacing:-.055em;font-weight:800}
+h1 .outline{color:transparent;-webkit-text-stroke:1px var(--line-bright)}
+.hero-lede{max-width:700px;margin:24px 0 0;color:var(--muted);font-size:16px;line-height:1.75}
+.hero-lede strong{color:var(--text);font-weight:600}
+.hero-actions{display:flex;flex-wrap:wrap;gap:11px;margin-top:30px}
+.btn{
+  display:inline-flex;align-items:center;gap:9px;border:1px solid var(--line);
+  border-radius:9px;padding:10px 16px;background:var(--panel);color:var(--text);
+  font-size:12.5px;cursor:pointer;transition:.16s ease;
+}
+.btn:hover{border-color:var(--line-bright);background:var(--panel-2);text-decoration:none;transform:translateY(-1px)}
+.btn.primary{
+  border-color:rgba(82,224,209,.45);
+  background:linear-gradient(180deg,rgba(82,224,209,.18),rgba(82,224,209,.07));
+  color:#cafff9;box-shadow:0 8px 26px rgba(82,224,209,.08);
+}
+.btn.primary:hover{border-color:rgba(82,224,209,.75)}
+.btn svg{width:15px;height:15px}
+.terminal-card{
+  position:relative;border:1px solid var(--line);border-radius:var(--radius);
+  background:linear-gradient(180deg,rgba(20,28,37,.97),rgba(12,17,23,.97));
+  box-shadow:var(--shadow);overflow:hidden;
+}
+.terminal-card::before{
+  content:"";position:absolute;inset:0;border-radius:inherit;pointer-events:none;
+  background:linear-gradient(120deg,rgba(82,224,209,.09),transparent 34%,transparent 72%,rgba(125,196,255,.06));
+}
+.term-bar{display:flex;align-items:center;gap:7px;padding:12px 15px;border-bottom:1px solid var(--line);background:rgba(255,255,255,.015)}
+.term-dot{width:9px;height:9px;border-radius:50%;background:#33404e}
+.term-dot:nth-child(1){background:#ff6b6b}
+.term-dot:nth-child(2){background:#ffd166}
+.term-dot:nth-child(3){background:#63d98a}
+.term-title{margin-left:10px;color:var(--dim);font-size:11px}
+.term-body{padding:20px;font-size:12px;line-height:1.85;overflow:auto}
+.term-line{white-space:nowrap}
+.term-line .prompt{color:var(--green)}
+.term-line .path{color:var(--blue)}
+.term-line .cmd{color:var(--text)}
+.term-line .comment{color:var(--dim)}
+.term-line .ok{color:var(--cyan)}
+.term-line .out{color:var(--muted)}
+.caret{display:inline-block;width:8px;height:15px;margin-left:2px;vertical-align:-2px;background:var(--cyan);animation:blink 1.15s steps(1) infinite}
+@keyframes blink{50%{opacity:0}}
+.stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;padding:16px 0 8px}
+.stat{border:1px solid var(--line);border-radius:12px;padding:15px 16px;background:linear-gradient(180deg,rgba(17,23,30,.82),rgba(12,17,23,.6))}
+.stat-value{font-size:25px;font-weight:750;letter-spacing:-.04em;line-height:1.1}
+.stat-label{color:var(--dim);font-size:10.5px;letter-spacing:.12em;text-transform:uppercase;margin-top:5px}
+
+.section{padding:64px 0;border-top:1px solid rgba(35,48,61,.55)}
+.section-head{display:flex;align-items:flex-end;justify-content:space-between;gap:28px;margin-bottom:28px}
+.section-kicker{color:var(--cyan);font-size:10.5px;letter-spacing:.18em;text-transform:uppercase;margin-bottom:8px}
+h2{margin:0;font-size:clamp(25px,3.2vw,38px);line-height:1.15;letter-spacing:-.035em;font-weight:760}
+.section-desc{max-width:620px;margin:0;color:var(--muted);font-size:13.5px;line-height:1.7}
+.section-desc.right{text-align:right}
+.eyebrow-note{display:flex;flex-wrap:wrap;gap:8px;margin-top:14px}
+.note-pill{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line);border-radius:999px;padding:4px 9px;color:var(--dim);font-size:10px;white-space:nowrap}
+.note-pill b{color:var(--muted);font-weight:600}
+
+.map-shell{
+  border:1px solid var(--line);border-radius:var(--radius);
+  background:linear-gradient(180deg,rgba(16,22,29,.96),rgba(9,13,18,.96));
+  box-shadow:var(--shadow);overflow:hidden;
+}
+.map-toolbar{
+  display:flex;flex-wrap:wrap;align-items:center;gap:10px;padding:13px 14px;
+  border-bottom:1px solid var(--line);background:rgba(255,255,255,.012);
+}
+.search-box{
+  display:flex;align-items:center;gap:8px;flex:1 1 250px;min-width:200px;
+  border:1px solid var(--line);border-radius:8px;background:var(--bg-soft);padding:0 10px;
+}
+.search-box svg{width:14px;height:14px;color:var(--dim);flex:none}
+.search-box input{width:100%;border:0;outline:0;background:transparent;color:var(--text);padding:8px 0;font-size:12px}
+.search-box input::placeholder{color:var(--dim)}
+.toolbar-label{color:var(--dim);font-size:10.5px;letter-spacing:.08em;text-transform:uppercase}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chip{
+  display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line);
+  border-radius:999px;background:transparent;color:var(--muted);padding:5px 9px;
+  font-size:10.5px;cursor:pointer;transition:.14s ease;white-space:nowrap;
+}
+.chip:hover{border-color:var(--line-bright);color:var(--text)}
+.chip.active{
+  border-color:color-mix(in srgb,var(--chip-color,var(--cyan)) 58%,transparent);
+  color:var(--chip-color,var(--cyan));
+  background:color-mix(in srgb,var(--chip-color,var(--cyan)) 10%,transparent);
+}
+.chip-dot{width:5px;height:5px;border-radius:50%;background:currentColor}
+.toolbar-spacer{flex:1}
+.icon-btn{
+  display:inline-flex;align-items:center;justify-content:center;gap:6px;width:31px;height:31px;
+  border:1px solid var(--line);border-radius:7px;background:transparent;color:var(--muted);cursor:pointer;
+}
+.icon-btn:hover{color:var(--text);border-color:var(--line-bright);background:rgba(255,255,255,.03)}
+.icon-btn svg{width:14px;height:14px}
+.map-grid{display:grid;grid-template-columns:minmax(0,1fr) 350px;min-height:780px}
+.map-stage{
+  padding:22px;
+  background:
+    radial-gradient(circle at 46% 30%,rgba(82,224,209,.035),transparent 42%),
+    linear-gradient(180deg,rgba(255,255,255,.006),transparent);
+}
+.map-layer{
+  display:grid;grid-template-columns:128px minmax(0,1fr);gap:16px;
+  position:relative;padding:15px 0;
+}
+.map-layer+.map-layer{border-top:1px dashed rgba(51,70,90,.45)}
+.layer-rail{position:relative;padding-top:4px}
+.layer-num{color:var(--dim);font-size:9px;letter-spacing:.16em;text-transform:uppercase}
+.layer-rail h3{margin:3px 0 4px;font-size:13px;line-height:1.2;letter-spacing:-.01em}
+.layer-rail p{margin:0;color:var(--dim);font-size:9.5px;line-height:1.5}
+.layer-nodes{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;align-content:start}
+.arch-node{
+  position:relative;min-height:68px;border:1px solid color-mix(in srgb,var(--nc,var(--cyan)) 24%,var(--line));
+  border-radius:9px;padding:9px 10px 9px 12px;background:linear-gradient(180deg,rgba(20,28,37,.92),rgba(12,17,23,.9));
+  color:var(--text);text-align:left;cursor:pointer;overflow:hidden;transition:.16s ease;
+}
+.arch-node::before{
+  content:"";position:absolute;inset:0 auto 0 0;width:2px;
+  background:linear-gradient(180deg,transparent,var(--nc,var(--cyan)),transparent);opacity:.65;
+}
+.arch-node:hover{transform:translateY(-1px);border-color:color-mix(in srgb,var(--nc,var(--cyan)) 52%,var(--line));box-shadow:0 10px 24px rgba(0,0,0,.24)}
+.arch-node.selected{
+  border-color:color-mix(in srgb,var(--nc,var(--cyan)) 72%,transparent);
+  background:linear-gradient(180deg,color-mix(in srgb,var(--nc,var(--cyan)) 11%,var(--panel)),rgba(12,17,23,.94));
+  box-shadow:0 0 0 1px color-mix(in srgb,var(--nc,var(--cyan)) 20%,transparent),0 12px 30px rgba(0,0,0,.3);
+}
+.arch-node.hidden{display:none}
+.arch-node.dim{opacity:.26}
+.node-type{display:block;color:var(--nc,var(--cyan));font-size:8.5px;letter-spacing:.13em;text-transform:uppercase;margin-bottom:3px}
+.node-title{display:block;font-size:11.5px;font-weight:650;line-height:1.28;letter-spacing:-.01em}
+.node-sub{display:block;color:var(--dim);font-size:9px;line-height:1.4;margin-top:3px}
+.map-arrow{
+  display:flex;align-items:center;gap:8px;margin:0 0 4px 144px;color:var(--dim);
+  font-size:8.5px;letter-spacing:.12em;text-transform:uppercase;
+}
+.map-arrow::before,.map-arrow::after{content:"";height:1px;background:linear-gradient(90deg,transparent,var(--line-bright));flex:1}
+.map-arrow::after{background:linear-gradient(90deg,var(--line-bright),transparent)}
+.map-side{
+  border-left:1px solid var(--line);background:linear-gradient(180deg,rgba(20,28,37,.62),rgba(10,14,19,.76));
+  display:flex;flex-direction:column;min-height:0;
+}
+.inspector-head{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:13px 15px;border-bottom:1px solid var(--line)}
+.inspector-head .toolbar-label{margin:0}
+.inspector-body{padding:16px;overflow:auto;flex:1;max-height:780px}
+.empty-inspector{color:var(--muted);font-size:12.5px;line-height:1.8}
+.empty-inspector .ascii{color:var(--line-bright);font-size:10px;line-height:1.3;margin-bottom:16px;white-space:pre}
+.inspector-badge{
+  display:inline-flex;align-items:center;gap:6px;
+  border:1px solid color-mix(in srgb,var(--node-color,var(--cyan)) 42%,transparent);
+  border-radius:999px;background:color-mix(in srgb,var(--node-color,var(--cyan)) 10%,transparent);
+  color:var(--node-color,var(--cyan));padding:3px 7px;font-size:9.5px;letter-spacing:.07em;text-transform:uppercase;
+}
+.inspector-title{margin:10px 0 5px;font-size:21px;line-height:1.18;letter-spacing:-.035em}
+.inspector-sub{color:var(--dim);font-size:10.5px;overflow-wrap:anywhere}
+.inspector-summary{color:var(--muted);font-size:12.5px;line-height:1.72;margin:15px 0}
+.inspector-section{border-top:1px solid rgba(35,48,61,.75);padding-top:13px;margin-top:13px}
+.inspector-section h4{margin:0 0 7px;color:var(--dim);font-size:9.5px;letter-spacing:.14em;text-transform:uppercase;font-weight:600}
+.inspector-section p{margin:0;color:var(--muted);font-size:12px;line-height:1.7}
+.code-line{
+  display:block;border:1px solid rgba(35,48,61,.7);border-radius:6px;background:rgba(0,0,0,.24);
+  color:#c9f7f1;padding:6px 8px;margin:4px 0;font-size:10.5px;overflow-wrap:anywhere;
+}
+.file-list{display:flex;flex-wrap:wrap;gap:5px}
+.file-tag{border:1px solid var(--line);border-radius:5px;padding:2px 5px;color:var(--muted);font-size:9.5px;background:rgba(255,255,255,.02)}
+.relation-list{display:flex;flex-direction:column;gap:8px}
+.relation-row{display:grid;grid-template-columns:58px minmax(0,1fr);gap:8px;font-size:11px;line-height:1.5}
+.relation-row .rel{color:var(--dim);font-size:8.5px;letter-spacing:.09em;text-transform:uppercase;padding-top:2px}
+.relation-row .val{color:var(--muted)}
+.map-legend{display:flex;flex-wrap:wrap;gap:14px;padding:11px 16px;border-top:1px solid var(--line);color:var(--dim);font-size:9.5px}
+.map-legend span{display:inline-flex;align-items:center;gap:6px}
+.legend-bar{width:14px;height:2px;background:var(--cyan)}
+
+.boot-layout{display:grid;grid-template-columns:300px minmax(0,1fr);gap:18px;align-items:start}
+.boot-list{
+  border:1px solid var(--line);border-radius:12px;background:rgba(14,19,26,.78);
+  padding:8px;display:flex;flex-direction:column;gap:3px;position:sticky;top:84px;
+}
+.boot-step{
+  display:grid;grid-template-columns:30px minmax(0,1fr);gap:9px;align-items:start;width:100%;
+  border:0;border-radius:8px;background:transparent;color:var(--muted);padding:8px;text-align:left;cursor:pointer;
+}
+.boot-step:hover{background:rgba(255,255,255,.035);color:var(--text)}
+.boot-step.active{background:rgba(82,224,209,.08);color:var(--text)}
+.boot-step.active .boot-num{color:var(--cyan);border-color:rgba(82,224,209,.45);background:rgba(82,224,209,.1)}
+.boot-num{
+  display:grid;place-items:center;width:26px;height:26px;border:1px solid var(--line);border-radius:7px;
+  color:var(--dim);font-size:9px;background:rgba(255,255,255,.02);
+}
+.boot-step b{display:block;font-size:11px;line-height:1.35;font-weight:600}
+.boot-step small{display:block;color:var(--dim);font-size:9px;line-height:1.4;margin-top:2px}
+.boot-detail{
+  border:1px solid var(--line);border-radius:var(--radius);
+  background:linear-gradient(180deg,rgba(17,23,30,.92),rgba(10,14,19,.92));overflow:hidden;min-height:460px;
+}
+.detail-head{padding:20px 22px;border-bottom:1px solid var(--line);background:rgba(255,255,255,.012)}
+.detail-head-top{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:9px}
+.detail-kicker{color:var(--cyan);font-size:9.5px;letter-spacing:.16em;text-transform:uppercase}
+.detail-phase{color:var(--dim);font-size:9.5px;white-space:nowrap}
+.detail-title{margin:0;font-size:26px;line-height:1.15;letter-spacing:-.035em}
+.detail-body{padding:20px 22px 22px}
+.detail-body>p{margin:0 0 16px;color:var(--muted);font-size:12.5px;line-height:1.78}
+.detail-facts{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin-bottom:16px}
+.detail-fact{border:1px solid rgba(35,48,61,.8);border-radius:8px;padding:10px 11px;background:rgba(0,0,0,.14)}
+.detail-fact span{display:block;color:var(--dim);font-size:8.5px;letter-spacing:.12em;text-transform:uppercase;margin-bottom:3px}
+.detail-fact b{color:var(--text);font-size:11px;font-weight:600;line-height:1.45}
+.detail-section{border-top:1px solid rgba(35,48,61,.65);padding-top:14px;margin-top:14px}
+.detail-section h4{margin:0 0 8px;color:var(--dim);font-size:9px;letter-spacing:.14em;text-transform:uppercase;font-weight:600}
+.detail-section p,.detail-section li{color:var(--muted);font-size:11.5px;line-height:1.7}
+.detail-section ul{margin:0;padding-left:17px}
+.detail-section li+li{margin-top:4px}
+.boot-nav{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:18px;padding-top:14px;border-top:1px solid rgba(35,48,61,.65)}
+.step-count{color:var(--dim);font-size:10px}
+.mini-btn{border:1px solid var(--line);border-radius:6px;background:transparent;color:var(--muted);padding:5px 9px;font-size:10px;cursor:pointer}
+.mini-btn:hover{border-color:var(--line-bright);color:var(--text)}
+.mini-btn:disabled{opacity:.35;cursor:not-allowed}
+
+.flow-rail{
+  display:grid;grid-template-columns:repeat(6,minmax(0,1fr));border:1px solid var(--line);
+  border-radius:var(--radius);overflow:hidden;background:linear-gradient(180deg,rgba(16,22,29,.9),rgba(10,14,19,.9));
+}
+.flow-step{
+  position:relative;border:0;border-right:1px solid var(--line);background:transparent;color:var(--muted);
+  padding:15px 12px 17px;text-align:left;cursor:pointer;min-height:120px;
+}
+.flow-step:last-child{border-right:0}
+.flow-step:hover{background:rgba(255,255,255,.022);color:var(--text)}
+.flow-step.active{background:rgba(82,224,209,.065);color:var(--text)}
+.flow-step.active .flow-num{color:var(--cyan)}
+.flow-step::after{
+  content:"";position:absolute;right:-4px;top:50%;width:7px;height:7px;border-top:1px solid var(--line-bright);
+  border-right:1px solid var(--line-bright);background:#0b1016;transform:translateY(-50%) rotate(45deg);z-index:2;
+}
+.flow-step:last-child::after{display:none}
+.flow-num{display:block;color:var(--dim);font-size:8.5px;letter-spacing:.13em;text-transform:uppercase;margin-bottom:11px}
+.flow-icon{display:grid;place-items:center;width:29px;height:29px;border:1px solid var(--line);border-radius:8px;color:var(--cyan);background:rgba(82,224,209,.05);margin-bottom:9px}
+.flow-icon svg{width:15px;height:15px}
+.flow-step b{display:block;font-size:11.5px;line-height:1.3;font-weight:650;letter-spacing:-.01em}
+.flow-step small{display:block;color:var(--dim);font-size:9px;line-height:1.45;margin-top:3px}
+.flow-detail{
+  margin-top:18px;border:1px solid var(--line);border-radius:12px;overflow:hidden;
+  background:linear-gradient(180deg,rgba(17,23,30,.86),rgba(10,14,19,.86));
+}
+.flow-detail-inner{display:grid;grid-template-columns:minmax(0,1fr) 330px;gap:0}
+.flow-copy{padding:20px 22px;border-right:1px solid var(--line)}
+.flow-copy h3{margin:0 0 8px;font-size:20px;line-height:1.2;letter-spacing:-.03em}
+.flow-copy p{margin:0;color:var(--muted);font-size:12px;line-height:1.75}
+.flow-side{padding:18px 20px;background:rgba(0,0,0,.12)}
+.flow-side h4{margin:0 0 8px;color:var(--dim);font-size:9px;letter-spacing:.13em;text-transform:uppercase;font-weight:600}
+.flow-side p{margin:0 0 10px;color:var(--muted);font-size:10.5px;line-height:1.62}
+.flow-side code{color:#c5f7f0;background:rgba(82,224,209,.06);border:1px solid rgba(82,224,209,.12);border-radius:4px;padding:1px 4px;font-size:10px}
+.flow-branch{display:inline-flex;align-items:center;gap:5px;border:1px solid var(--line);border-radius:5px;padding:3px 6px;margin:3px 3px 0 0;color:var(--muted);font-size:9px}
+.split{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:20px}
+.panel{border:1px solid var(--line);border-radius:var(--radius);background:linear-gradient(180deg,rgba(16,22,29,.86),rgba(10,14,19,.86));overflow:hidden}
+.panel-head{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:13px 16px;border-bottom:1px solid var(--line);background:rgba(255,255,255,.012)}
+.panel-head h3{margin:0;font-size:12.5px;letter-spacing:-.01em}
+.panel-head span{color:var(--dim);font-size:10px}
+.panel-body{padding:16px}
+.panel-body p{margin:0;color:var(--muted);font-size:12px;line-height:1.75}
+.panel-body p+p{margin-top:10px}
+.panel-body code{color:#c5f7f0;background:rgba(82,224,209,.06);border:1px solid rgba(82,224,209,.12);border-radius:4px;padding:1px 4px;font-size:10.5px}
+.panel-list{list-style:none;padding:0;margin:0}
+.panel-list li{display:flex;gap:9px;padding:7px 0;border-bottom:1px dashed rgba(35,48,61,.55);color:var(--muted);font-size:11.5px;line-height:1.6}
+.panel-list li:last-child{border-bottom:0}
+.panel-list .mark{color:var(--cyan);flex:none}
+.panel-list b{color:var(--text);font-weight:600}
+
+.module-toolbar{
+  display:flex;flex-wrap:wrap;align-items:center;gap:10px;padding:12px 14px;border:1px solid var(--line);
+  border-radius:11px 11px 0 0;background:rgba(16,22,29,.86);border-bottom:0;
+}
+.module-toolbar .search-box{flex:1 1 300px}
+.module-count{color:var(--dim);font-size:10px;white-space:nowrap}
+.module-grid{
+  display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;padding:14px;
+  border:1px solid var(--line);border-top:0;border-radius:0 0 11px 11px;
+  background:linear-gradient(180deg,rgba(12,17,23,.76),rgba(9,13,18,.7));
+}
+.module-card{
+  border:1px solid var(--line);border-radius:11px;background:linear-gradient(180deg,rgba(20,28,37,.9),rgba(11,15,20,.9));
+  overflow:hidden;transition:.16s ease;
+}
+.module-card:hover{border-color:var(--line-bright);transform:translateY(-1px)}
+.module-card.hidden{display:none}
+.module-toggle{
+  display:block;width:100%;border:0;background:transparent;color:var(--text);text-align:left;padding:14px 15px;cursor:pointer;
+}
+.module-top{display:flex;align-items:flex-start;justify-content:space-between;gap:10px;margin-bottom:7px}
+.module-badge{display:inline-flex;align-items:center;gap:5px;border:1px solid color-mix(in srgb,var(--mc,var(--cyan)) 35%,transparent);border-radius:999px;color:var(--mc,var(--cyan));background:color-mix(in srgb,var(--mc,var(--cyan)) 8%,transparent);padding:2px 6px;font-size:8.5px;letter-spacing:.08em;text-transform:uppercase;white-space:nowrap}
+.module-path{color:var(--dim);font-size:8.5px;overflow-wrap:anywhere;text-align:right}
+.module-card h3{margin:0 0 4px;font-size:13px;line-height:1.28;letter-spacing:-.015em}
+.module-card p{margin:0;color:var(--muted);font-size:10.5px;line-height:1.6}
+.module-expand{display:flex;align-items:center;gap:5px;margin-top:8px;color:var(--dim);font-size:9px;letter-spacing:.06em;text-transform:uppercase}
+.module-expand svg{width:11px;height:11px;transition:transform .16s}
+.module-card.open .module-expand svg{transform:rotate(90deg)}
+.module-more{display:none;border-top:1px solid rgba(35,48,61,.65);padding:12px 15px 14px;background:rgba(0,0,0,.12)}
+.module-card.open .module-more{display:block}
+.module-more p{margin:0 0 8px;font-size:10.5px}
+.module-more p:last-child{margin-bottom:0}
+.module-more b{color:var(--text);font-weight:600}
+.module-more code{color:#c5f7f0;font-size:9.5px;background:rgba(82,224,209,.05);border-radius:3px;padding:1px 3px}
+.module-empty{grid-column:1/-1;padding:30px;text-align:center;color:var(--dim);font-size:12px}
+
+.state-top{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin-bottom:18px}
+.state-card{border:1px solid var(--line);border-radius:11px;padding:15px;background:linear-gradient(180deg,rgba(18,25,33,.9),rgba(11,15,20,.9))}
+.state-card-top{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:8px}
+.state-card h3{margin:0;font-size:12.5px;line-height:1.3}
+.state-type{color:var(--dim);font-size:8.5px;letter-spacing:.1em;text-transform:uppercase}
+.state-card p{margin:0;color:var(--muted);font-size:10.5px;line-height:1.65}
+.state-card code{color:#c5f7f0;font-size:9.5px}
+.state-card .owner{display:block;margin-top:9px;padding-top:8px;border-top:1px dashed rgba(35,48,61,.6);color:var(--dim);font-size:9px}
+.ledger{border:1px solid var(--line);border-radius:12px;overflow:hidden;background:rgba(13,18,24,.72)}
+.ledger-head,.ledger-row{display:grid;grid-template-columns:minmax(120px,.9fr) minmax(180px,1.2fr) 118px minmax(220px,1.8fr);gap:12px;align-items:start}
+.ledger-head{padding:10px 14px;border-bottom:1px solid var(--line);background:rgba(255,255,255,.018);color:var(--dim);font-size:8.5px;letter-spacing:.13em;text-transform:uppercase}
+.ledger-row{padding:12px 14px;border-bottom:1px solid rgba(35,48,61,.55)}
+.ledger-row:last-child{border-bottom:0}
+.ledger-row:hover{background:rgba(255,255,255,.014)}
+.store-name{color:var(--text);font-size:11px;font-weight:600;line-height:1.4}
+.store-name span{display:block;color:var(--dim);font-size:9px;font-weight:400;margin-top:2px}
+.store-path{color:#c5f7f0;font-size:9.5px;line-height:1.55;overflow-wrap:anywhere}
+.store-format{color:var(--muted);font-size:9.5px;line-height:1.55}
+.store-note{color:var(--muted);font-size:10px;line-height:1.58}
+.scope{display:inline-flex;align-items:center;gap:4px;border:1px solid var(--line);border-radius:999px;padding:2px 6px;font-size:8px;letter-spacing:.06em;text-transform:uppercase;white-space:nowrap}
+.scope.global{color:var(--blue);border-color:rgba(125,196,255,.28);background:rgba(125,196,255,.06)}
+.scope.local{color:var(--green);border-color:rgba(155,227,109,.28);background:rgba(155,227,109,.06)}
+.scope.runtime{color:var(--purple);border-color:rgba(195,168,255,.28);background:rgba(195,168,255,.06)}
+
+.lane-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}
+.lane{border:1px solid var(--line);border-radius:12px;overflow:hidden;background:linear-gradient(180deg,rgba(18,25,33,.9),rgba(11,15,20,.9))}
+.lane-head{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:12px 14px;border-bottom:1px solid var(--line);background:rgba(255,255,255,.012)}
+.lane-head h3{margin:0;font-size:12px;line-height:1.3}
+.lane-kind{color:var(--dim);font-size:8.5px;letter-spacing:.1em;text-transform:uppercase;white-space:nowrap}
+.lane-body{padding:13px 14px}
+.lane-track{display:flex;flex-direction:column;gap:0;position:relative;margin-left:6px}
+.lane-track::before{content:"";position:absolute;left:4px;top:8px;bottom:8px;width:1px;background:linear-gradient(180deg,var(--line),var(--line-bright),var(--line))}
+.lane-event{position:relative;padding:0 0 11px 20px;color:var(--muted);font-size:10.5px;line-height:1.55}
+.lane-event:last-child{padding-bottom:0}
+.lane-event::before{content:"";position:absolute;left:1px;top:5px;width:7px;height:7px;border-radius:50%;background:var(--lc,var(--cyan));box-shadow:0 0 0 3px rgba(8,11,14,.9)}
+.lane-event b{color:var(--text);font-weight:600}
+.lane-note{margin:10px 0 0;padding-top:9px;border-top:1px dashed rgba(35,48,61,.6);color:var(--dim);font-size:9.5px;line-height:1.55}
+.shared-strip{margin-top:16px;border:1px solid var(--line);border-radius:12px;padding:15px;background:rgba(18,25,33,.68)}
+.shared-strip h3{margin:0 0 4px;font-size:12px}
+.shared-strip p{margin:0 0 10px;color:var(--muted);font-size:10.5px;line-height:1.6}
+.shared-pills{display:flex;flex-wrap:wrap;gap:6px}
+.shared-pill{border:1px solid rgba(195,168,255,.24);border-radius:6px;background:rgba(195,168,255,.055);color:#d9c8ff;padding:4px 7px;font-size:9.5px}
+
+.trust-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}
+.boundary{border:1px solid var(--line);border-radius:12px;background:linear-gradient(180deg,rgba(18,25,33,.9),rgba(11,15,20,.9));overflow:hidden}
+.boundary-head{padding:14px 15px;border-bottom:1px solid var(--line);background:rgba(255,255,255,.012)}
+.boundary-label{color:var(--bc,var(--amber));font-size:8.5px;letter-spacing:.13em;text-transform:uppercase;margin-bottom:5px}
+.boundary-head h3{margin:0;font-size:13px;line-height:1.3}
+.boundary-body{padding:14px 15px}
+.boundary-body p{margin:0 0 10px;color:var(--muted);font-size:10.5px;line-height:1.65}
+.boundary-body p:last-child{margin-bottom:0}
+.risk-row{display:flex;flex-wrap:wrap;gap:5px;margin-bottom:10px}
+.risk{display:inline-flex;align-items:center;gap:4px;border:1px solid var(--line);border-radius:999px;padding:2px 6px;color:var(--dim);font-size:8px;letter-spacing:.05em;text-transform:uppercase}
+.risk.hot{color:var(--red);border-color:rgba(255,123,114,.26);background:rgba(255,123,114,.055)}
+.risk.warm{color:var(--amber);border-color:rgba(255,200,107,.26);background:rgba(255,200,107,.05)}
+.risk.cool{color:var(--blue);border-color:rgba(125,196,255,.24);background:rgba(125,196,255,.045)}
+.security-note{margin-top:16px;border:1px solid rgba(255,200,107,.22);border-radius:12px;padding:15px 16px;background:rgba(255,200,107,.035)}
+.security-note h3{margin:0 0 6px;color:var(--amber);font-size:11.5px}
+.security-note p{margin:0;color:var(--muted);font-size:10.5px;line-height:1.7}
+.security-note b{color:var(--text)}
+
+.recovery-list{border:1px solid var(--line);border-radius:12px;overflow:hidden;background:rgba(13,18,24,.72)}
+.failure-row{display:grid;grid-template-columns:minmax(170px,.9fr) minmax(240px,1.4fr) minmax(150px,.8fr);gap:14px;padding:13px 15px;border-bottom:1px solid rgba(35,48,61,.55);align-items:start}
+.failure-row:last-child{border-bottom:0}
+.failure-row:hover{background:rgba(255,255,255,.014)}
+.failure-trigger{color:var(--text);font-size:10.5px;font-weight:600;line-height:1.5}
+.failure-trigger code{display:block;color:var(--dim);font-size:9px;font-weight:400;margin-top:3px;overflow-wrap:anywhere}
+.failure-handling{color:var(--muted);font-size:10px;line-height:1.6}
+.failure-result{color:var(--green);font-size:9.5px;line-height:1.5}
+.failure-result.warn{color:var(--amber)}
+.failure-result.stop{color:var(--red)}
+.failure-result b{display:block;font-size:8.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--dim);margin-bottom:2px}
+
+.build-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
+.build-card{border:1px solid var(--line);border-radius:11px;padding:15px;background:linear-gradient(180deg,rgba(18,25,33,.9),rgba(11,15,20,.9))}
+.build-card h3{margin:0 0 7px;font-size:12px;line-height:1.3}
+.build-card p{margin:0;color:var(--muted);font-size:10.5px;line-height:1.65}
+.build-card .tag{display:inline-block;margin:9px 4px 0 0;border:1px solid var(--line);border-radius:4px;padding:1px 5px;color:var(--dim);font-size:8.5px}
+.matrix{margin-top:14px;border:1px solid var(--line);border-radius:11px;overflow:hidden;background:rgba(13,18,24,.7)}
+.matrix-row{display:grid;grid-template-columns:140px minmax(0,1fr) minmax(170px,1fr);gap:14px;padding:11px 14px;border-bottom:1px solid rgba(35,48,61,.55);font-size:10px;line-height:1.55}
+.matrix-row:last-child{border-bottom:0}
+.matrix-row.head{background:rgba(255,255,255,.018);color:var(--dim);font-size:8.5px;letter-spacing:.12em;text-transform:uppercase}
+.matrix-platform{color:var(--text);font-weight:600}
+.matrix-row span{color:var(--muted)}
+.matrix-row code{color:#c5f7f0;font-size:9.5px}
+
+.recipe-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}
+.recipe{border:1px solid var(--line);border-radius:12px;background:linear-gradient(180deg,rgba(18,25,33,.9),rgba(11,15,20,.9));overflow:hidden}
+.recipe-head{display:flex;align-items:center;gap:10px;padding:13px 15px;border-bottom:1px solid var(--line);background:rgba(255,255,255,.012)}
+.recipe-icon{display:grid;place-items:center;width:27px;height:27px;border:1px solid rgba(82,224,209,.3);border-radius:7px;color:var(--cyan);background:rgba(82,224,209,.06);flex:none}
+.recipe-icon svg{width:13px;height:13px}
+.recipe-head h3{margin:0;font-size:11.5px;line-height:1.3}
+.recipe-body{padding:13px 15px}
+.recipe-body p{margin:0 0 9px;color:var(--muted);font-size:10.5px;line-height:1.65}
+.recipe-body ol{margin:0;padding-left:17px;color:var(--muted);font-size:10px;line-height:1.65}
+.recipe-body li+li{margin-top:3px}
+.recipe-code{display:block;border:1px solid rgba(35,48,61,.68);border-radius:6px;background:rgba(0,0,0,.24);padding:6px 8px;margin-top:6px;color:#c9f7f1;font-size:9px;line-height:1.55;overflow-wrap:anywhere}
+
+.notes-grid{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:14px}
+.note-card{border:1px solid var(--line);border-radius:12px;padding:17px;background:linear-gradient(180deg,rgba(18,25,33,.9),rgba(11,15,20,.9))}
+.note-card h3{margin:0 0 10px;font-size:12.5px}
+.note-card ul{margin:0;padding:0;list-style:none}
+.note-card li{display:flex;gap:8px;padding:6px 0;border-bottom:1px dashed rgba(35,48,61,.55);color:var(--muted);font-size:10.5px;line-height:1.65}
+.note-card li:last-child{border-bottom:0}
+.note-card .mark{color:var(--green);flex:none}
+.note-card.note-risk .mark{color:var(--amber)}
+.note-card b{color:var(--text);font-weight:600}
+
+.footer{padding:34px 0 44px;border-top:1px solid var(--line)}
+.footer-inner{display:flex;align-items:flex-start;justify-content:space-between;gap:24px}
+.footer p{margin:0;color:var(--dim);font-size:10.5px;line-height:1.8}
+.footer .strong{color:var(--muted)}
+.footer-links{display:flex;flex-wrap:wrap;gap:14px;font-size:10.5px}
+.footer-links a{color:var(--muted)}
+.footer-links a:hover{color:var(--cyan)}
+.status{display:inline-flex;align-items:center;gap:6px;color:var(--green);font-size:9.5px;letter-spacing:.1em;text-transform:uppercase}
+
+.reveal{opacity:0;transform:translateY(14px);transition:opacity .55s ease,transform .55s ease}
+.reveal.in{opacity:1;transform:none}
+
+@media(max-width:1100px){
+  .hero-grid{grid-template-columns:1fr;gap:34px}
+  .terminal-card{max-width:740px}
+  .map-grid{grid-template-columns:minmax(0,1fr) 320px}
+  .layer-nodes{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .module-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .flow-rail{grid-template-columns:repeat(3,minmax(0,1fr))}
+  .flow-step:nth-child(3){border-right:0}
+  .flow-step:nth-child(-n+3){border-bottom:1px solid var(--line)}
+  .flow-step:nth-child(3)::after{display:none}
+  .state-top{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .build-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+}
+@media(max-width:960px){
+  .nav{display:none}
+  .menu-toggle{display:block}
+  .nav.open{
+    display:flex;position:absolute;top:66px;left:0;right:0;flex-direction:column;align-items:stretch;
+    max-height:calc(100vh - 66px);overflow-y:auto;
+    padding:10px 20px 15px;background:var(--bg);border-bottom:1px solid var(--line);
+    box-shadow:0 22px 48px rgba(0,0,0,.55);
+  }
+  .nav.open a{padding:10px}
+  .version-pill{display:none}
+  .map-grid{grid-template-columns:1fr}
+  .map-side{border-left:0;border-top:1px solid var(--line)}
+  .inspector-body{max-height:440px}
+  .map-layer{grid-template-columns:110px minmax(0,1fr)}
+  .map-arrow{margin-left:126px}
+  .boot-layout{grid-template-columns:1fr}
+  .boot-list{position:static;flex-direction:row;overflow:auto;padding:7px}
+  .boot-step{min-width:165px}
+  .flow-detail-inner{grid-template-columns:1fr}
+  .flow-copy{border-right:0;border-bottom:1px solid var(--line)}
+  .trust-grid{grid-template-columns:1fr}
+}
+@media(max-width:760px){
+  .wrap{width:calc(100% - 26px)}
+  .hero{padding-top:58px}
+  .section{padding:52px 0}
+  .stats{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .section-head{display:block}
+  .section-desc.right{text-align:left;margin-top:10px}
+  .split,.recipe-grid,.notes-grid{grid-template-columns:1fr}
+  .map-stage{padding:16px 13px}
+  .map-layer{grid-template-columns:1fr;gap:8px;padding:13px 0}
+  .layer-rail{display:flex;flex-wrap:wrap;align-items:baseline;gap:7px;padding:0}
+  .layer-rail p{width:100%}
+  .map-arrow{margin-left:0}
+  .layer-nodes{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .map-toolbar{gap:8px}
+  .search-box{flex-basis:100%}
+  .flow-rail{grid-template-columns:1fr 1fr}
+  .flow-step:nth-child(2n){border-right:0}
+  .flow-step:nth-child(3){border-right:1px solid var(--line)}
+  .flow-step:nth-child(3)::after{display:block}
+  .flow-step:nth-child(4)::after{display:none}
+  .flow-step{border-bottom:1px solid var(--line);min-height:0}
+  .flow-step:nth-last-child(-n+2){border-bottom:0}
+  .module-grid{grid-template-columns:1fr}
+  .state-top{grid-template-columns:1fr}
+  .ledger-head{display:none}
+  .ledger-row{grid-template-columns:1fr 1fr;gap:7px}
+  .store-name{grid-column:1/-1}
+  .store-note{grid-column:1/-1;padding-top:3px}
+  .lane-grid{grid-template-columns:1fr}
+  .failure-row{grid-template-columns:1fr;gap:5px}
+  .failure-result{border-top:1px dashed rgba(35,48,61,.55);padding-top:6px}
+  .build-grid{grid-template-columns:1fr}
+  .matrix-row{grid-template-columns:1fr;gap:4px;padding:10px 12px}
+  .matrix-row.head{display:none}
+  .matrix-platform{font-size:11px}
+  .footer-inner{display:block}
+  .footer-links{margin-top:16px}
+  .detail-facts{grid-template-columns:1fr}
+}
+@media(max-width:440px){
+  body{font-size:14px}
+  .stats{grid-template-columns:1fr}
+  .layer-nodes{grid-template-columns:1fr}
+  .flow-rail{grid-template-columns:1fr}
+  .flow-step{border-right:0!important}
+  .flow-step::after{display:none!important}
+  .flow-step:nth-last-child(-n+2){border-bottom:1px solid var(--line)}
+  .flow-step:last-child{border-bottom:0}
+  .boot-step{min-width:145px}
+  .ledger-row{grid-template-columns:1fr}
+  .store-note{grid-column:auto}
+  .map-legend{display:none}
+  .term-body{font-size:10.5px}
+}
+@media(prefers-reduced-motion:reduce){
+  html{scroll-behavior:auto}
+  *,*::before,*::after{animation-duration:.001ms!important;transition-duration:.001ms!important}
+  .reveal{opacity:1;transform:none}
+}
+</style>
+</head>
+<body>
+<a class="skip" href="#map">Skip to architecture map</a>
+<div class="progress-track" aria-hidden="true"><div class="progress-bar" id="readProgress"></div></div>
+
+<header class="site-header">
+  <div class="wrap header-inner">
+    <a class="brand" href="#top" aria-label="NTC architecture home">
+      <span class="brand-mark">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M4 12h16M4 17h16"/><path d="M8 4v16M16 4v16"/></svg>
+      </span>
+      <span class="brand-text">ntc<small>system architecture</small></span>
+    </a>
+    <nav class="nav" id="nav" aria-label="Page sections">
+      <a href="#map">Map</a>
+      <a href="#boot">Boot</a>
+      <a href="#flow">Flow</a>
+      <a href="#modules">Modules</a>
+      <a href="#state">State</a>
+      <a href="#runtime">Runtime</a>
+      <a href="#trust">Trust</a>
+      <a href="#build">Build</a>
+      <a href="#extend">Extend</a>
+    </nav>
+    <span class="version-pill"><span class="dot"></span>v2.4.7</span>
+    <button class="menu-toggle" id="menuToggle" aria-expanded="false" aria-controls="nav" aria-label="Toggle navigation">
+      <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
+    </button>
+  </div>
+</header>
+
+<main id="top">
+  <section class="hero">
+    <div class="wrap">
+      <div class="hero-grid">
+        <div>
+          <div class="kicker">NTC 2.4.7 · System Design · Architecture</div>
+          <h1>One binary.<br><span class="outline">Layered by design.</span></h1>
+          <p class="hero-lede">
+            NTC is a <strong>shell-first workspace</strong>: a Rust binary and library that combine
+            navigation, aliases, pipelines, editing, reporting, networking, databases and a package
+            manager behind one command surface. This page maps the system behind that surface —
+            its layers, runtime path, ownership rules, trust boundaries and extension seams.
+          </p>
+          <div class="hero-actions">
+            <a class="btn primary" href="#map">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 5h16v4H4zM4 15h16v4H4z"/><path d="M8 9v6M16 9v6"/></svg>
+              Explore the architecture
+            </a>
+            <a class="btn" href="#flow">Trace a command</a>
+          </div>
+        </div>
+        <div class="terminal-card" aria-label="NTC boot trace example">
+          <div class="term-bar"><span class="term-dot"></span><span class="term-dot"></span><span class="term-dot"></span><span class="term-title">ntc — boot trace</span></div>
+          <div class="term-body">
+            <div class="term-line"><span class="ok">01</span> <span class="out">ensure_default_themes()</span></div>
+            <div class="term-line"><span class="ok">02</span> <span class="out">Config::global()</span> <span class="comment"># lazy singleton</span></div>
+            <div class="term-line"><span class="ok">03</span> <span class="out">cli::run_cli()</span> <span class="comment"># route argv</span></div>
+            <div class="term-line"><span class="ok">04</span> <span class="out">Navigator::new()</span> <span class="comment"># cwd + venv</span></div>
+            <div class="term-line"><span class="ok">05</span> <span class="out">build_package_path_entries()</span></div>
+            <div class="term-line"><span class="ok">06</span> <span class="out">rustyline::Editor</span> <span class="comment"># helper + history</span></div>
+            <div class="term-line"><span class="ok">07</span> <span class="out">watcher::start_watcher()</span></div>
+            <div class="term-line"><span class="ok">08</span> <span class="out">spawn_update_check()</span> <span class="comment"># background</span></div>
+            <div class="term-line"><span class="prompt">ntc</span> <span class="path">[ntc]</span><span class="cmd">&gt; </span><span class="caret"></span></div>
+          </div>
+        </div>
+      </div>
+      <div class="stats">
+        <div class="stat"><div class="stat-value">21</div><div class="stat-label">top-level modules</div></div>
+        <div class="stat"><div class="stat-value">5</div><div class="stat-label">architecture layers</div></div>
+        <div class="stat"><div class="stat-value">2</div><div class="stat-label">config scopes</div></div>
+        <div class="stat"><div class="stat-value">1</div><div class="stat-label">binary + library</div></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" id="map">
+    <div class="wrap">
+      <div class="section-head reveal">
+        <div>
+          <div class="section-kicker">01 · Architecture map</div>
+          <h2>Five layers, one command surface.</h2>
+        </div>
+        <p class="section-desc right">
+          NTC keeps interfaces at the edge, orchestration in the shell, domain tools below it,
+          and shared state underneath. Select any block to inspect its responsibility, source
+          root and neighbours.
+        </p>
+      </div>
+      <div class="map-shell reveal">
+        <div class="map-toolbar">
+          <div class="search-box">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="6.5"/><path d="M16 16l4 4"/></svg>
+            <input id="mapSearch" type="search" placeholder="Search layers, modules, source paths…" autocomplete="off" spellcheck="false" aria-label="Search architecture blocks">
+          </div>
+          <span class="toolbar-label">Layer</span>
+          <div class="chips" id="mapChips">
+            <button class="chip active" data-layer="all" style="--chip-color:var(--cyan)"><span class="chip-dot"></span>All</button>
+            <button class="chip" data-layer="entry" style="--chip-color:var(--cyan)">Interfaces</button>
+            <button class="chip" data-layer="core" style="--chip-color:var(--amber)">Orchestration</button>
+            <button class="chip" data-layer="domain" style="--chip-color:var(--green)">Domain</button>
+            <button class="chip" data-layer="shared" style="--chip-color:var(--purple)">Shared</button>
+            <button class="chip" data-layer="platform" style="--chip-color:var(--blue)">Platform</button>
+          </div>
+          <div class="toolbar-spacer"></div>
+          <span class="module-count" id="mapCount">25 blocks</span>
+          <button class="icon-btn" id="mapReset" title="Reset map" aria-label="Reset architecture map">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M4 4v6h6"/><path d="M5.5 9a8 8 0 1 1-1 6"/></svg>
+          </button>
+        </div>
+        <div class="map-grid">
+          <div class="map-stage">
+            <div class="map-layer">
+              <div class="layer-rail">
+                <div class="layer-num">Layer 01</div>
+                <h3>Interfaces</h3>
+                <p>What starts a session or call.</p>
+              </div>
+              <div class="layer-nodes">
+                <button class="arch-node" data-layer="entry" style="--nc:var(--cyan)" data-node="cli"
+                  data-title="CLI Router" data-path="src/main.rs · src/cli/run.rs" data-color="var(--cyan)"
+                  data-summary="The process entry point. It prepares themes and configuration, then routes argv to help, version, upgrade, a one-shot command, a new terminal, or the interactive shell."
+                  data-in="argv, environment variables, current directory" data-out="shell session / one command / process exit"
+                  data-files="src/main.rs|src/cli/run.rs|src/cli/helpers.rs"
+                  data-notes="No arguments enters the shell. NTC_STAY keeps a child shell interactive after a one-shot command.">
+                  <span class="node-type">Entry</span><span class="node-title">CLI router</span><span class="node-sub">argv → shell / one-shot</span>
+                </button>
+                <button class="arch-node" data-layer="entry" style="--nc:var(--cyan)" data-node="shell"
+                  data-title="Interactive Shell" data-path="src/shell/entry.rs" data-color="var(--cyan)"
+                  data-summary="A rustyline REPL with hints, tab cycling, history, heredoc capture, alias expansion and a watcher poll on every turn. It owns the Navigator and passes it through command execution."
+                  data-in="keyboard lines, aliases, heredoc bodies" data-out="commands, prompts, trees, session updates"
+                  data-files="src/shell/entry.rs|src/shell/hinter.rs|src/shell/alias.rs"
+                  data-notes="The prompt is deliberately plain text; ANSI colouring in the prompt breaks rustyline cursor positioning.">
+                  <span class="node-type">Entry</span><span class="node-title">Interactive shell</span><span class="node-sub">rustyline REPL + hints</span>
+                </button>
+                <button class="arch-node" data-layer="entry" style="--nc:var(--cyan)" data-node="editor"
+                  data-title="ntcEditor / TUI" data-path="src/editor/*" data-color="var(--cyan)"
+                  data-summary="A full-screen alternate-screen editor with modes, tabs, syntax highlighting, an embedded PTY terminal, a run panel and per-directory session snapshots."
+                  data-in="key/mouse events, files, terminal output" data-out="saved files, snapshots, run output"
+                  data-files="src/editor/run.rs|src/editor/types.rs|src/editor/terminal.rs|src/editor/editor_config.rs"
+                  data-notes="TerminalGuard restores raw mode, mouse capture and the alternate screen on normal exit, error or panic.">
+                  <span class="node-type">Entry</span><span class="node-title">ntcEditor / TUI</span><span class="node-sub">modes, PTY, run panel</span>
+                </button>
+                <button class="arch-node" data-layer="entry" style="--nc:var(--cyan)" data-node="automation"
+                  data-title="Automation Inputs" data-path="src/script/* · src/ranfile/*" data-color="var(--cyan)"
+                  data-summary="Scripts (.ntc) and NTCRANFILE.toml targets enter through the shell and reuse the same command dispatcher. RANFILE resolves a dependency graph before execution."
+                  data-in=".ntc lines, RANFILE targets, positional args" data-out="expanded command lines"
+                  data-files="src/script/runner.rs|src/script/parser.rs|src/ranfile/runner.rs"
+                  data-notes="Scripts support set, $var interpolation and @ to force a system command. RANFILE detects cycles and missing dependencies.">
+                  <span class="node-type">Entry</span><span class="node-title">Automation inputs</span><span class="node-sub">.ntc · NTCRANFILE.toml</span>
+                </button>
+                <button class="arch-node" data-layer="entry" style="--nc:var(--cyan)" data-node="serve"
+                  data-title="Serve &amp; Embedded Web" data-path="src/shell/commands/serve*.rs" data-color="var(--cyan)"
+                  data-summary="Local HTTP services for file sharing, HTTP serving and chess. The React frontends are embedded into the binary with rust-embed; file uploads land in SQLite plus the config directory."
+                  data-in="HTTP requests, local files, credentials" data-out="static assets, API responses, downloads"
+                  data-files="src/shell/commands/serve.rs|serve_http.rs|serve_chess.rs|ntc_web/dist"
+                  data-notes="The file service accepts up to 10 GB with chunking and optional Basic Auth for API routes.">
+                  <span class="node-type">Entry</span><span class="node-title">Serve &amp; embedded web</span><span class="node-sub">files · HTTP · chess</span>
+                </button>
+              </div>
+            </div>
+            <div class="map-arrow">dispatch and input flow down</div>
+            <div class="map-layer">
+              <div class="layer-rail">
+                <div class="layer-num">Layer 02</div>
+                <h3>Orchestration</h3>
+                <p>How a line becomes a call.</p>
+              </div>
+              <div class="layer-nodes">
+                <button class="arch-node" data-layer="core" style="--nc:var(--amber)" data-node="alias"
+                  data-title="Alias Expansion" data-path="src/shell/alias.rs" data-color="var(--amber)"
+                  data-summary="Expands run aliases and teleport paths across the whole line, including parameter substitution and interactive --select menus. Local aliases overlay global ones."
+                  data-in="raw command line, parameter args" data-out="expanded commands"
+                  data-files="src/shell/alias.rs|src/shell/commands/alias_commands.rs"
+                  data-notes="Templates support $name, ${name:-default}, arrays, $*{} rest capture and call syntax such as ship(prod).">
+                  <span class="node-type">Transform</span><span class="node-title">Alias expansion</span><span class="node-sub">ral · params · @teleport</span>
+                </button>
+                <button class="arch-node" data-layer="core" style="--nc:var(--amber)" data-node="pipeline"
+                  data-title="Pipeline Parser" data-path="src/shell/pipeline.rs" data-color="var(--amber)"
+                  data-summary="Recognises pipes, logical operators and redirections only when they are standalone whitespace-delimited tokens. Captured output is memory-buffered, ANSI-stripped and forwarded."
+                  data-in="expanded command line" data-out="captured output / operator sequence"
+                  data-files="src/shell/pipeline.rs|src/shell/stdin.rs"
+                  data-notes="Supports |, &amp;&amp;, ||, &gt;, &gt;&gt;, &lt;, &lt;&lt; and &lt;&lt;&lt;. Failure uses a side-channel so &amp;&amp; and || see the real status.">
+                  <span class="node-type">Parser</span><span class="node-title">Pipeline parser</span><span class="node-sub">| · &amp;&amp; · || · redirects</span>
+                </button>
+                <button class="arch-node" data-layer="core" style="--nc:var(--amber)" data-node="dispatch"
+                  data-title="Command Registry" data-path="src/shell/commands/mod.rs" data-color="var(--amber)"
+                  data-summary="A central match maps command names and aliases to builtin modules. Unknown commands fall through to the platform shell with the same working directory and piped input."
+                  data-in="single command + args" data-out="builtin result / system process"
+                  data-files="src/shell/commands/mod.rs|src/shell/commands/*.rs"
+                  data-notes="The registry is the widest seam in the system: adding a feature usually means adding a dispatch arm.">
+                  <span class="node-type">Dispatch</span><span class="node-title">Command registry</span><span class="node-sub">builtin match + fallback</span>
+                </button>
+                <button class="arch-node" data-layer="core" style="--nc:var(--amber)" data-node="help"
+                  data-title="Help, Hints &amp; Completion" data-path="src/shell/help.rs · hinter.rs" data-color="var(--amber)"
+                  data-summary="Contextual help intercepts --help at any command depth. The hinter supplies ghost text, tab cycles candidates and understands aliases, paths and local config."
+                  data-in="partial line, cursor position, command tree" data-out="hints, completions, help pages"
+                  data-files="src/shell/help.rs|src/shell/hinter.rs|src/shell/completions/*"
+                  data-notes="Help is resolved before dispatch so a --help flag never creates a file or directory named --help.">
+                  <span class="node-type">Guidance</span><span class="node-title">Help, hints &amp; completion</span><span class="node-sub">ghost text · contextual help</span>
+                </button>
+              </div>
+            </div>
+            <div class="map-arrow">calls into specialised tools</div>
+            <div class="map-layer">
+              <div class="layer-rail">
+                <div class="layer-num">Layer 03</div>
+                <h3>Domain</h3>
+                <p>What NTC actually does.</p>
+              </div>
+              <div class="layer-nodes">
+                <button class="arch-node" data-layer="domain" style="--nc:var(--green)" data-node="nav"
+                  data-title="Navigation &amp; Files" data-path="src/utils/navigator.rs · teleport.rs" data-color="var(--green)"
+                  data-summary="Navigator owns the current directory and synchronises the process CWD. TeleportManager resolves named savepoints and a bounded navigation stack."
+                  data-in="cd / back / drive / @name paths" data-out="new cwd, path resolution, tree views"
+                  data-files="src/utils/navigator.rs|src/utils/teleport.rs|src/shell/commands/nav.rs"
+                  data-notes="go_to canonicalizes, chdirs, re-detects the virtualenv and reloads global config when a local ntconfig.toml appears.">
+                  <span class="node-type">Filesystem</span><span class="node-title">Navigation &amp; files</span><span class="node-sub">cwd · teleports · trees</span>
+                </button>
+                <button class="arch-node" data-layer="domain" style="--nc:var(--green)" data-node="reports"
+                  data-title="Views &amp; Reports" data-path="src/report/*" data-color="var(--green)"
+                  data-summary="Directory inspection and export to TXT, HTML, JSON, Markdown, PDF, DOCX and XLSX. File collection honours ignore/care rules and max depth."
+                  data-in="directory, format, ignore/care state" data-out="terminal view / report file / clipboard text"
+                  data-files="src/report/mod.rs|src/report/html.rs|src/shell/commands/report.rs"
+                  data-notes="Binary formats are excluded on Android via cfg. HTML reports ship their own template and theme toggle.">
+                  <span class="node-type">Content</span><span class="node-title">Views &amp; reports</span><span class="node-sub">7 output formats</span>
+                </button>
+                <button class="arch-node" data-layer="domain" style="--nc:var(--green)" data-node="editing"
+                  data-title="Editor Toolchain" data-path="src/editor/* · src/syntax/*" data-color="var(--green)"
+                  data-summary="Editor modes, rendering, syntax highlighting, templates, recovery and mouse support. An embedded shell runs in a portable PTY inside the editor."
+                  data-in="files, keys, PTY output, themes" data-out="saved files, syntax spans, terminal grid"
+                  data-files="src/editor/modes/*|src/editor/render/*|src/syntax/*"
+                  data-notes="The editor persists snapshots per working directory so tabs from one project do not leak into another.">
+                  <span class="node-type">Editing</span><span class="node-title">Editor toolchain</span><span class="node-sub">modes · render · PTY</span>
+                </button>
+                <button class="arch-node" data-layer="domain" style="--nc:var(--green)" data-node="data"
+                  data-title="Data &amp; Documents" data-path="src/ndb · nsheet · mql · math" data-color="var(--green)"
+                  data-summary="SQLite browsing, spreadsheet parsing, SQL/MQL analysis and a math evaluator. These are independent domain engines surfaced as commands or TUIs."
+                  data-in="database files, sheets, queries, expressions" data-out="tables, parsed values, diagnostics"
+                  data-files="src/ndb/*|src/nsheet/*|src/mql/*|src/math/*"
+                  data-notes="db_aliases live in config; ndb keeps its own history beside the main history file.">
+                  <span class="node-type">Data</span><span class="node-title">Data &amp; documents</span><span class="node-sub">SQLite · sheets · MQL · math</span>
+                </button>
+                <button class="arch-node" data-layer="domain" style="--nc:var(--green)" data-node="network"
+                  data-title="Network &amp; DevOps" data-path="src/nssh · nms · netscan" data-color="var(--green)"
+                  data-summary="SSH/SFTP, network scanning and a music scanner/player. HTTP, DNS, ping, SMTP, QR and downloader commands sit alongside them in the shell."
+                  data-in="hosts, credentials, URLs, interfaces" data-out="remote sessions, scans, media, responses"
+                  data-files="src/nssh/*|src/nms/*|src/netscan.rs|src/shell/commands/serve*.rs"
+                  data-notes="Network commands include first-party clients as well as wrappers around external processes.">
+                  <span class="node-type">Network</span><span class="node-title">Network &amp; DevOps</span><span class="node-sub">SSH · scan · music · HTTP</span>
+                </button>
+                <button class="arch-node" data-layer="domain" style="--nc:var(--green)" data-node="packages"
+                  data-title="Packages, Media &amp; OCR" data-path="src/ntpkg/* · image2doc/*" data-color="var(--green)"
+                  data-summary="A runtime package manager with vendored installer recipes, plus image-to-document conversion with optional OCR. Active package bins are injected into PATH at shell start."
+                  data-in="package names/versions, images" data-out="installed runtimes, generated documents"
+                  data-files="src/ntpkg/*|src/image2doc/*|src/fake/*"
+                  data-notes="image2doc and ocr are default features; image2doc owns the optional image dependency.">
+                  <span class="node-type">Toolchain</span><span class="node-title">Packages, media &amp; OCR</span><span class="node-sub">ntpkg · image2doc · fake</span>
+                </button>
+              </div>
+            </div>
+            <div class="map-arrow">reads and writes shared services</div>
+            <div class="map-layer">
+              <div class="layer-rail">
+                <div class="layer-num">Layer 04</div>
+                <h3>Shared</h3>
+                <p>Cross-cutting runtime services.</p>
+              </div>
+              <div class="layer-nodes">
+                <button class="arch-node" data-layer="shared" style="--nc:var(--purple)" data-node="config"
+                  data-title="Configuration" data-path="src/utils/config/*" data-color="var(--purple)"
+                  data-summary="A process-global Config behind RwLock. Global TOML is loaded once; project-local ntconfig.toml is read on demand for aliases, hints and ignore/care overlays."
+                  data-in="TOML files, command setters" data-out="typed settings, effective ignore/care sets"
+                  data-files="src/utils/config/mod.rs|src/utils/config/globals.rs|src/utils/config/lang/*"
+                  data-notes="Invalid TOML falls back to defaults. Local writes never silently alter the global file.">
+                  <span class="node-type">State</span><span class="node-title">Configuration</span><span class="node-sub">global TOML + local overlay</span>
+                </button>
+                <button class="arch-node" data-layer="shared" style="--nc:var(--purple)" data-node="session"
+                  data-title="Session &amp; Teleports" data-path="src/utils/session.rs · teleport.rs" data-color="var(--purple)"
+                  data-summary="SessionState stores last directory, navigation history and editor tab snapshots. Teleports resolve named paths from global config and maintain a 50-entry stack."
+                  data-in="directory changes, editor snapshots, tp commands" data-out="restored cwd, history, jump targets"
+                  data-files="src/utils/session.rs|src/utils/teleport.rs|src/utils/session.rs"
+                  data-notes="Session snapshots are keyed by normalized working directory and capped at 24 directory buckets.">
+                  <span class="node-type">State</span><span class="node-title">Session &amp; teleports</span><span class="node-sub">cwd · history · snapshots</span>
+                </button>
+                <button class="arch-node" data-layer="shared" style="--nc:var(--purple)" data-node="watcher"
+                  data-title="File Watcher" data-path="src/utils/watcher.rs" data-color="var(--purple)"
+                  data-summary="Ignore-aware recursive watcher with a 400 ms debounce. The shell polls it once per loop, prints a change box, refreshes the tree and may run a configured trigger alias."
+                  data-in="filesystem notify events" data-out="WatchSummary, trigger alias"
+                  data-files="src/utils/watcher.rs|src/shell/entry.rs"
+                  data-notes="The notify callback runs on its own thread; shared state is Arc&lt;AtomicBool&gt;, Arc&lt;Mutex&lt;...&gt;&gt; and config read locks.">
+                  <span class="node-type">Events</span><span class="node-title">File watcher</span><span class="node-sub">debounce · refresh · trigger</span>
+                </button>
+                <button class="arch-node" data-layer="shared" style="--nc:var(--purple)" data-node="presentation"
+                  data-title="Output, Theme &amp; i18n" data-path="src/utils/output · theme · config/lang" data-color="var(--purple)"
+                  data-summary="Shared formatting, colouring, clipboard capture and translated strings. Terminal capability detection controls ANSI colour and ASCII fallback globally."
+                  data-in="messages, theme choice, language pack" data-out="styled terminal output, translated text"
+                  data-files="src/utils/output/*|src/utils/theme/*|src/utils/config/lang/*|src/utils/terminal.rs"
+                  data-notes="NO_COLOR, TERM=dumb and legacy Windows consoles can disable colour and force ASCII icons.">
+                  <span class="node-type">Presentation</span><span class="node-title">Output, theme &amp; i18n</span><span class="node-sub">format · colour · language</span>
+                </button>
+                <button class="arch-node" data-layer="shared" style="--nc:var(--purple)" data-node="search"
+                  data-title="Search, Git &amp; Backups" data-path="src/utils/search · git · backup*" data-color="var(--purple)"
+                  data-summary="Support services used by commands and the editor: fuzzy search, file-type classification, Git prompt/diff helpers and backup manifests/diffs."
+                  data-in="paths, queries, repository state" data-out="matches, prompt fragments, backup records"
+                  data-files="src/utils/search.rs|src/utils/fuzzy.rs|src/utils/git.rs|src/utils/backup*.rs"
+                  data-notes="Git status is cached and invalidated after command execution so the shell prompt stays accurate.">
+                  <span class="node-type">Services</span><span class="node-title">Search, Git &amp; backups</span><span class="node-sub">fuzzy · prompt · manifests</span>
+                </button>
+              </div>
+            </div>
+            <div class="map-arrow">delegates to the operating environment</div>
+            <div class="map-layer">
+              <div class="layer-rail">
+                <div class="layer-num">Layer 05</div>
+                <h3>Platform</h3>
+                <p>External contracts and storage.</p>
+              </div>
+              <div class="layer-nodes">
+                <button class="arch-node" data-layer="platform" style="--nc:var(--blue)" data-node="process"
+                  data-title="OS Shell &amp; Processes" data-path="std::process · portable-pty" data-color="var(--blue)"
+                  data-summary="Unknown commands execute through the platform shell. The editor and terminal panels use a native PTY; Ctrl-C terminates the active child process tree."
+                  data-in="command strings, PTY input, signals" data-out="exit status, stdout/stderr, terminal bytes"
+                  data-files="src/shell/commands/mod.rs|src/editor/terminal.rs"
+                  data-notes="Non-zero child status is surfaced to the pipeline via mark_failed; Windows uses taskkill /T for the tree.">
+                  <span class="node-type">Environment</span><span class="node-title">OS shell &amp; processes</span><span class="node-sub">child processes · PTY · signals</span>
+                </button>
+                <button class="arch-node" data-layer="platform" style="--nc:var(--blue)" data-node="fs"
+                  data-title="Filesystem" data-path="std::fs · walkdir" data-color="var(--blue)"
+                  data-summary="The canonical source of user data: working directories, reports, backups, config, sessions, installed runtimes and served files. NTC stores little hidden state outside the config directory."
+                  data-in="paths, file contents, uploads" data-out="read files, written artifacts, scans"
+                  data-files="src/utils/navigator.rs|src/report/*|src/ntpkg/types.rs"
+                  data-notes="Ignore rules and max-depth limits shape traversal, but NTC is not a sandbox for filesystem access.">
+                  <span class="node-type">Storage</span><span class="node-title">Filesystem</span><span class="node-sub">projects · output · packages</span>
+                </button>
+                <button class="arch-node" data-layer="platform" style="--nc:var(--blue)" data-node="net"
+                  data-title="Network &amp; TLS" data-path="TCP · ureq · lettre · russh" data-color="var(--blue)"
+                  data-summary="Raw TCP listeners for serve, HTTP clients for downloads and APIs, SMTP mail with rustls, and SSH/SFTP. Several tools also delegate to external binaries."
+                  data-in="URLs, hosts, credentials, requests" data-out="HTTP responses, mail, remote shells, transfers"
+                  data-files="Cargo.toml|src/shell/commands/serve*.rs|src/nssh/*|src/shell/commands/http_client.rs"
+                  data-notes="TLS protection depends on the subsystem: mail uses rustls, while the local serve listener is plain HTTP unless fronted by a tunnel.">
+                  <span class="node-type">Boundary</span><span class="node-title">Network &amp; TLS</span><span class="node-sub">HTTP · SMTP · SSH · serve</span>
+                </button>
+                <button class="arch-node" data-layer="platform" style="--nc:var(--blue)" data-node="sqlite"
+                  data-title="SQLite" data-path="rusqlite bundled" data-color="var(--blue)"
+                  data-summary="Bundled SQLite backs ndb exploration and the file-serving index. serve.db stores file metadata and BLOB data; uploads are streamed and chunked before completion."
+                  data-in="SQL, file bytes, manifest rows" data-out="query results, download streams"
+                  data-files="src/ndb/db.rs|src/shell/commands/serve.rs"
+                  data-notes="Bundled SQLite removes a system dependency and keeps database behaviour consistent across platforms.">
+                  <span class="node-type">Storage</span><span class="node-title">SQLite</span><span class="node-sub">ndb · serve index · uploads</span>
+                </button>
+                <button class="arch-node" data-layer="platform" style="--nc:var(--blue)" data-node="assets"
+                  data-title="Embedded Assets" data-path="rust-embed" data-color="var(--blue)"
+                  data-summary="Frontend bundles for the file server and chess app are compiled into the binary. Completions and report templates ship as source assets rather than runtime downloads."
+                  data-in="build-time dist folders" data-out="static HTTP assets, templates"
+                  data-files="ntc_web/dist|ntc_chess_web/*|src/report/html_template/template.html|src/cli/completions/*"
+                  data-notes="Embedding keeps distribution simple, but increases binary size and makes frontend updates part of the Rust build.">
+                  <span class="node-type">Packaging</span><span class="node-title">Embedded assets</span><span class="node-sub">web dist · templates · completions</span>
+                </button>
+              </div>
+            </div>
+          </div>
+          <aside class="map-side" aria-live="polite">
+            <div class="inspector-head">
+              <span class="toolbar-label">Block inspector</span>
+              <span class="dim" id="mapInspectorState">no selection</span>
+            </div>
+            <div class="inspector-body" id="mapInspector">
+              <div class="empty-inspector">
+                <div class="ascii">      ╭────────────╮
+      │  ARCH      │
+      │  LAYERS    │
+      ╰─────┬──────╯
+     ╭──────┴──────╮
+     │  select a   │
+     │    block    │
+     ╰─────────────╯</div>
+                Pick any block to read its role, source root, inputs, outputs and architectural notes.
+                Use the layer chips or search to narrow the map.
+              </div>
+            </div>
+          </aside>
+        </div>
+        <div class="map-legend">
+          <span><span class="legend-bar" style="background:var(--cyan)"></span>interfaces</span>
+          <span><span class="legend-bar" style="background:var(--amber)"></span>orchestration</span>
+          <span><span class="legend-bar" style="background:var(--green)"></span>domain</span>
+          <span><span class="legend-bar" style="background:var(--purple)"></span>shared services</span>
+          <span><span class="legend-bar" style="background:var(--blue)"></span>platform</span>
+          <span>Arrows show the dominant call direction, not every dependency.</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" id="boot">
+    <div class="wrap">
+      <div class="section-head reveal">
+        <div>
+          <div class="section-kicker">02 · Startup path</div>
+          <h2>From process start to prompt.</h2>
+        </div>
+        <p class="section-desc right">
+          Startup is intentionally sequential. Configuration, navigation and the shell are ready
+          before the interactive loop begins; the watcher and update check are optional and fail soft.
+        </p>
+      </div>
+      <div class="boot-layout reveal">
+        <div class="boot-list" id="bootList" role="tablist" aria-label="Startup steps">
+          <button class="boot-step active" data-boot="0" role="tab" aria-selected="true">
+            <span class="boot-num">01</span><span><b>Process bootstrap</b><small>themes + global config</small></span>
+          </button>
+          <button class="boot-step" data-boot="1" role="tab" aria-selected="false">
+            <span class="boot-num">02</span><span><b>CLI routing</b><small>argv decides the mode</small></span>
+          </button>
+          <button class="boot-step" data-boot="2" role="tab" aria-selected="false">
+            <span class="boot-num">03</span><span><b>Navigator state</b><small>cwd, venv, last session</small></span>
+          </button>
+          <button class="boot-step" data-boot="3" role="tab" aria-selected="false">
+            <span class="boot-num">04</span><span><b>Runtime injection</b><small>ntpkg bins into PATH</small></span>
+          </button>
+          <button class="boot-step" data-boot="4" role="tab" aria-selected="false">
+            <span class="boot-num">05</span><span><b>REPL setup</b><small>rustyline + history</small></span>
+          </button>
+          <button class="boot-step" data-boot="5" role="tab" aria-selected="false">
+            <span class="boot-num">06</span><span><b>Background services</b><small>watcher + update check</small></span>
+          </button>
+          <button class="boot-step" data-boot="6" role="tab" aria-selected="false">
+            <span class="boot-num">07</span><span><b>Prompt loop</b><small>read, expand, execute</small></span>
+          </button>
+          <button class="boot-step" data-boot="7" role="tab" aria-selected="false">
+            <span class="boot-num">08</span><span><b>Shutdown</b><small>session + history</small></span>
+          </button>
+        </div>
+        <div class="boot-detail" role="tabpanel" id="bootDetail">
+          <div class="detail-head">
+            <div class="detail-head-top"><span class="detail-kicker" id="bootKicker">Step 01 · preparation</span><span class="detail-phase" id="bootPhase">synchronous</span></div>
+            <h3 class="detail-title" id="bootTitle">Process bootstrap</h3>
+          </div>
+          <div class="detail-body" id="bootBody">
+            <p><code>main</code> first ensures the default themes exist, then touches <code>Config::global()</code>. That lazy singleton loads TOML, detects terminal capabilities, configures colour/ASCII fallback and loads the language pack before the CLI route is chosen.</p>
+            <div class="detail-facts">
+              <div class="detail-fact"><span>Source</span><b>src/main.rs:11</b></div>
+              <div class="detail-fact"><span>State</span><b>Config singleton, theme registry</b></div>
+            </div>
+            <div class="detail-section"><h4>Why it matters</h4><p>Every later layer reads configuration through this singleton. If the TOML is invalid, NTC warns and continues with defaults instead of aborting startup.</p></div>
+            <div class="boot-nav"><button class="mini-btn" data-boot-prev disabled>← Previous</button><span class="step-count">1 / 8</span><button class="mini-btn" data-boot-next>Next →</button></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" id="flow">
+    <div class="wrap">
+      <div class="section-head reveal">
+        <div>
+          <div class="section-kicker">03 · Command lifecycle</div>
+          <h2>A line, traced end to end.</h2>
+        </div>
+        <p class="section-desc right">
+          The shell is the composition point. It expands shortcuts, recognises its own operators,
+          dispatches builtins and hands everything else to the platform shell — then reconciles
+          state before the next prompt.
+        </p>
+      </div>
+      <div class="flow-rail reveal" id="flowRail" role="tablist" aria-label="Command lifecycle stages">
+        <button class="flow-step active" data-flow="0" role="tab" aria-selected="true">
+          <span class="flow-num">01</span>
+          <span class="flow-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M7 9l3 3-3 3M13 15h4"/></svg></span>
+          <b>Read &amp; edit</b><small>rustyline + hints</small>
+        </button>
+        <button class="flow-step" data-flow="1" role="tab" aria-selected="false">
+          <span class="flow-num">02</span>
+          <span class="flow-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M4 7h10M4 12h16M4 17h7"/><path d="M17 7l3 3-3 3"/></svg></span>
+          <b>Preprocess</b><small>heredoc + aliases</small>
+        </button>
+        <button class="flow-step" data-flow="2" role="tab" aria-selected="false">
+          <span class="flow-num">03</span>
+          <span class="flow-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M6 4v6M6 14v6M12 4v10M12 18v2M18 4v2M18 10v10"/><circle cx="6" cy="12" r="2"/><circle cx="12" cy="16" r="2"/><circle cx="18" cy="8" r="2"/></svg></span>
+          <b>Parse</b><small>operators + redirection</small>
+        </button>
+        <button class="flow-step" data-flow="3" role="tab" aria-selected="false">
+          <span class="flow-num">04</span>
+          <span class="flow-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M5 5h6v6H5zM13 13h6v6h-6z"/><path d="M11 8h4v5M9 16h4v-3"/></svg></span>
+          <b>Execute</b><small>builtin or system</small>
+        </button>
+        <button class="flow-step" data-flow="4" role="tab" aria-selected="false">
+          <span class="flow-num">05</span>
+          <span class="flow-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M4 12a8 8 0 0 1 13.7-5.7L20 8"/><path d="M20 4v4h-4"/><path d="M20 12a8 8 0 0 1-13.7 5.7L4 16"/><path d="M4 20v-4h4"/></svg></span>
+          <b>Reconcile</b><small>watcher + git cache</small>
+        </button>
+        <button class="flow-step" data-flow="5" role="tab" aria-selected="false">
+          <span class="flow-num">06</span>
+          <span class="flow-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M5 4h10l4 4v12H5z"/><path d="M9 12h6M9 16h6"/></svg></span>
+          <b>Persist</b><small>session + history</small>
+        </button>
+      </div>
+      <div class="flow-detail reveal">
+        <div class="flow-detail-inner">
+          <div class="flow-copy">
+            <h3 id="flowTitle">Read &amp; edit</h3>
+            <p id="flowText">rustyline renders a plain-text prompt, keeps history and autosuggest in the loop, and routes Tab / Shift-Tab through the custom hinter. The line is trimmed and BOM-cleaned before anything executes.</p>
+          </div>
+          <div class="flow-side">
+            <h4>Mechanism</h4>
+            <p id="flowMechanism"><code>rl.readline()</code> → history entry → NTC helper hints. Ctrl-C prints <code>^C</code> and loops; Ctrl-D exits.</p>
+            <h4>Source</h4>
+            <div class="file-list" id="flowFiles"><span class="file-tag">src/shell/entry.rs</span><span class="file-tag">src/shell/hinter.rs</span></div>
+            <div class="eyebrow-note" id="flowBranches"><span class="flow-branch">empty line → continue</span><span class="flow-branch">Ctrl-C → new prompt</span></div>
+          </div>
+        </div>
+      </div>
+      <div class="split reveal" style="margin-top:18px">
+        <div class="panel">
+          <div class="panel-head"><h3>Operator semantics</h3><span>src/shell/pipeline.rs</span></div>
+          <div class="panel-body">
+            <ul class="panel-list">
+              <li><span class="mark">01</span><span><b>Pipes</b> capture one stage and feed the next. ANSI escapes are stripped before the bytes cross the stage or reach a file.</span></li>
+              <li><span class="mark">02</span><span><b>Logical gates</b> use a dedicated failure marker, not only the return value, so a failed system child is visible to <code>&amp;&amp;</code> and <code>||</code>.</span></li>
+              <li><span class="mark">03</span><span><b>Redirections</b> support file input/output and inline heredocs. Operators must be whitespace-delimited and outside quotes or brackets.</span></li>
+            </ul>
+          </div>
+        </div>
+        <div class="panel">
+          <div class="panel-head"><h3>Output contract</h3><span>what the next layer receives</span></div>
+          <div class="panel-body">
+            <p>Builtins return <code>Result&lt;bool&gt;</code>. The boolean is the shell’s “should exit” signal, not the command’s success bit; failure is carried separately by the pipeline marker.</p>
+            <p>Unknown commands become platform processes. Their working directory is the Navigator’s CWD, inherited environment is preserved, and child status is translated back into the pipeline contract.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" id="modules">
+    <div class="wrap">
+      <div class="section-head reveal">
+        <div>
+          <div class="section-kicker">04 · Module index</div>
+          <h2>Twenty-one top-level modules.</h2>
+        </div>
+        <p class="section-desc right">
+          The library is a set of domain modules around the shell. Filter by family or search a
+          responsibility, command area or source path. Open a card for its architectural role.
+        </p>
+      </div>
+      <div class="module-toolbar reveal">
+        <div class="search-box">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="6.5"/><path d="M16 16l4 4"/></svg>
+          <input id="moduleSearch" type="search" placeholder="Search modules, responsibilities, paths…" autocomplete="off" spellcheck="false" aria-label="Search modules">
+        </div>
+        <div class="chips" id="moduleChips">
+          <button class="chip active" data-group="all" style="--chip-color:var(--cyan)">All</button>
+          <button class="chip" data-group="shell" style="--chip-color:var(--cyan)">Shell</button>
+          <button class="chip" data-group="editor" style="--chip-color:var(--purple)">Editor</button>
+          <button class="chip" data-group="data" style="--chip-color:var(--green)">Data</button>
+          <button class="chip" data-group="network" style="--chip-color:var(--blue)">Network</button>
+          <button class="chip" data-group="automation" style="--chip-color:var(--amber)">Automation</button>
+        </div>
+        <span class="module-count" id="moduleCount">21 modules</span>
+      </div>
+      <div class="module-grid reveal" id="moduleGrid">
+        <article class="module-card" data-group="shell" data-search="cli command line interface argv router main help version upgrade new terminal src cli run">
+          <button class="module-toggle" aria-expanded="false">
+            <div class="module-top"><span class="module-badge" style="--mc:var(--cyan)">shell</span><span class="module-path">src/cli/*</span></div>
+            <h3>cli</h3>
+            <p>Argument routing and the boundary between a one-shot invocation and an interactive session.</p>
+            <span class="module-expand"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 6l6 6-6 6"/></svg>Inspect role</span>
+          </button>
+          <div class="module-more">
+            <p><b>Owns:</b> help/version/upgrade routes, new-terminal spawning, <code>NTC_STAY</code>, and the no-argument shell launch.</p>
+            <p><b>Depends on:</b> <code>shell</code>, configuration, Navigator, platform process helpers. It contains no domain logic of its own.</p>
+          </div>
+        </article>
+        <article class="module-card" data-group="shell" data-search="shell repl rustyline entry commands pipeline alias hints help watcher session src shell">
+          <button class="module-toggle" aria-expanded="false">
+            <div class="module-top"><span class="module-badge" style="--mc:var(--cyan)">shell</span><span class="module-path">src/shell/*</span></div>
+            <h3>shell</h3>
+            <p>The composition centre: REPL, aliases, pipeline, dispatch, help, hints and subprocess execution.</p>
+            <span class="module-expand"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 6l6 6-6 6"/></svg>Inspect role</span>
+          </button>
+          <div class="module-more">
+            <p><b>Owns:</b> the main loop and the command registry. Domain modules are invoked through this layer rather than owning a separate runtime.</p>
+            <p><b>Key seam:</b> <code>execute_command</code> decides pipeline versus single dispatch; <code>execute_single_command</code> owns the builtin match.</p>
+          </div>
+        </article>
+        <article class="module-card" data-group="shell" data-search="utils config navigator teleport watcher session search fuzzy git backup output theme terminal filetype explorer src utils">
+          <button class="module-toggle" aria-expanded="false">
+            <div class="module-top"><span class="module-badge" style="--mc:var(--cyan)">shared</span><span class="module-path">src/utils/*</span></div>
+            <h3>utils</h3>
+            <p>Shared services used by nearly every other module: config, state, files, output, search, theme and backups.</p>
+            <span class="module-expand"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 6l6 6-6 6"/></svg>Inspect role</span>
+          </button>
+          <div class="module-more">
+            <p><b>Contains:</b> <code>config</code>, <code>navigator</code>, <code>teleport</code>, <code>watcher</code>, <code>session</code>, <code>search</code>, <code>fuzzy</code>, <code>git</code>, <code>backup*</code>, <code>output</code>, <code>theme</code>, <code>terminal</code> and file classification.</p>
+            <p><b>Compatibility:</b> lib.rs re-exports these modules at the crate root so older <code>crate::config</code> paths still work.</p>
+          </div>
+        </article>
+
+        <article class="module-card" data-group="editor" data-search="editor tui modes render tabs undo search terminal pty session ne src editor">
+          <button class="module-toggle" aria-expanded="false">
+            <div class="module-top"><span class="module-badge" style="--mc:var(--purple)">editor</span><span class="module-path">src/editor/*</span></div>
+            <h3>editor</h3>
+            <p>Full-screen editor with modal command handling, tabs, undo, search, PTY terminal and run panel.</p>
+            <span class="module-expand"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 6l6 6-6 6"/></svg>Inspect role</span>
+          </button>
+          <div class="module-more">
+            <p><b>Architecture:</b> a central <code>Editor</code> state object is split into cursor, search, scroll, sidebar, syntax, run and terminal sub-state. Mode handlers transform events into edits.</p>
+            <p><b>Durability:</b> snapshots are saved every 30 seconds by default and restored per directory for up to 24 hours.</p>
+          </div>
+        </article>
+        <article class="module-card" data-group="editor" data-search="syntax highlighter language token span incremental src syntax">
+          <button class="module-toggle" aria-expanded="false">
+            <div class="module-top"><span class="module-badge" style="--mc:var(--purple)">editor</span><span class="module-path">src/syntax/*</span></div>
+            <h3>syntax</h3>
+            <p>Language detection and syntax spans for the editor, designed to invalidate and refresh selectively.</p>
+            <span class="module-expand"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 6l6 6-6 6"/></svg>Inspect role</span>
+          </button>
+          <div class="module-more">
+            <p><b>Owns:</b> language lookup, token classification and the highlighter cache. Theme changes invalidate all spans so colour updates apply immediately.</p>
+            <p><b>Used by:</b> editor rendering and any preview surface that needs consistent highlighting.</p>
+          </div>
+        </article>
+        <article class="module-card" data-group="editor" data-search="nfe file explorer image render kitty sixel events file operations src nfe">
+          <button class="module-toggle" aria-expanded="false">
+            <div class="module-top"><span class="module-badge" style="--mc:var(--purple)">editor</span><span class="module-path">src/nfe/*</span></div>
+            <h3>nfe</h3>
+            <p>File explorer and image-aware rendering surface, including Kitty and Sixel protocol paths.</p>
+            <span class="module-expand"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 6l6 6-6 6"/></svg>Inspect role</span>
+          </button>
+          <div class="module-more">
+            <p><b>Owns:</b> explorer state, file operations, image decoding and terminal-specific image protocols.</p>
+            <p><b>Interfaces:</b> launched from the shell or editor; shares render conventions with the editor.</p>
+          </div>
+        </article>
+        <article class="module-card" data-group="editor" data-search="lsp language server protocol diagnostics completion hover src lsp">
+          <button class="module-toggle" aria-expanded="false">
+            <div class="module-top"><span class="module-badge" style="--mc:var(--purple)">editor</span><span class="module-path">src/lsp/mod.rs</span></div>
+            <h3>lsp</h3>
+            <p>Language-server integration for editor diagnostics and language intelligence.</p>
+            <span class="module-expand"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 6l6 6-6 6"/></svg>Inspect role</span>
+          </button>
+          <div class="module-more">
+            <p><b>Boundary:</b> spawns external language servers and translates protocol messages into editor-facing state.</p>
+            <p><b>Failure mode:</b> dependent on discovered executables and project configuration; unavailable servers should degrade rather than block editing.</p>
+          </div>
+        </article>
+        <article class="module-card" data-group="editor" data-search="tutorial guide steps engine render onboarding help src tutorial">
+          <button class="module-toggle" aria-expanded="false">
+            <div class="module-top"><span class="module-badge" style="--mc:var(--purple)">editor</span><span class="module-path">src/tutorial/*</span></div>
+            <h3>tutorial</h3>
+            <p>Guided onboarding content rendered through the shell/editor experience.</p>
+            <span class="module-expand"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 6l6 6-6 6"/></svg>Inspect role</span>
+          </button>
+          <div class="module-more">
+            <p><b>Owns:</b> step definitions, rendering and tutorial progression. Exposed through <code>tutorial</code> / <code>guide</code>.</p>
+            <p><b>Role:</b> product education is a first-class subsystem, not scattered help text.</p>
+          </div>
+        </article>
+
+        <article class="module-card" data-group="data" data-search="ndb sqlite database query table tui dbal history src ndb">
+          <button class="module-toggle" aria-expanded="false">
+            <div class="module-top"><span class="module-badge" style="--mc:var(--green)">data</span><span class="module-path">src/ndb/*</span></div>
+            <h3>ndb</h3>
+            <p>SQLite database browser with a dedicated shell, saved queries and tabular rendering.</p>
+            <span class="module-expand"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 6l6 6-6 6"/></svg>Inspect role</span>
+          </button>
+          <div class="module-more">
+            <p><b>Owns:</b> database opening, query execution, aliases (<code>dbal</code>) and ndb-specific history.</p>
+            <p><b>Storage:</b> queries live in global/local config; database files remain user-owned filesystem objects.</p>
+          </div>
+        </article>
+        <article class="module-card" data-group="data" data-search="nsheet spreadsheet csv excel parse table sheet src nsheet">
+          <button class="module-toggle" aria-expanded="false">
+            <div class="module-top"><span class="module-badge" style="--mc:var(--green)">data</span><span class="module-path">src/nsheet/*</span></div>
+            <h3>nsheet</h3>
+            <p>Spreadsheet parsing and tabular display for sheet-like files.</p>
+            <span class="module-expand"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 6l6 6-6 6"/></svg>Inspect role</span>
+          </button>
+          <div class="module-more">
+            <p><b>Owns:</b> sheet parsing and table presentation. Rendered as a command/TUI surface.</p>
+            <p><b>Composition:</b> shares formatting expectations with <code>ndb</code> and report generators.</p>
+          </div>
+        </article>
+        <article class="module-card" data-group="data" data-search="mql sql lexicon dialect extract hover check analysis src mql">
+          <button class="module-toggle" aria-expanded="false">
+            <div class="module-top"><span class="module-badge" style="--mc:var(--green)">data</span><span class="module-path">src/mql/*</span></div>
+            <h3>mql</h3>
+            <p>SQL/MQL lexicon, extraction, diagnostics and hover support.</p>
+            <span class="module-expand"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 6l6 6-6 6"/></svg>Inspect role</span>
+          </button>
+          <div class="module-more">
+            <p><b>Owns:</b> dialect definitions, token extraction, validation and hover explanations.</p>
+            <p><b>Used by:</b> editor query modes and any SQL-aware preview surface.</p>
+          </div>
+        </article>
+        <article class="module-card" data-group="data" data-search="math expression parser ast eval builtin function src math">
+          <button class="module-toggle" aria-expanded="false">
+            <div class="module-top"><span class="module-badge" style="--mc:var(--green)">data</span><span class="module-path">src/math/*</span></div>
+            <h3>math</h3>
+            <p>Expression tokenizer, parser, checker and evaluator with configurable functions.</p>
+            <span class="module-expand"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 6l6 6-6 6"/></svg>Inspect role</span>
+          </button>
+          <div class="module-more">
+            <p><b>Pipeline:</b> source expression → tokens → AST → checks → evaluated value. Custom functions are stored in config.</p>
+            <p><b>Surfaces:</b> the <code>math</code> command and alias parameter expressions.</p>
+          </div>
+        </article>
+        <article class="module-card" data-group="data" data-search="report txt html json markdown pdf docx xlsx export directory src report">
+          <button class="module-toggle" aria-expanded="false">
+            <div class="module-top"><span class="module-badge" style="--mc:var(--green)">data</span><span class="module-path">src/report/*</span></div>
+            <h3>report</h3>
+            <p>Directory-to-document pipeline with seven output formats and a shared file collector.</p>
+            <span class="module-expand"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 6l6 6-6 6"/></svg>Inspect role</span>
+          </button>
+          <div class="module-more">
+            <p><b>Owns:</b> file walking, supported/unsupported classification and per-format generators.</p>
+            <p><b>Constraints:</b> PDF, DOCX and XLSX generators are excluded on Android by cfg; binary reports cannot be copied as text.</p>
+          </div>
+        </article>
+        <article class="module-card" data-group="data" data-search="image2doc image ocr ascii classify analyze narrative formats html json md txt src image2doc">
+          <button class="module-toggle" aria-expanded="false">
+            <div class="module-top"><span class="module-badge" style="--mc:var(--green)">data</span><span class="module-path">src/image2doc/*</span></div>
+            <h3>image2doc</h3>
+            <p>Image analysis, OCR and document generation in text, Markdown, HTML and JSON formats.</p>
+            <span class="module-expand"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 6l6 6-6 6"/></svg>Inspect role</span>
+          </button>
+          <div class="module-more">
+            <p><b>Owns:</b> conversion pipeline, classification, colour/layout analysis, ASCII rendering and optional OCR.</p>
+            <p><b>Features:</b> <code>image2doc</code> gates the <code>image</code> dependency; <code>ocr</code> is a separate default feature.</p>
+          </div>
+        </article>
+        <article class="module-card" data-group="data" data-search="fake data generator rng locale group format column src fake">
+          <button class="module-toggle" aria-expanded="false">
+            <div class="module-top"><span class="module-badge" style="--mc:var(--green)">data</span><span class="module-path">src/fake/*</span></div>
+            <h3>fake</h3>
+            <p>Deterministic-style test data generation with saved column groups and locale-aware values.</p>
+            <span class="module-expand"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 6l6 6-6 6"/></svg>Inspect role</span>
+          </button>
+          <div class="module-more">
+            <p><b>Owns:</b> generators, RNG, locale data, group definitions and output formatting.</p>
+            <p><b>Storage:</b> saved groups live in global config as ordered <code>FakeColumn</code> lists.</p>
+          </div>
+        </article>
+
+        <article class="module-card" data-group="network" data-search="nssh ssh sftp remote keys scan store session src nssh">
+          <button class="module-toggle" aria-expanded="false">
+            <div class="module-top"><span class="module-badge" style="--mc:var(--blue)">network</span><span class="module-path">src/nssh/*</span></div>
+            <h3>nssh</h3>
+            <p>SSH and SFTP sessions with host scanning, key handling and session storage.</p>
+            <span class="module-expand"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 6l6 6-6 6"/></svg>Inspect role</span>
+          </button>
+          <div class="module-more">
+            <p><b>Owns:</b> connection setup, remote shell/transfer flows and local session records.</p>
+            <p><b>Boundary:</b> uses <code>russh</code> / <code>russh-sftp</code>; credentials and host policy are security-sensitive inputs.</p>
+          </div>
+        </article>
+        <article class="module-card" data-group="network" data-search="nms music player scan audio rodio tui library src nms">
+          <button class="module-toggle" aria-expanded="false">
+            <div class="module-top"><span class="module-badge" style="--mc:var(--blue)">network</span><span class="module-path">src/nms/*</span></div>
+            <h3>nms</h3>
+            <p>Music library scan, playback and TUI controls built on rodio.</p>
+            <span class="module-expand"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 6l6 6-6 6"/></svg>Inspect role</span>
+          </button>
+          <div class="module-more">
+            <p><b>Owns:</b> library scanning, player state and terminal UI. Audio output is a platform resource, not a shell concern.</p>
+            <p><b>Relevance:</b> demonstrates that NTC’s module boundary is domain-based, not “terminal-only”.</p>
+          </div>
+        </article>
+        <article class="module-card" data-group="network" data-search="netscan network scan ports interface discovery src netscan">
+          <button class="module-toggle" aria-expanded="false">
+            <div class="module-top"><span class="module-badge" style="--mc:var(--blue)">network</span><span class="module-path">src/netscan.rs</span></div>
+            <h3>netscan</h3>
+            <p>Network and port scanning primitives exposed through shell commands.</p>
+            <span class="module-expand"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 6l6 6-6 6"/></svg>Inspect role</span>
+          </button>
+          <div class="module-more">
+            <p><b>Owns:</b> scan orchestration and result classification. Related commands live in shell command modules.</p>
+            <p><b>Safety:</b> scan targets and rates are operator-controlled; the binary does not add an authorization layer.</p>
+          </div>
+        </article>
+        <article class="module-card" data-group="network" data-search="ntpkg package manager runtime install uninstall manifest download installers path src ntpkg">
+          <button class="module-toggle" aria-expanded="false">
+            <div class="module-top"><span class="module-badge" style="--mc:var(--blue)">network</span><span class="module-path">src/ntpkg/*</span></div>
+            <h3>ntpkg</h3>
+            <p>Vendored runtime package manager with download, archive extraction and per-language installers.</p>
+            <span class="module-expand"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 6l6 6-6 6"/></svg>Inspect role</span>
+          </button>
+          <div class="module-more">
+            <p><b>Owns:</b> sources, downloads, archive handling, installer recipes and the active-version manifest.</p>
+            <p><b>Runtime effect:</b> the shell prepends active package binary directories to <code>PATH</code> before the REPL starts.</p>
+          </div>
+        </article>
+        <article class="module-card" data-group="automation" data-search="ranfile ntcbuild targets dependencies topological vars ran src ranfile">
+          <button class="module-toggle" aria-expanded="false">
+            <div class="module-top"><span class="module-badge" style="--mc:var(--amber)">automation</span><span class="module-path">src/ranfile/*</span></div>
+            <h3>ranfile</h3>
+            <p>Project task graph parsed from NTCRANFILE.toml, resolved topologically before execution.</p>
+            <span class="module-expand"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 6l6 6-6 6"/></svg>Inspect role</span>
+          </button>
+          <div class="module-more">
+            <p><b>Owns:</b> target parsing, dependency resolution, cycle detection and <code>$(VAR)</code> expansion.</p>
+            <p><b>Integration:</b> resolves a target list, then calls back into the shell executor for each command.</p>
+          </div>
+        </article>
+        <article class="module-card" data-group="automation" data-search="script ntc automation parser interp variables args runner scr src script">
+          <button class="module-toggle" aria-expanded="false">
+            <div class="module-top"><span class="module-badge" style="--mc:var(--amber)">automation</span><span class="module-path">src/script/*</span></div>
+            <h3>script</h3>
+            <p>Line-oriented .ntc automation with variables, positional arguments and failure policy.</p>
+            <span class="module-expand"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 6l6 6-6 6"/></svg>Inspect role</span>
+          </button>
+          <div class="module-more">
+            <p><b>Owns:</b> parsing, interpolation and execution policy. Stops on the first failed command unless continue-on-error is requested.</p>
+            <p><b>Power:</b> every script line is a shell command, so script trust is equivalent to shell trust.</p>
+          </div>
+        </article>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" id="state">
+    <div class="wrap">
+      <div class="section-head reveal">
+        <div>
+          <div class="section-kicker">05 · State &amp; persistence</div>
+          <h2>Who owns what, and where it lives.</h2>
+        </div>
+        <p class="section-desc right">
+          NTC separates process-global runtime state from per-project configuration and durable
+          files. Most state is either a singleton, a Navigator field, or a plain file on disk.
+        </p>
+      </div>
+      <div class="state-top reveal">
+        <div class="state-card">
+          <div class="state-card-top"><h3>Config</h3><span class="state-type">global RwLock</span></div>
+          <p>A single typed configuration value shared by all modules. Reads clone fields; writes take the write lock, mutate and save.</p>
+          <span class="owner"><code>Config::read_global()</code> / <code>write_global()</code></span>
+        </div>
+        <div class="state-card">
+          <div class="state-card-top"><h3>Session</h3><span class="state-type">global RwLock</span></div>
+          <p>Last directory, nav stack and editor snapshots. Corrupt files load as an empty session instead of breaking startup.</p>
+          <span class="owner"><code>SessionState::global()</code> — max 24 dir buckets</span>
+        </div>
+        <div class="state-card">
+          <div class="state-card-top"><h3>Navigator</h3><span class="state-type">owned value</span></div>
+          <p>The shell owns the Navigator and passes <code>&amp;mut</code> through dispatch. Its CWD is kept in sync with the process working directory.</p>
+          <span class="owner">Passed to every command; not a global singleton</span>
+        </div>
+        <div class="state-card">
+          <div class="state-card-top"><h3>Watcher</h3><span class="state-type">Arc handle</span></div>
+          <p>The shell owns an optional watcher handle. The notify callback owns its own thread and writes into shared atomics/mutexes.</p>
+          <span class="owner"><code>Option&lt;Arc&lt;WatcherHandle&gt;&gt;</code></span>
+        </div>
+        <div class="state-card">
+          <div class="state-card-top"><h3>Pipeline</h3><span class="state-type">static side-channel</span></div>
+          <p>Failure state, quiet mode and heredoc bodies are process-level statics because pipeline stages call back into the same dispatcher.</p>
+          <span class="owner"><code>mark_failed()</code>, <code>is_quiet()</code>, heredoc supply</span>
+        </div>
+        <div class="state-card">
+          <div class="state-card-top"><h3>Editor</h3><span class="state-type">owned state tree</span></div>
+          <p>Buffers, cursor, modes, scroll, sidebar, syntax, terminal and run output all live inside the editor instance.</p>
+          <span class="owner">Snapshots are the only state that crosses process lifetime</span>
+        </div>
+      </div>
+      <div class="ledger reveal">
+        <div class="ledger-head"><span>Store</span><span>Location</span><span>Format</span><span>Ownership and behaviour</span></div>
+        <div class="ledger-row">
+          <div class="store-name">Global config<span>config.toml</span></div>
+          <div class="store-path">&lt;config_dir&gt;/ntc/config.toml</div>
+          <div class="store-format"><span class="scope global">global</span><br>TOML</div>
+          <div class="store-note">Settings, aliases, teleports, hints, fake groups, language, serve defaults and API keys. Invalid TOML warns and falls back to defaults.</div>
+        </div>
+        <div class="ledger-row">
+          <div class="store-name">Editor config<span>editor.toml</span></div>
+          <div class="store-path">&lt;config_dir&gt;/ntc/editor.toml</div>
+          <div class="store-format"><span class="scope global">global</span><br>TOML</div>
+          <div class="store-note">Tab size, undo depth, poll rate, session auto-save, max tabs and terminal/mouse preferences.</div>
+        </div>
+        <div class="ledger-row">
+          <div class="store-name">Session state<span>session.toml</span></div>
+          <div class="store-path">&lt;config_dir&gt;/ntc/session.toml</div>
+          <div class="store-format"><span class="scope runtime">runtime</span><br>TOML</div>
+          <div class="store-note">Last directory, teleport navigation stack and editor tab snapshots. Snapshots are scoped by normalized CWD and pruned to 24 buckets.</div>
+        </div>
+        <div class="ledger-row">
+          <div class="store-name">Shell history<span>ntc_history.txt</span></div>
+          <div class="store-path">&lt;config_dir&gt;/ntc/ntc_history.txt</div>
+          <div class="store-format"><span class="scope runtime">runtime</span><br>plain text</div>
+          <div class="store-note">Optional and configurable. Loaded before the REPL and saved on exit when history is enabled.</div>
+        </div>
+        <div class="ledger-row">
+          <div class="store-name">Served files index<span>serve.db</span></div>
+          <div class="store-path">&lt;config_dir&gt;/ntc/serve.db</div>
+          <div class="store-format"><span class="scope runtime">runtime</span><br>SQLite</div>
+          <div class="store-note">File metadata and optional BLOB data. Upload staging lives under <code>serve/files</code> and <code>serve/chunks</code>.</div>
+        </div>
+        <div class="ledger-row">
+          <div class="store-name">Package manifest<span>packages.toml</span></div>
+          <div class="store-path">&lt;config_dir&gt;/ntc/packages/packages.toml</div>
+          <div class="store-format"><span class="scope global">global</span><br>TOML</div>
+          <div class="store-note">Installed versions and the active version per runtime. Actual binaries live under <code>packages/&lt;name&gt;/&lt;version&gt;</code>.</div>
+        </div>
+        <div class="ledger-row">
+          <div class="store-name">Project config<span>ntconfig.toml</span></div>
+          <div class="store-path">&lt;project&gt;/ntconfig.toml</div>
+          <div class="store-format"><span class="scope local">local</span><br>TOML</div>
+          <div class="store-note">Ignore/care rules, aliases, hint specs and DB aliases. Read on demand and layered over global config; never merged into the global struct.</div>
+        </div>
+        <div class="ledger-row">
+          <div class="store-name">Project tasks<span>NTCRANFILE.toml</span></div>
+          <div class="store-path">&lt;project&gt;/NTCRANFILE.toml</div>
+          <div class="store-format"><span class="scope local">local</span><br>TOML</div>
+          <div class="store-note">Named targets, dependency lists and command templates. Parsed per run; no daemon or cache.</div>
+        </div>
+        <div class="ledger-row">
+          <div class="store-name">Automation scripts<span>*.ntc</span></div>
+          <div class="store-path">&lt;project&gt;/*.ntc</div>
+          <div class="store-format"><span class="scope local">local</span><br>plain text</div>
+          <div class="store-note">Line-oriented commands with variables and arguments. Executed in-process through the shell dispatcher.</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" id="runtime">
+    <div class="wrap">
+      <div class="section-head reveal">
+        <div>
+          <div class="section-kicker">06 · Runtime model</div>
+          <h2>Concurrency without a central reactor.</h2>
+        </div>
+        <p class="section-desc right">
+          The shell and editor are event loops, not async services. Tokio is available for
+          subsystems that need it; the rest of the runtime uses threads, channels, atomics and
+          short-lived locks around explicit shared state.
+        </p>
+      </div>
+      <div class="lane-grid reveal">
+        <div class="lane">
+          <div class="lane-head"><h3>Shell main loop</h3><span class="lane-kind">main thread</span></div>
+          <div class="lane-body">
+            <div class="lane-track" style="--lc:var(--cyan)">
+              <div class="lane-event"><b>Poll watcher</b> — drain a debounced summary if one is ready.</div>
+              <div class="lane-event"><b>Build prompt</b> — directory, watcher marker, Git fragment, venv prefix.</div>
+              <div class="lane-event"><b>Read line</b> — rustyline blocks for input while keeping hints/history.</div>
+              <div class="lane-event"><b>Expand + execute</b> — same thread runs builtins or waits for a child process.</div>
+              <div class="lane-event"><b>Reconcile</b> — update watcher path, invalidate Git cache.</div>
+            </div>
+            <p class="lane-note">No command runs concurrently with another shell command. Background services report through polling or configured triggers.</p>
+          </div>
+        </div>
+        <div class="lane">
+          <div class="lane-head"><h3>Watcher callback</h3><span class="lane-kind">notify thread</span></div>
+          <div class="lane-body">
+            <div class="lane-track" style="--lc:var(--purple)">
+              <div class="lane-event"><b>Receive event</b> from the platform watcher.</div>
+              <div class="lane-event"><b>Filter</b> ignored directory segments and non-mutating event kinds.</div>
+              <div class="lane-event"><b>Buffer</b> pending events behind a mutex; stamp the last event time.</div>
+              <div class="lane-event"><b>Signal</b> an <code>AtomicBool</code> so the shell’s fast path can skip polling work.</div>
+            </div>
+            <p class="lane-note">The 400 ms debounce is enforced at poll time on the shell thread. The callback never renders or runs aliases.</p>
+          </div>
+        </div>
+        <div class="lane">
+          <div class="lane-head"><h3>Update checker</h3><span class="lane-kind">background thread</span></div>
+          <div class="lane-body">
+            <div class="lane-track" style="--lc:var(--green)">
+              <div class="lane-event"><b>Gates</b> — environment flag, config setting, 24-hour throttle.</div>
+              <div class="lane-event"><b>Fetch</b> — check the latest release over the network.</div>
+              <div class="lane-event"><b>Report</b> — print a notice only when a newer version exists.</div>
+              <div class="lane-event"><b>Fail silently</b> — no internet or request failure never blocks startup.</div>
+            </div>
+            <p class="lane-note">This is intentionally best-effort. Network availability is not part of shell correctness.</p>
+          </div>
+        </div>
+        <div class="lane">
+          <div class="lane-head"><h3>Editor + PTY</h3><span class="lane-kind">main + reader threads</span></div>
+          <div class="lane-body">
+            <div class="lane-track" style="--lc:var(--blue)">
+              <div class="lane-event"><b>Event poll</b> — crossterm keys, mouse and resize at the configured rate.</div>
+              <div class="lane-event"><b>PTY spawn</b> — portable-pty creates the child and a reader thread forwards bytes.</div>
+              <div class="lane-event"><b>Parse output</b> — vte builds the terminal grid and alternate-screen state.</div>
+              <div class="lane-event"><b>Auto-save</b> — snapshot the editor state on the configured interval.</div>
+            </div>
+            <p class="lane-note">The embedded shell receives <code>NTC_IN_EDITOR=1</code>, so it keeps the PTY’s CWD and never overwrites the outer session directory.</p>
+          </div>
+        </div>
+        <div class="lane">
+          <div class="lane-head"><h3>Serve accept loop</h3><span class="lane-kind">main + connection threads</span></div>
+          <div class="lane-body">
+            <div class="lane-track" style="--lc:var(--amber)">
+              <div class="lane-event"><b>Bind listener</b> — port and bind address come from config defaults.</div>
+              <div class="lane-event"><b>Accept</b> — non-blocking loop checks a shutdown flag every 200 ms.</div>
+              <div class="lane-event"><b>Spawn</b> — each connection runs on its own thread with cloned DB/auth handles.</div>
+              <div class="lane-event"><b>Share state</b> — SQLite access is serialized behind a <code>Mutex&lt;Connection&gt;</code>.</div>
+            </div>
+            <p class="lane-note">File and HTTP services use the same thread-per-connection shape. Chess service routes have their own connection workers.</p>
+          </div>
+        </div>
+        <div class="lane">
+          <div class="lane-head"><h3>Ctrl-C handler</h3><span class="lane-kind">signal callback</span></div>
+          <div class="lane-body">
+            <div class="lane-track" style="--lc:var(--red)">
+              <div class="lane-event"><b>Read child PID</b> from a process-wide atomic.</div>
+              <div class="lane-event"><b>Terminate tree</b> — <code>taskkill /F /T</code> on Windows, <code>kill -TERM</code> elsewhere.</div>
+              <div class="lane-event"><b>Set shutdown flags</b> registered by long-running services.</div>
+              <div class="lane-event"><b>Return control</b> to the shell or stop the serve loop.</div>
+            </div>
+            <p class="lane-note">Installed once through an atomic guard. Flags are registered and unregistered around long-running commands.</p>
+          </div>
+        </div>
+      </div>
+      <div class="shared-strip reveal">
+        <h3>Shared-state contract</h3>
+        <p>Cross-thread coordination is deliberately small and explicit. Most domain modules never see these primitives directly.</p>
+        <div class="shared-pills">
+          <span class="shared-pill">Config: std::sync::RwLock</span>
+          <span class="shared-pill">Session: std::sync::RwLock</span>
+          <span class="shared-pill">Watcher: Arc + AtomicBool + Mutex</span>
+          <span class="shared-pill">Serve DB: Arc&lt;Mutex&lt;Connection&gt;&gt;</span>
+          <span class="shared-pill">Child PID: AtomicU32</span>
+          <span class="shared-pill">Shutdown: Mutex&lt;Vec&lt;Arc&lt;AtomicBool&gt;&gt;&gt;</span>
+          <span class="shared-pill">Pipeline: process statics</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" id="trust">
+    <div class="wrap">
+      <div class="section-head reveal">
+        <div>
+          <div class="section-kicker">07 · Trust boundaries</div>
+          <h2>Powerful by default, not sandboxed.</h2>
+        </div>
+        <p class="section-desc right">
+          NTC is a local developer tool. It assumes the operator trusts the code they run and the
+          projects they open. The architecture reduces accidental failure, but it does not claim
+          OS-level isolation between commands, scripts, plugins or served content.
+        </p>
+      </div>
+      <div class="trust-grid reveal">
+        <div class="boundary" style="--bc:var(--red)">
+          <div class="boundary-head">
+            <div class="boundary-label">Execution authority</div>
+            <h3>Everything runs as your user</h3>
+          </div>
+          <div class="boundary-body">
+            <div class="risk-row"><span class="risk hot">no sandbox</span><span class="risk warm">same environment</span><span class="risk cool">child tree kill</span></div>
+            <p>Builtins, aliases, <code>.ntc</code> scripts and NTCRANFILE targets execute in-process or through the platform shell with the user’s filesystem rights and environment.</p>
+            <p><b>Controls:</b> explicit fallback path, failure side-channel, and an active-child PID used by Ctrl-C. <b>Residual:</b> a malicious command or script has the same authority as NTC itself.</p>
+          </div>
+        </div>
+        <div class="boundary" style="--bc:var(--amber)">
+          <div class="boundary-head">
+            <div class="boundary-label">Filesystem policy</div>
+            <h3>Ignore rules are guidance, not access control</h3>
+          </div>
+          <div class="boundary-body">
+            <div class="risk-row"><span class="risk warm">advisory rules</span><span class="risk cool">OS permissions</span></div>
+            <p><code>ntconfig.toml</code> controls what search, tree, scan and report surfaces should skip or care about. Those rules shape tooling; they do not prevent a direct path from being read or written.</p>
+            <p>Actual enforcement is whatever the operating system grants the current account. Treat a project you open as input you trust.</p>
+          </div>
+        </div>
+        <div class="boundary" style="--bc:var(--amber)">
+          <div class="boundary-head">
+            <div class="boundary-label">Credentials</div>
+            <h3>Secrets are local files and process memory</h3>
+          </div>
+          <div class="boundary-body">
+            <div class="risk-row"><span class="risk warm">plaintext TOML</span><span class="risk cool">restricted profiles</span><span class="risk hot">no vault</span></div>
+            <p>API keys and user settings can live in the global TOML config. SSH profiles use a dedicated store with restrictive permissions on Unix, but there is no OS keychain or encrypted vault abstraction.</p>
+            <p>Serve Basic credentials are held in memory for the process lifetime; they are not hashed at rest because they are supplied per invocation.</p>
+          </div>
+        </div>
+        <div class="boundary" style="--bc:var(--red)">
+          <div class="boundary-head">
+            <div class="boundary-label">Network exposure</div>
+            <h3>Serve is a LAN-facing surface</h3>
+          </div>
+          <div class="boundary-body">
+            <div class="risk-row"><span class="risk hot">0.0.0.0 default</span><span class="risk warm">API-only auth</span><span class="risk hot">no native TLS</span></div>
+            <p>File/HTTP services bind all interfaces by default. When <code>--auth</code> is set, every <code>/api/*</code> route requires HTTP Basic, while static assets stay public so the UI can load. Downloads may use a short-lived token.</p>
+            <p>There is no built-in TLS or rate limiter. Prefer loopback, a trusted LAN, a VPN or a TLS-terminating reverse proxy. <code>--share</code> only advertises an address; it does not change routing or add authentication. The chess service deliberately has no <code>--auth</code>.</p>
+          </div>
+        </div>
+        <div class="boundary" style="--bc:var(--red)">
+          <div class="boundary-head">
+            <div class="boundary-label">Supply chain</div>
+            <h3>Runtime packages are vendor artifacts</h3>
+          </div>
+          <div class="boundary-body">
+            <div class="risk-row"><span class="risk hot">remote archives</span><span class="risk warm">optional digests</span><span class="risk cool">per-version dirs</span></div>
+            <p><code>ntpkg</code> downloads vendor releases and installers, extracts archives, and may launch OS installers. A SHA-256 verification helper exists, but not every source definition supplies a usable digest.</p>
+            <p>Installing a runtime is therefore an act of trust in the upstream project and transport. Versioned directories make rollback practical; they do not make the downloaded executable safe.</p>
+          </div>
+        </div>
+        <div class="boundary" style="--bc:var(--amber)">
+          <div class="boundary-head">
+            <div class="boundary-label">Parsed content</div>
+            <h3>Project files are untrusted input</h3>
+          </div>
+          <div class="boundary-body">
+            <div class="risk-row"><span class="risk warm">parsers</span><span class="risk cool">no browser runtime</span><span class="risk warm">generated HTML</span></div>
+            <p>Reports, sheets, images, Markdown, XML and language-server messages are parsed by third-party crates and external tools. Parser bugs are part of the trust surface even when NTC does not execute the file.</p>
+            <p>Generated HTML or served files may contain active content. NTC itself does not run a browser, but a browser that opens a served report does.</p>
+          </div>
+        </div>
+      </div>
+      <div class="security-note reveal">
+        <h3>Operational rule of thumb</h3>
+        <p>Run NTC as a normal user, not an administrator. Keep the config directory private, bind <code>serve</code> to loopback unless you intend LAN exposure, put TLS and access control in front of any public deployment, and review <code>.ntc</code>, <code>NTCRANFILE.toml</code> and installers before running them. <b>Upload limits</b> (10 GB per upload, 100 MB chunks) and idle timeouts reduce accidental resource use; they are availability controls, not authorization.</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" id="recovery">
+    <div class="wrap">
+      <div class="section-head reveal">
+        <div>
+          <div class="section-kicker">08 · Failure &amp; recovery</div>
+          <h2>Fail locally, keep the prompt.</h2>
+        </div>
+        <p class="section-desc right">
+          Recovery is mostly defensive defaults and scoped cleanup rather than a transaction
+          system. The design goal is that a bad file, failed child or interrupted service does not
+          leave the terminal or the next prompt unusable.
+        </p>
+      </div>
+      <div class="recovery-list reveal">
+        <div class="failure-row">
+          <div class="failure-trigger">Invalid global config<code>config.toml</code></div>
+          <div class="failure-handling">The TOML parse error is printed as a warning and the process continues with defaults. A broken config does not abort startup.</div>
+          <div class="failure-result"><b>Result</b>Continue with defaults</div>
+        </div>
+        <div class="failure-row">
+          <div class="failure-trigger">Unreadable session file<code>session.toml</code></div>
+          <div class="failure-handling">Deserialization returns <code>None</code> and session state starts empty. Individual stale or empty editor snapshots are skipped when restoring.</div>
+          <div class="failure-result"><b>Result</b>Fresh session state</div>
+        </div>
+        <div class="failure-row">
+          <div class="failure-trigger">Editor panic<code>main_loop</code></div>
+          <div class="failure-handling">The loop is wrapped in <code>catch_unwind</code>. A drop guard restores raw mode, mouse capture, cursor visibility and the alternate screen before the error is returned.</div>
+          <div class="failure-result"><b>Result</b>Terminal restored</div>
+        </div>
+        <div class="failure-row">
+          <div class="failure-trigger">External file changed<code>editor watcher</code></div>
+          <div class="failure-handling">The editor polls tracked files, prompts before replacing content and can reload the buffer. Unsaved state is not silently discarded by default.</div>
+          <div class="failure-result warn"><b>Result</b>Operator decision</div>
+        </div>
+        <div class="failure-row">
+          <div class="failure-trigger">Pipeline stage fails<code>mark_failed()</code></div>
+          <div class="failure-handling">Failure is recorded on a process-level side-channel even when the handler returns a boolean. <code>&amp;&amp;</code> and <code>||</code> consult that marker, not only child exit status.</div>
+          <div class="failure-result"><b>Result</b>Logical chain stops correctly</div>
+        </div>
+        <div class="failure-row">
+          <div class="failure-trigger">Ctrl-C during a child<code>child PID atomic</code></div>
+          <div class="failure-handling">The signal callback terminates the child tree and sets registered shutdown flags. The handler is installed once; long-running services register and unregister their own flags.</div>
+          <div class="failure-result"><b>Result</b>Return to prompt</div>
+        </div>
+        <div class="failure-row">
+          <div class="failure-trigger">Interrupted upload<code>serve staging</code></div>
+          <div class="failure-handling">Per-upload chunk files are cleaned on rejected/failed finalisation, and single-session staging left by a crashed process is removed when the service starts again.</div>
+          <div class="failure-result warn"><b>Result</b>Stale staging pruned</div>
+        </div>
+        <div class="failure-row">
+          <div class="failure-trigger">Git unavailable or slow<code>git status</code></div>
+          <div class="failure-handling">Git lookup is cached and status calls are best-effort. A missing binary or failed command yields no Git fragment instead of blocking the prompt.</div>
+          <div class="failure-result"><b>Result</b>Prompt degrades cleanly</div>
+        </div>
+        <div class="failure-row">
+          <div class="failure-trigger">Serve loop shutdown<code>accept loop</code></div>
+          <div class="failure-handling">The listener runs non-blocking so it can observe its shutdown flag roughly every 200 ms. Existing connection threads are not a process-wide graceful-drain protocol.</div>
+          <div class="failure-result warn"><b>Result</b>Prompt service stops</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" id="build">
+    <div class="wrap">
+      <div class="section-head reveal">
+        <div>
+          <div class="section-kicker">09 · Build &amp; platform matrix</div>
+          <h2>One binary, conditional edges.</h2>
+        </div>
+        <p class="section-desc right">
+          The build is a conventional Cargo binary plus library. Portability comes from bundled
+          native dependencies, cfg-gated surfaces and runtime discovery of optional external tools
+          rather than a separate implementation per operating system.
+        </p>
+      </div>
+      <div class="build-grid reveal">
+        <div class="build-card">
+          <h3>Default feature set</h3>
+          <p><code>image2doc</code> enables the optional <code>image</code> crate. <code>ocr</code> enables the OCR module, but OCR is still compiled only outside Android and requires a <code>tesseract</code> executable at runtime.</p>
+          <span class="tag">default = image2doc, ocr</span><span class="tag">feature-gated image</span><span class="tag">external tesseract</span>
+        </div>
+        <div class="build-card">
+          <h3>Native dependencies</h3>
+          <p>SQLite is vendored through <code>rusqlite</code>’s bundled feature. PTY, clipboard, audio and report writers compile per target; Windows console access uses <code>windows-sys</code>, while Linux clipboard support uses <code>x11rb</code>.</p>
+          <span class="tag">rusqlite bundled</span><span class="tag">portable-pty</span><span class="tag">rodio</span>
+        </div>
+        <div class="build-card">
+          <h3>Embedded frontends</h3>
+          <p><code>rust-embed</code> packages the file-service and chess web assets into the binary. There is no separate Node runtime at execution time, but the dist folders must exist when the Rust project is compiled.</p>
+          <span class="tag">build-time assets</span><span class="tag">no runtime server</span><span class="tag">single deployable</span>
+        </div>
+        <div class="build-card">
+          <h3>Android / Termux</h3>
+          <p>Native clipboard, PDF, DOCX and XLSX writers are excluded. Terminal clipboard uses <code>termux-clipboard-set</code> when available. OCR is disabled by cfg even though the feature is default.</p>
+          <span class="tag">cfg exclusions</span><span class="tag">Termux API</span><span class="tag">text formats remain</span>
+        </div>
+        <div class="build-card">
+          <h3>Optional runtime tools</h3>
+          <p>Git, language servers, Tesseract, cloudflared and package-managed runtimes are discovered at runtime. Missing tools degrade a feature; they are not linked into the core binary.</p>
+          <span class="tag">which::which</span><span class="tag">PATH injection</span><span class="tag">best-effort</span>
+        </div>
+        <div class="build-card">
+          <h3>Release verification</h3>
+          <p>A meaningful check covers library tests, the binary build and a manual TUI pass. Terminal behaviour and platform-specific PTY/clipboard paths cannot be fully validated by unit tests alone.</p>
+          <span class="tag">cargo test</span><span class="tag">cargo build --release</span><span class="tag">manual TUI smoke</span>
+        </div>
+      </div>
+      <div class="matrix reveal">
+        <div class="matrix-row head"><span>Surface</span><span>Availability</span><span>Architectural implication</span></div>
+        <div class="matrix-row">
+          <div class="matrix-platform">Shell + editor</div>
+          <span>Windows, Linux, macOS, Android/Termux</span>
+          <span>Core event loops have no async runtime requirement. Platform differences concentrate in terminal and process adapters.</span>
+        </div>
+        <div class="matrix-row">
+          <div class="matrix-platform">SQLite</div>
+          <span>All targets via <code>rusqlite</code> bundled</span>
+          <span>No system SQLite dependency; database behaviour is consistent, at the cost of a larger native build.</span>
+        </div>
+        <div class="matrix-row">
+          <div class="matrix-platform">Binary reports</div>
+          <span>PDF, DOCX, XLSX off on Android</span>
+          <span><code>report</code> keeps text formats everywhere; binary generators are compile-time optional surfaces.</span>
+        </div>
+        <div class="matrix-row">
+          <div class="matrix-platform">Clipboard</div>
+          <span><code>arboard</code> off on Android; Termux fallback</span>
+          <span>Clipboard is an adapter boundary, not a core editor assumption.</span>
+        </div>
+        <div class="matrix-row">
+          <div class="matrix-platform">OCR</div>
+          <span>Feature + non-Android + external binary</span>
+          <span>Three independent conditions must hold: compiled feature, supported target, installed Tesseract.</span>
+        </div>
+        <div class="matrix-row">
+          <div class="matrix-platform">Serve</div>
+          <span>Threaded TCP on all desktop targets</span>
+          <span>No TLS or async server dependency; deployment security belongs to the surrounding network.</span>
+        </div>
+        <div class="matrix-row">
+          <div class="matrix-platform">Package manager</div>
+          <span>Platform-specific source definitions</span>
+          <span><code>ntpkg</code> selects URLs and archive types per OS/architecture; not every package exists for every target.</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" id="extend">
+    <div class="wrap">
+      <div class="section-head reveal">
+        <div>
+          <div class="section-kicker">10 · Extension guide</div>
+          <h2>Where a new capability belongs.</h2>
+        </div>
+        <p class="section-desc right">
+          NTC grows by adding domain modules and wiring them into the shell, not by centralising
+          every feature in one dispatcher. These recipes follow the seams already present in the
+          codebase.
+        </p>
+      </div>
+      <div class="recipe-grid reveal">
+        <div class="recipe">
+          <div class="recipe-head">
+            <span class="recipe-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 7l8-4 8 4-8 4z"/><path d="M4 12l8 4 8-4M4 17l8 4 8-4"/></svg></span>
+            <h3>Add a builtin command</h3>
+          </div>
+          <div class="recipe-body">
+            <p>Keep the handler in a focused command module and make dispatch the only central edit.</p>
+            <ol>
+              <li>Implement <code>cmd_*</code> returning <code>Result&lt;bool&gt;</code>.</li>
+              <li>Add the name/alias arm in <code>execute_single_command</code>.</li>
+              <li>Add help, hints/completion and at least a parser test.</li>
+            </ol>
+            <code class="recipe-code">src/shell/commands/&lt;feature&gt;.rs → src/shell/commands/mod.rs</code>
+          </div>
+        </div>
+        <div class="recipe">
+          <div class="recipe-head">
+            <span class="recipe-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 5h7v14H4zM13 5h7v14h-7z"/><path d="M7 8h1M7 11h1M16 8h1"/></svg></span>
+            <h3>Add a domain module</h3>
+          </div>
+          <div class="recipe-body">
+            <p>Use a module when the feature owns state, parsers or a long-lived service.</p>
+            <ol>
+              <li>Create <code>src/&lt;name&gt;/mod.rs</code> with a narrow public surface.</li>
+              <li>Declare it in <code>lib.rs</code>; re-export only what other modules need.</li>
+              <li>Wire commands through <code>shell</code> and gate platform deps in <code>Cargo.toml</code>.</li>
+            </ol>
+            <code class="recipe-code">src/lib.rs → pub mod &lt;name&gt;;</code>
+          </div>
+        </div>
+        <div class="recipe">
+          <div class="recipe-head">
+            <span class="recipe-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M5 4h14v16H5z"/><path d="M9 8h6M9 12h6M9 16h3"/></svg></span>
+            <h3>Add configuration</h3>
+          </div>
+          <div class="recipe-body">
+            <p>Prefer an existing config struct over a new global singleton.</p>
+            <ol>
+              <li>Add a serde-defaulted field to the global or editor config.</li>
+              <li>Update the default constructor and any migration/merge logic.</li>
+              <li>Keep project-only values in <code>ntconfig.toml</code>, not the global struct.</li>
+            </ol>
+            <code class="recipe-code">src/utils/config/mod.rs → Config / EditorConfig</code>
+          </div>
+        </div>
+        <div class="recipe">
+          <div class="recipe-head">
+            <span class="recipe-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 3v12M8 11l4 4 4-4"/><path d="M5 17v3h14v-3"/></svg></span>
+            <h3>Add a managed runtime</h3>
+          </div>
+          <div class="recipe-body">
+            <p>Package support is data plus an installer, not a new branch in the shell.</p>
+            <ol>
+              <li>Add a source definition with per-platform URL/archive metadata.</li>
+              <li>Implement or reuse an installer that places binaries under the version dir.</li>
+              <li>Register the installer and verify PATH injection picks it up.</li>
+            </ol>
+            <code class="recipe-code">src/ntpkg/sources.rs → src/ntpkg/installers/</code>
+          </div>
+        </div>
+        <div class="recipe">
+          <div class="recipe-head">
+            <span class="recipe-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 5h16v14H4z"/><path d="M8 9h8M8 13h5"/></svg></span>
+            <h3>Add a report format</h3>
+          </div>
+          <div class="recipe-body">
+            <p>Extend the format enum and generator while keeping collection shared.</p>
+            <ol>
+              <li>Add the variant, extension and binary classification.</li>
+              <li>Reuse <code>collect_report_files</code>; implement a generator.</li>
+              <li>Add cfg gates if the writer is unavailable on Android.</li>
+            </ol>
+            <code class="recipe-code">src/report/mod.rs → ReportFormat + generator</code>
+          </div>
+        </div>
+        <div class="recipe">
+          <div class="recipe-head">
+            <span class="recipe-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 12h16M12 4v16"/><circle cx="12" cy="12" r="8"/></svg></span>
+            <h3>Add a serve route</h3>
+          </div>
+          <div class="recipe-body">
+            <p>Routes live behind one auth gate and one method/body contract.</p>
+            <ol>
+              <li>Add a method/path arm in <code>handle_api</code>.</li>
+              <li>Reuse <code>ApiResponse</code>, JSON helpers and the DB handle.</li>
+              <li>Test both locked and unlocked router paths; enforce body limits.</li>
+            </ol>
+            <code class="recipe-code">src/shell/commands/serve.rs → handle_api</code>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" id="observations">
+    <div class="wrap">
+      <div class="section-head reveal">
+        <div>
+          <div class="section-kicker">11 · Architecture observations</div>
+          <h2>What the design optimises for.</h2>
+        </div>
+        <p class="section-desc right">
+          Read as an architecture review: the strengths are explicit state and domain ownership;
+          the costs are global seams, platform conditionals and security surfaces that assume a
+          trusted operator.
+        </p>
+      </div>
+      <div class="notes-grid reveal">
+        <div class="note-card">
+          <h3>Strengths</h3>
+          <ul>
+            <li><span class="mark">+</span><span><b>Explicit composition.</b> The shell is a visible dispatch point; domain modules do not need a framework or service registry to participate.</span></li>
+            <li><span class="mark">+</span><span><b>State is named.</b> Config, session, Navigator and watcher ownership are easy to trace and reason about.</span></li>
+            <li><span class="mark">+</span><span><b>Portable core.</b> Bundled SQLite, native PTY and cfg-gated optional surfaces keep one codebase across desktop and Termux.</span></li>
+            <li><span class="mark">+</span><span><b>Degradation is normal.</b> Optional external tools and network checks fail into reduced functionality rather than startup failure.</span></li>
+          </ul>
+        </div>
+        <div class="note-card note-risk">
+          <h3>Tensions</h3>
+          <ul>
+            <li><span class="mark">!</span><span><b>Global seams.</b> Process-level pipeline flags and singleton config are pragmatic but make parallel execution and isolated testing harder.</span></li>
+            <li><span class="mark">!</span><span><b>Dispatch remains central.</b> The command match is the price of a simple shell; a registry would reduce merge pressure but add indirection.</span></li>
+            <li><span class="mark">!</span><span><b>Platform cfgs multiply.</b> Android exclusions and per-OS installers are necessary, but every new dependency must be audited across four target families.</span></li>
+            <li><span class="mark">!</span><span><b>Security is deployment-sensitive.</b> The serve defaults are convenient on a laptop and dangerous on an untrusted network; documentation and safer defaults matter more than clever code.</span></li>
+          </ul>
+        </div>
+        <div class="note-card">
+          <h3>Good extension points</h3>
+          <ul>
+            <li><span class="mark">→</span><span>New domain behaviour belongs in a module with a small public API, reached through a shell command.</span></li>
+            <li><span class="mark">→</span><span>New persistent preference belongs in typed config, not an ad-hoc file or static.</span></li>
+            <li><span class="mark">→</span><span>New platform capability belongs behind an adapter with a non-Android fallback, not scattered <code>cfg!</code> branches.</span></li>
+            <li><span class="mark">→</span><span>New served capability belongs behind the existing auth gate, body limits and response helpers.</span></li>
+          </ul>
+        </div>
+        <div class="note-card note-risk">
+          <h3>Questions worth asking</h3>
+          <ul>
+            <li><span class="mark">?</span><span>Should serve default to loopback, with explicit opt-in for LAN binding?</span></li>
+            <li><span class="mark">?</span><span>Should pipeline failure and quiet mode become per-execution context instead of process statics?</span></li>
+            <li><span class="mark">?</span><span>Should package sources require a digest rather than treating it as optional metadata?</span></li>
+            <li><span class="mark">?</span><span>Should command dispatch become data-driven to make help, hints and completions derive from one definition?</span></li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer class="footer">
+    <div class="wrap footer-inner">
+      <div>
+        <p class="strong">NTC 2.4.7 · System design &amp; architecture</p>
+        <p>Derived from the repository’s source layout, manifests and runtime paths. Architecture claims describe this version and should be re-checked when the code moves.</p>
+        <p><span class="status"><span class="dot"></span>Single-file · local · no external assets</span></p>
+      </div>
+      <div class="footer-links">
+        <a href="#map">Architecture map</a>
+        <a href="#flow">Command lifecycle</a>
+        <a href="#state">State</a>
+        <a href="#trust">Trust</a>
+        <a href="#extend">Extension guide</a>
+        <a href="#top">Back to top</a>
+      </div>
+    </div>
+  </footer>
+
+<script>
+(() => {
+  'use strict';
+
+  const $ = (selector, root = document) => root.querySelector(selector);
+  const $$ = (selector, root = document) => Array.from(root.querySelectorAll(selector));
+  const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const escapeHtml = (value) => String(value ?? '').replace(/[&<>"']/g, (character) => ({
+    '&': '&amp;',
+    '<': '&lt;',
+    '>': '&gt;',
+    '"': '&quot;',
+    "'": '&#39;'
+  }[character]));
+
+  const bootSteps = [
+    {
+      kicker: 'Step 01 · preparation',
+      phase: 'synchronous',
+      title: 'Process bootstrap',
+      text: '<code>main</code> first ensures the default themes exist, then touches <code>Config::global()</code>. That lazy singleton loads TOML, detects terminal capabilities, configures colour/ASCII fallback and loads the language pack before the CLI route is chosen.',
+      facts: [['Source', 'src/main.rs:11'], ['State', 'Config singleton, theme registry']],
+      why: 'Every later layer reads configuration through this singleton. If the TOML is invalid, NTC warns and continues with defaults instead of aborting startup.'
+    },
+    {
+      kicker: 'Step 02 · routing',
+      phase: 'synchronous',
+      title: 'CLI routing',
+      text: '<code>cli::run_cli()</code> inspects argv and chooses a mode: help, version, upgrade, a one-shot command, a new terminal, or the interactive shell. The no-argument path enters <code>run_shell_with_nav</code>; <code>NTC_STAY</code> keeps a child shell interactive after a one-shot call.',
+      facts: [['Source', 'src/cli/run.rs'], ['State', 'argv, environment, exit intent']],
+      why: 'Routing happens before Navigator or rustyline work, so one-shot invocations do not pay for REPL setup unless they explicitly stay.'
+    },
+    {
+      kicker: 'Step 03 · navigation',
+      phase: 'synchronous',
+      title: 'Navigator state',
+      text: 'The shell loads session state, chooses a valid working directory and constructs the Navigator. Directory changes canonicalize the path, update the process CWD, re-detect the virtualenv and reload local config when a project <code>ntconfig.toml</code> appears.',
+      facts: [['Source', 'src/utils/navigator.rs'], ['State', 'Navigator, SessionState, local config']],
+      why: 'The Navigator is the shell’s source of truth for CWD. Commands receive it by mutable reference instead of each resolving the working directory independently.'
+    },
+    {
+      kicker: 'Step 04 · environment',
+      phase: 'synchronous',
+      title: 'Runtime injection',
+      text: 'Before the prompt appears, <code>ntpkg</code> builds PATH entries for active managed runtimes and prepends them to the process environment. The child shell and system commands inherit those paths, so managed language binaries win without a separate activation step.',
+      facts: [['Source', 'src/ntpkg/mod.rs'], ['State', 'packages.toml, process PATH']],
+      why: 'Runtime selection is resolved when the shell starts. The active-version command updates the manifest; subsequent shells rebuild PATH, while the current process keeps its inherited environment.'
+    },
+    {
+      kicker: 'Step 05 · REPL',
+      phase: 'synchronous',
+      title: 'REPL setup',
+      text: 'rustyline is configured with a helper, hinter, history and completion behaviour. History is loaded when enabled. The prompt is assembled as plain text because ANSI sequences inside the prompt would break cursor positioning.',
+      facts: [['Source', 'src/shell/entry.rs · hinter.rs'], ['State', 'rustyline editor, hint state']],
+      why: 'The helper owns suggestions and tab cycling, while the shell keeps the prompt intentionally simple. This is a deliberate trade of visual flourish for reliable line editing.'
+    },
+    {
+      kicker: 'Step 06 · background',
+      phase: 'best-effort',
+      title: 'Background services',
+      text: 'The file watcher starts when configured and becomes an optional handle the shell polls once per loop. The update checker runs behind environment/config gates and a 24-hour throttle. Neither service is required for the prompt to function.',
+      facts: [['Source', 'src/shell/entry.rs · utils/watcher.rs'], ['State', 'watcher Arc, update-check thread']],
+      why: 'Both services fail soft. Watcher events are debounced and summarized; network failure in the update check is silent by design.'
+    },
+    {
+      kicker: 'Step 07 · loop',
+      phase: 'interactive',
+      title: 'Prompt loop',
+      text: 'Each turn polls the watcher, renders the prompt, reads a line and executes it. Heredocs are captured interactively, aliases expand before operator parsing, and dispatch selects a pipeline or a single command. After execution the shell reconciles watcher state, Git cache and session CWD.',
+      facts: [['Source', 'src/shell/entry.rs · commands/mod.rs'], ['State', 'Navigator, pipeline statics, session']],
+      why: 'This is the composition point for nearly every feature. Ctrl-C during a child terminates the process tree; Ctrl-C at the prompt prints <code>^C</code> and starts a new turn.'
+    },
+    {
+      kicker: 'Step 08 · teardown',
+      phase: 'best-effort',
+      title: 'Shutdown',
+      text: 'On exit the shell saves session state and history when enabled, then drops the watcher handle and background resources. Persistence is best-effort; a failure to write history or a snapshot must not turn a normal exit into a crash.',
+      facts: [['Source', 'src/utils/session.rs'], ['State', 'session.toml, ntc_history.txt']],
+      why: 'The next launch restores the last directory and eligible editor snapshots. Stale snapshots are ignored rather than resurrected indefinitely.'
+    }
+  ];
+
+  const flowSteps = [
+    {
+      title: 'Read &amp; edit',
+      text: 'rustyline renders a plain-text prompt, keeps history and autosuggest in the loop, and routes Tab / Shift-Tab through the custom hinter. The line is trimmed and BOM-cleaned before anything executes.',
+      mechanism: '<code>rl.readline()</code> → history entry → NTC helper hints. Ctrl-C prints <code>^C</code> and loops; Ctrl-D exits.',
+      files: ['src/shell/entry.rs', 'src/shell/hinter.rs'],
+      branches: ['empty line → continue', 'Ctrl-C → new prompt']
+    },
+    {
+      title: 'Preprocess',
+      text: 'Interactive heredocs are captured before execution. Alias expansion then rewrites the whole line, including parameters and teleport references, with local aliases layered over global definitions.',
+      mechanism: 'Heredoc capture → <code>expand_line()</code> → argument substitution. Expansion is skipped where quoting or structure makes a rewrite unsafe.',
+      files: ['src/shell/entry.rs', 'src/shell/alias.rs', 'src/shell/stdin.rs'],
+      branches: ['heredoc body → buffered', 'alias → expanded line', '@cmd → system']
+    },
+    {
+      title: 'Parse',
+      text: 'The pipeline parser recognises pipes, logical operators and redirections only when they are standalone whitespace-delimited tokens outside quotes and brackets. This keeps paths and arguments that contain operator characters intact.',
+      mechanism: '<code>|</code>, <code>&amp;&amp;</code>, <code>||</code>, <code>&gt;</code>, <code>&gt;&gt;</code>, <code>&lt;</code>, <code>&lt;&lt;</code>, <code>&lt;&lt;&lt;</code>. A captured stage is memory-buffered and ANSI-stripped.',
+      files: ['src/shell/pipeline.rs'],
+      branches: ['pipeline → stages', 'single → dispatch', 'redirect → file']
+    },
+    {
+      title: 'Execute',
+      text: 'Builtins dispatch through the central command match. Unknown commands fall through to the platform shell with the Navigator CWD and inherited environment. Piped input is supplied to the child; output returns to the pipeline contract.',
+      mechanism: '<code>execute_single_command()</code> → builtin or <code>cmd /C</code> / <code>sh -c</code>. A non-zero child marks pipeline failure.',
+      files: ['src/shell/commands/mod.rs', 'src/shell/pipeline.rs'],
+      branches: ['builtin → Result&lt;bool&gt;', 'system → child status', 'unknown → shell fallback']
+    },
+    {
+      title: 'Reconcile',
+      text: 'After the command, the shell syncs the watcher target, refreshes the tree when needed and invalidates the Git status cache so the next prompt reflects the new state. Session CWD is updated through the Navigator.',
+      mechanism: 'Watcher poll → optional tree refresh / trigger alias. Git cache invalidation is explicit after execution.',
+      files: ['src/utils/watcher.rs', 'src/utils/git.rs', 'src/utils/navigator.rs'],
+      branches: ['watcher → summary', 'trigger → alias', 'git → next prompt']
+    },
+    {
+      title: 'Persist',
+      text: 'Session state and shell history are saved when configured. Editor snapshots are written on their own interval and scoped by normalized working directory, so project state does not bleed between directories.',
+      mechanism: 'Session save → <code>session.toml</code>; history save → <code>ntc_history.txt</code>. Editor snapshots keep at most 24 directory buckets.',
+      files: ['src/utils/session.rs', 'src/editor/run.rs'],
+      branches: ['history enabled', 'snapshot → 30s default', 'stale → pruned']
+    }
+  ];
+
+  const bootList = $('#bootList');
+  const bootBody = $('#bootBody');
+  const bootTitle = $('#bootTitle');
+  const bootKicker = $('#bootKicker');
+  const bootPhase = $('#bootPhase');
+  let bootIndex = 0;
+
+  function renderBoot(index) {
+    bootIndex = Math.max(0, Math.min(bootSteps.length - 1, index));
+    const item = bootSteps[bootIndex];
+    bootKicker.textContent = item.kicker;
+    bootPhase.textContent = item.phase;
+    bootTitle.innerHTML = item.title;
+    const facts = item.facts.map(([label, value]) =>
+      `<div class="detail-fact"><span>${label}</span><b>${value}</b></div>`
+    ).join('');
+    bootBody.innerHTML = `
+      <p>${item.text}</p>
+      <div class="detail-facts">${facts}</div>
+      <div class="detail-section"><h4>Why it matters</h4><p>${item.why}</p></div>
+      <div class="boot-nav">
+        <button class="mini-btn" data-boot-prev ${bootIndex === 0 ? 'disabled' : ''}>← Previous</button>
+        <span class="step-count">${bootIndex + 1} / ${bootSteps.length}</span>
+        <button class="mini-btn" data-boot-next ${bootIndex === bootSteps.length - 1 ? 'disabled' : ''}>Next →</button>
+      </div>`;
+    $$('.boot-step', bootList).forEach((button, i) => {
+      const active = i === bootIndex;
+      button.classList.toggle('active', active);
+      button.setAttribute('aria-selected', String(active));
+    });
+  }
+
+  if (bootList) {
+    bootList.addEventListener('click', (event) => {
+      const button = event.target.closest('[data-boot]');
+      if (button) renderBoot(Number(button.dataset.boot));
+    });
+    bootList.addEventListener('keydown', (event) => {
+      if (!['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key)) return;
+      event.preventDefault();
+      const stepButtons = $$('.boot-step', bootList);
+      let next = bootIndex;
+      if (event.key === 'ArrowDown') next = Math.min(stepButtons.length - 1, bootIndex + 1);
+      if (event.key === 'ArrowUp') next = Math.max(0, bootIndex - 1);
+      if (event.key === 'Home') next = 0;
+      if (event.key === 'End') next = stepButtons.length - 1;
+      renderBoot(next);
+      stepButtons[next].focus();
+    });
+    bootBody.addEventListener('click', (event) => {
+      if (event.target.closest('[data-boot-prev]')) renderBoot(bootIndex - 1);
+      if (event.target.closest('[data-boot-next]')) renderBoot(bootIndex + 1);
+    });
+  }
+
+  const flowRail = $('#flowRail');
+  const flowTitle = $('#flowTitle');
+  const flowText = $('#flowText');
+  const flowMechanism = $('#flowMechanism');
+  const flowFiles = $('#flowFiles');
+  const flowBranches = $('#flowBranches');
+  let flowIndex = 0;
+
+  function renderFlow(index) {
+    flowIndex = Math.max(0, Math.min(flowSteps.length - 1, index));
+    const item = flowSteps[flowIndex];
+    flowTitle.innerHTML = item.title;
+    flowText.innerHTML = item.text;
+    flowMechanism.innerHTML = item.mechanism;
+    flowFiles.innerHTML = item.files.map(file => `<span class="file-tag">${file}</span>`).join('');
+    flowBranches.innerHTML = item.branches.map(branch => `<span class="flow-branch">${branch}</span>`).join('');
+    $$('.flow-step', flowRail).forEach((button, i) => {
+      const active = i === flowIndex;
+      button.classList.toggle('active', active);
+      button.setAttribute('aria-selected', String(active));
+    });
+  }
+
+  if (flowRail) {
+    flowRail.addEventListener('click', (event) => {
+      const button = event.target.closest('[data-flow]');
+      if (button) renderFlow(Number(button.dataset.flow));
+    });
+    flowRail.addEventListener('keydown', (event) => {
+      if (!['ArrowRight', 'ArrowLeft', 'Home', 'End'].includes(event.key)) return;
+      event.preventDefault();
+      const stepButtons = $$('.flow-step', flowRail);
+      let next = flowIndex;
+      if (event.key === 'ArrowRight') next = Math.min(stepButtons.length - 1, flowIndex + 1);
+      if (event.key === 'ArrowLeft') next = Math.max(0, flowIndex - 1);
+      if (event.key === 'Home') next = 0;
+      if (event.key === 'End') next = stepButtons.length - 1;
+      renderFlow(next);
+      stepButtons[next].focus();
+    });
+  }
+
+  const mapNodes = $$('.arch-node');
+  const mapSearch = $('#mapSearch');
+  const mapChips = $$('#mapChips .chip');
+  const mapCount = $('#mapCount');
+  const mapReset = $('#mapReset');
+  const mapInspector = $('#mapInspector');
+  const mapInspectorState = $('#mapInspectorState');
+  const mapEmptyMarkup = mapInspector ? mapInspector.innerHTML : '';
+  const layerLabels = {
+    entry: 'Interfaces',
+    core: 'Orchestration',
+    domain: 'Domain',
+    shared: 'Shared',
+    platform: 'Platform'
+  };
+  let mapLayer = 'all';
+  let mapSelected = null;
+
+  function blockCount(count) {
+    return `${count} block${count === 1 ? '' : 's'}`;
+  }
+
+  function filterMap() {
+    const query = (mapSearch ? mapSearch.value : '').trim().toLowerCase();
+    let visible = 0;
+    mapNodes.forEach((node) => {
+      const layerMatch = mapLayer === 'all' || node.dataset.layer === mapLayer;
+      const haystack = [
+        node.dataset.title,
+        node.dataset.path,
+        node.dataset.summary,
+        node.dataset.notes,
+        node.textContent
+      ].join(' ').toLowerCase();
+      const searchMatch = !query || haystack.includes(query);
+      const show = layerMatch && searchMatch;
+      node.classList.toggle('hidden', !show);
+      if (show) visible += 1;
+    });
+    if (mapCount) mapCount.textContent = blockCount(visible);
+  }
+
+  function clearMapSelection() {
+    mapNodes.forEach(node => node.classList.remove('selected'));
+    mapSelected = null;
+    if (mapInspector) mapInspector.innerHTML = mapEmptyMarkup;
+    if (mapInspectorState) mapInspectorState.textContent = 'no selection';
+  }
+
+  function renderInspector(node) {
+    const color = node.dataset.color || 'var(--cyan)';
+    const label = escapeHtml(layerLabels[node.dataset.layer] || node.dataset.layer);
+    const files = (node.dataset.files || '').split('|').filter(Boolean);
+    if (mapInspector) {
+      mapInspector.innerHTML = `
+        <span class="inspector-badge" style="--node-color:${color}">${label}</span>
+        <h3 class="inspector-title">${escapeHtml(node.dataset.title)}</h3>
+        <div class="inspector-sub">${escapeHtml(node.dataset.path)}</div>
+        <p class="inspector-summary">${escapeHtml(node.dataset.summary)}</p>
+        <div class="inspector-section">
+          <h4>Contract</h4>
+          <div class="relation-list">
+            <div class="relation-row"><span class="rel">Input</span><span class="val">${escapeHtml(node.dataset.in)}</span></div>
+            <div class="relation-row"><span class="rel">Output</span><span class="val">${escapeHtml(node.dataset.out)}</span></div>
+          </div>
+        </div>
+        <div class="inspector-section">
+          <h4>Source</h4>
+          <div class="file-list">${files.map(file => `<span class="file-tag">${escapeHtml(file)}</span>`).join('')}</div>
+        </div>
+        <div class="inspector-section">
+          <h4>Architectural note</h4>
+          <p>${escapeHtml(node.dataset.notes)}</p>
+        </div>`;
+    }
+    if (mapInspectorState) mapInspectorState.textContent = 'selected';
+  }
+
+  mapNodes.forEach((node) => {
+    node.addEventListener('click', () => {
+      mapNodes.forEach(candidate => candidate.classList.remove('selected'));
+      node.classList.add('selected');
+      mapSelected = node;
+      renderInspector(node);
+      if (window.innerWidth <= 880 && mapInspector) {
+        mapInspector.scrollIntoView({ block: 'nearest', behavior: reduceMotion ? 'auto' : 'smooth' });
+      }
+    });
+  });
+
+  if (mapSearch) mapSearch.addEventListener('input', filterMap);
+  mapChips.forEach((chip) => {
+    chip.addEventListener('click', () => {
+      mapLayer = chip.dataset.layer;
+      mapChips.forEach(candidate => candidate.classList.toggle('active', candidate === chip));
+      filterMap();
+    });
+  });
+  if (mapReset) {
+    mapReset.addEventListener('click', () => {
+      if (mapSearch) mapSearch.value = '';
+      mapLayer = 'all';
+      mapChips.forEach(chip => chip.classList.toggle('active', chip.dataset.layer === 'all'));
+      clearMapSelection();
+      filterMap();
+    });
+  }
+
+  const moduleGrid = $('#moduleGrid');
+  const moduleSearch = $('#moduleSearch');
+  const moduleChips = $$('#moduleChips .chip');
+  const moduleCount = $('#moduleCount');
+  const moduleCards = $$('.module-card', moduleGrid);
+  const totalModules = moduleCards.length;
+  let moduleGroup = 'all';
+
+  const moduleEmpty = document.createElement('div');
+  moduleEmpty.className = 'module-empty hidden';
+  moduleEmpty.textContent = 'No modules match that filter. Try another responsibility, path or family.';
+  if (moduleGrid) moduleGrid.appendChild(moduleEmpty);
+
+  function filterModules() {
+    const query = (moduleSearch ? moduleSearch.value : '').trim().toLowerCase();
+    let visible = 0;
+    moduleCards.forEach((card) => {
+      const groupMatch = moduleGroup === 'all' || card.dataset.group === moduleGroup;
+      const haystack = `${card.dataset.search || ''} ${card.textContent}`.toLowerCase();
+      const searchMatch = !query || haystack.includes(query);
+      const show = groupMatch && searchMatch;
+      card.classList.toggle('hidden', !show);
+      if (show) visible += 1;
+    });
+    moduleEmpty.style.display = visible ? 'none' : 'block';
+    if (moduleCount) {
+      moduleCount.textContent = visible === totalModules
+        ? `${totalModules} modules`
+        : `${visible} of ${totalModules} modules`;
+    }
+  }
+
+  if (moduleGrid) {
+    moduleGrid.addEventListener('click', (event) => {
+      const toggle = event.target.closest('.module-toggle');
+      if (!toggle) return;
+      const card = toggle.closest('.module-card');
+      const open = card.classList.toggle('open');
+      toggle.setAttribute('aria-expanded', String(open));
+    });
+  }
+  if (moduleSearch) moduleSearch.addEventListener('input', filterModules);
+  moduleChips.forEach((chip) => {
+    chip.addEventListener('click', () => {
+      moduleGroup = chip.dataset.group;
+      moduleChips.forEach(candidate => candidate.classList.toggle('active', candidate === chip));
+      filterModules();
+    });
+  });
+
+  const menuToggle = $('#menuToggle');
+  const nav = $('#nav');
+  if (menuToggle && nav) {
+    menuToggle.addEventListener('click', () => {
+      const open = nav.classList.toggle('open');
+      menuToggle.setAttribute('aria-expanded', String(open));
+    });
+    $$('a', nav).forEach(link => link.addEventListener('click', () => {
+      nav.classList.remove('open');
+      menuToggle.setAttribute('aria-expanded', 'false');
+    }));
+  }
+
+  const revealItems = $$('.reveal');
+  if (!reduceMotion && 'IntersectionObserver' in window) {
+    const observer = new IntersectionObserver((entries) => {
+      entries.forEach((entry) => {
+        if (entry.isIntersecting) {
+          entry.target.classList.add('in');
+          observer.unobserve(entry.target);
+        }
+      });
+    }, { threshold: 0.04, rootMargin: '0px 0px -30px 0px' });
+    revealItems.forEach(item => observer.observe(item));
+  } else {
+    revealItems.forEach(item => item.classList.add('in'));
+  }
+
+  const progressBar = $('#readProgress');
+  const navLinks = $$('.nav a');
+  const spySections = navLinks
+    .map(link => ({ link, section: $(link.getAttribute('href')) }))
+    .filter(item => item.section);
+
+  function updateScrollUI() {
+    const scrollTop = window.scrollY || document.documentElement.scrollTop;
+    const maxScroll = Math.max(1, document.documentElement.scrollHeight - window.innerHeight);
+    if (progressBar) progressBar.style.width = `${Math.min(100, Math.max(0, (scrollTop / maxScroll) * 100))}%`;
+
+    let current = null;
+    spySections.forEach((item) => {
+      if (item.section.offsetTop - 130 <= scrollTop) current = item;
+    });
+    spySections.forEach((item) => item.link.classList.toggle('active', item === current));
+  }
+
+  window.addEventListener('scroll', updateScrollUI, { passive: true });
+  window.addEventListener('resize', updateScrollUI);
+  updateScrollUI();
+
+  if (mapSearch) filterMap();
+  if (moduleSearch) filterModules();
+})();
+</script>
+</body>
+</html>

@@ -94,8 +94,8 @@ const KNOWN_UNSUPPORTED_EXTENSIONS: &[&str] = &[
     "wma", "m4a", "mp4", "avi", "mkv", "mov", "wmv", "flv", "webm", "doc", "docx", "pdf", "xls",
     "xlsx", "ppt", "pptx", "zip", "rar", "7z", "tar", "gz", "exe", "dll", "so", "bin", "iso",
     "dmg", "vmdk", "qcow2", "apk", "ipa", "jar", "war", "ear", "msi", "deb", "rpm", "qcow2", "vhd",
-    "vhdx", "img", "ex4", "ex5", "spv", "spirv", "o", "obj", "a", "lib", "pyc", "pyo",
-    "class", "sqlite", "db", "db3",
+    "vhdx", "img", "ex4", "ex5", "spv", "spirv", "o", "obj", "a", "lib", "pyc", "pyo", "class",
+    "sqlite", "db", "db3",
 ];
 
 /// A snapshot of the config sets needed for format-checking.
@@ -438,7 +438,10 @@ mod tests {
         assert!(matches_any_extension("a.ntc.ral", &exts));
         assert!(!matches_any_extension("main.rs.bak", &exts));
         assert!(!matches_any_extension("main.py", &exts));
-        assert!(matches_any_extension("Dockerfile", &["dockerfile".to_string()]));
+        assert!(matches_any_extension(
+            "Dockerfile",
+            &["dockerfile".to_string()]
+        ));
     }
 
     #[test]

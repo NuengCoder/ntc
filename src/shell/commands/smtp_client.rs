@@ -424,6 +424,7 @@ pub fn cmd_smtp(args: &str, _nav: &mut Navigator) -> Result<bool> {
     let mut profile_id = String::new();
     let mut list_profiles = false;
     let mut info_id = String::new();
+    let mut reveal_password = false;
     let mut remove_id = String::new();
     let mut to_addrs = Vec::new();
     let mut cc_addrs = Vec::new();
@@ -475,6 +476,8 @@ pub fn cmd_smtp(args: &str, _nav: &mut Navigator) -> Result<bool> {
                     .ok_or_else(|| anyhow::anyhow!("{}", t!("cmd.smtp.missing_id_info")))?
                     .clone();
             }
+            // With --id-info: show the app password after unlocking deadlock.
+            "--deadlock" => reveal_password = true,
             "--id-rm" => {
                 i += 1;
                 remove_id = tokens
@@ -583,7 +586,7 @@ pub fn cmd_smtp(args: &str, _nav: &mut Navigator) -> Result<bool> {
         return cmd_smtp_ls();
     }
     if !info_id.is_empty() {
-        return cmd_smtp_info(&info_id);
+        return cmd_smtp_info(&info_id, reveal_password);
     }
     if !remove_id.is_empty() {
         return cmd_smtp_rm(&remove_id);
@@ -660,14 +663,21 @@ fn cmd_smtp_ls() -> Result<bool> {
     Ok(false)
 }
 
-fn cmd_smtp_info(id: &str) -> Result<bool> {
+fn cmd_smtp_info(id: &str, reveal_password: bool) -> Result<bool> {
     let profiles = load_profiles();
     let profile = profiles
         .iter()
         .find(|p| p.id == id || p.id.starts_with(id))
         .ok_or_else(|| anyhow::anyhow!("{}", t!("cmd.smtp.profile_not_found", id)))?;
 
-    let pwd_plain = decode_password(&profile.password).unwrap_or_else(|_| "***".to_string());
+    // The app password is never printed by default: `--deadlock` unlocks the
+    // deadlock vault to prove the user knows the master password first.
+    let pwd_display = if reveal_password {
+        crate::deadlock::unlock_required()?;
+        decode_password(&profile.password).unwrap_or_else(|_| "***".to_string())
+    } else {
+        t!("cmd.smtp.password_hidden")
+    };
 
     println!("{}", t!("cmd.smtp.profile_label").bold());
     println!(
@@ -693,7 +703,7 @@ fn cmd_smtp_info(id: &str) -> Result<bool> {
     println!(
         "  {}  {}",
         t!("cmd.smtp.password_label").dimmed(),
-        pwd_plain.dimmed()
+        pwd_display.dimmed()
     );
     println!(
         "  {}  {}",
@@ -1017,6 +1027,7 @@ fn print_smtp_help() {
     println!();
     println!("{}", t!("cmd.smtp.help_info_title").cyan().bold());
     println!("  {}", t!("cmd.smtp.help_info_syntax"));
+    println!("  {}", t!("cmd.smtp.help_info_deadlock"));
     println!();
     println!("{}", t!("cmd.smtp.help_rm_title").cyan().bold());
     println!("  {}", t!("cmd.smtp.help_rm_syntax"));

@@ -3,7 +3,7 @@ use crate::config::Config;
 use crate::navigator::{clear_screen, Navigator};
 use crate::output::{print_error, print_info, print_success};
 use crate::session::SessionState;
-use crate::shell::show_tree;
+use crate::shell::show_nav_view;
 use crate::t;
 use anyhow::Result;
 use colored::*;
@@ -114,7 +114,7 @@ impl TeleportManager {
     }
 
     pub fn show_current_tree(nav: &Navigator) {
-        show_tree(nav, Some(1), false, false, false, false, false, false);
+        show_nav_view(nav);
     }
 
     /// Add or update a teleport savepoint (always global)
@@ -137,7 +137,12 @@ impl TeleportManager {
         };
 
         if let Some(old) = old_path {
-            print_success(&t!("teleport.updated", name_lower, old.display(), path.display()));
+            print_success(&t!(
+                "teleport.updated",
+                name_lower,
+                old.display(),
+                path.display()
+            ));
         } else {
             print_success(&t!("teleport.added", name_lower, path.display()));
         }
@@ -251,10 +256,7 @@ impl TeleportManager {
             );
         }
         println!();
-        println!(
-            "{}",
-            t!("teleport.tpb_hint").green()
-        );
+        println!("{}", t!("teleport.tpb_hint").green());
         println!("{}", t!("teleport.clear_hint").dimmed());
 
         Ok(())
@@ -334,10 +336,7 @@ impl TeleportManager {
         println!("  {}", t!("teleport.back_opt").cyan());
         println!("  {}", t!("teleport.history_opt").cyan());
         println!();
-        print!(
-            "{} ",
-            t!("teleport.choose_prompt", sorted.len()).green()
-        );
+        print!("{} ", t!("teleport.choose_prompt", sorted.len()).green());
         io::stdout().flush()?;
 
         let mut input = String::new();
@@ -481,10 +480,7 @@ impl TeleportManager {
         }
 
         println!();
-        print!(
-            "{} ",
-            t!("teleport.clear_confirm").yellow()
-        );
+        print!("{} ", t!("teleport.clear_confirm").yellow());
         io::stdout().flush()?;
 
         let mut input = String::new();
@@ -518,10 +514,8 @@ mod tests {
 
     fn cfg_with(tp1: &str, tp2: &str) -> Config {
         let mut cfg = Config::default();
-        cfg.teleports
-            .insert("tp1".to_string(), PathBuf::from(tp1));
-        cfg.teleports
-            .insert("tp2".to_string(), PathBuf::from(tp2));
+        cfg.teleports.insert("tp1".to_string(), PathBuf::from(tp1));
+        cfg.teleports.insert("tp2".to_string(), PathBuf::from(tp2));
         cfg
     }
 
@@ -564,8 +558,7 @@ mod tests {
         let mut cfg = Config::default();
         cfg.teleports
             .insert("a/b".to_string(), PathBuf::from("/slash"));
-        cfg.teleports
-            .insert("a".to_string(), PathBuf::from("/a"));
+        cfg.teleports.insert("a".to_string(), PathBuf::from("/a"));
         Config::with_test_config(cfg, || {
             // Exact slash-name still resolves on its own.
             assert_eq!(
@@ -580,4 +573,3 @@ mod tests {
         });
     }
 }
-

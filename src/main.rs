@@ -5,8 +5,6 @@ use ntc::shell;
 use ntc::utils;
 use ntc::Config;
 
-
-
 fn run() -> Result<bool> {
     utils::theme::ThemeManager::ensure_default_themes();
     let _ = Config::global();
@@ -79,9 +77,13 @@ fn main() -> Result<()> {
     }
     let launch_interactive = run()?;
     if launch_interactive {
-        println!();
-        print_logo();
-        println!();
+        // `config intro_view off` suppresses the whole startup intro
+        // (logo here; ntpkg/watcher notices in the shell entry).
+        if Config::global_get_intro_view_enabled() {
+            println!();
+            print_logo();
+            println!();
+        }
         shell::run_shell()?;
     }
     Config::save_global();

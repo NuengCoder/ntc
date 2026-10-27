@@ -56,7 +56,8 @@ impl Navigator {
     }
 
     /// Get the venv prefix for display
-    pub fn get_venv_prefix(&self) -> String {        match &self.venv_name {
+    pub fn get_venv_prefix(&self) -> String {
+        match &self.venv_name {
             Some(name) => format!("({}) ", name),
             None => String::new(),
         }

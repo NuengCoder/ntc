@@ -66,9 +66,7 @@ pub fn dir_key(dir: &Path) -> String {
     let s = crate::filetype::strip_unc_prefix(dir);
     #[cfg(windows)]
     {
-        s.replace('\\', "/")
-            .trim_end_matches('/')
-            .to_lowercase()
+        s.replace('\\', "/").trim_end_matches('/').to_lowercase()
     }
     #[cfg(not(windows))]
     {
@@ -259,8 +257,14 @@ mod tests {
     #[test]
     fn snapshots_are_scoped_per_directory() {
         let mut state = empty_state();
-        state.set_snapshot(Path::new("/proj/a"), snapshot("/proj/a/one.rs", "2026-01-01 10:00:00"));
-        state.set_snapshot(Path::new("/proj/b"), snapshot("/proj/b/two.rs", "2026-01-01 11:00:00"));
+        state.set_snapshot(
+            Path::new("/proj/a"),
+            snapshot("/proj/a/one.rs", "2026-01-01 10:00:00"),
+        );
+        state.set_snapshot(
+            Path::new("/proj/b"),
+            snapshot("/proj/b/two.rs", "2026-01-01 11:00:00"),
+        );
 
         let a = state.snapshot_for(Path::new("/proj/a")).unwrap();
         let b = state.snapshot_for(Path::new("/proj/b")).unwrap();
@@ -288,7 +292,10 @@ mod tests {
     #[test]
     fn restore_skips_stale_and_empty_snapshots() {
         let mut state = empty_state();
-        state.set_snapshot(Path::new("/proj/old"), snapshot("x.rs", "2000-01-01 00:00:00"));
+        state.set_snapshot(
+            Path::new("/proj/old"),
+            snapshot("x.rs", "2000-01-01 00:00:00"),
+        );
         assert!(snapshot_for_restore(&state, Path::new("/proj/old"), 24).is_none());
 
         let mut empty = snapshot("x.rs", &now_stamp());
@@ -300,7 +307,11 @@ mod tests {
     #[test]
     fn directory_key_ignores_trailing_separator_and_case() {
         let mut state = empty_state();
-        let dir = if cfg!(windows) { "C:/Work/Proj" } else { "/work/proj" };
+        let dir = if cfg!(windows) {
+            "C:/Work/Proj"
+        } else {
+            "/work/proj"
+        };
         state.set_snapshot(Path::new(dir), snapshot("x.txt", "2026-01-01 10:00:00"));
         let variant = format!("{}/", dir);
         assert!(state.snapshot_for(Path::new(&variant)).is_some());

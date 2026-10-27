@@ -4,6 +4,7 @@
 
 // Top-level modules (multi-file directories)
 pub mod cli;
+pub mod deadlock;
 pub mod editor;
 pub mod fake;
 pub mod image2doc;

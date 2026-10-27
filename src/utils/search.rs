@@ -695,9 +695,7 @@ pub fn display_content_path(path: &Path, root: &Path) -> String {
         s
     };
     // Strip any lingering UNC prefix (Windows) without re-adding absoluteness.
-    s.strip_prefix(r"\\?\")
-        .map(|x| x.to_string())
-        .unwrap_or(s)
+    s.strip_prefix(r"\\?\").map(|x| x.to_string()).unwrap_or(s)
 }
 
 /// Byte length of `text` consumed by a case-insensitive match of `needle`
@@ -1168,8 +1166,14 @@ mod tests {
 
     #[test]
     fn split_alternatives_handles_escaped_and_bare_pipes() {
-        assert_eq!(split_alternatives("error\\|warning"), vec!["error", "warning"]);
-        assert_eq!(split_alternatives("error|warning"), vec!["error", "warning"]);
+        assert_eq!(
+            split_alternatives("error\\|warning"),
+            vec!["error", "warning"]
+        );
+        assert_eq!(
+            split_alternatives("error|warning"),
+            vec!["error", "warning"]
+        );
         assert_eq!(split_alternatives(" a \\| b \\| c "), vec!["a", "b", "c"]);
         assert_eq!(split_alternatives("plain"), vec!["plain"]);
         assert_eq!(split_alternatives("foo bar"), vec!["foo bar"]);

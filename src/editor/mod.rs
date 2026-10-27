@@ -6,6 +6,7 @@ mod core;
 mod edit;
 mod editor_config;
 mod helpers;
+mod hinter;
 mod modes;
 mod mouse;
 pub(crate) mod nerun;
@@ -22,8 +23,8 @@ mod unicode;
 pub use types::set_goto_pattern;
 pub(crate) use types::take_goto_pattern;
 pub(crate) use types::{
-    CreateKind, CursorPos, Editor, EditorEncoding, Focus, Mode, Snapshot, Tab, ALL_ENCODINGS,
-    DEFAULT_SIDEBAR_WIDTH, GOTO_HIGHLIGHT, GOTO_LINE,
+    CreateKind, CursorPos, Editor, EditorEncoding, Focus, Mode, NfeBox, NfeBoxKind, NfeConfirm,
+    Snapshot, Tab, ALL_ENCODINGS, DEFAULT_SIDEBAR_WIDTH, GOTO_HIGHLIGHT, GOTO_LINE,
 };
 
 pub(crate) use unicode::{

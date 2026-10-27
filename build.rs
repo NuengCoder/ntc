@@ -37,16 +37,61 @@ fn set_build_hash() {
     println!("cargo:rustc-env=BUILD_GIT_HASH={}", hash);
 }
 
+/// Embed `assets/ntc_image.ico` (plus version info) into the .exe.
+///
+/// Build-script stderr is only shown with `-vv`, so a failure here used to
+/// leave the binary iconless with no trace in normal/CI output. The icon
+/// path is absolute (a build script's CWD is not guaranteed) and the file
+/// is watched, so changing the .ico re-embeds it instead of reusing a
+/// stale binary.
+#[cfg(windows)]
+fn embed_windows_icon() {
+    println!("cargo:rerun-if-changed=assets/ntc_image.ico");
+    println!("cargo:rerun-if-changed=build.rs");
+    // rc.exe/link.exe can only compile resources for Windows targets whose
+    // target_env is gnu or msvc — cross-compiling (e.g. to Android) would
+    // otherwise fail with "Can only compile resource file when target_env
+    // is gnu or msvc". Non-Windows binaries carry no .ico anyway.
+    let target_os = std::env::var("CARGO_CFG_TARGET_OS").unwrap_or_default();
+    let target_env = std::env::var("CARGO_CFG_TARGET_ENV").unwrap_or_default();
+    if target_os != "windows" || (target_env != "msvc" && target_env != "gnu") {
+        return;
+    }
+    let manifest = std::env::var("CARGO_MANIFEST_DIR").unwrap_or_else(|_| ".".to_string());
+    let icon = Path::new(&manifest).join("assets").join("ntc_image.ico");
+    if !icon.exists() {
+        println!(
+            "cargo:warning=Windows icon not found at {} — the .exe will have no icon",
+            icon.display()
+        );
+        return;
+    }
+    let mut res = winres::WindowsResource::new();
+    // Explicit resource id 1: Explorer picks the first icon group and some
+    // tools ignore groups that start higher.
+    res.set_icon_with_id(&icon.to_string_lossy(), "1");
+    res.set(
+        "FileDescription",
+        "ntc — terminal file manager, editor and shell",
+    );
+    res.set("ProductName", "ntc");
+    res.set("OriginalFilename", "ntc.exe");
+    match res.compile() {
+        Ok(()) => eprintln!("embedded Windows icon from {}", icon.display()),
+        Err(e) => println!(
+            "cargo:warning=Failed to embed Windows icon ({}): {} — install the Windows SDK (rc.exe) or build with the MSVC toolchain",
+            icon.display(),
+            e
+        ),
+    }
+}
+
 #[cfg(windows)]
 fn main() {
     build_frontend();
     set_build_hash();
     arm64_link_search();
-    let mut res = winres::WindowsResource::new();
-    res.set_icon("assets/ntc_image.ico");
-    if let Err(e) = res.compile() {
-        eprintln!("Warning: Failed to compile Windows resource: {}", e);
-    }
+    embed_windows_icon();
 }
 
 #[cfg(not(windows))]

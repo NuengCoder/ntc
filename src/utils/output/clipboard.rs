@@ -54,14 +54,38 @@ pub fn copy_to_clipboard_termux(content: &str) -> Result<bool> {
     Ok(false)
 }
 
+/// Normalize CRLF / lone CR line endings to LF for history and storage.
+pub fn normalize_newlines(content: &str) -> String {
+    content.replace("\r\n", "\n").replace('\r', "\n")
+}
+
+/// Windows apps expect CRLF; every other platform takes LF.
+#[cfg(all(not(target_os = "android"), windows))]
+fn clipboard_payload(content: &str) -> String {
+    content.replace("\r\n", "\n").replace('\n', "\r\n")
+}
+
+#[cfg(all(not(target_os = "android"), not(windows)))]
+fn clipboard_payload(content: &str) -> String {
+    content.to_string()
+}
+
+/// Put text on the system clipboard (non-Android).
+#[cfg(not(target_os = "android"))]
+pub fn set_clipboard_text(content: &str) -> Result<()> {
+    let mut clipboard = Clipboard::new().with_context(|| "Failed to access clipboard")?;
+    clipboard
+        .set_text(clipboard_payload(content))
+        .with_context(|| "Failed to set clipboard")?;
+    Ok(())
+}
+
 /// Copy to clipboard for all platforms
 #[cfg(not(target_os = "android"))]
 pub fn copy_to_clipboard(content: &str, format: &str) -> Result<()> {
-    crate::shell::commands::clipboard::push_clip(content);
-    let mut clipboard = Clipboard::new().with_context(|| "Failed to access clipboard")?;
-
-    clipboard
-        .set_text(content.to_string())
+    let content = normalize_newlines(content);
+    crate::shell::commands::clipboard::push_clip(&content);
+    set_clipboard_text(&content)
         .with_context(|| format!("Failed to copy {} report to clipboard", format))?;
 
     Ok(())

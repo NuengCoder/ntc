@@ -10,8 +10,9 @@
 //! ```
 //!
 //! Transport is pure-Rust `russh` (see [`crate::nssh::ssh`]); passwords come
-//! from `pass_env` or an interactive prompt only — never from argv, never
-//! stored on disk.
+//! from the `pass_env` name (a deadlock pass-env, else an environment
+//! variable) or an interactive prompt only — never from argv, never stored in
+//! the profile file.
 
 use crate::navigator::Navigator;
 use crate::nssh::scan as portscan;
@@ -23,8 +24,12 @@ use crate::utils::interactive::{prompt_yes_no, InteractiveMenu, MenuItem};
 use anyhow::Result;
 use colored::*;
 use indicatif::{ProgressBar, ProgressStyle};
+use rpassword;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
+
+/// Maximum total SSH authentication attempts (env password + prompted retries).
+const MAX_AUTH_ATTEMPTS: u32 = 3;
 
 fn tokenize(input: &str) -> Vec<String> {
     let mut out = Vec::new();
@@ -216,7 +221,18 @@ fn cmd_add(tokens: &[String]) -> Result<bool> {
         }
     }
     if let Some(ref v) = profile.pass_env {
-        if std::env::var(v).is_err() {
+        // A vault-only pass-env is the normal case: do not warn about a
+        // missing env var when the deadlock vault can supply it.
+        if crate::deadlock::find_secret(v).is_some() {
+            print_info(&t!("cmd.nssh.pass_env_registered", v));
+        } else if std::env::var(v)
+            .map(|value| !value.is_empty())
+            .unwrap_or(false)
+        {
+            // Environment variable is set; nothing to warn about.
+        } else if crate::deadlock::vault::exists(&crate::deadlock::vault::ensure_vault_location()) {
+            print_info(&t!("cmd.nssh.pass_env_pending", v));
+        } else {
             print_warning(&t!("cmd.nssh.pass_env_missing", v));
         }
     }
@@ -374,37 +390,58 @@ fn resolve_or_pick(name: Option<&str>) -> Result<Option<(String, store::Profile)
     }
 }
 
-/// Build auth from profile + flags: `pass_env` var, else `--ask-pass` prompt.
-fn build_auth(
-    profile: &store::Profile,
-    ask_pass: bool,
-    pass_value: Option<&str>,
-) -> Result<transport::SshAuth> {
+/// Build auth from profile: key from `profile.key`, password from the
+/// `pass_env` name — the deadlock vault (master cached in this process, the
+/// OS credential store, then the default master) or an environment variable.
+/// Never from argv, never stored in the profile file.
+///
+/// When the vault cannot be unlocked silently and no env var is set, the user
+/// is asked for the master password once; it is then cached for the process
+/// and registered in the OS credential store.
+fn build_auth(profile: &store::Profile) -> Result<transport::SshAuth> {
     let key_path = profile.key.as_deref().map(store::expand_home);
-    if let Some(v) = pass_value {
-        return Ok(transport::SshAuth {
-            key_path,
-            password: Some(v.to_string()),
-        });
-    }
     if let Some(ref var) = profile.pass_env {
-        match std::env::var(var) {
-            Ok(v) if !v.is_empty() => {
+        let mut vault_checked = false;
+        if let Some(vault) = crate::deadlock::unlock_silent() {
+            vault_checked = true;
+            if let Some(secret) = vault.get(var) {
+                print_info(&t!("cmd.nssh.pass_env_from_vault", var));
                 return Ok(transport::SshAuth {
                     key_path,
-                    password: Some(v),
-                })
+                    password: Some(secret.to_string()),
+                });
             }
-            _ => print_warning(&t!("cmd.nssh.pass_env_unset", var)),
         }
-    }
-    if ask_pass {
-        let prompt = t!("cmd.nssh.ask_pass", profile.user, profile.host);
-        let pwd = rpassword::prompt_password(prompt).map_err(|e| anyhow::anyhow!("{}", e))?;
-        return Ok(transport::SshAuth {
-            key_path,
-            password: Some(pwd),
-        });
+        // Environment variable fallback: no prompt needed.
+        if let Ok(value) = std::env::var(var) {
+            if !value.is_empty() {
+                return Ok(transport::SshAuth {
+                    key_path,
+                    password: Some(value),
+                });
+            }
+        }
+        // The vault exists but was not silently unlockable — ask for the
+        // master once (hidden) and remember it.
+        if !vault_checked
+            && crate::deadlock::vault::exists(&crate::deadlock::vault::ensure_vault_location())
+        {
+            match crate::deadlock::unlock_or_prompt() {
+                Ok(Some(vault)) => {
+                    if let Some(secret) = vault.get(var) {
+                        print_info(&t!("cmd.nssh.pass_env_from_vault", var));
+                        return Ok(transport::SshAuth {
+                            key_path,
+                            password: Some(secret.to_string()),
+                        });
+                    }
+                    print_warning(&t!("cmd.nssh.pass_env_not_in_vault", var));
+                }
+                Ok(None) => {}
+                Err(e) => print_warning(&t!("cmd.nssh.master_unlock_failed", e)),
+            }
+        }
+        print_warning(&t!("cmd.nssh.pass_env_unset", var));
     }
     Ok(transport::SshAuth {
         key_path,
@@ -412,12 +449,19 @@ fn build_auth(
     })
 }
 
+/// True when a connect error is an SSH authentication failure worth retrying
+/// with a freshly prompted password.
+fn is_auth_failure(err: &anyhow::Error) -> bool {
+    let msg = err.to_string();
+    msg.contains("authentication failed") || msg.contains("key auth failed")
+}
+
 fn cmd_ssh(tokens: &[String]) -> Result<bool> {
     // nssh ssh [name] [--cmd "..."] [--trust] [--ask-pass] [--timeout <s>]
     let mut name: Option<String> = None;
     let mut cmd: Option<String> = None;
     let mut trust = false;
-    let mut ask_pass = false;
+    let mut _ask_pass = false;
     let mut timeout = Duration::from_secs(30);
     let mut i = 1;
     while i < tokens.len() {
@@ -434,7 +478,7 @@ fn cmd_ssh(tokens: &[String]) -> Result<bool> {
                 i += 1;
             }
             "--ask-pass" => {
-                ask_pass = true;
+                _ask_pass = true;
                 i += 1;
             }
             "--timeout" => {
@@ -465,7 +509,10 @@ fn cmd_ssh(tokens: &[String]) -> Result<bool> {
         return Ok(false);
     };
     let _ = pname;
-    let auth = build_auth(&profile, ask_pass, None)?;
+    let auth = build_auth(&profile)?;
+    let key_path = auth.key_path;
+    let initial_password = auth.password;
+
     print_info(&t!(
         "cmd.nssh.ssh_connecting",
         profile.user,
@@ -473,33 +520,67 @@ fn cmd_ssh(tokens: &[String]) -> Result<bool> {
         profile.port.to_string()
     ));
     let runtime = rt()?;
-    let conn = runtime.block_on(transport::connect(
-        &profile.host,
-        profile.port,
-        &profile.user,
-        &auth,
-        trust,
-        timeout,
-    ))?;
-    if let Some(c) = cmd {
-        let code = runtime.block_on(transport::exec(&conn, &c))?;
-        if code != 0 {
-            print_warning(&t!("cmd.nssh.cmd_exit", code.to_string()));
+    let mut password = initial_password.clone();
+    let connect = |password: Option<&str>| {
+        runtime.block_on(transport::connect(
+            &profile.host,
+            profile.port,
+            &profile.user,
+            &transport::SshAuth {
+                key_path: key_path.clone(),
+                password: password.map(|v| v.to_string()),
+            },
+            trust,
+            timeout,
+        ))
+    };
+
+    for attempt in 1..=MAX_AUTH_ATTEMPTS {
+        match connect(password.as_deref()) {
+            Ok(conn) => {
+                if let Some(c) = cmd {
+                    let code = runtime.block_on(transport::exec(&conn, &c))?;
+                    if code != 0 {
+                        print_warning(&t!("cmd.nssh.cmd_exit", code.to_string()));
+                    }
+                } else {
+                    print_info(&t!("cmd.nssh.shell_hint"));
+                    match runtime.block_on(transport::shell(&conn))? {
+                        transport::ShellEnd::Forced => print_warning(&t!("cmd.nssh.shell_forced")),
+                        transport::ShellEnd::Closed => {}
+                    }
+                    print_info(&t!("cmd.nssh.shell_back"));
+                }
+                let _ = runtime.block_on(conn.handle.disconnect(
+                    russh::Disconnect::ByApplication,
+                    "nssh done",
+                    "",
+                ));
+                return Ok(false);
+            }
+            Err(e) => {
+                if !is_auth_failure(&e) || attempt == MAX_AUTH_ATTEMPTS {
+                    print_error(&format!("{}", e));
+                    print_info(&t!("cmd.nssh.shell_back"));
+                    return Ok(false);
+                }
+                let prompt = if attempt == 1 && initial_password.is_none() {
+                    t!("cmd.nssh.password_prompt", profile.user, profile.host)
+                } else {
+                    t!("cmd.nssh.password_incorrect", profile.user, profile.host)
+                };
+                match rpassword::prompt_password(prompt) {
+                    Ok(pwd) if !pwd.is_empty() => password = Some(pwd),
+                    _ => {
+                        print_info(&t!("cmd.nssh.shell_back"));
+                        return Ok(false);
+                    }
+                }
+            }
         }
-    } else {
-        print_info(&t!("cmd.nssh.shell_hint"));
-        match runtime.block_on(transport::shell(&conn))? {
-            transport::ShellEnd::Forced => print_warning(&t!("cmd.nssh.shell_forced")),
-            transport::ShellEnd::Closed => {}
-        }
-        print_info(&t!("cmd.nssh.shell_back"));
     }
-    let _ = runtime.block_on(conn.handle.disconnect(
-        russh::Disconnect::ByApplication,
-        "nssh done",
-        "",
-    ));
-    Ok(false)
+
+    unreachable!()
 }
 
 /// Split `<profile>:<path>`. Only a *known* profile name counts as remote
@@ -532,7 +613,7 @@ fn cmd_cp(tokens: &[String], nav: &mut Navigator) -> Result<bool> {
     // nssh cp <src> <dst> [--trust] [--ask-pass] [--timeout <s>]
     let mut positional: Vec<String> = Vec::new();
     let mut trust = false;
-    let mut ask_pass = false;
+    let mut _ask_pass = false;
     let mut timeout = Duration::from_secs(30);
     let mut i = 1;
     while i < tokens.len() {
@@ -542,7 +623,7 @@ fn cmd_cp(tokens: &[String], nav: &mut Navigator) -> Result<bool> {
                 i += 1;
             }
             "--ask-pass" => {
-                ask_pass = true;
+                _ask_pass = true;
                 i += 1;
             }
             "--timeout" => {
@@ -600,7 +681,7 @@ fn cmd_cp(tokens: &[String], nav: &mut Navigator) -> Result<bool> {
                 .map_err(|e| anyhow::anyhow!("{}", e))?
                 .expect("profile checked by split_remote");
             let remote = expand_remote_path(&rpath, local.file_name().and_then(|n| n.to_str()));
-            let auth = build_auth(&profile, ask_pass, None)?;
+            let auth = build_auth(&profile)?;
             let runtime = rt()?;
             runtime.block_on(cp_upload(&profile, &auth, &local, &remote, trust, timeout))?;
             Ok(false)
@@ -616,7 +697,7 @@ fn cmd_cp(tokens: &[String], nav: &mut Navigator) -> Result<bool> {
                     local = local.join(base);
                 }
             }
-            let auth = build_auth(&profile, ask_pass, None)?;
+            let auth = build_auth(&profile)?;
             let runtime = rt()?;
             runtime.block_on(cp_download(&profile, &auth, &rpath, &local, trust, timeout))?;
             Ok(false)
@@ -832,36 +913,11 @@ pub fn cmd_nssh(args: &str, nav: &mut Navigator) -> Result<bool> {
         // Bare `nssh` → profile picker → ssh.
         let picked = resolve_or_pick(None)?;
         return match picked {
-            Some((_, profile)) => {
-                let auth = build_auth(&profile, true, None)?;
-                print_info(&t!(
-                    "cmd.nssh.ssh_connecting",
-                    profile.user,
-                    profile.host,
-                    profile.port.to_string()
-                ));
-                let runtime = rt()?;
-                let conn = runtime.block_on(transport::connect(
-                    &profile.host,
-                    profile.port,
-                    &profile.user,
-                    &auth,
-                    false,
-                    Duration::from_secs(30),
-                ))?;
-                print_info(&t!("cmd.nssh.shell_hint"));
-                match runtime.block_on(transport::shell(&conn))? {
-                    transport::ShellEnd::Forced => print_warning(&t!("cmd.nssh.shell_forced")),
-                    transport::ShellEnd::Closed => {}
-                }
-                print_info(&t!("cmd.nssh.shell_back"));
-                let _ = runtime.block_on(conn.handle.disconnect(
-                    russh::Disconnect::ByApplication,
-                    "nssh done",
-                    "",
-                ));
-                Ok(false)
-            }
+            Some((name, _)) => cmd_ssh(&{
+                let mut v = vec!["ssh".to_string()];
+                v.push(name);
+                v
+            }),
             None => Ok(false),
         };
     }

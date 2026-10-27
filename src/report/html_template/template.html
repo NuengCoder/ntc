@@ -66,8 +66,42 @@
             border-bottom: 1px solid #e1e4e8;
             font-family: 'SF Mono', 'Consolas', monospace;
             font-size: 14px;
-            white-space: pre;
+            white-space: normal;
             overflow-x: auto;
+        }
+        /* Collapsible tree widget: first depth visible, deeper levels folded. */
+        .ntree-root {
+            font-weight: 700;
+            color: #1e3c72;
+            margin-bottom: 6px;
+        }
+        ul.ntree {
+            list-style: none;
+            margin: 0;
+            padding-left: 18px;
+            border-left: 1px dashed #d0d7de;
+        }
+        ul.ntree > li {
+            padding: 1px 0;
+            line-height: 1.7;
+        }
+        ul.ntree details > summary {
+            cursor: pointer;
+            list-style: none;
+            outline: none;
+        }
+        ul.ntree details > summary::-webkit-details-marker {
+            display: none;
+        }
+        ul.ntree details > summary::before {
+            content: "\u25B8  ";
+            color: #8a94a0;
+        }
+        ul.ntree details[open] > summary::before {
+            content: "\u25BE  ";
+        }
+        body.dark .ntree-root {
+            color: #9ecbff;
         }
         .file-section {
             padding: 24px 32px;

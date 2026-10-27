@@ -1,0 +1,3104 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="dark">
+<title>NTC 2.4.7 — Analysis Graph</title>
+<style>
+:root{
+  --bg:#080b0e;
+  --bg-soft:#0c1117;
+  --panel:#10161d;
+  --panel-2:#141c25;
+  --panel-3:#18222d;
+  --line:#23303d;
+  --line-bright:#33465a;
+  --text:#e7eef5;
+  --muted:#91a0b2;
+  --dim:#647386;
+  --cyan:#52e0d1;
+  --green:#9be36d;
+  --amber:#ffc86b;
+  --purple:#c3a8ff;
+  --red:#ff7b72;
+  --blue:#7dc4ff;
+  --shadow:0 22px 70px rgba(0,0,0,.45);
+  --radius:16px;
+  --mono:ui-monospace,SFMono-Regular,"Cascadia Code","Cascadia Mono",Consolas,"Liberation Mono",monospace;
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth;scroll-padding-top:88px}
+body{
+  margin:0;
+  background:
+    radial-gradient(900px 500px at 8% -8%,rgba(82,224,209,.09),transparent 60%),
+    radial-gradient(800px 520px at 96% 4%,rgba(195,168,255,.08),transparent 58%),
+    linear-gradient(180deg,#080b0e 0%,#090d12 60%,#080b0e 100%);
+  color:var(--text);
+  font-family:var(--mono);
+  font-size:15px;
+  line-height:1.62;
+  -webkit-font-smoothing:antialiased;
+}
+body::before{
+  content:"";
+  position:fixed;
+  inset:0;
+  pointer-events:none;
+  background-image:
+    linear-gradient(rgba(255,255,255,.018) 1px,transparent 1px),
+    linear-gradient(90deg,rgba(255,255,255,.018) 1px,transparent 1px);
+  background-size:48px 48px;
+  mask-image:linear-gradient(180deg,rgba(0,0,0,.7),transparent 78%);
+  z-index:-1;
+}
+a{color:var(--cyan);text-decoration:none}
+a:hover{text-decoration:underline}
+button,input{font:inherit}
+button{color:inherit}
+::selection{background:rgba(82,224,209,.25);color:#fff}
+.wrap{width:min(1320px,calc(100% - 40px));margin:0 auto}
+.mono{font-family:var(--mono)}
+.muted{color:var(--muted)}
+.dim{color:var(--dim)}
+.accent{color:var(--cyan)}
+.green{color:var(--green)}
+.amber{color:var(--amber)}
+.purple{color:var(--purple)}
+
+.site-header{
+  position:sticky;
+  top:0;
+  z-index:50;
+  border-bottom:1px solid rgba(35,48,61,.8);
+  background:rgba(8,11,14,.82);
+  backdrop-filter:blur(18px);
+}
+.header-inner{
+  display:flex;
+  align-items:center;
+  gap:22px;
+  min-height:66px;
+}
+.brand{
+  display:flex;
+  align-items:center;
+  gap:10px;
+  color:var(--text);
+  font-weight:700;
+  letter-spacing:.02em;
+  white-space:nowrap;
+}
+.brand:hover{text-decoration:none}
+.brand-mark{
+  display:grid;
+  place-items:center;
+  width:32px;
+  height:32px;
+  border:1px solid rgba(82,224,209,.38);
+  border-radius:9px;
+  background:linear-gradient(145deg,rgba(82,224,209,.15),rgba(82,224,209,.02));
+  color:var(--cyan);
+  box-shadow:inset 0 0 18px rgba(82,224,209,.08);
+}
+.brand-mark svg{width:19px;height:19px}
+.brand-text{display:flex;flex-direction:column;line-height:1.05}
+.brand-text small{color:var(--dim);font-size:10px;letter-spacing:.2em;text-transform:uppercase;font-weight:500}
+.nav{
+  display:flex;
+  align-items:center;
+  gap:4px;
+  margin-left:auto;
+}
+.nav a{
+  color:var(--muted);
+  padding:7px 11px;
+  border-radius:7px;
+  font-size:12.5px;
+}
+.nav a:hover{color:var(--text);background:rgba(255,255,255,.04);text-decoration:none}
+.version-pill{
+  display:inline-flex;
+  align-items:center;
+  gap:7px;
+  margin-left:10px;
+  border:1px solid var(--line);
+  border-radius:999px;
+  padding:6px 11px;
+  color:var(--muted);
+  font-size:11.5px;
+  white-space:nowrap;
+}
+.dot{
+  width:6px;height:6px;border-radius:50%;background:var(--green);
+  box-shadow:0 0 10px rgba(155,227,109,.8);
+}
+.menu-toggle{
+  display:none;
+  margin-left:auto;
+  background:transparent;
+  border:1px solid var(--line);
+  border-radius:8px;
+  padding:7px 9px;
+  cursor:pointer;
+}
+
+.hero{
+  position:relative;
+  padding:86px 0 42px;
+  overflow:hidden;
+}
+.hero::after{
+  content:"";
+  position:absolute;
+  width:560px;height:560px;
+  right:-160px;top:-200px;
+  border-radius:50%;
+  background:radial-gradient(circle,rgba(82,224,209,.12),transparent 66%);
+  pointer-events:none;
+}
+.hero-grid{
+  display:grid;
+  grid-template-columns:minmax(0,1.15fr) minmax(340px,.85fr);
+  gap:50px;
+  align-items:center;
+}
+.kicker{
+  display:inline-flex;
+  align-items:center;
+  gap:9px;
+  color:var(--cyan);
+  font-size:11px;
+  letter-spacing:.18em;
+  text-transform:uppercase;
+  margin-bottom:20px;
+}
+.kicker::before{
+  content:"";
+  width:28px;height:1px;
+  background:linear-gradient(90deg,transparent,var(--cyan));
+}
+h1{
+  margin:0;
+  font-size:clamp(42px,6vw,78px);
+  line-height:1.02;
+  letter-spacing:-.055em;
+  font-weight:800;
+}
+h1 .outline{
+  color:transparent;
+  -webkit-text-stroke:1px var(--line-bright);
+}
+.hero-lede{
+  max-width:680px;
+  margin:24px 0 0;
+  color:var(--muted);
+  font-size:16px;
+  line-height:1.75;
+}
+.hero-lede strong{color:var(--text);font-weight:600}
+.hero-actions{display:flex;flex-wrap:wrap;gap:11px;margin-top:30px}
+.btn{
+  display:inline-flex;
+  align-items:center;
+  gap:9px;
+  border:1px solid var(--line);
+  border-radius:9px;
+  padding:10px 16px;
+  background:var(--panel);
+  color:var(--text);
+  font-size:12.5px;
+  cursor:pointer;
+  transition:.16s ease;
+}
+.btn:hover{
+  border-color:var(--line-bright);
+  background:var(--panel-2);
+  text-decoration:none;
+  transform:translateY(-1px);
+}
+.btn.primary{
+  border-color:rgba(82,224,209,.45);
+  background:linear-gradient(180deg,rgba(82,224,209,.18),rgba(82,224,209,.07));
+  color:#cafff9;
+  box-shadow:0 8px 26px rgba(82,224,209,.08);
+}
+.btn.primary:hover{border-color:rgba(82,224,209,.75)}
+.btn svg{width:15px;height:15px}
+.terminal-card{
+  position:relative;
+  border:1px solid var(--line);
+  border-radius:var(--radius);
+  background:linear-gradient(180deg,rgba(20,28,37,.97),rgba(12,17,23,.97));
+  box-shadow:var(--shadow);
+  overflow:hidden;
+}
+.terminal-card::before{
+  content:"";
+  position:absolute;
+  inset:0;
+  border-radius:inherit;
+  pointer-events:none;
+  background:linear-gradient(120deg,rgba(82,224,209,.1),transparent 32%,transparent 70%,rgba(195,168,255,.07));
+}
+.term-bar{
+  display:flex;
+  align-items:center;
+  gap:7px;
+  padding:12px 15px;
+  border-bottom:1px solid var(--line);
+  background:rgba(255,255,255,.015);
+}
+.term-dot{width:9px;height:9px;border-radius:50%;background:#33404e}
+.term-dot:nth-child(1){background:#ff6b6b}
+.term-dot:nth-child(2){background:#ffd166}
+.term-dot:nth-child(3){background:#63d98a}
+.term-title{margin-left:10px;color:var(--dim);font-size:11px}
+.term-body{padding:22px 20px 24px;font-size:12.5px;line-height:1.85;overflow:auto}
+.term-line{white-space:nowrap}
+.term-line .prompt{color:var(--green)}
+.term-line .path{color:var(--blue)}
+.term-line .cmd{color:var(--text)}
+.term-line .comment{color:var(--dim)}
+.term-line .ok{color:var(--cyan)}
+.term-line .out{color:var(--muted)}
+.caret{
+  display:inline-block;
+  width:8px;height:15px;
+  margin-left:2px;
+  vertical-align:-2px;
+  background:var(--cyan);
+  animation:blink 1.15s steps(1) infinite;
+}
+@keyframes blink{50%{opacity:0}}
+
+.stats{
+  display:grid;
+  grid-template-columns:repeat(4,minmax(0,1fr));
+  gap:12px;
+  padding:16px 0 8px;
+}
+.stat{
+  border:1px solid var(--line);
+  border-radius:12px;
+  padding:15px 16px;
+  background:linear-gradient(180deg,rgba(17,23,30,.82),rgba(12,17,23,.6));
+}
+.stat-value{font-size:25px;font-weight:750;letter-spacing:-.04em;line-height:1.1}
+.stat-label{color:var(--dim);font-size:10.5px;letter-spacing:.12em;text-transform:uppercase;margin-top:5px}
+
+.section{
+  padding:64px 0;
+  border-top:1px solid rgba(35,48,61,.55);
+}
+.section-head{
+  display:flex;
+  align-items:flex-end;
+  justify-content:space-between;
+  gap:28px;
+  margin-bottom:28px;
+}
+.section-kicker{
+  color:var(--cyan);
+  font-size:10.5px;
+  letter-spacing:.18em;
+  text-transform:uppercase;
+  margin-bottom:8px;
+}
+h2{
+  margin:0;
+  font-size:clamp(25px,3.2vw,38px);
+  line-height:1.15;
+  letter-spacing:-.035em;
+  font-weight:760;
+}
+.section-desc{
+  max-width:600px;
+  margin:0;
+  color:var(--muted);
+  font-size:13.5px;
+  line-height:1.7;
+}
+.section-desc.right{text-align:right}
+
+.graph-shell{
+  border:1px solid var(--line);
+  border-radius:var(--radius);
+  background:linear-gradient(180deg,rgba(16,22,29,.96),rgba(9,13,18,.96));
+  box-shadow:var(--shadow);
+  overflow:hidden;
+}
+.graph-toolbar{
+  display:flex;
+  flex-wrap:wrap;
+  align-items:center;
+  gap:10px;
+  padding:13px 14px;
+  border-bottom:1px solid var(--line);
+  background:rgba(255,255,255,.012);
+}
+.search-box{
+  display:flex;
+  align-items:center;
+  gap:8px;
+  flex:1 1 250px;
+  min-width:200px;
+  border:1px solid var(--line);
+  border-radius:8px;
+  background:var(--bg-soft);
+  padding:0 10px;
+}
+.search-box svg{width:14px;height:14px;color:var(--dim);flex:none}
+.search-box input{
+  width:100%;
+  border:0;
+  outline:0;
+  background:transparent;
+  color:var(--text);
+  padding:8px 0;
+  font-size:12px;
+}
+.search-box input::placeholder{color:var(--dim)}
+.toolbar-label{color:var(--dim);font-size:10.5px;letter-spacing:.08em;text-transform:uppercase}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chip{
+  display:inline-flex;
+  align-items:center;
+  gap:6px;
+  border:1px solid var(--line);
+  border-radius:999px;
+  background:transparent;
+  color:var(--muted);
+  padding:5px 9px;
+  font-size:10.5px;
+  cursor:pointer;
+  transition:.14s ease;
+  white-space:nowrap;
+}
+.chip:hover{border-color:var(--line-bright);color:var(--text)}
+.chip.active{
+  border-color:color-mix(in srgb,var(--chip-color,var(--cyan)) 58%,transparent);
+  color:var(--chip-color,var(--cyan));
+  background:color-mix(in srgb,var(--chip-color,var(--cyan)) 10%,transparent);
+}
+.chip-dot{width:5px;height:5px;border-radius:50%;background:currentColor}
+.toolbar-spacer{flex:1}
+.icon-btn{
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  gap:6px;
+  width:31px;height:31px;
+  border:1px solid var(--line);
+  border-radius:7px;
+  background:transparent;
+  color:var(--muted);
+  cursor:pointer;
+}
+.icon-btn:hover{color:var(--text);border-color:var(--line-bright);background:rgba(255,255,255,.03)}
+.icon-btn svg{width:14px;height:14px}
+.scenario-bar{
+  display:flex;
+  flex-wrap:wrap;
+  align-items:center;
+  gap:7px;
+  padding:10px 14px;
+  border-bottom:1px solid rgba(35,48,61,.65);
+  background:rgba(82,224,209,.018);
+}
+.scenario-bar .toolbar-label{margin-right:2px}
+.scenario{
+  border:1px solid rgba(82,224,209,.18);
+  border-radius:7px;
+  background:rgba(82,224,209,.04);
+  color:#b7e9e3;
+  padding:4px 8px;
+  font-size:10.5px;
+  cursor:pointer;
+}
+.scenario:hover{background:rgba(82,224,209,.1);border-color:rgba(82,224,209,.42)}
+.scenario.active{background:rgba(82,224,209,.15);border-color:rgba(82,224,209,.62);color:#e3fffb}
+.graph-grid{
+  display:grid;
+  grid-template-columns:minmax(0,1fr) 336px;
+  min-height:720px;
+}
+.graph-stage{
+  position:relative;
+  height:720px;
+  min-height:720px;
+  overflow:hidden;
+  background:
+    radial-gradient(circle at 50% 44%,rgba(82,224,209,.035),transparent 48%),
+    linear-gradient(180deg,rgba(255,255,255,.008),transparent);
+}
+#graphSvg{width:100%;height:100%;display:block;touch-action:none;cursor:grab;overflow:hidden}
+#graphSvg.dragging{cursor:grabbing}
+.graph-hint{
+  position:absolute;
+  left:14px;
+  bottom:13px;
+  display:flex;
+  flex-wrap:wrap;
+  gap:12px;
+  color:var(--dim);
+  font-size:10px;
+  pointer-events:none;
+}
+.graph-hint span{display:inline-flex;align-items:center;gap:5px}
+.key{
+  border:1px solid var(--line);
+  border-bottom-color:var(--line-bright);
+  border-radius:4px;
+  padding:0 4px;
+  background:rgba(255,255,255,.03);
+  color:var(--muted);
+  font-size:9px;
+}
+.zoom-controls{
+  position:absolute;
+  right:12px;
+  bottom:12px;
+  display:flex;
+  flex-direction:column;
+  gap:5px;
+}
+.zoom-controls .icon-btn{background:rgba(10,14,19,.8);backdrop-filter:blur(8px)}
+.graph-side{
+  border-left:1px solid var(--line);
+  background:linear-gradient(180deg,rgba(20,28,37,.58),rgba(10,14,19,.7));
+  display:flex;
+  flex-direction:column;
+  min-height:0;
+}
+.inspector-head{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:10px;
+  padding:13px 15px;
+  border-bottom:1px solid var(--line);
+}
+.inspector-head .toolbar-label{margin:0}
+.inspector-body{
+  padding:16px;
+  overflow:auto;
+  flex:1;
+  max-height:720px;
+}
+.empty-inspector{color:var(--muted);font-size:12.5px;line-height:1.8}
+.empty-inspector .ascii{
+  color:var(--line-bright);
+  font-size:10px;
+  line-height:1.25;
+  margin-bottom:16px;
+  white-space:pre;
+}
+.inspector-badge{
+  display:inline-flex;
+  align-items:center;
+  gap:6px;
+  border:1px solid color-mix(in srgb,var(--node-color,var(--cyan)) 42%,transparent);
+  border-radius:999px;
+  background:color-mix(in srgb,var(--node-color,var(--cyan)) 10%,transparent);
+  color:var(--node-color,var(--cyan));
+  padding:3px 7px;
+  font-size:9.5px;
+  letter-spacing:.07em;
+  text-transform:uppercase;
+}
+.inspector-title{
+  margin:10px 0 5px;
+  font-size:22px;
+  line-height:1.15;
+  letter-spacing:-.035em;
+}
+.inspector-sub{color:var(--dim);font-size:11px;overflow-wrap:anywhere}
+.inspector-summary{color:var(--muted);font-size:12.5px;line-height:1.72;margin:15px 0}
+.inspector-section{border-top:1px solid rgba(35,48,61,.75);padding-top:13px;margin-top:13px}
+.inspector-section h4{
+  margin:0 0 7px;
+  color:var(--dim);
+  font-size:9.5px;
+  letter-spacing:.14em;
+  text-transform:uppercase;
+  font-weight:600;
+}
+.inspector-section p{margin:0;color:var(--muted);font-size:12px;line-height:1.7}
+.code-line{
+  display:block;
+  border:1px solid rgba(35,48,61,.7);
+  border-radius:6px;
+  background:rgba(0,0,0,.24);
+  color:#c9f7f1;
+  padding:6px 8px;
+  margin:4px 0;
+  font-size:10.5px;
+  overflow-wrap:anywhere;
+}
+.file-list{display:flex;flex-wrap:wrap;gap:5px}
+.file-tag{
+  border:1px solid var(--line);
+  border-radius:5px;
+  padding:2px 5px;
+  color:var(--muted);
+  font-size:9.5px;
+  background:rgba(255,255,255,.02);
+}
+.neighbor-list{display:flex;flex-direction:column;gap:4px}
+.neighbor{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:8px;
+  border:1px solid transparent;
+  border-radius:6px;
+  padding:4px 6px;
+  color:var(--muted);
+  font-size:10.5px;
+  cursor:pointer;
+  background:transparent;
+  text-align:left;
+}
+.neighbor:hover{border-color:var(--line);background:rgba(255,255,255,.025);color:var(--text)}
+.neighbor .rel{color:var(--dim);font-size:9px;text-transform:uppercase;letter-spacing:.07em}
+.legend{
+  display:flex;
+  flex-wrap:wrap;
+  gap:16px;
+  padding:12px 16px;
+  border-top:1px solid var(--line);
+  color:var(--dim);
+  font-size:10px;
+}
+.legend-item{display:inline-flex;align-items:center;gap:6px}
+.legend-line{width:22px;height:0;border-top:1px solid var(--cyan)}
+.legend-line.dashed{border-top-style:dashed}
+.legend-line.dotted{border-top-style:dotted}
+.legend-line.purple{border-color:var(--purple)}
+.legend-line.amber{border-color:var(--amber)}
+.legend-node{width:7px;height:7px;border-radius:50%;background:var(--cyan)}
+.legend-node.square{border-radius:2px;background:var(--purple)}
+</style>
+
+<style>
+.pipeline{
+  display:grid;
+  grid-template-columns:repeat(6,minmax(0,1fr));
+  gap:0;
+  border:1px solid var(--line);
+  border-radius:var(--radius);
+  background:linear-gradient(180deg,rgba(16,22,29,.9),rgba(10,14,19,.9));
+  overflow:hidden;
+}
+.pipe-step{
+  position:relative;
+  padding:20px 18px 22px;
+  border-right:1px solid var(--line);
+  min-height:160px;
+}
+.pipe-step:last-child{border-right:0}
+.pipe-step::after{
+  content:"";
+  position:absolute;
+  right:-4px;
+  top:50%;
+  width:7px;height:7px;
+  border-top:1px solid var(--line-bright);
+  border-right:1px solid var(--line-bright);
+  background:#0b1016;
+  transform:translateY(-50%) rotate(45deg);
+  z-index:2;
+}
+.pipe-step:last-child::after{display:none}
+.pipe-num{color:var(--dim);font-size:9.5px;letter-spacing:.15em;text-transform:uppercase}
+.pipe-icon{
+  display:grid;
+  place-items:center;
+  width:34px;height:34px;
+  border:1px solid var(--line);
+  border-radius:9px;
+  margin:12px 0 11px;
+  color:var(--cyan);
+  background:rgba(82,224,209,.05);
+}
+.pipe-icon svg{width:17px;height:17px}
+.pipe-step h3{margin:0 0 5px;font-size:13px;line-height:1.3;letter-spacing:-.01em}
+.pipe-step p{margin:0;color:var(--muted);font-size:10.5px;line-height:1.6}
+.pipe-cmd{
+  display:inline-block;
+  margin-top:9px;
+  color:var(--green);
+  font-size:9.5px;
+  overflow-wrap:anywhere;
+}
+
+.split{
+  display:grid;
+  grid-template-columns:minmax(0,1fr) minmax(0,1fr);
+  gap:20px;
+}
+.panel{
+  border:1px solid var(--line);
+  border-radius:var(--radius);
+  background:linear-gradient(180deg,rgba(16,22,29,.86),rgba(10,14,19,.86));
+  overflow:hidden;
+}
+.panel-head{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:12px;
+  padding:13px 16px;
+  border-bottom:1px solid var(--line);
+  background:rgba(255,255,255,.012);
+}
+.panel-head h3{margin:0;font-size:12.5px;letter-spacing:-.01em}
+.panel-head span{color:var(--dim);font-size:10px}
+.panel-body{padding:16px}
+.panel-body p{margin:0;color:var(--muted);font-size:12px;line-height:1.75}
+.panel-body p+p{margin-top:10px}
+.panel-body code{
+  color:#c5f7f0;
+  background:rgba(82,224,209,.06);
+  border:1px solid rgba(82,224,209,.12);
+  border-radius:4px;
+  padding:1px 4px;
+  font-size:10.5px;
+}
+.panel-list{list-style:none;padding:0;margin:0}
+.panel-list li{
+  display:flex;
+  gap:9px;
+  padding:7px 0;
+  border-bottom:1px dashed rgba(35,48,61,.55);
+  color:var(--muted);
+  font-size:11.5px;
+  line-height:1.6;
+}
+.panel-list li:last-child{border-bottom:0}
+.panel-list .mark{color:var(--cyan);flex:none}
+.panel-list b{color:var(--text);font-weight:600}
+
+.playbooks{
+  display:grid;
+  grid-template-columns:repeat(3,minmax(0,1fr));
+  gap:14px;
+}
+.playbook{
+  position:relative;
+  border:1px solid var(--line);
+  border-radius:13px;
+  padding:18px;
+  background:linear-gradient(180deg,rgba(18,25,33,.92),rgba(11,15,20,.92));
+  overflow:hidden;
+  transition:.18s ease;
+}
+.playbook::before{
+  content:"";
+  position:absolute;
+  inset:0 auto 0 0;
+  width:2px;
+  background:linear-gradient(180deg,transparent,var(--pb-color,var(--cyan)),transparent);
+  opacity:.7;
+}
+.playbook:hover{transform:translateY(-2px);border-color:var(--line-bright);box-shadow:0 14px 34px rgba(0,0,0,.25)}
+.playbook-top{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:12px}
+.playbook-icon{
+  display:grid;place-items:center;
+  width:30px;height:30px;
+  border-radius:8px;
+  color:var(--pb-color,var(--cyan));
+  background:color-mix(in srgb,var(--pb-color,var(--cyan)) 9%,transparent);
+  border:1px solid color-mix(in srgb,var(--pb-color,var(--cyan)) 25%,transparent);
+}
+.playbook-icon svg{width:15px;height:15px}
+.playbook-label{color:var(--dim);font-size:9px;letter-spacing:.13em;text-transform:uppercase}
+.playbook h3{margin:0 0 6px;font-size:14px;line-height:1.3;letter-spacing:-.015em}
+.playbook p{margin:0 0 14px;color:var(--muted);font-size:11px;line-height:1.65}
+.playbook-path{
+  display:flex;
+  flex-wrap:wrap;
+  align-items:center;
+  gap:5px;
+  border-top:1px solid rgba(35,48,61,.65);
+  padding-top:11px;
+}
+.path-node{
+  border:1px solid var(--line);
+  border-radius:5px;
+  padding:2px 5px;
+  color:var(--muted);
+  font-size:9px;
+  background:rgba(255,255,255,.02);
+}
+.path-arrow{color:var(--dim);font-size:9px}
+.playbook .run{
+  margin-top:12px;
+  display:block;
+  border:1px solid rgba(82,224,209,.15);
+  border-radius:6px;
+  background:rgba(82,224,209,.035);
+  color:#c8f8f2;
+  padding:6px 8px;
+  font-size:9.5px;
+  line-height:1.5;
+  overflow-wrap:anywhere;
+}
+
+.atlas-layout{
+  display:grid;
+  grid-template-columns:230px minmax(0,1fr);
+  gap:20px;
+  align-items:start;
+}
+.atlas-nav{
+  position:sticky;
+  top:84px;
+  border:1px solid var(--line);
+  border-radius:12px;
+  background:rgba(14,19,26,.75);
+  padding:10px;
+}
+.atlas-nav-title{color:var(--dim);font-size:9.5px;letter-spacing:.14em;text-transform:uppercase;padding:3px 7px 8px}
+.atlas-nav button{
+  display:flex;
+  align-items:center;
+  gap:8px;
+  width:100%;
+  border:0;
+  border-radius:7px;
+  background:transparent;
+  color:var(--muted);
+  padding:6px 7px;
+  font-size:10.5px;
+  text-align:left;
+  cursor:pointer;
+}
+.atlas-nav button:hover{background:rgba(255,255,255,.035);color:var(--text)}
+.atlas-nav button.active{background:rgba(82,224,209,.08);color:var(--cyan)}
+.atlas-nav .count{margin-left:auto;color:var(--dim);font-size:9px}
+.atlas-nav .sq{width:6px;height:6px;border-radius:2px;background:var(--cat-color,var(--cyan));flex:none}
+.atlas-content{min-width:0}
+.atlas-group{margin-bottom:34px;scroll-margin-top:90px}
+.atlas-group:last-child{margin-bottom:0}
+.atlas-group-head{
+  display:flex;
+  align-items:flex-end;
+  justify-content:space-between;
+  gap:16px;
+  padding-bottom:10px;
+  margin-bottom:12px;
+  border-bottom:1px solid var(--line);
+}
+.atlas-group-head h3{margin:0;font-size:17px;letter-spacing:-.025em}
+.atlas-group-head p{margin:0;color:var(--dim);font-size:10.5px}
+.atlas-grid{
+  display:grid;
+  grid-template-columns:repeat(3,minmax(0,1fr));
+  gap:9px;
+}
+.feature-card{
+  display:flex;
+  flex-direction:column;
+  min-height:150px;
+  border:1px solid var(--line);
+  border-radius:10px;
+  padding:13px;
+  background:linear-gradient(180deg,rgba(17,23,30,.82),rgba(11,15,20,.78));
+  cursor:pointer;
+  text-align:left;
+  transition:.15s ease;
+}
+.feature-card:hover{
+  border-color:color-mix(in srgb,var(--cat-color,var(--cyan)) 45%,var(--line));
+  background:linear-gradient(180deg,rgba(22,30,39,.9),rgba(12,17,22,.9));
+  transform:translateY(-1px);
+}
+.feature-card-top{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.feature-name{font-size:12px;font-weight:700;color:var(--text);letter-spacing:-.01em}
+.feature-cat{width:6px;height:6px;border-radius:50%;background:var(--cat-color,var(--cyan));box-shadow:0 0 8px color-mix(in srgb,var(--cat-color,var(--cyan)) 60%,transparent)}
+.feature-cmd{margin-top:5px;color:var(--green);font-size:9.5px;overflow-wrap:anywhere}
+.feature-summary{margin-top:8px;color:var(--muted);font-size:10.5px;line-height:1.55;flex:1}
+.feature-foot{
+  display:flex;
+  flex-wrap:wrap;
+  gap:4px;
+  margin-top:9px;
+  padding-top:8px;
+  border-top:1px solid rgba(35,48,61,.55);
+}
+.mini-tag{border:1px solid rgba(35,48,61,.9);border-radius:4px;padding:1px 4px;color:var(--dim);font-size:8.5px}
+
+.table-wrap{
+  border:1px solid var(--line);
+  border-radius:var(--radius);
+  overflow:auto;
+  background:rgba(11,15,20,.72);
+}
+table{width:100%;border-collapse:collapse;min-width:760px}
+th,td{
+  padding:11px 14px;
+  border-bottom:1px solid rgba(35,48,61,.62);
+  text-align:left;
+  vertical-align:top;
+  font-size:11px;
+}
+th{
+  color:var(--dim);
+  font-size:9.5px;
+  letter-spacing:.12em;
+  text-transform:uppercase;
+  background:rgba(255,255,255,.018);
+  font-weight:600;
+  position:sticky;
+  top:0;
+}
+td:first-child{color:var(--text);font-weight:600;white-space:nowrap}
+td code{color:#c7f8f2;font-size:10.5px}
+tr:last-child td{border-bottom:0}
+tbody tr:hover{background:rgba(255,255,255,.018)}
+.file-cell{color:var(--muted);white-space:nowrap}
+
+.limits{
+  display:grid;
+  grid-template-columns:repeat(4,minmax(0,1fr));
+  gap:12px;
+}
+.limit{
+  border:1px solid var(--line);
+  border-radius:11px;
+  padding:15px;
+  background:rgba(16,22,29,.62);
+}
+.limit-top{display:flex;align-items:center;gap:8px;margin-bottom:8px}
+.limit-icon{
+  display:grid;place-items:center;
+  width:26px;height:26px;
+  border-radius:7px;
+  background:rgba(255,200,107,.08);
+  color:var(--amber);
+  border:1px solid rgba(255,200,107,.16);
+}
+.limit-icon svg{width:13px;height:13px}
+.limit h3{margin:0;font-size:11.5px}
+.limit p{margin:0;color:var(--muted);font-size:10.5px;line-height:1.62}
+.limit code{color:#ffe0a3;font-size:9.5px}
+
+.footer{
+  padding:34px 0 44px;
+  border-top:1px solid var(--line);
+}
+.footer-inner{
+  display:flex;
+  align-items:flex-start;
+  justify-content:space-between;
+  gap:24px;
+}
+.footer p{margin:0;color:var(--dim);font-size:10.5px;line-height:1.8}
+.footer .strong{color:var(--muted)}
+.footer-links{display:flex;flex-wrap:wrap;gap:14px;font-size:10.5px}
+.footer-links a{color:var(--muted)}
+.footer-links a:hover{color:var(--cyan)}
+.status{
+  display:inline-flex;
+  align-items:center;
+  gap:6px;
+  color:var(--green);
+  font-size:9.5px;
+  letter-spacing:.1em;
+  text-transform:uppercase;
+}
+
+.tooltip{
+  position:fixed;
+  z-index:100;
+  pointer-events:none;
+  border:1px solid var(--line-bright);
+  border-radius:7px;
+  background:rgba(8,12,16,.96);
+  color:var(--text);
+  padding:5px 8px;
+  font-size:10px;
+  box-shadow:0 10px 28px rgba(0,0,0,.4);
+  opacity:0;
+  transform:translate(-50%,-100%);
+  transition:opacity .1s;
+}
+.tooltip.show{opacity:1}
+
+.reveal{opacity:0;transform:translateY(14px);transition:opacity .55s ease,transform .55s ease}
+.reveal.in{opacity:1;transform:none}
+
+@media(max-width:1100px){
+  .hero-grid{grid-template-columns:1fr;gap:34px}
+  .terminal-card{max-width:720px}
+  .pipeline{grid-template-columns:repeat(3,minmax(0,1fr))}
+  .pipe-step:nth-child(3){border-right:0}
+  .pipe-step:nth-child(-n+3){border-bottom:1px solid var(--line)}
+  .pipe-step:nth-child(3)::after{display:none}
+  .playbooks{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .atlas-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .limits{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .graph-grid{grid-template-columns:minmax(0,1fr) 300px}
+}
+@media(max-width:900px){
+  .nav{display:none}
+  .menu-toggle{display:block}
+  .nav.open{
+    display:flex;
+    position:absolute;
+    top:66px;left:0;right:0;
+    flex-direction:column;
+    align-items:stretch;
+    padding:10px 20px 15px;
+    background:rgba(8,11,14,.98);
+    border-bottom:1px solid var(--line);
+  }
+  .nav.open a{padding:10px}
+  .version-pill{display:none}
+  .graph-grid{grid-template-columns:1fr}
+  .graph-side{border-left:0;border-top:1px solid var(--line)}
+  .inspector-body{max-height:420px}
+  .atlas-layout{grid-template-columns:1fr}
+  .atlas-nav{position:static;display:flex;flex-wrap:wrap;gap:4px}
+  .atlas-nav-title{width:100%}
+  .atlas-nav button{width:auto}
+  .atlas-nav .count{display:none}
+}
+@media(max-width:700px){
+  .wrap{width:calc(100% - 26px)}
+  .hero{padding-top:58px}
+  .stats{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .split,.playbooks{grid-template-columns:1fr}
+  .pipeline{grid-template-columns:1fr 1fr}
+  .pipe-step:nth-child(2n){border-right:0}
+  .pipe-step:nth-child(3){border-right:1px solid var(--line)}
+  .pipe-step:nth-child(3)::after{display:block}
+  .pipe-step:nth-child(4)::after{display:none}
+  .pipe-step{border-bottom:1px solid var(--line);min-height:0}
+  .pipe-step:nth-last-child(-n+2){border-bottom:0}
+  .atlas-grid{grid-template-columns:1fr}
+  .limits{grid-template-columns:1fr}
+  .section-head{display:block}
+  .section-desc.right{text-align:left;margin-top:10px}
+  .footer-inner{display:block}
+  .footer-links{margin-top:16px}
+  .graph-stage{height:540px;min-height:540px}
+  .graph-grid{min-height:540px}
+  .gnode text{display:none}
+  .gnode.selected text,.gnode.related text,.gnode.search-hit text{display:block}
+  .graph-hint{display:none}
+  .scenario-bar{gap:5px}
+}
+@media(max-width:440px){
+  body{font-size:14px}
+  .stats{grid-template-columns:1fr}
+  .pipeline{grid-template-columns:1fr}
+  .pipe-step{border-right:0!important}
+  .pipe-step::after{display:none!important}
+  .pipe-step:nth-last-child(-n+2){border-bottom:1px solid var(--line)}
+  .pipe-step:last-child{border-bottom:0}
+  .graph-toolbar{gap:8px}
+  .search-box{flex-basis:100%}
+}
+@media(prefers-reduced-motion:reduce){
+  html{scroll-behavior:auto}
+  *,*::before,*::after{animation-duration:.001ms!important;transition-duration:.001ms!important}
+  .reveal{opacity:1;transform:none}
+}
+</style>
+<style>
+.gnode{cursor:grab;transition:opacity .18s ease}
+.gnode:active{cursor:grabbing}
+.gnode .shape{stroke:#080b0e;stroke-width:2.2;transition:filter .18s ease,fill-opacity .18s ease}
+.gnode text{fill:#a9b8c8;font-size:9px;font-weight:500;text-anchor:middle;paint-order:stroke;stroke:#080b0e;stroke-width:3;stroke-linejoin:round;pointer-events:none;transition:opacity .18s ease}
+.gnode.core-node text{fill:#e7eef5;font-size:9.6px;font-weight:650}
+.gnode .halo{fill:none;stroke-width:1.5;opacity:0;transition:opacity .18s ease}
+.gnode.related .halo{opacity:.36}
+.gnode.selected .halo{opacity:.92;stroke-width:2}
+.gnode.search-hit .halo{opacity:.64;stroke-dasharray:2 4}
+.gnode.selected .shape,.gnode.related .shape{fill-opacity:1;filter:url(#glow)}
+.gnode.dim{opacity:.11}
+.gnode.hidden{display:none}
+.gedge{fill:none;stroke-linecap:round;transition:opacity .18s ease,stroke-width .18s ease}
+.gedge.active{opacity:.95;stroke-width:1.5}
+.gedge.dim{opacity:.035}
+.gedge.hidden{display:none}
+.gedge-label{fill:#9babbc;font-size:7.4px;letter-spacing:.02em;text-anchor:middle;pointer-events:none;opacity:0;paint-order:stroke;stroke:#080b0e;stroke-width:2.6;transition:opacity .16s ease}
+.gedge-label.show{opacity:.85}
+.gedge-label.hidden{display:none}
+</style>
+</head>
+<body>
+<header class="site-header">
+  <div class="wrap header-inner">
+    <a class="brand" href="#top" aria-label="NTC analysis home">
+      <span class="brand-mark">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M5 7l4 5-4 5"/><path d="M12 17h7"/><path d="M17 5l2 2-2 2"/></svg>
+      </span>
+      <span class="brand-text">ntc<small>analysis graph</small></span>
+    </a>
+    <nav class="nav" id="nav" aria-label="Page sections">
+      <a href="#graph">Graph</a>
+      <a href="#pipeline">Pipeline</a>
+      <a href="#playbooks">Playbooks</a>
+      <a href="#atlas">Atlas</a>
+      <a href="#config">Config</a>
+      <a href="#limits">Limits</a>
+      <span class="version-pill"><span class="dot"></span>v2.4.7</span>
+    </nav>
+    <button class="menu-toggle" id="menuToggle" aria-expanded="false" aria-controls="nav" aria-label="Toggle navigation">
+      <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
+    </button>
+  </div>
+</header>
+
+<main id="top">
+  <section class="hero">
+    <div class="wrap">
+      <div class="hero-grid">
+        <div>
+          <div class="kicker">NTC 2.4.7 · Navigate · Toolkit · Center</div>
+          <h1>One terminal.<br><span class="outline">Every tool.</span></h1>
+          <p class="hero-lede">
+            NTC is a <strong>multi-CLI toolkit collected into one command surface</strong>.
+            It wraps navigation, aliases, task running, file inspection, search, reports,
+            networking, media, databases, editing and a package manager behind one fast shell.
+            This page maps what exists, how each piece works, and how the pieces feed each other.
+          </p>
+          <div class="hero-actions">
+            <a class="btn primary" href="#graph">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="6" cy="6" r="2.5"/><circle cx="18" cy="7" r="2.5"/><circle cx="12" cy="18" r="2.5"/><path d="M8.2 7.3l7.4-.4M7.3 8.2l3.7 7.4M16.7 9.2l-3.4 6.6"/></svg>
+              Open the graph
+            </a>
+            <a class="btn" href="#atlas">Browse every feature</a>
+          </div>
+        </div>
+        <div class="terminal-card" aria-label="NTC terminal example">
+          <div class="term-bar"><span class="term-dot"></span><span class="term-dot"></span><span class="term-dot"></span><span class="term-title">ntc — powershell</span></div>
+          <div class="term-body">
+            <div class="term-line"><span class="prompt">➜</span> <span class="path">C:\code\app</span> <span class="cmd">tp add web</span> <span class="comment"># save a jump point</span></div>
+            <div class="term-line"><span class="ok">✓</span> <span class="out">teleport 'web' saved</span></div>
+            <div class="term-line"><span class="prompt">➜</span> <span class="path">C:\code\app</span> <span class="cmd">ral add ship(x) "cargo build --release &amp;&amp; ran deploy $x"</span></div>
+            <div class="term-line"><span class="ok">✓</span> <span class="out">alias 'ship' created</span></div>
+            <div class="term-line"><span class="prompt">➜</span> <span class="path">C:\code\app</span> <span class="cmd">ship prod</span></div>
+            <div class="term-line"><span class="out">→ cargo build --release</span></div>
+            <div class="term-line"><span class="out">→ ran deploy prod</span></div>
+            <div class="term-line"><span class="prompt">➜</span> <span class="path">C:\code\app</span> <span class="cmd">view @web/ -d 2 -t</span><span class="caret"></span></div>
+          </div>
+        </div>
+      </div>
+      <div class="stats">
+        <div class="stat"><div class="stat-value" data-count="73">73</div><div class="stat-label">feature nodes</div></div>
+        <div class="stat"><div class="stat-value" data-count="192">192</div><div class="stat-label">mapped edges</div></div>
+        <div class="stat"><div class="stat-value">7</div><div class="stat-label">tool families</div></div>
+        <div class="stat"><div class="stat-value">1</div><div class="stat-label">binary shell</div></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" id="graph">
+    <div class="wrap">
+      <div class="section-head reveal">
+        <div>
+          <div class="section-kicker">01 · Relationship map</div>
+          <h2>Everything is connected.</h2>
+        </div>
+        <p class="section-desc right">
+          Pick a node to inspect it. Hover to trace neighbours. Use the scenarios to isolate
+          the machinery behind a real workflow. Edges are typed by how one feature consumes another.
+        </p>
+      </div>
+      <div class="graph-shell reveal">
+        <div class="graph-toolbar">
+          <div class="search-box">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="6.5"/><path d="M16 16l4 4"/></svg>
+            <input id="searchInput" type="search" placeholder="Search nodes, commands, files…" autocomplete="off" spellcheck="false" aria-label="Search graph nodes">
+          </div>
+          <span class="toolbar-label">Filter</span>
+          <div class="chips" id="filterChips"></div>
+          <div class="toolbar-spacer"></div>
+          <button class="icon-btn" id="resetBtn" title="Reset graph" aria-label="Reset graph">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M4 4v6h6"/><path d="M5.5 9a8 8 0 1 1-1 6"/></svg>
+          </button>
+        </div>
+        <div class="scenario-bar" id="scenarioBar">
+          <span class="toolbar-label">Scenarios</span>
+        </div>
+        <div class="graph-grid">
+          <div class="graph-stage">
+            <svg id="graphSvg" role="img" aria-label="Interactive relationship graph of NTC features">
+              <defs>
+                <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse">
+                  <path d="M 0 0 L 10 5 L 0 10 z" fill="context-stroke"></path>
+                </marker>
+                <filter id="glow" x="-50%" y="-50%" width="200%" height="200%">
+                  <feGaussianBlur stdDeviation="3" result="blur"></feGaussianBlur>
+                  <feMerge><feMergeNode in="blur"></feMergeNode><feMergeNode in="SourceGraphic"></feMergeNode></feMerge>
+                </filter>
+              </defs>
+              <g id="viewport">
+                <g id="edgeLayer"></g>
+                <g id="edgeLabelLayer"></g>
+                <g id="nodeLayer"></g>
+              </g>
+            </svg>
+            <div class="graph-hint">
+              <span><span class="key">drag</span> node</span>
+              <span><span class="key">drag bg</span> pan</span>
+              <span><span class="key">wheel</span> zoom</span>
+              <span><span class="key">click</span> inspect</span>
+            </div>
+            <div class="zoom-controls">
+              <button class="icon-btn" id="zoomIn" aria-label="Zoom in">+</button>
+              <button class="icon-btn" id="zoomOut" aria-label="Zoom out">−</button>
+              <button class="icon-btn" id="zoomFit" aria-label="Fit graph" title="Fit graph">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M8 4H4v4M16 4h4v4M20 16v4h-4M4 16v4h4"/></svg>
+              </button>
+            </div>
+          </div>
+          <aside class="graph-side" aria-live="polite">
+            <div class="inspector-head">
+              <span class="toolbar-label">Inspector</span>
+              <span class="dim" id="inspectorCount">no selection</span>
+            </div>
+            <div class="inspector-body" id="inspector">
+              <div class="empty-inspector">
+                <div class="ascii">      ╭──────────╮
+      │  ntc ◇   │
+      ╰────┬─────╯
+     ╭─────┴─────╮
+     │  select   │
+     │  a node   │
+     ╰───────────╯</div>
+                Select any node in the graph to read its role, commands, files, and direct dependencies.
+                Use <span class="accent">Scenarios</span> to isolate a real workflow.
+              </div>
+            </div>
+          </aside>
+        </div>
+        <div class="legend">
+          <span class="legend-item"><span class="legend-line"></span> uses / invokes</span>
+          <span class="legend-item"><span class="legend-line dashed"></span> configures</span>
+          <span class="legend-item"><span class="legend-line dotted"></span> flows into</span>
+          <span class="legend-item"><span class="legend-line purple"></span> extends</span>
+          <span class="legend-item"><span class="legend-line amber dashed"></span> state / shared</span>
+          <span class="legend-item"><span class="legend-node"></span> core node</span>
+          <span class="legend-item"><span class="legend-node square"></span> integration</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" id="pipeline">
+    <div class="wrap">
+      <div class="section-head reveal">
+        <div>
+          <div class="section-kicker">02 · Execution model</div>
+          <h2>How a line becomes an action.</h2>
+        </div>
+        <p class="section-desc right">
+          NTC is not a wrapper that shells out for everything. It dispatches its own commands,
+          expands aliases and teleports, then sends the rest to the platform shell.
+        </p>
+      </div>
+      <div class="pipeline reveal">
+        <div class="pipe-step">
+          <div class="pipe-num">Step 01</div>
+          <div class="pipe-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M7 9l3 3-3 3M13 15h4"/></svg></div>
+          <h3>Read the line</h3>
+          <p>The shell tokenises input, completes commands and hints, and keeps history and autosuggest in the loop.</p>
+          <span class="pipe-cmd">history · autosuggest · hints</span>
+        </div>
+        <div class="pipe-step">
+          <div class="pipe-num">Step 02</div>
+          <div class="pipe-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M4 7h16M4 12h10M4 17h7"/><path d="M17 12l3 3-3 3"/></svg></div>
+          <h3>Expand shortcuts</h3>
+          <p>Aliases expand into parameterised commands. <span class="green">@tp</span> paths resolve before filesystem work. Local config overlays global aliases.</p>
+          <span class="pipe-cmd">ral → @teleport → local overlay</span>
+        </div>
+        <div class="pipe-step">
+          <div class="pipe-num">Step 03</div>
+          <div class="pipe-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><circle cx="12" cy="12" r="8"/><path d="M12 8v4l3 2"/></svg></div>
+          <h3>Dispatch</h3>
+          <p>The command registry claims NTC builtins. Unknown commands pass through to the system shell with the same pipes and redirects.</p>
+          <span class="pipe-cmd">execute_command · native fallback</span>
+        </div>
+        <div class="pipe-step">
+          <div class="pipe-num">Step 04</div>
+          <div class="pipe-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M4 6h16v12H4z"/><path d="M8 10h8M8 14h5"/></svg></div>
+          <h3>Produce output</h3>
+          <p>Results return as terminal text, trees, tables, TUIs, generated files, reports, HTTP responses or served web apps.</p>
+          <span class="pipe-cmd">text · TUI · file · report · web</span>
+        </div>
+        <div class="pipe-step">
+          <div class="pipe-num">Step 05</div>
+          <div class="pipe-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M12 3v12"/><path d="M7 10l5 5 5-5"/><path d="M4 20h16"/></svg></div>
+          <h3>Pipe or persist</h3>
+          <p>Text output can feed <span class="green">gs</span>, <span class="green">sort</span>, <span class="green">head</span>, <span class="green">tail</span>, <span class="green">betw</span>, <span class="green">encode</span>, <span class="green">qur</span> or be redirected to disk.</p>
+          <span class="pipe-cmd">a | b · &gt; · &gt;&gt; · &lt; · &lt;&lt; · &lt;&lt;&lt;</span>
+        </div>
+        <div class="pipe-step">
+          <div class="pipe-num">Step 06</div>
+          <div class="pipe-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M4 7h16M7 7v12h10V7M10 4h4"/><path d="M10 11v5M14 11v5"/></svg></div>
+          <h3>Reuse the result</h3>
+          <p>Aliases, <span class="green">ran</span> targets, <span class="green">scr</span> scripts, watcher triggers and the editor terminal can call the same commands again.</p>
+          <span class="pipe-cmd">ral · ran · scr · watch trigger · ne</span>
+        </div>
+      </div>
+      <div class="split reveal" style="margin-top:20px">
+        <div class="panel">
+          <div class="panel-head"><h3>Dispatch rule</h3><span>src/shell/commands/mod.rs</span></div>
+          <div class="panel-body">
+            <p>NTC owns the command name if it exists in its registry. Otherwise the line is treated as a system command. That is why <code>git status</code>, <code>dir</code>, <code>ping</code> and native tools work beside builtins.</p>
+            <p>Pipes and redirects are parsed by the NTC shell, so <code>view | gs main</code> does not require a second shell process.</p>
+          </div>
+        </div>
+        <div class="panel">
+          <div class="panel-head"><h3>Resolution order</h3><span>what wins</span></div>
+          <div class="panel-body">
+            <ul class="panel-list">
+              <li><span class="mark">01</span><span><b>Local project config</b> overlays aliases, hints, ignore/care, fake groups and DB aliases.</span></li>
+              <li><span class="mark">02</span><span><b>Global config</b> supplies every other setting. It remains the base layer.</span></li>
+              <li><span class="mark">03</span><span><b>Teleports are global only</b>, even when a local config exists.</span></li>
+              <li><span class="mark">04</span><span><b>System commands</b> are the final fallback when NTC has no matching builtin.</span></li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" id="playbooks">
+    <div class="wrap">
+      <div class="section-head reveal">
+        <div>
+          <div class="section-kicker">03 · Workflows</div>
+          <h2>How features work together.</h2>
+        </div>
+        <p class="section-desc right">
+          NTC’s value is not a list of commands. It is the hand-offs: shortcuts call navigation,
+          navigation feeds views, views feed search, and search feeds reports and scripts.
+        </p>
+      </div>
+      <div class="playbooks reveal">
+        <article class="playbook" style="--pb-color:var(--cyan)">
+          <div class="playbook-top">
+            <div class="playbook-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M4 12l5-5 4 4 7-7"/><path d="M15 4h5v5"/></svg></div>
+            <span class="playbook-label">Navigation</span>
+          </div>
+          <h3>Create a jump point, then inspect it</h3>
+          <p>Save a directory as a global teleport. Later, resolve it directly inside <span class="green">view</span>, <span class="green">size</span>, <span class="green">report</span>, copy/move, or editor commands.</p>
+          <div class="playbook-path"><span class="path-node">tp add web</span><span class="path-arrow">→</span><span class="path-node">@web</span><span class="path-arrow">→</span><span class="path-node">view @web/ -d 2</span><span class="path-arrow">→</span><span class="path-node">size @web --care</span></div>
+          <span class="run">tp add web C:\code\web &amp;&amp; view @web/ -d 2 -t</span>
+        </article>
+        <article class="playbook" style="--pb-color:var(--green)">
+          <div class="playbook-top">
+            <div class="playbook-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M5 6h14M5 12h14M5 18h8"/><path d="M17 16l3 3-3 3"/></svg></div>
+            <span class="playbook-label">Automation</span>
+          </div>
+          <h3>Turn a repeatable task into one word</h3>
+          <p>Parameterised aliases can call other aliases, builtins and system commands. Share them as <span class="green">.ntc.ral</span> files or keep them local to a project.</p>
+          <div class="playbook-path"><span class="path-node">ral add ship(x)</span><span class="path-arrow">→</span><span class="path-node">cargo build</span><span class="path-arrow">→</span><span class="path-node">ran deploy $x</span><span class="path-arrow">→</span><span class="path-node">ship prod</span></div>
+          <span class="run">ral add ship(x) "cargo build --release &amp;&amp; ran deploy $x"</span>
+        </article>
+        <article class="playbook" style="--pb-color:var(--purple)">
+          <div class="playbook-top">
+            <div class="playbook-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M4 5h16v14H4z"/><path d="M8 9h8M8 13h6"/></svg></div>
+            <span class="playbook-label">Reporting</span>
+          </div>
+          <h3>Turn a directory into a deliverable</h3>
+          <p>Inspect the tree, filter what matters with ignore/care, then export text, JSON, Markdown, HTML, PDF, DOCX or XLSX. The HTML report has its own theme toggle.</p>
+          <div class="playbook-path"><span class="path-node">ignore dir</span><span class="path-arrow">→</span><span class="path-node">view</span><span class="path-arrow">→</span><span class="path-node">report html</span><span class="path-arrow">→</span><span class="path-node">--cp</span></div>
+          <span class="run">ignore dir node_modules &amp;&amp; report html --cp</span>
+        </article>
+        <article class="playbook" style="--pb-color:var(--amber)">
+          <div class="playbook-top">
+            <div class="playbook-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><circle cx="11" cy="11" r="6"/><path d="M16 16l4 4"/></svg></div>
+            <span class="playbook-label">Search</span>
+          </div>
+          <h3>Keep only the files worth searching</h3>
+          <p><span class="green">ignore</span> and <span class="green">care</span> are shared by tree views, size, search, scans and line totals. One policy shapes every file-aware command.</p>
+          <div class="playbook-path"><span class="path-node">ignore ext .log</span><span class="path-arrow">→</span><span class="path-node">gs TODO</span><span class="path-arrow">→</span><span class="path-node">qur</span><span class="path-arrow">→</span><span class="path-node">gs | head</span></div>
+          <span class="run">ignore ext .log &amp;&amp; gs TODO | head 20</span>
+        </article>
+        <article class="playbook" style="--pb-color:var(--blue)">
+          <div class="playbook-top">
+            <div class="playbook-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><rect x="3" y="4" width="18" height="14" rx="2"/><path d="M8 20h8M12 18v2M7 9l2 2-2 2M12 13h4"/></svg></div>
+            <span class="playbook-label">Web</span>
+          </div>
+          <h3>Serve the workspace or play a game</h3>
+          <p><span class="green">serve files</span> exposes the current directory through the embedded file-drive UI. <span class="green">serve chess</span> starts the embedded chess app. Both support LAN sharing.</p>
+          <div class="playbook-path"><span class="path-node">serve files</span><span class="path-arrow">→</span><span class="path-node">ntc_web</span><span class="path-arrow">→</span><span class="path-node">--port</span><span class="path-arrow">→</span><span class="path-node">--share</span></div>
+          <span class="run">serve files --port 8080 --share</span>
+        </article>
+        <article class="playbook" style="--pb-color:var(--red)">
+          <div class="playbook-top">
+            <div class="playbook-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M4 6h16v12H4z"/><path d="M8 10l2 2-2 2M13 14h3"/></svg></div>
+            <span class="playbook-label">Editor</span>
+          </div>
+          <h3>Edit, run, and diff without leaving NTC</h3>
+          <p>The built-in editor carries an NFE sidebar, git diff, teleport jumps and an embedded NTC shell. <span class="green">nerun.toml</span> maps file types to run commands.</p>
+          <div class="playbook-path"><span class="path-node">ne file</span><span class="path-arrow">→</span><span class="path-node">:tp</span><span class="path-arrow">→</span><span class="path-node">NFE</span><span class="path-arrow">→</span><span class="path-node">nerun</span><span class="path-arrow">→</span><span class="path-node">git diff</span></div>
+          <span class="run">ne src/main.rs:42</span>
+        </article>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" id="atlas">
+    <div class="wrap">
+      <div class="section-head reveal">
+        <div>
+          <div class="section-kicker">04 · Feature atlas</div>
+          <h2>Every family, one inventory.</h2>
+        </div>
+        <p class="section-desc right">
+          The atlas mirrors the graph. Click any card to send that node to the inspector.
+          Each card names the main command, the job it does, and the files or features it touches.
+        </p>
+      </div>
+      <div class="split reveal" style="margin-bottom:22px">
+        <div class="panel">
+          <div class="panel-head"><h3>The mental model</h3><span>read this first</span></div>
+          <div class="panel-body">
+            <p><b class="accent">Navigation</b> answers “where am I going?”. <b class="green">Toolkit</b> answers “what do I do there?”. <b class="purple">Center</b> is the shared state that makes both fast: aliases, teleports, config, ignore rules, history and the watcher.</p>
+            <p>Most commands are standalone, but the leverage comes from composition. A teleport is useful in <code>view</code>, but it is also accepted by <code>size</code>, <code>report</code>, <code>cp</code>, <code>mv</code>, <code>txtf</code> and the editor.</p>
+          </div>
+        </div>
+        <div class="panel">
+          <div class="panel-head"><h3>Two kinds of “integration”</h3><span>internal vs external</span></div>
+          <div class="panel-body">
+            <p><b class="amber">Internal integration</b> means a feature is genuinely wired into NTC: shared path resolver, config loader, ignore policy, command registry, or embedded UI.</p>
+            <p><b class="amber">External integration</b> means NTC drives a native tool or service: git, PowerShell/cmd, HTTP APIs, SMTP, SSH, OpenWeather, or the OS clipboard.</p>
+          </div>
+        </div>
+      </div>
+      <div class="atlas-layout reveal">
+        <nav class="atlas-nav" id="atlasNav" aria-label="Atlas categories"></nav>
+        <div class="atlas-content" id="atlasContent"></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" id="config">
+    <div class="wrap">
+      <div class="section-head reveal">
+        <div>
+          <div class="section-kicker">05 · Shared state</div>
+          <h2>Where NTC remembers things.</h2>
+        </div>
+        <p class="section-desc right">
+          Configuration is layered, state is file-backed, and only a small set of project settings
+          are allowed to override the global environment.
+        </p>
+      </div>
+      <div class="table-wrap reveal">
+        <table>
+          <thead><tr><th>Store</th><th>Scope</th><th>What lives there</th><th>Consumers</th></tr></thead>
+          <tbody>
+            <tr><td>config.toml</td><td>Global</td><td>Output path, depth, colors, line numbers, threads, history, autosuggest, git prompt, directory view, watcher, QSC hotkey, language, theme.</td><td class="file-cell">shell · view · report · theme · watcher · qsc</td></tr>
+            <tr><td>ntconfig.toml</td><td>Project</td><td>Local aliases, local hint lists, local ignore/care, local fake groups, local DB aliases. Local definitions win.</td><td class="file-cell">ral · gs · view · scan · fake · ndb</td></tr>
+            <tr><td>teleports</td><td>Global only</td><td>Named savepoints, previous-location stack and teleport history.</td><td class="file-cell">tp · @name · view · size · cp · mv · ne</td></tr>
+            <tr><td>NTCRANFILE.toml</td><td>Project</td><td>Default target, named targets, commands, working directory, environment and task metadata.</td><td class="file-cell">ran · ral · shell</td></tr>
+            <tr><td>.ntc scripts</td><td>Project</td><td>Ordered command scripts, positional arguments, continue-on-error mode.</td><td class="file-cell">scr · aliases · builtins · system</td></tr>
+            <tr><td>editor.toml</td><td>User</td><td>Editor preferences, key behavior, appearance and project hooks.</td><td class="file-cell">ne · nfe · editor terminal</td></tr>
+            <tr><td>nerun.toml</td><td>Project</td><td>Maps file types and projects to run commands.</td><td class="file-cell">ne · nerun</td></tr>
+            <tr><td>nssh.toml</td><td>User</td><td>Saved SSH hosts, users, ports, keys and connection defaults.</td><td class="file-cell">nssh · SFTP · remote commands</td></tr>
+            <tr><td>serve.db</td><td>Service</td><td>Per-service defaults for the file-drive HTTP server.</td><td class="file-cell">serve files · serve config</td></tr>
+            <tr><td>chess.db</td><td>Service</td><td>Persisted chess state for the embedded chess app.</td><td class="file-cell">serve chess</td></tr>
+            <tr><td>future_todo.txt</td><td>Project</td><td>Ordered TODO list with done/undo state.</td><td class="file-cell">todo</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="split reveal" style="margin-top:20px">
+        <div class="panel">
+          <div class="panel-head"><h3>Config precedence</h3><span>highest wins</span></div>
+          <div class="panel-body">
+            <ul class="panel-list">
+              <li><span class="mark">1</span><span><b>Project ntconfig.toml</b> — local aliases, hints, ignore/care, fake groups, DB aliases.</span></li>
+              <li><span class="mark">2</span><span><b>Global config.toml</b> — base behavior and every global setting.</span></li>
+              <li><span class="mark">3</span><span><b>Built-in defaults</b> — used when neither file defines a value.</span></li>
+              <li><span class="mark">×</span><span><b>Teleports do not participate.</b> They are global even inside a local project.</span></li>
+            </ul>
+          </div>
+        </div>
+        <div class="panel">
+          <div class="panel-head"><h3>Project initialization</h3><span>init / local</span></div>
+          <div class="panel-body">
+            <p><code>init --ran</code> creates a task runner file. <code>init --local</code> creates a local config. <code>init --opencode</code> adds project-level opencode configuration.</p>
+            <p><code>local init</code> creates a commented <code>ntconfig.toml</code> template; <code>local deinit</code> removes it. Use <code>showcg</code> and <code>opencg</code> for the global side.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" id="limits">
+    <div class="wrap">
+      <div class="section-head reveal">
+        <div>
+          <div class="section-kicker">06 · Boundaries</div>
+          <h2>What not to assume.</h2>
+        </div>
+        <p class="section-desc right">
+          NTC is broad, but it is not magic. These are the practical limits that change how you
+          chain commands or choose a platform.
+        </p>
+      </div>
+      <div class="limits reveal">
+        <div class="limit">
+          <div class="limit-top">
+            <div class="limit-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 3l9 16H3z"/><path d="M12 9v4M12 16h.01"/></svg></div>
+            <h3>TUIs are not pipeable</h3>
+          </div>
+          <p><code>ne</code>, <code>sys</code>, <code>nms play</code>, <code>nsheet</code> and <code>ndb</code> take over the terminal. Do not expect useful output from piping them into <code>gs</code> or redirecting them to a file.</p>
+        </div>
+        <div class="limit">
+          <div class="limit-top">
+            <div class="limit-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 9h18"/></svg></div>
+            <h3>Windows-only features</h3>
+          </div>
+          <p><code>usrpath</code>, <code>syspath</code>, <code>autoup</code> and <code>mode</code> are Windows-specific. The README describes the current release as Windows-only, although the source contains Linux and Android build paths.</p>
+        </div>
+        <div class="limit">
+          <div class="limit-top">
+            <div class="limit-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="5" y="2" width="14" height="20" rx="2"/><path d="M11 18h2"/></svg></div>
+            <h3>Android trims some formats</h3>
+          </div>
+          <p>PDF, DOCX, XLSX and clipboard-dependent paths are not available in every Android build. Check the command’s help output rather than assuming desktop parity.</p>
+        </div>
+        <div class="limit">
+          <div class="limit-top">
+            <div class="limit-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="9"/><path d="M8 12h8M12 8v8"/></svg></div>
+            <h3>Two separate themes</h3>
+          </div>
+          <p>The terminal theme (<code>nice.ntc_theme</code> and friends) does not style the generated HTML report. The report ships its own light/dark toggle.</p>
+        </div>
+        <div class="limit">
+          <div class="limit-top">
+            <div class="limit-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 6h16M4 12h16M4 18h10"/></svg></div>
+            <h3>Aliases are shell-level</h3>
+          </div>
+          <p>Aliases run inside the NTC shell. Calling <code>ntc myalias</code> from another terminal is a different invocation than typing <code>myalias</code> in the interactive shell.</p>
+        </div>
+        <div class="limit">
+          <div class="limit-top">
+            <div class="limit-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 18l6-6 4 4 6-8"/><path d="M15 8h5v5"/></svg></div>
+            <h3>External services need setup</h3>
+          </div>
+          <p>Weather needs an OpenWeather key, SMTP needs credentials, SSH needs profiles or keys. Network commands can fail for the same reasons any client would.</p>
+        </div>
+        <div class="limit">
+          <div class="limit-top">
+            <div class="limit-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 7h16v10H4z"/><path d="M8 11h3M8 14h6"/></svg></div>
+            <h3>Reports reflect ignore policy</h3>
+          </div>
+          <p><code>ignore</code>/<code>care</code> affects what reports and file-aware commands include. If a report looks wrong, inspect <code>igcared</code> before changing the report command.</p>
+        </div>
+        <div class="limit">
+          <div class="limit-top">
+            <div class="limit-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 3v18M3 12h18"/><circle cx="12" cy="12" r="9"/></svg></div>
+            <h3>No universal undo</h3>
+          </div>
+          <p><code>backup</code> has its own restore/undo model and <code>tpb</code> undoes teleports, but file deletion, config edits and remote operations are not covered by one global undo stack.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer class="footer">
+  <div class="wrap footer-inner">
+    <div>
+      <div class="status"><span class="dot"></span>analysis complete</div>
+      <p class="strong" style="margin-top:8px">NTC 2.4.7 — Navigate · Toolkit · Center</p>
+      <p>Generated from the repository source, help system, configuration files and embedded web apps.<br>Single-file analysis · no network dependencies.</p>
+    </div>
+    <div class="footer-links">
+      <a href="#graph">Graph</a>
+      <a href="#pipeline">Pipeline</a>
+      <a href="#playbooks">Playbooks</a>
+      <a href="#atlas">Atlas</a>
+      <a href="#config">Config</a>
+      <a href="#limits">Limits</a>
+      <a href="#top">Top</a>
+    </div>
+  </div>
+</footer>
+
+<script>
+const CATS = [
+  {id:"core",name:"Core & shell",color:"#52e0d1",desc:"The command surface, shortcut layers, shared state and shell behavior."},
+  {id:"files",name:"Files & content",color:"#9be36d",desc:"Navigate, inspect, search, edit and mutate the filesystem."},
+  {id:"data",name:"Data & output",color:"#c3a8ff",desc:"Turn inputs into tables, reports, generated data, binaries and runtimes."},
+  {id:"network",name:"Network & web",color:"#ffc86b",desc:"HTTP, transfers, DNS, SSH, sharing and embedded web services."},
+  {id:"system",name:"System & platform",color:"#7dc4ff",desc:"Machine state, Windows integration, git, elevation and project setup."},
+  {id:"apps",name:"Apps & TUIs",color:"#ff8fab",desc:"Full-screen experiences that take over the terminal."}
+];
+
+const NODES = [
+  {
+    id:"ntc",label:"ntc",cat:"core",kind:"core",cmd:"ntc",
+    summary:"The single binary and interactive shell that exposes every NTC command.",
+    details:"NTC boots into an interactive prompt with history, completion, hints, a directory view and a command registry. The same binary also runs one-shot commands and serves as the entry point for every TUI and embedded web app.",
+    files:["src/main.rs","src/lib.rs","src/shell/entry.rs"],
+    tags:["binary","entry","shell"]
+  },
+  {
+    id:"shell",label:"shell",cat:"core",kind:"core",cmd:"ntc",
+    summary:"Interactive prompt with history, autosuggest, completion and system passthrough.",
+    details:"The shell owns line editing, prompt rendering, history persistence, ghost-text autosuggest and command completion. Unknown command names fall through to the host system shell, so native tools coexist with NTC builtins.",
+    files:["src/shell/entry.rs","src/shell/helpers.rs","src/utils/session.rs"],
+    tags:["prompt","history","autosuggest","completion"]
+  },
+  {
+    id:"dispatch",label:"dispatch",cat:"core",kind:"core",cmd:"execute_command",
+    summary:"The registry that decides whether a line is an NTC builtin or a system command.",
+    details:"Command dispatch matches the first token against NTC command handlers. If nothing matches, the original line is sent to the platform shell. The pipeline parser handles pipes, redirects and command chaining before dispatch.",
+    files:["src/shell/commands/mod.rs","src/shell/pipeline.rs"],
+    tags:["registry","native fallback","parser"]
+  },
+  {
+    id:"ral",label:"ral",cat:"core",kind:"core",cmd:"ral",
+    summary:"Parameterised aliases with defaults, arrays, hints and import/export.",
+    details:"Aliases can be simple strings or parameterised commands using names, defaults, arrays and named hint lists. They can call other aliases, NTC builtins and system commands. Export/import uses .ntc.ral files; project-local aliases live in ntconfig.toml.",
+    files:["src/shell/commands/alias_commands.rs","src/shell/alias.rs"],
+    tags:["aliases","parameters","hints","import/export"]
+  },
+  {
+    id:"ran",label:"ran",cat:"core",kind:"core",cmd:"ran",
+    summary:"Project task runner driven by NTCRANFILE.toml targets.",
+    details:"NTCRANFILE.toml defines a default standalone target plus named targets with commands, working directories and environment. ral add, ran init and ran list make tasks discoverable and repeatable from the shell.",
+    files:["src/shell/commands/ran_commands.rs","src/ranfile/runner.rs","src/ranfile/parser.rs"],
+    tags:["tasks","targets","project"]
+  },
+  {
+    id:"scr",label:"scr",cat:"core",kind:"core",cmd:"scr",
+    summary:"Automation scripts with positional arguments and continue-on-error mode.",
+    details:"A .ntc script is an ordered command list interpreted by NTC. Positional arguments are exposed as $1, $2 and so on. scr -c keeps running after a failing line; scr ls and scr init make scripts easy to discover and create.",
+    files:["src/shell/commands/scr_commands.rs","src/script/interp.rs","src/script/runner.rs"],
+    tags:["scripts","arguments","automation"]
+  },
+  {
+    id:"watcher",label:"watcher",cat:"core",kind:"core",cmd:"wi",
+    summary:"Live file-change feed that can trigger an alias automatically.",
+    details:"The watcher observes the current project and renders recent changes in a live box. config watch trigger <alias> turns a change into an automatic command; config watch limit controls how many rows are shown.",
+    files:["src/utils/watcher.rs","src/shell/commands/wi.rs"],
+    tags:["watch","trigger","live feed"]
+  },
+  {
+    id:"qsc",label:"qsc",cat:"core",kind:"core",cmd:"qsc",
+    summary:"Global hotkey daemon for summoning NTC from anywhere.",
+    details:"config qsc sets a chord such as Ctrl+0 or Ctrl+Shift+A. qsc listen runs the daemon, qsc status checks it, and qsc startup can register it at login. The hotkey is global, not scoped to the terminal.",
+    files:["src/shell/commands/qsc.rs","src/utils/qsc.rs"],
+    tags:["hotkey","daemon","global"]
+  },
+  {
+    id:"tutorial",label:"tutorial",cat:"core",kind:"core",cmd:"tutorial",
+    summary:"Interactive step-by-step tour of NTC concepts and commands.",
+    details:"The tutorial engine walks through navigation, aliases, teleports and other core workflows in the terminal. It is the guided path into the same command surface described by this atlas.",
+    files:["src/tutorial/steps.rs","src/tutorial/engine.rs","src/tutorial/render.rs"],
+    tags:["onboarding","tour","interactive"]
+  },
+  {
+    id:"theme",label:"theme",cat:"core",kind:"core",cmd:"theme",
+    summary:"Theme manager for the terminal UI, with import/export and live reload.",
+    details:"theme switches, lists, creates, renames and removes terminal themes. theme info shows metadata and color counts, export/import uses .ntc_theme files, and theme reload rereads the theme directory. Terminal themes are separate from the generated HTML report's own light/dark toggle.",
+    files:["src/shell/commands/theme.rs","src/utils/theme/manager.rs","src/utils/output/theme.rs"],
+    tags:["themes","colors","import/export"]
+  },
+  {
+    id:"hints",label:"hints",cat:"core",kind:"core",cmd:"--hint-n",
+    summary:"Argument hints and selectable value lists for aliases and commands.",
+    details:"Hints provide inline guidance and named value lists for --hint-n and --select-n. Named lists are managed with ral hintn add, rm, rnm, info and ls; local hint lists can be layered through ntconfig.toml.",
+    files:["src/shell/hinter.rs","src/shell/commands/config_commands.rs"],
+    tags:["completion","hint lists","alias UX"]
+  },
+  {
+    id:"igcare",label:"ignore / care",cat:"core",kind:"core",cmd:"ignore · care",
+    summary:"Shared ignore and care policy for every file-aware command.",
+    details:"ignore dir, ignore ext and ignore file exclude paths. care dir, care ext and care file reverse the default or add supported types. igcared shows the effective policy, and the same rules shape view, report, search, scan and tl.",
+    files:["src/shell/commands/ignore.rs","src/utils/filetype.rs"],
+    tags:["ignore","care","shared policy"]
+  },
+  {
+    id:"local-config",label:"local config",cat:"core",kind:"core",cmd:"local init",
+    summary:"Project overlay for aliases, hints, ignore rules, fake groups and DB aliases.",
+    details:"ntconfig.toml is created by local init and removed by local deinit. Only a narrow set of settings is local: aliases, hint lists, ignore/care, fake groups and database aliases. Local definitions override global ones.",
+    files:["src/utils/config/mod.rs","src/shell/commands/config_commands.rs"],
+    tags:["project","overlay","precedence"]
+  },
+  {
+    id:"global-config",label:"config.toml",cat:"core",kind:"core",cmd:"showcg",
+    summary:"Global settings for output, depth, color, history, watcher, hotkey and UI.",
+    details:"config commands read and write the global config. showcg summarizes it, opencg opens it in the editor, resetcg restores defaults and restorecg brings back a backup. Teleports stay global regardless of project config.",
+    files:["src/utils/config/mod.rs","src/utils/config/globals.rs","src/shell/commands/config_commands.rs"],
+    tags:["global","settings","backup"]
+  },
+  {
+    id:"teleports",label:"teleports",cat:"core",kind:"core",cmd:"tp · @name",
+    summary:"Named global savepoints that resolve inside many commands.",
+    details:"tp add saves a path, tp jump and @name navigate to it, and tpb moves back through teleport history. @tp paths are accepted by view, size, report, cp, mv, txtf, image and editor commands, not just cd.",
+    files:["src/utils/teleport.rs","src/shell/commands/nav.rs"],
+    tags:["savepoints","global","path resolver"]
+  },
+  {
+    id:"history",label:"history",cat:"core",kind:"core",cmd:"config history",
+    summary:"Persistent command history with optional enable, disable and custom path.",
+    details:"History feeds the prompt’s up/down recall and autosuggest. config history can turn it on or off or point it at a custom file. Teleport history is separate and is managed by tpb history.",
+    files:["src/utils/session.rs","src/shell/entry.rs"],
+    tags:["recall","persistence","autosuggest"]
+  },
+  {
+    id:"meta",label:"help / version",cat:"core",kind:"core",cmd:"help · version · ui · clear",
+    summary:"Orientation commands for help, build version, UI mode and terminal reset.",
+    details:"help prints the built-in command reference, version reports the current build, ui shows the active UI mode and clear resets the screen. These are the low-level orientation commands of the interactive shell.",
+    files:["src/shell/help.rs","src/shell/commands/misc.rs"],
+    tags:["help","version","ui","clear"]
+  },
+  {
+    id:"pipes",label:"pipes & filters",cat:"core",kind:"core",cmd:"| · > · >> · < · <<",
+    summary:"Shell operators plus text filters for composing command output.",
+    details:"Pipes feed stdout into filters such as gs, head, tail, betw, sort, rev, encode and qur. Redirects write or append to files, while <, << and <<< supply stdin. Operators require spaces and - reads stdin explicitly.",
+    files:["src/shell/pipeline.rs","src/shell/stdin.rs","src/shell/commands/sort.rs","src/shell/commands/rev.rs"],
+    tags:["pipes","redirects","filters"]
+  },
+  {
+    id:"view",label:"view",cat:"files",kind:"core",cmd:"view",
+    summary:"The main tree and file-content viewer with size, sort, depth and teleport support.",
+    details:"view renders a directory tree or a file. It filters by extension, file or directory, applies ignore/care policy, shows sizes, sorts entries, limits head/tail/between ranges and resolves @teleport paths.",
+    files:["src/shell/commands/nav.rs","src/utils/navigator.rs"],
+    tags:["tree","sizes","teleport","file content"]
+  },
+  {
+    id:"viewf",label:"viewf",cat:"files",kind:"core",cmd:"viewf",
+    summary:"Files-only tree view at depth one, with sizes, extensions and content mode.",
+    details:"viewf prunes directories and focuses on files, making it a fast inventory for a folder. It can show sizes, sort by size/character/extension, filter extensions and display a selected file’s content.",
+    files:["src/shell/commands/nav.rs","src/utils/navigator.rs"],
+    tags:["files only","inventory","depth one"]
+  },
+  {
+    id:"viewd",label:"viewd",cat:"files",kind:"core",cmd:"viewd",
+    summary:"Directories-only tree with configurable depth and directory sizes.",
+    details:"viewd hides files and shows the folder skeleton. Depth, size sorting, care mode and copy-to-clipboard make it useful for understanding project structure before navigating.",
+    files:["src/shell/commands/nav.rs","src/utils/navigator.rs"],
+    tags:["directories only","structure","depth"]
+  },
+  {
+    id:"size",label:"size",cat:"files",kind:"core",cmd:"size",
+    summary:"Calculate directory, file or teleport size with care mode and timing.",
+    details:"size reports the total size of a path and accepts @teleport references. --care includes everything normally ignored by the shared policy; --time reports elapsed time for the calculation.",
+    files:["src/shell/commands/nav.rs","src/utils/navigator.rs"],
+    tags:["size","teleport","care"]
+  },
+  {
+    id:"report",label:"report",cat:"files",kind:"core",cmd:"report",
+    summary:"Generate TXT, JSON, Markdown, HTML, PDF, DOCX or XLSX reports.",
+    details:"report turns the current project into a shareable artifact. Formats include text, JSON, Markdown, HTML, PDF, DOCX and XLSX, with --cp copying instead of saving. The HTML report has its own light/dark toggle.",
+    files:["src/shell/commands/report.rs","src/report/html.rs","src/report/pdf.rs","src/report/docx.rs","src/report/xlsx.rs"],
+    tags:["export","html","pdf","xlsx"]
+  },
+  {
+    id:"txtf",label:"txtf",cat:"files",kind:"core",cmd:"txtf",
+    summary:"Display a file or pick one from a directory, with ranges and original line numbers.",
+    details:"txtf reads supported text files, optionally selecting one interactively from a directory. --head, --tail and --betw limit output while preserving original line numbers. It accepts teleport paths.",
+    files:["src/shell/commands/misc.rs","src/utils/filetype.rs"],
+    tags:["text","line ranges","teleport"]
+  },
+  {
+    id:"txtc",label:"txtc",cat:"files",kind:"core",cmd:"txtc",
+    summary:"Copy file content to the clipboard.",
+    details:"txtc is the content-to-clipboard path for a known file. It pairs naturally with gs and qur when the goal is to move code or text into another application.",
+    files:["src/shell/commands/clipboard.rs","src/utils/output/clipboard.rs"],
+    tags:["clipboard","text"]
+  },
+  {
+    id:"gs",label:"gs",cat:"files",kind:"core",cmd:"gs",
+    summary:"Grep-like content search with interactive results and piped input.",
+    details:"gs searches file contents with depth, line and glob controls. gs -i opens a paginated interactive picker, and gs can search piped text. OR patterns use a\\|b syntax and results can feed sort, head or files.",
+    files:["src/shell/commands/gs_interactive.rs","src/utils/search.rs"],
+    tags:["grep","content search","interactive","stdin"]
+  },
+  {
+    id:"qur",label:"qur",cat:"files",kind:"core",cmd:"qur",
+    summary:"Query files by glob, select matching content and replace it.",
+    details:"qur combines glob selection, content matching and replacement. It can display matching lines, preview changes and apply replacements across a set of files, making it the batch-edit counterpart to gs.",
+    files:["src/shell/commands/qur.rs","src/utils/search.rs"],
+    tags:["query","replace","batch edit"]
+  },
+  {
+    id:"find",label:"fs / ds / locate",cat:"files",kind:"core",cmd:"fs · ds · locate",
+    summary:"Find files, directories or both by name with a fuzzy fallback.",
+    details:"fs finds files, ds finds directories and locate searches both. They support depth limits, fuzzy fallback and interactive selection. fsc adds a pick-to-display-and-copy step.",
+    files:["src/shell/commands/nav.rs","src/utils/fuzzy.rs"],
+    tags:["find","fuzzy","names"]
+  },
+  {
+    id:"scan",label:"scan",cat:"files",kind:"core",cmd:"scan",
+    summary:"Inventory files by extension or name, plus TCP port and live-host scans.",
+    details:"scan ext and scan files/dir inventory the workspace with depth, size and care controls. scan port and scan ip switch the same command family to network discovery with top-port or custom port specifications.",
+    files:["src/shell/commands/scan.rs","src/netscan.rs"],
+    tags:["inventory","ports","hosts","sizes"]
+  },
+  {
+    id:"tl",label:"tl",cat:"files",kind:"core",cmd:"tl",
+    summary:"Count lines per file, extension or directory with sorting.",
+    details:"tl file counts one file, tl ext aggregates an extension and tl dir summarizes a directory. Sorting by line count makes it a quick way to find the largest source files while respecting ignore/care policy.",
+    files:["src/shell/commands/tl.rs"],
+    tags:["line count","extensions","sorting"]
+  },
+  {
+    id:"fileops",label:"file operations",cat:"files",kind:"core",cmd:"mkf · mkd · cp · mv · rm",
+    summary:"Create, copy, move, rename and remove files or directories.",
+    details:"mkf and mkd create; cp and mv accept files, directories, wildcard sources, destination directories and @teleport paths. rmf and rmd remove with confirmation, while rnmf and rnmd rename.",
+    files:["src/shell/commands/misc.rs","src/utils/teleport.rs"],
+    tags:["create","copy","move","delete","teleport"]
+  },
+  {
+    id:"arc",label:"arc",cat:"files",kind:"core",cmd:"arc",
+    summary:"Create, list and extract zip, tar.gz and tar archives.",
+    details:"arc create builds an archive from selected files and directories, arc list inspects its contents and arc extract restores it to a destination. It covers the common zip and tar family without leaving the shell.",
+    files:["src/shell/commands/arc.rs"],
+    tags:["zip","tar","extract"]
+  },
+  {
+    id:"backup",label:"backup",cat:"files",kind:"core",cmd:"backup",
+    summary:"Project snapshots with restore, undo, diff and selective recovery.",
+    details:"backup create captures the current project, list shows snapshots and restore can recover all or only deleted files. Undo reverses the last restore, diff compares against a snapshot, and clear/recreate manage the backup set.",
+    files:["src/shell/commands/backup.rs","src/utils/backup.rs","src/utils/backup_diff.rs"],
+    tags:["snapshot","restore","undo","diff"]
+  },
+  {
+    id:"todo",label:"todo",cat:"files",kind:"core",cmd:"todo",
+    summary:"Ordered task list stored in future_todo.txt.",
+    details:"todo adds, inserts, renames, completes, reopens and removes tasks. The list lives in future_todo.txt in the current directory, so it is project-scoped and can be committed with the code.",
+    files:["src/shell/commands/todo.rs"],
+    tags:["tasks","project","done/undo"]
+  },
+  {
+    id:"nfe",label:"nfe",cat:"files",kind:"core",cmd:"nfe · explorer",
+    summary:"Full-screen terminal file explorer with editor and file operations.",
+    details:"nfe supports navigation, filtering, find, rename, delete, new file, new directory, hidden-file toggle, sorting, refresh, mouse input and direct hand-off to the editor. It is a TUI, not a pipeable command.",
+    files:["src/nfe/mod.rs","src/nfe/events.rs","src/nfe/fileops.rs"],
+    tags:["TUI","explorer","mouse","sorting"]
+  },
+  {
+    id:"editor",label:"ne / ntceditor",cat:"files",kind:"core",cmd:"ne",
+    summary:"Built-in editor with NFE sidebar, git diff, teleports, templates and an embedded shell.",
+    details:"ne opens files at a line, creates simple/super templates, scaffolds C/C++ hyper projects and runs a full-screen editor. It integrates NFE navigation, git diff, :tp jumps, syntax highlighting, finder/search modes and a terminal panel configured by nerun.toml.",
+    files:["src/editor/mod.rs","src/editor/run.rs","src/editor/nerun.rs","src/editor/modes/nfe.rs","src/editor/terminal.rs"],
+    tags:["editor","templates","git diff","embedded shell"]
+  },
+  {
+    id:"fmt",label:"fmt",cat:"files",kind:"core",cmd:"fmt",
+    summary:"Convert between JSON, YAML, TOML, Markdown, HTML, XML, DOCX, PDF, CSV, TSV and XLSX.",
+    details:"fmt reads a supported input and writes another format, with pretty-printing when the target is the same as the source. It is the document/data conversion bridge behind many report and spreadsheet workflows.",
+    files:["src/shell/commands/fmt.rs","src/shell/commands/fmt_doc.rs","src/shell/commands/fmt_sheet.rs"],
+    tags:["convert","documents","spreadsheets"]
+  },
+  {
+    id:"image",label:"image",cat:"files",kind:"core",cmd:"image",
+    summary:"View, convert and analyze images, including OCR and layout detection.",
+    details:"image opens or renders an image inline with sixel/kitty support and converts it to JSON, Markdown, HTML, text or a description. OCR extracts text and layout detection identifies UI regions for downstream analysis.",
+    files:["src/shell/commands/image.rs","src/image2doc/ocr.rs","src/image2doc/layout.rs"],
+    tags:["images","OCR","layout","conversion"]
+  },
+  {
+    id:"clipboard",label:"clip",cat:"files",kind:"core",cmd:"clip",
+    summary:"Clipboard history plus copy-back and current-path shortcuts.",
+    details:"clip shows history, clip select copies an entry back and clip clear resets it. pathcp copies the current directory path, while view -cp and txtc handle tree and file-content copies.",
+    files:["src/shell/commands/clipboard.rs","src/utils/output/clipboard.rs"],
+    tags:["clipboard","history","path"]
+  },
+  {
+    id:"nsheet",label:"nsheet",cat:"data",kind:"core",cmd:"nsheet",
+    summary:"CSV, TSV and JSON sheet viewer with sort, filter and export.",
+    details:"nsheet open is a fullscreen sheet browser; nsheet view prints a table with sorting, filtering and row limits. It exports JSON or Markdown and supports keyboard navigation, search and column operations.",
+    files:["src/nsheet/mod.rs","src/nsheet/parse.rs","src/shell/commands/nsheet.rs"],
+    tags:["CSV","JSON","table","TUI"]
+  },
+  {
+    id:"ndb",label:"ndb",cat:"data",kind:"core",cmd:"ndb",
+    summary:"Read-only-by-default SQLite shell with schema, query and backup tools.",
+    details:"ndb opens .db files, lists tables and views, shows schemas and rows, runs read-only SQL with pagination, and exposes indexes and database info. Writes require an explicit edit on and write YES statement; backups are built in.",
+    files:["src/ndb/mod.rs","src/ndb/db.rs","src/shell/commands/ndb.rs"],
+    tags:["SQLite","SQL","schema","read-only"]
+  },
+  {
+    id:"fake",label:"fake",cat:"data",kind:"core",cmd:"fake",
+    summary:"Generate fake rows in JSON, TXT, SQL, CSV or XLSX with groups and locales.",
+    details:"fake gen builds rows from named types, unique constraints, locales and saved column groups. Output can be a table or a file, and groups can be shared as .ntc_fake files. It is a test-data generator, not a network service.",
+    files:["src/fake/gen.rs","src/fake/group.rs","src/fake/locale.rs"],
+    tags:["test data","generator","locales"]
+  },
+  {
+    id:"encode",label:"encode / decode",cat:"data",kind:"core",cmd:"encode · decode · cvcode",
+    summary:"Binary, decimal, Base64, hex and URL encoding or decoding.",
+    details:"encode and decode handle b2, b10, b64, hex and url formats from raw text or files. cvcode converts directly between formats, and filters such as encode b64 can sit inside a pipe.",
+    files:["src/shell/commands/encode_decode.rs"],
+    tags:["base64","hex","binary","URL"]
+  },
+  {
+    id:"math",label:"math",cat:"data",kind:"core",cmd:"math",
+    summary:"Expression evaluator, lap/countdown timer and custom math functions.",
+    details:"math evaluates arithmetic and built-in functions. math timer runs a lap timer or countdown alarm, and math fun manages reusable custom functions. .ntc.math files compile and run larger expressions.",
+    files:["src/math/eval.rs","src/math/function.rs","src/shell/commands/misc.rs"],
+    tags:["calculator","timer","functions"]
+  },
+  {
+    id:"ntpkg",label:"ntpkg",cat:"data",kind:"core",cmd:"ntpkg",
+    summary:"Install, activate, list and remove language/tool runtimes.",
+    details:"ntpkg manages many runtime families and injects the active tool bin directories into the shell PATH. install, uninstall, use, which, search and available cover discovery and lifecycle; info reports versions and binaries.",
+    files:["src/ntpkg/manager.rs","src/ntpkg/installers/mod.rs","src/ntpkg/sources.rs"],
+    tags:["runtimes","install","PATH"]
+  },
+  {
+    id:"ntpx",label:"ntpx",cat:"data",kind:"core",cmd:"ntpx",
+    summary:"Run a binary from an installed ntpkg runtime without changing the active shell.",
+    details:"ntpx resolves an installed package and executes its binary with arguments. It is the one-shot companion to ntpkg use, useful when a project needs a specific runtime without a permanent activation.",
+    files:["src/ntpkg/manager.rs","src/shell/commands/mod.rs"],
+    tags:["runtime","execute","one-shot"]
+  },
+  {
+    id:"qr",label:"qr",cat:"data",kind:"core",cmd:"qr",
+    summary:"Render QR codes in the terminal, save PNGs and encode or decode images.",
+    details:"qr encodes text for scanning, qr encode writes a PNG, and image payloads can be embedded so a scan reveals a picture. qr decode extracts data from an existing QR image.",
+    files:["src/shell/commands/qr.rs"],
+    tags:["QR","PNG","encode/decode"]
+  },
+  {
+    id:"http",label:"http",cat:"network",kind:"integration",cmd:"http",
+    summary:"HTTP API client for GET, POST and other methods with headers and auth.",
+    details:"http sends requests with custom headers, bodies, JSON mode, query parameters, bearer auth, silent mode, output files, verbose traces and timeouts. It is the general-purpose API client inside NTC.",
+    files:["src/shell/commands/http_client.rs"],
+    tags:["HTTP","API","headers","auth"]
+  },
+  {
+    id:"dl",label:"dl",cat:"network",kind:"integration",cmd:"dl",
+    summary:"Download files with progress, resume, stop and cancel controls.",
+    details:"dl fetches a URL to disk and can show progress, resume a partial transfer, or be stopped and cancelled interactively. It is designed for large downloads where a simple HTTP request is not enough.",
+    files:["src/shell/commands/downloader.rs"],
+    tags:["download","resume","progress"]
+  },
+  {
+    id:"up",label:"up",cat:"network",kind:"integration",cmd:"up",
+    summary:"Upload a file to an HTTP endpoint with method, headers and body options.",
+    details:"up sends a local file to a URL, with POST and custom header/body support. It complements http and dl for full request, transfer and upload workflows.",
+    files:["src/shell/commands/http_client.rs"],
+    tags:["upload","HTTP","POST"]
+  },
+  {
+    id:"ping",label:"ping",cat:"network",kind:"integration",cmd:"ping",
+    summary:"ICMP reachability check with a configurable count.",
+    details:"ping probes a host and reports latency and loss. It is the quick reachability check before using dns, scan, http or nssh.",
+    files:["src/shell/commands/misc.rs"],
+    tags:["ICMP","latency","reachability"]
+  },
+  {
+    id:"dns",label:"dns",cat:"network",kind:"integration",cmd:"dns",
+    summary:"DNS lookup for A, AAAA, MX, NS, ALL and other record types.",
+    details:"dns resolves a hostname and can request specific record types. It is useful for diagnosing whether a connection failure is name resolution, routing or the remote service.",
+    files:["src/shell/commands/misc.rs"],
+    tags:["DNS","records","diagnostics"]
+  },
+  {
+    id:"smtp",label:"smtp",cat:"network",kind:"integration",cmd:"smtp",
+    summary:"SMTP email client with identity, credentials, subject, body and recipients.",
+    details:"smtp sends mail through a configured SMTP server. It accepts identity, username, password, subject, body, sender and recipient options; credentials and server availability are external prerequisites.",
+    files:["src/shell/commands/smtp_client.rs"],
+    tags:["email","SMTP","credentials"]
+  },
+  {
+    id:"serve-files",label:"serve files",cat:"network",kind:"core",cmd:"serve files",
+    summary:"Serve the current directory through the embedded file-drive web UI.",
+    details:"serve files starts an HTTP service backed by the embedded ntc_web React app. It supports port selection, per-service defaults from serve.db and LAN sharing with a URL and QR code.",
+    files:["src/shell/commands/serve.rs","src/shell/commands/serve_http.rs","ntc_web/src"],
+    tags:["file server","web UI","LAN share"]
+  },
+  {
+    id:"serve-http",label:"serve http-server",cat:"network",kind:"core",cmd:"serve http-server",
+    summary:"Static HTTP server for the current working directory.",
+    details:"serve http-server exposes the CWD as a static site. It is the minimal server mode when the full file-drive UI is unnecessary, and shares the serve configuration and port handling.",
+    files:["src/shell/commands/serve.rs","src/shell/commands/serve_http.rs"],
+    tags:["static server","CWD","HTTP"]
+  },
+  {
+    id:"serve-chess",label:"serve chess",cat:"network",kind:"core",cmd:"serve chess",
+    summary:"Serve the embedded chess web app with persisted game state.",
+    details:"serve chess hosts the bundled ntc_chess_web application. The service uses chess.db for state and can share the LAN URL/QR like the file-drive server.",
+    files:["src/shell/commands/serve_chess.rs","src/shell/commands/chess_engine.rs","ntc_chess_web/src"],
+    tags:["chess","web app","state"]
+  },
+  {
+    id:"nssh",label:"nssh",cat:"network",kind:"integration",cmd:"nssh",
+    summary:"Saved SSH profiles, remote commands, SFTP transfers and port scans.",
+    details:"nssh add stores host/user/port/key profiles in nssh.toml. nssh ssh opens a shell or runs one remote command, nssh cp uploads/downloads over SFTP, and nssh scan checks remote TCP ports. keygen wraps ssh-keygen.",
+    files:["src/shell/commands/nssh.rs","src/nssh/store.rs","src/nssh/ssh.rs","src/nssh/scan.rs"],
+    tags:["SSH","SFTP","profiles","port scan"]
+  },
+  {
+    id:"ipcfg",label:"ipcfg",cat:"network",kind:"integration",cmd:"ipcfg",
+    summary:"Show network adapters in an ipconfig/ifconfig style.",
+    details:"ipcfg lists adapter addresses, masks, gateways and related interface details. It is the local-network companion to ping, dns, scan and nssh.",
+    files:["src/shell/commands/ipcfg.rs"],
+    tags:["adapters","IP","interfaces"]
+  },
+  {
+    id:"weather",label:"tmprt weather",cat:"network",kind:"integration",cmd:"tmprt weather",
+    summary:"Current weather for a city through the OpenWeather API.",
+    details:"tmprt weather reads a saved OpenWeather key and city, or accepts them explicitly. tmprt key and tmprt city persist the setup; network access and a valid key are required.",
+    files:["src/shell/commands/tmprt.rs"],
+    tags:["weather","API key","city"]
+  },
+  {
+    id:"sys",label:"sys / top",cat:"system",kind:"core",cmd:"sys",
+    summary:"Live system monitor for CPU, memory, disk and processes.",
+    details:"sys renders a full-screen monitor with process and resource views. It is a TUI: it is meant for interactive inspection, not for piping or redirecting output.",
+    files:["src/shell/commands/sysmon.rs"],
+    tags:["TUI","CPU","memory","processes"]
+  },
+  {
+    id:"spec",label:"spec",cat:"system",kind:"core",cmd:"spec",
+    summary:"Report CPU, GPU, RAM, storage, OS and serial-number specifications.",
+    details:"spec collects machine-level hardware and OS information in one view. It is the static counterpart to the live sys monitor and is useful for support and environment audits.",
+    files:["src/shell/commands/spec.rs"],
+    tags:["hardware","OS","audit"]
+  },
+  {
+    id:"tmprt",label:"tmprt com",cat:"system",kind:"integration",cmd:"tmprt com",
+    summary:"Live hardware temperature monitor with sensor backend management.",
+    details:"tmprt com refreshes temperature readings and supports freeze/unit toggles. tmprt sensors manages the LibreHardwareMonitor backend with status, install, uninstall and debug actions.",
+    files:["src/shell/commands/tmprt.rs"],
+    tags:["temperature","sensors","LHM"]
+  },
+  {
+    id:"usrpath",label:"usrpath",cat:"system",kind:"integration",cmd:"usrpath",
+    summary:"Inspect and edit user-level Windows PATH entries.",
+    details:"usrpath show lists entries; add, rm and move mutate them, including --cwd/--here shortcuts. Changes affect the user PATH, not the system PATH. Windows-specific.",
+    files:["src/shell/commands/pathman.rs"],
+    tags:["Windows","PATH","user"]
+  },
+  {
+    id:"syspath",label:"syspath",cat:"system",kind:"integration",cmd:"syspath",
+    summary:"Inspect and edit system-level Windows PATH entries.",
+    details:"syspath mirrors usrpath at machine scope. Adding or moving entries usually requires elevation, and changes affect all users. Windows-specific.",
+    files:["src/shell/commands/pathman.rs"],
+    tags:["Windows","PATH","system"]
+  },
+  {
+    id:"autoup",label:"autoup",cat:"system",kind:"integration",cmd:"autoup",
+    summary:"List, add, remove, enable and disable Windows startup entries.",
+    details:"autoup reads HKCU, HKLM and Startup Folder sources. It can add a command, remove an entry, or toggle an entry through StartupApproved without deleting it. Windows-specific.",
+    files:["src/shell/commands/autoup.rs"],
+    tags:["Windows","startup","registry"]
+  },
+  {
+    id:"mode",label:"mode",cat:"system",kind:"integration",cmd:"mode",
+    summary:"Relaunch NTC as Administrator or back to normal elevation.",
+    details:"mode admin exits and starts NTC elevated; mode normal restarts without elevation. It changes the process context, so open sessions and environment state may not carry over. Windows-specific.",
+    files:["src/shell/commands/mode.rs"],
+    tags:["Windows","elevation","admin"]
+  },
+  {
+    id:"git",label:"git",cat:"system",kind:"integration",cmd:"git · st · b · l",
+    summary:"Pretty git status, branches and log, with full passthrough for other subcommands.",
+    details:"git status, branch and log get NTC formatting and highlighting. Every other git subcommand passes through unchanged. The prompt can show git state when config git is enabled, and the editor has a git diff mode.",
+    files:["src/shell/commands/git.rs","src/utils/git.rs","src/editor/modes/git_diff.rs"],
+    tags:["git","status","diff","prompt"]
+  },
+  {
+    id:"pyenv",label:"py_activate",cat:"system",kind:"integration",cmd:"py_activate",
+    summary:"Auto-detect and activate or deactivate a Python virtual environment.",
+    details:"py_activate finds a nearby virtual environment and updates the shell environment; py_deactivate reverses it. It is a convenience layer over the standard venv activation scripts.",
+    files:["src/shell/venv.rs"],
+    tags:["Python","venv","environment"]
+  },
+  {
+    id:"init",label:"init / deinit",cat:"system",kind:"core",cmd:"init",
+    summary:"Create or remove project scaffolding for ran, local config and opencode.",
+    details:"init --ran creates NTCRANFILE.toml, init --local creates ntconfig.toml and init --opencode adds project-level opencode configuration. deinit removes the selected project files. local init/deinit handle the local config directly.",
+    files:["src/shell/commands/config_commands.rs","src/shell/commands/ran_commands.rs"],
+    tags:["scaffold","project","opencode"]
+  },
+  {
+    id:"nms",label:"nms",cat:"apps",kind:"core",cmd:"nms",
+    summary:"Fullscreen audio player with waveform, level meter and media scanning.",
+    details:"nms play provides pause, seek, volume, replay and a live waveform. nms scan finds audio/video files with depth, size, duration and care filters. Video files play their audio track only; the TUI is not pipeable.",
+    files:["src/nms/player.rs","src/nms/tui.rs","src/nms/scan.rs"],
+    tags:["audio","TUI","waveform","scan"]
+  },
+  {
+    id:"web-files",label:"ntc_web",cat:"apps",kind:"integration",cmd:"serve files",
+    summary:"Embedded React file-drive UI served by NTC.",
+    details:"ntc_web provides the browser interface for browsing and transferring files from the served directory. It is embedded into the binary and launched through serve files, so no separate frontend server is required.",
+    files:["ntc_web/src","src/shell/commands/serve.rs"],
+    tags:["React","file drive","embedded"]
+  },
+  {
+    id:"chess-app",label:"ntc_chess_web",cat:"apps",kind:"integration",cmd:"serve chess",
+    summary:"Embedded browser chess app backed by the bundled chess engine and state database.",
+    details:"ntc_chess_web is served by serve chess. The NTC side includes a chess engine and persists state in chess.db, while the browser app provides the board and interaction layer.",
+    files:["ntc_chess_web/src","src/shell/commands/chess_engine.rs","src/shell/commands/serve_chess.rs"],
+    tags:["chess","React","engine","embedded"]
+  },
+  {
+    id:"say",label:"say / print",cat:"apps",kind:"core",cmd:"say",
+    summary:"Print text with loop, newline and tab controls, without file redirect.",
+    details:"say and print repeat or format text for terminal output. They are deliberately simple output helpers and are documented as not redirecting to files.",
+    files:["src/shell/commands/misc.rs"],
+    tags:["output","text","loop"]
+  }
+];
+
+const EDGES = [
+  {s:"ntc",t:"shell",rel:"uses"},
+  {s:"ntc",t:"dispatch",rel:"uses"},
+  {s:"ntc",t:"tutorial",rel:"uses"},
+  {s:"ntc",t:"qsc",rel:"uses"},
+  {s:"shell",t:"dispatch",rel:"feeds"},
+  {s:"shell",t:"history",rel:"uses"},
+  {s:"shell",t:"hints",rel:"uses"},
+  {s:"shell",t:"pipes",rel:"uses"},
+  {s:"shell",t:"ral",rel:"uses"},
+  {s:"shell",t:"teleports",rel:"uses"},
+  {s:"dispatch",t:"shell",rel:"extends"},
+  {s:"dispatch",t:"git",rel:"uses"},
+  {s:"dispatch",t:"say",rel:"uses"},
+  {s:"ral",t:"dispatch",rel:"uses"},
+  {s:"ral",t:"teleports",rel:"uses"},
+  {s:"ral",t:"ran",rel:"uses"},
+  {s:"ral",t:"scr",rel:"uses"},
+  {s:"ral",t:"hints",rel:"config"},
+  {s:"ran",t:"shell",rel:"uses"},
+  {s:"ran",t:"scr",rel:"uses"},
+  {s:"scr",t:"ral",rel:"uses"},
+  {s:"scr",t:"ran",rel:"uses"},
+  {s:"scr",t:"shell",rel:"uses"},
+  {s:"watcher",t:"ral",rel:"feeds"},
+  {s:"watcher",t:"global-config",rel:"config"},
+  {s:"watcher",t:"shell",rel:"feeds"},
+  {s:"qsc",t:"global-config",rel:"config"},
+  {s:"qsc",t:"ntc",rel:"uses"},
+  {s:"tutorial",t:"teleports",rel:"uses"},
+  {s:"tutorial",t:"ral",rel:"uses"},
+  {s:"tutorial",t:"view",rel:"uses"},
+  {s:"tutorial",t:"shell",rel:"uses"},
+  {s:"tutorial",t:"meta",rel:"uses"},
+  {s:"theme",t:"shell",rel:"config"},
+  {s:"theme",t:"global-config",rel:"state"},
+  {s:"theme",t:"editor",rel:"uses"},
+  {s:"meta",t:"shell",rel:"uses"},
+  {s:"meta",t:"dispatch",rel:"uses"},
+  {s:"hints",t:"ral",rel:"feeds"},
+  {s:"hints",t:"local-config",rel:"config"},
+  {s:"igcare",t:"view",rel:"config"},
+  {s:"igcare",t:"viewf",rel:"config"},
+  {s:"igcare",t:"viewd",rel:"config"},
+  {s:"igcare",t:"size",rel:"config"},
+  {s:"igcare",t:"report",rel:"config"},
+  {s:"igcare",t:"gs",rel:"config"},
+  {s:"igcare",t:"scan",rel:"config"},
+  {s:"igcare",t:"tl",rel:"config"},
+  {s:"local-config",t:"ral",rel:"config"},
+  {s:"local-config",t:"hints",rel:"config"},
+  {s:"local-config",t:"igcare",rel:"config"},
+  {s:"local-config",t:"fake",rel:"config"},
+  {s:"local-config",t:"ndb",rel:"config"},
+  {s:"local-config",t:"global-config",rel:"extends"},
+  {s:"global-config",t:"shell",rel:"config"},
+  {s:"global-config",t:"view",rel:"config"},
+  {s:"global-config",t:"report",rel:"config"},
+  {s:"global-config",t:"watcher",rel:"config"},
+  {s:"global-config",t:"qsc",rel:"config"},
+  {s:"global-config",t:"git",rel:"config"},
+  {s:"global-config",t:"nms",rel:"config"},
+  {s:"teleports",t:"shell",rel:"config"},
+  {s:"teleports",t:"view",rel:"feeds"},
+  {s:"teleports",t:"viewf",rel:"feeds"},
+  {s:"teleports",t:"viewd",rel:"feeds"},
+  {s:"teleports",t:"size",rel:"feeds"},
+  {s:"teleports",t:"report",rel:"feeds"},
+  {s:"teleports",t:"txtf",rel:"feeds"},
+  {s:"teleports",t:"fileops",rel:"feeds"},
+  {s:"teleports",t:"image",rel:"feeds"},
+  {s:"teleports",t:"editor",rel:"feeds"},
+  {s:"history",t:"shell",rel:"feeds"},
+  {s:"pipes",t:"gs",rel:"feeds"},
+  {s:"pipes",t:"qur",rel:"feeds"},
+  {s:"pipes",t:"encode",rel:"feeds"},
+  {s:"pipes",t:"say",rel:"feeds"},
+  {s:"pipes",t:"dispatch",rel:"feeds"},
+  {s:"view",t:"igcare",rel:"uses"},
+  {s:"view",t:"teleports",rel:"uses"},
+  {s:"view",t:"clipboard",rel:"feeds"},
+  {s:"viewf",t:"view",rel:"extends"},
+  {s:"viewf",t:"igcare",rel:"uses"},
+  {s:"viewd",t:"view",rel:"extends"},
+  {s:"viewd",t:"igcare",rel:"uses"},
+  {s:"size",t:"view",rel:"extends"},
+  {s:"size",t:"igcare",rel:"uses"},
+  {s:"size",t:"teleports",rel:"uses"},
+  {s:"report",t:"view",rel:"uses"},
+  {s:"report",t:"gs",rel:"uses"},
+  {s:"report",t:"igcare",rel:"uses"},
+  {s:"report",t:"global-config",rel:"uses"},
+  {s:"report",t:"fmt",rel:"uses"},
+  {s:"txtf",t:"view",rel:"extends"},
+  {s:"txtf",t:"teleports",rel:"uses"},
+  {s:"txtf",t:"igcare",rel:"uses"},
+  {s:"txtc",t:"clipboard",rel:"feeds"},
+  {s:"gs",t:"igcare",rel:"uses"},
+  {s:"gs",t:"pipes",rel:"uses"},
+  {s:"gs",t:"qur",rel:"feeds"},
+  {s:"qur",t:"gs",rel:"uses"},
+  {s:"qur",t:"igcare",rel:"uses"},
+  {s:"find",t:"view",rel:"feeds"},
+  {s:"find",t:"scan",rel:"extends"},
+  {s:"scan",t:"igcare",rel:"uses"},
+  {s:"scan",t:"find",rel:"uses"},
+  {s:"scan",t:"nssh",rel:"feeds"},
+  {s:"tl",t:"igcare",rel:"uses"},
+  {s:"tl",t:"scan",rel:"uses"},
+  {s:"fileops",t:"teleports",rel:"uses"},
+  {s:"fileops",t:"igcare",rel:"uses"},
+  {s:"arc",t:"fileops",rel:"uses"},
+  {s:"backup",t:"git",rel:"uses"},
+  {s:"backup",t:"fileops",rel:"uses"},
+  {s:"backup",t:"view",rel:"uses"},
+  {s:"todo",t:"fileops",rel:"uses"},
+  {s:"nfe",t:"editor",rel:"feeds"},
+  {s:"nfe",t:"fileops",rel:"uses"},
+  {s:"nfe",t:"teleports",rel:"uses"},
+  {s:"editor",t:"nfe",rel:"uses"},
+  {s:"editor",t:"teleports",rel:"uses"},
+  {s:"editor",t:"git",rel:"uses"},
+  {s:"editor",t:"shell",rel:"uses"},
+  {s:"editor",t:"ntpkg",rel:"uses"},
+  {s:"fmt",t:"report",rel:"feeds"},
+  {s:"fmt",t:"nsheet",rel:"feeds"},
+  {s:"fmt",t:"fileops",rel:"uses"},
+  {s:"image",t:"fileops",rel:"uses"},
+  {s:"image",t:"clipboard",rel:"feeds"},
+  {s:"image",t:"qr",rel:"feeds"},
+  {s:"clipboard",t:"txtc",rel:"feeds"},
+  {s:"clipboard",t:"view",rel:"feeds"},
+  {s:"nsheet",t:"fmt",rel:"uses"},
+  {s:"nsheet",t:"fileops",rel:"uses"},
+  {s:"nsheet",t:"report",rel:"feeds"},
+  {s:"ndb",t:"fileops",rel:"uses"},
+  {s:"ndb",t:"backup",rel:"uses"},
+  {s:"ndb",t:"local-config",rel:"uses"},
+  {s:"fake",t:"local-config",rel:"uses"},
+  {s:"fake",t:"fmt",rel:"feeds"},
+  {s:"fake",t:"fileops",rel:"feeds"},
+  {s:"encode",t:"pipes",rel:"uses"},
+  {s:"encode",t:"fileops",rel:"feeds"},
+  {s:"math",t:"shell",rel:"extends"},
+  {s:"ntpkg",t:"dl",rel:"uses"},
+  {s:"ntpkg",t:"shell",rel:"feeds"},
+  {s:"ntpkg",t:"global-config",rel:"config"},
+  {s:"ntpkg",t:"ntpx",rel:"feeds"},
+  {s:"ntpx",t:"ntpkg",rel:"uses"},
+  {s:"qr",t:"clipboard",rel:"feeds"},
+  {s:"http",t:"fileops",rel:"feeds"},
+  {s:"http",t:"pipes",rel:"feeds"},
+  {s:"http",t:"weather",rel:"uses"},
+  {s:"dl",t:"fileops",rel:"feeds"},
+  {s:"up",t:"fileops",rel:"uses"},
+  {s:"up",t:"http",rel:"uses"},
+  {s:"ping",t:"dns",rel:"feeds"},
+  {s:"dns",t:"ipcfg",rel:"feeds"},
+  {s:"smtp",t:"fileops",rel:"uses"},
+  {s:"serve-files",t:"web-files",rel:"uses"},
+  {s:"serve-files",t:"serve-http",rel:"extends"},
+  {s:"serve-files",t:"qr",rel:"feeds"},
+  {s:"serve-files",t:"global-config",rel:"config"},
+  {s:"serve-files",t:"fileops",rel:"uses"},
+  {s:"serve-http",t:"fileops",rel:"uses"},
+  {s:"serve-chess",t:"chess-app",rel:"uses"},
+  {s:"serve-chess",t:"qr",rel:"feeds"},
+  {s:"serve-chess",t:"serve-http",rel:"extends"},
+  {s:"nssh",t:"scan",rel:"uses"},
+  {s:"nssh",t:"fileops",rel:"uses"},
+  {s:"nssh",t:"global-config",rel:"config"},
+  {s:"ipcfg",t:"scan",rel:"feeds"},
+  {s:"weather",t:"http",rel:"uses"},
+  {s:"weather",t:"global-config",rel:"config"},
+  {s:"sys",t:"spec",rel:"feeds"},
+  {s:"spec",t:"sys",rel:"extends"},
+  {s:"tmprt",t:"sys",rel:"feeds"},
+  {s:"usrpath",t:"ntpkg",rel:"state"},
+  {s:"syspath",t:"usrpath",rel:"extends"},
+  {s:"autoup",t:"usrpath",rel:"state"},
+  {s:"mode",t:"ntc",rel:"uses"},
+  {s:"git",t:"shell",rel:"uses"},
+  {s:"git",t:"editor",rel:"feeds"},
+  {s:"pyenv",t:"shell",rel:"config"},
+  {s:"init",t:"ran",rel:"feeds"},
+  {s:"init",t:"local-config",rel:"feeds"},
+  {s:"init",t:"editor",rel:"feeds"},
+  {s:"nms",t:"scan",rel:"uses"},
+  {s:"nms",t:"igcare",rel:"uses"},
+  {s:"web-files",t:"serve-files",rel:"extends"},
+  {s:"chess-app",t:"serve-chess",rel:"extends"},
+  {s:"say",t:"pipes",rel:"uses"},
+  {s:"tutorial",t:"hints",rel:"uses"}
+];
+
+const SCENARIOS = [
+  {
+    id:"all",name:"All nodes",desc:"The complete map.",
+    nodes:null
+  },
+  {
+    id:"teleport",name:"Teleport flow",desc:"Save a path, then resolve it across commands.",
+    nodes:["teleports","view","size","report","fileops","editor","nfe","txtf","image","shell","igcare","local-config"]
+  },
+  {
+    id:"alias",name:"Alias automation",desc:"A shortcut that reaches the shell, tasks and scripts.",
+    nodes:["ral","hints","shell","dispatch","ran","scr","teleports","fileops","git","local-config","global-config","watcher"]
+  },
+  {
+    id:"search",name:"Search & replace",desc:"One ignore policy feeding search, selection and batch edits.",
+    nodes:["igcare","gs","qur","view","scan","tl","find","pipes","local-config","report"]
+  },
+  {
+    id:"reporting",name:"Reporting",desc:"From tree inspection to a shareable document.",
+    nodes:["view","igcare","report","fmt","image","nsheet","fileops","clipboard","global-config"]
+  },
+  {
+    id:"serve",name:"Serve & share",desc:"Embedded web apps over the local network.",
+    nodes:["serve-files","serve-http","serve-chess","web-files","chess-app","qr","fileops","global-config","ntc"]
+  },
+  {
+    id:"editor",name:"Editor loop",desc:"Edit, navigate, diff and run without leaving.",
+    nodes:["editor","nfe","git","shell","teleports","ntpkg","fileops","init"]
+  },
+  {
+    id:"network",name:"Network toolkit",desc:"Reach, resolve, transfer, scan and connect.",
+    nodes:["http","dl","up","ping","dns","ipcfg","scan","nssh","smtp","weather","qr","global-config"]
+  },
+  {
+    id:"data",name:"Data pipeline",desc:"Generate, convert, inspect and store structured data.",
+    nodes:["fake","fmt","nsheet","ndb","encode","math","report","fileops","local-config"]
+  },
+  {
+    id:"system",name:"Platform ops",desc:"Observe the machine and change Windows integration.",
+    nodes:["sys","spec","tmprt","usrpath","syspath","autoup","mode","ntpkg","git","pyenv","ntc"]
+  },
+  {
+    id:"media",name:"Media & images",desc:"Scan media, inspect images, play audio, share QR.",
+    nodes:["nms","image","qr","scan","igcare","clipboard","fileops","serve-files"]
+  }
+];
+
+const NS = "http://www.w3.org/2000/svg";
+const stage = document.querySelector(".graph-stage");
+const svg = document.getElementById("graphSvg");
+const viewport = document.getElementById("viewport");
+const edgeLayer = document.getElementById("edgeLayer");
+const edgeLabelLayer = document.getElementById("edgeLabelLayer");
+const nodeLayer = document.getElementById("nodeLayer");
+const inspector = document.getElementById("inspector");
+const inspectorCount = document.getElementById("inspectorCount");
+const searchInput = document.getElementById("searchInput");
+const filterChips = document.getElementById("filterChips");
+const scenarioBar = document.getElementById("scenarioBar");
+const atlasNav = document.getElementById("atlasNav");
+const atlasContent = document.getElementById("atlasContent");
+const tooltip = document.createElement("div");
+tooltip.className = "tooltip";
+document.body.appendChild(tooltip);
+
+const catById = Object.fromEntries(CATS.map(c => [c.id, c]));
+const nodeById = Object.fromEntries(NODES.map(n => [n.id, n]));
+const edgeKey = e => [e.s, e.t, e.rel].join("|");
+const seenEdges = new Set();
+const cleanEdges = EDGES.filter(e => {
+  if (!nodeById[e.s] || !nodeById[e.t]) return false;
+  const key = edgeKey(e);
+  if (seenEdges.has(key)) return false;
+  seenEdges.add(key);
+  return true;
+});
+
+const relStyle = {
+  uses:    {color:"#52e0d1", dash:"",       opacity:.30},
+  config:  {color:"#9be36d", dash:"4 5",    opacity:.22},
+  feeds:   {color:"#7dc4ff", dash:"1 5",    opacity:.26},
+  extends: {color:"#c3a8ff", dash:"7 5",    opacity:.24},
+  state:   {color:"#ffc86b", dash:"2 4",    opacity:.22}
+};
+
+const degree = {};
+NODES.forEach(n => degree[n.id] = 0);
+cleanEdges.forEach(e => { degree[e.s]++; degree[e.t]++; });
+NODES.forEach(n => {
+  n.r = n.kind === "core" ? 9.5 + Math.min(4.5, degree[n.id] * .55) : 7 + Math.min(4, degree[n.id] * .5);
+});
+const maxDegree = Math.max(...Object.values(degree), 1);
+
+let W = 0;
+let H = 0;
+let pan = {x:0, y:0, k:1};
+let activeCats = new Set(CATS.map(c => c.id));
+let query = "";
+let activeScenario = "all";
+let scenarioSet = null;
+let selectedId = null;
+let hoverId = null;
+let drag = null;
+const nodeEls = {};
+const edgeEls = [];
+const labelEls = [];
+
+const esc = value => String(value)
+  .replaceAll("&","&amp;")
+  .replaceAll("<","&lt;")
+  .replaceAll(">","&gt;")
+  .replaceAll('"',"&quot;");
+
+function clamp(v, min, max){ return Math.max(min, Math.min(max, v)); }
+
+function sizeGraph(){
+  const oldW = W;
+  const oldH = H;
+  W = Math.max(320, stage.clientWidth);
+  H = Math.max(360, stage.clientHeight);
+  svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
+  if (oldW && oldH && (oldW !== W || oldH !== H) && Number.isFinite(NODES[0].x)) {
+    NODES.forEach(n => {
+      n.x = n.x * (W / oldW);
+      n.y = n.y * (H / oldH);
+      n.x = clamp(n.x, 30, W - 30);
+      n.y = clamp(n.y, 30, H - 30);
+    });
+    renderPositions();
+    fitVisible(false);
+  }
+}
+
+function categoryCenters(){
+  return {
+    core:    {x:W * .50, y:H * .46},
+    files:   {x:W * .24, y:H * .31},
+    data:    {x:W * .76, y:H * .28},
+    network: {x:W * .81, y:H * .70},
+    system:  {x:W * .23, y:H * .70},
+    apps:    {x:W * .51, y:H * .84}
+  };
+}
+
+function seedPositions(){
+  const centers = categoryCenters();
+  const counters = {};
+  NODES.forEach((n, i) => {
+    const c = centers[n.cat] || centers.core;
+    counters[n.cat] = (counters[n.cat] || 0) + 1;
+    const idx = counters[n.cat];
+    const angle = (idx * 2.399963) + (i * .37);
+    const ring = 34 + Math.sqrt(idx) * 28;
+    n.x = clamp(c.x + Math.cos(angle) * ring, 28, W - 28);
+    n.y = clamp(c.y + Math.sin(angle) * ring, 28, H - 28);
+    n.vx = 0;
+    n.vy = 0;
+    n.fixed = false;
+  });
+}
+
+function simulate(){
+  let alpha = 1;
+  const centers = categoryCenters();
+  for (let tick = 0; tick < 320; tick++) {
+    for (let i = 0; i < NODES.length; i++) {
+      const a = NODES[i];
+      for (let j = i + 1; j < NODES.length; j++) {
+        const b = NODES[j];
+        let dx = b.x - a.x;
+        let dy = b.y - a.y;
+        let d2 = dx * dx + dy * dy;
+        if (d2 < 1) {
+          dx = (i - j) * .1 + .1;
+          dy = (i + j) * .05 + .1;
+          d2 = dx * dx + dy * dy;
+        }
+        const d = Math.sqrt(d2);
+        const repel = (a.cat === b.cat ? 2900 : 4100) / (d2 + 60);
+        const fx = dx / d * repel;
+        const fy = dy / d * repel;
+        a.vx -= fx;
+        a.vy -= fy;
+        b.vx += fx;
+        b.vy += fy;
+        const minD = a.r + b.r + 24;
+        if (d < minD) {
+          const push = (minD - d) / d * .42;
+          a.vx -= dx * push;
+          a.vy -= dy * push;
+          b.vx += dx * push;
+          b.vy += dy * push;
+        }
+      }
+    }
+    cleanEdges.forEach(e => {
+      const a = nodeById[e.s];
+      const b = nodeById[e.t];
+      const dx = b.x - a.x;
+      const dy = b.y - a.y;
+      const d = Math.max(1, Math.hypot(dx, dy));
+      const target = e.rel === "config" ? 160 : e.rel === "state" ? 142 : 128;
+      const force = (d - target) * .0062;
+      const fx = dx / d * force;
+      const fy = dy / d * force;
+      a.vx += fx;
+      a.vy += fy;
+      b.vx -= fx;
+      b.vy -= fy;
+    });
+    NODES.forEach(n => {
+      if (n.fixed) return;
+      const c = centers[n.cat] || centers.core;
+      n.vx += (c.x - n.x) * .0017;
+      n.vy += (c.y - n.y) * .0017;
+      n.vx += (W * .5 - n.x) * .00025;
+      n.vy += (H * .5 - n.y) * .00025;
+      n.vx *= .82;
+      n.vy *= .82;
+      n.x = clamp(n.x + n.vx * alpha * 1.45, 26, W - 26);
+      n.y = clamp(n.y + n.vy * alpha * 1.45, 26, H - 26);
+    });
+    alpha = Math.max(.04, alpha * .992);
+  }
+}
+
+function createGraph(){
+  edgeLayer.replaceChildren();
+  edgeLabelLayer.replaceChildren();
+  nodeLayer.replaceChildren();
+  cleanEdges.forEach((e, i) => {
+    const path = document.createElementNS(NS, "path");
+    path.setAttribute("class", "gedge");
+    path.setAttribute("stroke", relStyle[e.rel].color);
+    path.setAttribute("stroke-width", "1");
+    path.setAttribute("stroke-dasharray", relStyle[e.rel].dash);
+    path.setAttribute("opacity", relStyle[e.rel].opacity);
+    path.setAttribute("marker-end", "url(#arrow)");
+    edgeLayer.appendChild(path);
+
+    const label = document.createElementNS(NS, "text");
+    label.setAttribute("class", "gedge-label");
+    label.textContent = e.rel;
+    edgeLabelLayer.appendChild(label);
+    edgeEls.push({edge:e, path, label, curve: ((i % 7) - 3) * 5});
+  });
+
+  NODES.forEach(n => {
+    const g = document.createElementNS(NS, "g");
+    g.setAttribute("class", `gnode ${n.kind === "core" ? "core-node" : "integration-node"}`);
+    g.dataset.id = n.id;
+    g.setAttribute("tabindex", "0");
+    g.setAttribute("role", "button");
+    g.setAttribute("aria-label", `${n.label}: ${n.summary}`);
+
+    const halo = document.createElementNS(NS, "circle");
+    halo.setAttribute("class", "halo");
+    halo.setAttribute("cx", "0");
+    halo.setAttribute("cy", "0");
+    halo.setAttribute("r", n.r + 7);
+    halo.setAttribute("stroke", catById[n.cat].color);
+    g.appendChild(halo);
+
+    let shape;
+    if (n.kind === "core") {
+      shape = document.createElementNS(NS, "circle");
+      shape.setAttribute("cx", "0");
+      shape.setAttribute("cy", "0");
+      shape.setAttribute("r", n.r);
+    } else {
+      shape = document.createElementNS(NS, "rect");
+      shape.setAttribute("x", -n.r);
+      shape.setAttribute("y", -n.r);
+      shape.setAttribute("width", n.r * 2);
+      shape.setAttribute("height", n.r * 2);
+      shape.setAttribute("rx", 3.5);
+    }
+    shape.setAttribute("class", "shape");
+    shape.setAttribute("fill", catById[n.cat].color);
+    shape.setAttribute("fill-opacity", n.kind === "core" ? ".92" : ".72");
+    g.appendChild(shape);
+
+    const text = document.createElementNS(NS, "text");
+    text.setAttribute("y", n.r + 12);
+    text.textContent = n.label;
+    g.appendChild(text);
+
+    g.addEventListener("pointerenter", () => {
+      hoverId = n.id;
+      updateStyles();
+      showTooltip(n);
+    });
+    g.addEventListener("pointermove", moveTooltip);
+    g.addEventListener("pointerleave", () => {
+      hoverId = null;
+      hideTooltip();
+      updateStyles();
+    });
+    g.addEventListener("focus", () => {
+      hoverId = n.id;
+      updateStyles();
+    });
+    g.addEventListener("blur", () => {
+      hoverId = null;
+      updateStyles();
+    });
+    g.addEventListener("keydown", ev => {
+      if (ev.key === "Enter" || ev.key === " ") {
+        ev.preventDefault();
+        selectNode(n.id);
+      }
+    });
+    nodeLayer.appendChild(g);
+    nodeEls[n.id] = g;
+  });
+}
+
+function renderPositions(){
+  edgeEls.forEach(({edge, path, label, curve}) => {
+    const a = nodeById[edge.s];
+    const b = nodeById[edge.t];
+    if (!a || !b) return;
+    const dx = b.x - a.x;
+    const dy = b.y - a.y;
+    const d = Math.max(1, Math.hypot(dx, dy));
+    const ux = dx / d;
+    const uy = dy / d;
+    const padA = a.r + 3;
+    const padB = b.r + 5;
+    const x1 = a.x + ux * padA;
+    const y1 = a.y + uy * padA;
+    const x2 = b.x - ux * padB;
+    const y2 = b.y - uy * padB;
+    const mx = (x1 + x2) / 2;
+    const my = (y1 + y2) / 2;
+    const cx = mx - uy * curve;
+    const cy = my + ux * curve;
+    path.setAttribute("d", `M ${x1.toFixed(1)} ${y1.toFixed(1)} Q ${cx.toFixed(1)} ${cy.toFixed(1)} ${x2.toFixed(1)} ${y2.toFixed(1)}`);
+    label.setAttribute("x", ((x1 + 2 * cx + x2) / 4).toFixed(1));
+    label.setAttribute("y", ((y1 + 2 * cy + y2) / 4 - 3).toFixed(1));
+  });
+  NODES.forEach(n => {
+    const g = nodeEls[n.id];
+    if (g) g.setAttribute("transform", `translate(${n.x.toFixed(1)} ${n.y.toFixed(1)})`);
+  });
+}
+
+function searchMatch(n){
+  if (!query) return true;
+  const hay = [
+    n.label, n.cmd, n.summary, n.details, n.cat,
+    (n.tags || []).join(" "), (n.files || []).join(" ")
+  ].join(" ").toLowerCase();
+  return hay.includes(query);
+}
+
+function visibleNodes(){
+  return NODES.filter(n => {
+    if (!activeCats.has(n.cat)) return false;
+    if (scenarioSet && !scenarioSet.has(n.id)) return false;
+    return true;
+  });
+}
+
+function updateVisibility(){
+  const visible = new Set(visibleNodes().map(n => n.id));
+  NODES.forEach(n => {
+    n.visible = visible.has(n.id);
+    n.match = searchMatch(n);
+    const g = nodeEls[n.id];
+    if (g) g.classList.toggle("hidden", !n.visible);
+    if (g) g.classList.toggle("search-hit", Boolean(query) && n.match && n.visible);
+  });
+  edgeEls.forEach(({edge, path, label}) => {
+    const show = visible.has(edge.s) && visible.has(edge.t);
+    path.classList.toggle("hidden", !show);
+    label.classList.toggle("hidden", !show);
+  });
+  if (selectedId && !visible.has(selectedId)) {
+    selectedId = null;
+    renderEmptyInspector();
+  }
+  updateStyles();
+}
+
+function neighborMap(){
+  const map = {};
+  cleanEdges.forEach(e => {
+    (map[e.s] ||= []).push({id:e.t, rel:e.rel, dir:"out"});
+    (map[e.t] ||= []).push({id:e.s, rel:e.rel, dir:"in"});
+  });
+  return map;
+}
+const neighbors = neighborMap();
+
+function updateStyles(){
+  const focus = hoverId || selectedId;
+  const related = new Set();
+  if (focus) {
+    related.add(focus);
+    (neighbors[focus] || []).forEach(x => related.add(x.id));
+  }
+  NODES.forEach(n => {
+    const g = nodeEls[n.id];
+    if (!g) return;
+    g.classList.toggle("selected", n.id === selectedId);
+    g.classList.toggle("related", Boolean(focus) && related.has(n.id));
+    g.classList.toggle("dim", (Boolean(focus) && !related.has(n.id)) || (Boolean(query) && !n.match));
+  });
+  edgeEls.forEach(({edge, path, label}) => {
+    const active = Boolean(focus) && (edge.s === focus || edge.t === focus);
+    path.classList.toggle("active", active);
+    path.classList.toggle("dim", Boolean(focus) && !active);
+    label.classList.toggle("show", active);
+  });
+  const activeCount = focus ? (neighbors[focus] || []).length : 0;
+  inspectorCount.textContent = focus ? `${activeCount} links` : (selectedId ? "" : "no selection");
+}
+
+function selectNode(id){
+  if (!nodeById[id]) return;
+  selectedId = id;
+  hoverId = null;
+  hideTooltip();
+  updateStyles();
+  renderInspector(nodeById[id]);
+}
+
+function clearSelection(){
+  selectedId = null;
+  updateStyles();
+  renderEmptyInspector();
+}
+
+function renderEmptyInspector(){
+  inspector.innerHTML = `
+    <div class="empty-inspector">
+      <div class="ascii">      ╭──────────╮
+      │  ntc ◇   │
+      ╰────┬─────╯
+     ╭─────┴─────╮
+     │  select   │
+     │  a node   │
+     ╰───────────╯</div>
+      Select any node in the graph to read its role, commands, files, and direct dependencies.
+      Use <span class="accent">Scenarios</span> to isolate a real workflow.
+    </div>`;
+  inspectorCount.textContent = "no selection";
+}
+
+function renderInspector(n){
+  const cat = catById[n.cat];
+  const links = neighbors[n.id] || [];
+  const linkHtml = links.map(x => {
+    const other = nodeById[x.id];
+    const arrow = x.dir === "out" ? "→" : "←";
+    return `<button class="neighbor" data-id="${x.id}"><span>${esc(other.label)}</span><span class="rel">${arrow} ${esc(x.rel)}</span></button>`;
+  }).join("");
+  const files = (n.files || []).map(f => `<span class="file-tag">${esc(f)}</span>`).join("");
+  inspector.innerHTML = `
+    <span class="inspector-badge" style="--node-color:${cat.color}"><span class="chip-dot"></span>${esc(cat.name)}</span>
+    <h3 class="inspector-title">${esc(n.label)}</h3>
+    <div class="inspector-sub">${esc(n.cmd)}</div>
+    <p class="inspector-summary">${esc(n.summary)}</p>
+    <div class="inspector-section">
+      <h4>How it works</h4>
+      <p>${esc(n.details)}</p>
+    </div>
+    <div class="inspector-section">
+      <h4>Commands</h4>
+      <span class="code-line">${esc(n.cmd)}</span>
+    </div>
+    <div class="inspector-section">
+      <h4>Source / files</h4>
+      <div class="file-list">${files || '<span class="file-tag">not file-backed</span>'}</div>
+    </div>
+    <div class="inspector-section">
+      <h4>Direct links · ${links.length}</h4>
+      <div class="neighbor-list">${linkHtml || '<p class="dim">No direct links.</p>'}</div>
+    </div>`;
+  inspector.querySelectorAll(".neighbor").forEach(btn => {
+    btn.addEventListener("click", () => selectNode(btn.dataset.id));
+  });
+}
+
+function showTooltip(n){
+  tooltip.innerHTML = `<span style="color:${catById[n.cat].color}">${esc(n.label)}</span><span class="dim"> · ${esc(n.cmd)}</span>`;
+  tooltip.classList.add("show");
+}
+function moveTooltip(ev){
+  tooltip.style.left = `${ev.clientX}px`;
+  tooltip.style.top = `${ev.clientY - 12}px`;
+}
+function hideTooltip(){ tooltip.classList.remove("show"); }
+
+function applyTransform(){
+  if (!Number.isFinite(pan.x) || !Number.isFinite(pan.y) || !Number.isFinite(pan.k)) return;
+  viewport.setAttribute("transform", `translate(${pan.x.toFixed(2)} ${pan.y.toFixed(2)}) scale(${pan.k.toFixed(4)})`);
+}
+
+function fitVisible(animate = true){
+  const visible = NODES.filter(n => n.visible !== false);
+  if (!visible.length || visible.some(n => !Number.isFinite(n.x) || !Number.isFinite(n.y))) return;
+  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+  visible.forEach(n => {
+    minX = Math.min(minX, n.x - n.r);
+    minY = Math.min(minY, n.y - n.r);
+    maxX = Math.max(maxX, n.x + n.r);
+    maxY = Math.max(maxY, n.y + n.r + 18);
+  });
+  const bw = Math.max(120, maxX - minX);
+  const bh = Math.max(120, maxY - minY);
+  const k = clamp(Math.min((W - 90) / bw, (H - 90) / bh, 1.35), .38, 1.35);
+  const cx = (minX + maxX) / 2;
+  const cy = (minY + maxY) / 2;
+  pan = {k, x: W / 2 - cx * k, y: H / 2 - cy * k};
+  if (animate) svg.style.transition = "none";
+  applyTransform();
+}
+
+function centerNode(n){
+  pan.k = clamp(pan.k, .8, 1.5);
+  pan.x = W / 2 - n.x * pan.k;
+  pan.y = H / 2 - n.y * pan.k;
+  applyTransform();
+}
+
+function zoomAt(sx, sy, factor){
+  const next = clamp(pan.k * factor, .32, 3);
+  const gx = (sx - pan.x) / pan.k;
+  const gy = (sy - pan.y) / pan.k;
+  pan.k = next;
+  pan.x = sx - gx * next;
+  pan.y = sy - gy * next;
+  applyTransform();
+}
+
+function bindPanZoom(){
+  svg.addEventListener("pointerdown", ev => {
+    if (ev.button !== 0) return;
+    const nodeEl = ev.target.closest(".gnode");
+    const rect = svg.getBoundingClientRect();
+    if (nodeEl) {
+      const n = nodeById[nodeEl.dataset.id];
+      const p = toGraph(ev.clientX, ev.clientY);
+      drag = {type:"node", node:n, dx:n.x - p.x, dy:n.y - p.y, sx:ev.clientX, sy:ev.clientY, moved:false};
+      n.fixed = true;
+      svg.setPointerCapture(ev.pointerId);
+      svg.classList.add("dragging");
+      ev.preventDefault();
+      return;
+    }
+    drag = {type:"pan", sx:ev.clientX, sy:ev.clientY, px:pan.x, py:pan.y, moved:false, rect};
+    svg.setPointerCapture(ev.pointerId);
+    svg.classList.add("dragging");
+    ev.preventDefault();
+  });
+
+  svg.addEventListener("pointermove", ev => {
+    if (!drag) return;
+    if (drag.type === "node") {
+      const p = toGraph(ev.clientX, ev.clientY);
+      drag.node.x = clamp(p.x + drag.dx, 24, W - 24);
+      drag.node.y = clamp(p.y + drag.dy, 24, H - 24);
+      if (Math.hypot(ev.clientX - drag.sx, ev.clientY - drag.sy) > 3) drag.moved = true;
+      renderPositions();
+    } else {
+      const rect = drag.rect;
+      const dx = ev.clientX - drag.sx;
+      const dy = ev.clientY - drag.sy;
+      pan.x = drag.px + dx * (W / rect.width);
+      pan.y = drag.py + dy * (H / rect.height);
+      if (Math.hypot(dx, dy) > 3) drag.moved = true;
+      applyTransform();
+    }
+  });
+
+  svg.addEventListener("pointerup", ev => {
+    if (!drag) return;
+    if (drag.type === "node") {
+      drag.node.fixed = false;
+      if (!drag.moved) selectNode(drag.node.id);
+    } else if (!drag.moved) {
+      clearSelection();
+    }
+    drag = null;
+    svg.classList.remove("dragging");
+    if (svg.hasPointerCapture(ev.pointerId)) svg.releasePointerCapture(ev.pointerId);
+  });
+
+  svg.addEventListener("pointercancel", () => {
+    if (drag && drag.type === "node") drag.node.fixed = false;
+    drag = null;
+    svg.classList.remove("dragging");
+  });
+
+  svg.addEventListener("wheel", ev => {
+    ev.preventDefault();
+    const rect = svg.getBoundingClientRect();
+    const sx = ev.clientX - rect.left;
+    const sy = ev.clientY - rect.top;
+    zoomAt(sx, sy, ev.deltaY < 0 ? 1.13 : .885);
+  }, {passive:false});
+
+  document.getElementById("zoomIn").addEventListener("click", () => zoomAt(W / 2, H / 2, 1.2));
+  document.getElementById("zoomOut").addEventListener("click", () => zoomAt(W / 2, H / 2, .83));
+  document.getElementById("zoomFit").addEventListener("click", () => fitVisible());
+}
+
+function toGraph(clientX, clientY){
+  const pt = svg.createSVGPoint();
+  pt.x = clientX;
+  pt.y = clientY;
+  const matrix = viewport.getScreenCTM();
+  if (!matrix) return {x:0, y:0};
+  return pt.matrixTransform(matrix.inverse());
+}
+
+function buildFilters(){
+  filterChips.replaceChildren();
+  CATS.forEach(cat => {
+    const count = NODES.filter(n => n.cat === cat.id).length;
+    const btn = document.createElement("button");
+    btn.className = "chip active";
+    btn.style.setProperty("--chip-color", cat.color);
+    btn.dataset.cat = cat.id;
+    btn.innerHTML = `<span class="chip-dot"></span>${cat.name.split(" ")[0]} <span class="dim">${count}</span>`;
+    btn.addEventListener("click", () => {
+      if (activeCats.has(cat.id)) {
+        if (activeCats.size === 1) return;
+        activeCats.delete(cat.id);
+      } else {
+        activeCats.add(cat.id);
+      }
+      btn.classList.toggle("active", activeCats.has(cat.id));
+      updateVisibility();
+    });
+    filterChips.appendChild(btn);
+  });
+}
+
+function buildScenarios(){
+  SCENARIOS.forEach(sc => {
+    const btn = document.createElement("button");
+    btn.className = `scenario${sc.id === "all" ? " active" : ""}`;
+    btn.textContent = sc.name;
+    btn.title = sc.desc;
+    btn.dataset.scenario = sc.id;
+    btn.addEventListener("click", () => {
+      activeScenario = sc.id;
+      scenarioSet = sc.nodes ? new Set(sc.nodes.filter(id => nodeById[id])) : null;
+      document.querySelectorAll(".scenario").forEach(b => b.classList.toggle("active", b.dataset.scenario === sc.id));
+      activeCats = new Set(CATS.map(c => c.id));
+      document.querySelectorAll("#filterChips .chip").forEach(b => b.classList.add("active"));
+      query = "";
+      searchInput.value = "";
+      selectedId = null;
+      renderEmptyInspector();
+      updateVisibility();
+      fitVisible();
+    });
+    scenarioBar.appendChild(btn);
+  });
+}
+
+function buildAtlas(){
+  atlasNav.replaceChildren();
+  atlasContent.replaceChildren();
+  const title = document.createElement("div");
+  title.className = "atlas-nav-title";
+  title.textContent = "Families";
+  atlasNav.appendChild(title);
+
+  CATS.forEach(cat => {
+    const items = NODES.filter(n => n.cat === cat.id);
+    const navBtn = document.createElement("button");
+    navBtn.style.setProperty("--cat-color", cat.color);
+    navBtn.innerHTML = `<span class="sq"></span>${cat.name}<span class="count">${items.length}</span>`;
+    navBtn.addEventListener("click", () => {
+      document.getElementById(`atlas-${cat.id}`).scrollIntoView({behavior:"smooth", block:"start"});
+      atlasNav.querySelectorAll("button").forEach(b => b.classList.remove("active"));
+      navBtn.classList.add("active");
+    });
+    atlasNav.appendChild(navBtn);
+
+    const group = document.createElement("section");
+    group.className = "atlas-group";
+    group.id = `atlas-${cat.id}`;
+    group.innerHTML = `
+      <div class="atlas-group-head">
+        <div><h3 style="color:${cat.color}">${cat.name}</h3><p>${cat.desc}</p></div>
+        <p>${items.length} nodes</p>
+      </div>
+      <div class="atlas-grid"></div>`;
+    const grid = group.querySelector(".atlas-grid");
+    items.forEach(n => {
+      const card = document.createElement("button");
+      card.className = "feature-card";
+      card.dataset.id = n.id;
+      card.style.setProperty("--cat-color", cat.color);
+      const tags = (n.tags || []).slice(0, 3).map(t => `<span class="mini-tag">${esc(t)}</span>`).join("");
+      card.innerHTML = `
+        <div class="feature-card-top"><span class="feature-name">${esc(n.label)}</span><span class="feature-cat"></span></div>
+        <div class="feature-cmd">${esc(n.cmd)}</div>
+        <div class="feature-summary">${esc(n.summary)}</div>
+        <div class="feature-foot">${tags}</div>`;
+      card.addEventListener("click", () => focusFromAtlas(n.id));
+      grid.appendChild(card);
+    });
+    atlasContent.appendChild(group);
+  });
+}
+
+function focusFromAtlas(id){
+  if (!nodeById[id]) return;
+  activeCatReset();
+  activeScenario = "all";
+  scenarioSet = null;
+  query = "";
+  searchInput.value = "";
+  document.querySelectorAll(".scenario").forEach(b => b.classList.toggle("active", b.dataset.scenario === "all"));
+  updateVisibility();
+  selectNode(id);
+  document.getElementById("graph").scrollIntoView({behavior:"smooth", block:"center"});
+  setTimeout(() => {
+    const n = nodeById[id];
+    if (n) { pan.k = Math.max(pan.k, .95); centerNode(n); }
+  }, 420);
+}
+
+function activeCatReset(){
+  activeCats = new Set(CATS.map(c => c.id));
+  document.querySelectorAll("#filterChips .chip").forEach(b => b.classList.add("active"));
+}
+
+function bindSearch(){
+  let timer = null;
+  searchInput.addEventListener("input", () => {
+    clearTimeout(timer);
+    timer = setTimeout(() => {
+      query = searchInput.value.trim().toLowerCase();
+      updateVisibility();
+      if (query) {
+        const matches = NODES.filter(n => n.visible && n.match);
+        if (matches.length) {
+          const dimBefore = selectedId;
+          selectedId = dimBefore;
+          updateStyles();
+        }
+      }
+    }, 90);
+  });
+  searchInput.addEventListener("keydown", ev => {
+    if (ev.key === "Escape") {
+      searchInput.value = "";
+      query = "";
+      updateVisibility();
+    }
+  });
+}
+
+function bindReset(){
+  document.getElementById("resetBtn").addEventListener("click", () => {
+    activeCatReset();
+    activeScenario = "all";
+    scenarioSet = null;
+    query = "";
+    searchInput.value = "";
+    selectedId = null;
+    hoverId = null;
+    document.querySelectorAll(".scenario").forEach(b => b.classList.toggle("active", b.dataset.scenario === "all"));
+    NODES.forEach(n => n.fixed = false);
+    renderEmptyInspector();
+    updateVisibility();
+    fitVisible();
+  });
+}
+
+function bindReveal(){
+  if (!("IntersectionObserver" in window)) {
+    document.querySelectorAll(".reveal").forEach(el => el.classList.add("in"));
+    return;
+  }
+  const observer = new IntersectionObserver(entries => {
+    entries.forEach(entry => {
+      if (entry.isIntersecting) {
+        entry.target.classList.add("in");
+        observer.unobserve(entry.target);
+      }
+    });
+  }, {threshold:.08});
+  document.querySelectorAll(".reveal").forEach(el => observer.observe(el));
+}
+
+function bindMenu(){
+  const toggle = document.getElementById("menuToggle");
+  const nav = document.getElementById("nav");
+  toggle.addEventListener("click", () => {
+    const open = nav.classList.toggle("open");
+    toggle.setAttribute("aria-expanded", String(open));
+  });
+  nav.querySelectorAll("a").forEach(a => a.addEventListener("click", () => {
+    nav.classList.remove("open");
+    toggle.setAttribute("aria-expanded", "false");
+  }));
+}
+
+function updateStats(){
+  const values = document.querySelectorAll(".stat-value");
+  if (values[0]) values[0].textContent = NODES.length;
+  if (values[1]) values[1].textContent = cleanEdges.length;
+}
+
+function init(){
+  sizeGraph();
+  seedPositions();
+  simulate();
+  createGraph();
+  renderPositions();
+  buildFilters();
+  buildScenarios();
+  buildAtlas();
+  bindPanZoom();
+  bindSearch();
+  bindReset();
+  bindReveal();
+  bindMenu();
+  bindInspectorKeys();
+  updateStats();
+  fitVisible(false);
+  setTimeout(() => svg.style.transition = "", 60);
+}
+
+function bindInspectorKeys(){
+  document.addEventListener("keydown", ev => {
+    if (ev.key === "Escape" && document.activeElement !== searchInput) {
+      clearSelection();
+    }
+  });
+}
+
+let resizeTimer = null;
+window.addEventListener("resize", () => {
+  clearTimeout(resizeTimer);
+  resizeTimer = setTimeout(() => {
+    sizeGraph();
+    fitVisible(false);
+  }, 120);
+});
+
+init();
+</script>
+</body>
+</html>

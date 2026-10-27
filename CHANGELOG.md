@@ -36,6 +36,12 @@
 - Line endings are preserved (a missing final newline stays missing, CRLF stays CRLF) and reversal is per Unicode character, so non-ASCII text stays intact; output is plain and ANSI-stripped on redirect
 - Registered as a pipe-stage command: `| ` now ghosts `rev`, and `rev <Tab>` completes text files; documented in `help pipe` (localized in all four languages)
 
+#### ✂ trim — Pattern-Removal Filter
+- New `trim <pattern> [text]` pipe filter: removes every non-overlapping occurrence of `<pattern>` and prints the result — `trim " ..." "nice ... bro ..."` → `nice bro`
+- Reads piped/redirected input instead of inline text, where every argument is a pattern: `echo nice ... bro ... | trim " ..."` gives the same output
+- Patterns are case-sensitive substrings; a trailing CR/LF is normalised so the inline and piped forms print the same line
+- Registered as a pipe-stage command (`| ` ghosts it, `trim` needs no file completion), documented in `help pipe`, and localized in English, Chinese, Thai and Lao
+
 #### 📝 editor — Template Creation, `-I` and Multi-File `ne`
 - `ne --init|--super <file> [<file> ...]` now only creates templates; the editor is no longer launched automatically
 - Append `-I <file>` (last argument, exactly one file) to create everything and open that one file in the editor; `ne --hyper <name> -I` opens the new project directory
@@ -260,6 +266,12 @@
 - Wrong/missing credentials get `401 {"error":"Unauthorized"}` + `WWW-Authenticate: Basic realm="ntc serve"`; the check runs before any body is read, so unauthenticated uploads can't burn bandwidth or disk
 - Web UI: login dialog (`🔒 Login required` → username + password → `Unlock`), credentials kept in `sessionStorage` (cleared on tab close + `🔒 Logout` button), every fetch/XHR carries the header, downloads go through authenticated fetch-blob, any `401` re-opens the login overlay
 - No `--auth` = exactly the old behavior (additive-only); localized (`cmd.serve.*`) in English, Chinese, Thai and Lao
+
+### 🌍 Localization
+
+#### 👁️ views — Help & Errors in Chinese, Thai and Lao
+- `help views` and every `views` error message (`invalid size`, `missing --sort`, `empty directory`) are now translated in Chinese, Thai and Lao instead of falling back to English
+- Adds a regression test that fails when those packs silently inherit the English text
 
 ### 🐛 Bug Fixes
 

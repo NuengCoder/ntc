@@ -9,8 +9,8 @@ use super::{
 use crate::config::Config;
 use crate::filetype::is_supported_format;
 use crate::navigator::Navigator;
-use crate::output::{cat_file_with_syntax, print_error, print_success, print_warning};
-use crate::report::{generate_report, ReportFormat};
+use crate::output::{print_error, print_info, print_success, print_warning};
+use crate::report::{generate_report_to, ReportFormat};
 use crate::shell::helpers::show_tree_at_ex;
 use crate::t;
 use crate::teleport::TeleportManager;
@@ -372,6 +372,200 @@ pub fn cmd_viewd(args: &str, nav: &mut Navigator) -> Result<bool> {
     cmd_view_impl(ViewMode::Dirs, args, nav)
 }
 
+/// `views [path] [-n] [--size <min>] [--sort <name|ext|size>]` — the short
+/// `view`: a flat `ls`-style listing of one directory level instead of the
+/// tree. There are no `[Directory]` / `[ignored]` tags (colour carries
+/// that), the depth is fixed at 1, sizes are always computed with `--care`
+/// semantics, and `--size` hides entries below the given size.
+///
+/// Bare `views` prints names only, flowing inline in four groups (dirs,
+/// files, ignored dirs, ignored files) joined by `...` and wrapped to the
+/// terminal width. `-n` switches to one entry per line.
+pub fn cmd_views(args: &str, nav: &mut Navigator) -> Result<bool> {
+    let parsed = match crate::shell::helpers::parse_target_arg(args, nav) {
+        Ok(p) => p,
+        Err(_) => return Ok(false),
+    };
+    let mut min: Option<u64> = None;
+    let mut show_size = false;
+    let mut sort = crate::explorer::TreeSortKey::Char;
+    let mut newline = false;
+    let mut i = 0;
+    while i < parsed.rest.len() {
+        match parsed.rest[i].to_lowercase().as_str() {
+            "-n" => newline = true,
+            "-s" | "--size" => {
+                show_size = true;
+                if let Some(v) = next_size_value(&parsed.rest, i) {
+                    min = Some(v);
+                    i += 1;
+                }
+            }
+            "--sort" => {
+                let Some(key) = parsed.rest.get(i + 1).map(|s| s.to_lowercase()) else {
+                    print_error(&t!("cmd.views.invalid_sort"));
+                    println!("{}", t!("cmd.views.usage"));
+                    return Ok(false);
+                };
+                sort = match key.as_str() {
+                    "name" | "char" | "n" => crate::explorer::TreeSortKey::Char,
+                    "ext" | "e" => crate::explorer::TreeSortKey::Ext,
+                    "size" | "s" => crate::explorer::TreeSortKey::Size,
+                    _ => {
+                        print_error(&t!("cmd.views.invalid_sort_value", key));
+                        println!("{}", t!("cmd.views.usage"));
+                        return Ok(false);
+                    }
+                };
+                i += 1;
+            }
+            other => {
+                print_error(&t!("cmd.report.unknown_option", other));
+                println!("{}", t!("cmd.views.usage"));
+                return Ok(false);
+            }
+        }
+        i += 1;
+    }
+
+    let target = parsed
+        .path
+        .unwrap_or_else(|| nav.current_path().to_path_buf());
+    let mut tree =
+        crate::explorer::generate_tree(target.to_string_lossy().as_ref(), Some(1), true, None);
+    // Sizes are always computed, and always with care semantics.
+    crate::explorer::compute_tree_sizes(&mut tree, None, true);
+    if let Some(min) = min {
+        tree.children.retain(|n| n.size.unwrap_or(0) >= min);
+    }
+    let ext_of = |name: &str| match name.rfind('.') {
+        Some(i) if i + 1 < name.len() => name[i + 1..].to_lowercase(),
+        _ => String::new(),
+    };
+    match sort {
+        crate::explorer::TreeSortKey::Char => tree
+            .children
+            .sort_by(|a, b| a.name.to_lowercase().cmp(&b.name.to_lowercase())),
+        crate::explorer::TreeSortKey::Ext => tree.children.sort_by(|a, b| {
+            ext_of(&a.name)
+                .cmp(&ext_of(&b.name))
+                .then_with(|| a.name.to_lowercase().cmp(&b.name.to_lowercase()))
+        }),
+        crate::explorer::TreeSortKey::Size => tree.children.sort_by(|a, b| {
+            b.size
+                .unwrap_or(0)
+                .cmp(&a.size.unwrap_or(0))
+                .then_with(|| a.name.to_lowercase().cmp(&b.name.to_lowercase()))
+        }),
+    }
+
+    if tree.children.is_empty() {
+        println!("{}", t!("cmd.views.empty"));
+        return Ok(false);
+    }
+
+    let theme = crate::utils::theme::ThemeManager::current();
+    let c_dir = theme.shell.tree_dir.clone();
+    let c_ignored = theme.shell.tree_ignored.clone();
+    drop(theme);
+
+    let paint = |node: &crate::explorer::TreeNode, text: &str| -> String {
+        if node.is_ignored {
+            c_ignored.paint_ansi(text)
+        } else if node.is_dir {
+            c_dir.paint_ansi(text)
+        } else {
+            text.to_string()
+        }
+    };
+
+    // Four display groups, in this order: plain dirs, plain files,
+    // ignored dirs, ignored files. Empty groups are dropped.
+    // When `--size` is set each entry is shown as `name (size)`; the
+    // `visible` width includes the size so line-wrapping in bare mode
+    // stays correct.
+    let mut groups: Vec<Vec<(usize, String)>> = Vec::new();
+    for (is_dir, is_ignored) in [(true, false), (false, false), (true, true), (false, true)] {
+        let names: Vec<(usize, String)> = tree
+            .children
+            .iter()
+            .filter(|n| n.is_dir == is_dir && n.is_ignored == is_ignored)
+            .map(|n| {
+                let painted = paint(n, &n.name);
+                if show_size {
+                    let s = crate::explorer::human_readable_size(n.size.unwrap_or(0));
+                    let text = format!("{} ({})", painted, s);
+                    let visible = n.name.chars().count() + 1 + 1 + s.chars().count() + 1;
+                    (visible, text)
+                } else {
+                    (n.name.chars().count(), painted)
+                }
+            })
+            .collect();
+        if !names.is_empty() {
+            groups.push(names);
+        }
+    }
+
+    // `-n`: one entry per line.
+    if newline {
+        for group in &groups {
+            for (_, name) in group {
+                println!("{}", name);
+            }
+        }
+        return Ok(false);
+    }
+
+    // Bare `views`: names flow inline, groups joined by `...`, wrapped to
+    // the terminal width.
+    let width = crossterm::terminal::size()
+        .map(|(w, _)| w as usize)
+        .unwrap_or(100)
+        .max(20);
+    let mut line = String::new();
+    let mut line_w = 0usize;
+    let mut first_group = true;
+    for group in groups {
+        if !first_group {
+            views_flow_push(&mut line, &mut line_w, 3, "...", width);
+        }
+        first_group = false;
+        for (visible, name) in group {
+            views_flow_push(&mut line, &mut line_w, visible, &name, width);
+        }
+    }
+    if !line.is_empty() {
+        println!("{}", line);
+    }
+    Ok(false)
+}
+
+/// Append one already-painted word to the flowing line, starting a new
+/// output line when the word would not fit. `visible` is the word's width
+/// in characters, measured before painting so ANSI escapes never count.
+fn views_flow_push(
+    line: &mut String,
+    line_w: &mut usize,
+    visible: usize,
+    word: &str,
+    width: usize,
+) {
+    if *line_w == 0 {
+        line.push_str(word);
+        *line_w = visible;
+    } else if *line_w + 1 + visible > width {
+        println!("{}", line);
+        line.clear();
+        line.push_str(word);
+        *line_w = visible;
+    } else {
+        line.push(' ');
+        line.push_str(word);
+        *line_w += 1 + visible;
+    }
+}
+
 fn view_usage_key(mode: ViewMode) -> &'static str {
     match mode {
         ViewMode::All => "help.view.file_usage",
@@ -442,7 +636,7 @@ fn cmd_view_impl(mode: ViewMode, args: &str, nav: &mut Navigator) -> Result<bool
                         }
                     };
                 let label = fv.path.file_name().and_then(|n| n.to_str()).unwrap_or("");
-                display_txtf_file(&fv.path, range, label)?;
+                display_txtf_file(&fv.path, range, label, None)?;
                 return Ok(false);
             }
             None => {}
@@ -531,6 +725,8 @@ fn cmd_view_impl(mode: ViewMode, args: &str, nav: &mut Navigator) -> Result<bool
         head,
         tail,
         entry_filter,
+        sort_dirs_by_size: false,
+        sort_files_by_size: false,
     };
     let target = parsed
         .path
@@ -564,82 +760,183 @@ fn cmd_view_impl(mode: ViewMode, args: &str, nav: &mut Navigator) -> Result<bool
     Ok(false)
 }
 
+/// `report project <fmt> [path] [--name <output>]` request.
+#[derive(Debug)]
+pub(crate) struct ProjectReport {
+    pub format: ReportFormat,
+    pub path: PathBuf,
+    pub name: Option<String>,
+}
+
+/// Parse a report format name (case-insensitive).
+fn parse_report_format(raw: &str) -> Option<ReportFormat> {
+    match raw.to_lowercase().as_str() {
+        "txt" | "text" => Some(ReportFormat::Txt),
+        "html" | "htm" => Some(ReportFormat::Html),
+        "json" => Some(ReportFormat::Json),
+        "md" | "markdown" => Some(ReportFormat::Md),
+        "pdf" => Some(ReportFormat::Pdf),
+        "docx" => Some(ReportFormat::Docx),
+        "xlsx" => Some(ReportFormat::Xlsx),
+        _ => None,
+    }
+}
+
+/// Parse `project <fmt> [path] [--name <output>]` (the part after
+/// `report project`). `Err` is a lang key for the usage message.
+pub(crate) fn parse_project_report(args: &str) -> Result<ProjectReport, &'static str> {
+    let usage = "cmd.report.project_usage";
+    let toks: Vec<String> = tokenize_spans(args)
+        .into_iter()
+        .map(|(s, _, _)| s)
+        .collect();
+    let mut format: Option<ReportFormat> = None;
+    let mut path: Option<String> = None;
+    let mut name: Option<String> = None;
+    let mut i = 0;
+    while i < toks.len() {
+        match toks[i].as_str() {
+            "--name" | "-n" | "-o" | "--output" => match toks.get(i + 1) {
+                Some(v) if !v.trim().is_empty() => {
+                    name = Some(v.clone());
+                    i += 1;
+                }
+                _ => return Err(usage),
+            },
+            other if other.starts_with('-') => return Err(usage),
+            other => {
+                if format.is_none() {
+                    format = Some(parse_report_format(other).ok_or(usage)?);
+                } else if path.is_none() {
+                    path = Some(other.to_string());
+                } else {
+                    return Err(usage);
+                }
+            }
+        }
+        i += 1;
+    }
+    Ok(ProjectReport {
+        format: format.ok_or(usage)?,
+        path: PathBuf::from(path.unwrap_or_else(|| ".".to_string())),
+        name,
+    })
+}
+
+/// Output path for `--name`: used as given, with the format extension
+/// appended when the name has none. Parent directories are created.
+fn project_output_path(name: &str, format: ReportFormat) -> PathBuf {
+    let mut out = PathBuf::from(name);
+    if out.extension().is_none() {
+        out.set_extension(format.extension());
+    }
+    if let Some(parent) = out.parent() {
+        if !parent.as_os_str().is_empty() {
+            let _ = std::fs::create_dir_all(parent);
+        }
+    }
+    out
+}
+
 pub fn cmd_report(args: &str, _nav: &mut Navigator) -> Result<bool> {
     let parts: Vec<&str> = args.splitn(2, ' ').collect();
     let format = parts.first().copied().unwrap_or("");
     let subargs = parts.get(1).unwrap_or(&"").trim();
 
-    match format {
-        "txt" => generate_report_file(Path::new(subargs), ReportFormat::Txt)?,
-        "json" => generate_report_dir(Path::new(subargs), ReportFormat::Json, "JSON")?,
-        "md" => generate_report_dir(Path::new(subargs), ReportFormat::Md, "Markdown")?,
-        "html" => generate_report_file(Path::new(subargs), ReportFormat::Html)?,
-        "pdf" => generate_report_dir_only(Path::new(subargs), ReportFormat::Pdf, "PDF")?,
-        "docx" => generate_report_dir_only(Path::new(subargs), ReportFormat::Docx, "DOCX")?,
-        "xlsx" => generate_report_dir_only(Path::new(subargs), ReportFormat::Xlsx, "XLSX")?,
-        _ => {
-            println!("{}", t!("cmd.report.title").cyan().bold());
-            println!("  {}", t!("cmd.report.help_txt"));
-            println!("  {}", t!("cmd.report.help_json"));
-            println!("  {}", t!("cmd.report.help_md"));
-            println!("  {}", t!("cmd.report.help_html"));
-            println!("  {}", t!("cmd.report.help_pdf"));
-            println!("  {}", t!("cmd.report.help_docx"));
-            println!("  {}", t!("cmd.report.help_xlsx"));
+    if format.eq_ignore_ascii_case("project") {
+        let req = match parse_project_report(subargs) {
+            Ok(r) => r,
+            Err(key) => {
+                print_error(&t!(key));
+                println!("{}", t!("cmd.report.project_usage"));
+                return Ok(false);
+            }
+        };
+        if req.path.is_file() {
+            print_error(&t!(
+                "cmd.report.dir_only",
+                req.format.extension().to_uppercase()
+            ));
+            return Ok(false);
+        }
+        let out = match &req.name {
+            Some(name) => project_output_path(name, req.format),
+            None => {
+                // Same default naming as `report <fmt>`.
+                let dir_name = req
+                    .path
+                    .file_name()
+                    .map(|n| n.to_string_lossy().into_owned())
+                    .unwrap_or_else(|| "root".to_string());
+                crate::output::build_output_path(&format!(
+                    "{}.{}",
+                    dir_name,
+                    req.format.extension()
+                ))
+            }
+        };
+        generate_report_to(&req.path, req.format, &out.to_string_lossy())?;
+        return Ok(false);
+    }
+
+    if format.eq_ignore_ascii_case("clip") {
+        if subargs.is_empty() {
+            print_error(&t!("cmd.clipboard.select_usage"));
+            return Ok(false);
+        }
+        let n: usize = match subargs.split_whitespace().next().unwrap_or("").parse() {
+            Ok(n) => n,
+            Err(_) => {
+                print_error(&t!("cmd.clipboard.select_usage"));
+                return Ok(false);
+            }
+        };
+        let entries = super::clipboard::load_history_public();
+        if entries.is_empty() {
+            print_info(&t!("cmd.clipboard.empty"));
+            return Ok(false);
+        }
+        if n == 0 || n > entries.len() {
+            print_error(&t!("cmd.clipboard.entry_not_found", n, entries.len()));
+            return Ok(false);
+        }
+        let entry = &entries[n - 1];
+        let date = chrono::DateTime::from_timestamp(entry.ts as i64, 0)
+            .map(|dt| dt.format("%Y-%m-%d %H:%M:%S").to_string())
+            .unwrap_or_else(|| "?".to_string());
+        let line_count = entry.content.lines().count().max(1);
+        let char_count = entry.content.chars().count();
+        println!("{}", t!("cmd.report.clip_header", n).cyan().bold());
+        println!("  {}: {}", t!("cmd.report.clip_meta_date"), date);
+        println!("  {}: {}", t!("cmd.report.clip_meta_lines"), line_count);
+        println!("  {}: {}", t!("cmd.report.clip_meta_chars"), char_count);
+        println!();
+        print!("{}", entry.content);
+        if !entry.content.is_empty() && !entry.content.ends_with('\n') {
             println!();
-            println!("{}", t!("cmd.report.examples").green());
-            println!("  {}", t!("cmd.report.example_txt"));
-            println!("  {}", t!("cmd.report.example_json"));
         }
+        return Ok(false);
     }
+
+    // Legacy `report txt|json|md|html|pdf|docx|xlsx <path>` shortcuts are removed.
+    // Use `report project <fmt> [path] [--name ...]` instead.
+    if matches!(
+        format,
+        "txt" | "json" | "md" | "html" | "pdf" | "docx" | "xlsx"
+    ) {
+        print_error(&t!("cmd.report.legacy_removed"));
+        println!("  {}", t!("cmd.report.help_project"));
+        return Ok(false);
+    }
+
+    println!("{}", t!("cmd.report.title").cyan().bold());
+    println!("  {}", t!("cmd.report.help_project"));
+    println!("  {}", t!("cmd.report.help_clip"));
+    println!();
+    println!("{}", t!("cmd.report.examples").green());
+    println!("  {}", t!("cmd.report.example_project"));
+    println!("  {}", t!("cmd.report.example_clip"));
     Ok(false)
-}
-
-fn generate_report_file(target: &Path, format: ReportFormat) -> Result<()> {
-    let target = if target.as_os_str().is_empty() {
-        Path::new(".")
-    } else {
-        target
-    };
-    if target.is_dir() {
-        generate_report(target, format)?;
-    } else if target.is_file() {
-        if is_supported_format(target) {
-            let show_lines = Config::global_get_show_line_numbers();
-            cat_file_with_syntax(target, show_lines)?;
-        } else {
-            print_warning(&t!("cmd.report.skipped_unsupported", target.display()));
-        }
-    }
-    Ok(())
-}
-
-fn generate_report_dir(target: &Path, format: ReportFormat, label: &str) -> Result<()> {
-    let target = if target.as_os_str().is_empty() {
-        Path::new(".")
-    } else {
-        target
-    };
-    if target.is_dir() {
-        generate_report(target, format)?;
-    } else {
-        print_error(&t!("cmd.report.dir_only", label));
-    }
-    Ok(())
-}
-
-fn generate_report_dir_only(target: &Path, format: ReportFormat, label: &str) -> Result<()> {
-    let target = if target.as_os_str().is_empty() {
-        Path::new(".")
-    } else {
-        target
-    };
-    if target.is_dir() {
-        generate_report(target, format)?;
-    } else {
-        print_error(&t!("cmd.report.dir_only", label));
-    }
-    Ok(())
 }
 
 pub fn cmd_txtc(args: &str, nav: &mut Navigator) -> Result<bool> {
@@ -699,6 +996,8 @@ pub(crate) struct TxtfArgs {
     pub head: Option<usize>,
     pub tail: Option<usize>,
     pub betw: Option<String>,
+    /// `--line` / `--no-line`: override the configured line numbers.
+    pub lines: Option<bool>,
 }
 
 /// Parse `txtf` args. `Err((key, arg))` is a lang key plus the
@@ -745,6 +1044,8 @@ pub(crate) fn parse_txtf_args(args: &str) -> Result<TxtfArgs, (String, String)> 
                     return Err(("cmd.report.invalid_range".to_string(), String::new()));
                 }
             },
+            "--line" | "--lines" | "-l" => out.lines = Some(true),
+            "--no-line" | "--no-lines" | "-nl" => out.lines = Some(false),
             other => {
                 if out.file.is_some() {
                     return Err(("cmd.report.unknown_option".to_string(), other.to_string()));
@@ -763,10 +1064,11 @@ pub(crate) fn display_txtf_file(
     target: &Path,
     range: Option<crate::output::FileLineRange>,
     label: &str,
+    lines: Option<bool>,
 ) -> Result<()> {
     if target.is_file() {
         if is_supported_format(target) {
-            let show_lines = Config::global_get_show_line_numbers();
+            let show_lines = lines.unwrap_or_else(Config::global_get_show_line_numbers);
             crate::output::cat_file_with_syntax_range(target, show_lines, range)?;
         } else {
             print_warning(&t!("cmd.report.skipped_unsupported", label));
@@ -824,14 +1126,14 @@ pub fn cmd_txtf(args: &str, nav: &mut Navigator) -> Result<bool> {
                     print_warning(&t!("cmd.report.no_files_in_dir", f));
                     return Ok(false);
                 }
-                show_file_selection_menu_range(nav, files, false, range)?;
+                show_file_selection_menu_range(nav, files, false, range, parsed.lines)?;
             } else {
-                display_txtf_file(&target, range, &f)?;
+                display_txtf_file(&target, range, &f, parsed.lines)?;
             }
         }
         None => {
             let files = list_supported_files(nav)?;
-            show_file_selection_menu_range(nav, files, false, range)?;
+            show_file_selection_menu_range(nav, files, false, range, parsed.lines)?;
         }
     }
     Ok(false)
@@ -841,6 +1143,80 @@ pub fn cmd_txtf(args: &str, nav: &mut Navigator) -> Result<bool> {
 mod tests {
     use super::*;
     use std::path::PathBuf;
+
+    #[test]
+    fn project_report_args() {
+        let p = parse_project_report("html").unwrap();
+        assert_eq!(p.format, ReportFormat::Html);
+        assert_eq!(p.path, PathBuf::from("."));
+        assert!(p.name.is_none());
+
+        let p = parse_project_report("md src --name out").unwrap();
+        assert_eq!(p.format, ReportFormat::Md);
+        assert_eq!(p.path, PathBuf::from("src"));
+        assert_eq!(p.name.as_deref(), Some("out"));
+
+        // Flags may come before the path.
+        let p = parse_project_report("json --name r1 src").unwrap();
+        assert_eq!(p.path, PathBuf::from("src"));
+        assert_eq!(p.name.as_deref(), Some("r1"));
+
+        // Formats are case-insensitive; quoted names keep their spaces.
+        let p = parse_project_report("HTML -n \"my report\"").unwrap();
+        assert_eq!(p.format, ReportFormat::Html);
+        assert_eq!(p.name.as_deref(), Some("my report"));
+
+        // Errors: missing/invalid format, extra target, dangling flag.
+        assert!(parse_project_report("").is_err());
+        assert!(parse_project_report("nope").is_err());
+        assert!(parse_project_report("txt a b").is_err());
+        assert!(parse_project_report("txt --name").is_err());
+        assert!(parse_project_report("txt --bogus").is_err());
+    }
+
+    #[test]
+    fn project_output_names_get_the_format_extension() {
+        assert_eq!(
+            project_output_path("out", ReportFormat::Html),
+            PathBuf::from("out.html")
+        );
+        // An explicit extension wins.
+        assert_eq!(
+            project_output_path("out.txt", ReportFormat::Html),
+            PathBuf::from("out.txt")
+        );
+        let dir = tempfile::tempdir().unwrap();
+        let named = dir.path().join("nested/out");
+        assert_eq!(
+            project_output_path(&named.to_string_lossy(), ReportFormat::Md),
+            dir.path().join("nested/out.md")
+        );
+        assert!(dir.path().join("nested").is_dir());
+    }
+
+    #[test]
+    fn project_report_writes_the_named_file() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(dir.path().join("main.rs"), "fn main() {}").unwrap();
+        std::fs::create_dir_all(dir.path().join("sub")).unwrap();
+        std::fs::write(dir.path().join("sub/notes.txt"), "hi").unwrap();
+        let out = dir.path().join("out/report");
+        let args = format!(
+            "project html {} --name {}",
+            dir.path().display(),
+            out.display()
+        );
+        let mut nav = Navigator::new().unwrap();
+        cmd_report(&args, &mut nav).unwrap();
+        let file = dir.path().join("out/report.html");
+        assert!(file.is_file(), "missing {}", file.display());
+        let html = std::fs::read_to_string(&file).unwrap();
+        // The tree is a collapsible widget, not an ASCII <pre> dump.
+        assert!(html.contains("ntree-root"));
+        assert!(html.contains("<details><summary>"));
+        assert!(html.contains("main.rs"));
+        assert!(html.contains("sub"));
+    }
 
     #[test]
     fn ext_filter_splits_exts_and_keeps_path() {
@@ -949,6 +1325,13 @@ mod tests {
         // Quoted names with spaces survive.
         let p = parse_txtf_args("\"my file.txt\" --tail 2").unwrap();
         assert_eq!(p.file.as_deref(), Some("my file.txt"));
+        // Line-number overrides for one call only.
+        assert_eq!(parse_txtf_args("a.txt --line").unwrap().lines, Some(true));
+        assert_eq!(
+            parse_txtf_args("--no-line a.txt").unwrap().lines,
+            Some(false)
+        );
+        assert_eq!(parse_txtf_args("a.txt").unwrap().lines, None);
         // Errors carry keys.
         assert!(parse_txtf_args("--head 0").is_err());
         assert!(parse_txtf_args("--head").is_err());

@@ -1763,6 +1763,22 @@ pub(super) fn expand_aliases_line(input: &str) -> String {
     out
 }
 
+/// Expand aliases until the line stops changing. Unlike
+/// `expand_aliases_line`, this also expands aliases introduced by another
+/// alias's expansion, e.g. `cbes` -> `... && sm ...`.
+pub(super) fn expand_aliases_line_deep(input: &str) -> String {
+    const MAX_PASSES: usize = 5;
+    let mut current = input.to_string();
+    for _ in 0..MAX_PASSES {
+        let expanded = expand_aliases_line(&current);
+        if expanded == current {
+            return expanded;
+        }
+        current = expanded;
+    }
+    current
+}
+
 /// Expand aliases, prompting `--select-*` menus for missing args.
 /// Returns `Ok(None)` when the user cancelled (execute nothing). The
 /// returned string is a single, fully expanded command line whose pipeline
@@ -2465,6 +2481,32 @@ mod tests {
             assert_eq!(
                 expand_command_line("run_file hello"),
                 vec!["python hello.py"]
+            );
+        });
+    }
+
+    #[test]
+    fn deep_expansion_expands_aliases_introduced_by_expansion() {
+        let mut cfg = Config::new();
+        cfg.run_aliases.insert(
+            "sm".to_string(),
+            "smtp --to a@b -s \"$*{title}\" -b \"$*{body}\"".to_string(),
+        );
+        cfg.run_aliases.insert(
+            "cbes".to_string(),
+            "echo build && sm \"T\" \"B\" && echo done".to_string(),
+        );
+        cfg.run_aliases
+            .insert("pipe_outer".to_string(), "echo hi | pipe_inner".to_string());
+        cfg.run_aliases
+            .insert("pipe_inner".to_string(), "echo inner".to_string());
+        Config::with_test_config(cfg, || {
+            let expanded = expand_aliases_line_deep("cbes");
+            assert!(!expanded.contains("sm \""), "expanded={expanded}");
+            assert!(expanded.contains("smtp --to a@b"), "expanded={expanded}");
+            assert_eq!(
+                expand_aliases_line_deep("pipe_outer"),
+                "echo hi | echo inner"
             );
         });
     }

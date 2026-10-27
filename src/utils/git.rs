@@ -196,8 +196,12 @@ fn strip_rename_target(path: &str) -> String {
 
 /// Plain-text prompt fragment like `(main*)` or `(main)` or empty.
 pub fn prompt_fragment(dir: &Path) -> String {
-    let Some(st) = status(dir) else { return String::new() };
-    let Some(branch) = &st.branch else { return String::new() };
+    let Some(st) = status(dir) else {
+        return String::new();
+    };
+    let Some(branch) = &st.branch else {
+        return String::new();
+    };
     let dirty = if st.is_dirty() { "*" } else { "" };
     format!("({branch}{dirty})")
 }
@@ -375,7 +379,10 @@ mod tests {
             prompt_fragment_from(&parse_status("## main\nM  x.rs\n")),
             "(main*)"
         );
-        assert_eq!(prompt_fragment_from(&parse_status("## HEAD (no branch)\n")), "");
+        assert_eq!(
+            prompt_fragment_from(&parse_status("## HEAD (no branch)\n")),
+            ""
+        );
     }
 
     fn prompt_fragment_from(st: &GitStatus) -> String {

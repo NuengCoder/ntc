@@ -49,6 +49,7 @@ pub(super) fn print_interactive_help() {
     print_igcare_help();
     print_network_help();
     print_tmprt_help();
+    print_time_help();
     print_git_help();
     print_clipboard_help();
     print_qsc_help();
@@ -76,6 +77,7 @@ pub(super) fn print_interactive_help() {
     print_nssh_help();
     print_nms_help();
     print_fake_help();
+    print_deadlock_help();
 }
 
 /// Print a single help section for `help <topic>` / `<cmd> -h`.
@@ -85,14 +87,14 @@ pub(super) fn print_topic_help(topic: &str) -> bool {
         "nav" | "cd" | "back" | "b" | "where" | "gos" | "gosc" | "godrive" | "god" | "fgo" => {
             print_nav_help()
         }
-        "config" | "watch" | "w" | "wi" => print_config_help(),
+        "config" | "cfg" | "watch" | "w" | "wi" => print_config_help(),
         "editor" | "ne" | "ntceditor" => print_editor_help(),
         "theme" => print_theme_help(),
         "teleport" | "tp" | "tpb" => print_teleport_help(),
         "ran" => print_ran_help(),
         "scr" | "script" => print_scr_help(),
         "alias" | "ral" | "run" | "r" => print_alias_help(),
-        "view" | "viewf" | "viewd" | "txtc" | "txtf" => print_view_help(),
+        "view" | "viewf" | "viewd" | "views" | "txtc" | "txtf" => print_view_help(),
         "size" => print_size_help(),
         "report" => print_report_help(),
         "backup" => print_backup_help(),
@@ -102,6 +104,7 @@ pub(super) fn print_topic_help(topic: &str) -> bool {
             print_network_help()
         }
         "tmprt" => print_tmprt_help(),
+        "time" => print_time_help(),
         "git" => print_git_help(),
         "clipboard" | "clip" => print_clipboard_help(),
         "qsc" => print_qsc_help(),
@@ -134,6 +137,7 @@ pub(super) fn print_topic_help(topic: &str) -> bool {
         "nssh" => print_nssh_help(),
         "nms" => print_nms_help(),
         "fake" => print_fake_help(),
+        "deadlock" => print_deadlock_help(),
         _ => return false,
     }
     true
@@ -168,6 +172,10 @@ fn print_config_help() {
     usage("help.config.autosuggest");
     usage("help.config.git");
     usage("help.config.dir_view");
+    usage("help.config.intro_view");
+    usage("help.config.file_view");
+    usage("help.config.todo");
+    usage("help.config.size");
     usage("help.config.watch");
     usage("help.config.watch_trigger");
     usage("help.config.watch_trigger_off");
@@ -394,6 +402,16 @@ fn print_view_help() {
     example_row("help.viewd.example2");
     example_row("help.viewd.example3");
     example_row("help.viewd.example4");
+
+    section_header("help.views.title");
+    usage("help.views.usage");
+    usage("help.views.size");
+    usage("help.views.sort");
+    usage("help.views.newline");
+    usage("help.views.note");
+    println!("{}", t!("help.examples_header").green());
+    example_row("help.views.example1");
+    example_row("help.views.example2");
 }
 
 fn print_size_help() {
@@ -411,21 +429,14 @@ fn print_size_help() {
 
 fn print_report_help() {
     section_header("help.report.title");
-    usage("help.report.txt");
-    usage("help.report.json");
-    usage("help.report.md");
-    usage("help.report.html");
-    usage("help.report.pdf");
-    usage("help.report.docx");
-    usage("help.report.xlsx");
+    usage("help.report.project");
+    usage("help.report.clip");
     usage("help.report.cp");
     usage("help.report.txtc");
     usage("help.report.txtf");
     println!("{}", t!("help.examples_header").green());
-    example_row("help.report.example1");
-    example_row("help.report.example2");
-    example_row("help.report.example3");
-    example_row("help.report.example4");
+    example_row("help.report.project_example");
+    example_row("help.report.clip_example");
     example_row("help.report.txtf_example1");
     example_row("help.report.txtf_example2");
     example_row("help.report.txtf_example3");
@@ -527,6 +538,18 @@ fn print_tmprt_help() {
     example_row("help.tmprt.example2");
     example_row("help.tmprt.example3");
     example_row("help.tmprt.example4");
+}
+
+fn print_time_help() {
+    section_header("help.time.title");
+    usage("help.time.run");
+    usage("help.time.alias");
+    usage("help.time.compare");
+    usage("help.time.compare_with");
+    usage("help.time.bench");
+    usage("help.time.count");
+    usage("help.time.help");
+    println!("  {}", crate::t!("help.time.note"));
 }
 
 fn print_git_help() {
@@ -639,6 +662,8 @@ fn print_pipe_help() {
     usage("help.pipe.betw");
     usage("help.pipe.sort");
     usage("help.pipe.rev");
+    usage("help.pipe.count");
+    usage("help.pipe.trim");
     usage("help.pipe.filters");
     usable_note("help.pipe.note");
     usable_note("help.pipe.hint");
@@ -648,6 +673,7 @@ fn print_pipe_help() {
     example_row("help.pipe.example3");
     example_row("help.pipe.example4");
     example_row("help.pipe.example5");
+    example_row("help.pipe.example6");
 }
 
 /// Print an indented note row (no `##` split).
@@ -952,6 +978,23 @@ pub(crate) fn print_fake_help() {
     example_row("help.fake.example4");
 }
 
+/// The `deadlock` section of the interactive help.
+pub(crate) fn print_deadlock_help() {
+    section_header("help.deadlock.title");
+    usage("help.deadlock.launch");
+    usage("help.deadlock.ls");
+    usage("help.deadlock.add");
+    usage("help.deadlock.rmpw");
+    usage("help.deadlock.master");
+    usage("help.deadlock.forget");
+    usage("help.deadlock.destroy");
+    usage("help.deadlock.exit");
+    println!("{}", t!("help.deadlock.note").dimmed());
+    println!("{}", t!("help.examples_header").green());
+    example_row("help.deadlock.example1");
+    example_row("help.deadlock.example2");
+}
+
 pub(super) fn print_tp_help() {
     print_teleport_help();
 }
@@ -987,6 +1030,7 @@ pub(crate) fn print_contextual_help(prefix_line: &str) -> bool {
         "arc" => print_arc_context_help(&parts, &lowers),
         "scan" => print_scan_context_help(&parts, &lowers),
         "qur" => print_qur_context_help(&parts, &lowers),
+        "time" => print_time_context_help(&parts, &lowers),
         _ => print_generic_help(&parts, &lowers, root),
     }
 }
@@ -1201,6 +1245,52 @@ fn print_qur_context_help(parts: &[&str], lowers: &[String]) -> bool {
     true
 }
 
+fn print_time_context_help(parts: &[&str], lowers: &[String]) -> bool {
+    use super::hinter::subcommands_for;
+    if parts.len() == 1 {
+        for s in subcommands_for(&[parts[0]]) {
+            println!("{}", s);
+        }
+        return true;
+    }
+    match lowers[1].as_str() {
+        "run" | "-r" | "--run" => {
+            if parts.len() == 2 {
+                println!("{}", t!("help.time.run"));
+            } else {
+                print_cr();
+            }
+        }
+        "compare" => {
+            if parts.len() <= 3 {
+                println!("{}", t!("help.time.compare_with"));
+            } else {
+                print_cr();
+            }
+        }
+        "bench" => {
+            if parts.len() == 2 {
+                println!("{}", t!("help.time.bench"));
+            } else {
+                print_cr();
+            }
+        }
+        "count" => {
+            if parts.len() == 2 {
+                println!("{}", t!("help.time.count"));
+            } else {
+                print_cr();
+            }
+        }
+        _ => {
+            for s in subcommands_for(&[parts[0]]) {
+                println!("{}", s);
+            }
+        }
+    }
+    true
+}
+
 fn print_generic_help(parts: &[&str], lowers: &[String], _root: &str) -> bool {
     use super::hinter::{
         alias_names_for_command, dedup_sorted, ntpkg_names_for_command,
@@ -1352,6 +1442,9 @@ fn is_known_root(root: &str) -> bool {
             | "view"
             | "viewf"
             | "viewd"
+            | "views"
+            | "count"
+            | "trim"
             | "ls"
             | "report"
             | "txtc"
@@ -1451,6 +1544,7 @@ fn is_known_root(root: &str) -> bool {
             | "nsheet"
             | "nssh"
             | "fake"
+            | "deadlock"
             | "esc"
     )
 }

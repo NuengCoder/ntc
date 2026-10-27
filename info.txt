@@ -1,108 +1,15 @@
-android:
-warning: function `sanitize_sheet_name` is never used
-   --> src\fake\format.rs:242:4
-    |
-242 | fn sanitize_sheet_name(name: &str) -> String {
-    |    ^^^^^^^^^^^^^^^^^^^
-    |
-    = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+tutorial feature need upgrade: i want to make tutorial now when user run : ntc tutorial or tutorial in shell it will auto nav user to ~appdata/ntc/tutorial and then start teaching mode let's start with your recommend to the end like how useruse ntc like how to use linux yeah that's it when run tutorial ntc will create tutorial dir and then bring user there and in the tutorial will have all command dir let user choose what they want to learn like cd , view , ral , ran , ne , ...
+if user prompt is blank and ntc shell is running then the shell view recognize it as idle mode when in idle mode read-only ghost text view start to appear and teach or recommend user to use the command that way like : try tp add <dir_name>then @dir_name this will allow you to save and teleport to that path that you usually working on
 
-warning: `ntc` (lib) generated 1 warning
-error: linking with `C:\Users\Trivico\.cargo\bin\cargo-ndk` failed: exit code: 1
-  |
-  = note: "C:\\Users\\Trivico\\.cargo\\bin\\cargo-ndk" "<1 object files omitted>" "-Wl,--as-needed" "-Wl,-Bstatic" "C:\\Users\\Trivico\\Desktop\\NTCLI\\ntc\\target\\aarch64-linux-android\\release\\deps\\rustcCQ4jr2/{libzstd_sys-b866cf23b20dd8f7,libbzip2_sys-ff1b13b867631214,libonig_sys-5d94e4812c3cb5e5,liblzma_sys-7034ec695a9fee72,libring-878966c99ce1b82c,liblibsqlite3_sys-29cac7453bab8f31}.rlib" "<sysroot>\\lib\\rustlib\\aarch64-linux-android\\lib/libcompiler_builtins-*.rlib" "-Wl,-Bdynamic" "-lc" "-landroid" "-laaudio" "-ldl" "-llog" "-lunwind" "-ldl" "-lm" "-lc" "-L" "C:\\Users\\Trivico\\Desktop\\NTCLI\\ntc\\target\\aarch64-linux-android\\release\\deps\\rustcCQ4jr2\\raw-dylibs" "-Wl,--eh-frame-hdr" "-Wl,-z,noexecstack" "-L" "C:\\Users\\Trivico\\Desktop\\NTCLI\\ntc\\target\\aarch64-linux-android\\release\\build\\onig_sys-70aa61d7860cde8e\\out" "-L" "C:\\Users\\Trivico\\Desktop\\NTCLI\\ntc\\target\\aarch64-linux-android\\release\\build\\ring-92214cd4a782962c\\out" "-L" "C:\\Users\\Trivico\\Desktop\\NTCLI\\ntc\\target\\aarch64-linux-android\\release\\build\\libsqlite3-sys-b4baa0d2e62eef97\\out" "-L" "C:\\Users\\Trivico\\Desktop\\NTCLI\\ntc\\target\\aarch64-linux-android\\release\\build\\lzma-sys-0ab71b3a31fd992f\\out" "-L" "C:\\Users\\Trivico\\Desktop\\NTCLI\\ntc\\target\\aarch64-linux-android\\release\\build\\bzip2-sys-d7c2bd7311dc25d1\\out\\lib" "-L" "C:\\Users\\Trivico\\Desktop\\NTCLI\\ntc\\target\\aarch64-linux-android\\release\\build\\zstd-sys-7274d56399527191\\out" "-o" "C:\\Users\\Trivico\\Desktop\\NTCLI\\ntc\\target\\aarch64-linux-android\\release\\deps\\ntc-b04e0b709bfca1fe" "-Wl,--gc-sections" "-pie" "-Wl,-z,relro,-z,now" "-Wl,-O1" "-Wl,--strip-all" "-nodefaultlibs"
-  = note: some arguments are omitted. use `--verbose` to show all linker arguments
-  = note: ld.lld: error: unable to find library -laaudio
-          clang: error: linker command failed with exit code 1 (use -v to see invocation)
-    
-    error: could not compile `ntc` (bin "ntc") due to 1 previous error
-    note: If the build failed due to a missing target, you can run this command:
-    note:
-    note:     rustup target install aarch64-linux-android
-    
-
-x Command exited with code: 101
-
-Linux:
-ℹ [all2] Executing: cargo build --release
-
-ℹ Executing: cargo build --release
-
-   Compiling proc-macro2 v1.0.106
-   Compiling quote v1.0.45
-   Compiling libc v0.2.186
-   Compiling getrandom v0.4.2
-   Compiling serde_core v1.0.229
-   Compiling libm v0.2.16
-   Compiling num-traits v0.2.19
-   Compiling thiserror v2.0.20
-   Compiling generic-array v0.14.7
-   Compiling zerocopy v0.8.50
-   Compiling rustix v1.1.4
-   Compiling rayon-core v1.13.0
-   Compiling serde v1.0.229
-   Compiling paste v1.0.15
-   Compiling av-scenechange v0.14.1
-   Compiling rav1e v0.8.1
-   Compiling standback v0.2.17
-   Compiling icu_properties_data v2.2.0
-   Compiling syn v1.0.109
-   Compiling proc-macro-hack v0.5.20+deprecated
-   Compiling icu_normalizer_data v2.2.0
-   Compiling phf_generator v0.14.0
-   Compiling digest v0.10.7
-   Compiling crypto-common v0.1.7
-   Compiling block-buffer v0.10.4
-   Compiling alsa-sys v0.4.0
-   Compiling const_fn v0.4.12
-   Compiling anstyle-parse v1.0.0
-   Compiling keccak v0.2.2
-   Compiling time v0.2.27
-   Compiling memoffset v0.6.5
-   Compiling anstyle v1.0.14
-error: failed to run custom build command for `alsa-sys v0.4.0`
-
-Caused by:
-  process didn't exit successfully: `/mnt/c/Users/Trivico/Desktop/NTCLI/ntc/target/release/build/alsa-sys-a05c77c77f43866f/build-script-build` (exit status: 101)
-  --- stdout
-  cargo:rerun-if-env-changed=ALSA_NO_PKG_CONFIG
-  cargo:rerun-if-env-changed=PKG_CONFIG_x86_64-unknown-linux-gnu
-  cargo:rerun-if-env-changed=PKG_CONFIG_x86_64_unknown_linux_gnu
-  cargo:rerun-if-env-changed=HOST_PKG_CONFIG
-  cargo:rerun-if-env-changed=PKG_CONFIG
-  cargo:rerun-if-env-changed=PKG_CONFIG_PATH_x86_64-unknown-linux-gnu
-  cargo:rerun-if-env-changed=PKG_CONFIG_PATH_x86_64_unknown_linux_gnu
-  cargo:rerun-if-env-changed=HOST_PKG_CONFIG_PATH
-  cargo:rerun-if-env-changed=PKG_CONFIG_PATH
-  cargo:rerun-if-env-changed=PKG_CONFIG_LIBDIR_x86_64-unknown-linux-gnu
-  cargo:rerun-if-env-changed=PKG_CONFIG_LIBDIR_x86_64_unknown_linux_gnu
-  cargo:rerun-if-env-changed=HOST_PKG_CONFIG_LIBDIR
-  cargo:rerun-if-env-changed=PKG_CONFIG_LIBDIR
-  cargo:rerun-if-env-changed=PKG_CONFIG_SYSROOT_DIR_x86_64-unknown-linux-gnu
-  cargo:rerun-if-env-changed=PKG_CONFIG_SYSROOT_DIR_x86_64_unknown_linux_gnu
-  cargo:rerun-if-env-changed=HOST_PKG_CONFIG_SYSROOT_DIR
-  cargo:rerun-if-env-changed=PKG_CONFIG_SYSROOT_DIR
-
-  --- stderr
-
-  thread 'main' (4074) panicked at /home/trivico/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/alsa-sys-0.4.0/build.rs:13:19:
-
-  pkg-config exited with status code 1
-  > PKG_CONFIG_ALLOW_SYSTEM_LIBS=1 PKG_CONFIG_ALLOW_SYSTEM_CFLAGS=1 pkg-config --libs --cflags alsa
-
-  pkg-config output:
-    Package alsa was not found in the pkg-config search path.
-    Perhaps you should add the directory containing `alsa.pc'
-    to the PKG_CONFIG_PATH environment variable
-    Package 'alsa' not found
-
-  The system library `alsa` required by crate `alsa-sys` was not found.
-  The file `alsa.pc` needs to be installed and the PKG_CONFIG_PATH environment variable must contain its parent directory.
-  The PKG_CONFIG_PATH environment variable is not set.
-
-  HINT: if you have installed the library, try setting PKG_CONFIG_PATH to the directory containing `alsa.pc`.
-
-  note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
-warning: build failed, waiting for other jobs to finish...
-
-✗ Command exited with code: 101
+- [ ] refactor lang feature here: src/utils/config/lang/ for all of them and align them cleanly each part and make them have the feature_name.rs instead of part0-n.rs
+- [ ] config integration_shell on|off (default off, if on is will turn on the hinter,tab,right key completion for that shell like p <--here now could hint powershell after powershell <could-hint-something>
+- [ ] new integration powershell: (hinter + tab change hint + right completion)
+- [ ] new integration cmd: (hinter + tab change hint + right completion)
+- [ ] new integration zsh : (hinter + tab change hint + right completion)
+- [ ] new integration bash: (hinter + tab change hint + right completion)
+- [ ] new integration termux : (hinter + tab change hint + right completion)
+- [ ] new integration fedora_sh: (hinter + tab change hint + right completion)
+- [ ] new integration debian_sh: (hinter + tab change hint + right completion)
+- [ ] new integration arch_sh: (hinter + tab change hint + right completion)
+- [ ] new integration fish_sh: (hinter + tab change hint + right completion)
+- [ ] new integration kali_sh: (hinter + tab change hint + right completion)

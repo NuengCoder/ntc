@@ -4,7 +4,7 @@ use crate::output::{print_error, print_info, print_warning};
 use crate::session::SessionState;
 use crate::shell::alias::{expand_command_line, expand_command_line_interactive};
 use crate::shell::commands::execute_command;
-use crate::shell::helpers::show_tree;
+use crate::shell::helpers::{show_nav_view, take_watch_refresh_suppressed};
 use crate::t;
 use crate::watcher;
 
@@ -15,6 +15,7 @@ use rustyline::highlight::Highlighter;
 use rustyline::hint::Hinter;
 use rustyline::history::FileHistory;
 use rustyline::validate::Validator;
+use rustyline::{Cmd, ConditionalEventHandler, Event, EventContext, RepeatCount};
 use rustyline::{Config as RlConfig, Context, Editor};
 use rustyline::{EventHandler, KeyCode, KeyEvent, Modifiers};
 use std::sync::Arc;
@@ -58,6 +59,28 @@ impl Completer for NtcHelper {
 }
 impl Validator for NtcHelper {}
 impl rustyline::Helper for NtcHelper {}
+
+/// End / Ctrl+E: accept the ghost hint when one is showing at the caret.
+/// Mirrors rustyline's own Right-arrow rule (`has_hint() && cursor at end`);
+/// returning `None` keeps the default key behaviour (both move the caret to
+/// the end of the line) when there is nothing to complete.
+struct AcceptHintOrEnd;
+
+impl ConditionalEventHandler for AcceptHintOrEnd {
+    fn handle(
+        &self,
+        _evt: &Event,
+        _n: RepeatCount,
+        _positive: bool,
+        ctx: &EventContext,
+    ) -> Option<Cmd> {
+        if ctx.has_hint() && ctx.pos() == ctx.line().len() {
+            Some(Cmd::CompleteHint)
+        } else {
+            None
+        }
+    }
+}
 
 /// Read the bodies of every `<<` heredoc declared on `line`, prompting with
 /// a `heredoc>` continuation until each delimiter line is seen. Returns
@@ -148,11 +171,13 @@ pub fn run_classic_shell(mut nav: Navigator) -> Result<()> {
         }
         std::env::set_var("PATH", &new_path);
         let count = pkg_dirs.len();
-        print_info(&t!(
-            "entry.ntpkg_active",
-            count,
-            if count == 1 { "" } else { "s" }
-        ));
+        if NtcConfig::global_get_intro_view_enabled() {
+            print_info(&t!(
+                "entry.ntpkg_active",
+                count,
+                if count == 1 { "" } else { "s" }
+            ));
+        }
     }
 
     let mut rl = Editor::<NtcHelper, FileHistory>::with_config(RlConfig::default())
@@ -171,6 +196,10 @@ pub fn run_classic_shell(mut nav: Navigator) -> Result<()> {
         KeyEvent(KeyCode::BackTab, Modifiers::NONE),
         EventHandler::Conditional(Box::new(tab_prev)),
     );
+    // End / Ctrl+E accept the ghost hint, like the right arrow does.
+    let accept_hint = || EventHandler::Conditional(Box::new(AcceptHintOrEnd));
+    rl.bind_sequence(KeyEvent(KeyCode::End, Modifiers::NONE), accept_hint());
+    rl.bind_sequence(KeyEvent(KeyCode::Char('e'), Modifiers::CTRL), accept_hint());
 
     if let Some(history_path) = NtcConfig::read_global().resolve_history_path() {
         let _ = rl.load_history(&history_path);
@@ -182,61 +211,61 @@ pub fn run_classic_shell(mut nav: Navigator) -> Result<()> {
             Ok(w) => {
                 let wh = Arc::new(w);
                 watcher_handle = Some(wh);
-                print_info(&t!("entry.watcher_started"));
+                if NtcConfig::global_get_intro_view_enabled() {
+                    print_info(&t!("entry.watcher_started"));
+                }
             }
             Err(e) => print_warning(&t!("entry.watcher_failed", e)),
         }
     }
 
-    println!();
-    println!(
-        "{}",
-        crate::utils::terminal::asciify(
-            "╔══════════════════════════════════════════════════════════════════╗"
-        )
-    );
-    println!(
-        "{}",
-        crate::utils::theme::ThemeColor::Cyan.paint_ansi_bold(&format!(
-            "{:^66}",
-            t!("entry.welcome_fmt", env!("CARGO_PKG_VERSION"))
-        ))
-    );
-    println!(
-        "{}",
-        crate::utils::terminal::asciify(
-            "╚══════════════════════════════════════════════════════════════════╝"
-        )
-    );
-    println!();
-    println!(
-        "{}",
-        crate::utils::theme::ThemeColor::BrightBlack.paint_ansi(&t!("entry.startup_hint"))
-    );
+    let show_header =
+        NtcConfig::global_get_dir_view_enabled() || NtcConfig::global_get_file_view_enabled();
+    if show_header {
+        println!();
+        println!(
+            "{}",
+            crate::utils::terminal::asciify(
+                "╔══════════════════════════════════════════════════════════════════╗"
+            )
+        );
+        println!(
+            "{}",
+            crate::utils::theme::ThemeColor::Cyan.paint_ansi_bold(&format!(
+                "{:^66}",
+                t!("entry.welcome_fmt", env!("CARGO_PKG_VERSION"))
+            ))
+        );
+        println!(
+            "{}",
+            crate::utils::terminal::asciify(
+                "╚══════════════════════════════════════════════════════════════════╝"
+            )
+        );
+        println!();
+        println!(
+            "{}",
+            crate::utils::theme::ThemeColor::BrightBlack.paint_ansi(&t!("entry.startup_hint"))
+        );
+    }
     // Daily new-release notice (max 1x/24h, background thread, silent on
     // failure): needs internet + GitHub tag newer than this build.
     crate::shell::update_check::spawn_update_check();
-    if NtcConfig::global_get_dir_view_enabled() {
-        show_tree(&nav, Some(1), false, false, false, false, false, false);
-    }
+    show_nav_view(&nav);
 
     loop {
         // Check if theme changed
         if crate::utils::theme::ThemeManager::take_theme_changed() {
             // Clear screen and redraw tree with new colors
             crate::navigator::clear_screen();
-            if NtcConfig::global_get_dir_view_enabled() {
-                show_tree(&nav, Some(1), false, false, false, false, false, false);
-            }
+            show_nav_view(&nav);
         }
         if let Some(ref wh) = watcher_handle {
             if let Some(summary) = wh.poll() {
                 if !summary.is_empty() {
                     summary.print_change_box();
                 }
-                if NtcConfig::global_get_dir_view_enabled() {
-                    show_tree(&nav, Some(1), false, false, false, false, false, false);
-                }
+                show_nav_view(&nav);
                 if !summary.is_empty() {
                     summary.print_refresh_box();
                 }
@@ -325,7 +354,19 @@ pub fn run_classic_shell(mut nav: Navigator) -> Result<()> {
             continue;
         }
 
+        // Embedded terminal: flag the command as running so the editor's
+        // terminal keeps its panel on Esc until the command finishes
+        // (see editor/terminal.rs). Harmless in a normal terminal.
+        let in_editor = embedded_in_editor();
+        if in_editor {
+            use std::io::Write;
+            print!("\u{1b}]1337;ntc-busy\u{7}");
+            let _ = std::io::stdout().flush();
+        }
+
         // Execute the (possibly piped / redirected) command line.
+        // Drop any stale suppression flag left by an earlier command line.
+        let _ = take_watch_refresh_suppressed();
         let mut should_exit = false;
         match execute_command(&expanded, &mut nav, &watcher_handle) {
             Ok(exit) => {
@@ -341,27 +382,37 @@ pub fn run_classic_shell(mut nav: Navigator) -> Result<()> {
                 print_error(&format!("{}", e));
             }
         }
+        if in_editor {
+            use std::io::Write;
+            print!("\u{1b}]1337;ntc-idle\u{7}");
+            let _ = std::io::stdout().flush();
+        }
+
+        // `clear` already redrew the view: swallow any pending watcher events
+        // so no change box, second tree, or trigger alias follows it.
+        let suppress_watch = take_watch_refresh_suppressed();
 
         // After commands, check for any watcher-triggered changes that arrived during execution
         if !should_exit {
             if let Some(ref wh) = watcher_handle {
-                if let Some(summary) = wh.poll() {
-                    if !summary.is_empty() {
-                        summary.print_change_box();
-                    }
-                    if NtcConfig::global_get_dir_view_enabled() {
-                        show_tree(&nav, Some(1), false, false, false, false, false, false);
-                    }
-                    if !summary.is_empty() {
-                        summary.print_refresh_box();
-                    }
-                    // Auto-run trigger alias if configured
-                    if let Some(ref alias) = summary.trigger_alias {
-                        let expanded = expand_command_line(alias);
-                        for cmd in expanded {
-                            match execute_command(&cmd, &mut nav, &watcher_handle) {
-                                Ok(_) => {}
-                                Err(e) => print_error(&t!("entry.watch_trigger", e)),
+                let pending = wh.poll();
+                if !suppress_watch {
+                    if let Some(summary) = pending {
+                        if !summary.is_empty() {
+                            summary.print_change_box();
+                        }
+                        show_nav_view(&nav);
+                        if !summary.is_empty() {
+                            summary.print_refresh_box();
+                        }
+                        // Auto-run trigger alias if configured
+                        if let Some(ref alias) = summary.trigger_alias {
+                            let expanded = expand_command_line(alias);
+                            for cmd in expanded {
+                                match execute_command(&cmd, &mut nav, &watcher_handle) {
+                                    Ok(_) => {}
+                                    Err(e) => print_error(&t!("entry.watch_trigger", e)),
+                                }
                             }
                         }
                     }

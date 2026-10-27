@@ -1,0 +1,1022 @@
+use std::collections::HashMap;
+
+pub fn fill(m: &mut HashMap<String, String>) {
+    m.insert("cli.completions.shell.bash".into(), "bash".into());
+
+    m.insert("cli.completions.shell.fish".into(), "fish".into());
+
+    m.insert(
+        "cli.completions.shell.powershell".into(),
+        "powershell".into(),
+    );
+
+    m.insert("cli.completions.shell.zsh".into(), "zsh".into());
+
+    m.insert(
+        "cli.example.cat_file".into(),
+        " ntc -i file.txt ສະແດງເນື້ອໃນໄຟລ໌".into(),
+    );
+
+    m.insert(
+        "cli.example.image".into(),
+        " ntc -image screenshot.png to json ແປງຮູບພາບເປັນ JSON ສຳລັບ AI\n".into(),
+    );
+
+    m.insert(
+        "cli.example.interactive".into(),
+        " ntc ເປີດ interactive shell".into(),
+    );
+
+    m.insert(
+        "cli.example.math_arithmetic".into(),
+        " ntc --math \"3+4*5\" ຄິດໄລ່ນິພົດຄະນິດສາດ".into(),
+    );
+
+    m.insert(
+        "cli.example.math_func".into(),
+        " ntc --math \"sin(PI/2)\" ຄະນິດສາດກັບຟັງຊັນ ແລະ ຄ່າຄົງທີ່".into(),
+    );
+
+    m.insert(
+        "cli.example.report_cp".into(),
+        " ntc -i src --cp ສຳເນົາຕົ້ນໄມ້ໄດເຣັກທໍຣີໃສ່ clipboard".into(),
+    );
+
+    m.insert(
+        "cli.example.report_docx".into(),
+        " ntc -i src -f docx ສ້າງບົດລາຍງານ DOCX ຈາກ src".into(),
+    );
+
+    m.insert(
+        "cli.example.report_json_cp".into(),
+        " ntc -i src -f json --cp ສຳເນົາບົດລາຍງານ JSON ໃສ່ clipboard".into(),
+    );
+
+    m.insert(
+        "cli.example.report_pdf".into(),
+        " ntc -i src -f pdf ສ້າງບົດລາຍງານ PDF ຈາກ src".into(),
+    );
+
+    m.insert(
+        "cli.example.report_txt".into(),
+        " ntc -i src ສ້າງບົດລາຍງານ TXT ຂອງໄດເຣັກທໍຣີ src".into(),
+    );
+
+    m.insert(
+        "cli.example.report_xlsx".into(),
+        " ntc -i src -f xlsx ສ້າງບົດລາຍງານ XLSX (ພ້ອມການວິເຄາະ dependency)".into(),
+    );
+
+    m.insert(
+        "cli.example.say".into(),
+        " ntc -say \"Hello World\" ພິມ Hello World".into(),
+    );
+
+    m.insert(
+        "cli.example.setL".into(),
+        " ntc --setL ON ເປີດໃຊ້ງານເບີແຖວ".into(),
+    );
+
+    m.insert(
+        "cli.example.showcg".into(),
+        " ntc --showcg ສະແດງການຕັ້ງຄ່າ".into(),
+    );
+
+    m.insert(
+        "cli.example.teleport_at".into(),
+        " ntc @web ເປີດ ແລະ teleport ໄປທີ່ savepoint 'web'".into(),
+    );
+
+    m.insert(
+        "cli.example.watch".into(),
+        " ntc --watch ON ເປີດໃຊ້ງານ file watcher".into(),
+    );
+
+    m.insert(
+        "cli.flag.cared".into(),
+        " --cared <name> ຢຸດການບໍ່ສົນໃຈຊື່ໄດເຣັກທໍຣີ".into(),
+    );
+
+    m.insert(
+        "cli.flag.caref".into(),
+        " --caref <ext> ໃສ່ໃຈກັບນາມສະກຸນໄຟລ໌".into(),
+    );
+
+    m.insert(
+        "cli.flag.caren".into(),
+        " --caren <file> ໃສ່ໃຈກັບໄຟລ໌ສະເພາະ\n".into(),
+    );
+
+    m.insert("cli.flag.clear".into(), " --clear ລ້າງໜ້າຈໍ terminal".into());
+
+    m.insert(
+        "cli.flag.copy".into(),
+        " --cp ສຳເນົາບົດລາຍງານໃສ່ clipboard ແທນການບັນທຶກເປັນໄຟລ໌".into(),
+    );
+
+    m.insert(
+        "cli.flag.edit".into(),
+        " -e, --edit <file> ເປີດໄຟລ໌ໃນ text editor ໃນຕົວ".into(),
+    );
+
+    m.insert(
+        "cli.flag.explorer".into(),
+        " -x, --explorer [PATH] ເປີດ NTC File Explorer TUI".into(),
+    );
+
+    m.insert(
+        "cli.flag.format".into(),
+        " -f, --format <FORMAT> ຮູບແບບຜົນລັບ: txt, html, json, md, pdf, docx, xlsx (ເລີ່ມຕົ້ນ: txt)"
+            .into(),
+    );
+
+    m.insert(
+        "cli.flag.generate_completions".into(),
+        " --generate-completions <SHELL> ສ້າງ completions (bash|zsh|fish|powershell)\n".into(),
+    );
+
+    m.insert(
+        "cli.flag.help_flag".into(),
+        " --help ສະແດງຂໍ້ຄວາມຊ່ວຍເຫຼືອນີ້".into(),
+    );
+
+    m.insert(
+        "cli.flag.hyper".into(),
+        " --hyper <name> --lang c ສ້າງ C/C++ hyper project scaffold\n".into(),
+    );
+
+    m.insert(
+        "cli.flag.igcare_export_all".into(),
+        " --igcare-export-all <name> ສົ່ງອອກການຕັ້ງຄ່າ ignore/care ທັງໝົດ".into(),
+    );
+
+    m.insert(
+        "cli.flag.igcare_export_select".into(),
+        " --igcare-export-select <name> ເລືອກໝວດໝູ່ເພື່ອສົ່ງອອກ".into(),
+    );
+
+    m.insert(
+        "cli.flag.igcare_import".into(),
+        " --igcare-import <file> ນຳເຂົ້າການຕັ້ງຄ່າຈາກໄຟລ໌ .ntc.igcare\n".into(),
+    );
+
+    m.insert(
+        "cli.flag.ignore".into(),
+        " --ignore <name> ບໍ່ສົນໃຈຊື່ໄດເຣັກທໍຣີ".into(),
+    );
+
+    m.insert(
+        "cli.flag.ignored".into(),
+        " --ignored ສະແດງລາຍການທີ່ຖືກບໍ່ສົນໃຈປັດຈຸບັນ".into(),
+    );
+
+    m.insert(
+        "cli.flag.ignoref".into(),
+        " --ignoref <ext> ບໍ່ສົນໃຈນາມສະກຸນໄຟລ໌".into(),
+    );
+
+    m.insert(
+        "cli.flag.ignoren".into(),
+        " --ignoren <file> ບໍ່ສົນໃຈໄຟລ໌ສະເພາະ (ຕ.ຢ., Cargo.lock)".into(),
+    );
+
+    m.insert(
+        "cli.flag.image".into(),
+        " -image <path> to <fmt> ແປງຮູບພາບເປັນເອກະສານສຳລັບ AI (json|md|html|txt)".into(),
+    );
+
+    m.insert(
+        "cli.flag.init".into(),
+        " --init <file> ສ້າງ template starter ແລະເປີດໃນ editor".into(),
+    );
+
+    m.insert(
+        "cli.flag.input".into(),
+        " -i, --input <path> ປະມວນຜົນໄຟລ໌ ຫຼື ໄດເຣັກທໍຣີ".into(),
+    );
+
+    m.insert(
+        "cli.flag.list".into(),
+        " --list, --fun ລາຍຊື່ຟັງຊັນ command-line ທັງໝົດ".into(),
+    );
+
+    m.insert(
+        "cli.flag.math".into(),
+        " --math <EXPR> ຄິດໄລ່ນິພົດຄະນິດສາດ (ຕ.ຢ. --math \"3+4*5\")".into(),
+    );
+
+    m.insert(
+        "cli.flag.output".into(),
+        " -o, --output <file> ບັນທຶກຜົນລັບໄປໃສ່ໄຟລ໌ທີ່ກຳນົດ".into(),
+    );
+
+    m.insert(
+        "cli.flag.ral_export_all".into(),
+        " --ral-export-all <name> ສົ່ງອອກ run aliases ທັງໝົດໄປຍັງ <name>.ntc.ral".into(),
+    );
+
+    m.insert(
+        "cli.flag.ral_export_select".into(),
+        " --ral-export-select <name> ເລືອກ aliases ເພື່ອສົ່ງອອກ".into(),
+    );
+
+    m.insert(
+        "cli.flag.ral_import".into(),
+        " --ral-import <file> ນຳເຂົ້າ aliases ຈາກໄຟລ໌ .ntc.ral".into(),
+    );
+
+    m.insert(
+        "cli.flag.say".into(),
+        " -say, -print <text> ພິມຂໍ້ຄວາມອອກ stdout".into(),
+    );
+
+    m.insert(
+        "cli.flag.setA".into(),
+        " --setA [ON|OFF] ສະແດງ/ຕັ້ງ autosuggest (ghost text)".into(),
+    );
+
+    m.insert(
+        "cli.flag.setC".into(),
+        " --setC [ON|OFF] ສະແດງ ຫຼື ປ່ຽນສີຜົນລັບ".into(),
+    );
+
+    m.insert(
+        "cli.flag.setD".into(),
+        " --setD [depth] ສະແດງ ຫຼື ຕັ້ງຄວາມເລິກ recursion ສູງສຸດ (ຕ່ຳສຸດ: 1, ສູງສຸດ: 20)".into(),
+    );
+
+    m.insert(
+        "cli.flag.setH".into(),
+        " --setH [path|ON|OFF] ສະແດງ/ຕັ້ງ path history ຫຼື ເປີດ/ປິດໃຊ້ງານ".into(),
+    );
+
+    m.insert(
+        "cli.flag.setL".into(),
+        " --setL [ON|OFF] ສະແດງ ຫຼື ປ່ຽນເບີແຖວສຳລັບການສະແດງໄຟລ໌".into(),
+    );
+
+    m.insert(
+        "cli.flag.setO".into(),
+        " --setO [path] ສະແດງ ຫຼື ຕັ້ງໄດເຣັກທໍຣີຜົນລັບ (ເລີ່ມຕົ້ນ: Desktop)".into(),
+    );
+
+    m.insert(
+        "cli.flag.setT".into(),
+        " --setT [threads] ສະແດງ ຫຼື ຕັ້ງຈຳນວນ threads (ເລີ່ມຕົ້ນ: 4)".into(),
+    );
+
+    m.insert(
+        "cli.flag.showcg".into(),
+        " --showcg ສະແດງພາບລວມການຕັ້ງຄ່າປັດຈຸບັນ".into(),
+    );
+
+    m.insert(
+        "cli.flag.size".into(),
+        " --size ສະແດງຂະໜາດໄດເຣັກທໍຣີປັດຈຸບັນ".into(),
+    );
+
+    m.insert(
+        "cli.flag.tp_add".into(),
+        " --tp-add <name> ບັນທຶກໄດເຣັກທໍຣີປັດຈຸບັນເປັນ teleport point".into(),
+    );
+
+    m.insert(
+        "cli.flag.tp_list".into(),
+        " --tp-list ລາຍຊື່ teleport points ທັງໝົດ".into(),
+    );
+
+    m.insert(
+        "cli.flag.tp_rm".into(),
+        " --tp-rm <name> ລຶບ teleport point\n".into(),
+    );
+
+    m.insert("cli.flag.version".into(), " --version ສະແດງຂໍ້ມູນເວີຊັນ".into());
+
+    m.insert(
+        "cli.flag.view".into(),
+        " --view ເບິ່ງຕົ້ນໄມ້ໄດເຣັກທໍຣີປັດຈຸບັນຢ່າງໄວ".into(),
+    );
+
+    m.insert(
+        "cli.flag.view_size".into(),
+        " --view --size ເບິ່ງໄວພ້ອມຂະໜາດໄດເຣັກທໍຣີ\n".into(),
+    );
+
+    m.insert(
+        "cli.flag.watch_flag".into(),
+        " --watch [ON|OFF] ສະແດງ/ຕັ້ງສະຖານະ file watcher".into(),
+    );
+
+    m.insert(
+        "cli.flag.where".into(),
+        " --where ສະແດງບ່ອນຕັ້ງ executable ແລະ config ຂອງ ntc\n".into(),
+    );
+
+    m.insert(
+        "cli.help.description".into(),
+        "ຈຸດລວມຂອງ Navigation, Project Toolkit Center hub.\n".into(),
+    );
+
+    m.insert(
+        "cli.help.title".into(),
+        "ntc <version> \u{2014} Navigate, Toolkit, Center".into(),
+    );
+
+    m.insert("cli.helpers.basic_usage".into(), " ntc [OPTIONS]\n ntc -i <path> [-o <output>]\n ntc -i <path> --cp ສຳເນົາບົດລາຍງານໃສ່ clipboard\n".into());
+
+    m.insert("cli.helpers.cli_examples".into(), " ntc ເປີດ interactive shell\n ntc @web ເປີດ ແລະ teleport ໄປທີ່ savepoint 'web'\n ntc --math \"3+4*5\" ຄິດໄລ່ນິພົດຄະນິດສາດ\n ntc --math \"sin(PI/2)\" ຄະນິດສາດກັບຟັງຊັນ ແລະ ຄ່າຄົງທີ່\n ntc -i src ສ້າງບົດລາຍງານ TXT ຂອງໄດເຣັກທໍຣີ src\n ntc -i src --cp ສຳເນົາຕົ້ນໄມ້ໄດເຣັກທໍຣີໃສ່ clipboard\n ntc -i src -f json --cp ສຳເນົາບົດລາຍງານ JSON ໃສ່ clipboard\n ntc -i src -f pdf ສ້າງບົດລາຍງານ PDF ຈາກ src\n ntc -i src -f docx ສ້າງບົດລາຍງານ DOCX ຈາກ src\n ntc -i src -f xlsx ສ້າງບົດລາຍງານ XLSX (ພ້ອມການວິເຄາະ dependency)\n ntc -i file.txt ສະແດງເນື້ອໃນໄຟລ໌\n ntc --setL ON ເປີດໃຊ້ງານເບີແຖວ\n ntc --showcg ສະແດງການຕັ້ງຄ່າ\n ntc -say \"Hello World\" ພິມ Hello World\n ntc --watch ON ເປີດໃຊ້ງານ file watcher\n ntc -image screenshot.png to json ແປງຮູບພາບເປັນ JSON ສຳລັບ AI\n".into());
+
+    m.insert("cli.helpers.config_header".into(), "ຕົວເລືອກການຕັ້ງຄ່າ:".into());
+
+    m.insert("cli.helpers.config_options".into(), " --setO [path] ສະແດງ ຫຼື ຕັ້ງໄດເຣັກທໍຣີຜົນລັບ (ເລີ່ມຕົ້ນ: Desktop)\n --setD [depth] ສະແດງ ຫຼື ຕັ້ງຄວາມເລິກ recursion ສູງສຸດ (ຕ່ຳສຸດ: 1, ສູງສຸດ: 20)\n --setL [ON|OFF] ສະແດງ ຫຼື ປ່ຽນເບີແຖວສຳລັບການສະແດງໄຟລ໌\n --setC [ON|OFF] ສະແດງ ຫຼື ປ່ຽນສີຜົນລັບ\n --setT [threads] ສະແດງ ຫຼື ຕັ້ງຈຳນວນ threads (ເລີ່ມຕົ້ນ: 4)\n --setH [path|ON|OFF] ສະແດງ/ຕັ້ງ path history ຫຼື ເປີດ/ປິດໃຊ້ງານ\n --setA [ON|OFF] ສະແດງ/ຕັ້ງ autosuggest (ghost text)\n --showcg ສະແດງພາບລວມການຕັ້ງຄ່າປັດຈຸບັນ\n --watch [ON|OFF] ສະແດງ/ຕັ້ງສະຖານະ file watcher\n --where ສະແດງບ່ອນຕັ້ງ executable ແລະ config ຂອງ ntc\n".into());
+
+    m.insert("cli.helpers.editor_header".into(), "ຕົວເລືອກ editor:".into());
+
+    m.insert("cli.helpers.editor_options".into(), " -e, --edit <file> ເປີດໄຟລ໌ໃນ text editor ໃນຕົວ\n --init <file> ສ້າງ template starter ແລະເປີດໃນ editor\n --hyper <name> --lang c ສ້າງ C/C++ hyper project scaffold\n".into());
+
+    m.insert("cli.helpers.examples_header".into(), "ຕົວຢ່າງ:".into());
+
+    m.insert(
+        "cli.helpers.export_header".into(),
+        "ການສົ່ງອອກ ALIAS / IGNORE/CARE:".into(),
+    );
+
+    m.insert("cli.helpers.export_options".into(), " --ral-export-all <name> ສົ່ງອອກ run aliases ທັງໝົດໄປຍັງ <name>.ntc.ral\n --ral-export-select <name> ເລືອກ aliases ເພື່ອສົ່ງອອກ\n --ral-import <file> ນຳເຂົ້າ aliases ຈາກໄຟລ໌ .ntc.ral\n --igcare-export-all <name> ສົ່ງອອກການຕັ້ງຄ່າ ignore/care ທັງໝົດ\n --igcare-export-select <name> ເລືອກໝວດໝູ່ເພື່ອສົ່ງອອກ\n --igcare-import <file> ນຳເຂົ້າການຕັ້ງຄ່າຈາກໄຟລ໌ .ntc.igcare\n".into());
+
+    m.insert("cli.helpers.igcare_options".into(), " --ignored ສະແດງລາຍການທີ່ຖືກບໍ່ສົນໃຈປັດຈຸບັນ\n --ignore <name> ບໍ່ສົນໃຈຊື່ໄດເຣັກທໍຣີ\n --cared <name> ຢຸດການບໍ່ສົນໃຈຊື່ໄດເຣັກທໍຣີ\n --ignoref <ext> ບໍ່ສົນໃຈນາມສະກຸນໄຟລ໌\n --caref <ext> ໃສ່ໃຈກັບນາມສະກຸນໄຟລ໌\n --ignoren <file> ບໍ່ສົນໃຈໄຟລ໌ສະເພາະ (ຕ.ຢ., Cargo.lock)\n --caren <file> ໃສ່ໃຈກັບໄຟລ໌ສະເພາະ\n".into());
+
+    m.insert(
+        "cli.helpers.ignore_header".into(),
+        "ຕົວເລືອກ IGNORE/CARE:".into(),
+    );
+
+    m.insert("cli.helpers.interactive_note".into(), "ໃຊ້ໃນ INTERACTIVE ເທົ່ານັ້ນ (ແລ່ນ 'ntc' ໂດຍບໍ່ມີ args):\n ການນຳທາງ: cd, back, gos, gosc\n Teleport: tp jump, tp to, @name\n Tutorial: tutorial \u{2014} ເລີ່ມ tutorial ແບບຂັ້ນຕອນ interactive\n".into());
+
+    m.insert("cli.helpers.other_header".into(), "ຕົວເລືອກອື່ນໆ:".into());
+
+    m.insert("cli.helpers.other_options".into(), " -say, -print <text> ພິມຂໍ້ຄວາມອອກ stdout\n -image <path> to <fmt> ແປງຮູບພາບເປັນເອກະສານສຳລັບ AI (json|md|html|txt)\n -x, --explorer [PATH] ເປີດ NTC File Explorer TUI\n --clear ລ້າງໜ້າຈໍ terminal\n --version ສະແດງຂໍ້ມູນເວີຊັນ\n --math <EXPR> ຄິດໄລ່ນິພົດຄະນິດສາດ (ຕ.ຢ. --math \"3+4*5\")\n --list, --fun ລາຍຊື່ຟັງຊັນ command-line ທັງໝົດ\n --help ສະແດງຂໍ້ຄວາມຊ່ວຍເຫຼືອນີ້\n --generate-completions <SHELL> ສ້າງ completions (bash|zsh|fish|powershell)\n".into());
+
+    m.insert("cli.helpers.report_header".into(), "ຕົວເລືອກບົດລາຍງານ:".into());
+
+    m.insert("cli.helpers.report_options".into(), " -i, --input <path> ປະມວນຜົນໄຟລ໌ ຫຼື ໄດເຣັກທໍຣີ\n -o, --output <file> ບັນທຶກຜົນລັບໄປໃສ່ໄຟລ໌ທີ່ກຳນົດ\n -f, --format <FORMAT> ຮູບແບບຜົນລັບ: txt, html, json, md, pdf, docx, xlsx (ເລີ່ມຕົ້ນ: txt)\n --cp ສຳເນົາບົດລາຍງານໃສ່ clipboard ແທນການບັນທຶກເປັນໄຟລ໌\n --size ສະແດງຂະໜາດໄດເຣັກທໍຣີປັດຈຸບັນ\n --view ເບິ່ງຕົ້ນໄມ້ໄດເຣັກທໍຣີປັດຈຸບັນຢ່າງໄວ\n --view --size ເບິ່ງໄວພ້ອມຂະໜາດໄດເຣັກທໍຣີ\n".into());
+
+    m.insert("cli.helpers.shell_commands".into(), " ntc pathcp ສຳເນົາ path ໃສ່ clipboard\n ntc say \"hello\" --loop 3 ພິມຂໍ້ຄວາມດ້ວຍ loop\n ntc tl dir . ນັບແຖວໃນໄດເຣັກທໍຣີ\n ntc ne ເປີດ text editor\n ntc size ສະແດງຂະໜາດໄດເຣັກທໍຣີ\n ntc view ສະແດງຕົ້ນໄມ້ໄດເຣັກທໍຣີ\n ntc serve files --port 8080 ເລີ່ມ file-drive server ຢູ່ port 8080\n ntc dl https://example.com/file.zip --progress ດາວໂຫຼດພ້ອມ progress\n ntc encode b64 hello Base64 encode ສະຕຣິງ\n ntc qr \"text\" ສ້າງລະຫັດ QR ໃນ terminal\n ntc math 3+4*5 ຄິດໄລ່ນິພົດ\n ntc ral add btr \"cargo build --release\" ເພີ່ມ alias ຈາກ CLI\n".into());
+
+    m.insert(
+        "cli.helpers.shell_header".into(),
+        "ຄຳສັ່ງ SHELL (ໃຊ້ຈາກ CLI ໄດ້ຄືກັນ):".into(),
+    );
+
+    m.insert(
+        "cli.helpers.tagline".into(),
+        "ຈຸດລວມຂອງ Navigation, Project Toolkit Center hub.\n".into(),
+    );
+
+    m.insert("cli.helpers.tp_header".into(), "ຈຸດບັນທຶກ TELEPORT:".into());
+
+    m.insert("cli.helpers.tp_options".into(), " --tp-add <name> ບັນທຶກໄດເຣັກທໍຣີປັດຈຸບັນເປັນ teleport point\n --tp-list ລາຍຊື່ teleport points ທັງໝົດ\n --tp-rm <name> ລຶບ teleport point\n".into());
+
+    m.insert("cli.helpers.usage_header".into(), "ວິທີໃຊ້:".into());
+
+    m.insert("cli.new.usage_header".into(), "ວິທີໃຊ້:".into());
+
+    m.insert(
+        "cli.new.usage_shell".into(),
+        "  ntc                       ເປີດ interactive shell".into(),
+    );
+
+    m.insert(
+        "cli.new.usage_cmd".into(),
+        "  ntc <command> [args...]   ແລ່ນຄຳສັ່ງ shell ແບບບໍ່ໂຕ້ຕອບ".into(),
+    );
+
+    m.insert(
+        "cli.new.usage_new".into(),
+        "  ntc -n, --new [command]   ເປີດ terminal ໃໝ່ (ແລ່ນຄຳສັ່ງແລ້ວຄ້າງແບບໂຕ້ຕອບ)".into(),
+    );
+
+    m.insert(
+        "cli.new.usage_upgrade".into(),
+        "  ntc --upgrade             ອັບເກຣດ ntc ເປັນເວີຊັນລ້າສຸດ".into(),
+    );
+
+    m.insert(
+        "cli.new.usage_version".into(),
+        "  ntc --version, -v         ສະແດງຂໍ້ມູນເວີຊັນ".into(),
+    );
+
+    m.insert(
+        "cli.new.usage_help".into(),
+        "  ntc --help, -h            ສະແດງຂໍ້ຄວາມຊ່ວຍເຫຼືອນີ້".into(),
+    );
+
+    m.insert("cli.new.examples_header".into(), "ຕົວຢ່າງ:".into());
+
+    m.insert(
+        "cli.new.ex_help".into(),
+        "  ntc help                  ສະແດງຄວາມຊ່ວຍເຫຼືອຂອງ shell".into(),
+    );
+
+    m.insert(
+        "cli.new.ex_version".into(),
+        "  ntc version               ສະແດງເວີຊັນຜ່ານ shell".into(),
+    );
+
+    m.insert(
+        "cli.new.ex_alias".into(),
+        "  ntc t                     ແລ່ນ ral alias 't' (ຕ.ຢ. taskmgr)".into(),
+    );
+
+    m.insert(
+        "cli.new.ex_new".into(),
+        "  ntc -n                    ເປີດ terminal ແບບໂຕ້ຕອບໃໝ່".into(),
+    );
+
+    m.insert(
+        "cli.new.ex_new_cmd".into(),
+        "  ntc -n t                  ເປີດ terminal ໃໝ່ ແລ່ນ 't' ແລ້ວຄ້າງແບບໂຕ້ຕອບ".into(),
+    );
+
+    m.insert("cli.new.opened".into(), "ເປີດ terminal ໃໝ່ແລ້ວ".into());
+
+    m.insert(
+        "cli.new.no_terminal".into(),
+        "ບໍ່ພົບ terminal (ລອງແລ້ວ: {})".into(),
+    );
+
+    m.insert(
+        "cli.new.unsupported".into(),
+        "ntc -n/--new ຮອງຮັບສະເພາະ Windows, Linux ແລະ macOS".into(),
+    );
+
+    m.insert(
+        "cli.interactive.navigation".into(),
+        " ການນຳທາງ: cd, back, gos, gosc".into(),
+    );
+
+    m.insert(
+        "cli.interactive.teleport".into(),
+        " Teleport: tp jump, tp to, @name".into(),
+    );
+
+    m.insert(
+        "cli.interactive.tutorial".into(),
+        " Tutorial: tutorial \u{2014} ເລີ່ມ tutorial ແບບຂັ້ນຕອນ interactive\n".into(),
+    );
+
+    m.insert(
+        "cli.known_flag.cared".into(),
+        "--cared <name> ຢຸດການບໍ່ສົນໃຈໄດເຣັກທໍຣີ".into(),
+    );
+
+    m.insert(
+        "cli.known_flag.caref".into(),
+        "--caref <ext> ໃສ່ໃຈກັບນາມສະກຸນໄຟລ໌".into(),
+    );
+
+    m.insert(
+        "cli.known_flag.caren".into(),
+        "--caren <file> ໃສ່ໃຈກັບໄຟລ໌ສະເພາະ".into(),
+    );
+
+    m.insert(
+        "cli.known_flag.clear".into(),
+        "--clear ລ້າງໜ້າຈໍ terminal".into(),
+    );
+
+    m.insert(
+        "cli.known_flag.cp".into(),
+        "--cp ສຳເນົາບົດລາຍງານໃສ່ clipboard".into(),
+    );
+
+    m.insert(
+        "cli.known_flag.explorer".into(),
+        "-x, --explorer [PATH] ເປີດ NTC File Explorer TUI".into(),
+    );
+
+    m.insert(
+        "cli.known_flag.generate_completions".into(),
+        "--generate-completions <SHELL> ສ້າງ shell completions (bash|zsh|fish|powershell)".into(),
+    );
+
+    m.insert(
+        "cli.known_flag.help_flag".into(),
+        "--help ສະແດງຄວາມຊ່ວຍເຫຼືອ".into(),
+    );
+
+    m.insert(
+        "cli.known_flag.igcare_export_all".into(),
+        "--igcare-export-all <name> ສົ່ງອອກການຕັ້ງຄ່າ ignore/care ທັງໝົດໄປຍັງ <name>.ntc.igcare".into(),
+    );
+
+    m.insert(
+        "cli.known_flag.igcare_export_select".into(),
+        "--igcare-export-select <name> ເລືອກໝວດໝູ່ເພື່ອສົ່ງອອກໄປຍັງ <name>.ntc.igcare".into(),
+    );
+
+    m.insert(
+        "cli.known_flag.igcare_import".into(),
+        "--igcare-import <file> ນຳເຂົ້າການຕັ້ງຄ່າ ignore/care ຈາກໄຟລ໌ .ntc.igcare".into(),
+    );
+
+    m.insert(
+        "cli.known_flag.ignore".into(),
+        "--ignore <name> ບໍ່ສົນໃຈຊື່ໄດເຣັກທໍຣີ".into(),
+    );
+
+    m.insert(
+        "cli.known_flag.ignored".into(),
+        "--ignored ສະແດງລາຍການທີ່ຖືກບໍ່ສົນໃຈ".into(),
+    );
+
+    m.insert(
+        "cli.known_flag.ignoref".into(),
+        "--ignoref <ext> ບໍ່ສົນໃຈນາມສະກຸນໄຟລ໌".into(),
+    );
+
+    m.insert(
+        "cli.known_flag.ignoren".into(),
+        "--ignoren <file> ບໍ່ສົນໃຈໄຟລ໌ສະເພາະ".into(),
+    );
+
+    m.insert(
+        "cli.known_flag.input".into(),
+        "-i, --input <path> ໄຟລ໌ ຫຼື ໄດເຣັກທໍຣີທີ່ນຳເຂົ້າ".into(),
+    );
+
+    m.insert(
+        "cli.known_flag.list".into(),
+        "--list, --fun ລາຍຊື່ຟັງຊັນ command-line ທັງໝົດ".into(),
+    );
+
+    m.insert(
+        "cli.known_flag.math".into(),
+        "--math <EXPR> ຄິດໄລ່ນິພົດຄະນິດສາດ (ຕ.ຢ. --math \"3+4*5\")".into(),
+    );
+
+    m.insert(
+        "cli.known_flag.no_args".into(),
+        "(ບໍ່ມີ args) ເປີດ interactive mode".into(),
+    );
+
+    m.insert(
+        "cli.known_flag.output".into(),
+        "-o, --output <file> ຊື່ໄຟລ໌ຜົນລັບ".into(),
+    );
+
+    m.insert(
+        "cli.known_flag.ral_export_all".into(),
+        "--ral-export-all <name> ສົ່ງອອກ run aliases ທັງໝົດໄປຍັງ <name>.ntc.ral".into(),
+    );
+
+    m.insert(
+        "cli.known_flag.ral_export_select".into(),
+        "--ral-export-select <name> ເລືອກ run aliases ເພື່ອສົ່ງອອກໄປຍັງ <name>.ntc.ral".into(),
+    );
+
+    m.insert(
+        "cli.known_flag.ral_import".into(),
+        "--ral-import <file> ນຳເຂົ້າ run aliases ຈາກໄຟລ໌ .ntc.ral".into(),
+    );
+
+    m.insert(
+        "cli.known_flag.say".into(),
+        "-say, -print <text> ພິມຂໍ້ຄວາມອອກ stdout".into(),
+    );
+
+    m.insert(
+        "cli.known_flag.setC".into(),
+        "--setC [ON|OFF] ສະແດງ ຫຼື ຕັ້ງສີຜົນລັບ".into(),
+    );
+
+    m.insert(
+        "cli.known_flag.setD".into(),
+        "--setD [depth] ສະແດງ ຫຼື ຕັ້ງຄວາມເລິກສູງສຸດ (1-20)".into(),
+    );
+
+    m.insert(
+        "cli.known_flag.setH".into(),
+        "--setH [path|ON|OFF] ສະແດງ ຫຼື ຕັ້ງ path/ສະຖານະ history".into(),
+    );
+
+    m.insert(
+        "cli.known_flag.setL".into(),
+        "--setL [ON|OFF] ສະແດງ ຫຼື ຕັ້ງເບີແຖວ".into(),
+    );
+
+    m.insert(
+        "cli.known_flag.setO".into(),
+        "--setO [path] ສະແດງ ຫຼື ຕັ້ງໄດເຣັກທໍຣີຜົນລັບ".into(),
+    );
+
+    m.insert(
+        "cli.known_flag.setT".into(),
+        "--setT [threads] ສະແດງ ຫຼື ຕັ້ງຈຳນວນ threads".into(),
+    );
+
+    m.insert(
+        "cli.known_flag.showcg".into(),
+        "--showcg ສະແດງພາບລວມການຕັ້ງຄ່າປັດຈຸບັນ".into(),
+    );
+
+    m.insert(
+        "cli.known_flag.size".into(),
+        "--size ສະແດງຂະໜາດໄດເຣັກທໍຣີປັດຈຸບັນ".into(),
+    );
+
+    m.insert(
+        "cli.known_flag.path".into(),
+        "--path <path|@tp> ເສັ້ນທາງເປົ້າໝາຍ ຫຼື savepoint (ໃຊ້ກັບ --size ຫຼື --view)".into(),
+    );
+
+    m.insert(
+        "cli.known_flag.teleport_at".into(),
+        "ntc @<name> ເປີດ ແລະ teleport ໄປທີ່ savepoint".into(),
+    );
+
+    m.insert(
+        "cli.known_flag.tp_add".into(),
+        "--tp-add <name> ບັນທຶກໄດເຣັກທໍຣີປັດຈຸບັນເປັນ teleport point".into(),
+    );
+
+    m.insert(
+        "cli.known_flag.tp_list".into(),
+        "--tp-list ລາຍຊື່ teleport points ທັງໝົດ".into(),
+    );
+
+    m.insert(
+        "cli.known_flag.tp_rm".into(),
+        "--tp-rm <name> ລຶບ teleport point".into(),
+    );
+
+    m.insert(
+        "cli.known_flag.upgrade".into(),
+        "--upgrade ກວດຫາການອັບເດດ ແລະ ອັບເກຣດ ntc".into(),
+    );
+
+    m.insert(
+        "cli.known_flag.version".into(),
+        "--version ສະແດງຂໍ້ມູນເວີຊັນ".into(),
+    );
+
+    m.insert(
+        "cli.known_flag.view".into(),
+        "--view ເບິ່ງຕົ້ນໄມ້ໄດເຣັກທໍຣີປັດຈຸບັນຢ່າງໄວ".into(),
+    );
+
+    m.insert(
+        "cli.known_flag.view_size".into(),
+        "--view --size ເບິ່ງໄວພ້ອມຂະໜາດໄດເຣັກທໍຣີ".into(),
+    );
+
+    m.insert(
+        "cli.known_flag.watch".into(),
+        "--watch [ON|OFF] ສະແດງ ຫຼື ຕັ້ງສະຖານະ file watcher".into(),
+    );
+
+    m.insert(
+        "cli.known_flag.where".into(),
+        "--where ສະແດງບ່ອນຕັ້ງ executable ແລະ config ຂອງ ntc".into(),
+    );
+
+    m.insert("cli.logo.c".into(), "C".into());
+
+    m.insert("cli.logo.center".into(), "Center".into());
+
+    m.insert("cli.logo.letters_format".into(), " {} {} {}".into());
+
+    m.insert("cli.logo.n".into(), "N".into());
+
+    m.insert("cli.logo.navigate".into(), "Navigate".into());
+
+    m.insert("cli.logo.subtitle_format".into(), " {} {} {}".into());
+
+    m.insert("cli.logo.t".into(), "T".into());
+
+    m.insert("cli.logo.toolkit".into(), "Toolkit".into());
+
+    m.insert(
+        "cli.run.about".into(),
+        "Navigate, Tree, Cat - ຕົວເບິ່ງຕົ້ນໄມ້ໄດເຣັກທໍຣີ ແລະ ຕໍ່ສະຕຣິງໄຟລ໌".into(),
+    );
+
+    m.insert("cli.run.help_cared".into(), "cared".into());
+
+    m.insert("cli.run.help_caref".into(), "caref".into());
+
+    m.insert("cli.run.help_caren".into(), "caren".into());
+
+    m.insert("cli.run.help_clear".into(), "ລ້າງໜ້າຈໍ terminal".into());
+
+    m.insert(
+        "cli.run.help_copy".into(),
+        "ສຳເນົາບົດລາຍງານໃສ່ clipboard ແທນການບັນທຶກເປັນໄຟລ໌".into(),
+    );
+
+    m.insert(
+        "cli.run.help_edit".into(),
+        "ເປີດໄຟລ໌ໃນ text editor ໃນຕົວ".into(),
+    );
+
+    m.insert(
+        "cli.run.help_explorer".into(),
+        "ເປີດ NTC File Explorer TUI (path ເລີ່ມຕົ້ນທາງເລືອກ)".into(),
+    );
+
+    m.insert(
+        "cli.run.help_format".into(),
+        "ຮູບແບບຜົນລັບ: txt, html, json, md".into(),
+    );
+
+    m.insert(
+        "cli.run.help_generate_completions".into(),
+        "ສ້າງ shell completion script (bash|zsh|fish|powershell)".into(),
+    );
+
+    m.insert(
+        "cli.run.help_helpextra".into(),
+        "ສະແດງຄວາມຊ່ວຍເຫຼືອເພີ່ມເຕີມສຳລັບ subcommands".into(),
+    );
+
+    m.insert(
+        "cli.run.help_hyper".into(),
+        "ສ້າງ hyper project scaffold (DSA library)".into(),
+    );
+
+    m.insert(
+        "cli.run.help_igcare_export_all".into(),
+        "ສົ່ງອອກການຕັ້ງຄ່າ ignore/care ທັງໝົດໄປຍັງ <name>.ntc.igcare".into(),
+    );
+
+    m.insert(
+        "cli.run.help_igcare_export_select".into(),
+        "ເລືອກໝວດໝູ່ເພື່ອສົ່ງອອກໄປຍັງ <name>.ntc.igcare".into(),
+    );
+
+    m.insert(
+        "cli.run.help_igcare_import".into(),
+        "ນຳເຂົ້າການຕັ້ງຄ່າ ignore/care ຈາກໄຟລ໌ .ntc.igcare".into(),
+    );
+
+    m.insert(
+        "cli.run.help_ignore".into(),
+        "ສະແດງບ່ອນຕັ້ງ executable ຂອງ ntc".into(),
+    );
+
+    m.insert("cli.run.help_ignored".into(), "ignoren".into());
+
+    m.insert("cli.run.help_ignoref".into(), "ignoref".into());
+
+    m.insert("cli.run.help_ignoren".into(), "ignoren".into());
+
+    m.insert(
+        "cli.run.help_image".into(),
+        "ແປງຮູບພາບເປັນເອກະສານ (JSON, MD, HTML, TXT)".into(),
+    );
+
+    m.insert(
+        "cli.run.help_image_to".into(),
+        "ຮູບແບບຜົນລັບສຳລັບການແປງຮູບພາບ: json, md, html, txt".into(),
+    );
+
+    m.insert(
+        "cli.run.help_init".into(),
+        "ສ້າງໄຟລ໌ starter ຈາກ template ແລະເປີດໃນ editor".into(),
+    );
+
+    m.insert(
+        "cli.run.help_input".into(),
+        "ໄຟລ໌ ຫຼື path ໄດເຣັກທໍຣີທີ່ນຳເຂົ້າ".into(),
+    );
+
+    m.insert("cli.run.help_lang".into(), "ພາສາສຳລັບ hyper project".into());
+
+    m.insert(
+        "cli.run.help_list".into(),
+        "ລາຍຊື່ຟັງຊັນ command-line ທັງໝົດ".into(),
+    );
+
+    m.insert(
+        "cli.run.help_lsp".into(),
+        "ເລີ່ມ ntc-math LSP server ຜ່ານ stdio".into(),
+    );
+
+    m.insert(
+        "cli.run.help_lsp_log".into(),
+        "path ເພື່ອຂຽນ LSP debug log".into(),
+    );
+
+    m.insert("cli.run.help_math".into(), "ຄິດໄລ່ນິພົດຄະນິດສາດ".into());
+
+    m.insert(
+        "cli.run.help_mode".into(),
+        "ສະຫຼັບລະຫວ່າງ normal ແລະ admin mode".into(),
+    );
+
+    m.insert("cli.run.help_modn".into(), "modn".into());
+
+    m.insert("cli.run.help_output".into(), "ຊື່ໄຟລ໌ສຳລັບບົດລາຍງານ".into());
+
+    m.insert(
+        "cli.run.help_ral_export_all".into(),
+        "ສົ່ງອອກ run aliases ທັງໝົດໄປຍັງ <name>.ntc.ral".into(),
+    );
+
+    m.insert(
+        "cli.run.help_ral_export_select".into(),
+        "ເລືອກ run aliases ເພື່ອສົ່ງອອກໄປຍັງ <name>.ntc.ral".into(),
+    );
+
+    m.insert(
+        "cli.run.help_ral_import".into(),
+        "ນຳເຂົ້າ run aliases ຈາກໄຟລ໌ .ntc.ral".into(),
+    );
+
+    m.insert("cli.run.help_say".into(), "ພິມຂໍ້ຄວາມອອກ stdout".into());
+
+    m.insert(
+        "cli.run.help_seta".into(),
+        "ສະແດງ ຫຼື ຕັ້ງ autosuggest (ghost text) (ON/OFF)".into(),
+    );
+
+    m.insert(
+        "cli.run.help_setc".into(),
+        "ສະແດງ ຫຼື ຕັ້ງສີຜົນລັບ (ON/OFF)".into(),
+    );
+
+    m.insert(
+        "cli.run.help_setd".into(),
+        "ສະແດງ ຫຼື ຕັ້ງຄວາມເລິກ recursion ສູງສຸດ".into(),
+    );
+
+    m.insert(
+        "cli.run.help_seth".into(),
+        "ສະແດງ ຫຼື ຕັ້ງ history (path/ON/OFF/default)".into(),
+    );
+
+    m.insert(
+        "cli.run.help_setl".into(),
+        "ສະແດງ ຫຼື ຕັ້ງການສະແດງເບີແຖວ (ON/OFF)".into(),
+    );
+
+    m.insert(
+        "cli.run.help_seto".into(),
+        "ສະແດງ ຫຼື ຕັ້ງໄດເຣັກທໍຣີຜົນລັບເລີ່ມຕົ້ນ".into(),
+    );
+
+    m.insert("cli.run.help_sett".into(), "ສະແດງ ຫຼື ຕັ້ງຈຳນວນ threads".into());
+
+    m.insert(
+        "cli.run.help_showcg".into(),
+        "ສະແດງພາບລວມການຕັ້ງຄ່າປັດຈຸບັນ".into(),
+    );
+
+    m.insert(
+        "cli.run.help_size".into(),
+        "ສະແດງຂະໜາດຂອງໄຟລ໌ ຫຼື ໄດເຣັກທໍຣີ".into(),
+    );
+
+    m.insert(
+        "cli.run.help_path".into(),
+        "ເສັ້ນທາງເປົ້າໝາຍ ຫຼື savepoint (ໃຊ້ກັບ --size ຫຼື --view)".into(),
+    );
+
+    m.insert(
+        "cli.run.help_time".into(),
+        "ສະແດງເວລາທີ່ໃຊ້ (ໃຊ້ກັບ --size ຫຼື --view)".into(),
+    );
+
+    m.insert(
+        "cli.run.help_tp_add".into(),
+        "ບັນທຶກໄດເຣັກທໍຣີປັດຈຸບັນເປັນ teleport point".into(),
+    );
+
+    m.insert(
+        "cli.run.help_tp_list".into(),
+        "ລາຍຊື່ teleport points ທັງໝົດ".into(),
+    );
+
+    m.insert("cli.run.help_tp_rm".into(), "ລຶບ teleport point".into());
+
+    m.insert(
+        "cli.run.help_upgrade".into(),
+        "ກວດຫາການອັບເດດ ແລະ ອັບເກຣດ ntc ເປັນເວີຊັນລ່າສຸດ".into(),
+    );
+
+    m.insert("cli.run.help_version".into(), "ສະແດງຂໍ້ມູນເວີຊັນ".into());
+
+    m.insert(
+        "cli.run.help_view".into(),
+        "ເບິ່ງຕົ້ນໄມ້ໄດເຣັກທໍຣີປັດຈຸບັນຢ່າງໄວ".into(),
+    );
+
+    m.insert(
+        "cli.run.help_watch".into(),
+        "ສະແດງ ຫຼື ຕັ້ງ file watcher (ON/OFF)".into(),
+    );
+
+    m.insert(
+        "cli.run.help_where".into(),
+        "ສະແດງບ່ອນຕັ້ງ executable ຂອງ ntc".into(),
+    );
+
+    m.insert("cli.section.config".into(), "ຕົວເລືອກການຕັ້ງຄ່າ:".into());
+
+    m.insert("cli.section.editor".into(), "ຕົວເລືອກ editor:".into());
+
+    m.insert("cli.section.examples".into(), "ຕົວຢ່າງ:".into());
+
+    m.insert(
+        "cli.section.export".into(),
+        "ການສົ່ງອອກ ALIAS / IGNORE/CARE:".into(),
+    );
+
+    m.insert("cli.section.igcare".into(), "ຕົວເລືອກ IGNORE/CARE:".into());
+
+    m.insert(
+        "cli.section.interactive_only".into(),
+        "ໃຊ້ໃນ INTERACTIVE ເທົ່ານັ້ນ (ແລ່ນ 'ntc' ໂດຍບໍ່ມີ args):".into(),
+    );
+
+    m.insert("cli.section.other".into(), "ຕົວເລືອກອື່ນໆ:".into());
+
+    m.insert("cli.section.report".into(), "ຕົວເລືອກບົດລາຍງານ:".into());
+
+    m.insert(
+        "cli.section.shell_commands".into(),
+        "ຄຳສັ່ງ SHELL (ໃຊ້ຈາກ CLI ໄດ້ຄືກັນ):".into(),
+    );
+
+    m.insert("cli.section.teleport".into(), "ຈຸດບັນທຶກ TELEPORT:".into());
+
+    m.insert(
+        "cli.shell_cmd.dl".into(),
+        " ntc dl https://example.com/file.zip --progress ດາວໂຫຼດພ້ອມ progress".into(),
+    );
+
+    m.insert(
+        "cli.shell_cmd.encode".into(),
+        " ntc encode b64 hello Base64 encode ສະຕຣິງ".into(),
+    );
+
+    m.insert(
+        "cli.shell_cmd.math".into(),
+        " ntc math 3+4*5 ຄິດໄລ່ນິພົດ".into(),
+    );
+
+    m.insert("cli.shell_cmd.ne".into(), " ntc ne ເປີດ text editor".into());
+
+    m.insert(
+        "cli.shell_cmd.pathcp".into(),
+        " ntc pathcp ສຳເນົາ path ໃສ່ clipboard".into(),
+    );
+
+    m.insert(
+        "cli.shell_cmd.qr".into(),
+        " ntc qr \"text\" ສ້າງລະຫັດ QR ໃນ terminal".into(),
+    );
+
+    m.insert(
+        "cli.shell_cmd.ral_add".into(),
+        " ntc ral add btr \"cargo build --release\" ເພີ່ມ alias ຈາກ CLI\n".into(),
+    );
+
+    m.insert(
+        "cli.shell_cmd.say_loop".into(),
+        " ntc say \"hello\" --loop 3 ພິມຂໍ້ຄວາມດ້ວຍ loop".into(),
+    );
+
+    m.insert(
+        "cli.shell_cmd.serve".into(),
+        " ntc serve files --port 8080 ເລີ່ມ file-drive server ຢູ່ port 8080".into(),
+    );
+
+    m.insert(
+        "cli.shell_cmd.size".into(),
+        " ntc size ສະແດງຂະໜາດໄດເຣັກທໍຣີ".into(),
+    );
+
+    m.insert(
+        "cli.shell_cmd.tl".into(),
+        " ntc tl dir . ນັບແຖວໃນໄດເຣັກທໍຣີ".into(),
+    );
+
+    m.insert(
+        "cli.shell_cmd.view".into(),
+        " ntc view ສະແດງຕົ້ນໄມ້ໄດເຣັກທໍຣີ".into(),
+    );
+
+    m.insert("cli.usage.basic".into(), " ntc [OPTIONS]".into());
+
+    m.insert(
+        "cli.usage.clipboard".into(),
+        " ntc -i <path> --cp ສຳເນົາບົດລາຍງານໃສ່ clipboard\n".into(),
+    );
+
+    m.insert("cli.usage.header".into(), "ວິທີໃຊ້:".into());
+
+    m.insert(
+        "cli.usage.input".into(),
+        " ntc -i <path> [-o <output>]".into(),
+    );
+}

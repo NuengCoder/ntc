@@ -138,8 +138,9 @@ impl Editor {
                         self.mark_all_dirty();
                     }
                     (true, _, _, KeyCode::Char('w')) => {
+                        // Keep any selection made in Insert (Ctrl+A, Ctrl+L):
+                        // entering Visual must not throw it away.
                         self.mode = Mode::Visual;
-                        self.clear_selection();
                         self.status_msg = Some(t!("editor.mode_visual_start"));
                     }
                     // Ctrl+; / Ctrl+: (shift folds unpredictably across

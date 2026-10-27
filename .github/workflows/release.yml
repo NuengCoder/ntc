@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: 'Version to publish (e.g. v2.4.6). Only used for manual runs.'
+        description: 'Version to publish (e.g. v2.4.7). Only used for manual runs.'
         required: false
         default: ''
 

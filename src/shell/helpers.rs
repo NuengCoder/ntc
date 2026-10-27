@@ -244,6 +244,67 @@ pub(crate) fn resolve_file_operand(spec: &str, nav: &Navigator) -> Result<PathBu
 // Helper functions (gosc, show_tree, file menus, spinner, system command)
 // ============================================================================
 
+/// Set when a command (`clear`) already redrew the navigation view, so the
+/// shell skips the file-watcher re-render that runs after every command.
+static WATCH_REFRESH_SUPPRESSED: AtomicBool = AtomicBool::new(false);
+
+/// Mark the current command as having drawn its own view; the shell will not
+/// print a watcher change box / refresh the tree after it.
+pub(crate) fn suppress_watch_refresh() {
+    WATCH_REFRESH_SUPPRESSED.store(true, Ordering::SeqCst);
+}
+
+/// Read and clear the suppression flag. Called once per command line.
+pub(crate) fn take_watch_refresh_suppressed() -> bool {
+    WATCH_REFRESH_SUPPRESSED.swap(false, Ordering::SeqCst)
+}
+
+/// Render the automatic navigation tree for the current directory.
+///
+/// Depth is always 1. Files are included only when `config file_view` is ON;
+/// sizes are annotated per `config size file|dir|all`. Any automatic sizing
+/// uses `--care` semantics so ignored entries are measured in full, and when
+/// sizes are shown entries inside each group are ordered largest first.
+pub(crate) fn show_nav_view(nav: &Navigator) {
+    let (dir_view, file_view, show_filesize, show_dirsize) = {
+        let cfg = Config::read_global();
+        (
+            cfg.dir_view_enabled,
+            cfg.file_view_enabled,
+            cfg.auto_size_files,
+            cfg.auto_size_dirs,
+        )
+    };
+    // Both views off: the shell hides the banner, hint and tree entirely.
+    if !dir_view && !file_view {
+        return;
+    }
+    let entry_filter = match (dir_view, file_view) {
+        (true, true) => crate::explorer::TreeEntryFilter::All,
+        (true, false) => crate::explorer::TreeEntryFilter::DirsOnly,
+        (false, true) => crate::explorer::TreeEntryFilter::FilesOnly,
+        (false, false) => return,
+    };
+    let opts = TreeViewOpts {
+        sort_dirs_by_size: show_dirsize,
+        sort_files_by_size: show_filesize,
+        entry_filter,
+        ..TreeViewOpts::default()
+    };
+    show_tree_at_ex(
+        nav.current_path(),
+        Some(1),
+        false,
+        file_view,
+        show_filesize,
+        show_dirsize,
+        false,
+        true,
+        None,
+        &opts,
+    );
+}
+
 pub(crate) fn show_tree(
     nav: &Navigator,
     max_depth_override: Option<usize>,
@@ -313,6 +374,13 @@ pub(crate) struct TreeViewOpts {
     pub tail: Option<usize>,
     /// Keep only files or only directories (exact-node pruning).
     pub entry_filter: crate::explorer::TreeEntryFilter,
+    /// Re-sort directories within their display group by size, largest
+    /// first. Used by the automatic navigation tree when `config size dir`
+    /// is ON.
+    pub sort_dirs_by_size: bool,
+    /// Re-sort files within their display group by size, largest first.
+    /// Used by the automatic navigation tree when `config size file` is ON.
+    pub sort_files_by_size: bool,
 }
 
 /// Extended tree render honoring [`TreeViewOpts`]: size thresholds prune
@@ -406,6 +474,13 @@ pub(crate) fn show_tree_at_ex(
     if opts.entry_filter != crate::explorer::TreeEntryFilter::All {
         crate::explorer::prune_tree_by_entry_filter(&mut tree, opts.entry_filter);
     }
+    if opts.sort_dirs_by_size || opts.sort_files_by_size {
+        crate::explorer::sort_tree_by_size_groups(
+            &mut tree,
+            opts.sort_dirs_by_size,
+            opts.sort_files_by_size,
+        );
+    }
     if let Some(key) = opts.sort {
         crate::explorer::sort_tree_by_key(&mut tree, key);
     }
@@ -475,7 +550,7 @@ pub(super) fn gosc_loop(nav: &mut Navigator) -> Result<()> {
     loop {
         let dirs = nav.list_subdirs()?;
         crate::navigator::clear_screen();
-        show_tree(nav, Some(1), false, false, false, false, false, false);
+        show_nav_view(nav);
 
         println!();
         println!(
@@ -629,62 +704,6 @@ pub(super) fn gosc_loop(nav: &mut Navigator) -> Result<()> {
             }
         }
     }
-}
-
-pub(super) fn open_with_fallback(config_path: &std::path::Path) {
-    #[cfg(windows)]
-    {
-        let path_str = config_path.to_str().unwrap_or("");
-        if !path_str.is_empty() {
-            let status = std::process::Command::new("cmd")
-                .args(["/C", "start", "", path_str])
-                .status();
-            if status.is_ok() {
-                return;
-            }
-        }
-    }
-    #[cfg(target_os = "macos")]
-    {
-        let status = std::process::Command::new("open").arg(config_path).status();
-        if status.is_ok() {
-            return;
-        }
-    }
-    #[cfg(target_os = "linux")]
-    {
-        if let Ok(editor) = std::env::var("VISUAL").or_else(|_| std::env::var("EDITOR")) {
-            let parts: Vec<&str> = editor.split_whitespace().collect();
-            if let Some(cmd) = parts.first() {
-                let mut proc = std::process::Command::new(cmd);
-                for arg in &parts[1..] {
-                    proc.arg(arg);
-                }
-                proc.arg(config_path);
-                if proc.status().is_ok() {
-                    return;
-                }
-            }
-        }
-        if std::process::Command::new("xdg-open")
-            .arg(config_path)
-            .status()
-            .is_ok()
-        {
-            return;
-        }
-        for editor in &["vim", "nano", "nvim", "emacs"] {
-            if std::process::Command::new(editor)
-                .arg(config_path)
-                .status()
-                .is_ok()
-            {
-                return;
-            }
-        }
-    }
-    crate::output::print_info(&t!("helpers.no_editor"));
-    let _ = crate::editor::edit_file(config_path);
 }
 
 /// Run a closure with an animated spinner in a background thread.
@@ -1238,6 +1257,16 @@ pub(crate) fn igcare_import(path_str: &str, scope: ConfigScope) -> Result<()> {
 mod tests {
     use super::*;
     use crate::utils::test_support as tsupport;
+
+    #[test]
+    fn watch_refresh_suppression_flag_is_one_shot() {
+        // Shared global flag: serialize with other tests that touch it.
+        let _g = tsupport::lock_globals();
+        let _ = take_watch_refresh_suppressed();
+        suppress_watch_refresh();
+        assert!(take_watch_refresh_suppressed());
+        assert!(!take_watch_refresh_suppressed());
+    }
 
     #[test]
     fn resolve_file_operand_plain_paths() {

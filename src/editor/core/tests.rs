@@ -798,17 +798,30 @@ mod tests {
         let mut editor = test_editor(&["foo bar"]);
         let mut out = stdout_sink();
         editor.mode = Mode::Visual;
-        editor.cursor.byte = 0;
         editor.cursor.selection_anchor = Some((0, 0));
         editor.cursor.byte = 3;
+        editor
+            .handle_visual_event(press_mod(KeyCode::Right, KeyModifiers::CONTROL), &mut out)
+            .unwrap();
+        assert!(!editor.has_selection());
+        assert!(editor.cursor.byte >= 3);
+    }
+
+    #[test]
+    fn visual_ctrl_l_selects_the_line() {
+        let mut editor = test_editor(&["foo bar", "baz"]);
+        let mut out = stdout_sink();
+        editor.mode = Mode::Visual;
+        editor.cursor.y = 1;
+        editor.cursor.byte = 1;
         editor
             .handle_visual_event(
                 press_mod(KeyCode::Char('l'), KeyModifiers::CONTROL),
                 &mut out,
             )
             .unwrap();
-        assert!(!editor.has_selection());
-        assert!(editor.cursor.byte >= 3);
+        assert_eq!(editor.cursor.selection_anchor, Some((1, 0)));
+        assert_eq!(editor.cursor.byte, 3);
     }
 
     #[test]
@@ -882,10 +895,15 @@ mod tests {
             .handle_visual_event(press_mod(KeyCode::Right, KeyModifiers::SHIFT), &mut out)
             .unwrap();
         assert!(editor.has_selection());
+        // Ctrl+L selects the whole current line.
         editor
-            .handle_visual_event(press(KeyCode::Char('l')), &mut out)
+            .handle_visual_event(
+                press_mod(KeyCode::Char('l'), KeyModifiers::CONTROL),
+                &mut out,
+            )
             .unwrap();
-        assert!(!editor.has_selection());
+        assert!(editor.has_selection());
+        assert_eq!(editor.cursor.selection_anchor, Some((0, 0)));
         assert_eq!(editor.cursor.byte, 2);
         // a toggles select-all
         editor
@@ -991,7 +1009,7 @@ mod tests {
         assert_eq!(editor.lines[1], format!("{tab}cd"));
         assert!(editor.has_selection());
         editor
-            .handle_visual_event(press_mod(KeyCode::Left, KeyModifiers::ALT), &mut out)
+            .handle_visual_event(press_mod(KeyCode::Char('h'), KeyModifiers::ALT), &mut out)
             .unwrap();
         assert_eq!(editor.lines, vec!["ab", "cd"]);
     }
@@ -1021,7 +1039,7 @@ mod tests {
         editor.mode = Mode::Visual;
         select_rows(&mut editor, 0, 2);
         editor
-            .handle_visual_event(press_mod(KeyCode::Left, KeyModifiers::ALT), &mut out)
+            .handle_visual_event(press_mod(KeyCode::Char('h'), KeyModifiers::ALT), &mut out)
             .unwrap();
         assert_eq!(editor.lines, vec!["ab", "", "cd"]);
     }
@@ -1888,5 +1906,510 @@ mod tests {
         assert!(!editor.check_file_changed());
         assert_eq!(editor.lines, vec!["mine".to_string()]);
         let _ = std::fs::remove_file(&path);
+    }
+
+    // ── visual mode: word selection, line select, space/backspace, slide ──
+
+    #[test]
+    fn visual_ctrl_shift_arrow_selects_by_word() {
+        let mut editor = test_editor(&["foo bar baz"]);
+        let mut out = stdout_sink();
+        editor.mode = Mode::Visual;
+        editor.cursor.byte = 0;
+        let mods = KeyModifiers::CONTROL | KeyModifiers::SHIFT;
+        editor
+            .handle_visual_event(press_mod(KeyCode::Right, mods), &mut out)
+            .unwrap();
+        assert!(editor.has_selection());
+        assert_eq!(editor.cursor.byte, 3);
+        assert_eq!(editor.cursor.selection_anchor, Some((0, 0)));
+        editor
+            .handle_visual_event(press_mod(KeyCode::Left, mods), &mut out)
+            .unwrap();
+        assert_eq!(editor.cursor.byte, 0);
+    }
+
+    #[test]
+    fn visual_shift_home_and_end_extend_to_edges() {
+        let mut editor = test_editor(&["hello world"]);
+        let mut out = stdout_sink();
+        editor.mode = Mode::Visual;
+        editor.cursor.byte = 5;
+        editor
+            .handle_visual_event(press_mod(KeyCode::End, KeyModifiers::SHIFT), &mut out)
+            .unwrap();
+        assert_eq!(editor.cursor.byte, 11);
+        assert_eq!(editor.cursor.selection_anchor, Some((0, 5)));
+        editor
+            .handle_visual_event(press_mod(KeyCode::Home, KeyModifiers::SHIFT), &mut out)
+            .unwrap();
+        assert_eq!(editor.cursor.byte, 0);
+        assert_eq!(editor.selected_text(), "hello");
+    }
+
+    #[test]
+    fn insert_ctrl_w_keeps_existing_selection() {
+        let mut editor = test_editor(&["hello"]);
+        let mut out = stdout_sink();
+        editor.mode = Mode::Insert;
+        editor.cursor.selection_anchor = Some((0, 0));
+        editor.cursor.byte = 5;
+        editor
+            .handle_insert_event(
+                press_mod(KeyCode::Char('w'), KeyModifiers::CONTROL),
+                &mut out,
+            )
+            .unwrap();
+        assert_eq!(editor.mode, Mode::Visual);
+        assert_eq!(editor.cursor.selection_anchor, Some((0, 0)));
+        assert!(editor.has_selection());
+    }
+
+    #[test]
+    fn visual_space_inserts_and_backspace_removes_one_space() {
+        let mut editor = test_editor(&["ab cd"]);
+        let mut out = stdout_sink();
+        editor.mode = Mode::Visual;
+        editor.cursor.selection_anchor = Some((0, 3));
+        editor.cursor.byte = 5;
+        // Space inserts at the cursor and the selection follows it.
+        editor
+            .handle_visual_event(press(KeyCode::Char(' ')), &mut out)
+            .unwrap();
+        assert_eq!(editor.lines[0], "ab cd ");
+        assert_eq!(editor.cursor.byte, 6);
+        assert!(editor.has_selection());
+        // Backspace removes the space right before the selection.
+        editor
+            .handle_visual_event(press(KeyCode::Backspace), &mut out)
+            .unwrap();
+        assert_eq!(editor.lines[0], "abcd ");
+        assert_eq!(editor.cursor.selection_anchor, Some((0, 2)));
+        assert_eq!(editor.selected_text(), "cd ");
+        // Nothing but a space is removed: no space left, no edit.
+        let before = editor.lines[0].clone();
+        editor
+            .handle_visual_event(press(KeyCode::Backspace), &mut out)
+            .unwrap();
+        assert_eq!(editor.lines[0], before);
+        assert!(editor.status_msg.is_some());
+    }
+
+    #[test]
+    fn visual_block_space_adds_and_removes_one_column_at_home() {
+        let mut editor = test_editor(&["  one", "    two", "three"]);
+        let mut out = stdout_sink();
+        editor.mode = Mode::Visual;
+        // Multi-line selection: anchor on line 0, cursor on line 2.
+        editor.cursor.selection_anchor = Some((0, 1));
+        editor.cursor.y = 2;
+        editor.cursor.byte = 3;
+        assert!(editor.has_selection());
+
+        // Space adds one column at the home position of every line.
+        editor
+            .handle_visual_event(press(KeyCode::Char(' ')), &mut out)
+            .unwrap();
+        assert_eq!(editor.lines, vec!["   one", "     two", " three"]);
+        assert_eq!(editor.cursor.selection_anchor, Some((0, 2)));
+        assert_eq!(editor.cursor.byte, 4);
+
+        // Backspace strips one column from each line that has a space there.
+        editor
+            .handle_visual_event(press(KeyCode::Backspace), &mut out)
+            .unwrap();
+        assert_eq!(editor.lines, vec!["  one", "    two", "three"]);
+        assert_eq!(editor.cursor.selection_anchor, Some((0, 1)));
+        assert_eq!(editor.cursor.byte, 3);
+
+        // A box whose lines have no leading space cannot be stripped.
+        let mut bare = test_editor(&["one", "two"]);
+        bare.mode = Mode::Visual;
+        bare.cursor.selection_anchor = Some((0, 1));
+        bare.cursor.y = 1;
+        bare.cursor.byte = 2;
+        let before = bare.lines.clone();
+        bare.handle_visual_event(press(KeyCode::Backspace), &mut out)
+            .unwrap();
+        assert_eq!(bare.lines, before);
+        assert!(bare.status_msg.is_some());
+    }
+
+    #[test]
+    fn visual_alt_left_right_slide_selection_with_text() {
+        let mut editor = test_editor(&["i have a b c"]);
+        let mut out = stdout_sink();
+        editor.mode = Mode::Visual;
+        editor.cursor.selection_anchor = Some((0, 7));
+        editor.cursor.byte = 12;
+        editor
+            .handle_visual_event(press_mod(KeyCode::Left, KeyModifiers::ALT), &mut out)
+            .unwrap();
+        assert_eq!(editor.lines[0], "i havea b c ");
+        assert_eq!(editor.cursor.selection_anchor, Some((0, 6)));
+        assert_eq!(editor.selected_text(), "a b c");
+        editor
+            .handle_visual_event(press_mod(KeyCode::Right, KeyModifiers::ALT), &mut out)
+            .unwrap();
+        assert_eq!(editor.lines[0], "i have a b c");
+        assert_eq!(editor.selected_text(), "a b c");
+        assert_eq!(editor.cursor.selection_anchor, Some((0, 7)));
+        // At the end of the line there is nothing to overtake.
+        editor.cursor.selection_anchor = Some((0, 9));
+        editor.cursor.byte = 12;
+        let before = editor.lines[0].clone();
+        editor
+            .handle_visual_event(press_mod(KeyCode::Right, KeyModifiers::ALT), &mut out)
+            .unwrap();
+        assert_eq!(editor.lines[0], before);
+    }
+
+    #[test]
+    fn prompt_tab_cycles_the_hint_and_right_accepts_it() {
+        let mut editor = test_editor(&["one"]);
+        let mut out = stdout_sink();
+
+        editor.mode = Mode::Command;
+        editor.cmd_buf = "wr".to_string();
+        editor.prompt_cursor = editor.cmd_buf.len();
+        editor
+            .handle_command_event(press(KeyCode::Tab), &mut out)
+            .unwrap();
+        // Tab moves the hint, not the line.
+        assert_eq!(editor.cmd_buf, "wr");
+        assert_eq!(editor.prompt_ghost(), Some("ite".to_string()));
+        editor
+            .handle_command_event(press(KeyCode::Right), &mut out)
+            .unwrap();
+        assert_eq!(editor.cmd_buf, "write");
+
+        editor.mode = Mode::Gmode;
+        editor.gmode_buf = "a".to_string();
+        editor.prompt_cursor = editor.gmode_buf.len();
+        editor
+            .handle_gmode_event(press(KeyCode::Tab), &mut out)
+            .unwrap();
+        assert_eq!(editor.prompt_ghost(), Some("qt".to_string()));
+        editor
+            .handle_gmode_event(press(KeyCode::Right), &mut out)
+            .unwrap();
+        assert_eq!(editor.gmode_buf, "aqt");
+
+        editor.mode = Mode::Query;
+        editor.query_buf = "upp".to_string();
+        editor.prompt_cursor = editor.query_buf.len();
+        editor.handle_query_event(press(KeyCode::Tab)).unwrap();
+        assert_eq!(editor.prompt_ghost(), Some("er".to_string()));
+        editor.handle_query_event(press(KeyCode::Right)).unwrap();
+        assert_eq!(editor.query_buf, "upper");
+    }
+
+    #[test]
+    fn command_prompt_caret_accepts_hint_with_right() {
+        let mut editor = test_editor(&["one"]);
+        let mut out = stdout_sink();
+        editor.mode = Mode::Command;
+        for c in "wr".chars() {
+            editor
+                .handle_command_event(press(KeyCode::Char(c)), &mut out)
+                .unwrap();
+        }
+        // Right accepts the ghost at the end of the line...
+        editor
+            .handle_command_event(press(KeyCode::Right), &mut out)
+            .unwrap();
+        assert_eq!(editor.cmd_buf, "write");
+        // ... and just moves the caret anywhere else.
+        editor
+            .handle_command_event(press(KeyCode::Left), &mut out)
+            .unwrap();
+        assert_eq!(editor.prompt_pos(), 4);
+        editor
+            .handle_command_event(press(KeyCode::Home), &mut out)
+            .unwrap();
+        assert_eq!(editor.prompt_pos(), 0);
+        editor
+            .handle_command_event(press(KeyCode::End), &mut out)
+            .unwrap();
+        assert_eq!(editor.prompt_pos(), 5);
+        editor
+            .handle_command_event(press(KeyCode::Backspace), &mut out)
+            .unwrap();
+        assert_eq!(editor.cmd_buf, "writ");
+    }
+
+    #[test]
+    fn end_and_ctrl_e_accept_the_hint_in_the_prompts() {
+        let mut editor = test_editor(&["one"]);
+        let mut out = stdout_sink();
+        let ctrl_e = || press_mod(KeyCode::Char('e'), KeyModifiers::CONTROL);
+
+        // `:` prompt: End accepts the ghost, Ctrl+E does too (it used to
+        // just type an `e` into the prompt).
+        editor.mode = Mode::Command;
+        editor.cmd_buf = "wr".into();
+        editor.prompt_cursor = editor.cmd_buf.len();
+        editor
+            .handle_command_event(press(KeyCode::End), &mut out)
+            .unwrap();
+        assert_eq!(editor.cmd_buf, "write");
+        editor.cmd_buf = "wr".into();
+        editor.prompt_cursor = editor.cmd_buf.len();
+        editor.handle_command_event(ctrl_e(), &mut out).unwrap();
+        assert_eq!(editor.cmd_buf, "write");
+
+        // `/` query prompt.
+        editor.mode = Mode::Query;
+        editor.query_buf = "upp".into();
+        editor.prompt_cursor = editor.query_buf.len();
+        editor.handle_query_event(press(KeyCode::End)).unwrap();
+        assert_eq!(editor.query_buf, "upper");
+        editor.query_buf = "upp".into();
+        editor.prompt_cursor = editor.query_buf.len();
+        editor.handle_query_event(ctrl_e()).unwrap();
+        assert_eq!(editor.query_buf, "upper");
+
+        // `g` prompt.
+        editor.mode = Mode::Gmode;
+        editor.gmode_buf = "a".into();
+        editor.prompt_cursor = editor.gmode_buf.len();
+        editor
+            .handle_gmode_event(press(KeyCode::End), &mut out)
+            .unwrap();
+        assert_eq!(editor.gmode_buf, "aqt");
+        editor.gmode_buf = "a".into();
+        editor.prompt_cursor = editor.gmode_buf.len();
+        editor.handle_gmode_event(ctrl_e(), &mut out).unwrap();
+        assert_eq!(editor.gmode_buf, "aqt");
+
+        // Insert mode keeps Ctrl+E for the file explorer.
+        editor.mode = Mode::Insert;
+        editor
+            .handle_insert_event(
+                press_mod(KeyCode::Char('e'), KeyModifiers::CONTROL),
+                &mut out,
+            )
+            .unwrap();
+        assert_eq!(editor.mode, Mode::Nfe);
+    }
+
+    #[test]
+    fn visual_s_saves_and_q_keeps_selection() {
+        let mut editor = test_editor(&["foo bar", "baz"]);
+        let mut out = stdout_sink();
+        editor.mode = Mode::Visual;
+        editor.snapshot();
+        editor.modified = true;
+        editor
+            .handle_visual_event(press(KeyCode::Char('s')), &mut out)
+            .unwrap();
+        assert_eq!(editor.mode, Mode::Visual);
+        assert!(!editor.modified);
+        // q opens Query and keeps the selection for the command to act on.
+        editor.cursor.y = 0;
+        editor.cursor.byte = 3;
+        editor.cursor.selection_anchor = Some((0, 0));
+        editor
+            .handle_visual_event(press(KeyCode::Char('q')), &mut out)
+            .unwrap();
+        assert_eq!(editor.mode, Mode::Query);
+        assert_eq!(editor.prev_mode, Mode::Visual);
+        assert_eq!(editor.selected_text(), "foo");
+    }
+
+    #[test]
+    fn visual_d_hops_to_next_occurrence_keeping_highlights() {
+        let mut editor = test_editor(&["foo bar", "xx foo yy foo"]);
+        let mut out = stdout_sink();
+        editor.mode = Mode::Visual;
+        editor.cursor.y = 0;
+        editor.cursor.byte = 3;
+        editor.cursor.selection_anchor = Some((0, 0));
+        editor
+            .handle_visual_event(press(KeyCode::Char('d')), &mut out)
+            .unwrap();
+        // The selection hops to the next `foo`; the old one stays marked
+        // but never becomes a second cursor.
+        assert_eq!(editor.cursor.selection_anchor, Some((1, 3)));
+        assert_eq!(editor.selected_text(), "foo");
+        assert_eq!(editor.visual_marks.len(), 1);
+        assert!(!editor.has_multiple_cursors());
+        editor
+            .handle_visual_event(press(KeyCode::Char('d')), &mut out)
+            .unwrap();
+        assert_eq!(editor.visual_marks.len(), 2);
+        assert_eq!(editor.cursor.selection_anchor, Some((1, 10)));
+        // `w` drops the marks, keeps the selection and never moves up.
+        let row = editor.cursor.y;
+        editor
+            .handle_visual_event(press(KeyCode::Char('w')), &mut out)
+            .unwrap();
+        assert!(editor.visual_marks.is_empty());
+        assert_eq!(editor.cursor.y, row);
+        assert_eq!(editor.mode, Mode::Visual);
+        assert!(editor.has_selection());
+        // Leaving Visual drops them as well.
+        editor.visual_marks.push(((0, 0), (0, 3)));
+        editor
+            .handle_visual_event(press(KeyCode::Esc), &mut out)
+            .unwrap();
+        assert!(editor.visual_marks.is_empty());
+        assert_eq!(editor.mode, Mode::Normal);
+    }
+
+    #[test]
+    fn mode_change_collapses_multi_cursor_and_marks() {
+        let mut editor = test_editor(&["foo", "bar"]);
+        editor.cursor.extra_cursors.push(CursorPos {
+            y: 0,
+            byte: 1,
+            anchor: None,
+        });
+        editor.visual_marks.push(((0, 0), (0, 3)));
+        editor.mode = Mode::Normal;
+        editor.after_mode_change(true, true);
+        assert!(!editor.has_multiple_cursors());
+        assert!(editor.visual_marks.is_empty());
+        // Staying put keeps everything.
+        editor.cursor.extra_cursors.push(CursorPos {
+            y: 0,
+            byte: 1,
+            anchor: None,
+        });
+        editor.visual_marks.push(((0, 0), (0, 3)));
+        editor.mode = Mode::Visual;
+        editor.after_mode_change(false, true);
+        assert!(editor.has_multiple_cursors());
+        assert_eq!(editor.visual_marks.len(), 1);
+    }
+
+    #[test]
+    fn switching_tab_with_unsaved_edits_warns_first() {
+        let dir = std::env::temp_dir().join("ntc_editor_test");
+        let _ = std::fs::create_dir_all(&dir);
+        let a = dir.join("guard_a.txt");
+        let b = dir.join("guard_b.txt");
+        std::fs::write(&a, "a").unwrap();
+        std::fs::write(&b, "b").unwrap();
+        let mut editor = Editor::new(&a).unwrap();
+        editor.init_tabs();
+        editor.open_file(&b);
+        assert_eq!(editor.tabs.len(), 2);
+        editor.switch_tab(0);
+        assert_eq!(editor.active_tab, 0);
+        editor.modified = true;
+        editor.switch_tab(1);
+        assert_eq!(editor.active_tab, 0);
+        assert!(editor.status_msg.is_some());
+        // Repeating the same switch goes through without saving.
+        editor.switch_tab(1);
+        assert_eq!(editor.active_tab, 1);
+        // Opening another file is guarded the same way.
+        editor.modified = true;
+        let c = dir.join("guard_c.txt");
+        std::fs::write(&c, "c").unwrap();
+        editor.open_file(&c);
+        assert_ne!(editor.path, c);
+        editor.open_file(&c);
+        assert_eq!(editor.path, c);
+    }
+
+    #[test]
+    fn help_hjkl_pans_and_alt_arrows_scroll() {
+        let mut editor = test_editor(&["one"]);
+        editor.mode = Mode::Help;
+        editor.sv.help_x = 0;
+        editor.handle_help_event(press(KeyCode::Char('l'))).unwrap();
+        assert_eq!(editor.sv.help_x, 1);
+        editor.handle_help_event(press(KeyCode::Char('d'))).unwrap();
+        assert_eq!(editor.sv.help_x, 2);
+        editor.handle_help_event(press(KeyCode::Char('h'))).unwrap();
+        assert_eq!(editor.sv.help_x, 1);
+        // Alt+Right pans three columns, Alt+Down still scrolls.
+        editor
+            .handle_help_event(press_mod(KeyCode::Right, KeyModifiers::ALT))
+            .unwrap();
+        assert_eq!(editor.sv.help_x, 4);
+        let start = editor.sv.help;
+        editor
+            .handle_help_event(press_mod(KeyCode::Down, KeyModifiers::ALT))
+            .unwrap();
+        assert_eq!(editor.sv.help, start + 1);
+        // k/w/Up still scroll up (one row).
+        editor.handle_help_event(press(KeyCode::Char('w'))).unwrap();
+        assert_eq!(editor.sv.help, start);
+    }
+
+    #[test]
+    fn tab_labels_show_relative_numbers() {
+        let dir = std::env::temp_dir().join("ntc_editor_test");
+        let _ = std::fs::create_dir_all(&dir);
+        let a = dir.join("rel_a.txt");
+        let b = dir.join("rel_b.txt");
+        let c = dir.join("rel_c.txt");
+        for p in [&a, &b, &c] {
+            std::fs::write(p, "x").unwrap();
+        }
+        let mut editor = Editor::new(&a).unwrap();
+        editor.init_tabs();
+        editor.open_file(&b);
+        editor.open_file(&c);
+        assert_eq!(editor.active_tab, 2);
+        // The active tab shows its own 1-based number, the rest their
+        // distance from it.
+        assert!(editor.tab_label(2).starts_with(" 3 rel_c.txt"));
+        assert!(editor.tab_label(1).starts_with(" 1 rel_b.txt"));
+        assert!(editor.tab_label(0).starts_with(" 2 "));
+        editor.switch_tab(0);
+        assert!(editor.tab_label(0).starts_with(" 1 rel_a.txt"));
+        assert!(editor.tab_label(2).starts_with(" 2 rel_c.txt"));
+        assert!(editor.tab_label(99).is_empty());
+    }
+
+    #[test]
+    fn gmode_tab_commands_jump_and_report_range() {
+        let dir = std::env::temp_dir().join("ntc_editor_test");
+        let _ = std::fs::create_dir_all(&dir);
+        let a = dir.join("gm_a.txt");
+        let b = dir.join("gm_b.txt");
+        for p in [&a, &b] {
+            std::fs::write(p, "x").unwrap();
+        }
+        let mut editor = Editor::new(&a).unwrap();
+        let mut out = stdout_sink();
+        editor.init_tabs();
+        editor.open_file(&b);
+        assert_eq!(editor.tabs.len(), 2);
+        assert_eq!(editor.active_tab, 1);
+
+        let run = |editor: &mut Editor, cmd: &str, out: &mut std::io::Stdout| {
+            editor.mode = Mode::Gmode;
+            editor.gmode_buf = cmd.to_string();
+            editor
+                .handle_gmode_event(press(KeyCode::Enter), out)
+                .unwrap();
+        };
+        run(&mut editor, "t1", &mut out);
+        assert_eq!(editor.active_tab, 0);
+        assert_eq!(editor.mode, Mode::Normal);
+        run(&mut editor, "t2", &mut out);
+        assert_eq!(editor.active_tab, 1);
+        run(&mut editor, "T1", &mut out);
+        assert_eq!(editor.active_tab, 0);
+        // Bare letters still step.
+        run(&mut editor, "t", &mut out);
+        assert_eq!(editor.active_tab, 1);
+        run(&mut editor, "T", &mut out);
+        assert_eq!(editor.active_tab, 0);
+        // Out of range: message, no switch, prompt stays open.
+        run(&mut editor, "t9", &mut out);
+        assert_eq!(editor.active_tab, 0);
+        assert_eq!(editor.mode, Mode::Gmode);
+        assert!(editor.status_msg.is_some());
+        // `t0` is not a tab number.
+        run(&mut editor, "t0", &mut out);
+        assert_eq!(editor.active_tab, 0);
+        assert!(editor.status_msg.is_some());
+        assert_eq!(editor.mode, Mode::Gmode);
     }
 }

@@ -1,8 +1,8 @@
 <p align="center">
-  <img src="https://img.shields.io/badge/version-2.4.6-blue.svg" alt="Version 2.4.6"/>
+  <img src="https://img.shields.io/badge/version-2.4.7-blue.svg" alt="Version 2.4.7"/>
 </p>
 
-<h1 align="center">ntc 2.4.6</h1>
+<h1 align="center">ntc 2.4.7</h1>
 
 <p align="center">
   <b>Navigate · Toolkit · Center</b><br>

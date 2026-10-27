@@ -19,6 +19,8 @@ mod backup;
 pub(crate) mod chess_engine;
 pub(crate) mod clipboard;
 mod config_commands;
+mod count;
+mod deadlock;
 mod downloader;
 mod encode_decode;
 mod fmt;
@@ -54,10 +56,12 @@ mod sort;
 mod spec;
 mod sysmon;
 mod theme;
+mod time;
 mod tl;
 mod tmprt;
 mod todo;
 mod trim;
+mod trim_text;
 pub(crate) mod upgrade;
 mod wi;
 
@@ -76,10 +80,23 @@ pub(crate) fn execute_command(
     nav: &mut Navigator,
     watcher_handle: &Option<Arc<watcher::WatcherHandle>>,
 ) -> Result<bool> {
+    execute_command_with_status(input, nav, watcher_handle).map(|(exit_shell, _)| exit_shell)
+}
+
+/// Execute a full command line and report both whether the shell should exit
+/// and whether the final command/pipeline segment succeeded.
+pub(crate) fn execute_command_with_status(
+    input: &str,
+    nav: &mut Navigator,
+    watcher_handle: &Option<Arc<watcher::WatcherHandle>>,
+) -> Result<(bool, bool)> {
     if crate::shell::pipeline::has_operators(input) {
         return crate::shell::pipeline::run(input, nav, watcher_handle);
     }
-    execute_single_command(input, nav, watcher_handle)
+    crate::shell::pipeline::reset_failed();
+    let exit_shell = execute_single_command(input, nav, watcher_handle)?;
+    let success = !crate::shell::pipeline::take_failed();
+    Ok((exit_shell, success))
 }
 
 /// Execute a single command (already fully expanded, no operators).
@@ -91,6 +108,12 @@ pub(crate) fn execute_single_command(
     let parts: Vec<&str> = input.splitn(2, ' ').collect();
     let cmd = parts[0].to_lowercase();
     let args = parts.get(1).unwrap_or(&"").trim();
+
+    // `time` owns a full help screen; handle its help forms before generic
+    // contextual help prints a shell completion hint for the same suffix.
+    if cmd == "time" && matches!(args, "help" | "--help" | "-h") {
+        return time::cmd_time(args, nav);
+    }
 
     // Cisco-style contextual `<prefix> --help` at any depth (concise
     // next-step hints, `<cr>` when complete). Runs before dispatch so
@@ -143,6 +166,13 @@ pub(crate) fn execute_single_command(
         }
     }
 
+    // The editor's embedded terminal already runs an ntc shell; starting a
+    // second one would stack shells on the same PTY.
+    if crate::shell::entry::embedded_in_editor() && is_ntc_shell_invocation(&cmd) {
+        print_error(&t!("misc.exit.no_nested_ntc"));
+        return Ok(false);
+    }
+
     match cmd.as_str() {
         "cd" => nav::cmd_cd(args, nav),
         "godrive" | "god" => nav::cmd_godrive(args, nav),
@@ -150,13 +180,16 @@ pub(crate) fn execute_single_command(
         "view" => report::cmd_view(args, nav),
         "viewf" => report::cmd_viewf(args, nav),
         "viewd" => report::cmd_viewd(args, nav),
+        "views" => report::cmd_views(args, nav),
         "report" => report::cmd_report(args, nav),
         "txtc" => report::cmd_txtc(args, nav),
         "txtf" => report::cmd_txtf(args, nav),
         "head" => trim::cmd_head(args, nav),
+        "count" => count::cmd_count(args, nav),
         "tail" => trim::cmd_tail(args, nav),
         "betw" => trim::cmd_betw(args, nav),
-        "config" => config_commands::cmd_config(args, nav),
+        "trim" => trim_text::cmd_trim(args, nav),
+        "config" | "cfg" => config_commands::cmd_config(args, nav),
         "clear" => misc::cmd_clear(args, nav),
         "encode" => encode_decode::cmd_encode(args, nav),
         "decode" => encode_decode::cmd_decode(args, nav),
@@ -173,7 +206,7 @@ pub(crate) fn execute_single_command(
         "run" | "r" => alias_commands::cmd_run(args, nav),
         "scr" | "script" => scr_commands::cmd_scr(args, nav),
         "showcg" => config_commands::cmd_showcg(args, nav),
-        "opencg" | "editcfg" => config_commands::cmd_opencg(args, nav),
+        "opencg" | "editcfg" | "editcg" => config_commands::cmd_opencg(args, nav),
         "ne" | "ntceditor" => misc::cmd_ne(args, nav),
         "resetcg" | "reset-config" => config_commands::cmd_resetcg(args, nav),
         "restorecg" | "restore-config" => config_commands::cmd_restorecg(args, nav),
@@ -255,14 +288,29 @@ pub(crate) fn execute_single_command(
         "say" | "print" => misc::cmd_say(args, nav),
         "pathcp" => misc::cmd_pathcp(args, nav),
         "tmprt" => tmprt::cmd_tmprt(args, nav),
+        "time" => time::cmd_time(args, nav),
         "git" => git::cmd_git(args, nav),
         "ndb" => ndb::cmd_ndb(args, nav),
         "nms" => nms::cmd_nms(args, nav),
         "nsheet" => nsheet::cmd_nsheet(args, nav),
         "nssh" => nssh::cmd_nssh(args, nav),
+        "deadlock" => deadlock::cmd_deadlock(args, nav),
         "fake" => crate::fake::cmd_fake(args, nav),
         _ => misc::cmd_fallback(input, nav, watcher_handle),
     }
+}
+
+/// True when `cmd` names the ntc binary itself (`ntc`, `ntc.exe`, or a
+/// path ending in either), as opposed to a command that merely contains
+/// the letters (`ntceditor`).
+fn is_ntc_shell_invocation(cmd: &str) -> bool {
+    let trimmed = cmd.trim().trim_matches('"').replace('\\', "/");
+    let last = trimmed
+        .rsplit('/')
+        .next()
+        .unwrap_or(&trimmed)
+        .to_lowercase();
+    last == "ntc" || last == "ntc.exe"
 }
 
 /// Execute a system command
@@ -350,7 +398,7 @@ pub fn init_ctrlc_handler() {
     });
 }
 
-fn run_system_command(args: &str, cwd: &Path) -> Result<std::process::ExitStatus> {
+pub(super) fn run_system_command(args: &str, cwd: &Path) -> Result<std::process::ExitStatus> {
     init_ctrlc_handler();
 
     // Input installed by a pipeline/`<` redirect (or piped process stdin).
@@ -393,6 +441,22 @@ fn run_system_command(args: &str, cwd: &Path) -> Result<std::process::ExitStatus
     Ok(status)
 }
 
+pub(super) fn capture_system_command(args: &str, cwd: &Path) -> Result<std::process::Output> {
+    #[cfg(windows)]
+    let output = std::process::Command::new("cmd")
+        .args(["/C", args])
+        .current_dir(cwd)
+        .output()?;
+
+    #[cfg(not(windows))]
+    let output = std::process::Command::new("sh")
+        .args(["-c", args])
+        .current_dir(cwd)
+        .output()?;
+
+    Ok(output)
+}
+
 /// Opt-in registry for universal `<cmd> -h | --help` (sole-arg only).
 /// Returns the help topic for commands that treat bare `-h/--help` as
 /// "show help". Commands where `-h` is data (gs search text, http header
@@ -402,11 +466,11 @@ fn help_topic_for_command(cmd: &str) -> Option<&'static str> {
     Some(match cmd {
         "mv" | "move" | "mkf" | "mkd" | "rmf" | "rmd" | "rnmf" | "rnmd" | "cp" => "fileops",
         "gs" | "fs" | "ds" | "locate" | "fsc" | "qur" => "search",
-        "config" | "wi" => "config",
+        "config" | "cfg" | "wi" => "config",
         "ne" | "ntceditor" => "editor",
         "size" => "size",
-        "view" | "viewf" | "viewd" | "txtc" | "txtf" => "view",
-        "head" | "tail" | "betw" | "sort" | "rev" => "pipe",
+        "view" | "viewf" | "viewd" | "views" | "txtc" | "txtf" => "view",
+        "head" | "tail" | "betw" | "sort" | "rev" | "count" | "trim" => "pipe",
         "report" => "report",
         "tp" | "tpb" => "teleport",
         "theme" => "theme",
@@ -422,6 +486,8 @@ fn help_topic_for_command(cmd: &str) -> Option<&'static str> {
         "nms" => "nms",
         "nsheet" => "nsheet",
         "nssh" => "nssh",
+        "deadlock" => "deadlock",
+        "time" => "time",
         "fake" => "fake",
         "cd" | "back" | "b" | "where" | "gos" | "gosc" | "fgo" => "nav",
         _ => return None,
@@ -693,7 +759,7 @@ fn show_file_selection_menu(
     files: Vec<(String, PathBuf)>,
     copy_mode: bool,
 ) -> Result<()> {
-    show_file_selection_menu_range(_nav, files, copy_mode, None)
+    show_file_selection_menu_range(_nav, files, copy_mode, None, None)
 }
 
 fn show_file_selection_menu_range(
@@ -701,6 +767,7 @@ fn show_file_selection_menu_range(
     files: Vec<(String, PathBuf)>,
     copy_mode: bool,
     range: Option<crate::output::FileLineRange>,
+    lines: Option<bool>,
 ) -> Result<()> {
     let title = if copy_mode {
         "Select a file to COPY to clipboard"
@@ -726,7 +793,7 @@ fn show_file_selection_menu_range(
             crate::output::copy_to_clipboard(&content, "TXT")?;
             print_success(&format!("File '{}' copied to clipboard!", name));
         } else {
-            let show_lines = Config::global_get_show_line_numbers();
+            let show_lines = lines.unwrap_or_else(Config::global_get_show_line_numbers);
             crate::output::cat_file_with_syntax_range(path, show_lines, range)?;
         }
     }
@@ -809,6 +876,7 @@ mod tests {
         assert_eq!(help_topic_for_command("gs"), Some("search"));
         assert_eq!(help_topic_for_command("wi"), Some("config"));
         assert_eq!(help_topic_for_command("ne"), Some("editor"));
+        assert_eq!(help_topic_for_command("time"), Some("time"));
     }
 
     #[test]

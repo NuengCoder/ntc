@@ -263,6 +263,9 @@ impl Editor {
             }
 
             let is_resize = matches!(&ev, Event::Resize(..));
+            // Mode hooks below need to know where the key started.
+            let was_insert = matches!(self.mode, Mode::Insert | Mode::InsertMulti);
+            let was_visual = self.mode == Mode::Visual;
 
             if !handled {
                 // Check pending quit from mouse tab-close
@@ -293,6 +296,7 @@ impl Editor {
                         Mode::GitDiff => self.handle_git_diff_event(ev, stdout)?,
                     },
                 }
+                self.after_mode_change(was_insert, was_visual);
             }
 
             if is_resize {
@@ -411,5 +415,18 @@ impl Editor {
             self.run_lines.remove(0);
         }
         self.run_lines.push(line);
+    }
+
+    /// Bookkeeping after a key may have changed modes: multi-cursor is an
+    /// Insert-only feature, so leaving Insert drops back to the single
+    /// primary cursor, and Visual `d` highlights live only while Visual is
+    /// open.
+    pub(crate) fn after_mode_change(&mut self, was_insert: bool, was_visual: bool) {
+        if was_insert && !matches!(self.mode, Mode::Insert | Mode::InsertMulti) {
+            self.clear_extra_cursors();
+        }
+        if was_visual && self.mode != Mode::Visual {
+            self.clear_visual_marks();
+        }
     }
 }

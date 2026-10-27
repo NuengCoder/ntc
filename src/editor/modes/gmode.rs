@@ -1,5 +1,5 @@
 use anyhow::Result;
-use crossterm::event::{Event, KeyCode, KeyEvent, KeyEventKind};
+use crossterm::event::{Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 
 use crate::editor::{Editor, Mode};
 use crate::t;
@@ -21,10 +21,16 @@ impl Editor {
     ) -> Result<()> {
         if let Event::Key(KeyEvent {
             code,
+            modifiers,
             kind: KeyEventKind::Press,
             ..
         }) = ev
         {
+            // Ctrl+E accepts the ghost hint, like End.
+            if modifiers.contains(KeyModifiers::CONTROL) && code == KeyCode::Char('e') {
+                self.prompt_accept_or_end();
+                return Ok(());
+            }
             match code {
                 KeyCode::Esc => {
                     self.mode = std::mem::replace(&mut self.prev_mode, Mode::Normal);
@@ -49,12 +55,14 @@ impl Editor {
                         GmodeDone::Stay => {}
                     }
                 }
-                KeyCode::Backspace => {
-                    self.gmode_buf.pop();
-                }
-                KeyCode::Char(c) => {
-                    self.gmode_buf.push(c);
-                }
+                KeyCode::Backspace => self.prompt_backspace(),
+                KeyCode::Delete => self.prompt_delete(),
+                KeyCode::Left => self.prompt_move_left(),
+                KeyCode::Right => self.prompt_accept_or_right(),
+                KeyCode::Home => self.prompt_home(),
+                KeyCode::End => self.prompt_accept_or_end(),
+                KeyCode::Tab => self.prompt_tab(),
+                KeyCode::Char(c) => self.prompt_push(c),
                 _ => {}
             }
         } else if let Event::Resize(w, h) = ev {
@@ -94,6 +102,7 @@ impl Editor {
                 } else {
                     t!("editor.nfe_created_dir", name)
                 });
+                self.sidebar.invalidate_cache();
                 self.mark_all_dirty();
             }
         }
@@ -101,15 +110,29 @@ impl Editor {
 
     /// Run one gmode line.
     fn execute_gmode(&mut self, cmd: &str, stdout: &mut std::io::Stdout) -> Result<GmodeDone> {
+        // `t`/`T` step through tabs; `t<n>`/`T<n>` jump to the n-th one.
+        for (prefix, back) in [('t', false), ('T', true)] {
+            let Some(n) = Editor::parse_tab_command(cmd, prefix) else {
+                continue;
+            };
+            let jumped = if n == 0 {
+                if back {
+                    self.prev_tab();
+                } else {
+                    self.next_tab();
+                }
+                true
+            } else {
+                self.goto_tab(n)
+            };
+            self.mark_all_dirty();
+            return Ok(if jumped {
+                GmodeDone::ToNormal
+            } else {
+                GmodeDone::Stay
+            });
+        }
         match cmd {
-            "t" => {
-                self.next_tab();
-                self.mark_all_dirty();
-            }
-            "T" => {
-                self.prev_tab();
-                self.mark_all_dirty();
-            }
             "qt" => {
                 let should_quit = self.close_current_tab();
                 if should_quit {

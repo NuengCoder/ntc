@@ -3,8 +3,8 @@
 //! with optional external `.ntc_lang` overrides from `~/.config/ntc/lang/`.
 
 pub mod en;
-pub mod th;
 pub mod lo;
+pub mod th;
 pub mod zh;
 
 use std::collections::HashMap;
@@ -59,8 +59,7 @@ pub fn load(code: &str) -> HashMap<String, String> {
         _ => en::build_map(),
     };
 
-    let lang_dir = dirs::config_dir()
-        .map(|d| d.join("ntc").join("lang"));
+    let lang_dir = dirs::config_dir().map(|d| d.join("ntc").join("lang"));
     if let Some(dir) = lang_dir {
         let lang_file = dir.join(format!("{}.ntc_lang", code));
         if lang_file.exists() {
@@ -96,10 +95,7 @@ pub fn reload() {
 /// Get a localized string by key. Falls back to the key itself if not found.
 pub fn get(key: &str) -> String {
     if let Ok(guard) = LANG_PACK.read() {
-        guard
-            .get(key)
-            .cloned()
-            .unwrap_or_else(|| key.to_string())
+        guard.get(key).cloned().unwrap_or_else(|| key.to_string())
     } else {
         key.to_string()
     }
@@ -196,6 +192,99 @@ mod tests {
         "help.context.cr",
     ];
 
+    const TIME_KEYS: &[&str] = &[
+        "cmd.time.count_usage",
+        "cmd.time.run_usage",
+        "cmd.time.executing",
+        "cmd.time.elapsed",
+        "cmd.time.exit_status",
+        "cmd.time.terminated",
+        "cmd.time.first_command",
+        "cmd.time.second_command",
+        "cmd.time.first_result",
+        "cmd.time.second_result",
+        "cmd.time.outputs_match",
+        "cmd.time.outputs_differ",
+        "cmd.time.large_diff",
+        "cmd.time.invalid_duration",
+        "cmd.time.cancelled",
+        "cmd.time.finished",
+        "cmd.time.remaining",
+        "cmd.time.compare_usage",
+        "cmd.time.bench_usage",
+        "cmd.time.invalid_runs",
+        "cmd.time.bench_header",
+        "cmd.time.bench_run",
+        "cmd.time.bench_summary",
+        "cmd.time.bench_min",
+        "cmd.time.bench_max",
+        "cmd.time.bench_mean",
+        "cmd.time.bench_median",
+        "cmd.time.bench_note",
+        "cmd.time.status_ok",
+        "cmd.time.status_failed",
+        "cmd.time.ignoring_whitespace",
+        "help.time.title",
+        "help.time.run",
+        "help.time.alias",
+        "help.time.compare",
+        "help.time.compare_with",
+        "help.time.bench",
+        "help.time.count",
+        "help.time.help",
+        "help.time.note",
+    ];
+
+    #[test]
+    fn time_keys_exist_in_all_languages() {
+        assert_keys_present(super::en::build_map(), "english", TIME_KEYS);
+        assert_keys_present(super::zh::build_map(), "chinese", TIME_KEYS);
+        assert_keys_present(super::th::build_map(), "thai", TIME_KEYS);
+        assert_keys_present(super::lo::build_map(), "lao", TIME_KEYS);
+    }
+
+    const QUR_KEYS: &[&str] = &[
+        "misc.qur.usage",
+        "misc.qur.example1",
+        "misc.qur.example2",
+        "misc.qur.example3",
+        "misc.qur.example4",
+        "misc.qur.searching",
+        "misc.qur.no_files",
+        "misc.qur.no_matches",
+        "misc.qur.files_header",
+        "misc.qur.summary_header",
+        "misc.qur.summary_hint",
+        "misc.qur.replace_preview",
+        "misc.qur.confirm",
+        "misc.qur.cancelled",
+        "misc.qur.replaced",
+        "misc.qur.skipped",
+        "misc.qur.many_results",
+        "misc.qur.replace_needs_select",
+        "misc.qur.display_needs_select",
+        "misc.qur.empty_select",
+        "misc.qur.empty_replace",
+        "misc.qur.stdin_needs_select",
+        "help.context.qur.needs_glob",
+        "help.context.qur.select_value",
+        "help.context.qur.replace_value",
+        "help.context.qur.depth_value",
+        "help.context.qur.limit_value",
+        "help.context.qur.next_select",
+        "help.context.qur.next_display_replace",
+        "help.context.qur.next_depth",
+        "help.search.qur",
+    ];
+
+    #[test]
+    fn qur_keys_exist_in_all_languages() {
+        assert_keys_present(super::en::build_map(), "english", QUR_KEYS);
+        assert_keys_present(super::zh::build_map(), "chinese", QUR_KEYS);
+        assert_keys_present(super::th::build_map(), "thai", QUR_KEYS);
+        assert_keys_present(super::lo::build_map(), "lao", QUR_KEYS);
+    }
+
     fn assert_all_present(map: HashMap<String, String>, lang: &str) {
         assert_keys_present(map, lang, REQUIRED_KEYS);
     }
@@ -210,6 +299,26 @@ mod tests {
             missing.is_empty(),
             "{lang} pack is missing keys: {:?}",
             missing
+        );
+    }
+
+    /// Assert these keys are really translated — present *and* different from
+    /// the English master pack — so an empty stub cannot hide behind the
+    /// fallback.
+    fn assert_translated(
+        map: HashMap<String, String>,
+        en: &HashMap<String, String>,
+        lang: &str,
+        keys: &[&str],
+    ) {
+        let untranslated: Vec<&str> = keys
+            .iter()
+            .copied()
+            .filter(|k| map.get(*k).map(|v| en.get(*k) == Some(v)).unwrap_or(true))
+            .collect();
+        assert!(
+            untranslated.is_empty(),
+            "{lang} pack still shows English for: {untranslated:?}"
         );
     }
 
@@ -343,12 +452,135 @@ mod tests {
         "msg.showcg.label_dir_view",
     ];
 
+    /// Every `views` / `count` key must exist in all four bundled packs.
+    const VIEWS_COUNT_KEYS: &[&str] = &[
+        "help.views.title",
+        "help.views.usage",
+        "help.views.size",
+        "help.views.sort",
+        "help.views.newline",
+        "help.views.note",
+        "help.views.example1",
+        "help.views.example2",
+        "cmd.views.usage",
+        "cmd.views.invalid_size",
+        "cmd.views.invalid_sort",
+        "cmd.views.invalid_sort_value",
+        "cmd.views.empty",
+        "help.pipe.count",
+        "misc.count.usage",
+    ];
+
+    #[test]
+    fn views_and_count_keys_exist_in_all_languages() {
+        assert_keys_present(super::en::build_map(), "english", VIEWS_COUNT_KEYS);
+        assert_keys_present(super::zh::build_map(), "chinese", VIEWS_COUNT_KEYS);
+        assert_keys_present(super::th::build_map(), "thai", VIEWS_COUNT_KEYS);
+        assert_keys_present(super::lo::build_map(), "lao", VIEWS_COUNT_KEYS);
+    }
+
+    /// `views` help/error text must be genuinely translated in every
+    /// non-English pack (the modules used to be empty stubs).
+    const VIEWS_KEYS: &[&str] = &[
+        "help.views.title",
+        "help.views.usage",
+        "help.views.size",
+        "help.views.sort",
+        "help.views.newline",
+        "help.views.note",
+        "help.views.example1",
+        "help.views.example2",
+        "cmd.views.usage",
+        "cmd.views.invalid_size",
+        "cmd.views.invalid_sort",
+        "cmd.views.invalid_sort_value",
+        "cmd.views.empty",
+    ];
+
+    #[test]
+    fn views_keys_are_translated_outside_english() {
+        let en = super::en::build_map();
+        assert_translated(super::zh::build_map(), &en, "chinese", VIEWS_KEYS);
+        assert_translated(super::th::build_map(), &en, "thai", VIEWS_KEYS);
+        assert_translated(super::lo::build_map(), &en, "lao", VIEWS_KEYS);
+    }
+
+    /// `trim` help/usage keys.
+    const TRIM_KEYS: &[&str] = &[
+        "help.pipe.trim",
+        "help.pipe.example6",
+        "misc.trim.usage",
+        "misc.trim.empty_pattern",
+    ];
+
+    #[test]
+    fn trim_keys_exist_in_all_languages() {
+        assert_keys_present(super::en::build_map(), "english", TRIM_KEYS);
+        assert_keys_present(super::zh::build_map(), "chinese", TRIM_KEYS);
+        assert_keys_present(super::th::build_map(), "thai", TRIM_KEYS);
+        assert_keys_present(super::lo::build_map(), "lao", TRIM_KEYS);
+    }
+
+    #[test]
+    fn trim_keys_are_translated_outside_english() {
+        let en = super::en::build_map();
+        assert_translated(super::zh::build_map(), &en, "chinese", TRIM_KEYS);
+        assert_translated(super::th::build_map(), &en, "thai", TRIM_KEYS);
+        assert_translated(super::lo::build_map(), &en, "lao", TRIM_KEYS);
+    }
+
+    /// Every `intro_view` config key must exist in all four bundled packs.
+    const INTRO_VIEW_KEYS: &[&str] = &[
+        "help.config.intro_view",
+        "msg.setIV.status",
+        "msg.setIV.on",
+        "msg.setIV.off",
+        "msg.setIV.error",
+        "msg.showcg.label_intro_view",
+    ];
+
+    #[test]
+    fn intro_view_keys_exist_in_all_languages() {
+        assert_keys_present(super::en::build_map(), "english", INTRO_VIEW_KEYS);
+        assert_keys_present(super::zh::build_map(), "chinese", INTRO_VIEW_KEYS);
+        assert_keys_present(super::th::build_map(), "thai", INTRO_VIEW_KEYS);
+        assert_keys_present(super::lo::build_map(), "lao", INTRO_VIEW_KEYS);
+    }
+
     #[test]
     fn dir_view_keys_exist_in_all_languages() {
         assert_keys_present(super::en::build_map(), "english", DIR_VIEW_KEYS);
         assert_keys_present(super::zh::build_map(), "chinese", DIR_VIEW_KEYS);
         assert_keys_present(super::th::build_map(), "thai", DIR_VIEW_KEYS);
         assert_keys_present(super::lo::build_map(), "lao", DIR_VIEW_KEYS);
+    }
+
+    /// Every `file_view` / `size` config key must exist in all four packs.
+    const FILE_VIEW_SIZE_KEYS: &[&str] = &[
+        "help.config.file_view",
+        "help.config.size",
+        "msg.setFV.status",
+        "msg.setFV.on",
+        "msg.setFV.off",
+        "msg.setFV.error",
+        "msg.setSZ.status",
+        "msg.setSZ.target_status",
+        "msg.setSZ.on",
+        "msg.setSZ.off",
+        "msg.setSZ.error",
+        "msg.setSZ.slow_warn",
+        "msg.setSZ.usage",
+        "msg.showcg.label_file_view",
+        "msg.showcg.label_auto_size",
+        "msg.showcg.auto_size_value",
+    ];
+
+    #[test]
+    fn file_view_size_keys_exist_in_all_languages() {
+        assert_keys_present(super::en::build_map(), "english", FILE_VIEW_SIZE_KEYS);
+        assert_keys_present(super::zh::build_map(), "chinese", FILE_VIEW_SIZE_KEYS);
+        assert_keys_present(super::th::build_map(), "thai", FILE_VIEW_SIZE_KEYS);
+        assert_keys_present(super::lo::build_map(), "lao", FILE_VIEW_SIZE_KEYS);
     }
 
     /// Every `ndb` (database shell) key must exist in all four bundled packs.
@@ -536,6 +768,94 @@ mod tests {
         assert_keys_present(super::lo::build_map(), "lao", NDB_KEYS);
     }
 
+    /// Every `deadlock` key must exist in all four bundled language packs.
+    const DEADLOCK_KEYS: &[&str] = &[
+        "deadlock.no_args",
+        "deadlock.created",
+        "deadlock.default_master_hint",
+        "deadlock.master_prompt",
+        "deadlock.wrong_master",
+        "deadlock.too_many_attempts",
+        "deadlock.force_change_notice",
+        "deadlock.new_master_prompt",
+        "deadlock.confirm_master_prompt",
+        "deadlock.empty_master",
+        "deadlock.default_master_rejected",
+        "deadlock.master_mismatch",
+        "deadlock.master_changed",
+        "deadlock.old_master_prompt",
+        "deadlock.wrong_master_once",
+        "deadlock.unlocked",
+        "deadlock.add_usage",
+        "deadlock.invalid_name",
+        "deadlock.value_prompt",
+        "deadlock.empty_password",
+        "deadlock.added",
+        "deadlock.updated",
+        "deadlock.ls_title",
+        "deadlock.ls_empty",
+        "deadlock.rmpw_usage",
+        "deadlock.removed",
+        "deadlock.not_found",
+        "deadlock.unknown_cmd",
+        "deadlock.hint_help",
+        "deadlock.bye",
+        "deadlock.editor_fail",
+        "deadlock.keychain_registered",
+        "deadlock.keychain_unavailable",
+        "deadlock.forget_done",
+        "deadlock.forget_failed",
+        "deadlock.destroy_confirm",
+        "deadlock.destroy_cancelled",
+        "deadlock.destroyed",
+        "deadlock.destroy_failed",
+        "deadlock.os_protected",
+        "deadlock.os_unprotected",
+        "help.deadlock.title",
+        "help.deadlock.launch",
+        "help.deadlock.ls",
+        "help.deadlock.add",
+        "help.deadlock.rmpw",
+        "help.deadlock.master",
+        "help.deadlock.forget",
+        "help.deadlock.destroy",
+        "help.deadlock.exit",
+        "help.deadlock.note",
+        "help.deadlock.example1",
+        "help.deadlock.example2",
+        "deadlock.vault_missing",
+        "deadlock.corrupt_notice",
+        "deadlock.corrupt_restore_prompt",
+        "deadlock.corrupt_restore_failed",
+        "deadlock.corrupt_restored",
+        "deadlock.corrupt_recreate_prompt",
+        "deadlock.corrupt_cancelled",
+        "deadlock.corrupt_aborted",
+        "deadlock.corrupt_kept",
+        "deadlock.corrupt_recreate_failed",
+        "deadlock.corrupt_recreated",
+    ];
+
+    #[test]
+    fn deadlock_keys_exist_in_all_languages() {
+        assert_keys_present(super::en::build_map(), "english", DEADLOCK_KEYS);
+        assert_keys_present(super::zh::build_map(), "chinese", DEADLOCK_KEYS);
+        assert_keys_present(super::th::build_map(), "thai", DEADLOCK_KEYS);
+        assert_keys_present(super::lo::build_map(), "lao", DEADLOCK_KEYS);
+    }
+
+    /// Every `smtp --deadlock` key must exist in all four bundled language packs.
+    const SMTP_DEADLOCK_KEYS: &[&str] =
+        &["cmd.smtp.help_info_deadlock", "cmd.smtp.password_hidden"];
+
+    #[test]
+    fn smtp_deadlock_keys_exist_in_all_languages() {
+        assert_keys_present(super::en::build_map(), "english", SMTP_DEADLOCK_KEYS);
+        assert_keys_present(super::zh::build_map(), "chinese", SMTP_DEADLOCK_KEYS);
+        assert_keys_present(super::th::build_map(), "thai", SMTP_DEADLOCK_KEYS);
+        assert_keys_present(super::lo::build_map(), "lao", SMTP_DEADLOCK_KEYS);
+    }
+
     /// Every `serve --share` key must exist in all four bundled language packs.
     const SHARE_KEYS: &[&str] = &[
         "cmd.serve.help_share",
@@ -715,6 +1035,7 @@ mod tests {
         "cmd.nssh.help_port",
         "cmd.nssh.help_key",
         "cmd.nssh.help_pass_env",
+        "cmd.nssh.pass_env_not_in_vault",
         "cmd.nssh.help_cmd",
         "cmd.nssh.help_trust",
         "cmd.nssh.help_ask_pass",
@@ -747,6 +1068,10 @@ mod tests {
         "cmd.nssh.profile_not_found",
         "cmd.nssh.key_not_found",
         "cmd.nssh.pass_env_missing",
+        "cmd.nssh.pass_env_registered",
+        "cmd.nssh.pass_env_pending",
+        "cmd.nssh.pass_env_from_vault",
+        "cmd.nssh.master_unlock_failed",
         "cmd.nssh.ls_empty",
         "cmd.nssh.ls_title",
         "cmd.nssh.info_title",
@@ -786,6 +1111,9 @@ mod tests {
         "cmd.nssh.shell_hint",
         "cmd.nssh.shell_back",
         "cmd.nssh.shell_forced",
+        "cmd.nssh.password_prompt",
+        "cmd.nssh.password_incorrect",
+        "cmd.nssh.auth_failed",
         "help.nssh.title",
         "help.nssh.add",
         "help.nssh.ssh",
@@ -1157,6 +1485,7 @@ mod tests {
         "misc.rmd.pattern_matches",
         "misc.rmd.confirm_delete",
         "misc.rmd.cancelled",
+        "misc.rmd.deadlock_vault_admin_only",
         "help.fileops.rmd",
     ];
 
@@ -1166,5 +1495,124 @@ mod tests {
         assert_keys_present(super::zh::build_map(), "chinese", RMD_WILDCARD_KEYS);
         assert_keys_present(super::th::build_map(), "thai", RMD_WILDCARD_KEYS);
         assert_keys_present(super::lo::build_map(), "lao", RMD_WILDCARD_KEYS);
+    }
+
+    /// Clipboard keys used in clipboard.rs.
+    const CLIPBOARD_KEYS: &[&str] = &[
+        "cmd.clipboard.copied_piped",
+        "cmd.clipboard.clear_error",
+        "help.pipe.filters",
+    ];
+
+    #[test]
+    fn clipboard_keys_exist_in_all_languages() {
+        assert_keys_present(super::en::build_map(), "english", CLIPBOARD_KEYS);
+        assert_keys_present(super::zh::build_map(), "chinese", CLIPBOARD_KEYS);
+        assert_keys_present(super::th::build_map(), "thai", CLIPBOARD_KEYS);
+        assert_keys_present(super::lo::build_map(), "lao", CLIPBOARD_KEYS);
+    }
+
+    /// Report clip keys used in report.rs.
+    const REPORT_CLIP_KEYS: &[&str] = &[
+        "help.report.clip",
+        "help.report.clip_example",
+        "cmd.report.help_clip",
+        "cmd.report.legacy_removed",
+        "cmd.report.example_project",
+        "cmd.report.example_clip",
+        "cmd.report.clip_header",
+        "cmd.report.clip_meta_date",
+        "cmd.report.clip_meta_lines",
+        "cmd.report.clip_meta_chars",
+    ];
+
+    #[test]
+    fn report_clip_keys_exist_in_all_languages() {
+        assert_keys_present(super::en::build_map(), "english", REPORT_CLIP_KEYS);
+        assert_keys_present(super::zh::build_map(), "chinese", REPORT_CLIP_KEYS);
+        assert_keys_present(super::th::build_map(), "thai", REPORT_CLIP_KEYS);
+        assert_keys_present(super::lo::build_map(), "lao", REPORT_CLIP_KEYS);
+    }
+
+    /// Todo format keys used in config_commands.rs.
+    const TODO_FORMAT_KEYS: &[&str] = &[
+        "msg.setTD.status",
+        "msg.setTD.set",
+        "msg.setTD.error",
+        "help.config.todo",
+        "cmd.todo.help_format",
+        "cmd.todo.unknown_format",
+        "cmd.todo.parse_failed",
+    ];
+
+    #[test]
+    fn todo_format_keys_exist_in_all_languages() {
+        assert_keys_present(super::en::build_map(), "english", TODO_FORMAT_KEYS);
+        assert_keys_present(super::zh::build_map(), "chinese", TODO_FORMAT_KEYS);
+        assert_keys_present(super::th::build_map(), "thai", TODO_FORMAT_KEYS);
+        assert_keys_present(super::lo::build_map(), "lao", TODO_FORMAT_KEYS);
+    }
+
+    /// NFE keys used in editor/nfe.rs and editor/types.rs.
+    const NFE_KEYS: &[&str] = &[
+        "editor.nfe_confirm",
+        "editor.nfe_rm_root",
+        "editor.hint_nfe",
+    ];
+
+    #[test]
+    fn nfe_keys_exist_in_all_languages() {
+        assert_keys_present(super::en::build_map(), "english", NFE_KEYS);
+        assert_keys_present(super::zh::build_map(), "chinese", NFE_KEYS);
+        assert_keys_present(super::th::build_map(), "thai", NFE_KEYS);
+        assert_keys_present(super::lo::build_map(), "lao", NFE_KEYS);
+    }
+
+    /// The `next.txt` key set must be genuinely translated (not just present
+    /// through the English fallback) in the Lao pack.
+    const NEXT_TXT_KEYS: &[&str] = &[
+        "help.deadlock.title",
+        "help.deadlock.launch",
+        "help.deadlock.ls",
+        "help.deadlock.add",
+        "help.deadlock.rmpw",
+        "help.deadlock.master",
+        "help.deadlock.forget",
+        "help.deadlock.destroy",
+        "help.deadlock.exit",
+        "help.deadlock.note",
+        "help.time.title",
+        "help.time.run",
+        "help.time.alias",
+        "help.time.compare",
+        "help.time.compare_with",
+        "help.time.bench",
+        "help.time.count",
+        "help.time.help",
+        "help.time.note",
+        "cmd.report.clip_header",
+        "cmd.report.clip_meta_date",
+        "cmd.report.clip_meta_lines",
+        "cmd.report.clip_meta_chars",
+        "help.report.project",
+        "help.report.project_example",
+        "help.report.clip",
+        // help.deadlock.example1/2 and help.report.clip_example are literal
+        // command examples and are identical in every language on purpose.
+    ];
+
+    #[test]
+    fn next_txt_keys_are_translated_in_lao() {
+        let en = super::en::build_map();
+        let lo = super::lo::build_map();
+        let untranslated: Vec<&str> = NEXT_TXT_KEYS
+            .iter()
+            .copied()
+            .filter(|k| lo.get(*k).map(|v| en.get(*k) == Some(v)).unwrap_or(true))
+            .collect();
+        assert!(
+            untranslated.is_empty(),
+            "lao pack still shows English for: {untranslated:?}"
+        );
     }
 }

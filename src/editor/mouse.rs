@@ -88,8 +88,8 @@ impl Editor {
         let mut zones = Vec::new();
         let right = self.term_w;
         let mut x = self.editor_offset();
-        for tab in &self.tabs {
-            let full_w = self.tab_label(tab).chars().count() + 1;
+        for (i, _) in self.tabs.iter().enumerate() {
+            let full_w = self.tab_label(i).chars().count() + 1;
             if full_w > right.saturating_sub(x) {
                 break;
             }

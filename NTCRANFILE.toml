@@ -19,7 +19,7 @@
 [vars]
 # CC = "gcc"
 # FLAGS = "-O2"
-ver = "2.4.6"
+ver = "2.4.7"
 lux = "ntc-v$(ver)-linux-x86_64.tar.gz"
 adb = "ntc-v$(ver)-aarch64-linux-android.tar.gz"
 win = "ntc-v$(ver)-windows-x86_64.zip"
@@ -166,4 +166,4 @@ cmd = "git pull origin main --rebase"
 
 [targets.clean]
 deps = []
-cmd = "cargo clean"
+cmd = "cargo clean && cleantmp && cleancrash"

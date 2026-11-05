@@ -2654,6 +2654,11 @@ mod tests {
 
     #[test]
     fn deadlock_vault_path_is_isolated_in_tests() {
+        // Snapshot the real config root first: the isolation helper points
+        // XDG_CONFIG_HOME at its tempdir, and on Linux `dirs::config_dir()`
+        // follows it, which made the "real user data" check below compare the
+        // vault against the isolated directory.
+        let real_config = dirs::config_dir();
         let home = crate::utils::test_support::IsolatedConfigHome::new();
         let vault = crate::deadlock::vault::vault_path();
         assert!(
@@ -2663,7 +2668,7 @@ mod tests {
         );
         // And it must not point into the real user config directory, even
         // though `dirs::config_dir()` ignores NTC_CONFIG_HOME on Windows.
-        if let Some(real) = dirs::config_dir() {
+        if let Some(real) = real_config {
             let real_vault_dir = real.join("ntc").join("deadlock");
             assert!(
                 !vault.starts_with(&real_vault_dir),

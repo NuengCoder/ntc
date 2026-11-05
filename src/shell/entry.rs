@@ -168,11 +168,16 @@ fn host_display(host_dir: &str, fallback: &str) -> String {
     if host_dir.is_empty() {
         return fallback.to_string();
     }
-    std::path::Path::new(host_dir)
-        .file_name()
-        .map(|n| n.to_string_lossy().to_string())
-        .filter(|n| !n.is_empty())
-        .unwrap_or_else(|| host_dir.to_string())
+    // The directory comes from a foreign shell, so its separator need not be
+    // this platform's (`C:\Users\me\proj` for `ntc ps`, POSIX paths for bash).
+    let last = host_dir
+        .rsplit(|c| c == '/' || c == '\\')
+        .find(|part| !part.is_empty());
+    match last {
+        // `C:` alone is a drive root, not a directory name.
+        Some(name) if !(name.len() == 2 && name.ends_with(':')) => name.to_string(),
+        _ => fallback.to_string(),
+    }
 }
 
 /// Keep ntc's directory (and therefore the tree view) in step with a `cd`

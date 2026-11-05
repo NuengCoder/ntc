@@ -99,8 +99,19 @@ __ntc_complete() {
   [ "$__ntc_start" -lt 0 ] && __ntc_start=0
   local __ntc_spec
   __ntc_spec=$(complete -p -- "$__ntc_cmd" 2>/dev/null) || __ntc_spec=''
-  if [ -z "$__ntc_spec" ] && declare -F _comp_complete_load >/dev/null 2>&1; then
-    _comp_complete_load "$__ntc_cmd" >/dev/null 2>&1
+  if [ -z "$__ntc_spec" ]; then
+    # bash-completion >= 2.12 lazy-loads a command's script through
+    # `_comp_complete_load`; 2.11 (Ubuntu 24.04) only ships
+    # `__load_completion` and its `-D` handler `_completion_loader`.  Without
+    # this fallback the completion file is never sourced and every command
+    # that relies on it (git, docker, ...) degrades to file names.
+    if declare -F _comp_complete_load >/dev/null 2>&1; then
+      _comp_complete_load "$__ntc_cmd" >/dev/null 2>&1
+    elif declare -F __load_completion >/dev/null 2>&1; then
+      __load_completion "$__ntc_cmd" >/dev/null 2>&1
+    elif declare -F _completion_loader >/dev/null 2>&1; then
+      _completion_loader "$__ntc_cmd" >/dev/null 2>&1
+    fi
     __ntc_spec=$(complete -p -- "$__ntc_cmd" 2>/dev/null) || __ntc_spec=''
   fi
   local __ntc_deflt=0 __ntc_dirs=0 __ntc_plus=0

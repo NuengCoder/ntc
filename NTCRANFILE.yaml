@@ -78,6 +78,9 @@ targets:
   padb:
     deps: []
     cmd: adb push ntc-v$(ver)-aarch64-linux-android.tar.gz /sdcard/Download/
+  git:
+    deps: []
+    cmd: git add . && git commit -m $(ver)
   pull:
     deps: []
     cmd: git pull origin main --rebase

@@ -60,6 +60,11 @@ pub fn fill(m: &mut HashMap<String, String>) {
         "  http GET https://api.example.com/users -a admin:secret123".into(),
     );
 
+    m.insert(
+        "cmd.http.help_example7".into(),
+        "  http QUERY https://api.example.com/search --json '{\"q\":\"foo\",\"limit\":10}'".into(),
+    );
+
     m.insert("cmd.http.help_examples_title".into(), "Examples:".into());
 
     m.insert(
@@ -79,7 +84,7 @@ pub fn fill(m: &mut HashMap<String, String>) {
 
     m.insert(
         "cmd.http.help_methods".into(),
-        "  GET, POST, PUT, DELETE, PATCH, HEAD".into(),
+        "  GET, POST, PUT, DELETE, PATCH, HEAD, QUERY".into(),
     );
 
     m.insert("cmd.http.help_methods_title".into(), "Methods:".into());
@@ -193,6 +198,16 @@ pub fn fill(m: &mut HashMap<String, String>) {
     );
 
     m.insert("cmd.http.request_failed".into(), "{} {} failed".into());
+
+    m.insert(
+        "cmd.http.query_no_body".into(),
+        "Warning: QUERY requests normally carry a body (use --json or -d).".into(),
+    );
+
+    m.insert(
+        "cmd.http.query_no_content_type".into(),
+        "Warning: QUERY body has no Content-Type; servers must reject this (add -H \"Content-Type: ...\").".into(),
+    );
 
     m.insert("cmd.http.saved_bytes".into(), "Saved {} bytes to {}".into());
 

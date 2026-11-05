@@ -41,13 +41,19 @@ pub fn fill(m: &mut HashMap<String, String>) {
     );
 
     m.insert(
-        "dl.help.opt_progress".into(),
-        " --progress 显示下载进度条".into(),
+        "dl.help.opt_history".into(),
+        " --history 显示下载历史".into(),
     );
 
-    m.insert("dl.help.opt_resume".into(), " --resume 恢复部分下载".into());
+    m.insert(
+        "dl.help.opt_resume".into(),
+        " --resume 恢复未完成的下载（从列表中选择）".into(),
+    );
 
-    m.insert("dl.help.opt_stop".into(), " --stop 显示下载历史".into());
+    m.insert(
+        "dl.help.opt_stop".into(),
+        " --stop 停止正在进行的下载（从列表中选择）".into(),
+    );
 
     m.insert("dl.help.options".into(), "选项：".into());
 
@@ -135,4 +141,59 @@ pub fn fill(m: &mut HashMap<String, String>) {
     m.insert("dl.request_failed".into(), "请求 {} 失败".into());
 
     m.insert("dl.upload_failed".into(), "上传到 {} 失败".into());
+
+    m.insert("dl.active_title".into(), "正在运行的下载：".into());
+
+    m.insert("dl.cancelled".into(), "已取消。".into());
+
+    m.insert("dl.incomplete_title".into(), "未完成的下载：".into());
+
+    m.insert("dl.invalid_choice".into(), "选择无效。".into());
+
+    m.insert("dl.no_active".into(), "没有正在运行的下载。".into());
+
+    m.insert(
+        "dl.nothing_incomplete".into(),
+        "没有可恢复的未完成下载。".into(),
+    );
+
+    m.insert("dl.resuming".into(), "正在从 {} 恢复 {}".into());
+
+    m.insert(
+        "dl.select_resume".into(),
+        "选择要恢复的下载 [1-N]（留空或 q 取消）：".into(),
+    );
+
+    m.insert(
+        "dl.select_stop".into(),
+        "选择要停止的下载 [1-N]（留空或 q 取消）：".into(),
+    );
+
+    m.insert(
+        "dl.stopped_ok".into(),
+        "已停止 {}，可用 'dl --resume' 继续。".into(),
+    );
+
+    m.insert(
+        "dl.stopped_stale".into(),
+        "已将 {} 标记为已停止（它已不在运行）。".into(),
+    );
+
+    m.insert(
+        "dl.dns_unsupported_type".into(),
+        "不支持的记录类型：{}（支持：{}）".into(),
+    );
+
+    m.insert("dl.dns_rcode".into(), "服务器返回 {} ({})".into());
+
+    m.insert("dl.dns_timeout".into(), "DNS 服务器无响应（超时）".into());
+
+    m.insert("dl.dns_malformed".into(), "DNS 响应格式错误".into());
+
+    m.insert("dl.dns_io".into(), "DNS 网络错误：{}".into());
+
+    m.insert(
+        "dl.dns_system_fallback".into(),
+        "回退到系统 DNS 工具……".into(),
+    );
 }

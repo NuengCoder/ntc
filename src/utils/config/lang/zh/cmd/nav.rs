@@ -23,6 +23,11 @@ pub fn fill(m: &mut HashMap<String, String>) {
     m.insert("cmd.nav.cd.navigated".into(), "已导航至：{}".into());
 
     m.insert(
+        "cmd.nav.cd.home_unavailable".into(),
+        "无法确定主目录（未设置 HOME / USERPROFILE）。".into(),
+    );
+
+    m.insert(
         "cmd.nav.cd.tp_list".into(),
         "使用 'tp list' 查看所有保存点。".into(),
     );
@@ -60,7 +65,7 @@ pub fn fill(m: &mut HashMap<String, String>) {
 
     m.insert(
         "cmd.nav.fgo.found".into(),
-        "\u{1f50d} 找到 {} 个匹配 \"{}\" 的文件：".into(),
+        "找到 {} 个匹配 \"{}\" 的文件：".into(),
     );
 
     m.insert(
@@ -87,39 +92,27 @@ pub fn fill(m: &mut HashMap<String, String>) {
 
     m.insert("cmd.nav.invalid_selection".into(), "无效的选择。".into());
 
-    m.insert(
-        "cmd.nav.where.config_file".into(),
-        "\u{2699}\u{fe0f} 配置文件：".into(),
-    );
+    m.insert("cmd.nav.where.config_file".into(), "配置文件：".into());
 
     m.insert(
         "cmd.nav.where.config_missing".into(),
-        "\u{26a0} 未找到配置文件（将在首次保存时创建）".into(),
+        "未找到配置文件（将在首次保存时创建）".into(),
     );
 
-    m.insert(
-        "cmd.nav.where.config_size".into(),
-        "\u{1f4cf} 配置大小：".into(),
-    );
+    m.insert("cmd.nav.where.config_size".into(), "配置大小：".into());
 
-    m.insert(
-        "cmd.nav.where.current_dir".into(),
-        "\u{1f4c2} 当前目录：".into(),
-    );
+    m.insert("cmd.nav.where.current_dir".into(), "当前目录：".into());
 
-    m.insert(
-        "cmd.nav.where.executable".into(),
-        "\u{1f4c1} 可执行文件：".into(),
-    );
+    m.insert("cmd.nav.where.executable".into(), "可执行文件：".into());
 
     m.insert(
         "cmd.nav.where.not_found".into(),
-        "\u{2717} 在 PATH 中未找到 '{}'".into(),
+        "在 PATH 中未找到 '{}'".into(),
     );
 
     m.insert(
         "cmd.nav.where.path_title".into(),
-        "\u{1f50d} '{}' 在 PATH 中的匹配项：".into(),
+        "'{}' 在 PATH 中的匹配项：".into(),
     );
 
     m.insert("cmd.nav.where.title".into(), "ntc 位置信息".into());

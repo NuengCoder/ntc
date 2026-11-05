@@ -5,11 +5,11 @@
 
 set -e
 
-echo "🔨 Building ntc from source..."
+echo "Building ntc from source..."
 
 # Check for cargo
 if ! command -v cargo &> /dev/null; then
-    echo "❌ Rust/Cargo not found. Please install Rust first:"
+    echo "Rust/Cargo not found. Please install Rust first:"
     echo "   curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh"
     exit 1
 fi
@@ -17,7 +17,7 @@ fi
 # cpal/alsa-sys needs ALSA headers to build the `nms` audio player.
 if [ "$(uname -s)" = "Linux" ] && ! command -v termux-info &> /dev/null; then
     if ! command -v pkg-config &> /dev/null || ! pkg-config --exists alsa; then
-        echo "❌ Linux audio build dependencies are missing (ALSA headers)."
+        echo "Linux audio build dependencies are missing (ALSA headers)."
         echo "   Debian/Ubuntu: sudo apt-get install build-essential pkg-config libasound2-dev"
         echo "   Fedora:        sudo dnf install gcc pkg-config alsa-lib-devel"
         echo "   Arch:          sudo pacman -S --needed base-devel pkgconf alsa-lib"
@@ -37,22 +37,22 @@ case "$OS" in
             INSTALL_DIR="$PREFIX/bin"
             cp target/release/ntc "$INSTALL_DIR/"
             chmod +x "$INSTALL_DIR/ntc"
-            echo "✅ Installed to $INSTALL_DIR/ntc"
+            echo "Installed to $INSTALL_DIR/ntc"
         else
             # Regular Linux
-            echo "📁 Installing to /usr/local/bin/ (requires sudo)..."
+            echo "Installing to /usr/local/bin/ (requires sudo)..."
             sudo cp target/release/ntc /usr/local/bin/
-            echo "✅ Installed to /usr/local/bin/ntc"
+            echo "Installed to /usr/local/bin/ntc"
         fi
         ;;
     Darwin)
         # macOS
-        echo "📁 Installing to /usr/local/bin/ (requires sudo)..."
+        echo "Installing to /usr/local/bin/ (requires sudo)..."
         sudo cp target/release/ntc /usr/local/bin/
-        echo "✅ Installed to /usr/local/bin/ntc"
+        echo "Installed to /usr/local/bin/ntc"
         ;;
     *)
-        echo "⚠️ Unknown OS: $OS"
+        echo "Unknown OS: $OS"
         echo "Binary built at: target/release/ntc"
         echo "Copy it manually to your PATH."
         exit 0
@@ -62,4 +62,4 @@ esac
 echo ""
 ntc --version
 echo ""
-echo "🎉 ntc installed successfully! Run 'ntc' to start."
+echo "ntc installed successfully! Run 'ntc' to start."

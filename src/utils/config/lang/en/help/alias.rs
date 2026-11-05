@@ -23,7 +23,13 @@ pub fn fill(m: &mut HashMap<String, String>) {
 
     m.insert(
         "help.alias.add_param".into(),
-        "ral add <name>(x) \"<cmd>\" ## Create parameterised alias with $x".into(),
+        "ral add <name>(x) \"<cmd>\" ## Create parameterised alias with ${x}".into(),
+    );
+
+    m.insert(
+        "help.alias.env_ref".into(),
+        "ral add <name> \"<cmd>\" ## Bare $NAME is an env var at run time; use ${x} for parameters"
+            .into(),
     );
 
     m.insert(
@@ -106,7 +112,7 @@ pub fn fill(m: &mut HashMap<String, String>) {
 
     m.insert(
         "help.alias.example2".into(),
-        "ral add greet(x) \"echo Hello $x\" ## Parameterised alias".into(),
+        "ral add greet(x) \"echo Hello ${x}\" ## Parameterised alias".into(),
     );
 
     m.insert(

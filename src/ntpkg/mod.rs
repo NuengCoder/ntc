@@ -2,7 +2,7 @@ mod download;
 mod installers;
 pub(crate) mod manager;
 pub(crate) mod sources;
-mod types;
+pub(crate) mod types;
 
 use colored::Colorize;
 
@@ -400,6 +400,45 @@ fn pick_java_version_interactive(feature: &str, versions: &[String]) -> Option<S
 /// Build the PATH entries from active packages (called at shell startup).
 pub fn build_package_path_entries() -> Vec<std::path::PathBuf> {
     manager::active_bin_dirs().unwrap_or_default()
+}
+
+/// Every binary installed through `ntpkg` for `name`, newest version first.
+///
+/// Unlike a "find one" helper this deliberately ignores which version is
+/// active: callers that let the user pick an engine need the full list.
+pub(crate) fn installed_binaries(name: &str, binary: &str) -> Vec<(String, std::path::PathBuf)> {
+    let Ok(manifest) = manager::load_manifest() else {
+        return Vec::new();
+    };
+    let Some(installed) = manifest.installed.get(name) else {
+        return Vec::new();
+    };
+
+    fn version_key(v: &str) -> Vec<u32> {
+        v.split('.').filter_map(|p| p.parse().ok()).collect()
+    }
+
+    let mut versions = installed.clone();
+    versions.sort_by_key(|v| std::cmp::Reverse(version_key(v)));
+
+    let exe = if cfg!(windows) {
+        format!("{binary}.exe")
+    } else {
+        binary.to_string()
+    };
+    versions
+        .into_iter()
+        .filter_map(|version| {
+            let path = types::bin_dir(name, &version).join(&exe);
+            path.is_file().then_some((version, path))
+        })
+        .collect()
+}
+
+/// Version `ntpkg use` currently points at. Report-only: consumers that let
+/// the user choose a version must not switch to it automatically.
+pub(crate) fn active_version(name: &str) -> Option<String> {
+    manager::load_manifest().ok()?.active.get(name).cloned()
 }
 
 fn print_help() {

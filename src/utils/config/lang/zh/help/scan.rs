@@ -77,4 +77,38 @@ pub fn fill(m: &mut HashMap<String, String>) {
     );
 
     m.insert("help.scan.title".into(), "扫描命令：".into());
+    m.insert(
+        "help.scan.waep".into(),
+        "scan waep <主机|URL> ## 枚举网页路径（/api、/admin、/upload ...）".into(),
+    );
+
+    m.insert(
+        "help.scan.waep_base".into(),
+        "scan waep example.com/api -r -d 2 ## 在基础路径下递归".into(),
+    );
+
+    m.insert(
+        "help.scan.waep_flags".into(),
+        "scan waep <目标> [-w <文件>] [-x <扩展名,...>] [-m GET|HEAD] [-s <代码>] [--all] ## 字典、扩展名、方法、接受的状态码".into(),
+    );
+
+    m.insert(
+        "help.scan.waep_recursive".into(),
+        "scan waep <目标> [-r] [-d 1-4] [-c 1-64] [--timeout <毫秒>] [-H '名称: 值'] [-A <ua>] [-o <文件>] [-q] ## 递归、速度、请求头、输出".into(),
+    );
+
+    m.insert(
+        "help.scan.example8".into(),
+        "scan waep http://127.0.0.1:55555/api ## 查看 ntc serve 接口暴露了哪些路径".into(),
+    );
+
+    m.insert(
+        "help.scan.example9".into(),
+        "scan waep example.com -x php,html --all ## 显示所有响应及 .php/.html 变体".into(),
+    );
+
+    m.insert(
+        "help.scan.example10".into(),
+        "scan waep example.com/api -r -d 2 -c 32 ## 32 并发递归两层".into(),
+    );
 }

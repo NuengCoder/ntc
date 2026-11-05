@@ -3,12 +3,12 @@ use std::collections::HashMap;
 pub fn fill(m: &mut HashMap<String, String>) {
     m.insert(
         "help.network.dl".into(),
-        "dl <url> ## ดาวน์โหลดไฟล์ (--progress, --resume, --stop, --cancel)".into(),
+        "dl <url> ## ดาวน์โหลดไฟล์ (--resume, --stop, --history, --cancel)".into(),
     );
 
     m.insert(
         "help.network.dns".into(),
-        "dns <host> ## DNS lookup (-t ประเภทระเบียน: A, AAAA, ALL, MX, NS เป็นต้น)".into(),
+        "dns <host> ## DNS lookup (-t A, AAAA, MX, NS, CNAME, TXT, PTR, SOA, ALL)".into(),
     );
 
     m.insert(
@@ -54,7 +54,7 @@ pub fn fill(m: &mut HashMap<String, String>) {
 
     m.insert(
         "help.network.up".into(),
-        "up <file> <url> ## อัปโหลดไฟล์ (--post, -H, -d)".into(),
+        "up <file> <url> ## อัปโหลดไฟล์ (multipart POST เป็นค่าเริ่มต้น; --put, --raw, -a, --bearer, -F, -H, -d)".into(),
     );
 
     m.insert(
@@ -69,7 +69,7 @@ pub fn fill(m: &mut HashMap<String, String>) {
 
     m.insert(
         "help.network.example3".into(),
-        "dl https://example.com/file.zip --progress ## ดาวน์โหลดพร้อมความคืบหน้า".into(),
+        "dl https://example.com/file.zip ## ดาวน์โหลดพร้อมความคืบหน้า".into(),
     );
 
     m.insert(
@@ -85,5 +85,15 @@ pub fn fill(m: &mut HashMap<String, String>) {
     m.insert(
         "help.network.example6".into(),
         "serve files --port 8080 ## เริ่มเซิร์ฟเวอร์ file-drive บนพอร์ต 8080".into(),
+    );
+    m.insert(
+        "help.network.trace".into(),
+        "trace <โฮสต์> [-m N] [-w MS] ## ติดตามเส้นทางทีละฮอป (tracert/traceroute หรือ TTL)".into(),
+    );
+
+    m.insert(
+        "help.network.ping_flags".into(),
+        "ping <โฮสต์> [-c N] [--forever] [-w MS] [-s ไบต์] [-t TTL] [-4|-6] ## ping พร้อมตัวเลือก"
+            .into(),
     );
 }

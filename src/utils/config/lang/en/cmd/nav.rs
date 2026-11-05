@@ -23,6 +23,11 @@ pub fn fill(m: &mut HashMap<String, String>) {
     m.insert("cmd.nav.cd.navigated".into(), "Navigated to: {}".into());
 
     m.insert(
+        "cmd.nav.cd.home_unavailable".into(),
+        "Cannot determine your home directory (HOME / USERPROFILE is not set).".into(),
+    );
+
+    m.insert(
         "cmd.nav.cd.tp_list".into(),
         "Use 'tp list' to see all savepoints.".into(),
     );
@@ -63,7 +68,7 @@ pub fn fill(m: &mut HashMap<String, String>) {
 
     m.insert(
         "cmd.nav.fgo.found".into(),
-        "\u{1f50d} Found {} file(s) for \"{}\":".into(),
+        "Found {} file(s) for \"{}\":".into(),
     );
 
     m.insert(
@@ -96,39 +101,27 @@ pub fn fill(m: &mut HashMap<String, String>) {
         "Invalid selection.".into(),
     );
 
-    m.insert(
-        "cmd.nav.where.config_file".into(),
-        "\u{2699}\u{fe0f} Config file:".into(),
-    );
+    m.insert("cmd.nav.where.config_file".into(), "Config file:".into());
 
     m.insert(
         "cmd.nav.where.config_missing".into(),
-        "\u{26a0} Config file not found (will be created on first save)".into(),
+        "Config file not found (will be created on first save)".into(),
     );
 
-    m.insert(
-        "cmd.nav.where.config_size".into(),
-        "\u{1f4cf} Config size:".into(),
-    );
+    m.insert("cmd.nav.where.config_size".into(), "Config size:".into());
 
-    m.insert(
-        "cmd.nav.where.current_dir".into(),
-        "\u{1f4c2} Current dir:".into(),
-    );
+    m.insert("cmd.nav.where.current_dir".into(), "Current dir:".into());
 
-    m.insert(
-        "cmd.nav.where.executable".into(),
-        "\u{1f4c1} Executable:".into(),
-    );
+    m.insert("cmd.nav.where.executable".into(), "Executable:".into());
 
     m.insert(
         "cmd.nav.where.not_found".into(),
-        "\u{2717} '{}' not found in PATH".into(),
+        "'{}' not found in PATH".into(),
     );
 
     m.insert(
         "cmd.nav.where.path_title".into(),
-        "\u{1f50d} PATH matches for '{}':".into(),
+        "PATH matches for '{}':".into(),
     );
 
     m.insert("cmd.nav.where.title".into(), "ntc Location Info".into());

@@ -162,6 +162,25 @@ pub fn fill(m: &mut HashMap<String, String>) {
         "cmd.serve.lock_on".into(),
         "只读模式 (--lock)：已阻止上传、编辑、创建和删除".into(),
     );
+    m.insert(
+        "cmd.serve.url_web".into(),
+        "网页界面：   {}  （浏览 + 拖拽上传）".into(),
+    );
+
+    m.insert(
+        "cmd.serve.url_upload".into(),
+        "上传接口：   {}  （POST multipart，字段名 file）".into(),
+    );
+
+    m.insert(
+        "cmd.serve.url_download".into(),
+        "下载地址：   {}  （后面接文件路径）".into(),
+    );
+
+    m.insert(
+        "cmd.serve.url_info".into(),
+        "说明页面：   {}  （这是什么 + curl/wget/ntc 示例）".into(),
+    );
 
     m.insert("cmd.serve.invalid_port".into(), "无效的端口".into());
 

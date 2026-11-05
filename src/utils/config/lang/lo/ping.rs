@@ -23,4 +23,39 @@ pub fn fill(m: &mut HashMap<String, String>) {
         "ping.help.usage_line".into(),
         " ping <host> [options]".into(),
     );
+
+    m.insert(
+        "ping.help.opt_forever".into(),
+        " --forever ping ຕໍ່ເນື່ອງຈົນຢຸດ (Ctrl+C)".into(),
+    );
+
+    m.insert(
+        "ping.help.opt_interval".into(),
+        " -i, --interval <ມິລລິວິນາທີ> ໄລຍະຫ່າງລະຫວ່າງ ping (Unix ເທົ່ານັ້ນ)".into(),
+    );
+
+    m.insert(
+        "ping.help.opt_timeout".into(),
+        " -w, --timeout <ມິລລິວິນາທີ> ເວລາລໍຄຳຕອບ".into(),
+    );
+
+    m.insert(
+        "ping.help.opt_size".into(),
+        " -s, --size <ໄບຕ໌> ຂະໜາດ payload".into(),
+    );
+
+    m.insert(
+        "ping.help.opt_ttl".into(),
+        " -t, --ttl <n> ເວລາມີຊີວິດ (TTL)".into(),
+    );
+
+    m.insert(
+        "ping.help.opt_family".into(),
+        " -4, -6 ບັງຄັບ IPv4 / IPv6".into(),
+    );
+
+    m.insert(
+        "ping.help.opt_quiet".into(),
+        " -q, --quiet ສະແດງຜົນແບບງຽບ (Unix ເທົ່ານັ້ນ)".into(),
+    );
 }

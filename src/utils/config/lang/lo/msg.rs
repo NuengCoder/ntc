@@ -85,6 +85,70 @@ pub fn fill(m: &mut HashMap<String, String>) {
     );
 
     m.insert(
+        "msg.setIS.status".into(),
+        "ການເຊື່ອມຕໍ່ shell (shell hints + ntc ps): {}".into(),
+    );
+    m.insert("msg.setIS.on".into(), "ການເຊື່ອມຕໍ່ shell: ON".into());
+    m.insert("msg.setIS.off".into(), "ການເຊື່ອມຕໍ່ shell: OFF".into());
+    m.insert(
+        "msg.setIS.error".into(),
+        "ຄ່າ integration_shell ບໍ່ຖືກຕ້ອງ: {}. ໃຊ້ ON ຫຼື OFF.".into(),
+    );
+    m.insert(
+        "msg.setIS.platform".into(),
+        "ແພລດຟອມ: {} (ຕົວຈັດການແພັກເກດ: {})".into(),
+    );
+    m.insert(
+        "msg.setIS.bash_completion_ok".into(),
+        "bash-completion: ຕິດຕັ້ງແລ້ວ".into(),
+    );
+    m.insert(
+        "msg.setIS.bash_completion_missing".into(),
+        "bash-completion: ຍັງບໍ່ໄດ້ຕິດຕັ້ງ — ການເຕີມອາກິວເມັນຂອງ bash ຕ້ອງໃຊ້".into(),
+    );
+    m.insert(
+        "msg.setIS.bash_completion_install".into(),
+        "ຕິດຕັ້ງດ້ວຍ: {}".into(),
+    );
+    m.insert(
+        "msg.setIS.ps_windows_only".into(),
+        "ການເຊື່ອມຕໍ່ PowerShell ໃຊ້ໄດ້ສະເພາະ Windows".into(),
+    );
+    m.insert(
+        "msg.setIS.bash_linux_only".into(),
+        "ການເຊື່ອມຕໍ່ bash ໃຊ້ໄດ້ສະເພາະ Linux ເດສະທັອບ".into(),
+    );
+    m.insert("msg.setIS.bash_missing".into(), "ບໍ່ພົບ bash ໃນລະບົບນີ້".into());
+    m.insert(
+        "msg.setIS.bash_start_failed".into(),
+        "ໂຮສ bash ເລີ່ມຕົ້ນບໍ່ສຳເລັດ".into(),
+    );
+    m.insert("msg.setIS.bash_exited".into(), "bash ອອກແລ້ວ".into());
+    m.insert("msg.setIS.bash_stopped".into(), "ໂຮສ bash ບໍ່ຕອບສະໜອງ".into());
+    m.insert(
+        "msg.setIS.zsh_macos_only".into(),
+        "ການເຊື່ອມຕໍ່ zsh ໃຊ້ໄດ້ສະເພາະ macOS".into(),
+    );
+    m.insert("msg.setIS.zsh_missing".into(), "ບໍ່ພົບ zsh ໃນລະບົບນີ້".into());
+    m.insert(
+        "msg.setIS.zsh_start_failed".into(),
+        "ໂຮສ zsh ເລີ່ມຕົ້ນບໍ່ສຳເລັດ".into(),
+    );
+    m.insert("msg.setIS.zsh_exited".into(), "zsh ອອກແລ້ວ".into());
+    m.insert("msg.setIS.zsh_stopped".into(), "ໂຮສ zsh ບໍ່ຕອບສະໜອງ".into());
+
+    m.insert(
+        "msg.setCT.status".into(),
+        "Code tools (ຄອມໄພເລີ/ໂປຣແກຣມຂຽນໂຄດ): {}".into(),
+    );
+    m.insert("msg.setCT.on".into(), "Code tools: ON".into());
+    m.insert("msg.setCT.off".into(), "Code tools: OFF".into());
+    m.insert(
+        "msg.setCT.error".into(),
+        "ຄ່າ code_tools ບໍ່ຖືກຕ້ອງ: {}. ໃຊ້ ON ຫຼື OFF.".into(),
+    );
+
+    m.insert(
         "msg.setC.error".into(),
         "ຄ່າ setC ບໍ່ຖືກຕ້ອງ: {}. ໃຊ້ ON ຫຼື OFF.".into(),
     );
@@ -221,7 +285,7 @@ pub fn fill(m: &mut HashMap<String, String>) {
 
     m.insert(
         "msg.teleport.success".into(),
-        "\u{2713} Teleported ໄປ '{}' -> {}".into(),
+        "Teleported ໄປ '{}' -> {}".into(),
     );
 
     m.insert("msg.version.format".into(), "ntc {}".into());
@@ -265,6 +329,11 @@ pub fn fill(m: &mut HashMap<String, String>) {
     m.insert("msg.showcg.label_file_view".into(), "ມຸມມອງໄຟລ໌:".into());
 
     m.insert("msg.showcg.label_auto_size".into(), "ຂະດັດອັດຕະພາບ:".into());
+    m.insert(
+        "msg.showcg.label_integration_shell".into(),
+        "ການເຊື່ອມຕໍ່ Shell:".into(),
+    );
+    m.insert("msg.showcg.label_code_tools".into(), "Code Tools:".into());
 
     m.insert(
         "msg.showcg.auto_size_value".into(),
@@ -350,5 +419,19 @@ pub fn fill(m: &mut HashMap<String, String>) {
     m.insert(
         "msg.update.available".into(),
         "ມີ NTC {} ໃໝ່ (ເຈົ້າໃຊ້ {}) — ລັນ 'ntc --upgrade' ໃນ {} ຫຼືເບິ່ງ {}".into(),
+    );
+
+    m.insert("msg.setIdle.status".into(), "ຄຳແນະນຳຕອນຫວ່າງ: {}".into());
+
+    m.insert(
+        "msg.setIdle.on".into(),
+        "ເປີດຄຳແນະນຳຕອນຫວ່າງ: prompt ຫວ່າງຈະສອນຄຳສັ່ງເທື່ອລະອັນ".into(),
+    );
+
+    m.insert("msg.setIdle.off".into(), "ປິດຄຳແນະນຳຕອນຫວ່າງ".into());
+
+    m.insert(
+        "msg.setIdle.error".into(),
+        "ຄ່າທີ່ບໍ່ຮູ້ຈັກ: {} (ໃຊ້ ON ຫຼື OFF)".into(),
     );
 }

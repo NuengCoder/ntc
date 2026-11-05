@@ -5,7 +5,7 @@ pub fn fill(m: &mut HashMap<String, String>) {
 
     m.insert(
         "help.nms.play".into(),
-        "nms play <ໄຟລ໌> ## ເຄື່ອງຫຼິ້ນສຽງເຕັມຈໍ (space ຢຸດ · ←/→ ເລື່ອນ · ↑/↓ ລະດັບສຽງ · a ຫຼິ້ນຄືນ)".into(),
+        "nms play [-sf <dur>] <ໄຟລ໌> ## ຫຼິ້ນສຽງໃນ terminal (Ctrl+C ຢຸດ; -sf ເລີ່ມຈາກເວລາທີ່ກຳນົດ)".into(),
     );
 
     m.insert(
@@ -21,12 +21,12 @@ pub fn fill(m: &mut HashMap<String, String>) {
 
     m.insert(
         "help.nms.keys".into(),
-        "ໜ້າຈໍເຄື່ອງຫຼິ້ນ: ຄື້ນສຽງຈິງ + ມາດຕະວັດລະດັບສູງ/ຕ່ຳ · ວິດີໂອຫຼິ້ນສະເພາະສຽງ · ຈົບແລ້ວຈະຢຸດນິ້ງ ກົດ a ເພື່ອຫຼິ້ນຄືນ".into(),
+        "ຫຼິ້ນໃນ terminal ພ້ອມນັບຕຳແໜ່ງ / ເວລາທີ່ເຫຼືອຖອຍຫຼັງ · ວິດີໂອຫຼິ້ນສະເພາະສຽງ (ຜ່ານ ffmpeg) · ກົດ Ctrl+C ເພື່ອຢຸດ".into(),
     );
 
     m.insert(
         "help.nms.example1".into(),
-        "nms play song.mp3 ## ຫຼິ້ນໄຟລ໌ສຽງ".into(),
+        "nms play -sf 30 song.mp3 ## ເລີ່ມຫຼິ້ນໄຟລ໌ສຽງທີ່ 0:30".into(),
     );
 
     m.insert(

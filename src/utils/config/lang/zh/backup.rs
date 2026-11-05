@@ -14,7 +14,7 @@ pub fn fill(m: &mut HashMap<String, String>) {
 
     m.insert(
         "backup.clear_history_prompt".into(),
-        "\u{26A0} 清除撤销历史？此操作无法撤销。（y/N）：".into(),
+        "清除撤销历史？此操作无法撤销。（y/N）：".into(),
     );
 
     m.insert("backup.cleared".into(), "所有备份已删除。".into());
@@ -216,10 +216,7 @@ pub fn fill(m: &mut HashMap<String, String>) {
         " 3. 创建当前状态的全新备份".into(),
     );
 
-    m.insert(
-        "backup.recreate_will_title".into(),
-        "\u{26A0}\u{FE0F} 重建将：".into(),
-    );
+    m.insert("backup.recreate_will_title".into(), "重建将：".into());
 
     m.insert(
         "backup.recreated".into(),
@@ -242,12 +239,12 @@ pub fn fill(m: &mut HashMap<String, String>) {
 
     m.insert(
         "backup.restore_create_title".into(),
-        "\u{26A0} 以下文件将被创建（{}）：".into(),
+        "以下文件将被创建（{}）：".into(),
     );
 
     m.insert(
         "backup.restore_delete_title".into(),
-        "\u{26A0} 以下文件将被删除（不在备份中）（{}）：".into(),
+        "以下文件将被删除（不在备份中）（{}）：".into(),
     );
 
     m.insert(
@@ -269,7 +266,7 @@ pub fn fill(m: &mut HashMap<String, String>) {
 
     m.insert(
         "backup.restore_overwrite_title".into(),
-        "\u{26A0} 以下文件将被覆盖（{}）：".into(),
+        "以下文件将被覆盖（{}）：".into(),
     );
 
     m.insert("backup.restore_preview_title".into(), "恢复预览".into());
@@ -428,7 +425,7 @@ pub fn fill(m: &mut HashMap<String, String>) {
 
     m.insert(
         "backup.warning_title".into(),
-        "\u{26A0}\u{FE0F} 警告：这将删除此项目的所有备份！".into(),
+        "警告：这将删除此项目的所有备份！".into(),
     );
 
     m.insert(

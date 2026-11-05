@@ -25,7 +25,7 @@ use crate::t;
 use anyhow::Result;
 
 /// Dispatch `fake …`. Never changes navigation.
-pub fn cmd_fake(args: &str, _nav: &mut Navigator) -> Result<bool> {
+pub fn cmd_fake(args: &str, nav: &mut Navigator) -> Result<bool> {
     let args = args.trim();
     let (sub, rest) = match args.split_once(char::is_whitespace) {
         Some((a, b)) => (a.to_lowercase(), b.trim()),
@@ -35,6 +35,16 @@ pub fn cmd_fake(args: &str, _nav: &mut Navigator) -> Result<bool> {
     match sub.as_str() {
         "" | "help" | "-h" | "--help" => print_usage(),
         "gen" | "generate" | "g" => gen::run(rest)?,
+        "check" => {
+            let cwd = nav.current_path().to_path_buf();
+            crate::shell::commands::check_common::run(
+                "fake",
+                rest,
+                &cwd,
+                ".ntc_fake",
+                crate::shell::commands::check_formats::fake,
+            );
+        }
         "types" | "type" | "t" => types::cmd_types(rest)?,
         "locales" | "locale" | "loc" => types::cmd_locales()?,
         "group" | "grp" | "groups" => group::cmd_group(rest)?,
@@ -54,6 +64,7 @@ pub fn print_usage() {
     println!("  {}", t!("cmd.fake.usage_locales"));
     println!("  {}", t!("cmd.fake.usage_group"));
     println!("  {}", t!("cmd.fake.usage_help"));
+    println!("  {}", t!("check.help", "fake"));
     println!();
     println!("{}", t!("cmd.fake.options_title").yellow().bold());
     println!("  {}", t!("cmd.fake.opt_count"));

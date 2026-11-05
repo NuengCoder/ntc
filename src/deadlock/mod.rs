@@ -349,6 +349,7 @@ fn prompt_hidden(prompt: &str) -> Result<String> {
 fn print_shell_help() {
     println!("{}", t!("help.deadlock.title").cyan().bold());
     println!("{}", t!("help.deadlock.ls"));
+    println!("{}", t!("help.deadlock.clear"));
     println!("{}", t!("help.deadlock.add"));
     println!("{}", t!("help.deadlock.rmpw"));
     println!("{}", t!("help.deadlock.master"));
@@ -357,6 +358,13 @@ fn print_shell_help() {
     println!("{}", t!("help.deadlock.exit"));
     println!();
     println!("{}", t!("help.deadlock.note").dimmed());
+}
+
+/// `clear` / `cls` inside the vault shell: wipe the terminal and put the
+/// cursor back at the top-left, never touching the vault.
+fn clear_screen() {
+    print!("\x1b[2J\x1b[H");
+    let _ = std::io::Write::flush(&mut std::io::stdout());
 }
 
 fn list_entries(vault: &Vault) {
@@ -515,6 +523,7 @@ fn shell_loop(vault: &mut Vault) -> Result<()> {
         let cmd = tokens[0].to_lowercase();
         match cmd.as_str() {
             "ls" | "list" => list_entries(vault),
+            "clear" | "cls" => clear_screen(),
             "add" => {
                 if let Err(e) = add_entry(vault, &tokens) {
                     print_error(&e);

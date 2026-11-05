@@ -129,4 +129,104 @@ pub fn fill(m: &mut HashMap<String, String>) {
     );
 
     m.insert("cmd.scan.usage_title".into(), "การใช้งาน:".into());
+
+    m.insert(
+        "cmd.scan.help_waep".into(),
+        "  scan waep <โฮสต์|URL>   ค้นหาเส้นทางบนเว็บ (endpoint discovery)".into(),
+    );
+
+    m.insert(
+        "cmd.scan.waep_usage".into(),
+        "วิธีใช้: scan waep <โฮสต์|โฮสต์:พอร์ต|URL[/base]> [ตัวเลือก] (ดู: scan help)".into(),
+    );
+
+    m.insert(
+        "cmd.scan.waep_bad_target".into(),
+        "เป้าหมายไม่ถูกต้อง: {}".into(),
+    );
+
+    m.insert(
+        "cmd.scan.waep_bad_method".into(),
+        "เมธอดไม่ถูกต้อง: {} (ใช้ GET หรือ HEAD)".into(),
+    );
+
+    m.insert(
+        "cmd.scan.waep_bad_status".into(),
+        "รายการสถานะไม่ถูกต้อง: {}".into(),
+    );
+
+    m.insert(
+        "cmd.scan.waep_bad_depth".into(),
+        "ความลึกไม่ถูกต้อง: {} (1-4)".into(),
+    );
+
+    m.insert(
+        "cmd.scan.waep_bad_concurrency".into(),
+        "จำนวนพร้อมกันไม่ถูกต้อง: {} (1-64)".into(),
+    );
+
+    m.insert(
+        "cmd.scan.waep_bad_timeout".into(),
+        "เวลาหมดไม่ถูกต้อง: {} (>=50 ms)".into(),
+    );
+
+    m.insert(
+        "cmd.scan.waep_bad_header".into(),
+        "เฮดเดอร์ไม่ถูกต้อง: {} (รูปแบบ 'Name: value')".into(),
+    );
+
+    m.insert(
+        "cmd.scan.waep_start".into(),
+        "กำลังตรวจสอบ {} ด้วย {} เส้นทาง...".into(),
+    );
+
+    m.insert(
+        "cmd.scan.waep_none".into(),
+        "ไม่มีเส้นทางใดตอบสนองบน {}".into(),
+    );
+
+    m.insert("cmd.scan.waep_summary".into(), "พบ {} รายการ".into());
+
+    m.insert("cmd.scan.waep_elapsed".into(), "ใช้เวลา: {} ms".into());
+
+    m.insert("cmd.scan.waep_saved".into(), "บันทึกแล้ว: {}".into());
+
+    m.insert(
+        "cmd.scan.waep_save_failed".into(),
+        "บันทึก {} ไม่ได้: {}".into(),
+    );
+
+    m.insert(
+        "cmd.scan.waep_wordlist_failed".into(),
+        "อ่าน wordlist {} ไม่ได้: {}".into(),
+    );
+
+    m.insert(
+        "cmd.scan.waep_empty_wordlist".into(),
+        "wordlist {} ไม่มีรายการที่ใช้ได้".into(),
+    );
+
+    m.insert("cmd.scan.waep_flags_title".into(), "แฟล็ก:".into());
+
+    m.insert(
+        "cmd.scan.waep_flags".into(),
+        "-w, --wordlist <ไฟล์>      ใช้ wordlist ของตัวเอง (หนึ่งพาธต่อบรรทัด)\n  -x, --ext <นามสกุล,...>    ทดสอบ word.ext สำหรับแต่ละนามสกุลด้วย\n  -m, --method GET|HEAD      HTTP method (ค่าเริ่มต้น GET)\n  -s, --status <รหัส,...>    รหัสสถานะที่ถือว่าพบ คั่นด้วยจุลภาค\n      --all                  แสดงทุกสถานะ รวม 404\n  -r, --recursive            ไล่ลงไปในพาธที่พบ\n  -d, --depth <1-4>          ความลึกของการไล่ (ค่าเริ่มต้น 1)\n  -c, --concurrency <1-64>   จำนวน probe พร้อมกัน (ค่าเริ่มต้น 16)\n      --timeout <ms>         เวลารอต่อ probe (ค่าเริ่มต้น 4000)\n  -H, --header ชื่อ:ค่า      เพิ่ม header (ใช้ซ้ำได้)\n  -A, --user-agent <ua>      User-Agent header\n  -o, --output <ไฟล์>        บันทึกผลลงไฟล์\n  -q, --quiet                แสดงเฉพาะสรุป\n  -h, --help                 แสดงความช่วยเหลือนี้".into(),
+    );
+
+    m.insert("cmd.scan.waep_options_title".into(), "ตัวเลือก:".into());
+
+    m.insert(
+        "cmd.scan.waep_options".into(),
+        "target        host, host:port, url หรือ url/base (scheme เริ่มต้น http)\n  paths         แสดงเทียบกับ base: .../api จะแสดง /files ไม่ใช่ /api/files\n  สถานะ 405    ถือว่าพบ (พาธมีอยู่ แต่ method นี้ไม่รองรับ)\n  recursion     ไล่ลงเฉพาะพาธที่ดูเป็นโฟลเดอร์ (ไม่มีจุด)".into(),
+    );
+
+    m.insert(
+        "cmd.scan.waep_unreachable".into(),
+        "ไม่มีการตอบกลับจาก {} - ตรวจสอบโฮสต์ พอร์ต และ scheme (DNS/การเชื่อมต่อ/TLS ล้มเหลว)".into(),
+    );
+
+    m.insert(
+        "cmd.scan.waep_some_failed".into(),
+        "{} จาก {} probe ไม่มีการตอบกลับ (หมดเวลาหรือถูกปฏิเสธการเชื่อมต่อ)".into(),
+    );
 }

@@ -5,7 +5,7 @@ use anyhow::Result;
 use colored::*;
 use std::io::{self, Write};
 
-pub fn cmd_theme(args: &str, _nav: &mut Navigator) -> Result<bool> {
+pub fn cmd_theme(args: &str, nav: &mut Navigator) -> Result<bool> {
     use crate::utils::theme::ThemeManager;
 
     if args.is_empty() {
@@ -26,7 +26,7 @@ pub fn cmd_theme(args: &str, _nav: &mut Navigator) -> Result<bool> {
             println!("╠══════════════════════════════════════════════════════════════════╣");
 
             for (i, name) in themes.iter().enumerate() {
-                let marker = if name == &current.name { " ✓" } else { "  " };
+                let marker = if name == &current.name { "* " } else { "  " };
                 println!(
                     "║  {}. {}{:<53} ",
                     (i + 1).to_string().yellow(),
@@ -324,11 +324,23 @@ pub fn cmd_theme(args: &str, _nav: &mut Navigator) -> Result<bool> {
         // Direct command mode (non-interactive)
         let parts: Vec<&str> = args.split_whitespace().collect();
         match parts[0].to_lowercase().as_str() {
+            // Handled before the "unknown name switches theme" fallback.
+            "check" => {
+                let cwd = nav.current_path().to_path_buf();
+                let target = parts.get(1).copied().unwrap_or("");
+                super::check_common::run(
+                    "theme",
+                    target,
+                    &cwd,
+                    ".ntc_theme",
+                    super::check_formats::theme,
+                );
+            }
             "list" | "ls" => {
                 let current = ThemeManager::current();
                 for name in ThemeManager::list_themes() {
                     if name == current.name {
-                        println!("  ✓ {}", name.green());
+                        println!("  {}", name.green());
                     } else {
                         println!("    {}", name);
                     }

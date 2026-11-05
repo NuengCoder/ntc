@@ -3,7 +3,13 @@ use std::collections::HashMap;
 pub fn fill(m: &mut HashMap<String, String>) {
     m.insert(
         "cmd.views.usage".into(),
-        "Usage: views [path] [-n] [--size [min-size]] [--sort <name|ext|size>]".into(),
+        "Usage: views [path] [-n] [--size [min-size]] [--sort <name|ext|size>] [--trim <text>]"
+            .into(),
+    );
+
+    m.insert(
+        "cmd.views.missing_trim".into(),
+        "Missing text after --trim".into(),
     );
 
     m.insert(

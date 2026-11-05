@@ -135,7 +135,7 @@ pub fn fill(m: &mut HashMap<String, String>) {
 
     m.insert(
         "cmd.config.local.exists_warning".into(),
-        "\u{26a0}\u{fe0f} ntconfig.toml already exists!".into(),
+        "ntconfig.toml already exists!".into(),
     );
 
     m.insert(
@@ -155,12 +155,12 @@ pub fn fill(m: &mut HashMap<String, String>) {
 
     m.insert(
         "cmd.config.local.template_hint".into(),
-        "\u{1f4dd} This is a COMMENTED TEMPLATE - no active settings yet".into(),
+        "This is a COMMENTED TEMPLATE - no active settings yet".into(),
     );
 
     m.insert(
         "cmd.config.local.tip_global".into(),
-        "\u{1f4a1} Tip: Global settings (teleports, output path, depth) stay global".into(),
+        "Tip: Global settings (teleports, output path, depth) stay global".into(),
     );
 
     m.insert(
@@ -200,7 +200,7 @@ pub fn fill(m: &mut HashMap<String, String>) {
 
     m.insert(
         "cmd.config.local_deinit.title".into(),
-        "\u{26A0}\u{FE0F} LOCAL CONFIG REMOVAL".into(),
+        "LOCAL CONFIG REMOVAL".into(),
     );
 
     m.insert(
@@ -375,7 +375,7 @@ pub fn fill(m: &mut HashMap<String, String>) {
 
     m.insert(
         "cmd.config.resetcg.warning_title".into(),
-        "\u{26A0}\u{FE0F} CONFIG RESET WARNING".into(),
+        "CONFIG RESET WARNING".into(),
     );
 
     m.insert(
@@ -427,7 +427,7 @@ pub fn fill(m: &mut HashMap<String, String>) {
 
     m.insert(
         "cmd.config.restorecg.title".into(),
-        "\u{1F4CB} Available Backups:".into(),
+        "Available Backups:".into(),
     );
 
     m.insert("cmd.config.mgmt_header".into(), "Management:".into());
@@ -542,4 +542,108 @@ pub fn fill(m: &mut HashMap<String, String>) {
     m.insert("cmd.config.local.init_all_removed".into(), "'local init --all' was removed - a local config can no longer copy the global settings. Use 'local init' for the template.".into());
 
     m.insert("cmd.config.local.precedence_hint".into(), "Local entries take priority; global entries keep working and the global config is never changed.".into());
+
+    // ---- config env / config rmenv ----
+
+    m.insert(
+        "cmd.config.env.title".into(),
+        "NTC environment variables:".into(),
+    );
+
+    m.insert(
+        "cmd.config.env.store_local".into(),
+        "local (ntconfig.toml)".into(),
+    );
+
+    m.insert(
+        "cmd.config.env.store_global".into(),
+        "global (ntc config)".into(),
+    );
+
+    m.insert(
+        "cmd.config.env.store_session".into(),
+        "session (-os)".into(),
+    );
+
+    m.insert(
+        "cmd.config.env.store_os".into(),
+        "OS environment (persisted)".into(),
+    );
+
+    m.insert("cmd.config.env.store_process".into(), "process".into());
+
+    m.insert(
+        "cmd.config.env.empty".into(),
+        "No NTC environment variables set. Use: config env NAME value".into(),
+    );
+
+    m.insert(
+        "cmd.config.env.list_hint".into(),
+        "Tip: config env NAME value [-g|-l|-os|-osg] | config env NAME | config rmenv NAME [-all]"
+            .into(),
+    );
+
+    m.insert("cmd.config.env.get".into(), "{} = {}  [{}]".into());
+
+    m.insert(
+        "cmd.config.env.not_set".into(),
+        "{} is not set in any NTC or OS environment.".into(),
+    );
+
+    m.insert(
+        "cmd.config.env.protected".into(),
+        "'{}' is protected. Use 'usrpath' / 'syspath' for PATH entries.".into(),
+    );
+
+    m.insert(
+        "cmd.config.env.invalid_name".into(),
+        "Invalid variable name '{}' (use letters, digits and underscore; must not start with a digit).".into(),
+    );
+
+    m.insert(
+        "cmd.config.env.os_fail".into(),
+        "Failed to update the OS environment: {}".into(),
+    );
+
+    m.insert(
+        "cmd.config.env.set_os".into(),
+        "{} = {} saved to {} and active in this session.".into(),
+    );
+
+    m.insert(
+        "cmd.config.env.os_wiring".into(),
+        "Load it in new shells by adding this to your shell profile: {}".into(),
+    );
+
+    m.insert("cmd.config.env.set".into(), "{} = {} saved to {}.".into());
+
+    m.insert(
+        "cmd.config.env.no_local".into(),
+        "No ntconfig.toml in the current directory. Run 'local init' first or use -g.".into(),
+    );
+
+    m.insert(
+        "cmd.config.env.remove_missing".into(),
+        "{} was not set in the selected store.".into(),
+    );
+
+    m.insert(
+        "cmd.config.env.removed".into(),
+        "Removed {} from {}.".into(),
+    );
+
+    m.insert(
+        "cmd.config.env.flag_conflict".into(),
+        "Conflicting flags. Use one of -g, -l, -os, -osg, or -all.".into(),
+    );
+
+    m.insert(
+        "cmd.config.env.rm_usage".into(),
+        "Usage: config rmenv NAME [-g|-l|-os|-osg|-all]".into(),
+    );
+
+    m.insert(
+        "help.config.idle".into(),
+        " idle|gt [on|off]  Toggle ghost typing on an empty prompt (alias: ghost_typing)".into(),
+    );
 }

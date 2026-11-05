@@ -79,6 +79,8 @@ pub struct RuntimeBinaries {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ArchiveType {
     #[cfg_attr(windows, allow(dead_code))]
+    Tar,
+    #[cfg_attr(windows, allow(dead_code))]
     TarGz,
     #[cfg_attr(any(windows, target_os = "macos"), allow(dead_code))]
     TarXz,

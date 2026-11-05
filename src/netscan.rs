@@ -23,6 +23,8 @@ use std::time::{Duration, Instant};
 
 /// Fast discovery probe set: services commonly listening on LAN hosts
 /// (SMB, NetBIOS, web, ssh, dns, rdp, alt-web, mDNS-adjacent).
+pub mod webpath;
+
 pub const DISCOVERY_PORTS: &[u16] = &[445, 139, 135, 80, 443, 22, 53, 3389, 8080, 5357];
 
 /// Upper bound on swept hosts per invocation (`/22`); wider ranges

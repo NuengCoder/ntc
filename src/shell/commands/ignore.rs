@@ -242,7 +242,7 @@ fn render_igcare_row(
     out
 }
 
-pub fn cmd_igcare(args: &str, _nav: &mut Navigator) -> Result<bool> {
+pub fn cmd_igcare(args: &str, nav: &mut Navigator) -> Result<bool> {
     if args.is_empty() {
         println!("{}", t!("cmd.igcare.main_title").cyan().bold());
         println!("  {}", t!("cmd.igcare.export_cmd"));
@@ -260,6 +260,16 @@ pub fn cmd_igcare(args: &str, _nav: &mut Navigator) -> Result<bool> {
         let subargs = ig_parts.get(1).unwrap_or(&"").trim();
 
         match subcmd.as_str() {
+            "check" => {
+                let cwd = nav.current_path().to_path_buf();
+                super::check_common::run(
+                    "igcare",
+                    subargs,
+                    &cwd,
+                    ".ntc.igcare",
+                    super::check_formats::igcare,
+                );
+            }
             "export" => {
                 if subargs.is_empty() {
                     print_error(&t!("cmd.igcare.export_usage"));

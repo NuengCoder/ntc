@@ -3,27 +3,27 @@ use std::collections::HashMap;
 pub fn fill(m: &mut HashMap<String, String>) {
     m.insert(
         "help.explorer.hint1".into(),
-        "h=帮助, l=跳转到行, b=父目录, f=查找".into(),
+        "h=帮助, b=父目录, f=查找（结果显示路径）".into(),
     );
 
     m.insert(
         "help.explorer.hint2".into(),
-        "/=过滤, e=编辑器, r=重命名, d=删除".into(),
+        "g/:=命令（file|dir|line）, /=实时过滤, e=编辑器".into(),
     );
 
     m.insert(
         "help.explorer.hint3".into(),
-        "n=新文件, m=新目录, i=切换隐藏文件".into(),
+        "r=重命名, d=删除, n=新文件, m=新目录, i=切换隐藏文件".into(),
     );
 
     m.insert(
         "help.explorer.hint4".into(),
-        "s=切换排序, S=反向排序, F5=刷新".into(),
+        "s=切换排序, S=反向排序（含目录）, F5=刷新".into(),
     );
 
     m.insert(
         "help.explorer.hint5".into(),
-        "q/Esc=退出, 鼠标=点击/滚动".into(),
+        "查找：输入=查询, Tab=hjkl/方向键, Enter=打开, Esc=返回".into(),
     );
 
     m.insert(

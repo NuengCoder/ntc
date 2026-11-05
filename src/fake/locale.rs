@@ -3,8 +3,9 @@
 //!
 //! Culture-sensitive display types (`first_name`, `last_name`, `name`,
 //! `city`, `state`, `street`, `address`, `phone_number`,
-//! `phone_country_code`, `postal_code`, `id_card`) consult this; every other
-//! type is locale-independent.
+//! `phone_country_code`, `postal_code`, `id_card`, `major`, `emotion`,
+//! `weather`, `school_subject`) consult this; every other type is
+//! locale-independent.
 //!
 //! Names are stored as `(native, roman)` pairs: `native` is what the display
 //! types emit (may be non-Latin), `roman` is the ASCII form the machine-ish
@@ -52,6 +53,10 @@ pub struct LocaleData {
     pub states: &'static [&'static str],
     pub street_names: &'static [&'static str],
     pub street_suffixes: &'static [&'static str],
+    pub majors: &'static [&'static str],
+    pub emotions: &'static [&'static str],
+    pub weather: &'static [&'static str],
+    pub school_subjects: &'static [&'static str],
     /// `true` when `name` renders family-name first (e.g. 王伟).
     pub last_first: bool,
     pub phone_cc: &'static str,
@@ -187,6 +192,10 @@ static EN_US: LocaleData = LocaleData {
     states: data::STATES,
     street_names: data::STREET_NAMES,
     street_suffixes: data::STREET_SUFFIXES,
+    majors: data::COLLEGE_MAJORS,
+    emotions: data::EMOTIONS,
+    weather: data::WEATHER_CONDITIONS,
+    school_subjects: data::SCHOOL_SUBJECTS,
     last_first: false,
     phone_cc: "+1",
     phone_pattern: "+1 (###) ###-####",
@@ -307,6 +316,10 @@ static EN_GB: LocaleData = LocaleData {
     street_suffixes: &[
         "Street", "Road", "Lane", "Avenue", "Close", "Way", "Drive", "Court", "Crescent", "Grove",
     ],
+    majors: data::COLLEGE_MAJORS_GB,
+    emotions: data::EMOTIONS,
+    weather: data::WEATHER_CONDITIONS,
+    school_subjects: data::SCHOOL_SUBJECTS_GB,
     last_first: false,
     phone_cc: "+44",
     phone_pattern: "+44 7### ######",
@@ -401,6 +414,10 @@ static ZH_CN: LocaleData = LocaleData {
         "团结",
     ],
     street_suffixes: &["路", "街", "大道", "巷", "胡同"],
+    majors: data::COLLEGE_MAJORS_ZH,
+    emotions: data::EMOTIONS_ZH,
+    weather: data::WEATHER_ZH,
+    school_subjects: data::SCHOOL_SUBJECTS_ZH,
     last_first: true,
     phone_cc: "+86",
     phone_pattern: "+86 1## #### ####",
@@ -501,6 +518,10 @@ static TH_TH: LocaleData = LocaleData {
         "รามคำแหง",
     ],
     street_suffixes: &["ซอย", "ถนน", "ตรอก", "หมู่"],
+    majors: data::COLLEGE_MAJORS_TH,
+    emotions: data::EMOTIONS_TH,
+    weather: data::WEATHER_TH,
+    school_subjects: data::SCHOOL_SUBJECTS_TH,
     last_first: false,
     phone_cc: "+66",
     phone_pattern: "+66 ## ### ####",
@@ -568,6 +589,10 @@ static LO_LA: LocaleData = LocaleData {
     ],
     street_names: &["ສີສະຫວາດ", "ລ້ານຊ້າງ", "ເສດຖາ", "ອຸດົມສຸກ", "ໄກສອນ"],
     street_suffixes: &["ຖະໜົນ", "ຊອຍ", "ບ້ານ"],
+    majors: data::COLLEGE_MAJORS_LO,
+    emotions: data::EMOTIONS_LO,
+    weather: data::WEATHER_LO,
+    school_subjects: data::SCHOOL_SUBJECTS_LO,
     last_first: false,
     phone_cc: "+856",
     phone_pattern: "+856 ## ## ### ###",
@@ -596,6 +621,14 @@ mod tests {
             assert!(d.last_names.len() >= 12, "{:?} last names", l.code());
             assert!(!d.cities.is_empty(), "{:?}", l.code());
             assert!(!d.states.is_empty(), "{:?}", l.code());
+            assert!(!d.majors.is_empty(), "{:?} majors", l.code());
+            assert!(!d.emotions.is_empty(), "{:?} emotions", l.code());
+            assert!(!d.weather.is_empty(), "{:?} weather", l.code());
+            assert!(
+                !d.school_subjects.is_empty(),
+                "{:?} school subjects",
+                l.code()
+            );
             assert!(!d.postal_pattern.is_empty(), "{:?}", l.code());
             assert!(!d.phone_pattern.is_empty(), "{:?}", l.code());
             for p in d.first_names.iter().chain(d.last_names.iter()) {
@@ -614,5 +647,41 @@ mod tests {
     fn zh_is_last_first() {
         assert!(Locale::ZhCn.data().last_first);
         assert!(!Locale::EnUs.data().last_first);
+    }
+
+    #[test]
+    fn catalog_pools_are_localized() {
+        assert!(Locale::EnUs.data().majors.iter().all(|m| m.is_ascii()));
+        assert!(Locale::EnUs
+            .data()
+            .school_subjects
+            .iter()
+            .all(|s| s.is_ascii()));
+
+        for &loc in &[Locale::ZhCn, Locale::ThTh, Locale::LoLa] {
+            let d = loc.data();
+            assert!(
+                d.majors.iter().any(|m| !m.is_ascii()),
+                "{:?} majors not localized",
+                loc.code()
+            );
+            assert!(
+                d.emotions.iter().any(|e| !e.is_ascii()),
+                "{:?} emotions not localized",
+                loc.code()
+            );
+            assert!(
+                d.weather.iter().any(|w| !w.is_ascii()),
+                "{:?} weather not localized",
+                loc.code()
+            );
+            assert!(
+                d.school_subjects.iter().any(|s| !s.is_ascii()),
+                "{:?} school subjects not localized",
+                loc.code()
+            );
+        }
+
+        assert!(Locale::EnGb.data().school_subjects.contains(&"Maths"));
     }
 }

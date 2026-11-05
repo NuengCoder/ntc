@@ -23,7 +23,12 @@ pub fn fill(m: &mut HashMap<String, String>) {
 
     m.insert(
         "help.alias.add_param".into(),
-        "ral add <name>(x) \"<cmd>\" ## ສ້າງ parameterised alias ດ້ວຍ $x".into(),
+        "ral add <name>(x) \"<cmd>\" ## ສ້າງ parameterised alias ດ້ວຍ ${x}".into(),
+    );
+
+    m.insert(
+        "help.alias.env_ref".into(),
+        "ral add <name> \"<cmd>\" ## $NAME ດ່ຽວແມ່ນ environment variable, ໃຊ້ ${x} ສຳລັບພາຣາມິເຕີ".into(),
     );
 
     m.insert(
@@ -106,7 +111,7 @@ pub fn fill(m: &mut HashMap<String, String>) {
 
     m.insert(
         "help.alias.example2".into(),
-        "ral add greet(x) \"echo Hello $x\" ## alias ແບບ parameterised".into(),
+        "ral add greet(x) \"echo Hello ${x}\" ## alias ແບບ parameterised".into(),
     );
 
     m.insert(

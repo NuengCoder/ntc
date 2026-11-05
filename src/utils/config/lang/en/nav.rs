@@ -5,10 +5,7 @@ pub fn fill(m: &mut HashMap<String, String>) {
 
     m.insert("nav.cancelled".into(), "Cancelled.".into());
 
-    m.insert(
-        "nav.config_exists".into(),
-        " \u{2713} Config file exists".into(),
-    );
+    m.insert("nav.config_exists".into(), " Config file exists".into());
 
     m.insert(
         "nav.drive_prompt".into(),

@@ -3,12 +3,12 @@ use std::collections::HashMap;
 pub fn fill(m: &mut HashMap<String, String>) {
     m.insert(
         "help.network.dl".into(),
-        "dl <url> ## ດາວໂຫຼດໄຟລ໌ (--progress, --resume, --stop, --cancel)".into(),
+        "dl <url> ## ດາວໂຫຼດໄຟລ໌ (--resume, --stop, --history, --cancel)".into(),
     );
 
     m.insert(
         "help.network.dns".into(),
-        "dns <host> ## DNS lookup (-t ປະເພດ record: A, AAAA, ALL, MX, NS, ອື່ນໆ)".into(),
+        "dns <host> ## DNS lookup (-t A, AAAA, MX, NS, CNAME, TXT, PTR, SOA, ALL)".into(),
     );
 
     m.insert(
@@ -51,7 +51,7 @@ pub fn fill(m: &mut HashMap<String, String>) {
 
     m.insert(
         "help.network.up".into(),
-        "up <file> <url> ## ອັບໂຫຼດໄຟລ໌ (--post, -H, -d)".into(),
+        "up <file> <url> ## ອັບໂຫຼດໄຟລ໌ (multipart POST ເລີ່ມຕົ້ນ; --put, --raw, -a, --bearer, -F, -H, -d)".into(),
     );
 
     m.insert(
@@ -66,7 +66,7 @@ pub fn fill(m: &mut HashMap<String, String>) {
 
     m.insert(
         "help.network.example3".into(),
-        "dl https://example.com/file.zip --progress ## ດາວໂຫຼດພ້ອມ progress".into(),
+        "dl https://example.com/file.zip ## ດາວໂຫຼດພ້ອມ progress".into(),
     );
 
     m.insert(
@@ -82,5 +82,14 @@ pub fn fill(m: &mut HashMap<String, String>) {
     m.insert(
         "help.network.example6".into(),
         "serve files --port 8080 ## ເລີ່ມ file-drive server ເທິງ port 8080".into(),
+    );
+    m.insert(
+        "help.network.trace".into(),
+        "trace <ໂຮສ> [-m N] [-w MS] ## ຕິດຕາມເສັ້ນທາງແຕ່ລະ hop (tracert/traceroute ຫຼື TTL)".into(),
+    );
+
+    m.insert(
+        "help.network.ping_flags".into(),
+        "ping <ໂຮສ> [-c N] [--forever] [-w MS] [-s ໄບຕ໌] [-t TTL] [-4|-6] ## ping ພ້ອມຕົວເລືອກ".into(),
     );
 }

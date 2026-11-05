@@ -27,6 +27,45 @@ export interface LastResult {
   reason: string
 }
 
+export type BotPhase =
+  | 'NotInstalled'
+  | 'Downloading'
+  | 'Extracting'
+  | 'Verifying'
+  | 'Ready'
+  | 'Error'
+
+export interface BotEngine {
+  id: string
+  label: string
+  version: string | null
+  source: 'ntc' | 'ntpkg' | 'system' | string
+  active: boolean
+}
+
+export interface BotStatus {
+  id: string
+  name: string
+  description: string
+  version: string | null
+  phase: BotPhase
+  downloaded: number
+  total: number
+  error: string | null
+  license: string
+  homepage: string
+  engines: BotEngine[]
+  engine: string | null
+}
+
+export interface BotGameInfo {
+  id: string
+  name: string
+  level: 'easy' | 'normal' | 'hard' | 'master' | string
+  level_label: string
+  color: 'w' | 'b' // the bot's side
+}
+
 export interface GameState {
   board: (string | null)[] // 64 entries, index 0 = a1; "wP".."bK"
   turn: 'w' | 'b'
@@ -43,12 +82,16 @@ export interface GameState {
   hot: Square[] // hanging pieces: attackers outnumber defenders
   pinned: Square[] // pinned pieces: attacks count only vs the pinner
   silver: Square[] // relatively pinned to a pricier piece: same credit rule as pinned
+  mode: 'human' | 'bot'
+  bot: BotGameInfo | null
   last_result: LastResult | null
   // present only on move responses:
   san?: string
   sfx?: string
   error?: string
   abandoned?: boolean
+  bot_move?: boolean
+  bot_fallback?: boolean
   // present only on undo responses:
   undone?: LastMove
 }

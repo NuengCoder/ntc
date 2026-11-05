@@ -139,7 +139,7 @@ pub fn fill(m: &mut HashMap<String, String>) {
 
     m.insert(
         "cmd.config.local.exists_warning".into(),
-        "\u{26a0}\u{fe0f} ntconfig.toml ມີຢູ່ແລ້ວ!".into(),
+        "ntconfig.toml ມີຢູ່ແລ້ວ!".into(),
     );
 
     m.insert(
@@ -159,12 +159,12 @@ pub fn fill(m: &mut HashMap<String, String>) {
 
     m.insert(
         "cmd.config.local.template_hint".into(),
-        "\u{1f4dd} ນີ້ແມ່ນ COMMENTED TEMPLATE - ຍັງບໍ່ມີການຕັ້ງຄ່າທີ່ເປີດໃຊ້".into(),
+        "ນີ້ແມ່ນ COMMENTED TEMPLATE - ຍັງບໍ່ມີການຕັ້ງຄ່າທີ່ເປີດໃຊ້".into(),
     );
 
     m.insert(
         "cmd.config.local.tip_global".into(),
-        "\u{1f4a1} ຄຳແນະນຳ: ການຕັ້ງຄ່າ global (teleports, output path, depth) ຍັງຄົງ global".into(),
+        "ຄຳແນະນຳ: ການຕັ້ງຄ່າ global (teleports, output path, depth) ຍັງຄົງ global".into(),
     );
 
     m.insert(
@@ -204,7 +204,7 @@ pub fn fill(m: &mut HashMap<String, String>) {
 
     m.insert(
         "cmd.config.local_deinit.title".into(),
-        "\u{26A0}\u{FE0F} ການລຶບການຕັ້ງຄ່າທ້ອງຖິ່ນ".into(),
+        "ການລຶບການຕັ້ງຄ່າທ້ອງຖິ່ນ".into(),
     );
 
     m.insert(
@@ -372,7 +372,7 @@ pub fn fill(m: &mut HashMap<String, String>) {
 
     m.insert(
         "cmd.config.resetcg.warning_title".into(),
-        "\u{26A0}\u{FE0F} ຄຳເຕືອນການຣີເຊັດ config".into(),
+        "ຄຳເຕືອນການຣີເຊັດ config".into(),
     );
 
     m.insert(
@@ -416,10 +416,7 @@ pub fn fill(m: &mut HashMap<String, String>) {
         "ກູ້ຄືນ config ຈາກ: {}".into(),
     );
 
-    m.insert(
-        "cmd.config.restorecg.title".into(),
-        "\u{1F4CB} Backup ທີ່ມີ:".into(),
-    );
+    m.insert("cmd.config.restorecg.title".into(), "Backup ທີ່ມີ:".into());
 
     m.insert("cmd.config.mgmt_header".into(), "ການຈັດການ:".into());
 
@@ -526,4 +523,104 @@ pub fn fill(m: &mut HashMap<String, String>) {
     );
 
     m.insert("cmd.config.serve.unknown_option".into(), "ບໍ່ຮູ້ຈັກ: {}".into());
+
+    // ---- config env / config rmenv ----
+
+    m.insert(
+        "cmd.config.env.title".into(),
+        "ຕົວແປສະພາບແວດລ້ອມຂອງ NTC:".into(),
+    );
+
+    m.insert(
+        "cmd.config.env.store_local".into(),
+        "local (ntconfig.toml)".into(),
+    );
+
+    m.insert(
+        "cmd.config.env.store_global".into(),
+        "global (ຄອນຟິກ ntc)".into(),
+    );
+
+    m.insert("cmd.config.env.store_session".into(), "ເຊສຊັນ (-os)".into());
+
+    m.insert(
+        "cmd.config.env.store_os".into(),
+        "ສະພາບແວດລ້ອມ OS (ບັນທຶກຖາວອນ)".into(),
+    );
+
+    m.insert("cmd.config.env.store_process".into(), "ໂປຣເຊສ".into());
+
+    m.insert(
+        "cmd.config.env.empty".into(),
+        "ຍັງບໍ່ໄດ້ຕັ້ງຕົວແປສະພາບແວດລ້ອມ NTC. ໃຊ້: config env NAME value".into(),
+    );
+
+    m.insert(
+        "cmd.config.env.list_hint".into(),
+        "ເຄັດລັບ: config env NAME value [-g|-l|-os|-osg] | config env NAME | config rmenv NAME [-all]".into(),
+    );
+
+    m.insert("cmd.config.env.get".into(), "{} = {}  [{}]".into());
+
+    m.insert(
+        "cmd.config.env.not_set".into(),
+        "{} ບໍ່ໄດ້ຕັ້ງໃນສະພາບແວດລ້ອມ NTC ຫຼື OS.".into(),
+    );
+
+    m.insert(
+        "cmd.config.env.protected".into(),
+        "'{}' ຖືກປ້ອງກັນ. ໃຊ້ 'usrpath' / 'syspath' ສຳລັບລາຍການ PATH.".into(),
+    );
+
+    m.insert(
+        "cmd.config.env.invalid_name".into(),
+        "ຊື່ຕົວແປ '{}' ບໍ່ຖືກຕ້ອງ (ໃຊ້ຕົວອັກສອນ ຕົວເລກ ແລະ ເສັ້ນລຸ່ມ; ຕ້ອງບໍ່ເລີ່ມດ້ວຍຕົວເລກ).".into(),
+    );
+
+    m.insert(
+        "cmd.config.env.os_fail".into(),
+        "ອັບເດດສະພາບແວດລ້ອມ OS ບໍ່ສຳເລັດ: {}".into(),
+    );
+
+    m.insert(
+        "cmd.config.env.set_os".into(),
+        "{} = {} ຖືກບັນທຶກໄປຍັງ {} ແລະ ໃຊ້ໄດ້ໃນເຊສຊັນນີ້.".into(),
+    );
+
+    m.insert(
+        "cmd.config.env.os_wiring".into(),
+        "ໂຫຼດໃນ shell ໃໝ່ໂດຍເພີ່ມແຖວນີ້ໃນ profile ຂອງ shell: {}".into(),
+    );
+
+    m.insert("cmd.config.env.set".into(), "{} = {} ຖືກບັນທຶກໄປຍັງ {}.".into());
+
+    m.insert(
+        "cmd.config.env.no_local".into(),
+        "ບໍ່ມີ ntconfig.toml ໃນໄດເຣັກທໍລີປັດຈຸບັນ. ລອງ 'local init' ກ່ອນ ຫຼື ໃຊ້ -g.".into(),
+    );
+
+    m.insert(
+        "cmd.config.env.remove_missing".into(),
+        "{} ບໍ່ໄດ້ຕັ້ງໃນບ່ອນເກັບທີ່ເລືອກ.".into(),
+    );
+
+    m.insert(
+        "cmd.config.env.removed".into(),
+        "ລຶບ {} ອອກຈາກ {} ແລ້ວ.".into(),
+    );
+
+    m.insert(
+        "cmd.config.env.flag_conflict".into(),
+        "ແຟລັກຂັດແຍ້ງ. ໃຊ້ຢ່າງໃດຢ່າງໜຶ່ງ: -g, -l, -os, -osg ຫຼື -all.".into(),
+    );
+
+    m.insert(
+        "cmd.config.env.rm_usage".into(),
+        "ວິທີໃຊ້: config rmenv NAME [-g|-l|-os|-osg|-all]".into(),
+    );
+
+    m.insert(
+        "help.config.idle".into(),
+        " idle|gt [on|off]  ເປີດ/ປິດ ghost typing ເທິງ prompt ຫວ່າງ (ຊື່ອື່ນ: ghost_typing)".into(),
+    );
 }

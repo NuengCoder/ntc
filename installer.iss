@@ -1,87 +1,30 @@
-[Setup]
-AppName=ntc
-AppVersion=2.4.7
-AppPublisher=NuengCoder
-AppPublisherURL=https://github.com/NuengCoder/ntc
-DefaultDirName={autopf}\ntc
-DefaultGroupName=ntc
-OutputDir=.\installer
-OutputBaseFilename=ntc-installer-2.4.7
-SetupIconFile=assets\ntc_image.ico
-Compression=lzma
-SolidCompression=yes
-ArchitecturesInstallIn64BitMode=x64compatible
-PrivilegesRequired=admin
-PrivilegesRequiredOverridesAllowed=dialog
+; installer.iss — Windows installer for the regular (Win10+) ntc build.
+;
+; Compile with Inno Setup 6:
+;   iscc installer.iss                    -> ntc-installer-<ver>.exe
+;                                            all users, requires admin
+;   iscc /DUSERINSTALL installer.iss      -> ntc-installer-<ver>-user.exe
+;                                            per-user, no UAC
+;
+; The per-user variants exist for standard user accounts: a setup whose
+; manifest asks for elevation cannot start without an admin credential (Windows
+; cannot create its temp directory), while the `-user` build installs into
+; %LOCALAPPDATA%\Programs\ntc with a per-user PATH entry.
+;
+; The shared setup body lives in packaging\ntc_install.issi.
 
-[Files]
-Source: "target\release\ntc.exe"; DestDir: "{app}"; Flags: ignoreversion
-Source: "target\release\*.dll"; DestDir: "{app}"; Flags: ignoreversion skipifsourcedoesntexist
-Source: "target\release\*.dll"; DestDir: "{app}\dll"; Flags: ignoreversion skipifsourcedoesntexist
-Source: "target\release\deps\*.dll"; DestDir: "{app}\dll"; Flags: ignoreversion skipifsourcedoesntexist
+#define AppVer "2.4.8"
 
-[Dirs]
-Name: "{app}\dll"
+#ifdef USERINSTALL
+  #define OutputSuffix "-user"
+#else
+  #define OutputSuffix ""
+#endif
 
-[Icons]
-Name: "{group}\ntc"; Filename: "{app}\ntc.exe"; Comment: "Navigate, Toolkit, Center - Interactive shell"
-Name: "{group}\Uninstall ntc"; Filename: "{uninstallexe}"
-Name: "{autodesktop}\ntc"; Filename: "{app}\ntc.exe"; Comment: "Navigate, Toolkit, Center - Interactive shell"; Tasks: desktopicon
+#define ExeSource  "target\release\ntc.exe"
+#define DllGlob    "target\release\*.dll"
+#define DepsGlob   "target\release\deps\*.dll"
+#define OutputBase "ntc-installer-" + AppVer
+#define MinOS ""
 
-[Tasks]
-Name: "desktopicon"; Description: "Create a desktop shortcut"; GroupDescription: "Additional icons:"
-
-[Registry]
-Root: HKCU; Subkey: "Environment"; ValueType: expandsz; ValueName: "Path"; \
-    ValueData: "{olddata};{app}"; Check: NeedsAddUserPath(ExpandConstant('{app}'))
-
-Root: HKLM; Subkey: "SYSTEM\CurrentControlSet\Control\Session Manager\Environment"; \
-    ValueType: expandsz; ValueName: "Path"; \
-    ValueData: "{olddata};{app}"; Check: NeedsAddSystemPath(ExpandConstant('{app}'))
-
-[Run]
-Filename: "{app}\ntc.exe"; Parameters: "--version"; Flags: runhidden; Description: "Verify installation";
-
-[Code]
-function IsVCRedistInstalled: boolean;
-var
-  ResultCode: integer;
-begin
-  Result := Exec('cmd.exe', '/c "where /q vcruntime140.dll"', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
-  if not Result then
-    Result := FileExists(ExpandConstant('{syswow64}\vcruntime140.dll')) or
-              FileExists(ExpandConstant('{sysnative}\vcruntime140.dll')) or
-              FileExists(ExpandConstant('{win}\System32\vcruntime140.dll'));
-end;
-
-function NeedsAddUserPath(Param: string): boolean;
-var
-  OrigPath: string;
-begin
-  if not RegQueryStringValue(HKCU, 'Environment', 'Path', OrigPath) then
-  begin
-    Result := True;
-    exit;
-  end;
-  Result := Pos(';' + UpperCase(Param) + ';', ';' + UpperCase(OrigPath) + ';') = 0;
-end;
-
-function NeedsAddSystemPath(Param: string): boolean;
-var
-  OrigPath: string;
-begin
-  if not RegQueryStringValue(HKLM, 'SYSTEM\CurrentControlSet\Control\Session Manager\Environment', 'Path', OrigPath) then
-  begin
-    Result := True;
-    exit;
-  end;
-  Result := Pos(';' + UpperCase(Param) + ';', ';' + UpperCase(OrigPath) + ';') = 0;
-end;
-
-procedure CurStepChanged(CurStep: TSetupStep);
-begin
-  if CurStep = ssPostInstall then
-  begin
-    SaveStringToFile(ExpandConstant('{tmp}\ntc_path_update.txt'), 'PATH updated', False);
-  end;
-end;
+#include "packaging\ntc_install.issi"

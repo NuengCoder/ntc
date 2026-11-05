@@ -194,6 +194,10 @@ pub struct Config {
     #[serde(default)]
     pub teleports: HashMap<String, PathBuf>,
 
+    /// NTC-managed environment variables (`config env NAME value`).
+    #[serde(default, skip_serializing_if = "HashMap::is_empty")]
+    pub env: HashMap<String, String>,
+
     #[serde(default)]
     pub run_aliases: HashMap<String, String>,
 
@@ -212,6 +216,12 @@ pub struct Config {
     #[serde(default)]
     pub db_aliases: HashMap<String, String>,
 
+    /// `#param --hint-*` specs for `dbal` aliases (`ndb`), keyed by
+    /// lowercased alias name. Includes `--hint-table` /
+    /// `--hint-table-col-name`, which only `ndb` can resolve.
+    #[serde(default)]
+    pub db_alias_hints: HashMap<String, String>,
+
     #[serde(default)]
     pub math_functions: HashMap<String, String>,
 
@@ -228,9 +238,23 @@ pub struct Config {
     #[serde(default = "default_autosuggest_enabled")]
     pub autosuggest_enabled: bool,
 
+    /// Whether an empty prompt shows a read-only teaching hint (idle mode)
+    #[serde(default = "default_idle_hint_enabled")]
+    pub idle_hint_enabled: bool,
+
     /// Whether git integration (prompt branch, browser symbols) is enabled
     #[serde(default = "default_git_integration_enabled")]
     pub git_integration_enabled: bool,
+
+    /// Whether external-shell integration is enabled (installed shell names
+    /// in the hinter, launcher-argument completion, and `ntc ps` mode).
+    #[serde(default = "default_integration_shell_enabled")]
+    pub integration_shell_enabled: bool,
+
+    /// Whether curated programming tools/compilers (installed on `PATH`) join
+    /// level-1 hints and get basic argument completion.
+    #[serde(default = "default_code_tools_enabled")]
+    pub code_tools_enabled: bool,
 
     /// QSC (Quick Short Command) global hotkey, if configured
     #[serde(default)]
@@ -243,7 +267,7 @@ pub struct Config {
     #[serde(default = "default_language_active")]
     pub language_active: bool,
 
-    /// Use ASCII-only icons (✓→+ etc) for pipe-safe/legacy terminal output
+    /// Use ASCII-only icons (→+ etc) for pipe-safe/legacy terminal output
     #[serde(default)]
     pub ascii_fallback: bool,
 
@@ -267,6 +291,11 @@ pub struct Config {
     /// One of: txt, md, json, toml, yaml, html.
     #[serde(default = "default_todo_format")]
     pub todo_format: String,
+
+    /// Ranfile format `ran init` writes and `ran fmt` converted to last.
+    /// One of: toml, json, yaml.
+    #[serde(default = "default_ran_format")]
+    pub ran_format: String,
 
     /// Whether file sizes are auto-calculated in the navigation tree
     #[serde(default)]
@@ -412,8 +441,20 @@ fn default_autosuggest_enabled() -> bool {
     true
 }
 
+fn default_idle_hint_enabled() -> bool {
+    true
+}
+
 fn default_git_integration_enabled() -> bool {
     true
+}
+
+fn default_integration_shell_enabled() -> bool {
+    false
+}
+
+fn default_code_tools_enabled() -> bool {
+    false
 }
 
 pub const VALID_LANGUAGES: &[&str] = &["english", "thai", "lao", "chinese"];
@@ -434,6 +475,12 @@ pub const VALID_TODO_FORMATS: &[&str] = &["txt", "md", "json", "toml", "yaml", "
 
 fn default_todo_format() -> String {
     "txt".to_string()
+}
+
+pub const VALID_RAN_FORMATS: &[&str] = &["toml", "json", "yaml"];
+
+fn default_ran_format() -> String {
+    "toml".to_string()
 }
 
 fn default_update_check_enabled() -> bool {
@@ -497,12 +544,17 @@ impl Config {
             watch_limit: default_watch_limit(),
             color_enabled: default_color_enabled(),
             autosuggest_enabled: default_autosuggest_enabled(),
+            idle_hint_enabled: default_idle_hint_enabled(),
             git_integration_enabled: default_git_integration_enabled(),
+            integration_shell_enabled: default_integration_shell_enabled(),
+            code_tools_enabled: default_code_tools_enabled(),
             teleports: HashMap::new(),
+            env: HashMap::new(),
             run_aliases: HashMap::new(),
             run_alias_hints: HashMap::new(),
             run_hint_lists: HashMap::new(),
             db_aliases: HashMap::new(),
+            db_alias_hints: HashMap::new(),
             math_functions: HashMap::new(),
             watch_trigger_alias: None,
             fake_groups: HashMap::new(),
@@ -515,6 +567,7 @@ impl Config {
             dir_view_enabled: default_dir_view_enabled(),
             file_view_enabled: false,
             todo_format: default_todo_format(),
+            ran_format: default_ran_format(),
             auto_size_files: false,
             auto_size_dirs: false,
             update_check_enabled: default_update_check_enabled(),
@@ -920,7 +973,10 @@ pub struct LocalConfig {
     pub run_alias_hints: Option<HashMap<String, String>>,
     pub run_hint_lists: Option<HashMap<String, Vec<String>>>,
     pub db_aliases: Option<HashMap<String, String>>,
+    pub db_alias_hints: Option<HashMap<String, String>>,
     pub fake_groups: Option<HashMap<String, Vec<FakeColumn>>>,
+    /// Project-scoped NTC environment variables (`config env NAME value`).
+    pub env: Option<HashMap<String, String>>,
 }
 
 /// Raw ignore/care sets of one config store (global or local), used by the
@@ -956,8 +1012,8 @@ mod tests {
     #[test]
     fn test_validate_alias_name_rejects_reserved() {
         for cmd in [
-            "go", "cd", "help", "exit", "quit", "run", "r", "ral", "math", "setc", "diff", "bkup",
-            "view", "txt",
+            "god", "cd", "help", "exit", "quit", "run", "r", "ral", "math", "config", "diff",
+            "backup", "view", "txt",
         ] {
             assert!(
                 !validate_alias_name(cmd),

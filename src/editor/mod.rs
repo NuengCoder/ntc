@@ -6,7 +6,7 @@ mod core;
 mod edit;
 mod editor_config;
 mod helpers;
-mod hinter;
+pub(crate) mod hinter;
 mod modes;
 mod mouse;
 pub(crate) mod nerun;
@@ -23,13 +23,14 @@ mod unicode;
 pub use types::set_goto_pattern;
 pub(crate) use types::take_goto_pattern;
 pub(crate) use types::{
-    CreateKind, CursorPos, Editor, EditorEncoding, Focus, Mode, NfeBox, NfeBoxKind, NfeConfirm,
-    Snapshot, Tab, ALL_ENCODINGS, DEFAULT_SIDEBAR_WIDTH, GOTO_HIGHLIGHT, GOTO_LINE,
+    CreateKind, CursorPos, Editor, EditorEncoding, Focus, LayoutSig, Mode, NfeBox, NfeBoxKind,
+    NfeConfirm, Snapshot, Tab, ALL_ENCODINGS, DEFAULT_SIDEBAR_WIDTH, GOTO_HIGHLIGHT, GOTO_LINE,
 };
 
 pub(crate) use unicode::{
-    auto_pair, byte_to_col, char_col_width, ci_find, col_to_byte, is_ctrl_char, next_char_byte,
-    next_word_byte, prev_char_byte, prev_word_byte,
+    auto_pair, byte_to_col, char_col_width, ci_find, display_cells, display_col,
+    display_col_to_byte, is_ctrl_char, next_char_byte, next_word_byte, prev_char_byte,
+    prev_word_byte,
 };
 
 pub(crate) use core::save_lines_to;

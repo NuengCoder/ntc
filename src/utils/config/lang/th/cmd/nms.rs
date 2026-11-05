@@ -5,7 +5,7 @@ pub fn fill(m: &mut HashMap<String, String>) {
 
     m.insert(
         "cmd.nms.help_play".into(),
-        "nms play <ไฟล์>                                 เครื่องเล่นเสียงเต็มจอ (วิดีโอเล่นเฉพาะเสียง)"
+        "nms play [-sf <dur>] <ไฟล์>                     เล่นเสียงในเทอร์มินัล (Ctrl+C หยุด; วิดีโอเล่นเฉพาะเสียง)"
             .into(),
     );
 
@@ -42,16 +42,35 @@ pub fn fill(m: &mut HashMap<String, String>) {
         "  --care            ไม่สนใจกฎ ignore (โหมด care)".into(),
     );
 
-    m.insert("cmd.nms.keys_title".into(), "ปุ่มเครื่องเล่น:".into());
+    m.insert(
+        "cmd.nms.help_start".into(),
+        "  -sf, --start-from <dur>  เริ่มเล่นที่ <dur> (เฉพาะ play เช่น -sf 30)".into(),
+    );
+
+    m.insert(
+        "cmd.nms.start_usage".into(),
+        "วิธีใช้: -sf <dur> (เช่น -sf 30, -sf 1mn)".into(),
+    );
+
+    m.insert(
+        "cmd.nms.invalid_start".into(),
+        "เวลาเริ่มไม่ถูกต้อง: '{}' (เช่น 30, 1mn)".into(),
+    );
+
+    m.insert("cmd.nms.playing".into(), "♪ {}  [{}]".into());
+
+    m.insert("cmd.nms.stop_hint".into(), "กด Ctrl+C เพื่อหยุด".into());
+
+    m.insert("cmd.nms.keys_title".into(), "การเล่น:".into());
 
     m.insert(
         "cmd.nms.help_keys".into(),
-        "  space หยุด/เล่นต่อ · ←/→ เลื่อน 5 วินาที · ↑/↓ ระดับเสียง · a เล่นซ้ำ · q ออก".into(),
+        "  นับเวลาถอยหลังตำแหน่ง / เวลาที่เหลือ · กด Ctrl+C เพื่อหยุด · -sf <dur> เริ่มจากตำแหน่งที่กำหนด".into(),
     );
 
     m.insert("cmd.nms.examples_title".into(), "ตัวอย่าง:".into());
 
-    m.insert("cmd.nms.example_play".into(), "nms play song.mp3".into());
+    m.insert("cmd.nms.example_play".into(), "nms play -sf 30 song.mp3".into());
 
     m.insert("cmd.nms.example_video".into(), "nms play movie.mp4".into());
 
@@ -71,6 +90,21 @@ pub fn fill(m: &mut HashMap<String, String>) {
     m.insert(
         "cmd.nms.no_sound_device".into(),
         "ไม่พบอุปกรณ์เสียงบนเครื่องนี้ — ไม่สามารถเล่นเสียงได้".into(),
+    );
+
+    m.insert(
+        "cmd.nms.need_ffmpeg".into(),
+        "เล่น '{}' ไม่ได้: ฟอร์แมตหรือตัวถอดรหัสนี้ต้องมี ffmpeg".into(),
+    );
+
+    m.insert(
+        "cmd.nms.install_ffmpeg".into(),
+        "ติดตั้งได้ด้วย: ntpkg install ffmpeg".into(),
+    );
+
+    m.insert(
+        "cmd.nms.no_audio_track".into(),
+        "'{}' ไม่มีแทร็กเสียง".into(),
     );
 
     m.insert("cmd.nms.play_failed".into(), "เล่น '{}' ไม่ได้: {}".into());

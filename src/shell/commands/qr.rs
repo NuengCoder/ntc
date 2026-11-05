@@ -38,7 +38,7 @@ fn qr_to_pixels(code: &qrcode::QrCode) -> Vec<Vec<bool>> {
     pixels
 }
 
-#[cfg(feature = "image2doc")]
+#[cfg(feature = "image")]
 fn save_qr_image(pixels: &[Vec<bool>], path: &Path) -> Result<()> {
     let size = pixels.len();
     let scale = 8;
@@ -64,7 +64,7 @@ fn save_qr_image(pixels: &[Vec<bool>], path: &Path) -> Result<()> {
     Ok(())
 }
 
-#[cfg(feature = "image2doc")]
+#[cfg(feature = "image")]
 fn encode_image_to_uri(mut img: image::DynamicImage) -> Result<String> {
     loop {
         let mut buf: Vec<u8> = Vec::new();
@@ -134,7 +134,7 @@ fn cmd_qr_encode(args: &str, cwd: &Path) -> Result<bool> {
         return Ok(false);
     }
 
-    #[cfg(feature = "image2doc")]
+    #[cfg(feature = "image")]
     {
         let candidate = cwd.join(text);
         if candidate.is_file() {
@@ -161,14 +161,14 @@ fn cmd_qr_encode(args: &str, cwd: &Path) -> Result<bool> {
 
     match out_file {
         Some(path) => {
-            #[cfg(feature = "image2doc")]
+            #[cfg(feature = "image")]
             {
                 let pixels = qr_to_pixels(&code);
                 let full = cwd.join(path);
                 save_qr_image(&pixels, &full)?;
                 print_success(&t!("cmd.qr.saved", full.display()));
             }
-            #[cfg(not(feature = "image2doc"))]
+            #[cfg(not(feature = "image"))]
             {
                 let _ = cwd;
                 print_error(&t!("cmd.qr.image_save_requires"));
@@ -199,7 +199,7 @@ fn cmd_qr_decode(args: &str, cwd: &Path) -> Result<bool> {
         return Ok(false);
     }
 
-    #[cfg(feature = "image2doc")]
+    #[cfg(feature = "image")]
     {
         let img =
             image::open(&file_path).map_err(|e| anyhow!("{}", t!("cmd.qr.open_image_fail", e)))?;
@@ -227,7 +227,7 @@ fn cmd_qr_decode(args: &str, cwd: &Path) -> Result<bool> {
         }
     }
 
-    #[cfg(not(feature = "image2doc"))]
+    #[cfg(not(feature = "image"))]
     {
         let _ = file_path;
         print_error(&t!("cmd.qr.decode_requires"));

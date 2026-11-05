@@ -14,7 +14,7 @@ pub fn fill(m: &mut HashMap<String, String>) {
 
     m.insert(
         "backup.clear_history_prompt".into(),
-        "\u{26A0} Clear undo history? This cannot be undone. (y/N):".into(),
+        "Clear undo history? This cannot be undone. (y/N):".into(),
     );
 
     m.insert("backup.cleared".into(), "All backups deleted.".into());
@@ -243,10 +243,7 @@ pub fn fill(m: &mut HashMap<String, String>) {
         " 3. Create a fresh backup of the current state".into(),
     );
 
-    m.insert(
-        "backup.recreate_will_title".into(),
-        "\u{26A0}\u{FE0F} RECREATE will:".into(),
-    );
+    m.insert("backup.recreate_will_title".into(), "RECREATE will:".into());
 
     m.insert(
         "backup.recreated".into(),
@@ -270,12 +267,12 @@ pub fn fill(m: &mut HashMap<String, String>) {
 
     m.insert(
         "backup.restore_create_title".into(),
-        "\u{26A0} The following files will be CREATED ({}):".into(),
+        "The following files will be CREATED ({}):".into(),
     );
 
     m.insert(
         "backup.restore_delete_title".into(),
-        "\u{26A0} The following files will be DELETED (not in backup) ({}):".into(),
+        "The following files will be DELETED (not in backup) ({}):".into(),
     );
 
     m.insert(
@@ -300,7 +297,7 @@ pub fn fill(m: &mut HashMap<String, String>) {
 
     m.insert(
         "backup.restore_overwrite_title".into(),
-        "\u{26A0} The following files will be OVERWRITTEN ({}):".into(),
+        "The following files will be OVERWRITTEN ({}):".into(),
     );
 
     m.insert(
@@ -474,7 +471,7 @@ pub fn fill(m: &mut HashMap<String, String>) {
 
     m.insert(
         "backup.warning_title".into(),
-        "\u{26A0}\u{FE0F} WARNING: This will delete ALL backups for this project!".into(),
+        "WARNING: This will delete ALL backups for this project!".into(),
     );
 
     m.insert(

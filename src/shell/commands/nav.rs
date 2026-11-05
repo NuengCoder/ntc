@@ -15,12 +15,12 @@ use std::io::{self, Write};
 use std::path::{Path, PathBuf};
 
 pub fn cmd_cd(args: &str, nav: &mut Navigator) -> Result<bool> {
+    let args = args.trim();
     if args.is_empty() {
-        println!("{}", t!("cmd.nav.cd.usage1"));
-        println!("{}", t!("cmd.nav.cd.usage2"));
-        println!("{}", t!("cmd.nav.cd.example1"));
-        println!("{}", t!("cmd.nav.cd.example2"));
-        println!("{}", t!("cmd.nav.cd.example3"));
+        match crate::utils::paths::home_dir() {
+            Some(home) => cd_to(nav, home)?,
+            None => print_error(&t!("cmd.nav.cd.home_unavailable")),
+        }
     } else {
         let parts: Vec<&str> = args.split_whitespace().collect();
         if parts.len() >= 2 && parts[0].to_lowercase() == "to" {
@@ -32,13 +32,29 @@ pub fn cmd_cd(args: &str, nav: &mut Navigator) -> Result<bool> {
                 println!("{}", t!("cmd.nav.cd.tp_list"));
             }
         } else {
-            nav.go_to(Path::new(args))?;
-            clear_screen();
-            print_success(&t!("cmd.nav.cd.navigated", nav.display_path()));
-            show_nav_view(nav);
+            let expanded = crate::utils::paths::expand_path_str(args);
+            let target = PathBuf::from(expanded);
+            let target = if target.is_absolute() {
+                target
+            } else {
+                nav.current_path().join(target)
+            };
+            cd_to(nav, target)?;
         }
     }
     Ok(false)
+}
+
+/// Navigate, then remember the old directory in the teleport history stack so
+/// `cd` participates in `tpb` like every `tp` jump does.
+fn cd_to(nav: &mut Navigator, target: PathBuf) -> Result<()> {
+    let previous = nav.current_path().to_path_buf();
+    nav.go_to(&target)?;
+    TeleportManager::remember_location(previous);
+    clear_screen();
+    print_success(&t!("cmd.nav.cd.navigated", nav.display_path()));
+    show_nav_view(nav);
+    Ok(())
 }
 
 pub fn cmd_godrive(args: &str, nav: &mut Navigator) -> Result<bool> {
@@ -251,7 +267,7 @@ fn where_binary(binary: &str) -> Result<bool> {
     println!("{}", t!("cmd.nav.where.path_title", binary).cyan().bold());
     for (i, path) in matches.iter().enumerate() {
         let marker = if i == 0 {
-            "✓".green().bold()
+            "".green().bold()
         } else {
             "•".dimmed()
         };
@@ -311,8 +327,8 @@ pub fn cmd_fgo(args: &str, nav: &mut Navigator) -> Result<bool> {
         println!("{}", t!("cmd.nav.fgo.example2"));
         return Ok(false);
     }
-    let (pattern, max_depth) = parse_search_args(args);
-    let results = crate::search::search_files(nav.current_path(), &pattern, max_depth);
+    let (pattern, max_depth, fuzzy) = parse_search_args(args);
+    let results = crate::search::search_files_opts(nav.current_path(), &pattern, max_depth, fuzzy);
     if results.is_empty() {
         let output = crate::search::format_search_results(&results, &pattern, max_depth, true);
         print!("{}", output);

@@ -34,7 +34,7 @@ pub fn fill(m: &mut HashMap<String, String>) {
 
     m.insert(
         "ran.desc_reserved".into(),
-        " init, deinit, help, list, ls \u{2014} 这些不能用作目标名称。".into(),
+        " init, deinit, help, list, ls, check, fmt \u{2014} 这些不能用作目标名称。".into(),
     );
 
     m.insert(
@@ -102,4 +102,73 @@ pub fn fill(m: &mut HashMap<String, String>) {
     m.insert("ran.section_vars".into(), "变量：".into());
 
     m.insert("ran.terminated".into(), "命令已终止（Ctrl+C）".into());
+
+    m.insert("ran.check_title".into(), "ran check 正在解析 {}".into());
+
+    m.insert("ran.check_ok".into(), "{} 没有问题".into());
+
+    m.insert("ran.check_problems".into(), "在 {} 中发现 {} 个问题".into());
+
+    m.insert("ran.check_error".into(), "错误".into());
+
+    m.insert("ran.check_hint".into(), "提示".into());
+
+    m.insert(
+        "ran.help_check_fmt".into(),
+        " ran check 解析 {} 并报告每个问题所在行".into(),
+    );
+
+    m.insert(
+        "ran.help_fmt".into(),
+        " ran fmt <toml|json|yaml> 转换 ranfile 格式（-o <文件>，-y 跳过询问）".into(),
+    );
+
+    m.insert(
+        "ran.fmt.usage".into(),
+        "用法：ran fmt <toml|json|yaml> [-o <文件>] [-y]".into(),
+    );
+
+    m.insert(
+        "ran.fmt.unknown".into(),
+        "未知格式 '{}'。可用：toml、json、yaml。".into(),
+    );
+
+    m.insert(
+        "ran.fmt.current".into(),
+        "ranfile 格式偏好：{}（ran init 会创建 {}）".into(),
+    );
+
+    m.insert(
+        "ran.fmt.no_file".into(),
+        "此处没有 ranfile。偏好已设为 {}；运行 `ran init` 创建 {}。".into(),
+    );
+
+    m.insert("ran.fmt.already".into(), "{} 已经是 {} 格式。".into());
+
+    m.insert(
+        "ran.fmt.confirm".into(),
+        "将 {} 转换为 {} \u{2192} {}？[y|n] ".into(),
+    );
+
+    m.insert(
+        "ran.fmt.skipped".into(),
+        "未写入任何文件。`ran init` 将创建 {}。".into(),
+    );
+
+    m.insert(
+        "ran.fmt.exists".into(),
+        "{} 已存在 \u{2014} 请先删除或使用 -o <文件>。".into(),
+    );
+
+    m.insert("ran.fmt.written".into(), "已写入 {}".into());
+
+    m.insert(
+        "ran.fmt.old_kept".into(),
+        "{} 仍然存在；`ran` 现在优先使用 {}（删除旧文件可避免两个 ranfile）。".into(),
+    );
+
+    m.insert(
+        "ran.fmt.no_terminal".into(),
+        "非终端环境：请加 -y 确认转换。".into(),
+    );
 }

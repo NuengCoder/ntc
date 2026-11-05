@@ -40,7 +40,7 @@ pub fn fill(m: &mut HashMap<String, String>) {
 
     m.insert(
         "cmd.image_disabled".into(),
-        "ການແປງຮູບພາບບໍ່ມີ (feature 'image2doc' ຖືກປິດ).".into(),
+        "ການສະແດງຮູບບໍ່ມີ (feature 'image' ຖືກປິດ).".into(),
     );
 
     m.insert("cmd.terminated".into(), "ຢຸດຄຳສັ່ງ (Ctrl+C)".into());

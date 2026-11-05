@@ -76,6 +76,70 @@ pub fn fill(m: &mut HashMap<String, String>) {
     m.insert("msg.setA.status".into(), "自动建议（幽灵文本）：{}".into());
 
     m.insert(
+        "msg.setIS.status".into(),
+        "集成 Shell（shell 提示 + ntc ps）：{}".into(),
+    );
+    m.insert("msg.setIS.on".into(), "集成 Shell：ON".into());
+    m.insert("msg.setIS.off".into(), "集成 Shell：OFF".into());
+    m.insert(
+        "msg.setIS.error".into(),
+        "integration_shell 的值无效：{}。请使用 ON 或 OFF。".into(),
+    );
+    m.insert(
+        "msg.setIS.platform".into(),
+        "平台：{}（包管理器：{}）".into(),
+    );
+    m.insert(
+        "msg.setIS.bash_completion_ok".into(),
+        "bash-completion：已安装".into(),
+    );
+    m.insert(
+        "msg.setIS.bash_completion_missing".into(),
+        "bash-completion：未安装 — bash 参数补全需要它".into(),
+    );
+    m.insert(
+        "msg.setIS.bash_completion_install".into(),
+        "安装命令：{}".into(),
+    );
+    m.insert(
+        "msg.setIS.ps_windows_only".into(),
+        "PowerShell 集成仅支持 Windows".into(),
+    );
+    m.insert(
+        "msg.setIS.bash_linux_only".into(),
+        "bash 集成仅支持 Linux 桌面".into(),
+    );
+    m.insert("msg.setIS.bash_missing".into(), "未找到 bash".into());
+    m.insert(
+        "msg.setIS.bash_start_failed".into(),
+        "bash 宿主启动失败".into(),
+    );
+    m.insert("msg.setIS.bash_exited".into(), "bash 已退出".into());
+    m.insert("msg.setIS.bash_stopped".into(), "bash 宿主无响应".into());
+    m.insert(
+        "msg.setIS.zsh_macos_only".into(),
+        "zsh 集成仅在 macOS 上可用".into(),
+    );
+    m.insert("msg.setIS.zsh_missing".into(), "系统中未找到 zsh".into());
+    m.insert(
+        "msg.setIS.zsh_start_failed".into(),
+        "zsh 宿主启动失败".into(),
+    );
+    m.insert("msg.setIS.zsh_exited".into(), "zsh 已退出".into());
+    m.insert("msg.setIS.zsh_stopped".into(), "zsh 宿主无响应".into());
+
+    m.insert(
+        "msg.setCT.status".into(),
+        "Code tools（编译器/编程工具）：{}".into(),
+    );
+    m.insert("msg.setCT.on".into(), "Code tools：ON".into());
+    m.insert("msg.setCT.off".into(), "Code tools：OFF".into());
+    m.insert(
+        "msg.setCT.error".into(),
+        "code_tools 的值无效：{}。请使用 ON 或 OFF。".into(),
+    );
+
+    m.insert(
         "msg.setC.error".into(),
         "setC的值无效：{}。使用 开 或 关。".into(),
     );
@@ -207,10 +271,7 @@ pub fn fill(m: &mut HashMap<String, String>) {
 
     m.insert("msg.teleport.not_found".into(), "未找到传送点：'{}'".into());
 
-    m.insert(
-        "msg.teleport.success".into(),
-        "\u{2713} 已传送到 '{}' -> {}".into(),
-    );
+    m.insert("msg.teleport.success".into(), "已传送到 '{}' -> {}".into());
 
     m.insert("msg.version.format".into(), "ntc {}".into());
 
@@ -273,6 +334,11 @@ pub fn fill(m: &mut HashMap<String, String>) {
     );
 
     m.insert("msg.showcg.label_intro_view".into(), "启动介绍：".into());
+    m.insert(
+        "msg.showcg.label_integration_shell".into(),
+        "集成 Shell：".into(),
+    );
+    m.insert("msg.showcg.label_code_tools".into(), "Code tools：".into());
 
     m.insert("msg.setDV.status".into(), "目录视图：{}".into());
 
@@ -299,5 +365,19 @@ pub fn fill(m: &mut HashMap<String, String>) {
     m.insert(
         "msg.update.available".into(),
         "有新的 NTC {}（你用的是 {}）— 在 {} 中运行 'ntc --upgrade' 或查看 {}".into(),
+    );
+
+    m.insert("msg.setIdle.status".into(), "空闲提示：{}".into());
+
+    m.insert(
+        "msg.setIdle.on".into(),
+        "空闲提示已开启：空提示符会逐条推荐命令".into(),
+    );
+
+    m.insert("msg.setIdle.off".into(), "空闲提示已关闭".into());
+
+    m.insert(
+        "msg.setIdle.error".into(),
+        "未知值：{}（用 ON 或 OFF）".into(),
     );
 }

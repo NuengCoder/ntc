@@ -58,6 +58,7 @@ fn termux_pkg_hint(name: &str) -> Option<&'static str> {
         "imagemagick" => "imagemagick",
         "tesseract" => "tesseract",
         "nginx" => "nginx",
+        "stockfish" => "stockfish",
         _ => return None,
     })
 }
@@ -243,6 +244,10 @@ pub fn install_package(name: &str, version: &str) -> Result<()> {
 
     if name == "tesseract" {
         return installers::install_tesseract(name, version, &source, &vdir);
+    }
+
+    if name == "stockfish" {
+        return installers::install_stockfish(name, version, &source, &vdir);
     }
 
     #[cfg(not(windows))]

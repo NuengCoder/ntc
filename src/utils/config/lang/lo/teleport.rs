@@ -26,7 +26,7 @@ pub fn fill(m: &mut HashMap<String, String>) {
 
     m.insert(
         "teleport.clear_confirm".into(),
-        "\u{26A0} ທ່ານແນ່ໃຈບໍວ່າຕ້ອງການລຶບ savepoints ທັງໝົດ? (y/N): ".into(),
+        "ທ່ານແນ່ໃຈບໍວ່າຕ້ອງການລຶບ savepoints ທັງໝົດ? (y/N): ".into(),
     );
 
     m.insert(
@@ -48,7 +48,7 @@ pub fn fill(m: &mut HashMap<String, String>) {
 
     m.insert(
         "teleport.history_title".into(),
-        "\u{1F4DC} Teleport History (ລ່າສຸດຢູ່ທ້າຍ)".into(),
+        "Teleport History (ລ່າສຸດຢູ່ທ້າຍ)".into(),
     );
 
     m.insert(
@@ -85,12 +85,12 @@ pub fn fill(m: &mut HashMap<String, String>) {
 
     m.insert(
         "teleport.list_title".into(),
-        "\u{1F4CC} ຈຸດ Teleport ຂອງທ່ານ (global)".into(),
+        "ຈຸດ Teleport ຂອງທ່ານ (global)".into(),
     );
 
     m.insert(
         "teleport.menu_title".into(),
-        "\u{1F4CC} Teleport - ຈຸດ Teleport ຂອງທ່ານ (global)".into(),
+        "Teleport - ຈຸດ Teleport ຂອງທ່ານ (global)".into(),
     );
 
     m.insert(

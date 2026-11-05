@@ -21,29 +21,38 @@ struct RequestConfig {
     no_pretty: bool,
 }
 
-pub fn cmd_http(args: &str, _nav: &mut Navigator) -> Result<bool> {
-    let parts: Vec<&str> = args.splitn(2, ' ').collect();
-    let first = parts.first().copied().unwrap_or("");
+const KNOWN_METHODS: &[&str] = &["GET", "POST", "PUT", "DELETE", "PATCH", "HEAD", "QUERY"];
 
+/// Returns `(method, remaining_args)`. Falls back to GET when the first word
+/// is not a known method, so `http https://…` still works.
+fn split_method(args: &str) -> (String, &str) {
+    let args = args.trim();
+    let (first, rest) = match args.split_once(char::is_whitespace) {
+        Some((f, r)) => (f, r.trim()),
+        None => (args, ""),
+    };
+    let upper = first.to_uppercase();
+    if KNOWN_METHODS.contains(&upper.as_str()) {
+        (upper, rest)
+    } else {
+        ("GET".to_string(), args)
+    }
+}
+
+fn has_header(cfg: &RequestConfig, name: &str) -> bool {
+    cfg.headers
+        .iter()
+        .any(|(k, _)| k.eq_ignore_ascii_case(name))
+}
+
+pub fn cmd_http(args: &str, _nav: &mut Navigator) -> Result<bool> {
+    let first = args.split_whitespace().next().unwrap_or("");
     if first.is_empty() || first == "help" || first == "--help" || first == "-h" {
         print_help();
         return Ok(false);
     }
 
-    let method;
-    let rest;
-
-    match first.to_uppercase().as_str() {
-        "GET" | "POST" | "PUT" | "DELETE" | "PATCH" | "HEAD" => {
-            method = first.to_uppercase();
-            rest = parts.get(1).unwrap_or(&"").trim();
-        }
-        _ => {
-            method = "GET".to_string();
-            rest = args.trim();
-        }
-    }
-
+    let (method, rest) = split_method(args);
     let cfg = parse_request(&method, rest)?;
     execute_request(&cfg)?;
     Ok(false)
@@ -254,6 +263,14 @@ fn execute_request(cfg: &RequestConfig) -> Result<()> {
         String::new()
     };
 
+    if cfg.method == "QUERY" {
+        if body_to_send.is_empty() {
+            eprintln!("{}", t!("cmd.http.query_no_body").yellow());
+        } else if cfg.json_body.is_none() && !has_header(cfg, "content-type") {
+            eprintln!("{}", t!("cmd.http.query_no_content_type").yellow());
+        }
+    }
+
     if cfg.verbose {
         eprintln!(
             "{} {} {}",
@@ -286,18 +303,19 @@ fn execute_request(cfg: &RequestConfig) -> Result<()> {
             );
         }
         if !body_to_send.is_empty() {
+            let preview: String = body_to_send.chars().take(500).collect();
             eprintln!("{}", t!("cmd.http.verbose_prefix").blue());
-            if body_to_send.len() <= 500 {
+            if body_to_send.chars().count() <= 500 {
                 eprintln!(
                     "{} {}",
                     t!("cmd.http.verbose_prefix").blue(),
-                    body_to_send.dimmed()
+                    preview.dimmed()
                 );
             } else {
                 eprintln!(
                     "{} {}...",
                     t!("cmd.http.verbose_prefix").blue(),
-                    body_to_send[..500].dimmed()
+                    preview.dimmed()
                 );
             }
         }
@@ -479,6 +497,7 @@ fn print_help() {
     println!("  {}", t!("cmd.http.help_example4"));
     println!("  {}", t!("cmd.http.help_example5"));
     println!("  {}", t!("cmd.http.help_example6"));
+    println!("  {}", t!("cmd.http.help_example7"));
 }
 
 #[cfg(test)]
@@ -573,5 +592,58 @@ mod tests {
         highlight_json("true");
         highlight_json("");
         highlight_json("plain text");
+    }
+
+    #[test]
+    fn test_split_method_query() {
+        let (m, rest) = split_method("QUERY https://example.com -v");
+        assert_eq!(m, "QUERY");
+        assert_eq!(rest, "https://example.com -v");
+    }
+
+    #[test]
+    fn test_split_method_lowercase() {
+        let (m, rest) = split_method("query https://example.com");
+        assert_eq!(m, "QUERY");
+        assert_eq!(rest, "https://example.com");
+    }
+
+    #[test]
+    fn test_split_method_tab_separator() {
+        let (m, rest) = split_method("QUERY\thttps://example.com");
+        assert_eq!(m, "QUERY");
+        assert_eq!(rest, "https://example.com");
+    }
+
+    #[test]
+    fn test_split_method_default_get() {
+        let (m, rest) = split_method("https://example.com -v");
+        assert_eq!(m, "GET");
+        assert_eq!(rest, "https://example.com -v");
+    }
+
+    #[test]
+    fn test_split_method_only_method() {
+        let (m, rest) = split_method("QUERY");
+        assert_eq!(m, "QUERY");
+        assert_eq!(rest, "");
+    }
+
+    #[test]
+    fn test_parse_request_query_json() {
+        let cfg = parse_request("QUERY", "https://example.com --json '{\"q\":1}'").unwrap();
+        assert_eq!(cfg.method, "QUERY");
+        assert_eq!(cfg.url, "https://example.com");
+        assert_eq!(cfg.json_body.as_deref(), Some("{\"q\":1}"));
+    }
+
+    #[test]
+    fn test_has_header_case_insensitive() {
+        let cfg = RequestConfig {
+            headers: vec![("Content-Type".into(), "application/json".into())],
+            ..Default::default()
+        };
+        assert!(has_header(&cfg, "content-type"));
+        assert!(!has_header(&cfg, "accept"));
     }
 }

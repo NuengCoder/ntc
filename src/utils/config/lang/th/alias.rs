@@ -30,7 +30,7 @@ pub fn fill(m: &mut HashMap<String, String>) {
 
     m.insert(
         "alias.ral.cls_warning".into(),
-        "\u{26A0}\u{FE0F} คำเตือน: การดำเนินการนี้จะลบ alias ทั้งหมด!".into(),
+        "คำเตือน: การดำเนินการนี้จะลบ alias ทั้งหมด!".into(),
     );
 
     m.insert("alias.ral.config_path".into(), " กำหนดค่า: {}".into());
@@ -170,7 +170,7 @@ pub fn fill(m: &mut HashMap<String, String>) {
         "รายการ '{}' ถูกใช้โดย: {} ใช้ --force เพื่อลบทิ้ง".into(),
     );
 
-    m.insert("alias.ral.hintn_info_title".into(), "📌 ข้อมูลรายการ".into());
+    m.insert("alias.ral.hintn_info_title".into(), "ข้อมูลรายการ".into());
 
     m.insert("alias.ral.hintn_info_name".into(), "ชื่อ".into());
 
@@ -218,12 +218,12 @@ pub fn fill(m: &mut HashMap<String, String>) {
 
     m.insert(
         "alias.ral.example_hint_values".into(),
-        "ral add srv \"ssh $p\" #p --hint [8080,5050,5000]".into(),
+        "ral add srv \"ssh ${p}\" #p --hint [8080,5050,5000]".into(),
     );
 
     m.insert(
         "alias.ral.example_hintn".into(),
-        "ral hintn add port [8080,5050,5000] + ral add srvn \"ssh $p\" #p --hint-n port".into(),
+        "ral hintn add port [8080,5050,5000] + ral add srvn \"ssh ${p}\" #p --hint-n port".into(),
     );
 
     m.insert(
@@ -240,7 +240,7 @@ pub fn fill(m: &mut HashMap<String, String>) {
         "local (ntconfig.toml)".into(),
     );
 
-    m.insert("alias.ral.info_title".into(), "\u{1F4CC} ข้อมูล Alias".into());
+    m.insert("alias.ral.info_title".into(), "ข้อมูล Alias".into());
 
     m.insert(
         "alias.ral.info_edit_copied".into(),
@@ -296,7 +296,7 @@ pub fn fill(m: &mut HashMap<String, String>) {
 
     m.insert(
         "alias.ral.param_cmd".into(),
-        " ral add <ชื่อ>(x) <คำสั่ง> สร้าง alias แบบมีพารามิเตอร์ (ใช้ $x หรือ ${{x}} ในคำสั่ง)".into(),
+        " ral add <ชื่อ>(x) <คำสั่ง> สร้าง alias แบบมีพารามิเตอร์ (ใช้ ${{x}} ในคำสั่ง)".into(),
     );
 
     m.insert(
@@ -490,4 +490,9 @@ pub fn fill(m: &mut HashMap<String, String>) {
     m.insert("alias.ral.scope_global".into(), "config global".into());
 
     m.insert("alias.ral.cls_target".into(), "เป้าหมาย: {}".into());
+
+    m.insert(
+        "alias.ral.bare_env_warning".into(),
+        "ตอนนี้ $NAME แบบไม่มีวงเล็บคือตัวแปรสภาพแวดล้อม ใช้ ${name} สำหรับพารามิเตอร์: {}".into(),
+    );
 }

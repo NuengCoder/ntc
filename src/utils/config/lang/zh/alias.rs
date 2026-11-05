@@ -33,7 +33,7 @@ pub fn fill(m: &mut HashMap<String, String>) {
 
     m.insert(
         "alias.ral.cls_warning".into(),
-        "\u{26A0}\u{FE0F} 警告：这将删除所有运行别名！".into(),
+        "警告：这将删除所有运行别名！".into(),
     );
 
     m.insert("alias.ral.config_path".into(), " 配置：{}".into());
@@ -175,10 +175,7 @@ pub fn fill(m: &mut HashMap<String, String>) {
         "提示列表 '{}' 正被使用：{}。加 --force 仍要删除。".into(),
     );
 
-    m.insert(
-        "alias.ral.hintn_info_title".into(),
-        "📌 提示列表信息".into(),
-    );
+    m.insert("alias.ral.hintn_info_title".into(), "提示列表信息".into());
 
     m.insert("alias.ral.hintn_info_name".into(), "名称".into());
 
@@ -226,12 +223,12 @@ pub fn fill(m: &mut HashMap<String, String>) {
 
     m.insert(
         "alias.ral.example_hint_values".into(),
-        "ral add srv \"ssh $p\" #p --hint [8080,5050,5000]".into(),
+        "ral add srv \"ssh ${p}\" #p --hint [8080,5050,5000]".into(),
     );
 
     m.insert(
         "alias.ral.example_hintn".into(),
-        "ral hintn add port [8080,5050,5000] + ral add srvn \"ssh $p\" #p --hint-n port".into(),
+        "ral hintn add port [8080,5050,5000] + ral add srvn \"ssh ${p}\" #p --hint-n port".into(),
     );
 
     m.insert(
@@ -248,7 +245,7 @@ pub fn fill(m: &mut HashMap<String, String>) {
         "本地（ntconfig.toml）".into(),
     );
 
-    m.insert("alias.ral.info_title".into(), "\u{1F4CC} 别名信息".into());
+    m.insert("alias.ral.info_title".into(), "别名信息".into());
 
     m.insert(
         "alias.ral.info_edit_copied".into(),
@@ -304,7 +301,7 @@ pub fn fill(m: &mut HashMap<String, String>) {
 
     m.insert(
         "alias.ral.param_cmd".into(),
-        " ral add <名称>(x) <命令> 创建参数化别名（在命令中使用 $x 或 ${{x}}）".into(),
+        " ral add <名称>(x) <命令> 创建参数化别名（在命令中使用 ${{x}}）".into(),
     );
 
     m.insert(
@@ -496,4 +493,9 @@ pub fn fill(m: &mut HashMap<String, String>) {
     m.insert("alias.ral.scope_global".into(), "全局配置".into());
 
     m.insert("alias.ral.cls_target".into(), "目标：{}".into());
+
+    m.insert(
+        "alias.ral.bare_env_warning".into(),
+        "现在裸 $NAME 表示环境变量。参数请使用 ${name}：{}".into(),
+    );
 }

@@ -5,7 +5,7 @@ pub fn fill(m: &mut HashMap<String, String>) {
 
     m.insert(
         "help.nms.play".into(),
-        "nms play <文件> ## 全屏声音播放器（空格暂停 · ←/→ 快进 · ↑/↓ 音量 · a 重播）".into(),
+        "nms play [-sf <时长>] <文件> ## 在终端播放声音（Ctrl+C 停止；-sf 指定开始位置）".into(),
     );
 
     m.insert(
@@ -21,12 +21,12 @@ pub fn fill(m: &mut HashMap<String, String>) {
 
     m.insert(
         "help.nms.keys".into(),
-        "播放器界面：实时波形 + 高低电平表 · 视频仅播放音频 · 播放结束会定格，按 a 重播".into(),
+        "在终端中播放并显示实时位置 / 剩余时间倒计时 · 视频仅播放音频（通过 ffmpeg） · Ctrl+C 停止".into(),
     );
 
     m.insert(
         "help.nms.example1".into(),
-        "nms play song.mp3 ## 播放音频文件".into(),
+        "nms play -sf 30 song.mp3 ## 从 0:30 开始播放音频".into(),
     );
 
     m.insert(

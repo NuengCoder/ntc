@@ -3,36 +3,13 @@ use std::collections::HashMap;
 pub fn fill(m: &mut HashMap<String, String>) {
     m.insert("cmd.image.cancelled".into(), "已取消。".into());
 
-    m.insert("cmd.image.default_label".into(), "默认".into());
-
     m.insert("cmd.image.desc_cancel".into(), "  {}. 取消".into());
-
-    m.insert("cmd.image.desc_html".into(), "  {}. HTML".into());
-
-    m.insert("cmd.image.desc_json".into(), "  {}. JSON".into());
-
-    m.insert(
-        "cmd.image.desc_markdown".into(),
-        "  {}. Markdown（默认）".into(),
-    );
-
-    m.insert(
-        "cmd.image.desc_narrative".into(),
-        "  {}. 叙述性描述（供 AI 使用）".into(),
-    );
-
-    m.insert("cmd.image.desc_txt".into(), "  {}. TXT".into());
 
     m.insert("cmd.image.enter_number".into(), "请输入编号：".into());
 
     m.insert(
-        "cmd.image.missing_out_format".into(),
-        "'out' 后缺少格式。".into(),
-    );
-
-    m.insert(
-        "cmd.image.missing_to_format".into(),
-        "'to' 后缺少格式。".into(),
+        "cmd.image.no_ansi".into(),
+        "此终端不支持 ANSI 颜色，无法在终端内显示 '{}'。".into(),
     );
 
     m.insert(
@@ -46,7 +23,7 @@ pub fn fill(m: &mut HashMap<String, String>) {
 
     m.insert(
         "cmd.image.usage".into(),
-        "用法：image <路径> [display|show [--sixel]|to|out <格式>] [--ocr] [--layout]".into(),
+        "用法：image [display|show] [--sixel] [<路径>]".into(),
     );
 
     m.insert(

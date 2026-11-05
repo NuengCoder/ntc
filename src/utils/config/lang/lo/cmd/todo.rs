@@ -38,6 +38,41 @@ pub fn fill(m: &mut HashMap<String, String>) {
     );
 
     m.insert(
+        "cmd.todo.help_move".into(),
+        "  todo move|mv <N> <M>    ຍ້າຍລາຍການທີ່ N ໄປຕຳແໜ່ງ M".into(),
+    );
+
+    m.insert(
+        "cmd.todo.help_replace".into(),
+        "  todo replace|rp <N> <M> ສະຫຼັບລາຍການທີ່ N ກັບ M".into(),
+    );
+
+    m.insert(
+        "cmd.todo.move_usage".into(),
+        "ການໃຊ້: todo move <ລຳດັບທີ່ເລືອກ> <ລຳດັບເປົ້າໝາຍ>  — ເລີ່ມທີ່ 1".into(),
+    );
+
+    m.insert(
+        "cmd.todo.replace_usage".into(),
+        "ການໃຊ້: todo replace <ລຳດັບທີ່ເລືອກ> <ລຳດັບເປົ້າໝາຍ>  — ເລີ່ມທີ່ 1".into(),
+    );
+
+    m.insert(
+        "cmd.todo.task_moved".into(),
+        "ຍ້າຍລາຍການທີ່ {} ໄປຕຳແໜ່ງ {}: {}".into(),
+    );
+
+    m.insert(
+        "cmd.todo.task_replaced".into(),
+        "ສະຫຼັບລາຍການທີ່ {} ແລະ {}: {} <-> {}".into(),
+    );
+
+    m.insert(
+        "cmd.todo.same_position".into(),
+        "ລາຍການທີ່ {} ຢູ່ຕຳແໜ່ງນີ້ແລ້ວ".into(),
+    );
+
+    m.insert(
         "cmd.todo.help_show".into(),
         "  todo                    ສະແດງງານທັງໝົດ".into(),
     );

@@ -4,8 +4,8 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="color-scheme" content="dark">
-<meta name="description" content="NTC 2.4.7 system design and architecture: layers, command lifecycle, modules, state, concurrency, trust boundaries, recovery, and extension points.">
-<title>NTC 2.4.7 — System Design &amp; Architecture</title>
+<meta name="description" content="NTC 2.4.8 system design and architecture: layers, command lifecycle, modules, state, concurrency, trust boundaries, recovery, and extension points.">
+<title>NTC 2.4.8 — System Design &amp; Architecture</title>
 <style>
 :root{
   --bg:#080b0e;
@@ -660,7 +660,7 @@ h2{margin:0;font-size:clamp(25px,3.2vw,38px);line-height:1.15;letter-spacing:-.0
       <a href="#build">Build</a>
       <a href="#extend">Extend</a>
     </nav>
-    <span class="version-pill"><span class="dot"></span>v2.4.7</span>
+    <span class="version-pill"><span class="dot"></span>v2.4.8</span>
     <button class="menu-toggle" id="menuToggle" aria-expanded="false" aria-controls="nav" aria-label="Toggle navigation">
       <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
     </button>
@@ -672,7 +672,7 @@ h2{margin:0;font-size:clamp(25px,3.2vw,38px);line-height:1.15;letter-spacing:-.0
     <div class="wrap">
       <div class="hero-grid">
         <div>
-          <div class="kicker">NTC 2.4.7 · System Design · Architecture</div>
+          <div class="kicker">NTC 2.4.8 · System Design · Architecture</div>
           <h1>One binary.<br><span class="outline">Layered by design.</span></h1>
           <p class="hero-lede">
             NTC is a <strong>shell-first workspace</strong>: a Rust binary and library that combine
@@ -888,12 +888,12 @@ h2{margin:0;font-size:clamp(25px,3.2vw,38px);line-height:1.15;letter-spacing:-.0
                   <span class="node-type">Network</span><span class="node-title">Network &amp; DevOps</span><span class="node-sub">SSH · scan · music · HTTP</span>
                 </button>
                 <button class="arch-node" data-layer="domain" style="--nc:var(--green)" data-node="packages"
-                  data-title="Packages, Media &amp; OCR" data-path="src/ntpkg/* · image2doc/*" data-color="var(--green)"
-                  data-summary="A runtime package manager with vendored installer recipes, plus image-to-document conversion with optional OCR. Active package bins are injected into PATH at shell start."
-                  data-in="package names/versions, images" data-out="installed runtimes, generated documents"
-                  data-files="src/ntpkg/*|src/image2doc/*|src/fake/*"
-                  data-notes="image2doc and ocr are default features; image2doc owns the optional image dependency.">
-                  <span class="node-type">Toolchain</span><span class="node-title">Packages, media &amp; OCR</span><span class="node-sub">ntpkg · image2doc · fake</span>
+                  data-title="Packages &amp; Data" data-path="src/ntpkg/* · src/fake/*" data-color="var(--green)"
+                  data-summary="A runtime package manager with vendored installer recipes, plus deterministic test-data generation. Active package bins are injected into PATH at shell start."
+                  data-in="package names/versions" data-out="installed runtimes, generated data"
+                  data-files="src/ntpkg/*|src/fake/*"
+                  data-notes="The optional image dependency is a default feature and powers inline image display; there is no OCR surface.">
+                  <span class="node-type">Toolchain</span><span class="node-title">Packages &amp; data</span><span class="node-sub">ntpkg · fake</span>
                 </button>
               </div>
             </div>
@@ -1357,16 +1357,16 @@ h2{margin:0;font-size:clamp(25px,3.2vw,38px);line-height:1.15;letter-spacing:-.0
             <p><b>Constraints:</b> PDF, DOCX and XLSX generators are excluded on Android by cfg; binary reports cannot be copied as text.</p>
           </div>
         </article>
-        <article class="module-card" data-group="data" data-search="image2doc image ocr ascii classify analyze narrative formats html json md txt src image2doc">
+        <article class="module-card" data-group="data" data-search="image display kitty sixel sextant terminal src nfe image sixel">
           <button class="module-toggle" aria-expanded="false">
-            <div class="module-top"><span class="module-badge" style="--mc:var(--green)">data</span><span class="module-path">src/image2doc/*</span></div>
-            <h3>image2doc</h3>
-            <p>Image analysis, OCR and document generation in text, Markdown, HTML and JSON formats.</p>
+            <div class="module-top"><span class="module-badge" style="--mc:var(--green)">data</span><span class="module-path">src/nfe/image.rs · src/nfe/sixel.rs</span></div>
+            <h3>image display</h3>
+            <p>Inline image rendering for the shell: Kitty PNG chunks, Sixel DCS or truecolor ANSI sextants.</p>
             <span class="module-expand"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 6l6 6-6 6"/></svg>Inspect role</span>
           </button>
           <div class="module-more">
-            <p><b>Owns:</b> conversion pipeline, classification, colour/layout analysis, ASCII rendering and optional OCR.</p>
-            <p><b>Features:</b> <code>image2doc</code> gates the <code>image</code> dependency; <code>ocr</code> is a separate default feature.</p>
+            <p><b>Owns:</b> decoding and resizing through the optional <code>image</code> crate, environment-based backend detection, cell fitting and ANSI composition.</p>
+            <p><b>Features:</b> <code>image</code> is a default Cargo feature and gates the <code>image</code> dependency; NFE previews and QR image output use the same feature.</p>
           </div>
         </article>
         <article class="module-card" data-group="data" data-search="fake data generator rng locale group format column src fake">
@@ -1394,15 +1394,15 @@ h2{margin:0;font-size:clamp(25px,3.2vw,38px);line-height:1.15;letter-spacing:-.0
             <p><b>Boundary:</b> uses <code>russh</code> / <code>russh-sftp</code>; credentials and host policy are security-sensitive inputs.</p>
           </div>
         </article>
-        <article class="module-card" data-group="network" data-search="nms music player scan audio rodio tui library src nms">
+        <article class="module-card" data-group="network" data-search="nms music player scan audio rodio countdown library src nms">
           <button class="module-toggle" aria-expanded="false">
             <div class="module-top"><span class="module-badge" style="--mc:var(--blue)">network</span><span class="module-path">src/nms/*</span></div>
             <h3>nms</h3>
-            <p>Music library scan, playback and TUI controls built on rodio.</p>
+            <p>Music library scan and terminal playback with a live countdown, built on rodio.</p>
             <span class="module-expand"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 6l6 6-6 6"/></svg>Inspect role</span>
           </button>
           <div class="module-more">
-            <p><b>Owns:</b> library scanning, player state and terminal UI. Audio output is a platform resource, not a shell concern.</p>
+            <p><b>Owns:</b> library scanning, playback state and the countdown loop. Audio output is a platform resource, not a shell concern.</p>
             <p><b>Relevance:</b> demonstrates that NTC’s module boundary is domain-based, not “terminal-only”.</p>
           </div>
         </article>
@@ -1833,8 +1833,8 @@ h2{margin:0;font-size:clamp(25px,3.2vw,38px);line-height:1.15;letter-spacing:-.0
       <div class="build-grid reveal">
         <div class="build-card">
           <h3>Default feature set</h3>
-          <p><code>image2doc</code> enables the optional <code>image</code> crate. <code>ocr</code> enables the OCR module, but OCR is still compiled only outside Android and requires a <code>tesseract</code> executable at runtime.</p>
-          <span class="tag">default = image2doc, ocr</span><span class="tag">feature-gated image</span><span class="tag">external tesseract</span>
+          <p><code>image</code> is the only default feature: it enables the optional <code>image</code> crate used for inline image display and QR image output. Everything else ships in the default build.</p>
+          <span class="tag">default = image</span><span class="tag">feature-gated image crate</span><span class="tag">no optional services</span>
         </div>
         <div class="build-card">
           <h3>Native dependencies</h3>
@@ -1848,12 +1848,12 @@ h2{margin:0;font-size:clamp(25px,3.2vw,38px);line-height:1.15;letter-spacing:-.0
         </div>
         <div class="build-card">
           <h3>Android / Termux</h3>
-          <p>Native clipboard, PDF, DOCX and XLSX writers are excluded. Terminal clipboard uses <code>termux-clipboard-set</code> when available. OCR is disabled by cfg even though the feature is default.</p>
+          <p>Native clipboard, PDF, DOCX and XLSX writers are excluded. Terminal clipboard uses <code>termux-clipboard-set</code> when available. The optional <code>image</code> crate still compiles, so inline image display remains available.</p>
           <span class="tag">cfg exclusions</span><span class="tag">Termux API</span><span class="tag">text formats remain</span>
         </div>
         <div class="build-card">
           <h3>Optional runtime tools</h3>
-          <p>Git, language servers, Tesseract, cloudflared and package-managed runtimes are discovered at runtime. Missing tools degrade a feature; they are not linked into the core binary.</p>
+          <p>Git, language servers, cloudflared and package-managed runtimes are discovered at runtime. Missing tools degrade a feature; they are not linked into the core binary.</p>
           <span class="tag">which::which</span><span class="tag">PATH injection</span><span class="tag">best-effort</span>
         </div>
         <div class="build-card">
@@ -1883,11 +1883,6 @@ h2{margin:0;font-size:clamp(25px,3.2vw,38px);line-height:1.15;letter-spacing:-.0
           <div class="matrix-platform">Clipboard</div>
           <span><code>arboard</code> off on Android; Termux fallback</span>
           <span>Clipboard is an adapter boundary, not a core editor assumption.</span>
-        </div>
-        <div class="matrix-row">
-          <div class="matrix-platform">OCR</div>
-          <span>Feature + non-Android + external binary</span>
-          <span>Three independent conditions must hold: compiled feature, supported target, installed Tesseract.</span>
         </div>
         <div class="matrix-row">
           <div class="matrix-platform">Serve</div>
@@ -2069,7 +2064,7 @@ h2{margin:0;font-size:clamp(25px,3.2vw,38px);line-height:1.15;letter-spacing:-.0
 <footer class="footer">
     <div class="wrap footer-inner">
       <div>
-        <p class="strong">NTC 2.4.7 · System design &amp; architecture</p>
+        <p class="strong">NTC 2.4.8 · System design &amp; architecture</p>
         <p>Derived from the repository’s source layout, manifests and runtime paths. Architecture claims describe this version and should be re-checked when the code moves.</p>
         <p><span class="status"><span class="dot"></span>Single-file · local · no external assets</span></p>
       </div>

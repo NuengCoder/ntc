@@ -136,7 +136,7 @@ pub fn fill(m: &mut HashMap<String, String>) {
 
     m.insert(
         "cmd.config.local.exists_warning".into(),
-        "\u{26a0}\u{fe0f} ntconfig.toml มีอยู่แล้ว!".into(),
+        "ntconfig.toml มีอยู่แล้ว!".into(),
     );
 
     m.insert(
@@ -156,13 +156,12 @@ pub fn fill(m: &mut HashMap<String, String>) {
 
     m.insert(
         "cmd.config.local.template_hint".into(),
-        "\u{1f4dd} นี่คือ COMMENTED TEMPLATE - ยังไม่มีการตั้งค่าที่ใช้งานอยู่".into(),
+        "นี่คือ COMMENTED TEMPLATE - ยังไม่มีการตั้งค่าที่ใช้งานอยู่".into(),
     );
 
     m.insert(
         "cmd.config.local.tip_global".into(),
-        "\u{1f4a1} เคล็ดลับ: การตั้งค่าระดับ global (teleports, เส้นทางผลลัพธ์, ความลึก) ยังคงเป็น global"
-            .into(),
+        "เคล็ดลับ: การตั้งค่าระดับ global (teleports, เส้นทางผลลัพธ์, ความลึก) ยังคงเป็น global".into(),
     );
 
     m.insert(
@@ -202,7 +201,7 @@ pub fn fill(m: &mut HashMap<String, String>) {
 
     m.insert(
         "cmd.config.local_deinit.title".into(),
-        "\u{26A0}\u{FE0F} การลบการกำหนดค่า LOCAL".into(),
+        "การลบการกำหนดค่า LOCAL".into(),
     );
 
     m.insert(
@@ -367,7 +366,7 @@ pub fn fill(m: &mut HashMap<String, String>) {
 
     m.insert(
         "cmd.config.resetcg.warning_title".into(),
-        "\u{26A0}\u{FE0F} คำเตือนการรีเซ็ตการกำหนดค่า".into(),
+        "คำเตือนการรีเซ็ตการกำหนดค่า".into(),
     );
 
     m.insert(
@@ -416,7 +415,7 @@ pub fn fill(m: &mut HashMap<String, String>) {
 
     m.insert(
         "cmd.config.restorecg.title".into(),
-        "\u{1F4CB} ไฟล์สำรองที่พร้อมใช้งาน:".into(),
+        "ไฟล์สำรองที่พร้อมใช้งาน:".into(),
     );
 
     m.insert("cmd.config.mgmt_header".into(), "การจัดการ:".into());
@@ -524,4 +523,107 @@ pub fn fill(m: &mut HashMap<String, String>) {
     );
 
     m.insert("cmd.config.serve.unknown_option".into(), "ไม่รู้จัก: {}".into());
+
+    // ---- config env / config rmenv ----
+
+    m.insert(
+        "cmd.config.env.title".into(),
+        "ตัวแปรสภาพแวดล้อมของ NTC:".into(),
+    );
+
+    m.insert(
+        "cmd.config.env.store_local".into(),
+        "local (ntconfig.toml)".into(),
+    );
+
+    m.insert(
+        "cmd.config.env.store_global".into(),
+        "global (คอนฟิก ntc)".into(),
+    );
+
+    m.insert("cmd.config.env.store_session".into(), "เซสชัน (-os)".into());
+
+    m.insert(
+        "cmd.config.env.store_os".into(),
+        "สภาพแวดล้อม OS (บันทึกถาวร)".into(),
+    );
+
+    m.insert("cmd.config.env.store_process".into(), "โปรเซส".into());
+
+    m.insert(
+        "cmd.config.env.empty".into(),
+        "ยังไม่ได้ตั้งตัวแปรสภาพแวดล้อมของ NTC ใช้: config env NAME value".into(),
+    );
+
+    m.insert(
+        "cmd.config.env.list_hint".into(),
+        "เคล็ดลับ: config env NAME value [-g|-l|-os|-osg] | config env NAME | config rmenv NAME [-all]".into(),
+    );
+
+    m.insert("cmd.config.env.get".into(), "{} = {}  [{}]".into());
+
+    m.insert(
+        "cmd.config.env.not_set".into(),
+        "ไม่ได้ตั้ง {} ในสภาพแวดล้อม NTC หรือ OS".into(),
+    );
+
+    m.insert(
+        "cmd.config.env.protected".into(),
+        "'{}' ถูกป้องกัน ใช้ 'usrpath' / 'syspath' สำหรับรายการ PATH".into(),
+    );
+
+    m.insert(
+        "cmd.config.env.invalid_name".into(),
+        "ชื่อตัวแปร '{}' ไม่ถูกต้อง (ใช้ตัวอักษร ตัวเลข และขีดล่าง ต้องไม่ขึ้นต้นด้วยตัวเลข)".into(),
+    );
+
+    m.insert(
+        "cmd.config.env.os_fail".into(),
+        "อัปเดตสภาพแวดล้อม OS ไม่สำเร็จ: {}".into(),
+    );
+
+    m.insert(
+        "cmd.config.env.set_os".into(),
+        "บันทึก {} = {} ไปยัง {} และใช้งานในเซสชันนี้แล้ว".into(),
+    );
+
+    m.insert(
+        "cmd.config.env.os_wiring".into(),
+        "โหลดในเชลล์ใหม่โดยเพิ่มบรรทัดนี้ในโปรไฟล์เชลล์: {}".into(),
+    );
+
+    m.insert(
+        "cmd.config.env.set".into(),
+        "บันทึก {} = {} ไปยัง {} แล้ว".into(),
+    );
+
+    m.insert(
+        "cmd.config.env.no_local".into(),
+        "ไม่มี ntconfig.toml ในไดเรกทอรีปัจจุบัน ใช้ 'local init' ก่อนหรือใช้ -g".into(),
+    );
+
+    m.insert(
+        "cmd.config.env.remove_missing".into(),
+        "ไม่ได้ตั้ง {} ในที่เก็บที่เลือก".into(),
+    );
+
+    m.insert(
+        "cmd.config.env.removed".into(),
+        "ลบ {} ออกจาก {} แล้ว".into(),
+    );
+
+    m.insert(
+        "cmd.config.env.flag_conflict".into(),
+        "แฟล็กขัดแย้งกัน ใช้อย่างใดอย่างหนึ่ง: -g, -l, -os, -osg หรือ -all".into(),
+    );
+
+    m.insert(
+        "cmd.config.env.rm_usage".into(),
+        "วิธีใช้: config rmenv NAME [-g|-l|-os|-osg|-all]".into(),
+    );
+
+    m.insert(
+        "help.config.idle".into(),
+        " idle|gt [on|off]  เปิด/ปิด ghost typing บนพร้อมท์ว่าง (ชื่ออื่น: ghost_typing)".into(),
+    );
 }

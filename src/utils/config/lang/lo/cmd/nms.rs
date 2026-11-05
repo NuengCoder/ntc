@@ -5,7 +5,7 @@ pub fn fill(m: &mut HashMap<String, String>) {
 
     m.insert(
         "cmd.nms.help_play".into(),
-        "nms play <ໄຟລ໌>                                 ເຄື່ອງຫຼິ້ນສຽງເຕັມຈໍ (ວິດີໂອຫຼິ້ນສະເພາະສຽງ)".into(),
+        "nms play [-sf <dur>] <ໄຟລ໌>                     ຫຼິ້ນສຽງໃນ terminal (Ctrl+C ຢຸດ; ວິດີໂອຫຼິ້ນສະເພາະສຽງ)".into(),
     );
 
     m.insert(
@@ -41,16 +41,35 @@ pub fn fill(m: &mut HashMap<String, String>) {
         "  --care            ບໍ່ສົນໃຈກົດ ignore (ໂຫມດ care)".into(),
     );
 
-    m.insert("cmd.nms.keys_title".into(), "ປຸ່ມເຄື່ອງຫຼິ້ນ:".into());
+    m.insert(
+        "cmd.nms.help_start".into(),
+        "  -sf, --start-from <dur>  ເລີ່ມຫຼິ້ນທີ່ <dur> (ສະເພາະ play ເຊັ່ນ -sf 30)".into(),
+    );
+
+    m.insert(
+        "cmd.nms.start_usage".into(),
+        "ວິທີໃຊ້: -sf <dur> (ເຊັ່ນ -sf 30, -sf 1mn)".into(),
+    );
+
+    m.insert(
+        "cmd.nms.invalid_start".into(),
+        "ເວລາເລີ່ມຕົ້ນບໍ່ຖືກຕ້ອງ: '{}' (ເຊັ່ນ 30, 1mn)".into(),
+    );
+
+    m.insert("cmd.nms.playing".into(), "♪ {}  [{}]".into());
+
+    m.insert("cmd.nms.stop_hint".into(), "ກົດ Ctrl+C ເພື່ອຢຸດ".into());
+
+    m.insert("cmd.nms.keys_title".into(), "ການຫຼິ້ນ:".into());
 
     m.insert(
         "cmd.nms.help_keys".into(),
-        "  space ຢຸດ/ຫຼິ້ນຕໍ່ · ←/→ ເລື່ອນ 5 ວິນາທີ · ↑/↓ ລະດັບສຽງ · a ຫຼິ້ນຄືນ · q ອອກ".into(),
+        "  ນັບຖອຍຫຼັງຕຳແໜ່ງ / ເວລາທີ່ເຫຼືອ · ກົດ Ctrl+C ເພື່ອຢຸດ · -sf <dur> ເລີ່ມຈາກຕຳແໜ່ງທີ່ກຳນົດ".into(),
     );
 
     m.insert("cmd.nms.examples_title".into(), "ຕົວຢ່າງ:".into());
 
-    m.insert("cmd.nms.example_play".into(), "nms play song.mp3".into());
+    m.insert("cmd.nms.example_play".into(), "nms play -sf 30 song.mp3".into());
 
     m.insert("cmd.nms.example_video".into(), "nms play movie.mp4".into());
 
@@ -70,6 +89,21 @@ pub fn fill(m: &mut HashMap<String, String>) {
     m.insert(
         "cmd.nms.no_sound_device".into(),
         "ບໍ່ພົບອຸປະກອນສຽງໃນເຄື່ອງນີ້ — ຫຼິ້ນສຽງບໍ່ໄດ້".into(),
+    );
+
+    m.insert(
+        "cmd.nms.need_ffmpeg".into(),
+        "ຫຼິ້ນ '{}' ບໍ່ໄດ້: ຟອແມັດ ຫຼື ຕົວແກະລະຫັດນີ້ຕ້ອງການ ffmpeg".into(),
+    );
+
+    m.insert(
+        "cmd.nms.install_ffmpeg".into(),
+        "ຕິດຕັ້ງໄດ້ດ້ວຍ: ntpkg install ffmpeg".into(),
+    );
+
+    m.insert(
+        "cmd.nms.no_audio_track".into(),
+        "'{}' ບໍ່ມີແຮກສຽງ".into(),
     );
 
     m.insert("cmd.nms.play_failed".into(), "ຫຼິ້ນ '{}' ບໍ່ໄດ້: {}".into());

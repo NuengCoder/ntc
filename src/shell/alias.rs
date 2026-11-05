@@ -126,6 +126,47 @@ struct VarRef {
     /// `true` for `$*{name}` / `$*{name:-default}`: a greedy, quote- and
     /// space-aware capture of the remaining args as one value.
     rest_capture: bool,
+    /// `true` when written with braces (`${x}`); a bare `$x` is an environment
+    /// reference in ral mode and a parameter in dbal mode.
+    braced: bool,
+}
+
+/// How a template interprets `$name` references.
+///
+/// - `Ral`: bare `$NAME` is an environment variable; `${x}`, `${x:-def}`,
+///   `${x[]}`, `${x[,]}`, `$*{x}` and legacy `$x[]` are parameters.
+/// - `Dbal`: every reference is a positional parameter (legacy `dbal`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum RefMode {
+    Ral,
+    Dbal,
+}
+
+impl VarRef {
+    /// Whether this reference is a positional parameter in `mode`.
+    fn is_param(&self, mode: RefMode) -> bool {
+        match mode {
+            RefMode::Dbal => true,
+            RefMode::Ral => self.braced || self.array_suffix.is_some() || self.array_sep.is_some(),
+        }
+    }
+}
+
+/// Split a trailing `[]` / `[c]` that lives *inside* braces (`${x[]}`).
+/// Returns `(base name, array suffix, separator)`.
+fn split_braced_array(name: &str) -> (String, Option<String>, Option<char>) {
+    let Some(open) = name.rfind('[') else {
+        return (name.to_string(), None, None);
+    };
+    if !name.ends_with(']') {
+        return (name.to_string(), None, None);
+    }
+    let content = &name[open + 1..name.len() - 1];
+    if content.chars().count() > 1 {
+        return (name.to_string(), None, None);
+    }
+    let sep = content.chars().next();
+    (name[..open].to_string(), Some(String::new()), sep)
 }
 
 /// Read an array suffix starting at `from` (first char after `]`):
@@ -161,7 +202,7 @@ fn parse_var_ref(chars: &[char], mut i: usize) -> Option<VarRef> {
             return None;
         }
     }
-    let (name, end, default_val) = if i < chars.len() && chars[i] == '{' {
+    let (name, end, default_val, braced) = if i < chars.len() && chars[i] == '{' {
         // ${name} or ${name:-default} syntax
         i += 1;
         let start = i;
@@ -186,7 +227,7 @@ fn parse_var_ref(chars: &[char], mut i: usize) -> Option<VarRef> {
             chars[val_start..i].iter().collect::<String>()
         });
         i += 1; // skip '}'
-        (name, i, default_val)
+        (name, i, default_val, true)
     } else {
         // $name syntax — first char must be [a-z0-9_]
         if i >= chars.len()
@@ -199,7 +240,14 @@ fn parse_var_ref(chars: &[char], mut i: usize) -> Option<VarRef> {
             i += 1;
         }
         let name: String = chars[start..i].iter().collect();
-        (name, i, None)
+        (name, i, None, false)
+    };
+
+    // `${x[]}` / `${x[,]}`: array syntax may live inside the braces.
+    let (name, braced_suffix, braced_sep) = if braced {
+        split_braced_array(&name)
+    } else {
+        (name, None, None)
     };
 
     // Check for array expansion: `[]suffix` (legacy space join) or
@@ -223,6 +271,7 @@ fn parse_var_ref(chars: &[char], mut i: usize) -> Option<VarRef> {
                     array_sep: None,
                     default_val,
                     rest_capture,
+                    braced,
                 });
             } else if content.chars().count() == 1 {
                 let sep = content.chars().next().unwrap();
@@ -234,9 +283,21 @@ fn parse_var_ref(chars: &[char], mut i: usize) -> Option<VarRef> {
                     array_sep: Some(sep),
                     default_val,
                     rest_capture,
+                    braced,
                 });
             }
         }
+    }
+    if let Some(suffix) = braced_suffix {
+        return Some(VarRef {
+            name,
+            end,
+            array_suffix: Some(suffix),
+            array_sep: braced_sep,
+            default_val,
+            rest_capture,
+            braced,
+        });
     }
     Some(VarRef {
         name,
@@ -245,6 +306,7 @@ fn parse_var_ref(chars: &[char], mut i: usize) -> Option<VarRef> {
         array_sep: None,
         default_val,
         rest_capture,
+        braced,
     })
 }
 
@@ -312,8 +374,42 @@ pub(crate) fn find_invalid_array_sep(template: &str) -> Option<(String, String)>
     None
 }
 
+/// Bare `$NAME` references in a template — environment variables in ral mode.
+/// Used by `ral add`/`edit` to suggest the braced `${name}` parameter form.
+pub(crate) fn bare_env_refs(template: &str) -> Vec<String> {
+    let mut out: Vec<String> = Vec::new();
+    let chars: Vec<char> = template.chars().collect();
+    let mut i = 0;
+    while i < chars.len() {
+        if chars[i] == '$' {
+            if let Some(ref vr) = parse_var_ref(&chars, i) {
+                if !vr.is_param(RefMode::Ral) && !out.iter().any(|n| n == &vr.name) {
+                    out.push(vr.name.clone());
+                }
+                i = vr.end;
+            } else {
+                i += 1;
+            }
+        } else {
+            i += 1;
+        }
+    }
+    out
+}
+
 /// Shared with the `ndb` shell (`dbal` aliases reuse ral-style params).
+/// In this (legacy) mode every `$x` / `${x}` reference is a parameter.
 pub(crate) fn substitute_params(template: &str, args: &[&str]) -> String {
+    substitute_params_mode(template, args, RefMode::Dbal)
+}
+
+/// Substitute ral parameters: braced `${x}` forms are parameters while a bare
+/// `$NAME` resolves from the environment.
+pub(crate) fn substitute_params_ral(template: &str, args: &[&str]) -> String {
+    substitute_params_mode(template, args, RefMode::Ral)
+}
+
+fn substitute_params_mode(template: &str, args: &[&str], mode: RefMode) -> String {
     // 1. Collect placeholder names in order of first appearance.
     let mut param_order: Vec<String> = Vec::new();
     let chars: Vec<char> = template.chars().collect();
@@ -321,7 +417,7 @@ pub(crate) fn substitute_params(template: &str, args: &[&str]) -> String {
     while i < chars.len() {
         if chars[i] == '$' {
             if let Some(ref vr) = parse_var_ref(&chars, i) {
-                if !param_order.contains(&vr.name) {
+                if vr.is_param(mode) && !param_order.contains(&vr.name) {
                     param_order.push(vr.name.clone());
                 }
                 i = vr.end;
@@ -347,7 +443,13 @@ pub(crate) fn substitute_params(template: &str, args: &[&str]) -> String {
     while i < chars.len() {
         if chars[i] == '$' {
             if let Some(ref vr) = parse_var_ref(&chars, i) {
-                if vr.rest_capture {
+                if !vr.is_param(mode) {
+                    // Bare `$NAME` in ral mode is an environment variable.
+                    match crate::utils::paths::resolve_env_var(&vr.name) {
+                        Some(value) => result.push_str(&value),
+                        None => result.extend(&chars[i..vr.end]),
+                    }
+                } else if vr.rest_capture {
                     // `$*{x}` binds one argument (spaces preserved by the
                     // quote-aware tokenizer, so `"wow nice"` arrives here as a
                     // single arg). Only the *last* placeholder in the template
@@ -450,31 +552,43 @@ pub(crate) fn substitute_params(template: &str, args: &[&str]) -> String {
     result
 }
 
-/// Extract parameter names from a command template (e.g. `$x`, `${x}`).
+/// Extract parameter names from a command template (e.g. `${x}`, `$x[]`).
 /// Returns names in order of first appearance.
-/// Shared with the `ndb` shell (`dbal` usage hints).
+/// Shared with the `ndb` shell (`dbal` usage hints); this legacy form treats
+/// every reference as a parameter.
 pub(crate) fn extract_param_names(template: &str) -> Vec<String> {
+    extract_param_names_mode(template, RefMode::Dbal)
+}
+
+/// Ral-mode parameter names: braced `${x}` forms and `$x[]` arrays only.
+pub(crate) fn extract_param_names_ral(template: &str) -> Vec<String> {
+    extract_param_names_mode(template, RefMode::Ral)
+}
+
+fn extract_param_names_mode(template: &str, mode: RefMode) -> Vec<String> {
     let mut names: Vec<String> = Vec::new();
     let chars: Vec<char> = template.chars().collect();
     let mut i = 0;
     while i < chars.len() {
         if chars[i] == '$' {
             if let Some(ref vr) = parse_var_ref(&chars, i) {
-                let base_name = if vr.array_suffix.is_some() || vr.array_sep.is_some() {
-                    match vr.array_sep {
-                        Some(c) => format!("{}[{}]", vr.name, c),
-                        None => format!("{}[]", vr.name),
+                if vr.is_param(mode) {
+                    let base_name = if vr.array_suffix.is_some() || vr.array_sep.is_some() {
+                        match vr.array_sep {
+                            Some(c) => format!("{}[{}]", vr.name, c),
+                            None => format!("{}[]", vr.name),
+                        }
+                    } else {
+                        vr.name.clone()
+                    };
+                    let display_name = if let Some(ref default) = vr.default_val {
+                        format!("{}={}", base_name, default)
+                    } else {
+                        base_name
+                    };
+                    if !names.contains(&display_name) {
+                        names.push(display_name);
                     }
-                } else {
-                    vr.name.clone()
-                };
-                let display_name = if let Some(ref default) = vr.default_val {
-                    format!("{}={}", base_name, default)
-                } else {
-                    base_name
-                };
-                if !names.contains(&display_name) {
-                    names.push(display_name);
                 }
                 i = vr.end;
             } else {
@@ -520,6 +634,15 @@ pub(super) fn inject_template_defaults(template: &str, defaults: &[(String, Stri
     while i < chars.len() {
         if chars[i] == '$' {
             if let Some(ref vr) = parse_var_ref(&chars, i) {
+                if !vr.is_param(RefMode::Ral) {
+                    // Bare `$NAME` is an environment reference: leave it be.
+                    let end = vr.end;
+                    while i < end {
+                        result.push(chars[i]);
+                        i += 1;
+                    }
+                    continue;
+                }
                 // Only inject default if this name has no existing default and we have one
                 if vr.default_val.is_none() {
                     if let Some((_, def_val)) = defaults.iter().find(|(n, _)| *n == vr.name) {
@@ -594,6 +717,12 @@ pub(crate) enum ParamHintKind {
     Values(Vec<String>),
     /// Named value list: `--hint-n <name>` (see `ral hintn`).
     Named(String),
+    /// Table name of the open `ndb` database (`--hint-table`). Only the
+    /// `ndb` hinter can resolve this; the `ntc` shell shows nothing.
+    Table,
+    /// Column name of a table in the open `ndb` database, optionally
+    /// restricted to one table: `--hint-table-col-name [table]`.
+    TableColName(String),
 }
 
 /// Interactive-select source for one alias parameter.
@@ -689,8 +818,8 @@ pub(crate) fn placeholder_idents(template: &str) -> Vec<(String, bool)> {
     while i < chars.len() {
         if chars[i] == '$' {
             if let Some(ref vr) = parse_var_ref(&chars, i) {
-                // One entry per name: array-ness from first appearance.
-                if !out.iter().any(|(n, _)| n == &vr.name) {
+                // Ral params only: bare `$NAME` is an environment reference.
+                if vr.is_param(RefMode::Ral) && !out.iter().any(|(n, _)| n == &vr.name) {
                     out.push((
                         vr.name.clone(),
                         vr.array_suffix.is_some() || vr.array_sep.is_some(),
@@ -722,6 +851,8 @@ fn parse_hint_flag(flag: &str, values: &[String]) -> Result<ParamHintKind, ()> {
         "--hint-file-name" => Ok(ParamHintKind::FileName),
         "--hint" => Ok(ParamHintKind::Values(parse_inline_values(values))),
         "--hint-n" => Ok(ParamHintKind::Named(clean_hint_list_name(values))),
+        "--hint-table" => Ok(ParamHintKind::Table),
+        "--hint-table-col-name" => Ok(ParamHintKind::TableColName(clean_hint_list_name(values))),
         _ => Err(()),
     }
 }
@@ -958,6 +1089,7 @@ fn parse_hint_tail(
             let is_select_ext = tok == "--select-ext" || tok == "--select-ext-name";
             let is_inline = tok == "--hint" || tok == "--select";
             let is_named = tok == "--hint-n" || tok == "--select-n";
+            let is_table_col = tok == "--hint-table-col-name";
             // `--hint-ext` / `--hint-ext-name` / `--select-ext` /
             // `--select-ext-name` take space/comma values;
             // `--hint` / `--select` take one `[...]` span; `--hint-n` /
@@ -1011,6 +1143,17 @@ fn parse_hint_tail(
                 }
                 if values.len() != 1 || clean_hint_list_name(&values).is_empty() {
                     return Err(("bad_group", i));
+                }
+            } else if is_table_col {
+                // Optional `[table]` restriction; a bare flag means "any
+                // table's columns".
+                if j < toks.len()
+                    && !toks[j].starts_with('#')
+                    && !is_annotation_flag(&toks[j])
+                    && !toks[j].starts_with('-')
+                {
+                    values.push(toks[j].clone());
+                    j += 1;
                 }
             }
             if tok == "--hint" || tok == "--hint-n" || tok.starts_with("--hint-") {
@@ -1067,6 +1210,28 @@ fn is_annotation_flag(tok: &str) -> bool {
 pub(crate) fn split_hint_annotations(
     input: &str,
 ) -> Result<(String, Vec<ParamHint>), &'static str> {
+    split_annotations(input, placeholder_idents)
+}
+
+/// [`split_hint_annotations`] for `ndb` `dbal` templates, where bare `$x`
+/// *is* a parameter (in the `ntc` shell it is an environment reference).
+pub(crate) fn split_hint_annotations_bare(
+    input: &str,
+) -> Result<(String, Vec<ParamHint>), &'static str> {
+    split_annotations(input, |cmd| {
+        extract_param_names(cmd)
+            .into_iter()
+            .map(|n| (n, false))
+            .collect()
+    })
+}
+
+/// Shared body of the two splitters: `idents_for` maps the text before the
+/// annotations to the parameter names a `#param` group may reference.
+fn split_annotations(
+    input: &str,
+    idents_for: impl Fn(&str) -> Vec<(String, bool)>,
+) -> Result<(String, Vec<ParamHint>), &'static str> {
     let toks = tokenize_hint_args(input);
     let mut first_err: Option<&'static str> = None;
     let mut mentioned = false;
@@ -1083,7 +1248,7 @@ pub(crate) fn split_hint_annotations(
         }) {
             mentioned = true;
         }
-        let idents = placeholder_idents(&toks[..start].join(" "));
+        let idents = idents_for(&toks[..start].join(" "));
         match parse_hint_tail(tail, &idents) {
             Ok(groups) => {
                 let cmd = toks[..start].join(" ");
@@ -1154,6 +1319,13 @@ pub(crate) fn serialize_hint_spec(hints: &[ParamHint]) -> String {
                 }
                 ParamHintKind::Named(name) => {
                     p.push_str(&format!(" --hint-n {}", name));
+                }
+                ParamHintKind::Table => p.push_str(" --hint-table"),
+                ParamHintKind::TableColName(table) if table.is_empty() => {
+                    p.push_str(" --hint-table-col-name");
+                }
+                ParamHintKind::TableColName(table) => {
+                    p.push_str(&format!(" --hint-table-col-name {}", table));
                 }
             }
         }
@@ -1298,7 +1470,7 @@ pub(super) fn expand_aliases(cmd: &str) -> String {
 }
 
 /// Recursively expand aliases in a command (no && splitting).
-/// Supports parameterised calls: `py(hello)` with template `python $x.py` -> `python hello.py`
+/// Supports parameterised calls: `py(hello)` with template `python ${x}.py` -> `python hello.py`
 fn expand_aliases_rec(cmd: &str, depth: usize) -> String {
     const MAX_DEPTH: usize = 5;
     if depth > MAX_DEPTH {
@@ -1331,15 +1503,15 @@ fn expand_aliases_rec(cmd: &str, depth: usize) -> String {
             } else {
                 args_str.split(',').map(|s| s.trim()).collect()
             };
-            (substitute_params(template, &args), false)
+            (substitute_params_ral(template, &args), false)
         } else if !rest.is_empty() && has_placeholders {
             // Positional args: runc [add,minus,mul] math
             let tokens = tokenize_args(rest);
             let token_refs: Vec<&str> = tokens.iter().map(|s| s.as_str()).collect();
-            (substitute_params(template, &token_refs), true)
+            (substitute_params_ral(template, &token_refs), true)
         } else {
             // Even with no args, substitute so that ${name:-default} gets resolved
-            (substitute_params(template, &[]), false)
+            (substitute_params_ral(template, &[]), false)
         };
 
         let new_cmd = if consumed_rest || rest.is_empty() {
@@ -1380,7 +1552,7 @@ fn placeholder_defaults(template: &str) -> Vec<(String, bool, Option<String>)> {
     while i < chars.len() {
         if chars[i] == '$' {
             if let Some(ref vr) = parse_var_ref(&chars, i) {
-                if !out.iter().any(|(n, _, _)| n == &vr.name) {
+                if vr.is_param(RefMode::Ral) && !out.iter().any(|(n, _, _)| n == &vr.name) {
                     out.push((
                         vr.name.clone(),
                         vr.array_suffix.is_some() || vr.array_sep.is_some(),
@@ -1787,6 +1959,28 @@ pub(crate) fn expand_command_line_interactive(
     input: &str,
     nav: &mut crate::navigator::Navigator,
 ) -> anyhow::Result<Option<String>> {
+    match expand_command_line_interactive_inner(input, nav)? {
+        Some(line) => Ok(Some(expand_env_in_line(&line))),
+        None => Ok(None),
+    }
+}
+
+/// Resolve `$NAME` / `${NAME}` (and `%NAME%` on Windows) just before the line
+/// is executed, so `print $PATH` shows the value like `echo $PATH` does in a
+/// POSIX shell. Lines that define or edit a ral template keep their `$` text
+/// literal — those run-time references belong to the alias, not the caller.
+fn expand_env_in_line(line: &str) -> String {
+    let head = line.trim_start().to_lowercase();
+    if head == "ral" || head.starts_with("ral ") {
+        return line.to_string();
+    }
+    crate::utils::paths::expand_env_refs(line)
+}
+
+fn expand_command_line_interactive_inner(
+    input: &str,
+    nav: &mut crate::navigator::Navigator,
+) -> anyhow::Result<Option<String>> {
     if input.trim().is_empty() {
         return Ok(Some(String::new()));
     }
@@ -1933,7 +2127,7 @@ mod tests {
             );
         }
         // Bare --hint-ext with no values = all files.
-        let (_, hints) = split_hint_annotations("run $x #x --hint-ext").unwrap();
+        let (_, hints) = split_hint_annotations("run ${x} #x --hint-ext").unwrap();
         assert_eq!(hints[0].kinds, vec![ParamHintKind::Ext(vec![])]);
         // Array placeholder form.
         let (_, hints) =
@@ -1952,8 +2146,8 @@ mod tests {
         assert_eq!(cmd, "echo #notahint");
         assert!(hints.is_empty());
         // Maximal command wins when an earlier #word exists.
-        let (cmd, hints) = split_hint_annotations("echo #a $x #x --hint-dir").unwrap();
-        assert_eq!(cmd, "echo #a $x");
+        let (cmd, hints) = split_hint_annotations("echo #a ${x} #x --hint-dir").unwrap();
+        assert_eq!(cmd, "echo #a ${x}");
         assert_eq!(hints.len(), 1);
     }
 
@@ -1961,22 +2155,22 @@ mod tests {
     fn hint_annotations_errors_save_nothing() {
         // Unknown hint flag.
         assert_eq!(
-            split_hint_annotations("run $x #x --hint-bogus").unwrap_err(),
+            split_hint_annotations("run ${x} #x --hint-bogus").unwrap_err(),
             "unknown_hint"
         );
         // Unknown param.
         assert_eq!(
-            split_hint_annotations("run $x #y --hint-dir").unwrap_err(),
+            split_hint_annotations("run ${x} #y --hint-dir").unwrap_err(),
             "unknown_param"
         );
         // Trailing flagless group.
         assert_eq!(
-            split_hint_annotations("run $x #x --hint-dir #y").unwrap_err(),
+            split_hint_annotations("run ${x} #x --hint-dir #y").unwrap_err(),
             "unknown_param"
         );
         // Bare value where a group is expected.
         assert_eq!(
-            split_hint_annotations("run $x #x --hint-dir oops").unwrap_err(),
+            split_hint_annotations("run ${x} #x --hint-dir oops").unwrap_err(),
             "bad_group"
         );
     }
@@ -1989,7 +2183,7 @@ mod tests {
             serialize_hint_spec(&hints),
             "#x --hint-all #y --hint-tp --hint-dir"
         );
-        let (_, hints) = split_hint_annotations("run $x #x --hint-ext (py, c)").unwrap();
+        let (_, hints) = split_hint_annotations("run ${x} #x --hint-ext (py, c)").unwrap();
         assert_eq!(serialize_hint_spec(&hints), "#x --hint-ext py,c");
     }
 
@@ -2001,8 +2195,8 @@ mod tests {
             ("#x --select-fd", "fd"),
             ("#x --select-tp", "tp"),
         ] {
-            let (cmd, hints) = split_hint_annotations(&format!("run $x {}", tail)).unwrap();
-            assert_eq!(cmd, "run $x", "tail: {}", tail);
+            let (cmd, hints) = split_hint_annotations(&format!("run ${{x}} {}", tail)).unwrap();
+            assert_eq!(cmd, "run ${x}", "tail: {}", tail);
             assert_eq!(hints.len(), 1);
             assert_eq!(hints[0].param, "x");
             assert!(hints[0].kinds.is_empty());
@@ -2012,7 +2206,7 @@ mod tests {
         let (_, hints) = split_hint_annotations("tl dir ${x:-.} #x --select-dir").unwrap();
         assert_eq!(hints[0].selects, vec![ParamSelectKind::Dir]);
         // Bare --select-ext = all files.
-        let (_, hints) = split_hint_annotations("run $x #x --select-ext").unwrap();
+        let (_, hints) = split_hint_annotations("run ${x} #x --select-ext").unwrap();
         assert_eq!(hints[0].selects, vec![ParamSelectKind::Ext(vec![])]);
     }
 
@@ -2024,7 +2218,7 @@ mod tests {
             ("#x --select-ext py,c", vec!["py", "c"]),
             ("#x --select-ext .PY", vec!["py"]),
         ] {
-            let (_, hints) = split_hint_annotations(&format!("run $x {}", tail)).unwrap();
+            let (_, hints) = split_hint_annotations(&format!("run ${{x}} {}", tail)).unwrap();
             let want: Vec<String> = want.into_iter().map(str::to_string).collect();
             assert_eq!(
                 hints[0].selects,
@@ -2050,7 +2244,7 @@ mod tests {
             vec![ParamSelectKind::Tp, ParamSelectKind::Dir]
         );
         // Same-param repeats merge.
-        let (_, hints) = split_hint_annotations("run $x #x --select-dir #x --select-tp").unwrap();
+        let (_, hints) = split_hint_annotations("run ${x} #x --select-dir #x --select-tp").unwrap();
         assert_eq!(
             hints[0].selects,
             vec![ParamSelectKind::Dir, ParamSelectKind::Tp]
@@ -2058,7 +2252,8 @@ mod tests {
         // Roundtrip keeps both.
         assert_eq!(serialize_hint_spec(&hints), "#x --select-dir --select-tp");
         let (_, hints) =
-            split_hint_annotations("run $x #x --hint-dir --select-dir --select-ext py,c").unwrap();
+            split_hint_annotations("run ${x} #x --hint-dir --select-dir --select-ext py,c")
+                .unwrap();
         assert_eq!(
             serialize_hint_spec(&hints),
             "#x --hint-dir --select-dir --select-ext py,c"
@@ -2069,22 +2264,22 @@ mod tests {
     fn select_errors() {
         // Unknown select flag.
         assert_eq!(
-            split_hint_annotations("run $x #x --select-bogus").unwrap_err(),
+            split_hint_annotations("run ${x} #x --select-bogus").unwrap_err(),
             "unknown_hint"
         );
         // Unknown param.
         assert_eq!(
-            split_hint_annotations("run $x #y --select-dir").unwrap_err(),
+            split_hint_annotations("run ${x} #y --select-dir").unwrap_err(),
             "unknown_param"
         );
         // Bare value after non-ext select.
         assert_eq!(
-            split_hint_annotations("run $x #x --select-dir oops").unwrap_err(),
+            split_hint_annotations("run ${x} #x --select-dir oops").unwrap_err(),
             "bad_group"
         );
         // Flagless group still bad.
         assert_eq!(
-            split_hint_annotations("run $x #x --select-dir #y").unwrap_err(),
+            split_hint_annotations("run ${x} #x --select-dir #y").unwrap_err(),
             "unknown_param"
         );
     }
@@ -2098,7 +2293,7 @@ mod tests {
             ("#x --hint-ext-name py,c", vec!["py", "c"]),
             ("#x --hint-ext-name .PY", vec!["py"]),
         ] {
-            let (_, hints) = split_hint_annotations(&format!("run $x {}", tail)).unwrap();
+            let (_, hints) = split_hint_annotations(&format!("run ${{x}} {}", tail)).unwrap();
             let want: Vec<String> = want.into_iter().map(str::to_string).collect();
             assert_eq!(
                 hints[0].kinds,
@@ -2108,39 +2303,40 @@ mod tests {
             );
         }
         // Bare --hint-ext-name = stems of all files.
-        let (_, hints) = split_hint_annotations("run $x #x --hint-ext-name").unwrap();
+        let (_, hints) = split_hint_annotations("run ${x} #x --hint-ext-name").unwrap();
         assert_eq!(hints[0].kinds, vec![ParamHintKind::ExtName(vec![])]);
 
         // --hint-file-name takes no values.
-        let (cmd, hints) = split_hint_annotations("run $x #x --hint-file-name").unwrap();
-        assert_eq!(cmd, "run $x");
+        let (cmd, hints) = split_hint_annotations("run ${x} #x --hint-file-name").unwrap();
+        assert_eq!(cmd, "run ${x}");
         assert_eq!(hints[0].kinds, vec![ParamHintKind::FileName]);
 
         // Select forms mirror hints.
-        let (_, hints) = split_hint_annotations("run $x #x --select-ext-name py,c").unwrap();
+        let (_, hints) = split_hint_annotations("run ${x} #x --select-ext-name py,c").unwrap();
         assert_eq!(
             hints[0].selects,
             vec![ParamSelectKind::ExtName(vec!["py".into(), "c".into()])]
         );
-        let (_, hints) = split_hint_annotations("run $x #x --select-file-name").unwrap();
+        let (_, hints) = split_hint_annotations("run ${x} #x --select-file-name").unwrap();
         assert_eq!(hints[0].selects, vec![ParamSelectKind::FileName]);
 
         // Roundtrip keeps canonical spellings.
         let (_, hints) =
-            split_hint_annotations("run $x #x --hint-file-name --hint-ext-name py,c").unwrap();
+            split_hint_annotations("run ${x} #x --hint-file-name --hint-ext-name py,c").unwrap();
         assert_eq!(
             serialize_hint_spec(&hints),
             "#x --hint-file-name --hint-ext-name py,c"
         );
         let (_, hints) =
-            split_hint_annotations("run $x #x --select-file-name --select-ext-name py,c").unwrap();
+            split_hint_annotations("run ${x} #x --select-file-name --select-ext-name py,c")
+                .unwrap();
         assert_eq!(
             serialize_hint_spec(&hints),
             "#x --select-file-name --select-ext-name py,c"
         );
         // A bare token after a value-less --hint-file-name is a bad group.
         assert_eq!(
-            split_hint_annotations("run $x #x --hint-file-name oops").unwrap_err(),
+            split_hint_annotations("run ${x} #x --hint-file-name oops").unwrap_err(),
             "bad_group"
         );
     }
@@ -2194,8 +2390,8 @@ mod tests {
     #[test]
     fn inline_values_parse_and_serialize() {
         // Bare --hint / --select with bracket lists.
-        let (cmd, hints) = split_hint_annotations("ssh $p #p --hint [8080,38533,55555]").unwrap();
-        assert_eq!(cmd, "ssh $p");
+        let (cmd, hints) = split_hint_annotations("ssh ${p} #p --hint [8080,38533,55555]").unwrap();
+        assert_eq!(cmd, "ssh ${p}");
         assert_eq!(
             hints[0].kinds,
             vec![ParamHintKind::Values(vec![
@@ -2207,7 +2403,7 @@ mod tests {
         assert_eq!(serialize_hint_spec(&hints), "#p --hint [8080,38533,55555]");
         // Quoted phrases with spaces survive.
         let (_, hints) =
-            split_hint_annotations("echo $w #w --select [\"what is this\",omg]").unwrap();
+            split_hint_annotations("echo ${w} #w --select [\"what is this\",omg]").unwrap();
         assert_eq!(
             hints[0].selects,
             vec![ParamSelectKind::Values(vec![
@@ -2221,33 +2417,34 @@ mod tests {
         );
         // Union with other kinds on the same param.
         let (_, hints) =
-            split_hint_annotations("run $x #x --hint-dir --hint [build,dist]").unwrap();
+            split_hint_annotations("run ${x} #x --hint-dir --hint [build,dist]").unwrap();
         assert_eq!(hints[0].kinds.len(), 2);
         // Bare flag without a bracket span is malformed.
         assert_eq!(
-            split_hint_annotations("run $x #x --hint").unwrap_err(),
+            split_hint_annotations("run ${x} #x --hint").unwrap_err(),
             "bad_group"
         );
         assert_eq!(
-            split_hint_annotations("run $x #x --hint dir").unwrap_err(),
+            split_hint_annotations("run ${x} #x --hint dir").unwrap_err(),
             "bad_group"
         );
         assert_eq!(
-            split_hint_annotations("run $x #x --select []").unwrap_err(),
+            split_hint_annotations("run ${x} #x --select []").unwrap_err(),
             "bad_group"
         );
     }
 
     #[test]
     fn named_refs_parse_and_helpers() {
-        let (cmd, hints) = split_hint_annotations("ssh $p #p --hint-n port").unwrap();
-        assert_eq!(cmd, "ssh $p");
+        let (cmd, hints) = split_hint_annotations("ssh ${p} #p --hint-n port").unwrap();
+        assert_eq!(cmd, "ssh ${p}");
         assert_eq!(
             hints[0].kinds,
             vec![ParamHintKind::Named("port".to_string())]
         );
         assert_eq!(serialize_hint_spec(&hints), "#p --hint-n port");
-        let (_, hints) = split_hint_annotations("run $x #x --select-dir --select-n port").unwrap();
+        let (_, hints) =
+            split_hint_annotations("run ${x} #x --select-dir --select-n port").unwrap();
         assert_eq!(
             hints[0].selects,
             vec![
@@ -2256,14 +2453,14 @@ mod tests {
             ]
         );
         // Names normalize to lowercase.
-        let (_, hints) = split_hint_annotations("run $x #x --hint-n PORT").unwrap();
+        let (_, hints) = split_hint_annotations("run ${x} #x --hint-n PORT").unwrap();
         assert_eq!(
             hints[0].kinds,
             vec![ParamHintKind::Named("port".to_string())]
         );
         // Missing name is malformed.
         assert_eq!(
-            split_hint_annotations("run $x #x --hint-n").unwrap_err(),
+            split_hint_annotations("run ${x} #x --hint-n").unwrap_err(),
             "bad_group"
         );
         // Spec helpers.
@@ -2459,7 +2656,7 @@ mod tests {
         cfg.run_aliases
             .insert("hi".to_string(), "echo $*{x}".to_string());
         cfg.run_aliases
-            .insert("run_file".to_string(), "python $x.py".to_string());
+            .insert("run_file".to_string(), "python ${x}.py".to_string());
         cfg.run_aliases.insert(
             "mail".to_string(),
             "smtp --to a@b -s \"$*{title}\" -b \"$*{body}\"".to_string(),
@@ -2509,6 +2706,31 @@ mod tests {
                 "echo hi | echo inner"
             );
         });
+    }
+
+    #[test]
+    fn typed_env_refs_expand_before_execution() {
+        std::env::set_var("NTC_TEST_LINE_ENV", "hello world");
+        assert_eq!(
+            expand_env_in_line("print $NTC_TEST_LINE_ENV"),
+            "print hello world"
+        );
+        assert_eq!(
+            expand_env_in_line("print ${NTC_TEST_LINE_ENV}"),
+            "print hello world"
+        );
+        // Unknown names and bare `$` stay literal.
+        assert_eq!(
+            expand_env_in_line("print $NTC_TEST_NO_SUCH_VAR_XYZ"),
+            "print $NTC_TEST_NO_SUCH_VAR_XYZ"
+        );
+        assert_eq!(expand_env_in_line("print cost$5"), "print cost$5");
+        // ral definitions own their `$` references.
+        assert_eq!(
+            expand_env_in_line("ral add hi \"print $NTC_TEST_LINE_ENV\""),
+            "ral add hi \"print $NTC_TEST_LINE_ENV\""
+        );
+        std::env::remove_var("NTC_TEST_LINE_ENV");
     }
 
     #[test]

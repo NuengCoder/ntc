@@ -2,6 +2,7 @@ pub(crate) mod events;
 pub(crate) mod fileops;
 pub(crate) mod image;
 pub(crate) mod kitty;
+pub(crate) mod prompt;
 pub(crate) mod render;
 pub(crate) mod sixel;
 pub(crate) mod state;
@@ -13,9 +14,9 @@ use crossterm::cursor::{Hide, Show};
 use crossterm::event::{DisableMouseCapture, EnableMouseCapture};
 use crossterm::execute;
 use crossterm::terminal::{self, EnterAlternateScreen, LeaveAlternateScreen};
-use std::io::stdout;
+use std::io::{stdout, Write};
 use std::path::Path;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 /// Run the NTC File Explorer TUI starting at the given optional path.
 pub fn run_explorer(path: Option<&Path>) -> Result<()> {
@@ -28,8 +29,10 @@ pub fn run_explorer(path: Option<&Path>) -> Result<()> {
     state.term_w = w as usize;
     state.term_h = h as usize;
 
-    state.reload();
-    state.render(&mut stdout)?;
+    // `NfeState::new` already loaded the listing; a second `reload()` here
+    // only repeated the directory walk and the git probe before the first
+    // frame.
+    render_frame(&mut state, &mut stdout)?;
 
     while state.running {
         if !crossterm::event::poll(Duration::from_millis(50))? {
@@ -50,7 +53,7 @@ pub fn run_explorer(path: Option<&Path>) -> Result<()> {
                         state.term_w = w2 as usize;
                         state.term_h = h2 as usize;
                         state.refresh();
-                        state.render(&mut stdout)?;
+                        render_frame(&mut state, &mut stdout)?;
                         continue;
                     }
                 }
@@ -58,10 +61,27 @@ pub fn run_explorer(path: Option<&Path>) -> Result<()> {
             Action::Continue => {}
         }
 
-        state.render(&mut stdout)?;
+        render_frame(&mut state, &mut stdout)?;
     }
 
     leave_tui(&mut stdout)?;
+    Ok(())
+}
+
+/// Compose a frame in memory and emit it with one write. Writing straight
+/// into `Stdout` (1 KiB line buffer) let crossterm flush mid-frame, so slow
+/// terminals briefly showed blank rows before numbers/names landed.
+/// Explicit pixel flushes inside the renderer become no-ops on the buffer;
+/// byte order is preserved, so Sixel/Kitty payloads still start at the
+/// cursor position set before them.
+fn render_frame(state: &mut NfeState, stdout: &mut impl Write) -> std::io::Result<()> {
+    let mut frame: Vec<u8> = Vec::with_capacity(32 * 1024);
+    let started = Instant::now();
+    state.render(&mut frame)?;
+    let bytes = frame.len();
+    stdout.write_all(&frame)?;
+    stdout.flush()?;
+    crate::utils::frame_log::log("nfe", bytes, started.elapsed());
     Ok(())
 }
 

@@ -237,7 +237,8 @@ fn prepare_view_in(cwd: &Path, args: &NsheetArgs) -> Result<SheetView, String> {
 }
 
 fn resolve_sheet_path(cwd: &Path, file: &str) -> PathBuf {
-    let p = Path::new(file);
+    let expanded = crate::utils::paths::expand_path_str(file);
+    let p = Path::new(&expanded);
     if p.is_absolute() {
         p.to_path_buf()
     } else {
@@ -584,7 +585,7 @@ impl NsheetTui {
             title.push_str(&format!(
                 " | sort: {}{}",
                 col_name(&self.headers, col),
-                if self.sort_desc { "▼" } else { "▲" }
+                if self.sort_desc { "v" } else { "^" }
             ));
         }
         if !self.filter.trim().is_empty() {

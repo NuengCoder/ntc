@@ -19,25 +19,33 @@
 [vars]
 # CC = "gcc"
 # FLAGS = "-O2"
-ver = "2.4.7"
+ver = "2.4.8"
 lux = "ntc-v$(ver)-linux-x86_64.tar.gz"
+lux_arm = "ntc-v$(ver)-linux-aarch64.tar.gz"
 adb = "ntc-v$(ver)-aarch64-linux-android.tar.gz"
 win = "ntc-v$(ver)-windows-x86_64.zip"
 deb = "ntc_$(ver)-1_amd64.deb"
 wini = "ntc-installer-$(ver).exe"
+winiu = "ntc-installer-$(ver)-user.exe"
 wini7 = "ntc-installer-$(ver)-win7-x64.exe"
+wini7u = "ntc-installer-$(ver)-win7-x64-user.exe"
 winiz = "ntc-installer-$(ver).zip"
+winizu = "ntc-installer-$(ver)-user.zip"
 winiz7 = "ntc-installer-$(ver)-win7-x64.zip"
+winiz7u = "ntc-installer-$(ver)-win7-x64-user.zip"
 win_arm = "ntc-v$(ver)-windows-arm64.zip"
 win7amd = "ntc-v$(ver)-windows7-x86_64.zip"
 win7arm = "ntc-v$(ver)-windows7-arm64.zip"
 
 lux_w = "target/release"
+lux_arm_w = "target/aarch64-unknown-linux-gnu/release"
 adb_w = "target/aarch64-linux-android/release"
 win_w = "target/release/ntc.exe"
 deb_w = "target/debian/ntc_$(ver)-1_amd64.deb"
 wini_w = "installer/ntc-installer-$(ver).exe"
+winiu_w = "installer/ntc-installer-$(ver)-user.exe"
 wini7_w = "installer/ntc-installer-$(ver)-win7-x64.exe"
+wini7u_w = "installer/ntc-installer-$(ver)-win7-x64-user.exe"
 win_arm_w = "target/aarch64-pc-windows-msvc/release/ntc.exe"
 win7amd_dir = "target/win7-amd64"
 win7amd_w = "target/win7-amd64/x86_64-win7-windows-msvc/release/ntc.exe"
@@ -47,6 +55,9 @@ win7arm_w = "target/win7-arm64/aarch64-win7-windows-msvc/release/ntc.exe"
 # target (see packaging/build_win7amd.cmd): vendor="win7" switches std
 # (GetSystemTimeAsFileTime, not Win8+ Precise) and getrandom to legacy.
 # The RUSTFLAGS getrandom_backend cfg lives in that .cmd (raw quotes).
+# Both ARM64 builds additionally need clang.exe on PATH: ring 0.17 forces
+# clang for every aarch64 + windows target (packaging/find_clang.cmd adds
+# the Visual Studio / LLVM install to PATH).
 # The Win7-ARM64 build needs no RUSTFLAGS: it uses the custom
 # aarch64-win7-windows-msvc target whose win7 vendor switches std and
 # getrandom to the legacy backend automatically.
@@ -70,6 +81,20 @@ cmd = "cargo build --release && echo done...!"
 deps = []
 cmd = "cargo build --release && start installer.iss"
 
+# Per-user installer (no UAC): for standard user accounts, installs into
+# %LOCALAPPDATA%\Programs\ntc with a per-user PATH entry.
+[targets.build-user]
+deps = []
+cmd = "cargo build --release && iscc /DUSERINSTALL installer.iss"
+
+[targets.build-win7]
+deps = ["win7amd"]
+cmd = "iscc win7amd.iss"
+
+[targets.build-win7-user]
+deps = ["win7amd"]
+cmd = "iscc /DUSERINSTALL win7amd.iss"
+
 [targets.reset]
 deps = []
 cmd = "cargo clean && cargo build --release"
@@ -77,6 +102,10 @@ cmd = "cargo clean && cargo build --release"
 [targets.win32]
 deps = []
 cmd = "packaging\\build_win32.cmd"
+
+[targets.aarch64_linux]
+deps = []
+cmd = "cross build --target aarch64-unknown-linux-gnu --release"
 
 [targets.android]
 deps = []
@@ -93,12 +122,12 @@ deps = ["reset","android","win32","win7amd","win7arm"]
 cmd = "echo all done!"
 
 [targets.all2]
-deps = ["debian"]
+deps = ["debian","aarch64_linux"]
 cmd = "cargo build --release"
 
 [targets.tar]
 deps = []
-cmd = "arc create $(lux) $(lux_w)/ntc && arc create $(adb) $(adb_w)/ntc"
+cmd = "arc create $(adb) $(adb_w)/ntc && arc create $(lux) $(lux_w)/ntc && arc create $(lux_arm) $(lux_arm_w)/ntc"
 
 [targets.zip]
 deps = []
@@ -132,17 +161,25 @@ cmd = "cp $(deb_w) ."
 deps = []
 cmd = "cp $(wini_w) . && arc create $(winiz) $(wini) && rmf $(wini)"
 
+[targets.cpwinu]
+deps = []
+cmd = "cp $(winiu_w) . && arc create $(winizu) $(winiu) && rmf $(winiu)"
+
 [targets.cpwin7]
 deps = []
 cmd = "cp $(wini7_w) . && arc create $(winiz7) $(wini7) && rmf $(wini7)"
 
+[targets.cpwin7u]
+deps = []
+cmd = "cp $(wini7u_w) . && arc create $(winiz7u) $(wini7u) && rmf $(wini7u)"
+
 [targets.setpack]
-deps = ["tar","zip","zip_arm","zip_win7amd","zip_win7arm","cpdeb","cpwin","cpwin7"]
+deps = ["tar","zip","zip_arm","zip_win7amd","zip_win7arm","cpdeb","cpwin","cpwinu","cpwin7","cpwin7u"]
 cmd = "echo pack setup completed!"
 
 [targets.rmpack]
 deps = []
-cmd = "rmf $(lux) ,  $(adb) ,  $(win) ,  $(deb) ,  $(win_arm) ,  $(win7amd) , $(win7arm) , $(winiz) , $(winiz7)"
+cmd = "rmf $(lux) ,  $(adb) , $(lux_arm) ,  $(win) ,  $(deb) ,  $(win_arm) ,  $(win7amd) , $(win7arm) , $(winiz) , $(winizu) , $(winiz7) , $(winiz7u)"
 
 [targets.padb]
 deps = []

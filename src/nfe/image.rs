@@ -5,7 +5,7 @@
 //! text row carries two rows of image. This works in any terminal
 //! (no Kitty/Sixel/iTerm protocols needed).
 //!
-//! Decoding uses the `image` crate behind the `image2doc` feature (same
+//! Decoding uses the `image` crate behind the `image` feature (same
 //! gating as `qr`/`image` shell commands); without the feature only
 //! extension detection is available.
 
@@ -153,7 +153,7 @@ pub fn grid_for_panel(cols: usize, rows: usize) -> (usize, usize) {
 }
 
 /// Decode `path` and downscale to a `cols × rows` half-block grid.
-#[cfg(feature = "image2doc")]
+#[cfg(feature = "image")]
 pub fn load_halfblock(path: &Path, cols: usize, rows: usize) -> anyhow::Result<ImagePreview> {
     let (gw, gh) = grid_for_panel(cols, rows);
     if gw.saturating_mul(gh).saturating_mul(2) > MAX_SAMPLE_PIXELS {
@@ -192,7 +192,7 @@ pub fn load_halfblock(path: &Path, cols: usize, rows: usize) -> anyhow::Result<I
     })
 }
 
-#[cfg(feature = "image2doc")]
+#[cfg(feature = "image")]
 fn sample_px(img: &image::RgbImage, x: u32, y: u32) -> (u8, u8, u8) {
     let (w, h) = (img.width(), img.height());
     let p = img.get_pixel(x.min(w.saturating_sub(1)), y.min(h.saturating_sub(1)));
@@ -276,7 +276,7 @@ pub fn sextant_cell(samples: [(u8, u8, u8); 6], ax: u32, ay: u32) -> ImageCell {
 
 /// Decode `path` and downscale to a `cols × rows` sextant grid
 /// (2x3 micro-pixels per cell: 3x the vertical detail of half-blocks).
-#[cfg(feature = "image2doc")]
+#[cfg(feature = "image")]
 pub fn load_sextants(path: &Path, cols: usize, rows: usize) -> anyhow::Result<ImagePreview> {
     let (gw, gh) = grid_for_panel(cols, rows);
     if gw.saturating_mul(2).saturating_mul(gh.saturating_mul(3)) > MAX_SAMPLE_PIXELS {
@@ -313,7 +313,7 @@ pub fn load_sextants(path: &Path, cols: usize, rows: usize) -> anyhow::Result<Im
 
 /// Decoded source image kept for re-gridding (viewer zoom/resize)
 /// without re-reading the file.
-#[cfg(feature = "image2doc")]
+#[cfg(feature = "image")]
 #[derive(Clone)]
 pub struct DecodedImage {
     pub pixels: image::RgbImage,
@@ -321,14 +321,14 @@ pub struct DecodedImage {
     pub orig_h: u32,
 }
 
-#[cfg(feature = "image2doc")]
+#[cfg(feature = "image")]
 pub(crate) struct RawDecoded {
     pub pixels: image::RgbImage,
     pub orig_w: u32,
     pub orig_h: u32,
 }
 
-#[cfg(feature = "image2doc")]
+#[cfg(feature = "image")]
 fn decode_rgb(path: &Path) -> anyhow::Result<RawDecoded> {
     use image::GenericImageView;
     let img = image::open(path).map_err(|e| anyhow::anyhow!("{}", e))?;
@@ -341,7 +341,7 @@ fn decode_rgb(path: &Path) -> anyhow::Result<RawDecoded> {
 }
 
 /// Decode once for the viewer cache (no downscale yet).
-#[cfg(feature = "image2doc")]
+#[cfg(feature = "image")]
 pub fn decode_for_viewer(path: &Path) -> anyhow::Result<DecodedImage> {
     let raw = decode_rgb(path)?;
     // Refuse absurd allocations before they happen.
@@ -358,7 +358,7 @@ pub fn decode_for_viewer(path: &Path) -> anyhow::Result<DecodedImage> {
 
 /// Grid a cached decode at an explicit sample size (viewer zoom/pan).
 /// `(ox, oy)` is the top-left sample offset into the resized image.
-#[cfg(feature = "image2doc")]
+#[cfg(feature = "image")]
 pub fn grid_sextants_from(
     src: &DecodedImage,
     samp_w: u32,
@@ -398,7 +398,7 @@ pub fn grid_sextants_from(
 
 /// Grid a cached decode at an explicit sample size (viewer zoom/pan).
 /// Half-block variant: 1 wide x 2 tall samples per cell.
-#[cfg(feature = "image2doc")]
+#[cfg(feature = "image")]
 pub fn grid_half_from(
     src: &DecodedImage,
     samp_w: u32,
@@ -438,7 +438,7 @@ pub fn grid_half_from(
     }
 }
 
-#[cfg(feature = "image2doc")]
+#[cfg(feature = "image")]
 fn resize_rgb(img: &image::RgbImage, w: u32, h: u32) -> image::RgbImage {
     // Lanczos3 preserves edge contrast through the downscale, which
     // matters disproportionately at micro-block sizes (Triangle blurs
@@ -527,7 +527,7 @@ mod tests {
         assert!(SEXTANT_GLYPHS.contains(&c.ch));
     }
 
-    #[cfg(feature = "image2doc")]
+    #[cfg(feature = "image")]
     #[test]
     fn halfblock_shape_and_aspect() {
         use image::RgbImage;
@@ -564,7 +564,7 @@ mod tests {
         let _ = std::fs::remove_dir_all(&dir);
     }
 
-    #[cfg(feature = "image2doc")]
+    #[cfg(feature = "image")]
     #[test]
     fn corrupt_file_errors() {
         let dir = std::env::temp_dir().join(format!("ntc_img_bad_{}", std::process::id()));

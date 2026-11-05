@@ -29,6 +29,26 @@ pub fn fill(m: &mut HashMap<String, String>) {
             .into(),
     );
 
+    m.insert(
+        "help.todo.move".into(),
+        "todo move <N> <M> ## Move task N to position M (the rest shift)".into(),
+    );
+
+    m.insert(
+        "help.todo.replace".into(),
+        "todo replace <N> <M> ## Swap the tasks at N and M".into(),
+    );
+
+    m.insert(
+        "help.todo.example4".into(),
+        "todo mv 5 1 ## Move task #5 to the top".into(),
+    );
+
+    m.insert(
+        "help.todo.example5".into(),
+        "todo rp 5 1 ## Swap task #5 with task #1".into(),
+    );
+
     m.insert("help.todo.title".into(), "TODO COMMANDS:".into());
 
     m.insert(

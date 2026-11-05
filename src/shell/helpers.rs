@@ -137,6 +137,8 @@ pub(crate) fn resolve_target_spec_allow_file(spec: &str, nav: &Navigator) -> Res
 }
 
 fn resolve_target_spec_inner(spec: &str, nav: &Navigator, allow_file: bool) -> Result<PathBuf> {
+    let expanded = crate::utils::paths::expand_path_str(spec);
+    let spec = expanded.as_str();
     let name = spec.strip_prefix('@').unwrap_or(spec);
 
     if spec.starts_with('@') {
@@ -199,7 +201,9 @@ pub(crate) fn parse_target_arg_allow_file(args: &str, nav: &Navigator) -> Result
 fn parse_target_arg_inner(args: &str, nav: &Navigator, allow_file: bool) -> Result<TargetArg> {
     let (spec, rest) = extract_target_spec(
         args,
-        &["-d", "--depth", "--head", "--tail", "--sort", "--betw"],
+        &[
+            "-d", "--depth", "--head", "--tail", "--sort", "--betw", "--trim",
+        ],
     );
     let path = match spec {
         Some(s) => Some(if allow_file {
@@ -219,6 +223,8 @@ fn parse_target_arg_inner(args: &str, nav: &Navigator, allow_file: bool) -> Resu
 /// Unlike `resolve_target_spec` there is no directory gate and no
 /// bare-name fallback — callers validate existence/type themselves.
 pub(crate) fn resolve_file_operand(spec: &str, nav: &Navigator) -> Result<PathBuf> {
+    let expanded = crate::utils::paths::expand_path_str(spec);
+    let spec = expanded.as_str();
     if let Some(name) = spec.strip_prefix('@') {
         if name.is_empty() {
             print_error(&t!("cmd.target.tp_not_found", spec));

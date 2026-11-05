@@ -1,15 +1,1 @@
-tutorial feature need upgrade: i want to make tutorial now when user run : ntc tutorial or tutorial in shell it will auto nav user to ~appdata/ntc/tutorial and then start teaching mode let's start with your recommend to the end like how useruse ntc like how to use linux yeah that's it when run tutorial ntc will create tutorial dir and then bring user there and in the tutorial will have all command dir let user choose what they want to learn like cd , view , ral , ran , ne , ...
-if user prompt is blank and ntc shell is running then the shell view recognize it as idle mode when in idle mode read-only ghost text view start to appear and teach or recommend user to use the command that way like : try tp add <dir_name>then @dir_name this will allow you to save and teleport to that path that you usually working on
-
-- [ ] refactor lang feature here: src/utils/config/lang/ for all of them and align them cleanly each part and make them have the feature_name.rs instead of part0-n.rs
-- [ ] config integration_shell on|off (default off, if on is will turn on the hinter,tab,right key completion for that shell like p <--here now could hint powershell after powershell <could-hint-something>
-- [ ] new integration powershell: (hinter + tab change hint + right completion)
-- [ ] new integration cmd: (hinter + tab change hint + right completion)
-- [ ] new integration zsh : (hinter + tab change hint + right completion)
-- [ ] new integration bash: (hinter + tab change hint + right completion)
-- [ ] new integration termux : (hinter + tab change hint + right completion)
-- [ ] new integration fedora_sh: (hinter + tab change hint + right completion)
-- [ ] new integration debian_sh: (hinter + tab change hint + right completion)
-- [ ] new integration arch_sh: (hinter + tab change hint + right completion)
-- [ ] new integration fish_sh: (hinter + tab change hint + right completion)
-- [ ] new integration kali_sh: (hinter + tab change hint + right completion)
+- [ ] tutorial feature need upgrade: i want to make tutorial now when user run : ntc tutorial or tutorial in shell it will auto nav user to ~appdata/ntc/tutorial and then start teaching mode let's start with your recommend to the end like how useruse ntc like how to use linux yeah that's it when run tutorial ntc will create tutorial dir and then bring user there and in the tutorial will have all command dir let user choose what they want to learn like cd , view , ral , ran , ne , ... and inside it be sure that user need to tpye themselve not the tutorial immediately give answer; when ntc tutorial happen it will be ntc tutorial shell so it will restrict the command if user are not in path that contain tutorial dir name

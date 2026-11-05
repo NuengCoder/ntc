@@ -27,6 +27,8 @@ pub enum Category {
     Text,
     Security,
     File,
+    Tech,
+    Education,
     Misc,
 }
 
@@ -47,6 +49,8 @@ impl Category {
             Category::Text => "text",
             Category::Security => "security",
             Category::File => "file",
+            Category::Tech => "tech",
+            Category::Education => "education",
             Category::Misc => "misc",
         }
     }
@@ -358,6 +362,69 @@ pub static TYPES: &[TypeDef] = &[
     td("locale", Category::Misc, "locale (en_US)", g_locale),
     td("isbn", Category::Misc, "ISBN-13", g_isbn),
     td("ean", Category::Misc, "EAN-13 barcode", g_ean),
+    // ---- tech ----
+    td(
+        "programming_language",
+        Category::Tech,
+        "programming language",
+        g_programming_language,
+    ),
+    td("adobe_tools", Category::Tech, "Adobe tool", g_adobe_tools),
+    td("os", Category::Tech, "operating system", g_os),
+    td(
+        "hacker_tools",
+        Category::Tech,
+        "hacking tool",
+        g_hacker_tools,
+    ),
+    td("dev_tools", Category::Tech, "developer tool", g_dev_tools),
+    td(
+        "ai_llm",
+        Category::Tech,
+        "AI large language model",
+        g_ai_llm,
+    ),
+    td(
+        "ai_harness",
+        Category::Tech,
+        "AI agent framework",
+        g_ai_harness,
+    ),
+    td(
+        "computer_brand",
+        Category::Tech,
+        "computer brand",
+        g_computer_brand,
+    ),
+    td("ram", Category::Tech, "memory size", g_ram),
+    td("disk", Category::Tech, "storage drive type", g_disk),
+    td("cpu", Category::Tech, "processor model", g_cpu),
+    td("gpu", Category::Tech, "graphics card model", g_gpu),
+    td("sql", Category::Tech, "relational database", g_sql),
+    td("nosql", Category::Tech, "NoSQL database", g_nosql),
+    // ---- education ----
+    td("major", Category::Education, "college major", g_major),
+    td(
+        "school_subject",
+        Category::Education,
+        "school subject",
+        g_school_subject,
+    ),
+    td(
+        "dsa",
+        Category::Education,
+        "data structure / algorithm",
+        g_dsa,
+    ),
+    // ---- web / misc ----
+    td(
+        "website",
+        Category::Web,
+        "popular website domain",
+        g_website,
+    ),
+    td("emotion", Category::Misc, "emotion", g_emotion),
+    td("weather", Category::Misc, "weather condition", g_weather),
 ];
 
 const fn td(
@@ -438,6 +505,8 @@ pub fn cmd_types(rest: &str) -> anyhow::Result<()> {
             Category::Text,
             Category::Security,
             Category::File,
+            Category::Tech,
+            Category::Education,
             Category::Misc,
         ] {
             let items: Vec<&TypeDef> = TYPES.iter().filter(|t| t.category == cat).collect();
@@ -1217,6 +1286,86 @@ fn g_language(g: &mut Gen) -> String {
     g.pick_str(LANGUAGES).to_string()
 }
 
+fn g_programming_language(g: &mut Gen) -> String {
+    g.pick_str(PROGRAMMING_LANGUAGES).to_string()
+}
+
+fn g_adobe_tools(g: &mut Gen) -> String {
+    g.pick_str(ADOBE_TOOLS).to_string()
+}
+
+fn g_os(g: &mut Gen) -> String {
+    g.pick_str(OPERATING_SYSTEMS).to_string()
+}
+
+fn g_hacker_tools(g: &mut Gen) -> String {
+    g.pick_str(HACKER_TOOLS).to_string()
+}
+
+fn g_dev_tools(g: &mut Gen) -> String {
+    g.pick_str(DEV_TOOLS).to_string()
+}
+
+fn g_ai_llm(g: &mut Gen) -> String {
+    g.pick_str(AI_LLMS).to_string()
+}
+
+fn g_ai_harness(g: &mut Gen) -> String {
+    g.pick_str(AI_HARNESSES).to_string()
+}
+
+fn g_computer_brand(g: &mut Gen) -> String {
+    g.pick_str(COMPUTER_BRANDS).to_string()
+}
+
+fn g_ram(g: &mut Gen) -> String {
+    g.pick_str(RAM_SIZES).to_string()
+}
+
+fn g_disk(g: &mut Gen) -> String {
+    g.pick_str(DISK_TYPES).to_string()
+}
+
+fn g_cpu(g: &mut Gen) -> String {
+    g.pick_str(CPUS).to_string()
+}
+
+fn g_gpu(g: &mut Gen) -> String {
+    g.pick_str(GPUS).to_string()
+}
+
+fn g_sql(g: &mut Gen) -> String {
+    g.pick_str(SQL_DATABASES).to_string()
+}
+
+fn g_nosql(g: &mut Gen) -> String {
+    g.pick_str(NOSQL_DATABASES).to_string()
+}
+
+fn g_major(g: &mut Gen) -> String {
+    g.pick_str(g.locale_data().majors).to_string()
+}
+
+fn g_school_subject(g: &mut Gen) -> String {
+    g.pick_str(g.locale_data().school_subjects).to_string()
+}
+
+fn g_dsa(g: &mut Gen) -> String {
+    g.pick_str(DSA_TOPICS).to_string()
+}
+
+fn g_website(g: &mut Gen) -> String {
+    g.pick_str(WEBSITES).to_string()
+}
+
+fn g_emotion(g: &mut Gen) -> String {
+    g.pick_str(g.locale_data().emotions).to_string()
+}
+
+fn g_weather(g: &mut Gen) -> String {
+    g.pick_str(g.locale_data().weather).to_string()
+}
+
 fn g_locale(g: &mut Gen) -> String {
     g.pick_str(LOCALES).to_string()
 }
@@ -1567,6 +1716,57 @@ mod tests {
         assert!(find("id_card").is_some());
         assert!(find("id-card").is_some());
         assert!(find("identity_card").is_some());
+    }
+
+    #[test]
+    fn catalog_types_resolve() {
+        for name in [
+            "major",
+            "programming_language",
+            "adobe_tools",
+            "os",
+            "hacker_tools",
+            "dev_tools",
+            "emotion",
+            "weather",
+            "ai_llm",
+            "ai_harness",
+            "computer_brand",
+            "ram",
+            "disk",
+            "cpu",
+            "gpu",
+            "school_subject",
+            "dsa",
+            "sql",
+            "nosql",
+            "website",
+        ] {
+            assert!(find(name).is_some(), "missing type {name}");
+        }
+    }
+
+    #[test]
+    fn catalog_types_follow_locale() {
+        use crate::fake::locale::Locale;
+        let mut g = Gen::seeded(88);
+        g.set_locale(Locale::ZhCn);
+        for value in [
+            g_major(&mut g),
+            g_school_subject(&mut g),
+            g_emotion(&mut g),
+            g_weather(&mut g),
+        ] {
+            assert!(
+                value.chars().any(|c| !c.is_ascii()),
+                "zh value stayed English: {value}"
+            );
+        }
+
+        g.set_locale(Locale::EnUs);
+        for value in [g_major(&mut g), g_weather(&mut g)] {
+            assert!(value.is_ascii(), "en value is not ASCII: {value}");
+        }
     }
 
     #[test]

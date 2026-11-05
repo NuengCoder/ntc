@@ -38,6 +38,6 @@ pub fn fill(m: &mut HashMap<String, String>) {
 
     m.insert(
         "backup_diff.select_title".into(),
-        "\u{1F4CA} 选择要与当前项目比较的备份".into(),
+        "选择要与当前项目比较的备份".into(),
     );
 }

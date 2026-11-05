@@ -23,7 +23,12 @@ pub fn fill(m: &mut HashMap<String, String>) {
 
     m.insert(
         "help.alias.add_param".into(),
-        "ral add <ชื่อ>(x) \"<cmd>\" ## สร้าง alias แบบมีพารามิเตอร์ด้วย $x".into(),
+        "ral add <ชื่อ>(x) \"<cmd>\" ## สร้าง alias แบบมีพารามิเตอร์ด้วย ${x}".into(),
+    );
+
+    m.insert(
+        "help.alias.env_ref".into(),
+        "ral add <ชื่อ> \"<cmd>\" ## $NAME เดี่ยวคือ environment variable ใช้ ${x} สำหรับพารามิเตอร์".into(),
     );
 
     m.insert(
@@ -105,7 +110,7 @@ pub fn fill(m: &mut HashMap<String, String>) {
 
     m.insert(
         "help.alias.example2".into(),
-        "ral add greet(x) \"echo Hello $x\" ## Alias แบบมีพารามิเตอร์".into(),
+        "ral add greet(x) \"echo Hello ${x}\" ## Alias แบบมีพารามิเตอร์".into(),
     );
 
     m.insert(

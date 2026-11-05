@@ -23,7 +23,7 @@ pub fn fill(m: &mut HashMap<String, String>) {
 
     m.insert(
         "teleport.clear_confirm".into(),
-        "\u{26A0} แน่ใจหรือว่าต้องการลบจุดบันทึกทั้งหมด? (y/N): ".into(),
+        "แน่ใจหรือว่าต้องการลบจุดบันทึกทั้งหมด? (y/N): ".into(),
     );
 
     m.insert(
@@ -45,7 +45,7 @@ pub fn fill(m: &mut HashMap<String, String>) {
 
     m.insert(
         "teleport.history_title".into(),
-        "\u{1F4DC} ประวัติเทเลพอร์ต (ล่าสุดอยู่ท้ายสุด)".into(),
+        "ประวัติเทเลพอร์ต (ล่าสุดอยู่ท้ายสุด)".into(),
     );
 
     m.insert(
@@ -85,12 +85,12 @@ pub fn fill(m: &mut HashMap<String, String>) {
 
     m.insert(
         "teleport.list_title".into(),
-        "\u{1F4CC} จุดบันทึกเทเลพอร์ตของคุณ (global)".into(),
+        "จุดบันทึกเทเลพอร์ตของคุณ (global)".into(),
     );
 
     m.insert(
         "teleport.menu_title".into(),
-        "\u{1F4CC} เทเลพอร์ต - จุดบันทึกของคุณ (global)".into(),
+        "เทเลพอร์ต - จุดบันทึกของคุณ (global)".into(),
     );
 
     m.insert(

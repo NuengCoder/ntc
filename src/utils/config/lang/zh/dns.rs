@@ -7,12 +7,12 @@ pub fn fill(m: &mut HashMap<String, String>) {
 
     m.insert(
         "dns.help.opt_type".into(),
-        " -t, --type <类型> 记录类型：A, AAAA, ALL, MX, NS, CNAME 等（默认 A）".into(),
+        " -t, --type <类型> 记录类型：A, AAAA, MX, NS, CNAME, TXT, PTR, SOA, ALL（默认 A）".into(),
     );
 
     m.insert(
         "dns.help.opt_type_sub".into(),
-        " MX/NS/CNAME 等使用系统 dig/nslookup".into(),
+        " 非 A 记录使用内置 DNS 客户端（dig/nslookup 仅作后备）".into(),
     );
 
     m.insert("dns.help.options".into(), "选项：".into());

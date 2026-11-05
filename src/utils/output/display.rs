@@ -402,6 +402,18 @@ mod range_tests {
     }
 
     #[test]
+    fn txtc_line_numbers_follow_the_flag_not_the_config() {
+        let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("Cargo.toml");
+        // `--no-line` must produce a clean copy: no LINE prefixes at all.
+        let plain = super::cat_file_with_line_numbers(&path, false).unwrap();
+        assert!(!plain.contains(">>"), "line prefixes leaked: {plain:.120}");
+        assert!(plain.contains("package"));
+        // `--line` uses the same prefix format as txtf.
+        let numbered = super::cat_file_with_line_numbers(&path, true).unwrap();
+        assert!(numbered.contains("LINE 1>>"));
+    }
+
+    #[test]
     fn slice_keeps_original_numbers_and_clamps() {
         let lines = vec!["a", "b", "c", "d", "e"];
         assert_eq!(

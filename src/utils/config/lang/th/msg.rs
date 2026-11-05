@@ -91,6 +91,73 @@ pub fn fill(m: &mut HashMap<String, String>) {
     );
 
     m.insert(
+        "msg.setIS.status".into(),
+        "Integration shell (shell hints + ntc ps): {}".into(),
+    );
+    m.insert("msg.setIS.on".into(), "Integration shell: ON".into());
+    m.insert("msg.setIS.off".into(), "Integration shell: OFF".into());
+    m.insert(
+        "msg.setIS.error".into(),
+        "ค่า integration_shell ไม่ถูกต้อง: {}. ใช้ ON หรือ OFF.".into(),
+    );
+    m.insert(
+        "msg.setIS.platform".into(),
+        "แพลตฟอร์ม: {} (ตัวจัดการแพ็กเกจ: {})".into(),
+    );
+    m.insert(
+        "msg.setIS.bash_completion_ok".into(),
+        "bash-completion: ติดตั้งแล้ว".into(),
+    );
+    m.insert(
+        "msg.setIS.bash_completion_missing".into(),
+        "bash-completion: ยังไม่ได้ติดตั้ง — การเติมอาร์กิวเมนต์ของ bash ต้องใช้".into(),
+    );
+    m.insert(
+        "msg.setIS.bash_completion_install".into(),
+        "ติดตั้งด้วย: {}".into(),
+    );
+    m.insert(
+        "msg.setIS.ps_windows_only".into(),
+        "การเชื่อมต่อ PowerShell ใช้ได้เฉพาะบน Windows".into(),
+    );
+    m.insert(
+        "msg.setIS.bash_linux_only".into(),
+        "การเชื่อมต่อ bash ใช้ได้เฉพาะบน Linux เดสก์ท็อป".into(),
+    );
+    m.insert("msg.setIS.bash_missing".into(), "ไม่พบ bash ในระบบนี้".into());
+    m.insert(
+        "msg.setIS.bash_start_failed".into(),
+        "โฮสต์ bash เริ่มต้นไม่สำเร็จ".into(),
+    );
+    m.insert("msg.setIS.bash_exited".into(), "bash ออกแล้ว".into());
+    m.insert(
+        "msg.setIS.bash_stopped".into(),
+        "โฮสต์ bash ไม่ตอบสนอง".into(),
+    );
+    m.insert(
+        "msg.setIS.zsh_macos_only".into(),
+        "การเชื่อมต่อ zsh ใช้ได้เฉพาะบน macOS".into(),
+    );
+    m.insert("msg.setIS.zsh_missing".into(), "ไม่พบ zsh ในระบบนี้".into());
+    m.insert(
+        "msg.setIS.zsh_start_failed".into(),
+        "โฮสต์ zsh เริ่มต้นไม่สำเร็จ".into(),
+    );
+    m.insert("msg.setIS.zsh_exited".into(), "zsh ออกแล้ว".into());
+    m.insert("msg.setIS.zsh_stopped".into(), "โฮสต์ zsh ไม่ตอบสนอง".into());
+
+    m.insert(
+        "msg.setCT.status".into(),
+        "Code tools (คอมไพเลอร์/โปรแกรมช่วยเขียนโค้ด): {}".into(),
+    );
+    m.insert("msg.setCT.on".into(), "Code tools: ON".into());
+    m.insert("msg.setCT.off".into(), "Code tools: OFF".into());
+    m.insert(
+        "msg.setCT.error".into(),
+        "ค่า code_tools ไม่ถูกต้อง: {}. ใช้ ON หรือ OFF.".into(),
+    );
+
+    m.insert(
         "msg.setC.error".into(),
         "ค่าสี setC ไม่ถูกต้อง: {}. ใช้ ON หรือ OFF.".into(),
     );
@@ -233,7 +300,7 @@ pub fn fill(m: &mut HashMap<String, String>) {
 
     m.insert(
         "msg.teleport.success".into(),
-        "\u{2713} เทเลพอร์ตไปยัง '{}' -> {} แล้ว".into(),
+        "เทเลพอร์ตไปยัง '{}' -> {} แล้ว".into(),
     );
 
     m.insert("msg.version.format".into(), "ntc {}".into());
@@ -315,6 +382,11 @@ pub fn fill(m: &mut HashMap<String, String>) {
     );
 
     m.insert("msg.showcg.label_intro_view".into(), "Intro View:".into());
+    m.insert(
+        "msg.showcg.label_integration_shell".into(),
+        "Integration Shell:".into(),
+    );
+    m.insert("msg.showcg.label_code_tools".into(), "Code Tools:".into());
 
     m.insert("msg.setDV.status".into(), "Dir view: {}".into());
 
@@ -396,5 +468,19 @@ pub fn fill(m: &mut HashMap<String, String>) {
     m.insert(
         "msg.setTD.error".into(),
         "การใช้งาน: config todo format <txt|md|json|toml|yaml|html>".into(),
+    );
+
+    m.insert("msg.setIdle.status".into(), "คำแนะนำตอนว่าง: {}".into());
+
+    m.insert(
+        "msg.setIdle.on".into(),
+        "เปิดคำแนะนำตอนว่าง: พร้อมท์ว่างจะสอนคำสั่งทีละรายการ".into(),
+    );
+
+    m.insert("msg.setIdle.off".into(), "ปิดคำแนะนำตอนว่าง".into());
+
+    m.insert(
+        "msg.setIdle.error".into(),
+        "ค่าไม่รู้จัก: {} (ใช้ ON หรือ OFF)".into(),
     );
 }

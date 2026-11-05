@@ -3,7 +3,10 @@ use std::collections::HashMap;
 pub fn fill(m: &mut HashMap<String, String>) {
     m.insert("cmd.nms.usage_title".into(), "Usage:".into());
 
-    m.insert("cmd.nms.help_play".into(), "nms play <file>                                  Fullscreen sound player (video plays audio only)".into());
+    m.insert(
+        "cmd.nms.help_play".into(),
+        "nms play [-sf <dur>] <file>                              Play sound in the terminal (Ctrl+C stops; video plays audio only)".into(),
+    );
 
     m.insert("cmd.nms.help_scan".into(), "nms scan [-d|--depth <n>] [-s|--size] [-l|--long <dur>] [--care]  List audio + video files".into());
 
@@ -34,16 +37,35 @@ pub fn fill(m: &mut HashMap<String, String>) {
         "  --care            Ignore the ignore-rules (care mode)".into(),
     );
 
-    m.insert("cmd.nms.keys_title".into(), "Player keys:".into());
+    m.insert(
+        "cmd.nms.help_start".into(),
+        "  -sf, --start-from <dur>  Start playback at <dur> (play only, e.g. -sf 30)".into(),
+    );
+
+    m.insert(
+        "cmd.nms.start_usage".into(),
+        "Usage: -sf <duration> (e.g. -sf 30, -sf 1mn)".into(),
+    );
+
+    m.insert(
+        "cmd.nms.invalid_start".into(),
+        "Invalid start time: '{}' (use e.g. 30, 1mn)".into(),
+    );
+
+    m.insert("cmd.nms.playing".into(), "♪ {}  [{}]".into());
+
+    m.insert("cmd.nms.stop_hint".into(), "Ctrl+C to stop".into());
+
+    m.insert("cmd.nms.keys_title".into(), "Playback:".into());
 
     m.insert(
         "cmd.nms.help_keys".into(),
-        "  space pause/resume · ←/→ seek 5s · ↑/↓ volume · a replay · q quit".into(),
+        "  live position / remaining countdown · Ctrl+C stops · -sf <dur> starts from an offset".into(),
     );
 
     m.insert("cmd.nms.examples_title".into(), "Examples:".into());
 
-    m.insert("cmd.nms.example_play".into(), "nms play song.mp3".into());
+    m.insert("cmd.nms.example_play".into(), "nms play -sf 30 song.mp3".into());
 
     m.insert("cmd.nms.example_video".into(), "nms play movie.mp4".into());
 
@@ -69,6 +91,21 @@ pub fn fill(m: &mut HashMap<String, String>) {
     m.insert(
         "cmd.nms.no_sound_device".into(),
         "No sound device found on this machine — cannot play audio here".into(),
+    );
+
+    m.insert(
+        "cmd.nms.need_ffmpeg".into(),
+        "Cannot play '{}': this container or codec needs ffmpeg".into(),
+    );
+
+    m.insert(
+        "cmd.nms.install_ffmpeg".into(),
+        "Install it with: ntpkg install ffmpeg".into(),
+    );
+
+    m.insert(
+        "cmd.nms.no_audio_track".into(),
+        "'{}' has no audio track".into(),
     );
 
     m.insert("cmd.nms.play_failed".into(), "Cannot play '{}': {}".into());

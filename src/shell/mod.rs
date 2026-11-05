@@ -4,9 +4,11 @@
 pub(crate) mod alias;
 pub(crate) mod commands;
 pub(crate) mod entry;
+pub(crate) mod ext_complete;
 pub(crate) mod help;
 pub(crate) mod helpers;
 mod hinter;
+pub(crate) mod idle;
 pub(crate) mod pipeline;
 pub(crate) mod stdin;
 pub(crate) mod update_check;

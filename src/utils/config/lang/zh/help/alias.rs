@@ -23,7 +23,12 @@ pub fn fill(m: &mut HashMap<String, String>) {
 
     m.insert(
         "help.alias.add_param".into(),
-        "ral add <名称>(x) \"<命令>\" ## 创建带参数的别名（使用 $x）".into(),
+        "ral add <名称>(x) \"<命令>\" ## 创建带参数的别名（使用 ${x}）".into(),
+    );
+
+    m.insert(
+        "help.alias.env_ref".into(),
+        "ral add <名称> \"<命令>\" ## 裸 $NAME 运行时为环境变量；参数请用 ${x}".into(),
     );
 
     m.insert(
@@ -102,7 +107,7 @@ pub fn fill(m: &mut HashMap<String, String>) {
 
     m.insert(
         "help.alias.example2".into(),
-        "ral add greet(x) \"echo Hello $x\" ## 创建参数化别名".into(),
+        "ral add greet(x) \"echo Hello ${x}\" ## 创建参数化别名".into(),
     );
 
     m.insert(

@@ -135,6 +135,9 @@ impl Editor {
 
     pub(crate) fn toggle_sidebar(&mut self) {
         self.sidebar.open = !self.sidebar.open;
+        // The pixels under the sidebar changed while it was closed, so the
+        // cached paint signature is no longer valid.
+        self.sidebar.last_paint_sig = None;
         self.mark_all_dirty();
     }
 
@@ -240,7 +243,7 @@ impl Editor {
             None => return String::new(),
         };
         let name = self.tab_display_name(tab);
-        let mark = if tab.modified { " ●" } else { "" };
+        let mark = if tab.modified { " *" } else { "" };
         let num = if idx == self.active_tab {
             idx + 1
         } else {

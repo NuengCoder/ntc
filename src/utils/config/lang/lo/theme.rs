@@ -71,7 +71,7 @@ pub fn fill(m: &mut HashMap<String, String>) {
 
     m.insert("theme.info_author".into(), "Author".into());
 
-    m.insert("theme.info_defined".into(), "\u{2713} ກຳນົດແລ້ວ".into());
+    m.insert("theme.info_defined".into(), "ກຳນົດແລ້ວ".into());
 
     m.insert("theme.info_description".into(), "Description".into());
 
@@ -81,7 +81,7 @@ pub fn fill(m: &mut HashMap<String, String>) {
 
     m.insert("theme.info_syntax".into(), "Syntax colors".into());
 
-    m.insert("theme.info_title".into(), "\u{1F3A8} Theme: {}".into());
+    m.insert("theme.info_title".into(), "Theme: {}".into());
 
     m.insert(
         "theme.invalid_number".into(),
@@ -157,10 +157,7 @@ pub fn fill(m: &mut HashMap<String, String>) {
 
     m.insert("theme.ui.theme_prompt".into(), "theme>".into());
 
-    m.insert(
-        "theme.ui.title".into(),
-        "\u{1F3A8} ntc Theme Manager".into(),
-    );
+    m.insert("theme.ui.title".into(), "ntc Theme Manager".into());
 
     m.insert("theme.unknown_cmd".into(), "ຄຳສັ່ງບໍ່ຮູ້ຈັກ: {}".into());
 

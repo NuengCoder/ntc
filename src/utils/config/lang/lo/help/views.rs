@@ -28,6 +28,11 @@ pub fn fill(m: &mut HashMap<String, String>) {
     );
 
     m.insert(
+        "help.views.trim".into(),
+        "views --trim <ຂໍ້ຄວາມ> ## ລຶບຂໍ້ຄວາມອອກຈາກຊື່ ແລະ ຕົວຄັ່ນກຸ່ມ ... (ໃຊ້ຊ້ຳໄດ້, ຮັກສາສີ)".into(),
+    );
+
+    m.insert(
         "help.views.note".into(),
         "ບໍ່ມີແທັກ [Directory]/[ignored] - ສີບອກຊະນິດ ຄວາມເລິກຄົງທີ່ທີ່ 1 ແລະ ຄິດຂະໜາດດ້ວຍຄວາມໝາຍຂອງ --care ສະເໝີ ໃຊ້ --size ເພື່ອສະແດງຂະໜາດ".into(),
     );

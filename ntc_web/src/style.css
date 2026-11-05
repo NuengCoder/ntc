@@ -173,6 +173,8 @@ body::after {
   transition: all .15s;
 }
 .top-btn:hover { background: var(--accent); color: #000; border-color: var(--accent); }
+/* `Info` is an anchor reusing the button look. */
+a.top-btn { text-decoration: none; display: inline-flex; align-items: center; }
 
 .crumb {
   display: flex; align-items: center; gap: 2px;
@@ -264,16 +266,19 @@ body::after {
 .file-row:last-child { border-bottom: none; }
 .file-row:hover { background: var(--surface2); }
 
-.file-icon { font-size: 18px; width: 24px; text-align: center; flex-shrink: 0; }
+.file-icon {
+  font-size: 11px; font-weight: 600; width: 42px; text-align: center; flex-shrink: 0;
+  color: var(--text2); font-family: 'Consolas', 'Courier New', monospace;
+}
 .file-name {
   flex: 1; cursor: pointer; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
 .file-name:hover { color: var(--accent); }
 .file-size { width: 80px; text-align: right; color: var(--text2); font-size: 13px; flex-shrink: 0; }
-.file-actions { display: flex; gap: 4px; flex-shrink: 0; }
+.file-actions { display: flex; gap: 4px; flex-shrink: 0; align-items: center; }
 
 .act-btn {
-  background: none; border: none; cursor: pointer; font-size: 15px;
+  background: none; border: none; cursor: pointer; font-size: 12px;
   padding: 2px 6px; border-radius: 4px; text-decoration: none;
   color: var(--text2); line-height: 1; transition: all .1s;
 }

@@ -19,7 +19,7 @@ pub fn fill(m: &mut HashMap<String, String>) {
 
     m.insert(
         "cli.example.image".into(),
-        " ntc -image screenshot.png to json แปลงภาพเป็น JSON สำหรับ AI\n".into(),
+        " ntc -image display screenshot.png แสดงภาพในเทอร์มินัล\n".into(),
     );
 
     m.insert(
@@ -327,7 +327,7 @@ pub fn fill(m: &mut HashMap<String, String>) {
 
     m.insert("cli.helpers.basic_usage".into(), " ntc [OPTIONS]\n ntc -i <path> [-o <output>]\n ntc -i <path> --cp คัดลอกรายงานไปยังคลิปบอร์ด\n".into());
 
-    m.insert("cli.helpers.cli_examples".into(), " ntc เปิดเชลล์แบบโต้ตอบ\n ntc @web เปิดและเทเลพอร์ตไปยังจุดบันทึก 'web'\n ntc --math \"3+4*5\" ประเมินนิพจน์คณิตศาสตร์\n ntc --math \"sin(PI/2)\" คณิตศาสตร์พร้อมฟังก์ชันและค่าคงที่\n ntc -i src สร้างรายงาน TXT ของไดเรกทอรี src\n ntc -i src --cp คัดลอกโครงสร้างไดเรกทอรีไปยังคลิปบอร์ด\n ntc -i src -f json --cp คัดลอกรายงาน JSON ไปยังคลิปบอร์ด\n ntc -i src -f pdf สร้างรายงาน PDF จาก src\n ntc -i src -f docx สร้างรายงาน DOCX จาก src\n ntc -i src -f xlsx สร้างรายงาน XLSX (พร้อมการวิเคราะห์การอ้างอิง)\n ntc -i file.txt แสดงเนื้อหาไฟล์\n ntc --setL ON เปิดใช้งานหมายเลขบรรทัด\n ntc --showcg แสดงการกำหนดค่า\n ntc -say \"Hello World\" พิมพ์ Hello World\n ntc --watch ON เปิดใช้งานตัวเฝ้าดูไฟล์\n ntc -image screenshot.png to json แปลงภาพเป็น JSON สำหรับ AI\n".into());
+    m.insert("cli.helpers.cli_examples".into(), " ntc เปิดเชลล์แบบโต้ตอบ\n ntc @web เปิดและเทเลพอร์ตไปยังจุดบันทึก 'web'\n ntc --math \"3+4*5\" ประเมินนิพจน์คณิตศาสตร์\n ntc --math \"sin(PI/2)\" คณิตศาสตร์พร้อมฟังก์ชันและค่าคงที่\n ntc -i src สร้างรายงาน TXT ของไดเรกทอรี src\n ntc -i src --cp คัดลอกโครงสร้างไดเรกทอรีไปยังคลิปบอร์ด\n ntc -i src -f json --cp คัดลอกรายงาน JSON ไปยังคลิปบอร์ด\n ntc -i src -f pdf สร้างรายงาน PDF จาก src\n ntc -i src -f docx สร้างรายงาน DOCX จาก src\n ntc -i src -f xlsx สร้างรายงาน XLSX (พร้อมการวิเคราะห์การอ้างอิง)\n ntc -i file.txt แสดงเนื้อหาไฟล์\n ntc --setL ON เปิดใช้งานหมายเลขบรรทัด\n ntc --showcg แสดงการกำหนดค่า\n ntc -say \"Hello World\" พิมพ์ Hello World\n ntc --watch ON เปิดใช้งานตัวเฝ้าดูไฟล์\n ntc -image display screenshot.png แสดงภาพในเทอร์มินัล\n".into());
 
     m.insert(
         "cli.helpers.config_header".into(),
@@ -366,7 +366,7 @@ pub fn fill(m: &mut HashMap<String, String>) {
 
     m.insert("cli.helpers.report_options".into(), " -i, --input <path> ประมวลผลไฟล์หรือไดเรกทอรี\n -o, --output <file> บันทึกผลลัพธ์ไปยังไฟล์ที่ระบุ\n -f, --format <FORMAT> รูปแบบผลลัพธ์: txt, html, json, md, pdf, docx, xlsx (ค่าเริ่มต้น: txt)\n --cp คัดลอกรายงานไปยังคลิปบอร์ดแทนการบันทึกเป็นไฟล์\n --size แสดงขนาดไดเรกทอรีปัจจุบัน\n --view ดูโครงสร้างไดเรกทอรีปัจจุบันอย่างรวดเร็ว\n --view --size ดูโครงสร้างอย่างรวดเร็วพร้อมขนาดไดเรกทอรี\n".into());
 
-    m.insert("cli.helpers.shell_commands".into(), " ntc pathcp คัดลอกเส้นทางไปยังคลิปบอร์ด\n ntc say \"hello\" --loop 3 พิมพ์ข้อความพร้อมลูป\n ntc tl dir . นับบรรทัดในไดเรกทอรี\n ntc ne เปิดตัวแก้ไขข้อความ\n ntc size แสดงขนาดไดเรกทอรี\n ntc view แสดงโครงสร้างไดเรกทอรี\n ntc serve files --port 8080 เริ่มเซิร์ฟเวอร์ file-drive บนพอร์ต 8080\n ntc dl https://example.com/file.zip --progress ดาวน์โหลดพร้อมความคืบหน้า\n ntc encode b64 hello เข้ารหัส Base64 สตริง\n ntc qr \"text\" สร้างรหัส QR ในเทอร์มินัล\n ntc math 3+4*5 ประเมินนิพจน์\n ntc ral add btr \"cargo build --release\" เพิ่ม alias จาก CLI\n".into());
+    m.insert("cli.helpers.shell_commands".into(), " ntc pathcp คัดลอกเส้นทางไปยังคลิปบอร์ด\n ntc say \"hello\" --loop 3 พิมพ์ข้อความพร้อมลูป\n ntc tl dir . นับบรรทัดในไดเรกทอรี\n ntc ne เปิดตัวแก้ไขข้อความ\n ntc size แสดงขนาดไดเรกทอรี\n ntc view แสดงโครงสร้างไดเรกทอรี\n ntc serve files --port 8080 เริ่มเซิร์ฟเวอร์ file-drive บนพอร์ต 8080\n ntc dl https://example.com/file.zip ดาวน์โหลดพร้อมความคืบหน้า\n ntc encode b64 hello เข้ารหัส Base64 สตริง\n ntc qr \"text\" สร้างรหัส QR ในเทอร์มินัล\n ntc math 3+4*5 ประเมินนิพจน์\n ntc ral add btr \"cargo build --release\" เพิ่ม alias จาก CLI\n".into());
 
     m.insert(
         "cli.helpers.shell_header".into(),
@@ -957,7 +957,7 @@ pub fn fill(m: &mut HashMap<String, String>) {
 
     m.insert(
         "cli.shell_cmd.dl".into(),
-        " ntc dl https://example.com/file.zip --progress ดาวน์โหลดพร้อมความคืบหน้า".into(),
+        " ntc dl https://example.com/file.zip ดาวน์โหลดพร้อมความคืบหน้า".into(),
     );
 
     m.insert(

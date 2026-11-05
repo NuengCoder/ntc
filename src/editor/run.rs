@@ -8,7 +8,7 @@ use crossterm::event::{
     KeyModifiers, MouseEvent,
 };
 use crossterm::execute;
-use crossterm::terminal::{self, EnterAlternateScreen, LeaveAlternateScreen};
+use crossterm::terminal::{self, Clear, ClearType, EnterAlternateScreen, LeaveAlternateScreen};
 
 use super::{Editor, Focus, Mode};
 use crate::editor::types::RunMessage;
@@ -41,6 +41,8 @@ impl Editor {
         let mut stdout = stdout();
         let _guard = TerminalGuard::new();
         execute!(stdout, EnterAlternateScreen, Hide, EnableMouseCapture)?;
+        // The alternate screen can inherit stale bytes from a previous run.
+        execute!(stdout, Clear(ClearType::All))?;
         terminal::enable_raw_mode()?;
 
         // Start file watcher for live reload
@@ -65,23 +67,32 @@ impl Editor {
 
     pub(crate) fn main_loop(&mut self, stdout: &mut std::io::Stdout) -> Result<bool> {
         self.mark_all_dirty();
-        self.render(stdout)?;
+        self.render_frame(stdout)?;
         loop {
             // ── Check if theme changed ──
             if crate::utils::theme::ThemeManager::take_theme_changed() {
                 // Force a full redraw
                 self.mark_all_dirty();
                 self.syntax.invalidate_all(); // Force syntax to refresh colors
-                self.render(stdout)?;
+                self.sidebar.last_paint_sig = None;
+                self.render_frame(stdout)?;
             }
             // ── Check for external file changes ──
             if self.check_file_changed() {
-                self.render(stdout)?;
+                self.render_frame(stdout)?;
             }
             // ── Check for sidebar directory changes ──
             if self.sidebar.check_changed() {
                 self.file_index = None; // Invalidate file finder cache too
-                self.render(stdout)?;
+                self.render_frame(stdout)?;
+            }
+            // ── Sidebar git symbols: refreshed off the paint path ──
+            if self.sidebar.open {
+                let refreshed = self.sidebar.poll_git();
+                self.sidebar.request_git_refresh(Duration::from_secs(2));
+                if refreshed {
+                    self.render_frame(stdout)?;
+                }
             }
             // ── Blink tick — runs even when no input arrives ──
             let blink_rate = self.editor_cfg.cursor_blink_rate_ms;
@@ -93,7 +104,7 @@ impl Editor {
                 for y in ec_ys {
                     self.mark_dirty(y);
                 }
-                self.render(stdout)?;
+                self.render_frame(stdout)?;
             }
             // ── Terminal cursor blink — only when focused ──
             if let Some(ref mut term) = self.terminal {
@@ -121,7 +132,7 @@ impl Editor {
                 if !event::poll(Duration::from_millis(poll_ms))? {
                     self.poll_run_output(stdout);
                     if self.dirty_end > 0 {
-                        self.render(stdout)?;
+                        self.render_frame(stdout)?;
                     }
                     continue;
                 }
@@ -156,7 +167,7 @@ impl Editor {
                             );
                         }
                         self.mark_all_dirty();
-                        self.render(stdout)?;
+                        self.render_frame(stdout)?;
                         if let Some(ref mut term) = self.terminal {
                             term.clear_dirty();
                         }
@@ -301,11 +312,15 @@ impl Editor {
 
             if is_resize {
                 self.mark_all_dirty();
-                // Resize the embedded terminal if active (fixed 50%)
-                if let Some(ref mut term) = self.terminal {
-                    let (tw, th) = crate::editor::helpers::term_size();
-                    let term_h = (th / 2) as u16;
-                    term.resize(tw as u16, term_h);
+                // Keep the embedded shell's grid identical to the panel that
+                // displays it; a stale size makes the child format its rulers
+                // and boxes to columns the panel then clips.
+                let pty_size = self
+                    .terminal
+                    .is_some()
+                    .then(|| self.terminal_pty_size());
+                if let (Some((cols, rows)), Some(term)) = (pty_size, self.terminal.as_mut()) {
+                    term.resize(cols, rows);
                 }
             }
 
@@ -324,13 +339,13 @@ impl Editor {
                     self.last_blink = Instant::now();
                     self.cursor_visible = true;
                 }
-                self.render(stdout)?;
+                self.render_frame(stdout)?;
 
                 // Poll streaming output after render too
                 if self.run_panel_open {
                     self.poll_run_output(stdout);
                     if self.dirty_end > 0 {
-                        self.render(stdout)?;
+                        self.render_frame(stdout)?;
                     }
                 }
 
@@ -363,7 +378,7 @@ impl Editor {
                             );
                         }
                         self.mark_all_dirty();
-                        self.render(stdout)?;
+                        self.render_frame(stdout)?;
                         if let Some(ref mut term) = self.terminal {
                             term.clear_dirty();
                         }
@@ -371,6 +386,22 @@ impl Editor {
                 }
             }
         }
+    }
+
+    /// Paint one frame into a scratch buffer and hand the terminal a single
+    /// write. Rendering straight into `Stdout` (a 1 KiB line-buffered handle)
+    /// let crossterm flush mid-frame, so the terminal could display — and
+    /// briefly keep — a half-painted sidebar/list. One buffered write per
+    /// frame keeps the whole frame atomic.
+    pub(crate) fn render_frame(&mut self, stdout: &mut std::io::Stdout) -> std::io::Result<()> {
+        let mut frame: Vec<u8> = Vec::with_capacity(32 * 1024);
+        let started = Instant::now();
+        self.render(&mut frame)?;
+        let bytes = frame.len();
+        stdout.write_all(&frame)?;
+        stdout.flush()?;
+        crate::utils::frame_log::log("editor", bytes, started.elapsed());
+        Ok(())
     }
 
     /// Poll the run output channel for new lines and re-render if needed.

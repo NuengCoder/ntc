@@ -5,6 +5,7 @@ use crossterm::terminal::{Clear, ClearType};
 
 use super::super::{byte_to_col, gutter_width, Editor, ALL_ENCODINGS};
 use crate::t;
+use crate::utils::ansi_text::{expand_tabs, sanitize_control, truncate_visible, visible_width};
 
 /// Help text starts `offset` columns in (the horizontal pan). Lines shorter
 /// than the offset render empty instead of repeating.
@@ -16,7 +17,7 @@ fn help_line_from(line: &str, offset: usize) -> &str {
 }
 
 impl Editor {
-    pub(crate) fn render_help_screen(&self, stdout: &mut std::io::Stdout) -> std::io::Result<()> {
+    pub(crate) fn render_help_screen(&self, stdout: &mut impl std::io::Write) -> std::io::Result<()> {
         let theme = crate::utils::theme::ThemeManager::current();
         let content_top = 1;
         let rows = self.term_h.saturating_sub(5);
@@ -96,7 +97,7 @@ impl Editor {
         Ok(())
     }
 
-    pub(crate) fn render_file_finder(&self, stdout: &mut std::io::Stdout) -> std::io::Result<()> {
+    pub(crate) fn render_file_finder(&self, stdout: &mut impl std::io::Write) -> std::io::Result<()> {
         let theme = crate::utils::theme::ThemeManager::current();
         let eo = self.editor_offset();
         let content_top = 1;
@@ -275,7 +276,7 @@ impl Editor {
         Ok(())
     }
 
-    pub(crate) fn render_gosc(&self, stdout: &mut std::io::Stdout) -> std::io::Result<()> {
+    pub(crate) fn render_gosc(&self, stdout: &mut impl std::io::Write) -> std::io::Result<()> {
         let theme = crate::utils::theme::ThemeManager::current();
         let content_top = 1;
         let cols = self.term_w;
@@ -322,9 +323,8 @@ impl Editor {
             let ri = top + 2 + i;
             let prefix = format!(" {:>2}. ", i + 1);
             let name = &self.gosc_dirs[i];
-            let display = if name.len() > inner_w.saturating_sub(5) {
-                let cut = name.floor_char_boundary(inner_w.saturating_sub(6));
-                format!("{}…", &name[..cut])
+            let display = if visible_width(name) > inner_w.saturating_sub(5) {
+                format!("{}…", truncate_visible(name, inner_w.saturating_sub(6)))
             } else {
                 name.clone()
             };
@@ -377,7 +377,7 @@ impl Editor {
 
     pub(crate) fn render_encoding_picker(
         &self,
-        stdout: &mut std::io::Stdout,
+        stdout: &mut impl std::io::Write,
     ) -> std::io::Result<()> {
         let theme = crate::utils::theme::ThemeManager::current();
         let content_top = 1;
@@ -424,10 +424,10 @@ impl Editor {
             let ri = top + 2 + i;
             let is_sel = i == self.encoding_sel;
             let is_current = *enc == current;
-            let mark = if is_current { "●" } else { " " };
+            let mark = if is_current { "*" } else { " " };
             let line = format!(
                 " {}  {}  {}",
-                if is_sel { "▶" } else { " " },
+                if is_sel { ">" } else { " " },
                 mark,
                 enc.label()
             );
@@ -466,7 +466,7 @@ impl Editor {
         Ok(())
     }
 
-    pub(crate) fn render_git_diff(&self, stdout: &mut std::io::Stdout) -> std::io::Result<()> {
+    pub(crate) fn render_git_diff(&self, stdout: &mut impl std::io::Write) -> std::io::Result<()> {
         let theme = crate::utils::theme::ThemeManager::current();
         if let Some(state) = &self.git_diff {
             let rows = self.term_h.saturating_sub(4);
@@ -491,9 +491,12 @@ impl Editor {
                     } else {
                         Color::White
                     };
-                    let print_len = line.chars().count().min(cols);
-                    let clipped: String = line.chars().take(print_len).collect();
-                    queue!(stdout, SetForegroundColor(fg), Print(&clipped), ResetColor,)?;
+                    // Diff lines are file content: escape control bytes and
+                    // align tabs before clipping by visible width.
+                    let clean =
+                        expand_tabs(&sanitize_control(line), self.editor_cfg.tab_size.max(1));
+                    let clipped = truncate_visible(&clean, cols);
+                    queue!(stdout, SetForegroundColor(fg), Print(clipped), ResetColor,)?;
                 }
             }
             let hint = format!(
@@ -509,7 +512,7 @@ impl Editor {
                 stdout,
                 MoveTo(0, (self.term_h.saturating_sub(2)) as u16),
                 SetForegroundColor(theme.editor.hint_text.to_crossterm()),
-                Print(hint),
+                Print(sanitize_control(&hint)),
                 ResetColor,
                 Clear(ClearType::UntilNewLine),
             )?;
@@ -520,7 +523,7 @@ impl Editor {
     /// VSCode-style input box for the nfe explorer's `n`/`m`/`r` actions:
     /// a centred bordered box over the top rows of the text area, with the
     /// editable line and its caret in the middle.
-    pub(crate) fn render_nfe_box(&self, stdout: &mut std::io::Stdout) -> std::io::Result<()> {
+    pub(crate) fn render_nfe_box(&self, stdout: &mut impl std::io::Write) -> std::io::Result<()> {
         let Some(b) = self.nfe_box.as_ref() else {
             return Ok(());
         };
@@ -638,7 +641,7 @@ impl Editor {
         Ok(())
     }
 
-    pub(crate) fn render_hover_popup(&self, stdout: &mut std::io::Stdout) -> std::io::Result<()> {
+    pub(crate) fn render_hover_popup(&self, stdout: &mut impl std::io::Write) -> std::io::Result<()> {
         let theme = crate::utils::theme::ThemeManager::current();
         let text = match &self.hover_text {
             Some(t) => t,
@@ -720,9 +723,11 @@ impl Editor {
 
         for (i, line_text) in lines.iter().enumerate().take(visible) {
             let y = popup_y + 1 + i;
-            let display = if line_text.len() > popup_w.saturating_sub(4) {
-                let cut = line_text.floor_char_boundary(popup_w.saturating_sub(5));
-                format!(" {}…", &line_text[..cut])
+            let display = if visible_width(line_text) > popup_w.saturating_sub(4) {
+                format!(
+                    " {}…",
+                    truncate_visible(line_text, popup_w.saturating_sub(5))
+                )
             } else {
                 format!(" {}", line_text)
             };
@@ -754,7 +759,7 @@ impl Editor {
 
     /// VSCode-style completion: fixed Box1 (candidates) + Box2 (detail),
     /// one line below the cursor, flipped above when space runs out.
-    pub(crate) fn render_completion(&self, stdout: &mut std::io::Stdout) -> std::io::Result<()> {
+    pub(crate) fn render_completion(&self, stdout: &mut impl std::io::Write) -> std::io::Result<()> {
         use crate::editor::complete::{BOX1_WIDTH, BOX2_WIDTH, COMPLETE_ROWS};
 
         let st = match &self.completion {
@@ -797,9 +802,8 @@ impl Editor {
         // Border titles: ` prefix (idx/total) `, data only, no new words.
         let title = format!(" {} ({}/{}) ", st.prefix, sel + 1, st.items.len());
         let title_w = BOX1_WIDTH.saturating_sub(2);
-        let title = if title.chars().count() > title_w {
-            let cut = title.floor_char_boundary(title_w.saturating_sub(1));
-            format!("{}…", &title[..cut])
+        let title = if visible_width(&title) > title_w {
+            format!("{}…", truncate_visible(&title, title_w.saturating_sub(1)))
         } else {
             title
         };
@@ -838,9 +842,11 @@ impl Editor {
             match st.items.get(start + r) {
                 Some(item) => {
                     let is_sel = start + r == sel;
-                    let label = if item.label.chars().count() > label_w {
-                        let cut = item.label.floor_char_boundary(label_w.saturating_sub(1));
-                        format!("{}…", &item.label[..cut])
+                    let label = if visible_width(&item.label) > label_w {
+                        format!(
+                            "{}…",
+                            truncate_visible(&item.label, label_w.saturating_sub(1))
+                        )
                     } else {
                         item.label.clone()
                     };
@@ -912,9 +918,8 @@ impl Editor {
                 sel_item.doc.lines().nth(r - 1).map(|s| s.to_string())
             };
             let text = match b2 {
-                Some(t) if t.chars().count() > inner2 => {
-                    let cut = t.floor_char_boundary(inner2.saturating_sub(1));
-                    format!("{}…", &t[..cut])
+                Some(t) if visible_width(&t) > inner2 => {
+                    format!("{}…", truncate_visible(&t, inner2.saturating_sub(1)))
                 }
                 Some(t) => t,
                 None => String::new(),
@@ -961,7 +966,7 @@ impl Editor {
     /// parameter uses hardcoded Yellow (per spec) on any theme.
     fn paint_sig_rows(
         &self,
-        stdout: &mut std::io::Stdout,
+        stdout: &mut impl std::io::Write,
         x0: usize,
         y0: usize,
         inner: usize,
@@ -1047,7 +1052,7 @@ impl Editor {
 
     /// Signature help: Box2-sized box above the cursor, full wrapped
     /// signature with the active parameter in Yellow.
-    pub(crate) fn render_sighelp(&self, stdout: &mut std::io::Stdout) -> std::io::Result<()> {
+    pub(crate) fn render_sighelp(&self, stdout: &mut impl std::io::Write) -> std::io::Result<()> {
         use crate::editor::complete::{wrap_sig, BOX2_WIDTH};
 
         /// Fixed box height: borders + up to 4 signature rows + desc.
@@ -1094,9 +1099,8 @@ impl Editor {
                 break;
             }
             let text = desc.get(di).copied().unwrap_or("");
-            let text = if text.chars().count() > inner.saturating_sub(1) {
-                let cut = text.floor_char_boundary(inner.saturating_sub(2));
-                format!("{}…", &text[..cut])
+            let text = if visible_width(text) > inner.saturating_sub(1) {
+                format!("{}…", truncate_visible(text, inner.saturating_sub(2)))
             } else {
                 text.to_string()
             };

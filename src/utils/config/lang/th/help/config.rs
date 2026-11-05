@@ -190,7 +190,33 @@ pub fn fill(m: &mut HashMap<String, String>) {
     );
 
     m.insert(
+        "help.config.integration_shell".into(),
+        "config integration_shell ON|OFF ## เติมชื่อเชลล์ที่ติดตั้ง (powershell บน Windows, bash บน Linux desktop, cmd, …), แฟล็กตัวเรียก และเปิดโหมด ntc ps บน Windows / ntc <distro> บน Linux (alias: is)".into(),
+    );
+
+    m.insert(
+        "help.config.code_tools".into(),
+        "config code_tools ON|OFF ## เติมเครื่องมือเขียนโปรแกรม/คอมไพเลอร์ที่ติดตั้ง (g++, python, java, cargo, …) และแฟล็ก (alias: ct)".into(),
+    );
+
+    m.insert(
         "help.config.todo".into(),
         "config todo format <txt|md|json|toml|yaml|html> ## ตั้งรูปแบบไฟล์ todo".into(),
+    );
+
+    m.insert(
+        "help.config.env".into(),
+        "config env NAME value [-g|-l|-os|-osg] ## ตั้งตัวแปรสภาพแวดล้อม NTC (ไม่ใส่ค่า: แสดงรายการ; ใส่ชื่อ: แสดงค่า)".into(),
+    );
+
+    m.insert(
+        "help.config.env_os".into(),
+        "  -g global | -l local | -os เซสชันนี้ | -osg บันทึกถาวรใน OS ## ค่าเริ่มต้น: local ถ้ามี ntconfig.toml ไม่เช่นนั้น global".into(),
+    );
+
+    m.insert(
+        "help.config.rmenv".into(),
+        "config rmenv NAME [-g|-l|-os|-osg|-all] ## ลบตัวแปรสภาพแวดล้อม NTC (-all: ทุกที่เก็บ + เซสชัน)"
+            .into(),
     );
 }

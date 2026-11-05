@@ -1215,10 +1215,12 @@ fn sync_hinter_context(ctx: &NdbContext, cwd: &Path, state: &NdbState) {
         .collect();
     aliases.sort();
     ctx.set_aliases(aliases);
+    ctx.set_hints(crate::config::Config::get_db_alias_hints());
     match state {
         NdbState::Root => {
             ctx.set_in_db(false);
             ctx.set_tables(Vec::new());
+            ctx.set_columns(std::collections::BTreeMap::new());
         }
         NdbState::Db(db) => {
             ctx.set_in_db(true);
@@ -1226,7 +1228,19 @@ fn sync_hinter_context(ctx: &NdbContext, cwd: &Path, state: &NdbState) {
                 .tables()
                 .map(|t| t.into_iter().map(|info| info.name).collect())
                 .unwrap_or_default();
+            // Columns feed `--hint-table-col-name`; one listing query per
+            // table, refreshed whenever the open database changes.
+            let mut columns = std::collections::BTreeMap::new();
+            for table in &tables {
+                if let Ok(cols) = db.columns(table) {
+                    columns.insert(
+                        table.to_lowercase(),
+                        cols.into_iter().map(|c| c.name).collect::<Vec<String>>(),
+                    );
+                }
+            }
             ctx.set_tables(tables);
+            ctx.set_columns(columns);
         }
     }
 }

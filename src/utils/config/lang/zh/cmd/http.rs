@@ -51,6 +51,11 @@ pub fn fill(m: &mut HashMap<String, String>) {
         "  http GET https://api.example.com/users -a admin:secret123".into(),
     );
 
+    m.insert(
+        "cmd.http.help_example7".into(),
+        "  http QUERY https://api.example.com/search --json '{\"q\":\"foo\",\"limit\":10}'".into(),
+    );
+
     m.insert("cmd.http.help_examples_title".into(), "示例：".into());
 
     m.insert(
@@ -70,7 +75,7 @@ pub fn fill(m: &mut HashMap<String, String>) {
 
     m.insert(
         "cmd.http.help_methods".into(),
-        "  GET, POST, PUT, DELETE, PATCH, HEAD".into(),
+        "  GET, POST, PUT, DELETE, PATCH, HEAD, QUERY".into(),
     );
 
     m.insert("cmd.http.help_methods_title".into(), "方法：".into());
@@ -163,6 +168,16 @@ pub fn fill(m: &mut HashMap<String, String>) {
     m.insert("cmd.http.missing_timeout".into(), "-t 后缺少秒数".into());
 
     m.insert("cmd.http.request_failed".into(), "{} {} 失败".into());
+
+    m.insert(
+        "cmd.http.query_no_body".into(),
+        "警告：QUERY 请求通常需要请求体（使用 --json 或 -d）。".into(),
+    );
+
+    m.insert(
+        "cmd.http.query_no_content_type".into(),
+        "警告：QUERY 请求体没有 Content-Type；服务器应拒绝此请求（添加 -H \"Content-Type: ...\"）。".into(),
+    );
 
     m.insert(
         "cmd.http.saved_bytes".into(),

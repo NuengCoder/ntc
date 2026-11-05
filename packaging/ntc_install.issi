@@ -1,0 +1,161 @@
+; ntc_install.issi — shared installer body for installer.iss and win7amd.iss.
+;
+; The wrapper defines what to package, then includes this file:
+;   #define ExeSource   "target\release\ntc.exe"
+;   #define DllGlob     "target\release\*.dll"
+;   #define DepsGlob    "target\release\deps\*.dll"
+;   #define OutputBase  "ntc-installer-2.4.8"
+;   #define AppVer      "2.4.8"
+;   #include "packaging\ntc_install.issi"
+;
+; Two install modes come out of the same body:
+;   iscc installer.iss                      -> all users, requires admin (today's default)
+;   iscc /DUSERINSTALL installer.iss        -> per-user, no UAC at all
+;
+; Why the per-user build exists: the elevation level is baked into the exe
+; manifest by `PrivilegesRequired`, so a `admin`-mode setup cannot start on a
+; standard user account (Windows cannot create Setup's temp directory without
+; elevation). A `lowest`-mode build has an `asInvoker` manifest and runs
+; unelevated, installing into %LOCALAPPDATA%\Programs with a per-user PATH.
+
+[Setup]
+AppName=ntc
+AppVersion={#AppVer}
+AppVerName=ntc {#AppVer}
+AppPublisher=NuengCoder
+AppPublisherURL=https://github.com/NuengCoder/ntc
+AppSupportURL=https://github.com/NuengCoder/ntc/issues
+DefaultDirName={code:DefaultInstallDir}\ntc
+DefaultGroupName=ntc
+AllowNoIcons=yes
+OutputDir=.\installer
+OutputBaseFilename={#OutputBase}{#OutputSuffix}
+SetupIconFile=assets\ntc_image.ico
+Compression=lzma
+SolidCompression=yes
+UsePreviousAppDir=yes
+ChangesEnvironment=yes
+SetupLogging=yes
+CloseApplications=yes
+RestartApplications=no
+ArchitecturesAllowed=x64compatible
+; The HKCU PATH row below is Check-guarded to per-user mode, so an elevated
+; install never edits the admin profile's environment: the warning is a false
+; positive for this script.
+UsedUserAreasWarning=no
+; The Win7 wrapper lowers this via {#MinOS}; the regular build leaves it empty.
+#if MinOS != ""
+MinVersion={#MinOS}
+#endif
+
+#ifdef USERINSTALL
+; Per-user build: no elevation request at all, so it runs on a locked-down
+; account. `/ALLUSERS` and the command-line override are still honoured if the
+; user wants a machine-wide install from this binary.
+PrivilegesRequired=lowest
+PrivilegesRequiredOverridesAllowed=commandline dialog
+#else
+; Default build: machine-wide, asks for elevation once.
+PrivilegesRequired=admin
+PrivilegesRequiredOverridesAllowed=commandline dialog
+#endif
+
+[Files]
+Source: "{#ExeSource}"; DestDir: "{app}"; Flags: ignoreversion
+Source: "{#DllGlob}"; DestDir: "{app}"; Flags: ignoreversion skipifsourcedoesntexist
+Source: "{#DllGlob}"; DestDir: "{app}\dll"; Flags: ignoreversion skipifsourcedoesntexist
+Source: "{#DepsGlob}"; DestDir: "{app}\dll"; Flags: ignoreversion skipifsourcedoesntexist
+
+[Dirs]
+Name: "{app}\dll"
+
+[Icons]
+Name: "{group}\ntc"; Filename: "{app}\ntc.exe"; Comment: "Navigate, Toolkit, Center - Interactive shell"
+Name: "{group}\Uninstall ntc"; Filename: "{uninstallexe}"
+Name: "{autodesktop}\ntc"; Filename: "{app}\ntc.exe"; Comment: "Navigate, Toolkit, Center - Interactive shell"; Tasks: desktopicon
+
+[Tasks]
+Name: "desktopicon"; Description: "Create a desktop shortcut"; GroupDescription: "Additional icons:"
+
+[Registry]
+; Exactly one PATH entry per mode:
+;  - per-user install  -> HKCU for the installing account (no UAC, no machine
+;    changes, and the uninstaller only removes what it wrote);
+;  - all-users install -> HKLM, which covers every account, so an elevated
+;    Setup never edits the (possibly different) admin profile's HKCU.
+Root: HKCU; Subkey: "Environment"; ValueType: expandsz; ValueName: "Path"; \
+    ValueData: "{olddata};{app}"; Check: NeedsAddUserPath(ExpandConstant('{app}')) and (not IsAdminInstallMode)
+
+Root: HKLM; Subkey: "SYSTEM\CurrentControlSet\Control\Session Manager\Environment"; \
+    ValueType: expandsz; ValueName: "Path"; \
+    ValueData: "{olddata};{app}"; Check: NeedsAddSystemPath(ExpandConstant('{app}')) and IsAdminInstallMode
+
+[Run]
+Filename: "{app}\ntc.exe"; Parameters: "--version"; Flags: runhidden; Description: "Verify installation"
+
+[Code]
+function DefaultInstallDir(Param: string): string;
+begin
+  if IsAdminInstallMode then
+    Result := ExpandConstant('{commonpf}')
+  else
+    Result := ExpandConstant('{localappdata}\Programs');
+end;
+
+function IsVCRedistInstalled: boolean;
+var
+  ResultCode: integer;
+begin
+  Result := Exec('cmd.exe', '/c "where /q vcruntime140.dll"', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+  if not Result then
+    Result := FileExists(ExpandConstant('{syswow64}\vcruntime140.dll')) or
+              FileExists(ExpandConstant('{sysnative}\vcruntime140.dll')) or
+              FileExists(ExpandConstant('{win}\System32\vcruntime140.dll'));
+end;
+
+function NeedsAddUserPath(Param: string): boolean;
+var
+  OrigPath: string;
+begin
+  if not RegQueryStringValue(HKCU, 'Environment', 'Path', OrigPath) then
+  begin
+    Result := True;
+    exit;
+  end;
+  Result := Pos(';' + UpperCase(Param) + ';', ';' + UpperCase(OrigPath) + ';') = 0;
+end;
+
+function NeedsAddSystemPath(Param: string): boolean;
+var
+  OrigPath: string;
+begin
+  if not RegQueryStringValue(HKLM, 'SYSTEM\CurrentControlSet\Control\Session Manager\Environment', 'Path', OrigPath) then
+  begin
+    Result := True;
+    exit;
+  end;
+  Result := Pos(';' + UpperCase(Param) + ';', ';' + UpperCase(OrigPath) + ';') = 0;
+end;
+
+procedure CurStepChanged(CurStep: TSetupStep);
+var
+  Installed: String;
+  Mode: String;
+begin
+  if CurStep = ssPostInstall then
+  begin
+    if IsAdminInstallMode then
+      Mode := 'all users'
+    else
+      Mode := 'current user only';
+    Log('ntc installed for ' + Mode + ' in ' + ExpandConstant('{app}'));
+
+    // A version mismatch means the exe on disk is not the one this script was
+    // built for; log it instead of silently shipping a mislabeled installer.
+    if GetVersionNumbersString(ExpandConstant('{app}\ntc.exe'), Installed) then
+    begin
+      if Pos('{#AppVer}', Installed) <> 1 then
+        Log('WARNING: ntc.exe reports version "' + Installed + '", installer says {#AppVer}');
+    end;
+  end;
+end;

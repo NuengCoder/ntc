@@ -3,17 +3,19 @@ use std::collections::HashMap;
 pub fn fill(m: &mut HashMap<String, String>) {
     m.insert(
         "help.search.ds".into(),
-        "ds <pattern> [-d <n>] ## ຄົ້ນຫາໄດເຣັກທໍຣີຕາມຊື່".into(),
+        "ds <pattern> [-d <n>] [--no-fuzzy] ## ຄົ້ນຫາໄດເຣັກທໍຣີຕາມຊື່ (--no-fuzzy ປິດການຄົ້ນຫາແບບ fuzzy)"
+            .into(),
     );
 
     m.insert(
         "help.search.fs".into(),
-        "fs <pattern> [-d <n>] ## ຄົ້ນຫາໄຟລ໌ຕາມຊື່ (fuzzy fallback)".into(),
+        "fs <pattern> [-d <n>] [--no-fuzzy] ## ຄົ້ນຫາໄຟລ໌ຕາມຊື່ (fuzzy fallback ເວັ້ນເສຍແຕ່ໃສ່ --no-fuzzy)"
+            .into(),
     );
 
     m.insert(
         "help.search.fsc".into(),
-        "fsc <pattern> [-d <n>] ## ຄົ້ນຫາໄຟລ໌, ເລືອກເພື່ອສະແດງ ແລະ ສຳເນົາໄດ້".into(),
+        "fsc <pattern> [-d <n>] [--no-fuzzy] ## ຄົ້ນຫາໄຟລ໌, ເລືອກເພື່ອສະແດງ ແລະ ສຳເນົາໄດ້".into(),
     );
 
     m.insert("help.search.gs".into(), "gs <pattern> [-p <glob>] [-s [line|path|size]] [-d <n>] [-l <n>] [-i] ## ຄົ້ນຫາເນື້ອໃນໄຟລ໌ (grep ງ່າຍໆ)".into());
@@ -25,7 +27,7 @@ pub fn fill(m: &mut HashMap<String, String>) {
 
     m.insert(
         "help.search.locate".into(),
-        "locate <pattern> [-d <n>] ## ຄົ້ນຫາທັງໄຟລ໌ ແລະ ໄດເຣັກທໍຣີ".into(),
+        "locate <pattern> [-d <n>] [--no-fuzzy] ## ຄົ້ນຫາທັງໄຟລ໌ ແລະ ໄດເຣັກທໍຣີ".into(),
     );
 
     m.insert(

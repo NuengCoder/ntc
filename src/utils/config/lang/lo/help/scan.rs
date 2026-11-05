@@ -77,4 +77,38 @@ pub fn fill(m: &mut HashMap<String, String>) {
     );
 
     m.insert("help.scan.title".into(), "ຄຳສັ່ງ SCAN:".into());
+    m.insert(
+        "help.scan.waep".into(),
+        "scan waep <ໂຮສ|URL> ## ຄົ້ນຫາເສັ້ນທາງເວັບ (/api, /admin, /upload, ...)".into(),
+    );
+
+    m.insert(
+        "help.scan.waep_base".into(),
+        "scan waep example.com/api -r -d 2 ## ຄົ້ນຕໍ່ໃຕ້ base path".into(),
+    );
+
+    m.insert(
+        "help.scan.waep_flags".into(),
+        "scan waep <ເປົ້າໝາຍ> [-w <ຟາຍ>] [-x <ນາມສະກຸນ,...>] [-m GET|HEAD] [-s <ລະຫັດ>] [--all] ## wordlist, ນາມສະກຸນ, method, ສະຖານະທີ່ຮັບ".into(),
+    );
+
+    m.insert(
+        "help.scan.waep_recursive".into(),
+        "scan waep <ເປົ້າໝາຍ> [-r] [-d 1-4] [-c 1-64] [--timeout <ms>] [-H 'ຊື່: ຄ່າ'] [-A <ua>] [-o <ຟາຍ>] [-q] ## ການລົງເລິກ, ຄວາມໄວ, header, ຜົນອອກ".into(),
+    );
+
+    m.insert(
+        "help.scan.example8".into(),
+        "scan waep http://127.0.0.1:55555/api ## ເບິ່ງວ່າ API ຂອງ ntc serve ເປີດຫຍັງໄວ້".into(),
+    );
+
+    m.insert(
+        "help.scan.example9".into(),
+        "scan waep example.com -x php,html --all ## ສະແດງທຸກການຕອບສະໜອງ ລວມ .php/.html".into(),
+    );
+
+    m.insert(
+        "help.scan.example10".into(),
+        "scan waep example.com/api -r -d 2 -c 32 ## ລົງສອງຊັ້ນດ້ວຍ 32 probe ພ້ອມກັນ".into(),
+    );
 }

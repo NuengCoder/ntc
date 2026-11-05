@@ -40,7 +40,7 @@ pub fn fill(m: &mut HashMap<String, String>) {
 
     m.insert(
         "help.report.txtc".into(),
-        "txtc <文件> ## 将文件内容复制到剪贴板".into(),
+        "txtc [--line|--no-line] <文件> ## 将文件内容复制到剪贴板（行号开关）".into(),
     );
 
     m.insert("help.report.txtf".into(), "txtf [--head N|--tail N|--betw A:B] [文件|目录|@tp/文件|@tp/目录] ## 显示文件内容或从目录中选择文件（保留原始行号）".into());

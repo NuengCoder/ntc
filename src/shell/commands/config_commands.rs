@@ -7,6 +7,7 @@ use crate::config::VALID_LANGUAGES;
 use crate::navigator::Navigator;
 use crate::output::{print_error, print_info, print_success, print_warning};
 use crate::t;
+use crate::utils::{os_env, paths};
 
 use anyhow::Result;
 use colored::*;
@@ -24,6 +25,7 @@ pub fn cmd_config(args: &str, _nav: &mut Navigator) -> Result<bool> {
         "linenumbers" | "ln" | "line" => config_linenumbers(subargs),
         "color" | "c" => config_color(subargs),
         "autosuggest" | "as" => config_autosuggest(subargs),
+        "idle" | "idle-hint" | "ghost_typing" | "ghost-typing" | "gt" => config_idle_hint(subargs),
         "threads" | "t" => config_threads(subargs),
         "history" | "h" => config_history(subargs),
         "watch" | "w" => config_watch(subargs),
@@ -34,9 +36,13 @@ pub fn cmd_config(args: &str, _nav: &mut Navigator) -> Result<bool> {
         "size" | "s" => config_size(subargs),
         "update_check" | "uc" => config_update_check(subargs),
         "intro_view" | "iv" => config_intro_view(subargs),
+        "integration_shell" | "int_shell" | "is" => config_integration_shell(subargs),
+        "code_tools" | "ct" => config_code_tools(subargs),
         "qsc" => config_qsc(subargs),
         "serve" => config_serve(subargs),
         "lang" | "language" => config_lang(subargs),
+        "env" | "vars" => config_env(subargs),
+        "rmenv" | "envrm" | "unsetenv" => config_rmenv(subargs),
         _ => {
             println!("{}", t!("cmd.config.title").cyan().bold());
             println!();
@@ -46,6 +52,7 @@ pub fn cmd_config(args: &str, _nav: &mut Navigator) -> Result<bool> {
             println!("  {}", t!("help.config.linenumbers"));
             println!("  {}", t!("help.config.color"));
             println!("  {}", t!("help.config.autosuggest"));
+            println!("  {}", t!("help.config.idle"));
             println!("  {}", t!("help.config.git"));
             println!("  {}", t!("help.config.dir_view"));
             println!("  {}", t!("help.config.file_view"));
@@ -53,6 +60,8 @@ pub fn cmd_config(args: &str, _nav: &mut Navigator) -> Result<bool> {
             println!("  {}", t!("help.config.size"));
             println!("  {}", t!("help.config.update_check"));
             println!("  {}", t!("help.config.intro_view"));
+            println!("  {}", t!("help.config.integration_shell"));
+            println!("  {}", t!("help.config.code_tools"));
             println!("  {}", t!("help.config.threads"));
             println!("  {}", t!("help.config.history"));
             println!("  {}", t!("help.config.watch"));
@@ -74,6 +83,9 @@ pub fn cmd_config(args: &str, _nav: &mut Navigator) -> Result<bool> {
             println!("  {}", t!("help.config.showenv"));
             println!("  {}", t!("help.config.showenv_all"));
             println!("  {}", t!("help.config.showenv_d"));
+            println!("  {}", t!("help.config.env"));
+            println!("  {}", t!("help.config.env_os"));
+            println!("  {}", t!("help.config.rmenv"));
             println!();
             println!("{}", t!("cmd.config.examples_header").green());
             println!("  {}", t!("cmd.config.example_output"));
@@ -96,7 +108,7 @@ fn config_output(args: &str) -> Result<bool> {
             )
         );
     } else {
-        Config::global_set_output_path(Path::new(args));
+        Config::global_set_output_path(Path::new(&paths::expand_path_str(args)));
         print_success(&t!(
             "msg.setO.success",
             Config::global_get_output_path().display()
@@ -180,6 +192,133 @@ fn config_autosuggest(args: &str) -> Result<bool> {
                 print_warning(&t!("msg.setA.off"));
             }
             _ => print_error(&t!("msg.setA.error", args)),
+        }
+    }
+    Ok(false)
+}
+
+/// `config idle [on|off]` (also `ghost_typing`, `gt`): the idle ghost typing
+/// switch — what the empty prompt types out after you stop touching it.
+fn config_idle_hint(args: &str) -> Result<bool> {
+    if args.is_empty() {
+        let state = if Config::global_get_idle_hint_enabled() {
+            "ON"
+        } else {
+            "OFF"
+        };
+        println!("{}", t!("msg.setIdle.status", state));
+    } else {
+        match args.to_uppercase().as_str() {
+            "ON" => {
+                Config::global_set_idle_hint_enabled(true);
+                print_success(&t!("msg.setIdle.on"));
+            }
+            "OFF" => {
+                Config::global_set_idle_hint_enabled(false);
+                print_warning(&t!("msg.setIdle.off"));
+            }
+            _ => print_error(&t!("msg.setIdle.error", args)),
+        }
+    }
+    Ok(false)
+}
+
+fn config_integration_shell(args: &str) -> Result<bool> {
+    if args.is_empty() {
+        let state = if Config::global_get_integration_shell_enabled() {
+            "ON"
+        } else {
+            "OFF"
+        };
+        println!("{}", t!("msg.setIS.status", state));
+        print_integration_platform_status();
+    } else {
+        match args.to_uppercase().as_str() {
+            "ON" => {
+                Config::global_set_integration_shell_enabled(true);
+                print_success(&t!("msg.setIS.on"));
+                warn_missing_bash_completion();
+            }
+            "OFF" => {
+                Config::global_set_integration_shell_enabled(false);
+                print_warning(&t!("msg.setIS.off"));
+            }
+            _ => print_error(&t!("msg.setIS.error", args)),
+        }
+    }
+    Ok(false)
+}
+
+/// Platform details for the integrated shell: the macOS package manager, or
+/// the detected distro (Termux included) plus whether bash argument hints
+/// have `bash-completion`. Silent on other platforms.
+fn print_integration_platform_status() {
+    use crate::shell::ext_complete::{bash_completion_available, is_installed, platform};
+
+    if platform::is_macos() {
+        let package_manager = if is_installed("brew") {
+            "brew"
+        } else {
+            "unknown"
+        };
+        println!("{}", t!("msg.setIS.platform", "macOS", package_manager));
+        return;
+    }
+    if !platform::is_bash_platform() {
+        return;
+    }
+    if let Some(distro) = platform::distro() {
+        println!(
+            "{}",
+            t!(
+                "msg.setIS.platform",
+                distro.name,
+                distro.package_manager.command()
+            )
+        );
+    }
+    if !is_installed("bash") {
+        return;
+    }
+    if bash_completion_available() {
+        println!("{}", t!("msg.setIS.bash_completion_ok"));
+        return;
+    }
+    print_warning(&t!("msg.setIS.bash_completion_missing"));
+    if let Some(command) = crate::shell::ext_complete::bash_completion_install_hint() {
+        println!("  {}", t!("msg.setIS.bash_completion_install", command));
+    }
+}
+
+/// On `config integration_shell ON`, explain why bash arguments will not
+/// complete on this machine and how to fix it.
+fn warn_missing_bash_completion() {
+    let Some(command) = crate::shell::ext_complete::bash_completion_install_hint() else {
+        return;
+    };
+    print_warning(&t!("msg.setIS.bash_completion_missing"));
+    println!("  {}", t!("msg.setIS.bash_completion_install", command));
+}
+
+fn config_code_tools(args: &str) -> Result<bool> {
+    if args.is_empty() {
+        let state = if Config::global_get_code_tools_enabled() {
+            "ON"
+        } else {
+            "OFF"
+        };
+        println!("{}", t!("msg.setCT.status", state));
+    } else {
+        match args.to_uppercase().as_str() {
+            "ON" => {
+                Config::global_set_code_tools_enabled(true);
+                print_success(&t!("msg.setCT.on"));
+            }
+            "OFF" => {
+                Config::global_set_code_tools_enabled(false);
+                print_warning(&t!("msg.setCT.off"));
+            }
+            _ => print_error(&t!("msg.setCT.error", args)),
         }
     }
     Ok(false)
@@ -603,7 +742,8 @@ fn config_history(args: &str) -> Result<bool> {
             Config::global_set_history_path(None);
             print_success(&t!("msg.setH.path_reset"));
         } else {
-            let p = Path::new(args);
+            let expanded = paths::expand_path_str(args);
+            let p = Path::new(&expanded);
             Config::global_set_history_path(Some(p.to_path_buf()));
             print_success(&t!("msg.setH.path_set", p.display()));
         }
@@ -780,6 +920,346 @@ fn config_lang(args: &str) -> Result<bool> {
     Ok(false)
 }
 
+// ============================================================================
+// config env / config rmenv
+// ============================================================================
+
+#[derive(Debug, Default, Clone, Copy)]
+struct EnvFlags {
+    global: bool,
+    local: bool,
+    os: bool,
+    osg: bool,
+    delete: bool,
+    all: bool,
+}
+
+impl EnvFlags {
+    fn scope_conflict(self) -> bool {
+        (self.global as u8 + self.local as u8) > 1
+            || (self.os as u8 + self.osg as u8) > 1
+            || (self.all && (self.global || self.local || self.os || self.osg))
+    }
+}
+
+/// Quote-aware tokenizer for `config env` (values may contain spaces).
+fn split_env_tokens(input: &str) -> Vec<String> {
+    let mut out: Vec<String> = Vec::new();
+    let mut cur = String::new();
+    let mut quote: Option<char> = None;
+    for c in input.chars() {
+        match quote {
+            Some(q) => {
+                if c == q {
+                    quote = None;
+                } else {
+                    cur.push(c);
+                }
+            }
+            None => {
+                if c == '"' || c == '\'' {
+                    quote = Some(c);
+                } else if c.is_whitespace() {
+                    if !cur.is_empty() {
+                        out.push(std::mem::take(&mut cur));
+                    }
+                } else {
+                    cur.push(c);
+                }
+            }
+        }
+    }
+    if !cur.is_empty() {
+        out.push(cur);
+    }
+    out
+}
+
+/// Split trailing `-g/-l/-os/-osg/-d/-all` flags from the value tokens.
+fn parse_env_flags(input: &str) -> (EnvFlags, Vec<String>) {
+    let mut flags = EnvFlags::default();
+    let mut kept: Vec<String> = Vec::new();
+    for tok in split_env_tokens(input) {
+        match tok.to_lowercase().as_str() {
+            "-g" | "--global" => flags.global = true,
+            "-l" | "--local" => flags.local = true,
+            "-os" | "--os" | "--session" => flags.os = true,
+            "-osg" | "--os-global" | "--os-persist" => flags.osg = true,
+            "-d" | "--delete" | "-rm" | "--rm" => flags.delete = true,
+            "-a" | "--all" => flags.all = true,
+            _ => kept.push(tok),
+        }
+    }
+    (flags, kept)
+}
+
+fn env_store_label(store: &str) -> String {
+    t!(format!("cmd.config.env.store_{}", store).as_str())
+}
+
+fn env_origin(name: &str) -> Option<(&'static str, String)> {
+    if let Some(v) = paths::session_var(name) {
+        return Some(("session", v));
+    }
+    let (global, local) = Config::get_env_by_source();
+    if let Some(v) = local.get(name) {
+        return Some(("local", v.clone()));
+    }
+    if let Some(v) = global.get(name) {
+        return Some(("global", v.clone()));
+    }
+    if let Some(v) = os_env::os_var(name) {
+        return Some(("os", v));
+    }
+    if let Ok(v) = std::env::var(name) {
+        return Some(("process", v));
+    }
+    None
+}
+
+fn env_list() {
+    let (global, local) = Config::get_env_by_source();
+    let session = paths::session_env();
+
+    println!("{}", t!("cmd.config.env.title").cyan().bold());
+    let mut any = false;
+    for (store, map) in [
+        ("local", &local),
+        ("global", &global),
+        ("session", &session),
+    ] {
+        if map.is_empty() {
+            continue;
+        }
+        any = true;
+        let mut names: Vec<&String> = map.keys().collect();
+        names.sort();
+        println!("  {}", env_store_label(store).yellow().bold());
+        for name in names {
+            println!(
+                "    {} = {}",
+                name.cyan(),
+                map.get(name)
+                    .map(String::as_str)
+                    .unwrap_or_default()
+                    .dimmed()
+            );
+        }
+    }
+    if !any {
+        println!("  {}", t!("cmd.config.env.empty").dimmed());
+    }
+    println!();
+    println!("{}", t!("cmd.config.env.list_hint").green());
+}
+
+fn env_show(name: &str) {
+    match env_origin(name) {
+        Some((store, value)) => println!(
+            "{}",
+            t!("cmd.config.env.get", name, value, env_store_label(store))
+        ),
+        None => println!("{}", t!("cmd.config.env.not_set", name).dimmed()),
+    }
+}
+
+fn env_validate(name: &str) -> bool {
+    if os_env::is_protected(name) {
+        print_error(&t!("cmd.config.env.protected", name));
+        return false;
+    }
+    if !os_env::is_valid_name(name) {
+        print_error(&t!("cmd.config.env.invalid_name", name));
+        return false;
+    }
+    true
+}
+
+fn env_set(name: &str, value: &str, flags: EnvFlags) -> Result<bool> {
+    if !env_validate(name) {
+        return Ok(false);
+    }
+
+    if flags.osg {
+        if let Err(e) = os_env::set_os_var(name, value) {
+            print_error(&t!("cmd.config.env.os_fail", e));
+            return Ok(false);
+        }
+        paths::set_session_var(name, value);
+        print_success(&t!(
+            "cmd.config.env.set_os",
+            name,
+            value,
+            os_env::os_store_location()
+        ));
+        if let Some(hint) = os_env::shell_wiring_hint() {
+            println!("{}", t!("cmd.config.env.os_wiring", hint).dimmed());
+        }
+        return Ok(false);
+    }
+
+    if flags.os {
+        paths::set_session_var(name, value);
+        print_success(&t!(
+            "cmd.config.env.set",
+            name,
+            value,
+            env_store_label("session")
+        ));
+        return Ok(false);
+    }
+
+    let store = if flags.global {
+        Config::set_global_env_var(name, value);
+        "global"
+    } else if flags.local {
+        if !Config::set_local_env_var(name, value) {
+            print_error(&t!("cmd.config.env.no_local"));
+            return Ok(false);
+        }
+        "local"
+    } else if Config::get_local_config_path().is_some() {
+        if Config::set_local_env_var(name, value) {
+            "local"
+        } else {
+            Config::set_global_env_var(name, value);
+            "global"
+        }
+    } else {
+        Config::set_global_env_var(name, value);
+        "global"
+    };
+
+    // A session `-os` override would shadow the value just written.
+    paths::clear_session_var(name);
+    print_success(&t!(
+        "cmd.config.env.set",
+        name,
+        value,
+        env_store_label(store)
+    ));
+    Ok(false)
+}
+
+fn env_remove(name: &str, flags: EnvFlags) -> Result<bool> {
+    if !env_validate(name) {
+        return Ok(false);
+    }
+
+    let mut removed: Vec<&'static str> = Vec::new();
+
+    let remove_session = || {
+        if paths::session_var(name).is_some() {
+            paths::remove_session_var(name);
+            true
+        } else {
+            false
+        }
+    };
+
+    if flags.all {
+        for store in ["local", "global"] {
+            let did = if store == "local" {
+                Config::remove_local_env_var(name)
+            } else {
+                Config::remove_global_env_var(name)
+            };
+            if did {
+                removed.push(store);
+            }
+        }
+        if remove_session() {
+            removed.push("session");
+        }
+        if os_env::remove_os_var(name).unwrap_or(false) {
+            removed.push("os");
+        }
+    } else if flags.osg {
+        if os_env::remove_os_var(name).unwrap_or(false) {
+            removed.push("os");
+        }
+        if remove_session() {
+            removed.push("session");
+        }
+    } else if flags.os {
+        if remove_session() {
+            removed.push("session");
+        }
+    } else if flags.local {
+        if Config::remove_local_env_var(name) {
+            removed.push("local");
+        }
+        remove_session();
+    } else if flags.global {
+        if Config::remove_global_env_var(name) {
+            removed.push("global");
+        }
+        remove_session();
+    } else {
+        let mut did = Config::remove_local_env_var(name);
+        let mut store: &'static str = "local";
+        if !did {
+            did = Config::remove_global_env_var(name);
+            store = "global";
+        }
+        if did {
+            removed.push(store);
+        }
+        remove_session();
+    }
+
+    if removed.is_empty() {
+        print_info(&t!("cmd.config.env.remove_missing", name));
+    } else {
+        for store in removed {
+            print_success(&t!("cmd.config.env.removed", name, env_store_label(store)));
+        }
+    }
+    Ok(false)
+}
+
+fn config_env(args: &str) -> Result<bool> {
+    let (flags, tokens) = parse_env_flags(args);
+    if flags.scope_conflict() {
+        print_error(&t!("cmd.config.env.flag_conflict"));
+        return Ok(false);
+    }
+    if tokens.is_empty() {
+        env_list();
+        return Ok(false);
+    }
+
+    let name = tokens[0].clone();
+    let value = tokens[1..].join(" ");
+
+    if flags.delete {
+        return env_remove(&name, flags);
+    }
+    if value.is_empty() {
+        env_show(&name);
+        return Ok(false);
+    }
+    env_set(&name, &value, flags)
+}
+
+fn config_rmenv(args: &str) -> Result<bool> {
+    let (mut flags, tokens) = parse_env_flags(args);
+    if flags.scope_conflict() {
+        print_error(&t!("cmd.config.env.flag_conflict"));
+        return Ok(false);
+    }
+    if tokens.is_empty() {
+        print_error(&t!("cmd.config.env.rm_usage"));
+        return Ok(false);
+    }
+    if tokens.len() > 1 {
+        print_error(&t!("cmd.config.env.rm_usage"));
+        return Ok(false);
+    }
+    flags.delete = true;
+    env_remove(&tokens[0], flags)
+}
+
 pub fn cmd_showcg(_args: &str, _nav: &mut Navigator) -> Result<bool> {
     let w = 65;
     println!();
@@ -885,6 +1365,24 @@ pub fn cmd_showcg(_args: &str, _nav: &mut Navigator) -> Result<bool> {
         "│ {:<20} {:<42} │",
         t!("msg.showcg.label_intro_view"),
         if Config::global_get_intro_view_enabled() {
+            t!("status.on").green()
+        } else {
+            t!("status.off").red()
+        }
+    );
+    println!(
+        "│ {:<20} {:<42} │",
+        t!("msg.showcg.label_integration_shell"),
+        if Config::global_get_integration_shell_enabled() {
+            t!("status.on").green()
+        } else {
+            t!("status.off").red()
+        }
+    );
+    println!(
+        "│ {:<20} {:<42} │",
+        t!("msg.showcg.label_code_tools"),
+        if Config::global_get_code_tools_enabled() {
             t!("status.on").green()
         } else {
             t!("status.off").red()
@@ -1438,7 +1936,7 @@ fn confirm_delete(path: &Path, force: bool) -> Result<bool> {
     }
     print!(
         "{} {}",
-        "⚠".red().bold(),
+        "[!]".red().bold(),
         t!("cmd.config.deinit.confirm", path.display()).yellow()
     );
     io::stdout().flush()?;
@@ -1539,7 +2037,8 @@ fn cmd_deinit_opencode(force: bool) -> Result<()> {
 
 // ── top-level init: create NTCRANFILE.toml, ntconfig.toml, .opencode/ ─────
 
-use crate::ranfile::parser::{RANFILE_NAME, RANFILE_TEMPLATE};
+use crate::ranfile::parser;
+use crate::ranfile::types::RanFormat;
 
 pub fn cmd_init(args: &str, nav: &mut Navigator) -> Result<bool> {
     let tokens: Vec<String> = args.split_whitespace().map(|s| s.to_lowercase()).collect();
@@ -1563,11 +2062,25 @@ pub fn cmd_init(args: &str, nav: &mut Navigator) -> Result<bool> {
                 return Ok(false);
             }
         };
-        let path = cwd.join(RANFILE_NAME);
+        let fmt = parser::preferred_format();
+        let path = cwd.join(fmt.file_name());
         if path.exists() {
-            print_warning(&t!("cmd.config.init.exists_warn", RANFILE_NAME));
+            print_warning(&t!("cmd.config.init.exists_warn", fmt.file_name()));
         } else {
-            match std::fs::write(&path, RANFILE_TEMPLATE) {
+            // Another format may still be here; the preferred one is what
+            // `ran` reads, so create that and name the file left behind.
+            if let Some((other, _)) = parser::resolve(&cwd) {
+                let other_name = other
+                    .file_name()
+                    .map(|n| n.to_string_lossy().to_string())
+                    .unwrap_or_else(parser::ranfile_names);
+                println!("{}", t!("ran.fmt.old_kept", other_name, fmt.file_name()));
+            }
+            let created: anyhow::Result<()> = parser::template(fmt).and_then(|body| {
+                std::fs::write(&path, body)?;
+                Ok(())
+            });
+            match created {
                 Ok(_) => print_success(&t!("cmd.config.init.created", path.display())),
                 Err(e) => print_error(&t!("cmd.config.init.create_failed", path.display(), e)),
             }
@@ -1623,16 +2136,28 @@ pub fn cmd_deinit(args: &str, _nav: &mut Navigator) -> Result<bool> {
                 return Ok(false);
             }
         };
-        let path = cwd.join(RANFILE_NAME);
-        if !path.exists() {
-            print_warning(&t!("cmd.config.deinit.not_found", RANFILE_NAME));
-        } else if confirm_delete(&path, force)? {
-            match std::fs::remove_file(&path) {
-                Ok(_) => print_success(&t!("cmd.config.deinit.removed", path.display())),
-                Err(e) => print_error(&t!("cmd.config.deinit.remove_failed", path.display(), e)),
+        let mut found = false;
+        for fmt in RanFormat::ALL {
+            for name in fmt.file_names() {
+                let path = cwd.join(name);
+                if !path.exists() {
+                    continue;
+                }
+                found = true;
+                if confirm_delete(&path, force)? {
+                    match std::fs::remove_file(&path) {
+                        Ok(_) => print_success(&t!("cmd.config.deinit.removed", path.display())),
+                        Err(e) => {
+                            print_error(&t!("cmd.config.deinit.remove_failed", path.display(), e))
+                        }
+                    }
+                } else {
+                    println!("{}", t!("cmd.config.deinit.skipped").dimmed());
+                }
             }
-        } else {
-            println!("{}", t!("cmd.config.deinit.skipped").dimmed());
+        }
+        if !found {
+            print_warning(&t!("cmd.config.deinit.not_found", parser::ranfile_names()));
         }
     }
 
@@ -1908,5 +2433,24 @@ mod tests {
         assert_eq!(parse_size_action("bogus"), None);
         assert_eq!(parse_size_action("file maybe"), None);
         assert_eq!(parse_size_action("all on extra"), None);
+    }
+
+    /// `config gt` / `config ghost_typing` are second names for the idle ghost
+    /// typing switch, so they must reach the same setting as `config idle`.
+    #[test]
+    fn ghost_typing_names_toggle_the_idle_switch() {
+        let mut nav = Navigator::new().unwrap();
+        Config::with_test_config(Config::new(), || {
+            cmd_config("gt off", &mut nav).unwrap();
+            assert!(!Config::global_get_idle_hint_enabled());
+            cmd_config("ghost_typing on", &mut nav).unwrap();
+            assert!(Config::global_get_idle_hint_enabled());
+            cmd_config("idle off", &mut nav).unwrap();
+            assert!(!Config::global_get_idle_hint_enabled());
+            // A bare name only reports, an unknown value is refused.
+            assert!(cmd_config("gt", &mut nav).is_ok());
+            assert!(cmd_config("gt maybe", &mut nav).is_ok());
+            assert!(!Config::global_get_idle_hint_enabled());
+        });
     }
 }

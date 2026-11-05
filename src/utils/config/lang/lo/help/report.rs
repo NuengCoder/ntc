@@ -40,7 +40,7 @@ pub fn fill(m: &mut HashMap<String, String>) {
 
     m.insert(
         "help.report.txtc".into(),
-        "txtc <file> ## ສຳເນົາເນື້ອໃນໄຟລ໌ໃສ່ clipboard".into(),
+        "txtc [--line|--no-line] <ຟາຍ> ## ສຳເນົາເນື້ອໃນໃສ່ clipboard (ເປີດ/ປິດເລກແຖວ)".into(),
     );
 
     m.insert("help.report.txtf".into(), "txtf [--head N|--tail N|--betw A:B] [file|dir|@tp/file|@tp/dir] ## ສະແດງເນື້ອໃນໄຟລ໌ ຫຼື ເລືອກໄຟລ໌ຈາກ directory (ເລກແຖວເດີມ)".into());

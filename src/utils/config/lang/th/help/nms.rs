@@ -5,7 +5,7 @@ pub fn fill(m: &mut HashMap<String, String>) {
 
     m.insert(
         "help.nms.play".into(),
-        "nms play <ไฟล์> ## เครื่องเล่นเสียงเต็มจอ (space หยุด · ←/→ เลื่อน · ↑/↓ ระดับเสียง · a เล่นซ้ำ)"
+        "nms play [-sf <dur>] <ไฟล์> ## เล่นเสียงในเทอร์มินัล (Ctrl+C หยุด; -sf เริ่มจากตำแหน่งที่กำหนด)"
             .into(),
     );
 
@@ -20,11 +20,14 @@ pub fn fill(m: &mut HashMap<String, String>) {
         "nms scan -l <dur> ## แสดงเฉพาะมีเดียที่ยาวกว่า <dur> (เช่น 25s, 1mn, 1h)".into(),
     );
 
-    m.insert("help.nms.keys".into(), "หน้าจอเครื่องเล่น: คลื่นเสียงจริง + มาตรวัดระดับสูง/ต่ำ · วิดีโอเล่นเฉพาะเสียง · เมื่อจบจะหยุดนิ่ง กด a เพื่อเล่นซ้ำ".into());
+    m.insert(
+        "help.nms.keys".into(),
+        "เล่นในเทอร์มินัลพร้อมนับตำแหน่ง / เวลาที่เหลือถอยหลัง · วิดีโอเล่นเฉพาะเสียง (ใช้ ffmpeg) · กด Ctrl+C เพื่อหยุด".into(),
+    );
 
     m.insert(
         "help.nms.example1".into(),
-        "nms play song.mp3 ## เล่นไฟล์เสียง".into(),
+        "nms play -sf 30 song.mp3 ## เริ่มเล่นไฟล์เสียงที่ 0:30".into(),
     );
 
     m.insert(

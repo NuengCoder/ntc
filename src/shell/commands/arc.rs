@@ -52,10 +52,11 @@ fn detect_kind(path: &str) -> Option<ArcKind> {
 fn collect_inputs(inputs: &[String], cwd: &Path) -> Result<Vec<(PathBuf, String)>> {
     let mut files = Vec::new();
     for input in inputs {
-        let abs = if Path::new(input).is_absolute() {
-            PathBuf::from(input)
+        let expanded = crate::utils::paths::expand_path_str(input);
+        let abs = if Path::new(&expanded).is_absolute() {
+            PathBuf::from(&expanded)
         } else {
-            cwd.join(input)
+            cwd.join(&expanded)
         };
         if !abs.exists() {
             return Err(anyhow!("{}", t!("cmd.arc.not_found", input)));
@@ -147,10 +148,11 @@ fn cmd_create(args: &[String], nav: &mut Navigator) -> Result<bool> {
     let cwd = nav.current_path().to_path_buf();
     let out_arg = &args[0];
     let kind = detect_kind(out_arg).ok_or_else(|| anyhow!("{}", t!("cmd.arc.bad_ext")))?;
-    let out = if Path::new(out_arg).is_absolute() {
-        PathBuf::from(out_arg)
+    let expanded_out = crate::utils::paths::expand_path_str(out_arg);
+    let out = if Path::new(&expanded_out).is_absolute() {
+        PathBuf::from(&expanded_out)
     } else {
-        cwd.join(out_arg)
+        cwd.join(&expanded_out)
     };
     if let Some(parent) = out.parent() {
         if !parent.exists() {
@@ -182,10 +184,11 @@ fn cmd_list(args: &[String], nav: &mut Navigator) -> Result<bool> {
     }
     let cwd = nav.current_path().to_path_buf();
     let arg = &args[0];
-    let path = if Path::new(arg).is_absolute() {
-        PathBuf::from(arg)
+    let expanded_list = crate::utils::paths::expand_path_str(arg);
+    let path = if Path::new(&expanded_list).is_absolute() {
+        PathBuf::from(&expanded_list)
     } else {
-        cwd.join(arg)
+        cwd.join(&expanded_list)
     };
     let kind = detect_kind(arg).ok_or_else(|| anyhow!("{}", t!("cmd.arc.bad_ext")))?;
     match kind {
@@ -240,20 +243,22 @@ fn cmd_extract(args: &[String], nav: &mut Navigator) -> Result<bool> {
     }
     let cwd = nav.current_path().to_path_buf();
     let arg = &args[0];
-    let src = if Path::new(arg).is_absolute() {
-        PathBuf::from(arg)
+    let expanded_src = crate::utils::paths::expand_path_str(arg);
+    let src = if Path::new(&expanded_src).is_absolute() {
+        PathBuf::from(&expanded_src)
     } else {
-        cwd.join(arg)
+        cwd.join(&expanded_src)
     };
     if !src.exists() {
         return Err(anyhow!("{}", t!("cmd.arc.not_found", arg)));
     }
     let dest = if args.len() >= 2 {
         let d = &args[1];
-        if Path::new(d).is_absolute() {
-            PathBuf::from(d)
+        let expanded_d = crate::utils::paths::expand_path_str(d);
+        if Path::new(&expanded_d).is_absolute() {
+            PathBuf::from(&expanded_d)
         } else {
-            cwd.join(d)
+            cwd.join(&expanded_d)
         }
     } else {
         // Default: strip extension in the archive's own directory

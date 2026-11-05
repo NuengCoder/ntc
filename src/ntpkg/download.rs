@@ -99,6 +99,7 @@ pub fn extract_archive(archive_path: &Path, dest_dir: &Path, kind: ArchiveType) 
         .with_context(|| format!("Failed to create {}", dest_dir.display()))?;
 
     match kind {
+        ArchiveType::Tar => extract_tar(archive_path, dest_dir),
         ArchiveType::TarGz => extract_tar_gz(archive_path, dest_dir),
         ArchiveType::TarXz => extract_tar_xz(archive_path, dest_dir),
         ArchiveType::Zip => extract_zip(archive_path, dest_dir),
@@ -111,6 +112,18 @@ pub fn extract_archive(archive_path: &Path, dest_dir: &Path, kind: ArchiveType) 
             Ok(())
         }
     }
+}
+
+fn extract_tar(archive_path: &Path, dest_dir: &Path) -> Result<()> {
+    use tar::Archive;
+
+    let file = fs::File::open(archive_path)
+        .with_context(|| format!("Failed to open {}", archive_path.display()))?;
+    let mut archive = Archive::new(file);
+    archive
+        .unpack(dest_dir)
+        .with_context(|| format!("Failed to extract tar to {}", dest_dir.display()))?;
+    Ok(())
 }
 
 fn extract_tar_gz(archive_path: &Path, dest_dir: &Path) -> Result<()> {

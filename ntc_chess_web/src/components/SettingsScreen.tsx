@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { getSettings, setSetting } from '../api'
+import { TC_OPTIONS } from '../constants'
 import { setVolumes } from '../sfx'
 import BackButton from './BackButton'
 
@@ -14,7 +15,11 @@ const SFX_KEYS = [
   ['sfx.lose', 'Lose'],
 ] as const
 
-const TC_OPTIONS = ['1+0', '3+2', '5+0', '10+0', '15+10', '30+0', 'unlimited']
+
+const HIGHLIGHT_KEYS = [
+  ['chess.highlight.pinned', 'Pinned pieces'],
+  ['chess.highlight.danger', 'Hanging danger'],
+] as const
 
 export default function SettingsScreen({ onBack }: { onBack(): void }) {
   const [vals, setVals] = useState<Record<string, string>>({})
@@ -51,6 +56,28 @@ export default function SettingsScreen({ onBack }: { onBack(): void }) {
       <BackButton onBack={onBack} />
       <h2>Settings</h2>
       <div className="settings">
+        <h3>Board highlights</h3>
+        {HIGHLIGHT_KEYS.map(([k, label]) => {
+          const on = (vals[k] ?? 'on') === 'on'
+          return (
+            <label key={k} className="toggle-row">
+              <span>{label}</span>
+              <input
+                type="checkbox"
+                className="toggle"
+                checked={on}
+                onChange={(e) => change(k, e.target.checked ? 'on' : 'off')}
+              />
+              <span className="slider-val">{on ? 'On' : 'Off'}</span>
+            </label>
+          )
+        })}
+        <p className="hint">
+          Pinned covers gray king pins and aqua relative pins. Hanging danger covers orange
+          attacked squares. Checks and last-move highlights always stay visible.
+        </p>
+
+        <h3>Sounds</h3>
         {SFX_KEYS.map(([k, label]) => (
           <label key={k} className="slider-row">
             <span>{label}</span>

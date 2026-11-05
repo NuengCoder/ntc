@@ -18,7 +18,7 @@ use crate::t;
 
 use self::ast::{Expr, Parser};
 pub(crate) use self::builtins::{builtin_function_names, constant_names};
-pub(crate) use self::check::validate;
+pub(crate) use self::check::{check_text, validate};
 use self::eval::{eval, EvalResult};
 use self::token::tokenize;
 
@@ -76,6 +76,22 @@ pub fn run(input: &str) -> Result<()> {
         return function::handle_fun(input[3..].trim());
     }
 
+    // `math check [file]` validates `.ntc.math` files instead of evaluating
+    // them, so it must be handled before the path/expression branches.
+    if let Some(rest) = input.strip_prefix("check") {
+        if rest.is_empty() || rest.starts_with(char::is_whitespace) {
+            let cwd = std::env::current_dir().unwrap_or_else(|_| Path::new(".").to_path_buf());
+            crate::shell::commands::check_common::run(
+                "math",
+                rest.trim(),
+                &cwd,
+                ".ntc.math",
+                crate::shell::commands::check_formats::math,
+            );
+            return Ok(());
+        }
+    }
+
     let path = Path::new(input);
     if path.exists() {
         if path.is_file() {
@@ -108,6 +124,7 @@ fn print_help() {
     println!("{}", t!("math.help_fun_info"));
     println!("{}", t!("math.help_fun_ls"));
     println!("{}", t!("math.help_file"));
+    println!("{}", t!("check.help", "math"));
     println!();
     println!("{}", t!("math.examples_header").green());
     println!("{}", t!("math.example_add"));

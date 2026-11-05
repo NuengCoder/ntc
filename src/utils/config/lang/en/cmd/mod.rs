@@ -43,7 +43,7 @@ pub fn fill(m: &mut HashMap<String, String>) {
 
     m.insert(
         "cmd.image_disabled".into(),
-        "Image conversion not available (feature 'image2doc' disabled).".into(),
+        "Image display not available (feature 'image' disabled).".into(),
     );
 
     m.insert(

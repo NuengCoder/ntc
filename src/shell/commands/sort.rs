@@ -166,7 +166,8 @@ fn sort_lines(text: &str, opts: &SortOptions) -> Vec<String> {
 /// Reports a missing file itself; returns `None` on any failure.
 fn read_source(file: &Option<String>) -> Option<String> {
     if let Some(path) = file {
-        match read_file_as_string(Path::new(path)) {
+        let expanded = crate::utils::paths::expand_path_str(path);
+        match read_file_as_string(Path::new(&expanded)) {
             Ok(text) => return Some(text),
             Err(_) => {
                 print_error(&t!("cmd.report.file_not_found", path));

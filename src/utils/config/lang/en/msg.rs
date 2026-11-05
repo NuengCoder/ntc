@@ -106,6 +106,82 @@ pub fn fill(m: &mut HashMap<String, String>) {
     );
 
     m.insert(
+        "msg.setIS.status".into(),
+        "Integration shell (shell hints + ntc ps): {}".into(),
+    );
+    m.insert("msg.setIS.on".into(), "Integration shell: ON".into());
+    m.insert("msg.setIS.off".into(), "Integration shell: OFF".into());
+    m.insert(
+        "msg.setIS.error".into(),
+        "Invalid value for integration_shell: {}. Use ON or OFF.".into(),
+    );
+    m.insert(
+        "msg.setIS.platform".into(),
+        "Platform: {} (package manager: {})".into(),
+    );
+    m.insert(
+        "msg.setIS.bash_completion_ok".into(),
+        "bash-completion: installed".into(),
+    );
+    m.insert(
+        "msg.setIS.bash_completion_missing".into(),
+        "bash-completion: missing — bash argument hints need it".into(),
+    );
+    m.insert(
+        "msg.setIS.bash_completion_install".into(),
+        "install with: {}".into(),
+    );
+    m.insert(
+        "msg.setIS.ps_windows_only".into(),
+        "PowerShell integration is only available on Windows".into(),
+    );
+    m.insert(
+        "msg.setIS.bash_linux_only".into(),
+        "bash integration is only available on desktop Linux".into(),
+    );
+    m.insert(
+        "msg.setIS.bash_missing".into(),
+        "bash was not found on this system".into(),
+    );
+    m.insert(
+        "msg.setIS.bash_start_failed".into(),
+        "bash host failed to start".into(),
+    );
+    m.insert("msg.setIS.bash_exited".into(), "bash exited".into());
+    m.insert(
+        "msg.setIS.bash_stopped".into(),
+        "bash host stopped responding".into(),
+    );
+    m.insert(
+        "msg.setIS.zsh_macos_only".into(),
+        "zsh integration is only available on macOS".into(),
+    );
+    m.insert(
+        "msg.setIS.zsh_missing".into(),
+        "zsh was not found on this system".into(),
+    );
+    m.insert(
+        "msg.setIS.zsh_start_failed".into(),
+        "zsh host failed to start".into(),
+    );
+    m.insert("msg.setIS.zsh_exited".into(), "zsh exited".into());
+    m.insert(
+        "msg.setIS.zsh_stopped".into(),
+        "zsh host stopped responding".into(),
+    );
+
+    m.insert(
+        "msg.setCT.status".into(),
+        "Code tools (compilers/programming binaries): {}".into(),
+    );
+    m.insert("msg.setCT.on".into(), "Code tools: ON".into());
+    m.insert("msg.setCT.off".into(), "Code tools: OFF".into());
+    m.insert(
+        "msg.setCT.error".into(),
+        "Invalid value for code_tools: {}. Use ON or OFF.".into(),
+    );
+
+    m.insert(
         "msg.setC.error".into(),
         "Invalid value for setC: {}. Use ON or OFF.".into(),
     );
@@ -246,7 +322,7 @@ pub fn fill(m: &mut HashMap<String, String>) {
 
     m.insert(
         "msg.teleport.success".into(),
-        "\u{2713} Teleported to '{}' -> {}".into(),
+        "Teleported to '{}' -> {}".into(),
     );
 
     m.insert("msg.version.format".into(), "ntc {}".into());
@@ -340,6 +416,11 @@ pub fn fill(m: &mut HashMap<String, String>) {
     );
 
     m.insert("msg.showcg.label_intro_view".into(), "Intro View:".into());
+    m.insert(
+        "msg.showcg.label_integration_shell".into(),
+        "Integration Shell:".into(),
+    );
+    m.insert("msg.showcg.label_code_tools".into(), "Code Tools:".into());
 
     m.insert("msg.setDV.status".into(), "Dir view is: {}".into());
 
@@ -405,5 +486,19 @@ pub fn fill(m: &mut HashMap<String, String>) {
     m.insert(
         "msg.setSZ.usage".into(),
         "Usage: config size all|file|dir ON|OFF".into(),
+    );
+
+    m.insert("msg.setIdle.status".into(), "Idle hints: {}".into());
+
+    m.insert(
+        "msg.setIdle.on".into(),
+        "Idle hints on: a blank prompt teaches one command at a time".into(),
+    );
+
+    m.insert("msg.setIdle.off".into(), "Idle hints off".into());
+
+    m.insert(
+        "msg.setIdle.error".into(),
+        "Unknown value: {} (use ON or OFF)".into(),
     );
 }

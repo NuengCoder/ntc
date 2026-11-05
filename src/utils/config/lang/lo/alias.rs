@@ -33,7 +33,7 @@ pub fn fill(m: &mut HashMap<String, String>) {
 
     m.insert(
         "alias.ral.cls_warning".into(),
-        "\u{26A0}\u{FE0F} ຄຳເຕືອນ: ອັນນີ້ຈະລຶບ run alias ທັງໝົດ!".into(),
+        "ຄຳເຕືອນ: ອັນນີ້ຈະລຶບ run alias ທັງໝົດ!".into(),
     );
 
     m.insert("alias.ral.config_path".into(), " ການຕັ້ງຄ່າ: {}".into());
@@ -172,10 +172,7 @@ pub fn fill(m: &mut HashMap<String, String>) {
         "Hint list '{}' is used by: {}. Use --force to remove anyway.".into(),
     );
 
-    m.insert(
-        "alias.ral.hintn_info_title".into(),
-        "📌 Hint List Info".into(),
-    );
+    m.insert("alias.ral.hintn_info_title".into(), "Hint List Info".into());
 
     m.insert("alias.ral.hintn_info_name".into(), "Name".into());
 
@@ -223,12 +220,12 @@ pub fn fill(m: &mut HashMap<String, String>) {
 
     m.insert(
         "alias.ral.example_hint_values".into(),
-        "ral add srv \"ssh $p\" #p --hint [8080,5050,5000]".into(),
+        "ral add srv \"ssh ${p}\" #p --hint [8080,5050,5000]".into(),
     );
 
     m.insert(
         "alias.ral.example_hintn".into(),
-        "ral hintn add port [8080,5050,5000] + ral add srvn \"ssh $p\" #p --hint-n port".into(),
+        "ral hintn add port [8080,5050,5000] + ral add srvn \"ssh ${p}\" #p --hint-n port".into(),
     );
 
     m.insert(
@@ -245,7 +242,7 @@ pub fn fill(m: &mut HashMap<String, String>) {
         "local (ntconfig.toml)".into(),
     );
 
-    m.insert("alias.ral.info_title".into(), "\u{1F4CC} ຂໍ້ມູນ Alias".into());
+    m.insert("alias.ral.info_title".into(), "ຂໍ້ມູນ Alias".into());
 
     m.insert(
         "alias.ral.info_edit_copied".into(),
@@ -301,7 +298,7 @@ pub fn fill(m: &mut HashMap<String, String>) {
 
     m.insert(
         "alias.ral.param_cmd".into(),
-        " ral add <name>(x) <command> ສ້າງ alias ແບບມີພາຣາມິເຕີ (ໃຊ້ $x ຫຼື ${{x}} ໃນຄຳສັ່ງ)".into(),
+        " ral add <name>(x) <command> ສ້າງ alias ແບບມີພາຣາມິເຕີ (ໃຊ້ ${{x}} ໃນຄຳສັ່ງ)".into(),
     );
 
     m.insert(
@@ -490,4 +487,9 @@ pub fn fill(m: &mut HashMap<String, String>) {
     m.insert("alias.ral.scope_global".into(), "config global".into());
 
     m.insert("alias.ral.cls_target".into(), "ເປົ້າຫມາຍ: {}".into());
+
+    m.insert(
+        "alias.ral.bare_env_warning".into(),
+        "ຕອນນີ້ $NAME ແບບບໍ່ມີວົງເລັບໝາຍເຖິງຕົວແປສະພາບແວດລ້ອມ. ໃຊ້ ${name} ສຳລັບພາລາມິເຕີ: {}".into(),
+    );
 }

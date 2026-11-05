@@ -79,6 +79,13 @@ struct VtePerformer {
     scrollback: Vec<Vec<TermCell>>,
     /// Set by the embedded shell around each command (`OSC 1337`).
     busy: bool,
+    /// xterm-style deferred autowrap: a glyph written in the last column
+    /// leaves the cursor there and the line break happens when the next
+    /// printable char arrives. Dropping the overflow instead (the old
+    /// behaviour) made the child's wrapped lines shorter than the ones it
+    /// believed it had drawn, so its later cursor moves and `CSI K` erases
+    /// landed on the wrong rows and stale rule rows survived on screen.
+    pending_wrap: bool,
 }
 
 impl Default for VtePerformer {
@@ -98,6 +105,7 @@ impl Default for VtePerformer {
             app_cursor_hidden: false,
             scrollback: Vec::new(),
             busy: false,
+            pending_wrap: false,
         }
     }
 }
@@ -117,6 +125,7 @@ impl VtePerformer {
         self.main_lines = Some(std::mem::replace(&mut self.lines, cleared));
         self.cursor_x = 0;
         self.cursor_y = 0;
+        self.pending_wrap = false;
     }
 
     /// Leave the alternate screen, discarding it. With `restore_cursor`
@@ -134,31 +143,51 @@ impl VtePerformer {
 
 impl vte::Perform for VtePerformer {
     fn print(&mut self, ch: char) {
-        if self.cursor_x < self.width && self.cursor_y < self.height {
-            self.lines[self.cursor_y][self.cursor_x] = TermCell {
-                ch,
-                fg: self.current_fg,
-                bg: self.current_bg,
-                bold: self.current_bold,
-            };
+        if self.width == 0 || self.height == 0 {
+            return;
+        }
+        // Deferred autowrap: the pending break lands now, at the next glyph.
+        if self.pending_wrap {
+            self.pending_wrap = false;
+            self.cursor_x = 0;
+            self.line_feed();
+        }
+        if self.cursor_y >= self.height {
+            return;
+        }
+        self.lines[self.cursor_y][self.cursor_x] = TermCell {
+            ch,
+            fg: self.current_fg,
+            bg: self.current_bg,
+            bold: self.current_bold,
+        };
+        if self.cursor_x + 1 >= self.width {
+            // Park on the last cell and wrap on the next character.
+            self.cursor_x = self.width - 1;
+            self.pending_wrap = true;
+        } else {
             self.cursor_x += 1;
         }
     }
 
     fn execute(&mut self, byte: u8) {
         match byte {
-            b'\r' => self.cursor_x = 0,
+            b'\r' => {
+                self.cursor_x = 0;
+                self.pending_wrap = false;
+            }
             b'\n' => {
-                self.cursor_y += 1;
-                if self.cursor_y >= self.height {
-                    self.scroll_up();
-                    self.cursor_y = self.height - 1;
+                self.pending_wrap = false;
+                self.line_feed();
+            }
+            b'\x08' => {
+                self.pending_wrap = false;
+                if self.cursor_x > 0 {
+                    self.cursor_x -= 1;
                 }
             }
-            b'\x08' if self.cursor_x > 0 => {
-                self.cursor_x -= 1;
-            }
             b'\t' => {
+                self.pending_wrap = false;
                 self.cursor_x = (self.cursor_x + 8) & !7;
                 if self.cursor_x >= self.width {
                     self.cursor_x = self.width - 1;
@@ -182,6 +211,7 @@ impl vte::Perform for VtePerformer {
         // and ignored — the editor handles mouse itself.
         if intermediates == [b'?'] && (action == 'h' || action == 'l') {
             let enable = action == 'h';
+            self.pending_wrap = false;
             for p in params.iter() {
                 match p[0] {
                     25 => self.app_cursor_hidden = !enable,
@@ -215,6 +245,8 @@ impl vte::Perform for VtePerformer {
             return;
         }
         let pv: Vec<u16> = params.iter().map(|p| p[0]).collect();
+        // Any CSI (cursor motion, erase, SGR) ends a deferred autowrap.
+        self.pending_wrap = false;
         match action {
             'A' => {
                 let n = pv.first().copied().unwrap_or(1) as usize;
@@ -431,6 +463,15 @@ impl vte::Perform for VtePerformer {
 }
 
 impl VtePerformer {
+    /// Advance one line, scrolling when the last row is passed.
+    fn line_feed(&mut self) {
+        self.cursor_y += 1;
+        if self.cursor_y >= self.height {
+            self.scroll_up();
+            self.cursor_y = self.height - 1;
+        }
+    }
+
     fn scroll_up(&mut self) {
         if !self.lines.is_empty() {
             let first = self.lines.remove(0);
@@ -676,6 +717,7 @@ impl TerminalState {
         self.height = height as usize;
         self.performer.width = width as usize;
         self.performer.height = height as usize;
+        self.performer.pending_wrap = false;
         Self::resize_grid(&mut self.performer.lines, width as usize, height as usize);
         // A stashed main grid must track the size too so alt-exit
         // restores a correctly shaped grid.
@@ -858,6 +900,38 @@ mod tests {
         let mut parser = vte::Parser::new();
         feed(&mut p, &mut parser, b"\x1b[48;2;1;2;3mA");
         assert_eq!(p.lines[0][0].bg, Some((1, 2, 3)));
+    }
+
+    #[test]
+    fn overlong_line_wraps_instead_of_dropping() {
+        let mut p = VtePerformer::default();
+        let mut parser = vte::Parser::new();
+        // 82 glyphs on an 80-column grid: the tail must land on the next
+        // row (like a real terminal) instead of being discarded.
+        feed(&mut p, &mut parser, &[b'a'; 82]);
+        assert_eq!(p.cursor_y, 1);
+        assert_eq!(p.cursor_x, 2);
+        assert_eq!(p.lines[1][0].ch, 'a');
+        assert_eq!(p.lines[1][1].ch, 'a');
+        assert_eq!(p.lines[1][2].ch, '\0');
+    }
+
+    #[test]
+    fn wrap_is_deferred_until_the_next_glyph() {
+        let mut p = VtePerformer::default();
+        let mut parser = vte::Parser::new();
+        feed(&mut p, &mut parser, &[b'b'; 80]);
+        // A full row parks the cursor on the last cell: no break yet.
+        assert_eq!((p.cursor_y, p.cursor_x), (0, 79));
+        assert!(p.pending_wrap);
+        assert_eq!(p.lines[0][79].ch, 'b');
+        // CRLF consumes the pending break without emitting a blank row.
+        feed(&mut p, &mut parser, b"\r\n");
+        assert_eq!((p.cursor_y, p.cursor_x), (1, 0));
+        assert!(!p.pending_wrap);
+        feed(&mut p, &mut parser, b"c");
+        assert_eq!(p.lines[1][0].ch, 'c');
+        assert_eq!(p.lines[1][1].ch, '\0');
     }
 
     #[test]

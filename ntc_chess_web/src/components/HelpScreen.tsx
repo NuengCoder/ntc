@@ -10,9 +10,13 @@ export default function HelpScreen({ onBack }: { onBack(): void }) {
         <p>Click one of your pieces — legal targets show as black dots (rings on captures). Click a dot to move. Pawns promote via the picker. Castle by moving the king two squares; en passant works like normal chess.</p>
         <p>Orange squares are hanging: pieces attacked more than defended (a cheaper piece eyeing a pricier one always glows), plus danger zones around both kings.</p>
         <p>Gray squares are pinned to the king — their attacks only count against the pinner. Aqua squares are pinned to a pricier piece, same rule.</p>
+        <p>Both highlight groups can be turned off in Settings (Pinned covers gray and aqua; Hanging danger covers orange). Checks and last-move highlights stay on.</p>
         <p>Captured trays show taken pieces as images (strongest first); <code>+N</code> by a clock is that side's material lead (P1 N3 B3 R5 Q9).</p>
-        <p>↩ Undo takes back one ply (hold to rewind); ⇄ Flip swaps the board perspective.</p>
-        <p>Click any move in the history to preview that position (view-only — press ● Now to return to live).</p>
+        <p>Undo takes back one ply (hold to rewind); Flip swaps the board perspective.</p>
+        <p>Click any move in the history to preview that position (view-only — press Now to return to live).</p>
+        <h3>Bots</h3>
+        <p>Choose <b>vs AI Bot</b>, download the engine once, then pick your side, difficulty and clock. The engine runs locally on this machine; no account or cloud service is involved.</p>
+        <p>In a bot game the board locks while the engine thinks. Undo takes back both your move and the bot's reply, and draw-by-agreement is unavailable.</p>
         <h3>Notation</h3>
         <p>History uses standard algebraic notation: <code>e4 Nf3 O-O O-O-O Bxf4 Bxf4+ Bxf4#</code> (+ check, # mate).</p>
         <h3>Endings</h3>

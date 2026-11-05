@@ -74,8 +74,34 @@ impl ConditionalEventHandler for AcceptHintOrEnd {
         _positive: bool,
         ctx: &EventContext,
     ) -> Option<Cmd> {
+        // Idle-mode hints on an empty line are teaching text: End / Ctrl+E
+        // must move the caret, never insert the suggestion.
+        if ctx.line().is_empty() {
+            return None;
+        }
         if ctx.has_hint() && ctx.pos() == ctx.line().len() {
             Some(Cmd::CompleteHint)
+        } else {
+            None
+        }
+    }
+}
+
+/// Right-arrow on an **empty** line must not accept the idle-mode hint.
+/// Everywhere else it keeps rustyline's default (complete the hint when the
+/// caret is at the end, otherwise move right).
+struct RightIgnoresIdleHint;
+
+impl ConditionalEventHandler for RightIgnoresIdleHint {
+    fn handle(
+        &self,
+        _evt: &Event,
+        _n: RepeatCount,
+        _positive: bool,
+        ctx: &EventContext,
+    ) -> Option<Cmd> {
+        if ctx.line().is_empty() {
+            Some(Cmd::Noop)
         } else {
             None
         }
@@ -95,7 +121,9 @@ fn read_heredocs_interactive(rl: &mut Editor<NtcHelper, FileHistory>, line: &str
     for delim in delims {
         let mut body = String::new();
         loop {
-            match rl.readline("heredoc> ") {
+            let readline = rl.readline("heredoc> ");
+            crate::shell::idle::prompt_ended();
+            match readline {
                 Ok(l) => {
                     let l = l.trim_end_matches(['\r', '\n']);
                     if l == delim {
@@ -124,6 +152,122 @@ fn read_heredocs_interactive(rl: &mut Editor<NtcHelper, FileHistory>, line: &str
 // ============================================================================
 // Main shell entry points
 // ============================================================================
+
+/// Which foreign shell (if any) currently owns the prompt.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum ForeignMode {
+    None,
+    Ps,
+    Bash,
+    Zsh,
+}
+
+/// Prompt fragment for a host mode: the last path component of the host cwd,
+/// falling back to ntc's own directory name when the host has not answered.
+fn host_display(host_dir: &str, fallback: &str) -> String {
+    if host_dir.is_empty() {
+        return fallback.to_string();
+    }
+    std::path::Path::new(host_dir)
+        .file_name()
+        .map(|n| n.to_string_lossy().to_string())
+        .filter(|n| !n.is_empty())
+        .unwrap_or_else(|| host_dir.to_string())
+}
+
+/// Keep ntc's directory (and therefore the tree view) in step with a `cd`
+/// performed inside the foreign shell. Failures are silent: a UNC or removed
+/// path must not break the prompt.
+fn sync_host_dir(nav: &mut Navigator, host_dir: &mut String, cwd: Option<String>) {
+    let Some(cwd) = cwd else {
+        return;
+    };
+    if cwd.is_empty() {
+        return;
+    }
+    *host_dir = cwd.clone();
+    let path = std::path::PathBuf::from(&cwd);
+    if path.is_dir() && nav.current_path() != path.as_path() {
+        if nav.go_to(&path).is_ok() {
+            // Mirror the built-in `cd`: redraw so the tree matches the prompt.
+            show_nav_view(nav);
+        }
+    }
+}
+
+/// Prompt shown while a foreign host owns the shell: `ntc ps [src]>` on
+/// Windows, `ntc arch [src]>` (the distro label) on Linux.
+fn host_prompt(label: &str, host_dir: &str, fallback: &str) -> String {
+    format!("ntc {} [{}]> ", label, host_display(host_dir, fallback))
+}
+
+/// True for the bare launcher spellings that should enter `ntc ps`.
+/// Arguments (`powershell -File x.ps1`) keep the ordinary one-shot path.
+fn integration_ps_entry(line: &str) -> bool {
+    if !crate::shell::ext_complete::integration_enabled() {
+        return false;
+    }
+    if !crate::shell::ext_complete::platform::is_windows() {
+        return false;
+    }
+    let mut parts = line.split_whitespace();
+    let Some(first) = parts.next() else {
+        return false;
+    };
+    if parts.next().is_some() {
+        return false;
+    }
+    crate::shell::ext_complete::is_powershell(first)
+}
+
+/// True for a line that ends the hosted shell (`exit`, `exit 3`, `exec ls`).
+fn exits_shell(line: &str) -> bool {
+    matches!(
+        line.split_whitespace().next().unwrap_or(""),
+        "exit" | "exec"
+    )
+}
+
+/// True for a bare `zsh` on macOS: it enters the integrated mode
+/// (`ntc zsh [dir]>`) instead of spawning a nested shell. `zsh -c …` and
+/// `zsh script.zsh` keep the ordinary one-shot path.
+fn integration_zsh_entry(line: &str) -> bool {
+    if !crate::shell::ext_complete::integration_enabled() {
+        return false;
+    }
+    if !crate::shell::ext_complete::platform::is_macos() {
+        return false;
+    }
+    let mut parts = line.split_whitespace();
+    let Some(first) = parts.next() else {
+        return false;
+    };
+    if parts.next().is_some() {
+        return false;
+    }
+    crate::shell::ext_complete::is_zsh(first)
+}
+
+/// True for a bare `bash` on desktop Linux or Termux: it enters the
+/// integrated mode (`ntc <distro> [dir]>`, `ntc termux [dir]>`) instead of
+/// spawning a nested shell. `bash -c …` and `bash script.sh` keep the
+/// ordinary one-shot path.
+fn integration_bash_entry(line: &str) -> bool {
+    if !crate::shell::ext_complete::integration_enabled() {
+        return false;
+    }
+    if !crate::shell::ext_complete::platform::is_bash_platform() {
+        return false;
+    }
+    let mut parts = line.split_whitespace();
+    let Some(first) = parts.next() else {
+        return false;
+    };
+    if parts.next().is_some() {
+        return false;
+    }
+    crate::shell::ext_complete::is_bash(first)
+}
 
 /// True when this shell runs inside the editor's embedded terminal
 /// (spawned with `NTC_IN_EDITOR=1`). The embedded shell keeps the PTY
@@ -200,6 +344,10 @@ pub fn run_classic_shell(mut nav: Navigator) -> Result<()> {
     let accept_hint = || EventHandler::Conditional(Box::new(AcceptHintOrEnd));
     rl.bind_sequence(KeyEvent(KeyCode::End, Modifiers::NONE), accept_hint());
     rl.bind_sequence(KeyEvent(KeyCode::Char('e'), Modifiers::CTRL), accept_hint());
+    rl.bind_sequence(
+        KeyEvent(KeyCode::Right, Modifiers::NONE),
+        EventHandler::Conditional(Box::new(RightIgnoresIdleHint)),
+    );
 
     if let Some(history_path) = NtcConfig::read_global().resolve_history_path() {
         let _ = rl.load_history(&history_path);
@@ -253,6 +401,9 @@ pub fn run_classic_shell(mut nav: Navigator) -> Result<()> {
     crate::shell::update_check::spawn_update_check();
     show_nav_view(&nav);
 
+    let mut mode = ForeignMode::None;
+    let mut host_dir = String::new();
+
     loop {
         // Check if theme changed
         if crate::utils::theme::ThemeManager::take_theme_changed() {
@@ -299,17 +450,41 @@ pub fn run_classic_shell(mut nav: Navigator) -> Result<()> {
         // break rustyline's cursor positioning and line editing.
         let venv_prefix = nav.get_colored_venv_prefix(); // Use colored version
 
-        // Build the prompt
-        let prompt = if venv_prefix.is_empty() {
-            format!("ntc [{}{}{}]> ", display_path, watcher_suffix, git_suffix)
-        } else {
-            format!(
-                "{}ntc [{}{}{}]> ",
-                venv_prefix, display_path, watcher_suffix, git_suffix
-            )
+        // Build the prompt. Host modes keep ntc's line editor in charge while
+        // a foreign shell executes the lines.
+        let tutorial_prefix = crate::tutorial::prompt_prefix();
+        let prompt = match mode {
+            ForeignMode::Ps => host_prompt("ps", &host_dir, &display_path),
+            ForeignMode::Bash => host_prompt(
+                crate::shell::ext_complete::platform::prompt_label(),
+                &host_dir,
+                &display_path,
+            ),
+            ForeignMode::Zsh => host_prompt("zsh", &host_dir, &display_path),
+            ForeignMode::None if venv_prefix.is_empty() => {
+                format!(
+                    "{tutorial_prefix}ntc [{}{}{}]> ",
+                    display_path, watcher_suffix, git_suffix
+                )
+            }
+            ForeignMode::None => {
+                format!(
+                    "{}{tutorial_prefix}ntc [{}{}{}]> ",
+                    venv_prefix, display_path, watcher_suffix, git_suffix
+                )
+            }
         };
 
-        let line = match rl.readline(&prompt) {
+        // A new prompt shows the next idle-mode suggestion.
+        if let Some(helper) = rl.helper_mut() {
+            helper.hinter.next_idle_hint();
+        }
+        let readline = rl.readline(&prompt);
+        // The idle ghost is drawn outside rustyline; stop the animator (and
+        // forget the ghost) as soon as the prompt is done, before running the
+        // command or printing "^C".
+        crate::shell::idle::prompt_ended();
+        let line = match readline {
             Ok(line) => {
                 rl.add_history_entry(&line).ok();
                 line
@@ -333,6 +508,189 @@ pub fn run_classic_shell(mut nav: Navigator) -> Result<()> {
             .trim_start_matches('\u{feff}')
             .trim_end_matches('\u{feff}');
         if line.is_empty() {
+            continue;
+        }
+
+        // Raw line before alias expansion: `tutorial` lessons check it so
+        // running a freshly created alias still counts.
+        crate::tutorial::note_input(line);
+
+        // ── ntc ps mode: PowerShell runs the line, ntc keeps the editor ──
+        if mode == ForeignMode::Ps {
+            if line.eq_ignore_ascii_case("exit") {
+                mode = ForeignMode::None;
+                crate::shell::ext_complete::leave_ps_mode();
+                crate::shell::ext_complete::clear_line_cache();
+                continue;
+            }
+            // `Clear-Host` writes to the console buffer the host does not
+            // own; ntc clears its own screen instead.
+            if line.eq_ignore_ascii_case("cls") || line.eq_ignore_ascii_case("clear") {
+                crate::navigator::clear_screen();
+                continue;
+            }
+            match crate::shell::ext_complete::run_line(line) {
+                Ok(code) if code != 0 => {
+                    crate::shell::pipeline::mark_failed();
+                }
+                Ok(_) => {}
+                Err(e) => print_error(&format!("{}", e)),
+            }
+            sync_host_dir(
+                &mut nav,
+                &mut host_dir,
+                crate::shell::ext_complete::ps_cwd(),
+            );
+            // Variables and cwd may have moved: never reuse the old answers.
+            crate::shell::ext_complete::clear_line_cache();
+            crate::utils::git::invalidate();
+            continue;
+        }
+
+        // ── integrated bash mode: `ntc <distro> [dir]>` ──
+        if mode == ForeignMode::Bash {
+            if line.eq_ignore_ascii_case("exit") {
+                mode = ForeignMode::None;
+                crate::shell::ext_complete::leave_bash_mode();
+                crate::shell::ext_complete::clear_line_cache();
+                continue;
+            }
+            if line.eq_ignore_ascii_case("clear") {
+                crate::navigator::clear_screen();
+                continue;
+            }
+            match crate::shell::ext_complete::bash_run_line(line) {
+                Ok(code) if code != 0 => {
+                    crate::shell::pipeline::mark_failed();
+                }
+                Ok(_) => {}
+                Err(e) => {
+                    // A dead host means `exit N` / `exec …` ran, or Ctrl-C
+                    // dropped it. `exit` returns to ntc; a killed host keeps
+                    // the mode and the next line starts a fresh bash.
+                    if !crate::shell::ext_complete::bash_host_alive() {
+                        if exits_shell(line) {
+                            crate::shell::ext_complete::leave_bash_mode();
+                            mode = ForeignMode::None;
+                        } else {
+                            print_warning(&format!("{}", e));
+                        }
+                        crate::shell::ext_complete::clear_line_cache();
+                        continue;
+                    }
+                    print_error(&format!("{}", e));
+                }
+            }
+            sync_host_dir(
+                &mut nav,
+                &mut host_dir,
+                crate::shell::ext_complete::bash_cwd(),
+            );
+            crate::shell::ext_complete::clear_line_cache();
+            crate::utils::git::invalidate();
+            continue;
+        }
+
+        // ── integrated zsh mode: `ntc zsh [dir]>` on macOS ──
+        if mode == ForeignMode::Zsh {
+            if line.eq_ignore_ascii_case("exit") {
+                mode = ForeignMode::None;
+                crate::shell::ext_complete::leave_zsh_mode();
+                crate::shell::ext_complete::clear_line_cache();
+                continue;
+            }
+            if line.eq_ignore_ascii_case("clear") {
+                crate::navigator::clear_screen();
+                continue;
+            }
+            match crate::shell::ext_complete::zsh_run_line(line) {
+                Ok(code) if code != 0 => {
+                    crate::shell::pipeline::mark_failed();
+                }
+                Ok(_) => {}
+                Err(e) => {
+                    // Same contract as bash: a killed host keeps the mode and
+                    // the next line starts a fresh zsh; `exit` returns to ntc.
+                    if !crate::shell::ext_complete::zsh_host_alive() {
+                        if exits_shell(line) {
+                            crate::shell::ext_complete::leave_zsh_mode();
+                            mode = ForeignMode::None;
+                        } else {
+                            print_warning(&format!("{}", e));
+                        }
+                        crate::shell::ext_complete::clear_line_cache();
+                        continue;
+                    }
+                    print_error(&format!("{}", e));
+                }
+            }
+            sync_host_dir(
+                &mut nav,
+                &mut host_dir,
+                crate::shell::ext_complete::zsh_cwd(),
+            );
+            crate::shell::ext_complete::clear_line_cache();
+            crate::utils::git::invalidate();
+            continue;
+        }
+
+        // `powershell` / `pwsh` / `powershell.exe` enters integrated mode
+        // instead of spawning a nested shell (only with integration_shell on).
+        if integration_ps_entry(line) {
+            // Wire Ctrl-C before the host warms up so a stuck start can be
+            // interrupted too.
+            crate::shell::commands::init_ctrlc_handler();
+            match crate::shell::ext_complete::enter_ps_mode() {
+                Ok(()) => {
+                    crate::shell::ext_complete::clear_line_cache();
+                    mode = ForeignMode::Ps;
+                    host_dir.clear();
+                    sync_host_dir(
+                        &mut nav,
+                        &mut host_dir,
+                        crate::shell::ext_complete::ps_cwd(),
+                    );
+                }
+                Err(e) => print_warning(&format!("{}", e)),
+            }
+            continue;
+        }
+
+        // `bash` on desktop Linux enters `ntc <distro> [dir]>` the same way.
+        if integration_bash_entry(line) {
+            crate::shell::commands::init_ctrlc_handler();
+            match crate::shell::ext_complete::enter_bash_mode() {
+                Ok(()) => {
+                    crate::shell::ext_complete::clear_line_cache();
+                    mode = ForeignMode::Bash;
+                    host_dir.clear();
+                    sync_host_dir(
+                        &mut nav,
+                        &mut host_dir,
+                        crate::shell::ext_complete::bash_cwd(),
+                    );
+                }
+                Err(e) => print_warning(&format!("{}", e)),
+            }
+            continue;
+        }
+
+        // `zsh` on macOS enters `ntc zsh [dir]>`.
+        if integration_zsh_entry(line) {
+            crate::shell::commands::init_ctrlc_handler();
+            match crate::shell::ext_complete::enter_zsh_mode() {
+                Ok(()) => {
+                    crate::shell::ext_complete::clear_line_cache();
+                    mode = ForeignMode::Zsh;
+                    host_dir.clear();
+                    sync_host_dir(
+                        &mut nav,
+                        &mut host_dir,
+                        crate::shell::ext_complete::zsh_cwd(),
+                    );
+                }
+                Err(e) => print_warning(&format!("{}", e)),
+            }
             continue;
         }
 
@@ -388,6 +746,12 @@ pub fn run_classic_shell(mut nav: Navigator) -> Result<()> {
             let _ = std::io::stdout().flush();
         }
 
+        // Tutorial progress: check the goal after the command has run (so a
+        // `cd` has already moved us). Never reveals the answer.
+        if !should_exit {
+            crate::tutorial::after_command(&nav);
+        }
+
         // `clear` already redrew the view: swallow any pending watcher events
         // so no change box, second tree, or trigger alias follows it.
         let suppress_watch = take_watch_refresh_suppressed();
@@ -436,6 +800,7 @@ pub fn run_classic_shell(mut nav: Navigator) -> Result<()> {
     }
 
     // Also save on EOF (skipped when embedded in the editor)
+    crate::shell::ext_complete::shutdown_all();
     if !embedded_in_editor() {
         SessionState::write_global().last_directory = Some(nav.current_path().to_path_buf());
         SessionState::save_global();
@@ -448,4 +813,39 @@ pub fn run_classic_shell(mut nav: Navigator) -> Result<()> {
     }
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn host_prompt_shows_the_label_and_last_directory() {
+        // `bash` + Enter on Linux: the distro label replaces `ntc`.
+        assert_eq!(
+            host_prompt("arch", "/home/me/src", "ntc"),
+            "ntc arch [src]> "
+        );
+        assert_eq!(host_prompt("ubuntu", "/tmp", "ntc"), "ntc ubuntu [tmp]> ");
+        // PowerShell keeps its fixed label.
+        assert_eq!(
+            host_prompt("ps", "C:\\Users\\me\\proj", "ntc"),
+            "ntc ps [proj]> "
+        );
+    }
+
+    #[test]
+    fn exit_lines_leave_the_hosted_shell() {
+        assert!(exits_shell("exit"));
+        assert!(exits_shell("exit 3"));
+        assert!(exits_shell("exec ls"));
+        assert!(!exits_shell("exitcode"));
+        assert!(!exits_shell("echo exit"));
+    }
+
+    #[test]
+    fn host_display_falls_back_to_ntc_directory() {
+        assert_eq!(host_display("", "src"), "src");
+        assert_eq!(host_display("/home/me/src", "ntc"), "src");
+    }
 }

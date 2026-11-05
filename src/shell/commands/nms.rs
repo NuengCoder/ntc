@@ -1,7 +1,8 @@
-//! `nms` command — NTC Music: a TUI sound player plus a media scanner.
+//! `nms` command — NTC Music: a sound player plus a media scanner.
 //!
-//! - `nms play <file>` opens a fullscreen player (real waveform + level meter,
-//!   seek, volume, pause). Video files play their audio track only.
+//! - `nms play [-sf <dur>] <file>` plays audio in the terminal with a live
+//!   position/remaining countdown; Ctrl+C stops. `-sf` starts from an offset.
+//!   Video files play their audio track only.
 //! - `nms scan [-d|--depth <n>] [-s|--size] [-l|--long <dur>] [--care]` lists
 //!   audio + video files under the current directory, in the same style as
 //!   `scan ext`; `-l`/`--long` keeps only media longer than a duration.
@@ -11,6 +12,7 @@
 //! and returns to the shell instead of crashing.
 
 use std::path::{Path, PathBuf};
+use std::time::Duration;
 
 use crate::explorer::human_readable_size;
 use crate::navigator::Navigator;
@@ -45,7 +47,8 @@ fn tokenize(args: &str) -> Vec<String> {
 
 /// Resolve `name` against `cwd` unless it is already absolute.
 fn resolve(cwd: &Path, name: &str) -> PathBuf {
-    let p = Path::new(name);
+    let expanded = crate::utils::paths::expand_path_str(name);
+    let p = Path::new(&expanded);
     if p.is_absolute() {
         p.to_path_buf()
     } else {
@@ -86,6 +89,7 @@ fn print_usage() {
     println!("{}", t!("cmd.nms.help_size"));
     println!("{}", t!("cmd.nms.help_long"));
     println!("{}", t!("cmd.nms.help_care"));
+    println!("{}", t!("cmd.nms.help_start"));
     println!();
     println!("{}", t!("cmd.nms.keys_title").green());
     println!("{}", t!("cmd.nms.help_keys"));
@@ -97,18 +101,59 @@ fn print_usage() {
     println!("    {}", t!("cmd.nms.example_long"));
 }
 
-/// `nms play <file>`
+/// `nms play [-sf <dur>] <file>`
 fn cmd_nms_play(tokens: &[String], nav: &Navigator) -> Result<bool> {
-    let Some(first) = tokens.first() else {
+    let mut start_from = Duration::ZERO;
+    let mut parts: Vec<String> = Vec::new();
+
+    let mut i = 0;
+    while i < tokens.len() {
+        let tok = tokens[i].as_str();
+
+        // `-sf` / `--start-from`, accepting `=<dur>` or a following value.
+        let inline = tok
+            .strip_prefix("-sf=")
+            .or_else(|| tok.strip_prefix("--sf="))
+            .or_else(|| tok.strip_prefix("--start-from="))
+            .map(|v| v.to_string());
+        let as_flag = matches!(tok.to_lowercase().as_str(), "-sf" | "--sf" | "--start-from");
+
+        if let Some(val) = inline {
+            match crate::nms::parse_duration(&val) {
+                Some(d) => start_from = d,
+                None => {
+                    print_error(&t!("cmd.nms.invalid_start", val));
+                    return Ok(false);
+                }
+            }
+        } else if as_flag {
+            let Some(val) = tokens.get(i + 1) else {
+                print_error(&t!("cmd.nms.start_usage"));
+                return Ok(false);
+            };
+            match crate::nms::parse_duration(val) {
+                Some(d) => start_from = d,
+                None => {
+                    print_error(&t!("cmd.nms.invalid_start", val));
+                    return Ok(false);
+                }
+            }
+            i += 1;
+        } else if tok.starts_with('-') && parts.is_empty() {
+            print_error(&t!("cmd.nms.unknown_option", tok));
+            return Ok(false);
+        } else {
+            parts.push(tokens[i].clone());
+        }
+        i += 1;
+    }
+
+    // A quoted path arrives as one token; unquoted spaced paths are rejoined.
+    let name = parts.join(" ");
+    if name.is_empty() {
         print_error(&t!("cmd.nms.play_missing_file"));
         return Ok(false);
-    };
-    if first.starts_with('-') {
-        print_error(&t!("cmd.nms.unknown_option", first));
-        return Ok(false);
     }
-    // A quoted path arrives as one token; unquoted spaced paths are rejoined.
-    let name = tokens.join(" ");
     let path = resolve(nav.current_path(), &name);
 
     if !path.exists() {
@@ -124,10 +169,19 @@ fn cmd_nms_play(tokens: &[String], nav: &Navigator) -> Result<bool> {
         return Ok(false);
     }
 
-    match crate::nms::play(&path) {
+    match crate::nms::play(&path, start_from) {
         Ok(()) => Ok(false),
         Err(PlayError::NoDevice) => {
             print_error(&t!("cmd.nms.no_sound_device"));
+            Ok(false)
+        }
+        Err(PlayError::NoFfmpeg) => {
+            print_error(&t!("cmd.nms.need_ffmpeg", name));
+            print_info(&t!("cmd.nms.install_ffmpeg"));
+            Ok(false)
+        }
+        Err(PlayError::NoAudio) => {
+            print_error(&t!("cmd.nms.no_audio_track", name));
             Ok(false)
         }
         Err(PlayError::Decode(e)) => {
@@ -214,7 +268,7 @@ fn cmd_nms_scan(tokens: &[String], nav: &Navigator) -> Result<bool> {
 
     if entries.is_empty() {
         if let Some(thr) = min_duration {
-            print_info(&t!("cmd.nms.long_none", crate::nms::tui::format_time(thr)));
+            print_info(&t!("cmd.nms.long_none", crate::nms::format_time(thr)));
         } else {
             print_info(&t!("cmd.nms.no_files"));
         }
@@ -224,7 +278,7 @@ fn cmd_nms_scan(tokens: &[String], nav: &Navigator) -> Result<bool> {
     println!("{}", t!("cmd.nms.list_title").cyan().bold());
     let show_dur = min_duration.is_some();
     for e in &entries {
-        let dur = e.duration.map(crate::nms::tui::format_time);
+        let dur = e.duration.map(crate::nms::format_time);
         let detail = match (show_dur, show_size) {
             (true, true) => Some(format!(
                 "{}, {}",

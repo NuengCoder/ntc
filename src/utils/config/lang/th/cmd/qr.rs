@@ -8,7 +8,7 @@ pub fn fill(m: &mut HashMap<String, String>) {
 
     m.insert(
         "cmd.qr.decode_requires".into(),
-        "การถอดรหัส QR ต้องใช้คุณสมบัติ 'image2doc' (เปิดใช้งานเป็นค่าเริ่มต้น). เรียกด้วย --features image2doc."
+        "การถอดรหัส QR ต้องใช้คุณสมบัติ 'image' (เปิดใช้งานเป็นค่าเริ่มต้น). เรียกด้วย --features image."
             .into(),
     );
 
@@ -69,7 +69,7 @@ pub fn fill(m: &mut HashMap<String, String>) {
 
     m.insert(
         "cmd.qr.image_save_requires".into(),
-        "การบันทึกภาพต้องใช้คุณสมบัติ 'image2doc' (เปิดใช้งานเป็นค่าเริ่มต้น)".into(),
+        "การบันทึกภาพต้องใช้คุณสมบัติ 'image' (เปิดใช้งานเป็นค่าเริ่มต้น)".into(),
     );
 
     m.insert(

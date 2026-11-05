@@ -14,6 +14,13 @@ use crate::teleport::TeleportManager;
 /// The hinter's `hint()` method checks this and refreshes its cache when stale.
 pub(crate) static ALIAS_GENERATION: AtomicU64 = AtomicU64::new(0);
 
+/// Force the hinter to rebuild its command set on the next keystroke.
+/// Used when `integration_shell` or `code_tools` flips (registry names
+/// join/leave level 1).
+pub(crate) fn bump_generation() {
+    ALIAS_GENERATION.fetch_add(1, Ordering::Relaxed);
+}
+
 /// Built-in commands for the ntc shell (lowercase).
 fn builtin_commands() -> Vec<&'static str> {
     vec![
@@ -101,6 +108,9 @@ fn builtin_commands() -> Vec<&'static str> {
         "dl",
         "up",
         "ping",
+        "trace",
+        "tracert",
+        "traceroute",
         "dns",
         "smtp",
         "serve",
@@ -131,6 +141,7 @@ fn builtin_commands() -> Vec<&'static str> {
         "nsheet",
         "nssh",
         "fake",
+        "skill",
         "deadlock",
         "mkf",
         "mkd",
@@ -515,6 +526,8 @@ fn hint_kind_candidates(kinds: &[crate::shell::alias::ParamHintKind]) -> Vec<Str
                 out.extend(TeleportManager::get_all().into_keys());
                 out.extend(Config::get_run_aliases_merged().into_keys());
             }
+            // `--hint-table*` needs an open `ndb` database: nothing here.
+            K::Table | K::TableColName(_) => {}
         }
     }
     out.sort();
@@ -813,6 +826,22 @@ pub(crate) fn scr_scripts_for_command(parts: &[&str]) -> Vec<String> {
     }
 }
 
+/// Skill names for `skill add/remove/edit/delete <TAB>`, from the registry.
+pub(crate) fn skill_names_for_command(parts: &[&str]) -> Vec<String> {
+    if parts.is_empty() || !parts[0].eq_ignore_ascii_case("skill") {
+        return vec![];
+    }
+    let Some(sub) = parts.get(1) else {
+        return vec![];
+    };
+    match sub.to_lowercase().as_str() {
+        "add" | "remove" | "rm" | "delete" | "del" | "uninstall" | "u" | "edit" | "sub" => {
+            crate::skill::installed_names()
+        }
+        _ => vec![],
+    }
+}
+
 /// Returns the list of ntpkg/ntpx argument completions (languages, versions, installed packages).
 pub(crate) fn ntpkg_names_for_command(parts: &[&str]) -> Vec<String> {
     if parts.len() < 2 {
@@ -969,7 +998,7 @@ pub(crate) fn subcommands_for(parts: &[&str]) -> Vec<&'static str> {
             if parts.len() == 1 {
                 vec![
                     "add", "edit", "rm", "remove", "list", "ls", "info", "rnm", "rename", "export",
-                    "import", "make", "mk", "cls", "clear", "hintn",
+                    "import", "make", "mk", "cls", "clear", "hintn", "check",
                 ]
             } else {
                 match parts[1].to_lowercase().as_str() {
@@ -1006,12 +1035,12 @@ pub(crate) fn subcommands_for(parts: &[&str]) -> Vec<&'static str> {
         "tpb" => vec!["history", "hist", "h", "clear", "cls"],
         "theme" => vec![
             "add", "rm", "remove", "edit", "info", "export", "import", "make", "mk", "where", "wh",
-            "reload", "n", "number", "rnm", "rename", "list", "ls",
+            "reload", "n", "number", "rnm", "rename", "list", "ls", "check",
         ],
         // igcare export / igcare import / igcare export --all / igcare export --select
         "igcare" => {
             if parts.len() == 1 {
-                vec!["export", "import", "make", "mk"]
+                vec!["export", "import", "make", "mk", "check"]
             } else {
                 match parts[1].to_lowercase().as_str() {
                     "export" => vec!["--all", "-a", "--select", "-s"],
@@ -1080,7 +1109,7 @@ pub(crate) fn subcommands_for(parts: &[&str]) -> Vec<&'static str> {
         //   fake group add|edit|rm|rnm|ls|info|clear
         "fake" => {
             if parts.len() == 1 {
-                vec!["gen", "types", "locales", "group", "help"]
+                vec!["gen", "types", "locales", "group", "check", "help"]
             } else {
                 match parts[1].to_lowercase().as_str() {
                     "gen" | "generate" | "g" => vec![
@@ -1109,10 +1138,12 @@ pub(crate) fn subcommands_for(parts: &[&str]) -> Vec<&'static str> {
                 }
             }
         }
-        // ran init / ran deinit / ran list
-        "ran" if parts.len() == 1 => vec!["init", "deinit", "help", "list", "ls"],
-        // scr init / scr ls / scr help
-        "scr" | "script" if parts.len() == 1 => vec!["init", "ls", "list", "help"],
+        // ran init / ran deinit / ran list / ran check
+        "ran" if parts.len() == 1 => vec!["init", "deinit", "help", "list", "ls", "check", "fmt"],
+        // math check / math timer / math fun
+        "math" if parts.len() == 1 => vec!["check", "timer", "fun"],
+        // scr init / scr ls / scr check / scr help
+        "scr" | "script" if parts.len() == 1 => vec!["init", "ls", "list", "check", "help"],
         // deadlock ls / add / rmpw / master-pass / forget / destroy / help / exit
         "deadlock" if parts.len() == 1 => vec![
             "ls",
@@ -1161,6 +1192,7 @@ pub(crate) fn subcommands_for(parts: &[&str]) -> Vec<&'static str> {
                     "c",
                     "autosuggest",
                     "as",
+                    "idle",
                     "threads",
                     "t",
                     "history",
@@ -1171,6 +1203,9 @@ pub(crate) fn subcommands_for(parts: &[&str]) -> Vec<&'static str> {
                     "serve",
                     "lang",
                     "language",
+                    "env",
+                    "vars",
+                    "rmenv",
                     "git",
                     "dir_view",
                     "dv",
@@ -1184,6 +1219,10 @@ pub(crate) fn subcommands_for(parts: &[&str]) -> Vec<&'static str> {
                     "uc",
                     "intro_view",
                     "iv",
+                    "integration_shell",
+                    "is",
+                    "code_tools",
+                    "ct",
                 ]
             } else {
                 match parts[1].to_lowercase().as_str() {
@@ -1191,6 +1230,9 @@ pub(crate) fn subcommands_for(parts: &[&str]) -> Vec<&'static str> {
                     "watch" | "w" if parts.len() >= 3 => vec!["off"],
                     "lang" | "language" if parts.len() == 2 => {
                         vec!["english", "thai", "lao", "chinese"]
+                    }
+                    "env" | "vars" | "rmenv" if parts.len() == 2 => {
+                        vec!["-g", "-l", "-os", "-osg", "-all", "-d"]
                     }
                     "git" if parts.len() == 2 => vec!["ON", "OFF"],
                     "dir_view" | "dv" if parts.len() == 2 => vec!["ON", "OFF"],
@@ -1205,6 +1247,8 @@ pub(crate) fn subcommands_for(parts: &[&str]) -> Vec<&'static str> {
                     "size" | "s" if parts.len() == 3 => vec!["ON", "OFF"],
                     "update_check" | "uc" if parts.len() == 2 => vec!["ON", "OFF"],
                     "intro_view" | "iv" if parts.len() == 2 => vec!["ON", "OFF"],
+                    "integration_shell" | "is" if parts.len() == 2 => vec!["ON", "OFF"],
+                    "code_tools" | "ct" if parts.len() == 2 => vec!["ON", "OFF"],
                     "serve" if parts.len() == 2 => {
                         vec!["files", "http-server", "chess", "help"]
                     }
@@ -1320,13 +1364,13 @@ pub(crate) fn subcommands_for(parts: &[&str]) -> Vec<&'static str> {
             "-e",
         ],
         // views flags (flat ls-style listing)
-        "views" if parts.len() == 1 => vec!["-n", "-s", "--size", "--sort"],
+        "views" if parts.len() == 1 => vec!["-n", "-s", "--size", "--sort", "--trim"],
         "views" if parts.len() >= 2 => {
             let last = parts[parts.len() - 1].to_lowercase();
-            if last == "-s" || last == "--size" || last == "--sort" {
+            if last == "-s" || last == "--size" || last == "--sort" || last == "--trim" {
                 vec![]
             } else {
-                vec!["-n", "-s", "--size", "--sort"]
+                vec!["-n", "-s", "--size", "--sort", "--trim"]
             }
         }
         // ui (now a no-op after modern mode removal)
@@ -1348,6 +1392,50 @@ pub(crate) fn subcommands_for(parts: &[&str]) -> Vec<&'static str> {
             "help",
         ],
         "ntpx" => vec![], // Completions come from ntpkg_names_for_command
+        // skill download / add / remove / delete / edit / list / avail / info / sub
+        "skill" if parts.len() == 1 => vec![
+            "download",
+            "install",
+            "i",
+            "dl",
+            "add",
+            "remove",
+            "delete",
+            "uninstall",
+            "u",
+            "edit",
+            "list",
+            "ls",
+            "avail",
+            "available",
+            "info",
+            "sub",
+            "help",
+        ],
+        "skill" => {
+            let sub = parts[1].to_lowercase();
+            match sub.as_str() {
+                "download" | "dl" | "install" | "i" => {
+                    vec!["--url", "--name", "--force", "-f"]
+                }
+                "delete" | "del" | "uninstall" | "u" => vec!["--force", "-f"],
+                "list" | "ls" => vec!["--all", "-a"],
+                "info" => crate::skill::harness::HARNESSES.to_vec(),
+                "sub" => vec!["ls", "list"],
+                "add" | "remove" | "rm" => {
+                    let last = parts[parts.len() - 1].to_lowercase();
+                    let keyword = if sub == "add" { "to" } else { "from" };
+                    if last == "to" || last == "from" {
+                        crate::skill::harness::HARNESSES.to_vec()
+                    } else if parts.len() == 2 {
+                        vec![keyword, "--global", "-g", "--force", "-f"]
+                    } else {
+                        vec!["--global", "-g", "--force", "-f"]
+                    }
+                }
+                _ => vec![],
+            }
+        }
         // tl file / tl ext / tl dir
         "tl" if parts.len() == 1 => vec!["file", "ext", "dir"],
         "tl" if parts.len() == 2 && matches!(parts[1], "ext" | "dir") => {
@@ -1382,8 +1470,11 @@ pub(crate) fn subcommands_for(parts: &[&str]) -> Vec<&'static str> {
                 ]
             }
         }
-        // nms play / scan / help + scan flags (must match cmd_nms's parser).
+        // nms play / scan / help + their flags (must match cmd_nms's parser).
         "nms" if parts.len() == 1 => vec!["play", "scan", "help"],
+        "nms" if parts.len() >= 2 && parts[1].to_lowercase() == "play" => {
+            vec!["-sf", "--start-from"]
+        }
         "nms" if parts.len() >= 2 && parts[1].to_lowercase() == "scan" => {
             vec!["-d", "--depth", "-s", "--size", "-l", "--long", "--care"]
         }
@@ -1409,17 +1500,53 @@ pub(crate) fn subcommands_for(parts: &[&str]) -> Vec<&'static str> {
         ],
         // dl flags
         "dl" if !parts.is_empty() => vec![
-            "--progress",
             "--resume",
             "--stop",
+            "--history",
             "--cancel",
             "-o",
             "--output",
         ],
         // ping flags
-        "ping" if !parts.is_empty() => vec!["-c", "--count"],
-        // dns flags
-        "dns" if !parts.is_empty() => vec!["-t", "--type"],
+        "ping" if !parts.is_empty() => vec![
+            "-c",
+            "--count",
+            "--forever",
+            "-i",
+            "--interval",
+            "-w",
+            "--timeout",
+            "-s",
+            "--size",
+            "-t",
+            "--ttl",
+            "-4",
+            "-6",
+            "-q",
+            "--quiet",
+        ],
+        "trace" | "tracert" | "traceroute" if !parts.is_empty() => vec![
+            "-m",
+            "--max-hops",
+            "-w",
+            "--timeout",
+            "-q",
+            "--queries",
+            "-n",
+            "--numeric",
+            "-4",
+            "-6",
+            "--no-fallback",
+        ],
+        // dns flags, then the record-type value after -t/--type
+        "dns" => {
+            let last = parts[parts.len() - 1].to_lowercase();
+            if last == "-t" || last == "--type" {
+                vec!["A", "AAAA", "MX", "NS", "CNAME", "TXT", "PTR", "SOA", "ALL"]
+            } else {
+                vec!["-t", "--type"]
+            }
+        }
         // serve chess flags (no --auth/--spa: rejected by cmd_serve_chess)
         "serve" if parts.len() >= 2 && parts[1].eq_ignore_ascii_case("chess") => {
             vec![
@@ -1496,10 +1623,45 @@ pub(crate) fn subcommands_for(parts: &[&str]) -> Vec<&'static str> {
             "-h",
             "--help",
         ],
-        // up flags
-        "up" if !parts.is_empty() => vec!["-H", "--header", "-d", "--data", "--post"],
+        // up flags (a value-taking flag awaiting its value offers nothing)
+        "up" => {
+            let last = parts[parts.len() - 1].to_lowercase();
+            if matches!(
+                last.as_str(),
+                "-h" | "--header"
+                    | "-d"
+                    | "--data"
+                    | "-a"
+                    | "--auth"
+                    | "--bearer"
+                    | "-f"
+                    | "--form"
+                    | "--timeout"
+            ) {
+                vec![]
+            } else {
+                vec![
+                    "-H",
+                    "--header",
+                    "-d",
+                    "--data",
+                    "-a",
+                    "--auth",
+                    "--bearer",
+                    "-F",
+                    "--form",
+                    "--raw",
+                    "--put",
+                    "--post",
+                    "--timeout",
+                    "--no-fallback",
+                ]
+            }
+        }
         // http methods then flags
-        "http" if parts.len() == 1 => vec!["GET", "POST", "PUT", "DELETE", "PATCH", "HEAD"],
+        "http" if parts.len() == 1 => {
+            vec!["GET", "POST", "PUT", "DELETE", "PATCH", "HEAD", "QUERY"]
+        }
         "http" if parts.len() >= 2 => vec![
             "-H",
             "--header",
@@ -1536,7 +1698,8 @@ pub(crate) fn subcommands_for(parts: &[&str]) -> Vec<&'static str> {
         // todo info / add / rm / clear
         "todo" | "td" if parts.len() == 1 => {
             vec![
-                "info", "add", "done", "undo", "edit", "rm", "remove", "clear", "cl", "list", "ls",
+                "info", "add", "done", "undo", "edit", "rm", "remove", "move", "mv", "replace",
+                "rp", "clear", "cl", "list", "ls",
             ]
         }
         // arc create / extract / list
@@ -1706,6 +1869,8 @@ pub(crate) fn subcommands_for(parts: &[&str]) -> Vec<&'static str> {
                 ]
             }
         }
+        // txtc line-number flags (must match parse_txtc_args).
+        "txtc" => vec!["--line", "--lines", "-l", "--no-line", "--no-lines", "-nl"],
         // txtf display-range flags (must match parse_txtf_args).
         // A value-taking flag awaiting its value offers nothing.
         "txtf" if parts.len() >= 1 => {
@@ -1721,12 +1886,44 @@ pub(crate) fn subcommands_for(parts: &[&str]) -> Vec<&'static str> {
         // scan dir [pattern] [-d|--depth <n>] [-s|--size] [--care]
         // scan port [host] [--top N | --ports <spec> | --all] [--timeout MS]
         // scan ip [cidr] [--top N | --ports <spec>] [--timeout MS]
-        "scan" if parts.len() == 1 => vec!["ext", "files", "dir", "port", "ip", "help"],
+        "scan" if parts.len() == 1 => {
+            vec!["ext", "files", "dir", "port", "ip", "waep", "web", "help"]
+        }
         "scan"
             if parts.len() >= 2
                 && matches!(parts[1].to_lowercase().as_str(), "ext" | "files" | "dir") =>
         {
             vec!["-d", "--depth", "-s", "--size", "--care"]
+        }
+        "scan"
+            if parts.len() >= 2 && matches!(parts[1].to_lowercase().as_str(), "waep" | "web") =>
+        {
+            vec![
+                "-w",
+                "--wordlist",
+                "-x",
+                "--ext",
+                "-m",
+                "--method",
+                "-s",
+                "--status",
+                "--all",
+                "-r",
+                "--recursive",
+                "-d",
+                "--depth",
+                "-c",
+                "--concurrency",
+                "--timeout",
+                "-H",
+                "--header",
+                "-A",
+                "--user-agent",
+                "-o",
+                "--output",
+                "-q",
+                "--quiet",
+            ]
         }
         "scan" if parts.len() >= 2 && parts[1].to_lowercase() == "port" => {
             vec!["--top", "--ports", "--all", "--timeout"]
@@ -1752,11 +1949,9 @@ pub(crate) fn subcommands_for(parts: &[&str]) -> Vec<&'static str> {
         }
         // qr encode / decode
         "qr" if parts.len() == 1 => vec!["encode", "en", "decode", "de"],
-        // image display / show / to / out / --ocr / --layout / --sixel
+        // image display / show / --sixel
         "image" | "img" if parts.len() == 1 => {
-            vec![
-                "display", "show", "to", "out", "--ocr", "--layout", "--sixel",
-            ]
+            vec!["display", "show", "--sixel"]
         }
         // image display|show [--sixel] [<path> [--sixel]]: the only flag
         // the display tail accepts (cf. parse_display_tail in image.rs).
@@ -1884,6 +2079,8 @@ pub(crate) struct NtcHinter {
     commands: RwLock<HashSet<String>>,
     generation: AtomicU64,
     cycle: Arc<Mutex<CycleState>>,
+    /// Rotation index for the idle-mode (empty prompt) teaching hints.
+    idle_step: Arc<AtomicU64>,
 }
 
 impl NtcHinter {
@@ -1892,6 +2089,7 @@ impl NtcHinter {
             commands: RwLock::new(build_command_set()),
             generation: AtomicU64::new(ALIAS_GENERATION.load(Ordering::Relaxed)),
             cycle: Arc::new(Mutex::new(CycleState::default())),
+            idle_step: Arc::new(AtomicU64::new(0)),
         }
     }
 
@@ -1903,6 +2101,51 @@ impl NtcHinter {
             *cmds = build_command_set();
             self.generation.store(current, Ordering::Relaxed);
         }
+    }
+
+    /// Candidate words plus the byte offset of their base inside `typed`.
+    /// `usize::MAX` marks ordinary last-word candidates (ghosted relative to
+    /// the active word); any other value means full-line candidates whose
+    /// base starts at that offset.
+    fn ghost_candidates(&self, typed: &str, _pos: usize) -> (Vec<String>, usize) {
+        if crate::shell::ext_complete::ps_mode_active()
+            || crate::shell::ext_complete::bash_mode_active()
+            || crate::shell::ext_complete::zsh_mode_active()
+        {
+            let cands =
+                crate::shell::ext_complete::line_candidates(typed, typed.len()).unwrap_or_default();
+            // The whole line belongs to the host shell; full-line candidates
+            // replace text from the start, so the base is the line's beginning.
+            return (cands, 0);
+        }
+        let (tail, _) = Self::stage_tail(typed);
+        let offset = typed.len() - tail.len();
+        if crate::shell::ext_complete::owns_line(tail) {
+            if let Some(cands) = crate::shell::ext_complete::line_candidates(tail, tail.len()) {
+                if !cands.is_empty() {
+                    return (cands, offset);
+                }
+            }
+            // Owned but no external answer: keep ntc's own candidates.
+            return (self.candidates_for(typed), usize::MAX);
+        }
+        let cands = self.candidates_for(typed);
+        if !cands.is_empty() {
+            return (cands, usize::MAX);
+        }
+        // No ntc candidate: let an external shell/tool answer instead.
+        match crate::shell::ext_complete::line_candidates(tail, tail.len()) {
+            Some(cands) => (cands, offset),
+            None => (Vec::new(), usize::MAX),
+        }
+    }
+
+    /// Advance the idle-hint rotation: the entry loop calls this once before
+    /// each `readline`, so a new prompt shows the next suggestion while a
+    /// redraw of the same prompt keeps the current one.
+    pub(crate) fn next_idle_hint(&self) {
+        let step = self.idle_step.fetch_add(1, Ordering::Relaxed) as usize + 1;
+        crate::shell::idle::prompt_started(step);
     }
 
     /// Handle for the Tab key handler so it can advance the same cycle state.
@@ -1965,6 +2208,12 @@ impl NtcHinter {
             return vec![];
         }
 
+        // `$` / `$NA` / `${NA`: every variable that expands here — OS,
+        // global ntc, local ntc and session all count.
+        if let Some(cands) = env_var_candidates(typed) {
+            return cands;
+        }
+
         if parts.len() == 1 && !trailing_space {
             // ── Level 1: top-level commands ──
             let word = parts[0];
@@ -2004,6 +2253,23 @@ impl NtcHinter {
         if parent_parts.is_empty() {
             return vec![];
         }
+
+        // `<cmd> check ` only ever takes the format file — no subcommands, no
+        // filesystem noise.
+        if !last_frag.starts_with('-') {
+            if let Some(cands) = check_only_candidates(parent_parts, last_frag) {
+                return dedup_sorted(cands);
+            }
+        }
+
+        // Format files come before every other candidate at the positions
+        // that take one, so `math <TAB>` ghosts the `.ntc.math` file in the
+        // working directory before `timer` / `fun` / `check`.
+        let format_first = if last_frag.starts_with('-') {
+            Vec::new()
+        } else {
+            format_file_candidates(parent_parts, last_frag)
+        };
 
         // `cmd -` / `cmd --d` suggests the universal help flag plus the
         // command's own flags (e.g. `view -d` -> `-ds`,
@@ -2082,6 +2348,10 @@ impl NtcHinter {
             last_frag,
         ));
         out.extend(filter_prefix(
+            skill_names_for_command(parent_parts),
+            last_frag,
+        ));
+        out.extend(filter_prefix(
             theme_names_for_command(parent_parts),
             last_frag,
         ));
@@ -2139,7 +2409,17 @@ impl NtcHinter {
             out.extend(fs_candidates_for(parent_parts, last_frag));
         }
 
-        dedup_sorted(out)
+        if format_first.is_empty() {
+            return dedup_sorted(out);
+        }
+        // Keep the order (no sort) so the format file stays the ghost text.
+        let mut ordered: Vec<String> = Vec::new();
+        for name in format_first.into_iter().chain(out) {
+            if !ordered.contains(&name) {
+                ordered.push(name);
+            }
+        }
+        ordered
     }
 }
 
@@ -2177,6 +2457,58 @@ impl ConditionalEventHandler for TabCycleHandler {
     }
 }
 
+/// Every environment variable name ntc can resolve, sorted and deduped:
+/// session (`config env … -os`), local `ntconfig.toml`, the global ntc
+/// config and the OS/process environment.
+fn all_env_names() -> Vec<String> {
+    let mut names: Vec<String> = std::env::vars_os()
+        .filter_map(|(k, _)| k.into_string().ok())
+        .collect();
+    names.extend(crate::utils::paths::session_env().into_keys());
+    let (global, local) = Config::get_env_by_source();
+    names.extend(global.into_keys());
+    names.extend(local.into_keys());
+    names.sort();
+    names.dedup();
+    names
+}
+
+/// Candidates for a `$NAME` / `${NAME}` fragment: every available variable,
+/// so a bare `$` lists what can expand while `$H` completes `$HOME`,
+/// `$HOMEPATH`, … Returns `None` when the active word is not a plain variable
+/// reference (`$PATH/sub`, `cost$5`), leaving the usual completion in charge.
+fn env_var_candidates(typed: &str) -> Option<Vec<String>> {
+    let word = typed.split_whitespace().last().unwrap_or("");
+    let braced = word.starts_with("${");
+    let prefix = if braced {
+        word.get(2..)?
+    } else {
+        word.strip_prefix('$')?
+    };
+    if !prefix
+        .chars()
+        .all(|c| c.is_ascii_alphanumeric() || c == '_')
+    {
+        return None;
+    }
+    let mut out: Vec<String> = all_env_names()
+        .into_iter()
+        .filter(|n| n.starts_with(prefix))
+        .map(|n| {
+            if braced {
+                format!("${{{}}}", n)
+            } else {
+                format!("${}", n)
+            }
+        })
+        .collect();
+    // A fully typed reference ghosts nothing more.
+    out.retain(|c| c.len() > word.len());
+    out.sort();
+    out.dedup();
+    Some(out)
+}
+
 /// Keep candidates that start with `frag` (case-insensitive) and are longer
 /// than what was typed. `names` are full candidate words.
 pub(crate) fn filter_prefix(names: Vec<String>, frag: &str) -> Vec<String> {
@@ -2196,6 +2528,104 @@ pub(crate) fn dedup_sorted(mut v: Vec<String>) -> Vec<String> {
     v.sort();
     v.dedup();
     v
+}
+
+/// Format file suffixes each command reads, keyed by command name.
+pub(crate) const FORMAT_FILE_EXTS: &[(&str, &[&str])] = &[
+    ("ral", &[".ntc.ral"]),
+    ("math", &[".ntc.math"]),
+    ("igcare", &[".ntc.igcare"]),
+    ("theme", &[".ntc_theme"]),
+    ("fake", &[".ntc_fake"]),
+    ("scr", &[".ntc"]),
+    ("script", &[".ntc"]),
+    (
+        "ran",
+        &[
+            "NTCRANFILE.toml",
+            "NTCRANFILE.json",
+            "NTCRANFILE.yaml",
+            "NTCRANFILE.yml",
+        ],
+    ),
+];
+
+/// Format files in the working directory whose name starts with `frag`.
+fn format_files(exts: &[&str], frag: &str) -> Vec<String> {
+    let cwd = match std::env::current_dir() {
+        Ok(dir) => dir,
+        Err(_) => return vec![],
+    };
+    let lower = frag.to_lowercase();
+    let mut out: Vec<String> = Vec::new();
+    if let Ok(entries) = std::fs::read_dir(&cwd) {
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if !path.is_file() {
+                continue;
+            }
+            let Some(name) = path.file_name().and_then(|n| n.to_str()) else {
+                continue;
+            }; // Extensions are matched case-insensitively (`NTCRANFILE.toml`
+               // is spelled uppercase in the table above).
+            let lower_name = name.to_lowercase();
+            if !exts
+                .iter()
+                .any(|ext| lower_name.ends_with(&ext.to_lowercase()))
+            {
+                continue;
+            }
+            if name.to_lowercase().starts_with(&lower) && name.len() > frag.len() {
+                out.push(name.to_string());
+            }
+        }
+    }
+    out.sort();
+    out
+}
+
+/// Format files for the slots that take one: `math <TAB>`, `scr <TAB>`,
+/// `ral import <TAB>`, `igcare import <TAB>`, `theme import <TAB>`,
+/// `fake group import <TAB>` and `ran check <TAB>`.
+pub(crate) fn format_file_candidates(parent_parts: &[&str], frag: &str) -> Vec<String> {
+    if parent_parts.is_empty() {
+        return vec![];
+    }
+    let cmd = parent_parts[0].to_lowercase();
+    let takes_file = match (cmd.as_str(), parent_parts.len()) {
+        ("math" | "scr" | "script", 1) => true,
+        ("ral" | "igcare" | "theme", 2) => parent_parts[1].eq_ignore_ascii_case("import"),
+        ("fake", 3) => {
+            parent_parts[1].eq_ignore_ascii_case("group")
+                && parent_parts[2].eq_ignore_ascii_case("import")
+        }
+        ("ran", 2) => parent_parts[1].eq_ignore_ascii_case("check"),
+        _ => false,
+    };
+    if !takes_file {
+        return vec![];
+    }
+    let exts = FORMAT_FILE_EXTS
+        .iter()
+        .find(|(name, _)| *name == cmd)
+        .map(|(_, exts)| *exts)
+        .unwrap_or(&[]);
+    format_files(exts, frag)
+}
+
+/// `<cmd> check <TAB>` takes the format file and nothing else. Returns `None`
+/// when the cursor is not in a check slot.
+pub(crate) fn check_only_candidates(parent_parts: &[&str], frag: &str) -> Option<Vec<String>> {
+    let last = parent_parts.last()?.to_lowercase();
+    if last != "check" {
+        return None;
+    }
+    let cmd = parent_parts[0].to_lowercase();
+    let exts = FORMAT_FILE_EXTS
+        .iter()
+        .find(|(name, _)| *name == cmd)
+        .map(|(_, exts)| *exts)?;
+    Some(format_files(exts, frag))
 }
 
 /// True when a single token is a contextual-help trigger (`--help` / `-h`).
@@ -2644,7 +3074,12 @@ pub(crate) fn fs_candidates_for(parent_parts: &[&str], last_frag: &str) -> Vec<S
                 }
                 let awaiting = parent_parts
                     .last()
-                    .map(|t| matches!(t.to_lowercase().as_str(), "--sort" | "-s" | "--size"))
+                    .map(|t| {
+                        matches!(
+                            t.to_lowercase().as_str(),
+                            "--sort" | "-s" | "--size" | "--trim"
+                        )
+                    })
                     .unwrap_or(false)
                     && parent_parts.len() > 1;
                 if awaiting {
@@ -3116,6 +3551,24 @@ fn build_command_set() -> HashSet<String> {
     for name in aliases.keys() {
         cmds.insert(name.clone());
     }
+    // Curated, installed-only names join level-1 completion:
+    // `config integration_shell on` adds foreign shells, `config code_tools
+    // on` adds programming tools/compilers. Arbitrary PATH executables never
+    // appear.
+    if crate::shell::ext_complete::integration_enabled() {
+        for name in crate::shell::ext_complete::shell_names() {
+            cmds.insert(name);
+        }
+        // brew ships with the macOS zsh integration.
+        if let Some(name) = crate::shell::ext_complete::package_manager_name() {
+            cmds.insert(name.to_string());
+        }
+    }
+    if crate::shell::ext_complete::code_tools_enabled() {
+        for name in crate::shell::ext_complete::code_tool_names() {
+            cmds.insert(name);
+        }
+    }
     cmds
 }
 
@@ -3124,6 +3577,9 @@ impl Hinter for NtcHinter {
 
     fn hint(&self, line: &str, pos: usize, _ctx: &Context<'_>) -> Option<String> {
         if !Config::global_get_autosuggest_enabled() {
+            // Autosuggest off also means no idle animation (and stop one that
+            // may still be running after the setting was toggled).
+            crate::shell::idle::stop();
             return None;
         }
 
@@ -3135,29 +3591,102 @@ impl Hinter for NtcHinter {
         let typed = &line[..pos];
 
         if typed.is_empty() {
+            // Idle mode: a blank prompt teaches one command at a time. The
+            // text is typed out by the idle animator (30 s delay, typewriter
+            // reveal, 15 s hold, next idea) and drawn after the caret, so
+            // rustyline gets no hint here — Right/Tab/End can never insert it.
+            let step = self.idle_step.load(Ordering::Relaxed) as usize;
+            crate::shell::idle::prompt_shown(step);
             return None;
         }
+        // Anything typed means the ghost must go away immediately.
+        crate::shell::idle::stop();
 
-        let cands = self.candidates_for(typed);
+        // `ntc ps` mode hands the whole line to PowerShell — ntc operators,
+        // `--help` suppression and `@teleport` do not apply there.
+        let (cands, base_len) = self.ghost_candidates(typed, pos);
+
         if cands.is_empty() {
             return None;
         }
 
         // Show the currently-cycled candidate as ghost text. Typing resets to
         // the first candidate; Tab advances (see TabCycleHandler).
-        let pick: String = {
+        let (pick, cycling): (String, bool) = {
             let mut cyc = self.cycle.lock().unwrap();
             if cyc.line != typed || cyc.pos != pos {
                 cyc.line = typed.to_string();
                 cyc.pos = pos;
                 cyc.index = 0;
             }
-            cands[(cyc.index.rem_euclid(cands.len() as isize)) as usize].clone()
+            let index = cyc.index.rem_euclid(cands.len() as isize);
+            (cands[index as usize].clone(), index != 0)
         };
+
+        // Staging is a preview for the first candidate only. While Tab is
+        // cycling, show the whole remainder so candidates stay distinguishable
+        // (`Get-Acl` and `Get-ChildItem` would otherwise both ghost `et`).
+        if base_len != usize::MAX {
+            // Full-line candidate: only the part after the base is ghosted.
+            // PowerShell matches case-insensitively, so `get-c` keeps the
+            // canonical `Get-Content` remainder.
+            let base = &typed[base_len..];
+            let rest = strip_prefix_ci(&pick, base)?;
+            let rest = if cycling {
+                rest
+            } else {
+                stage_rest(rest, &pick)
+            };
+            return if rest.is_empty() {
+                None
+            } else {
+                Some(rest.to_string())
+            };
+        }
 
         // The ghost is the remainder after the active word, computed from
         // the current segment so `cmd |` ghosts `" head"` (space included).
-        ghost_remainder(typed, &pick)
+        let rest = ghost_remainder(typed, &pick)?;
+        let staged = if cycling {
+            rest.as_str()
+        } else {
+            stage_rest(&rest, &pick)
+        };
+        if staged.is_empty() {
+            None
+        } else {
+            Some(staged.to_string())
+        }
+    }
+}
+
+/// Ghost only the next hyphen-delimited stage of a command name.
+///
+/// A `-` inside a verb-noun name is a natural acceptance boundary:
+/// `g` + `Get-Acl` → `et`, then `Get` + `Get-Acl` → `-`, then
+/// `Get-` + `Get-Acl` → `Acl`. Flags (leading `-`) and path-like candidates
+/// are left alone so their existing ghost behavior is unchanged.
+fn stage_rest<'a>(rest: &'a str, candidate: &str) -> &'a str {
+    if candidate.starts_with('-') || candidate.contains(['/', '\\', '.']) {
+        return rest;
+    }
+    if rest.starts_with('-') {
+        return &rest[..1];
+    }
+    match rest.find('-') {
+        Some(i) if i > 0 => &rest[..i],
+        _ => rest,
+    }
+}
+
+/// Remove `prefix` from `s` without regard to ASCII case. The returned slice
+/// starts at the same byte offset, so canonical casing survives.
+fn strip_prefix_ci<'a>(s: &'a str, prefix: &str) -> Option<&'a str> {
+    let head = s.get(..prefix.len())?;
+    if head.eq_ignore_ascii_case(prefix) {
+        s.get(prefix.len()..)
+    } else {
+        None
     }
 }
 
@@ -3192,6 +3721,87 @@ mod tests {
     use super::*;
     use crate::utils::test_support::TempCwd;
 
+    /// `math ` ghosts the format file in the working directory before any
+    /// subcommand, and `<cmd> check ` ghosts nothing else.
+    #[test]
+    fn format_files_lead_the_hints() {
+        let _cwd = TempCwd::with_fixture(&[("calc.ntc.math", "1+1\n"), ("notes.txt", "x\n")], &[]);
+        let h = NtcHinter::new();
+
+        let math = h.candidates_for("math ");
+        assert_eq!(
+            math.first().map(String::as_str),
+            Some("calc.ntc.math"),
+            "{math:?}"
+        );
+        assert!(math.contains(&"check".to_string()), "{math:?}");
+
+        let check = h.candidates_for("math check ");
+        assert_eq!(check, vec!["calc.ntc.math".to_string()], "{check:?}");
+
+        // A fragment that matches nothing leaves the slot empty instead of
+        // falling back to the whole directory.
+        assert!(h.candidates_for("math check zzz").is_empty());
+    }
+
+    #[test]
+    fn ran_check_offers_the_ranfile() {
+        let _cwd = TempCwd::with_fixture(
+            &[(
+                "NTCRANFILE.toml",
+                "[targets.standalone]\ndeps = []\ncmd = \"echo hi\"\n",
+            )],
+            &[],
+        );
+        let h = NtcHinter::new();
+        assert_eq!(
+            h.candidates_for("ran check "),
+            vec!["NTCRANFILE.toml".to_string()]
+        );
+    }
+
+    #[test]
+    fn import_slots_offer_format_files() {
+        let _cwd = TempCwd::with_fixture(
+            &[("mine.ntc.ral", "[run_aliases]\n"), ("x.ntc.igcare", "")],
+            &[],
+        );
+        assert_eq!(
+            format_file_candidates(&["ral", "import"], ""),
+            vec!["mine.ntc.ral".to_string()]
+        );
+        assert_eq!(
+            format_file_candidates(&["igcare", "import"], "x"),
+            vec!["x.ntc.igcare".to_string()]
+        );
+        // Slots that take free text never offer a format file.
+        assert!(format_file_candidates(&["ral", "add"], "").is_empty());
+        assert!(check_only_candidates(&["math"], "").is_none());
+    }
+
+    #[test]
+    fn dollar_fragment_hints_env_vars_from_every_store() {
+        std::env::set_var("NTC_HINT_OS_ONLY", "1");
+        crate::utils::paths::set_session_var("NTC_HINT_SESSION_ONLY", "2");
+        let h = NtcHinter::new();
+        let c = h.candidates_for("print $NTC_HINT_");
+        assert!(c.contains(&"$NTC_HINT_OS_ONLY".to_string()), "{c:?}");
+        assert!(c.contains(&"$NTC_HINT_SESSION_ONLY".to_string()), "{c:?}");
+        // A shorter prefix filters, and a bare `$` lists everything.
+        assert!(h
+            .candidates_for("print $NTC_HINT_O")
+            .contains(&"$NTC_HINT_OS_ONLY".to_string()));
+        assert!(h
+            .candidates_for("print $")
+            .contains(&"$NTC_HINT_OS_ONLY".to_string()));
+        // The braced form keeps its shape so `${…}` stays valid.
+        assert!(h
+            .candidates_for("print ${NTC_HINT_O")
+            .contains(&"${NTC_HINT_OS_ONLY}".to_string()));
+        crate::utils::paths::remove_session_var("NTC_HINT_SESSION_ONLY");
+        std::env::remove_var("NTC_HINT_OS_ONLY");
+    }
+
     #[test]
     fn l1_prefix_matches_commands() {
         let h = NtcHinter::new();
@@ -3201,6 +3811,84 @@ mod tests {
         assert!(c.contains(&"todo".to_string()));
         // Exact-length matches are excluded (ghost only shows the remainder).
         assert!(!c.iter().any(|x| x == "t"));
+    }
+
+    #[test]
+    fn code_tools_delegates_git_subcommands() {
+        let mut cfg = hint_test_config();
+        cfg.code_tools_enabled = true;
+        Config::with_test_config(cfg, || {
+            crate::shell::ext_complete::invalidate();
+            let h = NtcHinter::new();
+            let (cands, base) = h.ghost_candidates("git ch", 6);
+            assert_eq!(base, 0, "base offset");
+            assert!(cands.contains(&"git checkout".to_string()), "{cands:?}");
+            // Pipe stage: the base is the tail (which keeps the leading space).
+            let (cands, base) = h.ghost_candidates("ls | git ch", 11);
+            assert_eq!(base, 4, "base offset after `|`");
+            assert!(cands.contains(&" git checkout".to_string()), "{cands:?}");
+            // Unknown commands keep ntc's own (filesystem) candidates.
+            let (_, base) = h.ghost_candidates("view Cargo", 10);
+            assert_eq!(base, usize::MAX);
+        });
+    }
+
+    #[test]
+    fn integration_shell_only_adds_installed_shell_names() {
+        let mut cfg = hint_test_config();
+        cfg.integration_shell_enabled = true;
+        Config::with_test_config(cfg, || {
+            crate::shell::ext_complete::invalidate();
+            let cmds = build_command_set();
+            // `git` is a builtin, so it is always present; compilers are not
+            // added by the shell gate.
+            assert!(!cmds.contains("g++"), "code tools leaked into shells");
+            assert!(!cmds.contains("ntcfixture"));
+            for name in crate::shell::ext_complete::shell_names() {
+                assert!(cmds.contains(&name), "missing installed shell {name}");
+            }
+        });
+    }
+
+    #[test]
+    fn code_tools_adds_only_installed_curated_names() {
+        let mut cfg = hint_test_config();
+        cfg.code_tools_enabled = true;
+        Config::with_test_config(cfg, || {
+            crate::shell::ext_complete::invalidate();
+            let cmds = build_command_set();
+            for name in crate::shell::ext_complete::code_tool_names() {
+                assert!(cmds.contains(&name), "missing installed tool {name}");
+            }
+            // Shells stay behind their own gate.
+            for name in ["bash", "zsh", "fish"] {
+                if !is_builtin_command(name) {
+                    assert!(!cmds.contains(name), "shell leaked into code tools");
+                }
+            }
+            assert!(!cmds.contains("ntcfixture"));
+        });
+    }
+
+    #[test]
+    fn config_code_tools_hints_on_off() {
+        let flags: Vec<String> = subcommands_for(&["config", "code_tools"])
+            .into_iter()
+            .map(|s| s.to_string())
+            .collect();
+        assert_eq!(flags, vec!["ON", "OFF"]);
+        assert_eq!(
+            subcommands_for(&["config", "ct"]),
+            vec!["ON", "OFF"],
+            "short alias"
+        );
+    }
+
+    #[test]
+    fn full_line_ghost_is_case_insensitive() {
+        assert_eq!(strip_prefix_ci("Get-Content", "get-c"), Some("ontent"));
+        assert_eq!(strip_prefix_ci("Select-Object", "sel"), Some("ect-Object"));
+        assert_eq!(strip_prefix_ci("Get-Content", "git"), None);
     }
 
     #[test]
@@ -4193,11 +4881,11 @@ mod tests {
     fn ral_hint_suggests_values_named_and_hintn() {
         let h = NtcHinter::new();
         // Bare --hint / --select and their -n forms are suggested.
-        let c = h.candidates_for("ral add tld \"tl dir $x\" #x --sel");
+        let c = h.candidates_for("ral add tld \"tl dir ${x}\" #x --sel");
         assert!(c.contains(&"--select-dir".to_string()), "got: {:?}", c);
         assert!(c.contains(&"--select-n".to_string()), "got: {:?}", c);
         assert!(c.contains(&"--select".to_string()), "got: {:?}", c);
-        let c = h.candidates_for("ral add tld \"tl dir $x\" #x --hin");
+        let c = h.candidates_for("ral add tld \"tl dir ${x}\" #x --hin");
         assert!(c.contains(&"--hint-n".to_string()), "got: {:?}", c);
         assert!(c.contains(&"--hint".to_string()), "got: {:?}", c);
         // hintn subcommands complete.
@@ -4214,9 +4902,9 @@ mod tests {
         );
         Config::with_test_config(cfg, || {
             let h = NtcHinter::new();
-            let c = h.candidates_for("ral add srv \"ssh $p\" #p --hint-n ");
+            let c = h.candidates_for("ral add srv \"ssh ${p}\" #p --hint-n ");
             assert!(c.contains(&"port".to_string()), "got: {:?}", c);
-            let c = h.candidates_for("ral add srv \"ssh $p\" #p --hint-n p");
+            let c = h.candidates_for("ral add srv \"ssh ${p}\" #p --hint-n p");
             assert!(c.contains(&"port".to_string()), "got: {:?}", c);
             // hintn rm/info complete list names too.
             let c = h.candidates_for("ral hintn rm ");
@@ -4231,15 +4919,15 @@ mod tests {
         let _cwd = TempCwd::with_repo_fixture();
         let mut cfg = hint_test_config();
         cfg.run_aliases
-            .insert("srv".to_string(), "ssh $p".to_string());
+            .insert("srv".to_string(), "ssh ${p}".to_string());
         cfg.run_alias_hints
             .insert("srv".to_string(), "#p --hint [8080,5050]".into());
         cfg.run_aliases
-            .insert("srvn".to_string(), "ssh $p".to_string());
+            .insert("srvn".to_string(), "ssh ${p}".to_string());
         cfg.run_alias_hints
             .insert("srvn".to_string(), "#p --hint-n port".into());
         cfg.run_aliases
-            .insert("srvboth".to_string(), "ssh $p".to_string());
+            .insert("srvboth".to_string(), "ssh ${p}".to_string());
         cfg.run_alias_hints.insert(
             "srvboth".to_string(),
             "#p --hint [8080] --select-n port".into(),
@@ -4265,7 +4953,7 @@ mod tests {
         // Dangling named refs complete nothing (no fallback leak).
         let mut cfg2 = hint_test_config();
         cfg2.run_aliases
-            .insert("dangle".to_string(), "ssh $p".to_string());
+            .insert("dangle".to_string(), "ssh ${p}".to_string());
         cfg2.run_alias_hints
             .insert("dangle".to_string(), "#p --hint-n ghost".into());
         Config::with_test_config(cfg2, || {
@@ -4298,7 +4986,7 @@ mod tests {
         let c = h.candidates_for("ral edit runc \"gcc $x[]\" #");
         assert!(c.contains(&"#x[]".to_string()), "got: {:?}", c);
         // `--hint` prefix → the hint flags.
-        let c = h.candidates_for("ral add tld \"tl dir $x\" #x --hint-");
+        let c = h.candidates_for("ral add tld \"tl dir ${x}\" #x --hint-");
         for f in [
             "--hint-tp",
             "--hint-ext",
@@ -4313,7 +5001,7 @@ mod tests {
             assert!(c.contains(&f.to_string()), "missing {} in {:?}", f, c);
         }
         // `--select` prefix → the select flags.
-        let c = h.candidates_for("ral add tld \"tl dir $x\" #x --select-");
+        let c = h.candidates_for("ral add tld \"tl dir ${x}\" #x --select-");
         for f in [
             "--select-dir",
             "--select-ext",
@@ -4326,7 +5014,7 @@ mod tests {
             assert!(c.contains(&f.to_string()), "missing {} in {:?}", f, c);
         }
         // Just-finished #param → flags as well.
-        let c = h.candidates_for("ral add tld \"tl dir $x\" #x ");
+        let c = h.candidates_for("ral add tld \"tl dir ${x}\" #x ");
         assert!(c.contains(&"--hint-dir".to_string()), "got: {:?}", c);
         // No placeholders → nothing extra.
         let c = h.candidates_for("ral add btr \"cargo build\" #");
@@ -4835,6 +5523,17 @@ mod tests {
         // Here-strings take free text: no hint.
         assert!(h.candidates_for("say <<< ").is_empty());
         assert!(h.candidates_for("say <<< hi").is_empty());
+    }
+
+    #[test]
+    fn hyphen_stages_grow_one_boundary_at_a_time() {
+        assert_eq!(stage_rest("et-Acl", "Get-Acl"), "et");
+        assert_eq!(stage_rest("-Acl", "Get-Acl"), "-");
+        assert_eq!(stage_rest("Acl", "Get-Acl"), "Acl");
+        // Flags and paths keep their full remainder.
+        assert_eq!(stage_rest("epth", "--depth"), "epth");
+        assert_eq!(stage_rest("-file.txt", "my-file.txt"), "-file.txt");
+        assert_eq!(stage_rest("ildItem", "Get-ChildItem"), "ildItem");
     }
 
     #[test]

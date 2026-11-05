@@ -230,13 +230,27 @@ fn unquote(t: &str) -> String {
 
 /// Remove ANSI escape sequences from captured output so redirected files and
 /// piped data stay clean.
+///
+/// Handles CSI (`ESC [ … final`), OSC (`ESC ] … BEL` or `ST`) — including
+/// OSC-8 hyperlinks, whose URL would otherwise leak through as plain text —
+/// and the other ESC-string introducers (`DCS`, `SOS`, `PM`, `APC`).
 pub(crate) fn strip_ansi_bytes(input: &[u8]) -> Vec<u8> {
     let mut out = Vec::with_capacity(input.len());
     let mut i = 0;
     while i < input.len() {
-        if input[i] == 0x1b {
+        if input[i] != 0x1b {
+            out.push(input[i]);
             i += 1;
-            if i < input.len() && input[i] == b'[' {
+            continue;
+        }
+
+        i += 1;
+        let Some(&kind) = input.get(i) else {
+            break;
+        };
+        match kind {
+            b'[' => {
+                // CSI: parameters/intermediates, then one final byte 0x40-0x7E.
                 i += 1;
                 while i < input.len() && !(0x40..=0x7e).contains(&input[i]) {
                     i += 1;
@@ -244,15 +258,31 @@ pub(crate) fn strip_ansi_bytes(input: &[u8]) -> Vec<u8> {
                 if i < input.len() {
                     i += 1;
                 }
-            } else if i < input.len() {
-                i += 1;
             }
-        } else {
-            out.push(input[i]);
-            i += 1;
+            b']' | b'P' | b'X' | b'^' | b'_' => {
+                // OSC / DCS / SOS / PM / APC: terminated by BEL or ST (ESC \).
+                i += 1;
+                while i < input.len() {
+                    if input[i] == 0x07 {
+                        i += 1;
+                        break;
+                    }
+                    if input[i] == 0x1b && input.get(i + 1) == Some(&b'\\') {
+                        i += 2;
+                        break;
+                    }
+                    i += 1;
+                }
+            }
+            _ => i += 1,
         }
     }
     out
+}
+
+/// Strip ANSI escape sequences from a UTF-8 string.
+pub(crate) fn strip_ansi_text(input: &str) -> String {
+    String::from_utf8_lossy(&strip_ansi_bytes(input.as_bytes())).into_owned()
 }
 
 // ── parsed model ────────────────────────────────────────────────────────────
@@ -720,6 +750,22 @@ mod tests {
     fn strip_ansi_removes_colour_codes() {
         let raw = b"\x1b[31mred\x1b[0m plain";
         assert_eq!(strip_ansi_bytes(raw), b"red plain".to_vec());
+    }
+
+    #[test]
+    fn strip_ansi_removes_osc_hyperlinks() {
+        let raw = b"\x1b]8;;https://example.com\x07link\x1b]8;;\x07 text";
+        assert_eq!(strip_ansi_bytes(raw), b"link text".to_vec());
+        let raw = b"\x1b]0;title\x1b\\body";
+        assert_eq!(strip_ansi_bytes(raw), b"body".to_vec());
+    }
+
+    #[test]
+    fn strip_ansi_text_keeps_newlines() {
+        assert_eq!(
+            strip_ansi_text("\x1b[32mone\x1b[0m\r\ntwo\n"),
+            "one\r\ntwo\n"
+        );
     }
 
     #[test]

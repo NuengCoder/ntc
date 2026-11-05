@@ -9,8 +9,18 @@ pub fn fill(m: &mut HashMap<String, String>) {
     m.insert("help.ran.help".into(), "ran help ## Show ran usage".into());
 
     m.insert(
+        "help.ran.fmt".into(),
+        "ran fmt <toml|json|yaml> ## Convert the ranfile to another format (-o <file>, -y)".into(),
+    );
+
+    m.insert(
         "help.ran.init".into(),
         "ran init ## Create a NTCRANFILE.toml template".into(),
+    );
+
+    m.insert(
+        "help.ran.check".into(),
+        "ran check ## Validate NTCRANFILE.toml and show where problems are".into(),
     );
 
     m.insert(

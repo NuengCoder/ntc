@@ -9,6 +9,7 @@
 //! * `ndb [<file.db>]>` - database commands; `tablef`/`schema <TAB>` completes
 //!   table names
 
+use std::collections::{BTreeMap, HashMap};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, RwLock};
 
@@ -93,6 +94,9 @@ const DBAL_SUBCOMMANDS: &[&str] = &[
 /// `dbal` subcommands taking an existing alias name.
 const DBAL_ALIAS_ARG_SUBS: &[&str] = &["rm", "remove", "info", "edit", "run"];
 
+/// `ndb`-only `#param --hint-*` flags completed after a `#param`.
+const DBAL_HINT_FLAGS: &[&str] = &["--hint-table", "--hint-table-col-name"];
+
 /// Commands whose first argument is a table name.
 const TABLE_ARG_COMMANDS: &[&str] = &[
     "tablef", "tblf", "tf", "schema", "desc", "describe", "indexes", "idx",
@@ -114,6 +118,10 @@ fn is_help_token(tok: &str) -> bool {
 pub(crate) struct NdbContext {
     in_db: AtomicBool,
     tables: RwLock<Vec<String>>,
+    /// Lowercased table name -> column names (for `--hint-table-col-name`).
+    columns: RwLock<BTreeMap<String, Vec<String>>>,
+    /// Lowercased `dbal` alias name -> serialized `#param --hint-*` spec.
+    hints: RwLock<HashMap<String, String>>,
     db_files: RwLock<Vec<String>>,
     aliases: RwLock<Vec<String>>,
 }
@@ -123,6 +131,8 @@ impl Default for NdbContext {
         Self {
             in_db: AtomicBool::new(false),
             tables: RwLock::new(Vec::new()),
+            columns: RwLock::new(BTreeMap::new()),
+            hints: RwLock::new(HashMap::new()),
             db_files: RwLock::new(Vec::new()),
             aliases: RwLock::new(Vec::new()),
         }
@@ -161,6 +171,20 @@ impl NdbContext {
     pub(crate) fn set_aliases(&self, aliases: Vec<String>) {
         if let Ok(mut guard) = self.aliases.write() {
             *guard = aliases;
+        }
+    }
+
+    /// Column names of the open database, keyed by lowercased table name.
+    pub(crate) fn set_columns(&self, columns: BTreeMap<String, Vec<String>>) {
+        if let Ok(mut guard) = self.columns.write() {
+            *guard = columns;
+        }
+    }
+
+    /// `dbal` completion hints, keyed by lowercased alias name.
+    pub(crate) fn set_hints(&self, hints: HashMap<String, String>) {
+        if let Ok(mut guard) = self.hints.write() {
+            *guard = hints;
         }
     }
 }
@@ -238,6 +262,54 @@ impl NdbHinter {
             .unwrap_or_default()
     }
 
+    fn columns_of(&self, table: &str) -> Vec<String> {
+        self.ctx
+            .columns
+            .read()
+            .ok()
+            .and_then(|m| m.get(&table.to_lowercase()).cloned())
+            .unwrap_or_default()
+    }
+
+    fn all_columns(&self) -> Vec<String> {
+        self.ctx
+            .columns
+            .read()
+            .map(|m| m.values().flatten().cloned().collect())
+            .unwrap_or_default()
+    }
+
+    /// Candidate values for argument `arg_index` of a saved alias, driven by
+    /// its `#param --hint-table` / `--hint-table-col-name` annotations.
+    fn db_hint_candidates(&self, alias: &str, arg_index: usize) -> Vec<String> {
+        use crate::shell::alias::ParamHintKind as K;
+        let Some(spec) = self
+            .ctx
+            .hints
+            .read()
+            .ok()
+            .and_then(|m| m.get(&alias.to_lowercase()).cloned())
+        else {
+            return Vec::new();
+        };
+        let groups = crate::shell::alias::parse_hint_spec(&spec);
+        let Some(group) = groups.get(arg_index) else {
+            return Vec::new();
+        };
+        let mut out: Vec<String> = Vec::new();
+        for kind in &group.kinds {
+            match kind {
+                K::Table => out.extend(self.tables()),
+                K::TableColName(table) if table.is_empty() => out.extend(self.all_columns()),
+                K::TableColName(table) => out.extend(self.columns_of(table)),
+                _ => {}
+            }
+        }
+        out.sort();
+        out.dedup();
+        out
+    }
+
     /// Full candidate words for the word being typed in `typed`
     /// (cursor assumed at end of `typed`).
     pub(crate) fn candidates_for(&self, typed: &str) -> Vec<String> {
@@ -269,6 +341,25 @@ impl NdbHinter {
         // -- Argument completion --
         let cmd = parts[0].to_lowercase();
 
+        // Bare `dbal` alias execution: complete its annotated arguments
+        // (`recent <TAB>`, `recent us<TAB>`).
+        if self.aliases().iter().any(|a| a.eq_ignore_ascii_case(&cmd)) {
+            let arg_index = if trailing_space {
+                parts.len() - 1
+            } else {
+                parts.len().saturating_sub(2)
+            };
+            let frag = if trailing_space {
+                ""
+            } else {
+                parts.last().copied().unwrap_or("")
+            };
+            let out = self.db_hint_candidates(&cmd, arg_index);
+            if !out.is_empty() {
+                return filter_prefix(out, frag);
+            }
+        }
+
         // Inside `dbal`: subcommands first, then alias names for the
         // subcommands that take one.
         if cmd == "dbal" {
@@ -279,6 +370,35 @@ impl NdbHinter {
                     DBAL_SUBCOMMANDS.iter().map(|s| s.to_string()).collect(),
                     frag,
                 );
+            }
+            // `dbal add|edit … #t --hint-` completes the ndb-only hints.
+            let sub_cmd = parts.get(1).map(|s| s.to_lowercase()).unwrap_or_default();
+            let frag = if trailing_space {
+                ""
+            } else {
+                parts.last().copied().unwrap_or("")
+            };
+            if matches!(sub_cmd.as_str(), "add" | "edit")
+                && parts.iter().skip(2).any(|t| t.starts_with('#'))
+                && (frag.is_empty() || frag.starts_with("--hint"))
+            {
+                return filter_prefix(
+                    DBAL_HINT_FLAGS.iter().map(|s| s.to_string()).collect(),
+                    frag,
+                );
+            }
+            // `dbal run <alias> <arg>` completes the alias's annotated args.
+            if sub_cmd == "run" && parts.len() >= 3 {
+                let alias = parts[2];
+                let arg_index = if trailing_space {
+                    parts.len().saturating_sub(3)
+                } else {
+                    parts.len().saturating_sub(4)
+                };
+                let out = self.db_hint_candidates(alias, arg_index);
+                if !out.is_empty() {
+                    return filter_prefix(out, frag);
+                }
             }
             // Completing the alias name after a subcommand that takes one
             // (`dbal run ` / `dbal run top`).
@@ -646,5 +766,55 @@ mod tests {
         let h = NdbHinter::new(ctx);
         assert!(h.candidates_for("help --help").is_empty());
         assert!(h.candidates_for("--").contains(&"--help".to_string()));
+    }
+
+    #[test]
+    fn dbal_hints_complete_tables_and_columns() {
+        let ctx = Arc::new(NdbContext::new());
+        ctx.set_in_db(true);
+        ctx.set_tables(vec!["users".to_string(), "notes".to_string()]);
+        ctx.set_aliases(vec!["recent".to_string()]);
+        ctx.set_columns(BTreeMap::from([
+            (
+                "users".to_string(),
+                vec!["id".to_string(), "email".to_string()],
+            ),
+            ("notes".to_string(), vec!["body".to_string()]),
+        ]));
+        ctx.set_hints(HashMap::from([(
+            "recent".to_string(),
+            "#t --hint-table #c --hint-table-col-name users".to_string(),
+        )]));
+        let h = NdbHinter::new(ctx);
+        assert_eq!(
+            h.candidates_for("dbal run recent "),
+            vec!["notes".to_string(), "users".to_string()]
+        );
+        assert_eq!(
+            h.candidates_for("dbal run recent us"),
+            vec!["users".to_string()]
+        );
+        assert_eq!(
+            h.candidates_for("dbal run recent users "),
+            vec!["email".to_string(), "id".to_string()]
+        );
+        // Bare alias execution gets the same completion.
+        assert_eq!(
+            h.candidates_for("recent "),
+            vec!["notes".to_string(), "users".to_string()]
+        );
+    }
+
+    #[test]
+    fn dbal_hint_flags_complete_after_a_param() {
+        let ctx = Arc::new(NdbContext::new());
+        let h = NdbHinter::new(ctx);
+        assert_eq!(
+            h.candidates_for("dbal add q \"SELECT * FROM $t\" #t --hint-"),
+            vec![
+                "--hint-table".to_string(),
+                "--hint-table-col-name".to_string()
+            ]
+        );
     }
 }

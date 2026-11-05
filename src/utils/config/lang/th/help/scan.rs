@@ -77,4 +77,38 @@ pub fn fill(m: &mut HashMap<String, String>) {
     );
 
     m.insert("help.scan.title".into(), "คำสั่ง SCAN:".into());
+    m.insert(
+        "help.scan.waep".into(),
+        "scan waep <โฮสต์|URL> ## ค้นหาเส้นทางบนเว็บ (/api, /admin, /upload, ...)".into(),
+    );
+
+    m.insert(
+        "help.scan.waep_base".into(),
+        "scan waep example.com/api -r -d 2 ## ค้นต่อใต้ base path".into(),
+    );
+
+    m.insert(
+        "help.scan.waep_flags".into(),
+        "scan waep <เป้าหมาย> [-w <ไฟล์>] [-x <นามสกุล,...>] [-m GET|HEAD] [-s <รหัส>] [--all] ## wordlist, นามสกุล, method, สถานะที่รับ".into(),
+    );
+
+    m.insert(
+        "help.scan.waep_recursive".into(),
+        "scan waep <เป้าหมาย> [-r] [-d 1-4] [-c 1-64] [--timeout <ms>] [-H 'ชื่อ: ค่า'] [-A <ua>] [-o <ไฟล์>] [-q] ## การไล่, ความเร็ว, header, เอาต์พุต".into(),
+    );
+
+    m.insert(
+        "help.scan.example8".into(),
+        "scan waep http://127.0.0.1:55555/api ## ดูว่า API ของ ntc serve เปิดอะไรไว้".into(),
+    );
+
+    m.insert(
+        "help.scan.example9".into(),
+        "scan waep example.com -x php,html --all ## แสดงทุกการตอบกลับ รวม .php/.html".into(),
+    );
+
+    m.insert(
+        "help.scan.example10".into(),
+        "scan waep example.com/api -r -d 2 -c 32 ## ไล่สองระดับด้วย 32 probe พร้อมกัน".into(),
+    );
 }

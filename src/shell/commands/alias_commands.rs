@@ -2,12 +2,12 @@ use super::execute_system_command;
 use super::scope::{split_scope_flag, split_scope_flag_prefix};
 use crate::config::{Config, ConfigScope};
 use crate::navigator::Navigator;
-use crate::output::{print_error, print_info, print_success};
+use crate::output::{print_error, print_info, print_success, print_warning};
 use crate::shell::alias::{
-    expand_command_line_interactive, extract_param_names, find_invalid_array_sep,
-    inject_template_defaults, named_refs_in_groups, parse_call_syntax, parse_param_defaults,
-    parse_value_list_raw, rename_named_in_spec, serialize_hint_spec, spec_references_named,
-    split_hint_annotations, ParamHint,
+    bare_env_refs, expand_command_line_interactive, extract_param_names_ral,
+    find_invalid_array_sep, inject_template_defaults, named_refs_in_groups, parse_call_syntax,
+    parse_param_defaults, parse_value_list_raw, rename_named_in_spec, serialize_hint_spec,
+    spec_references_named, split_hint_annotations, ParamHint,
 };
 use std::collections::HashMap;
 use std::path::Path;
@@ -323,6 +323,21 @@ fn check_array_separators(command: &str) -> bool {
         None => true,
     }
 }
+
+/// Point out bare `$name` refs: in ral they are environment variables, so a
+/// template that meant a parameter must use the braced `${name}` form.
+fn warn_bare_env_refs(command: &str) {
+    let refs = bare_env_refs(command);
+    if refs.is_empty() {
+        return;
+    }
+    let list = refs
+        .iter()
+        .map(|n| format!("${}", n))
+        .collect::<Vec<_>>()
+        .join(", ");
+    print_warning(&t!("alias.ral.bare_env_warning", list));
+}
 use crate::shell::helpers::{ral_export_all, ral_export_select, ral_import};
 use crate::shell::hinter::ALIAS_GENERATION;
 use crate::t;
@@ -396,7 +411,7 @@ fn render_alias_section(
         } else {
             t!("alias.ral.invalid_suffix", name).red()
         };
-        let param_names = extract_param_names(cmd);
+        let param_names = extract_param_names_ral(cmd);
         let cmd_display = if !param_names.is_empty() {
             let params_str = if param_names.len() == 1 {
                 format!("({})", param_names[0])
@@ -458,18 +473,19 @@ pub fn cmd_ral(args: &str, nav: &mut Navigator) -> Result<bool> {
         println!("  ral rnm btr to build");
         println!("  ral add py \"python test.py\"");
         println!("  ral edit py \"python main.py\"");
-        println!("  ral add run_file(x) \"python $x.py\"");
-        println!("  ral add mkf({{x=a,e=txt}}) \"echo. > $x.$e\"");
+        println!("  ral add run_file(x) \"python ${{x}}.py\"");
+        println!("  ral add mkfile \"echo. > ${{x:-a}}.${{e:-txt}}\"");
         println!("  ral add hi \"echo $*{{x}}\"   # hi \"wow nice\" -> echo wow nice");
         println!(
-            "  ral add runc(x[],y) \"cls && gcc -o $y.exe $x[].c && ./$y.exe && rm -rf $y.exe\""
+            "  ral add runc(x[],y) \"cls && gcc -o ${{y}}.exe $x[].c && ./${{y}}.exe && rm -rf ${{y}}.exe\""
         );
         println!("  ral add tld \"tl dir ${{x:-.}}\" #x --hint-dir");
         println!("  ral add tldsel \"tl dir ${{x:-.}}\" #x --select-dir");
-        println!("  ral add show \"txtf $x\" #x --select-ext rs,txt");
-        println!("  ral add srv \"ssh $p\" #p --hint [8080,5050,5000]");
+        println!("  ral add show \"txtf ${{x}}\" #x --select-ext rs,txt");
+        println!("  ral add srv \"ssh ${{p}}\" #p --hint [8080,5050,5000]");
         println!("  ral hintn add port [8080,5050,5000,55555,56789,38533]");
-        println!("  ral add srvn \"ssh $p\" #p --hint-n port");
+        println!("  ral add srvn \"ssh ${{p}}\" #p --hint-n port");
+        println!("  ral add proj \"cd $HOME/proj\"  # bare $NAME = env var at run time");
         println!("  ral add cop \"cp ${{x}} ${{y}}\" #x --hint-all #y --hint-tp --hint-dir");
         println!("  ral list");
         println!("  ral rm py");
@@ -490,6 +506,16 @@ pub fn cmd_ral(args: &str, nav: &mut Navigator) -> Result<bool> {
         let subargs = parts.get(1).unwrap_or(&"").trim();
 
         match subcmd.as_str() {
+            "check" => {
+                let cwd = nav.current_path().to_path_buf();
+                super::check_common::run(
+                    "ral",
+                    subargs,
+                    &cwd,
+                    ".ntc.ral",
+                    super::check_formats::ral,
+                );
+            }
             "add" => {
                 let (mut scope, subargs) = split_scope_flag(subargs);
                 if subargs.is_empty() {
@@ -536,6 +562,7 @@ pub fn cmd_ral(args: &str, nav: &mut Navigator) -> Result<bool> {
                         if !check_array_separators(&command) {
                             return Ok(false);
                         }
+                        warn_bare_env_refs(&command);
                         if !check_named_refs(&hints) {
                             return Ok(false);
                         }
@@ -620,6 +647,7 @@ pub fn cmd_ral(args: &str, nav: &mut Navigator) -> Result<bool> {
                         if !check_array_separators(&command) {
                             return Ok(false);
                         }
+                        warn_bare_env_refs(&command);
                         if !check_named_refs(&hints) {
                             return Ok(false);
                         }
@@ -808,7 +836,7 @@ pub fn cmd_ral(args: &str, nav: &mut Navigator) -> Result<bool> {
                             t!("alias.ral.info_command").yellow(),
                             cmd.dimmed()
                         );
-                        let param_names = extract_param_names(cmd);
+                        let param_names = extract_param_names_ral(cmd);
                         if !param_names.is_empty() {
                             let params_str = if param_names.len() == 1 {
                                 format!("({})", param_names[0])
@@ -974,8 +1002,9 @@ pub fn cmd_ral(args: &str, nav: &mut Navigator) -> Result<bool> {
 # py = "python main.py"
 # hello = "echo Hello, World!"
 # tldsel = "tl dir ${x:-.}"
-# show = "txtf $x"
+# show = "txtf ${x}"            # ${x} is a parameter
 # hi = "echo $*{x}"              # one arg, spaces kept: hi "wow nice" -> echo wow nice
+# proj = "cd $HOME/projects"     # bare $NAME is an environment variable
 
 # Per-alias completion/selection specs (`ral add <name> "<cmd>" #x --hint-dir ...).
 # Uncomment to ship hints with this file:

@@ -23,7 +23,7 @@ pub fn fill(m: &mut HashMap<String, String>) {
 
     m.insert(
         "teleport.clear_confirm".into(),
-        "\u{26A0} 您确定要删除所有保存点吗？（y/N）：".into(),
+        "您确定要删除所有保存点吗？（y/N）：".into(),
     );
 
     m.insert(
@@ -39,7 +39,7 @@ pub fn fill(m: &mut HashMap<String, String>) {
 
     m.insert(
         "teleport.history_title".into(),
-        "\u{1F4DC} 传送历史（最近的在最后）".into(),
+        "传送历史（最近的在最后）".into(),
     );
 
     m.insert(
@@ -73,12 +73,12 @@ pub fn fill(m: &mut HashMap<String, String>) {
 
     m.insert(
         "teleport.list_title".into(),
-        "\u{1F4CC} 您的传送保存点（全局）".into(),
+        "您的传送保存点（全局）".into(),
     );
 
     m.insert(
         "teleport.menu_title".into(),
-        "\u{1F4CC} 传送 - 您的保存点（全局）".into(),
+        "传送 - 您的保存点（全局）".into(),
     );
 
     m.insert(

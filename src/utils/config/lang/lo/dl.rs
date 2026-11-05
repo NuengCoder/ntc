@@ -65,18 +65,18 @@ pub fn fill(m: &mut HashMap<String, String>) {
     );
 
     m.insert(
-        "dl.help.opt_progress".into(),
-        " --progress ສະແດງແຖບ progress ການດາວໂຫຼດ".into(),
+        "dl.help.opt_history".into(),
+        " --history ສະແດງ history ການດາວໂຫຼດ".into(),
     );
 
     m.insert(
         "dl.help.opt_resume".into(),
-        " --resume ດາວໂຫຼດຕໍ່ຈາກສ່ວນທີ່ດາວໂຫຼດໄວ້".into(),
+        " --resume ດາວໂຫຼດຕໍ່ລາຍການທີ່ຍັງບໍ່ສຳເລັດ (ເລືອກຈາກລາຍການ)".into(),
     );
 
     m.insert(
         "dl.help.opt_stop".into(),
-        " --stop ສະແດງ history ການດາວໂຫຼດ".into(),
+        " --stop ຢຸດການດາວໂຫຼດທີ່ກຳລັງເຮັດວຽກ (ເລືອກຈາກລາຍການ)".into(),
     );
 
     m.insert("dl.help.options".into(), "ຕົວເລືອກ:".into());
@@ -146,5 +146,66 @@ pub fn fill(m: &mut HashMap<String, String>) {
     m.insert(
         "dl.url_required".into(),
         "ຕ້ອງການ URL. ວິທີໃຊ້: dl <url>".into(),
+    );
+
+    m.insert("dl.active_title".into(), "ລາຍການທີ່ກຳລັງດາວໂຫຼດ:".into());
+
+    m.insert("dl.cancelled".into(), "ຍົກເລີກແລ້ວ.".into());
+
+    m.insert(
+        "dl.incomplete_title".into(),
+        "ລາຍການທີ່ດາວໂຫຼດຍັງບໍ່ສຳເລັດ:".into(),
+    );
+
+    m.insert("dl.invalid_choice".into(), "ຕົວເລືອກບໍ່ຖືກຕ້ອງ.".into());
+
+    m.insert("dl.no_active".into(), "ບໍ່ມີການດາວໂຫຼດທີ່ກຳລັງເຮັດວຽກ.".into());
+
+    m.insert(
+        "dl.nothing_incomplete".into(),
+        "ບໍ່ມີລາຍການທີ່ຍັງບໍ່ສຳເລັດໃຫ້ເຮັດຕໍ່.".into(),
+    );
+
+    m.insert("dl.resuming".into(), "ກຳລັງເຮັດຕໍ່ {} ຈາກ {}".into());
+
+    m.insert(
+        "dl.select_resume".into(),
+        "ເລືອກໄຟລ໌ທີ່ຈະເຮັດຕໍ່ [1-N] (ປ່ອຍຫວ່າງ ຫຼື q ເພື່ອຍົກເລີກ): ".into(),
+    );
+
+    m.insert(
+        "dl.select_stop".into(),
+        "ເລືອກໄຟລ໌ທີ່ຈະຢຸດ [1-N] (ປ່ອຍຫວ່າງ ຫຼື q ເພື່ອຍົກເລີກ): ".into(),
+    );
+
+    m.insert(
+        "dl.stopped_ok".into(),
+        "ຢຸດ {} ແລ້ວ. ເຮັດຕໍ່ໄດ້ດ້ວຍ 'dl --resume'.".into(),
+    );
+
+    m.insert(
+        "dl.stopped_stale".into(),
+        "ໝາຍ {} ວ່າຢຸດແລ້ວ (ບໍ່ໄດ້ເຮັດວຽກຢູ່ແລ້ວ).".into(),
+    );
+
+    m.insert(
+        "dl.dns_unsupported_type".into(),
+        "ບໍ່ຮອງຮັບປະເພດ record: {} (ຮອງຮັບ: {})".into(),
+    );
+
+    m.insert("dl.dns_rcode".into(), "ເຊີບເວີຕອບກັບ {} ({})".into());
+
+    m.insert(
+        "dl.dns_timeout".into(),
+        "ບໍ່ມີການຕອບກັບຈາກເຊີບເວີ DNS (ໝົດເວລາ)".into(),
+    );
+
+    m.insert("dl.dns_malformed".into(), "ການຕອບກັບ DNS ຜິດຮູບແບບ".into());
+
+    m.insert("dl.dns_io".into(), "ຂໍ້ຜິດພາດເຄືອຂ່າຍ DNS: {}".into());
+
+    m.insert(
+        "dl.dns_system_fallback".into(),
+        "ປ່ຽນໄປໃຊ້ເຄື່ອງມື DNS ຂອງລະບົບ...".into(),
     );
 }

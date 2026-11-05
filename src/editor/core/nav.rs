@@ -1,5 +1,5 @@
 use crate::editor::{
-    byte_to_col, gutter_width, next_char_byte, next_word_byte, prev_char_byte, prev_word_byte,
+    display_col, gutter_width, next_char_byte, next_word_byte, prev_char_byte, prev_word_byte,
     sel_range, set_status_bar, Editor,
 };
 use crate::t;
@@ -61,10 +61,11 @@ impl Editor {
         let eo = self.editor_offset();
         let editor_cols = self.term_w.saturating_sub(eo);
         let text_cols = editor_cols.saturating_sub(gw + 2);
+        let tabstop = self.editor_cfg.tab_size.max(1);
         let max_vis = self
             .lines
             .iter()
-            .map(|l| byte_to_col(l, l.len()))
+            .map(|l| display_col(l, l.len(), tabstop))
             .max()
             .unwrap_or(0);
         max_vis.saturating_sub(text_cols)
@@ -88,7 +89,11 @@ impl Editor {
         let eo = self.editor_offset();
         let editor_cols = self.term_w.saturating_sub(eo);
         let text_cols = editor_cols.saturating_sub(gw + 2);
-        let cursor_col = byte_to_col(self.current(), self.cursor.byte);
+        let cursor_col = display_col(
+            self.current(),
+            self.cursor.byte,
+            self.editor_cfg.tab_size.max(1),
+        );
         if cursor_col >= self.sv.x + text_cols {
             self.sv.x = cursor_col.saturating_sub(text_cols) + 1;
         } else if cursor_col < self.sv.x {
@@ -350,9 +355,10 @@ impl Editor {
             self.focus = crate::editor::Focus::Editor;
             self.mark_all_dirty();
         } else {
-            let (tw, th) = crate::editor::helpers::term_size();
-            // Fixed 50% of the editor text field.
-            let term_h = (th / 2) as u16;
+            let (tw, th) = self.terminal_pty_size();
+            // The PTY grid must be the panel's content size, not half the
+            // window: the child formats full-width output to it.
+            let term_h = th;
             let cwd = std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from("."));
             match crate::editor::terminal::TerminalState::spawn_ntc_shell(tw as u16, term_h, &cwd) {
                 Ok(term) => {

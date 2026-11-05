@@ -70,7 +70,9 @@ const EDITOR_COMMANDS: &[&str] = &[
 ];
 
 /// `nfe:` prompt verbs handled by `run_nfe_command`.
-const NFE_COMMANDS: &[&str] = &["i", "m ", "n ", "rmd ", "rmf ", "size ", "v", "V", "I"];
+const NFE_COMMANDS: &[&str] = &[
+    "dir ", "file ", "i", "line ", "m ", "n ", "rmd ", "rmf ", "size ", "v", "V", "I",
+];
 
 /// gmode `g` prompt verbs handled by `execute_gmode`.
 const GMODE_COMMANDS: &[&str] = &[
@@ -79,7 +81,7 @@ const GMODE_COMMANDS: &[&str] = &[
 
 /// Which directory entries a path completion should offer.
 #[derive(Clone, Copy, PartialEq, Eq)]
-enum Want {
+pub(crate) enum Want {
     Any,
     Dir,
     File,
@@ -381,7 +383,7 @@ fn word_completions<'a>(input: &str, words: impl IntoIterator<Item = &'a str>) -
 /// Complete the last token against directory entry names under `root`.
 /// Candidates are full tokens (directory part included); a directory gets
 /// a trailing `/` so the next component can be completed right away.
-fn path_completions(root: &Path, token: &str, want: Want) -> Vec<String> {
+pub(crate) fn path_completions(root: &Path, token: &str, want: Want) -> Vec<String> {
     let (dir_part, name_part) = match token.rfind(['/', '\\']) {
         Some(i) => token.split_at(i + 1),
         None => ("", token),
@@ -522,9 +524,11 @@ fn nfe_completions(root: &Path, input: &str) -> Completions {
             .filter(|w| w.starts_with(tail_token(args)))
             .map(str::to_string)
             .collect(),
-        "n" => path_completions(root, tail_token(args), Want::Any),
-        "m" | "rmd" => path_completions(root, tail_token(args), Want::Dir),
+        "n" | "file" => path_completions(root, tail_token(args), Want::Any),
+        "m" | "rmd" | "dir" => path_completions(root, tail_token(args), Want::Dir),
         "rmf" => path_completions(root, tail_token(args), Want::File),
+        // `line` takes a number: no hint to offer.
+        "line" => Vec::new(),
         _ => Vec::new(),
     };
     let start = input.len().saturating_sub(tail_token(args).len());

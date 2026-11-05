@@ -1,0 +1,1 @@
+- [x] spec update for disk: now disk also show usage like 200GB/300GB n% 100GB

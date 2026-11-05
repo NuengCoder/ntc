@@ -19,7 +19,7 @@ pub const KITTY_IMAGE_ID: u32 = 7;
 pub const CHUNK_SIZE: usize = 4096;
 
 /// Encode RGB pixels as PNG bytes (transmission payload).
-#[cfg(feature = "image2doc")]
+#[cfg(feature = "image")]
 pub fn encode_png(pixels: &image::RgbImage) -> anyhow::Result<Vec<u8>> {
     use std::io::Cursor;
     let mut buf = Vec::new();
@@ -116,7 +116,7 @@ mod tests {
         assert_eq!(delete_cmd(), "\x1b_Ga=d,d=I,i=7,q=2\x1b\\");
     }
 
-    #[cfg(feature = "image2doc")]
+    #[cfg(feature = "image")]
     #[test]
     fn png_roundtrip_dims() {
         let img = image::RgbImage::from_pixel(37, 21, image::Rgb([9, 99, 199]));

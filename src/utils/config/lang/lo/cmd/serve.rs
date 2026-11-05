@@ -159,6 +159,25 @@ pub fn fill(m: &mut HashMap<String, String>) {
         "cmd.serve.lock_on".into(),
         "ໂຫມດອ່ານຢ່າງດຽວ (--lock): ບລັອກອັບໂຫລດ ແກ້ໄຂ ສ້າງ ແລະ ລຶບແລ້ວ".into(),
     );
+    m.insert(
+        "cmd.serve.url_web".into(),
+        "ໜ້າເວັບ:     {}  (ເບິ່ງ + ລາກໄຟລ໌ອັບໂຫຼດ)".into(),
+    );
+
+    m.insert(
+        "cmd.serve.url_upload".into(),
+        "ອັບໂຫຼດ:     {}  (POST multipart, ຊ່ອງ 'file')".into(),
+    );
+
+    m.insert(
+        "cmd.serve.url_download".into(),
+        "ດາວໂຫຼດ:     {}  (ຕໍ່ດ້ວຍເສັ້ນທາງໄຟລ໌)".into(),
+    );
+
+    m.insert(
+        "cmd.serve.url_info".into(),
+        "ຂໍ້ມູນ:      {}  (ນີ້ຄືຫຍັງ + ຕົວຢ່າງ curl/wget/ntc)".into(),
+    );
 
     m.insert("cmd.serve.invalid_port".into(), "port ບໍ່ຖືກຕ້ອງ".into());
 

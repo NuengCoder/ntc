@@ -14,6 +14,10 @@ const STEPS = [
     title: '3 — Finish',
     body: 'Watch the status line for check, mate and auto-draws. History below the board records every move in SAN. Resign, agree a draw, or hit Rematch.',
   },
+  {
+    title: '4 — vs Bot',
+    body: 'Open vs AI Bot, download Stockfish once, then pick your side, difficulty and clock. The board locks while the engine thinks, and Undo takes back both your move and the bot reply.',
+  },
 ]
 
 export default function TutorialScreen({ onBack }: { onBack(): void }) {

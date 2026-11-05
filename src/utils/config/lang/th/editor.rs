@@ -29,7 +29,7 @@ pub fn fill(m: &mut HashMap<String, String>) {
 
     m.insert("editor.clipboard_empty".into(), "คลิปบอร์ดว่างเปล่า".into());
 
-    m.insert("editor.close_btn".into(), "\u{2715}".into());
+    m.insert("editor.close_btn".into(), "x".into());
 
     m.insert("editor.cmd_already_at_root".into(), "อยู่ที่รากอยู่แล้ว".into());
 
@@ -166,7 +166,7 @@ pub fn fill(m: &mut HashMap<String, String>) {
 
     m.insert(
         "editor.cmd_visual_hint".into(),
-        "โหมด Visual ใช้ปุ่มลูกศรเพื่อเลือก Esc เพื่อออก".into(),
+        "โหมด Visual \u{2014} ใช้ปุ่มลูกศรเพื่อเลือก Esc เพื่อออก".into(),
     );
 
     m.insert("editor.color_off".into(), "สี: OFF".into());
@@ -423,7 +423,7 @@ pub fn fill(m: &mut HashMap<String, String>) {
         "คำสั่ง gmode ไม่รู้จัก: '{}'".into(),
     );
 
-    m.insert("editor.hint_normal".into(), " i=insert v=visual f=ค้นหา b=files e=nfe t=term g=gmode x=บันทึก n=ไฟล์ m=dir c=copy Sh=เลือก :cmd ?=ช่วยเหลือ 0=ออก".into());
+    m.insert("editor.hint_normal".into(), " ?=ช่วยเหลือ  i=insert v=visual f=ค้นหา b=files e=nfe t=term g=gmode x=บันทึก n=ไฟล์ m=dir c=copy Sh=เลือก :cmd 0=ออก".into());
 
     m.insert(
         "editor.hint_create_actions".into(),
@@ -437,7 +437,7 @@ pub fn fill(m: &mut HashMap<String, String>) {
 
     m.insert(
         "editor.hint_normal_msg".into(),
-        " i=insert v=visual :cmd ?=ช่วยเหลือ 0=ออก".into(),
+        " ?=ช่วยเหลือ  i=insert v=visual :cmd 0=ออก".into(),
     );
 
     m.insert("editor.hint_query".into(), "Query: {}".into());
@@ -635,7 +635,7 @@ pub fn fill(m: &mut HashMap<String, String>) {
 
     m.insert("editor.mode_nfe".into(), "[Nfe]".into());
 
-    m.insert("editor.hint_nfe".into(), " hjkl/wasd/ลูกศร เลื่อน · Enter เปิด · n สร้างไฟล์ · m สร้างไดเรกทอรี · r เปลี่ยนชื่อ · d ล้าง · i/v แก้ไข · :=ขนาด/Tabs · Esc กลับ".into());
+    m.insert("editor.hint_nfe".into(), " hjkl/wasd/ลูกศร เลื่อน · Enter เปิด · g/: file|dir|line · n สร้างไฟล์ · m สร้างไดเรกทอรี · r เปลี่ยนชื่อ · d ล้าง · i/v แก้ไข · :=ขนาด/Tabs · Esc กลับ".into());
 
     m.insert(
         "editor.hint_nfe_cmd_actions".into(),
@@ -643,6 +643,17 @@ pub fn fill(m: &mut HashMap<String, String>) {
     );
 
     m.insert("editor.nfe_unknown".into(), "คำสั่ง nfe ไม่รู้จัก: '{}' (ลอง size full|def|N% | n <ไฟล์> | m <ไดเรกทอรี> | rmd <ไดเรกทอรี> | rmf <ไฟล์> | i | v)".into());
+
+    m.insert("editor.nfe_file_jumped".into(), "ไปที่ไฟล์: {}".into());
+
+    m.insert("editor.nfe_dir_jumped".into(), "ไปที่ไดเรกทอรี: {}".into());
+
+    m.insert("editor.nfe_line_jumped".into(), "ไปที่บรรทัด {}".into());
+
+    m.insert(
+        "editor.nfe_cmd_usage".into(),
+        "วิธีใช้: file <ชื่อไฟล์> | dir <ชื่อไดเรกทอรี> | line <+N|-N|N>".into(),
+    );
 
     m.insert(
         "editor.nfe_rm_usage".into(),
@@ -1037,11 +1048,11 @@ pub fn fill(m: &mut HashMap<String, String>) {
 
     m.insert("editor.save_prompt".into(), "บันทึกไฟล์ [Y|N]?".into());
 
-    m.insert("editor.saved".into(), "บันทึกแล้ว \u{2713}".into());
+    m.insert("editor.saved".into(), "บันทึกแล้ว ".into());
 
-    m.insert("editor.saved_full".into(), " บันทึกแล้ว ✓".into());
+    m.insert("editor.saved_full".into(), " บันทึกแล้ว ".into());
 
-    m.insert("editor.saved_marker".into(), " \u{2713}".into());
+    m.insert("editor.saved_marker".into(), " ".into());
 
     m.insert("editor.scratch".into(), "[scratch]".into());
 
@@ -1060,7 +1071,7 @@ pub fn fill(m: &mut HashMap<String, String>) {
 
     m.insert("editor.status_saved".into(), "บันทึกแล้ว".into());
 
-    m.insert("editor.status_saved_tag".into(), " \u{2713}".into());
+    m.insert("editor.status_saved_tag".into(), " ".into());
 
     m.insert("editor.syntax_off".into(), "ไฮไลต์ไวยากรณ์: OFF".into());
 

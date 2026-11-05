@@ -1,6 +1,7 @@
 # Build artifacts
 /target
 /test
+/tests
 /installer
 
 # Temporary files
@@ -35,6 +36,14 @@ Thumbs.db
 
 # Mimocode AI tool config
 .mimocode/
+.kilo/
+.opencode/
+.workbuddy-ai/
+.freebuff/
+
 
 # Node.js
 node_modules/
+
+# Portable LLVM for the Windows ARM64 builds (packaging/find_clang.cmd)
+packaging/tools/

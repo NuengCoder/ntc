@@ -57,6 +57,11 @@ pub fn fill(m: &mut HashMap<String, String>) {
         "  http GET https://api.example.com/users -a admin:secret123".into(),
     );
 
+    m.insert(
+        "cmd.http.help_example7".into(),
+        "  http QUERY https://api.example.com/search --json '{\"q\":\"foo\",\"limit\":10}'".into(),
+    );
+
     m.insert("cmd.http.help_examples_title".into(), "ตัวอย่าง:".into());
 
     m.insert(
@@ -76,7 +81,7 @@ pub fn fill(m: &mut HashMap<String, String>) {
 
     m.insert(
         "cmd.http.help_methods".into(),
-        "  GET, POST, PUT, DELETE, PATCH, HEAD".into(),
+        "  GET, POST, PUT, DELETE, PATCH, HEAD, QUERY".into(),
     );
 
     m.insert("cmd.http.help_methods_title".into(), "เมธอด:".into());
@@ -184,6 +189,17 @@ pub fn fill(m: &mut HashMap<String, String>) {
     );
 
     m.insert("cmd.http.request_failed".into(), "{} {} ล้มเหลว".into());
+
+    m.insert(
+        "cmd.http.query_no_body".into(),
+        "คำเตือน: คำขอ QUERY ปกติต้องมี body (ใช้ --json หรือ -d)".into(),
+    );
+
+    m.insert(
+        "cmd.http.query_no_content_type".into(),
+        "คำเตือน: body ของ QUERY ไม่มี Content-Type; เซิร์ฟเวอร์ควรปฏิเสธ (เพิ่ม -H \"Content-Type: ...\")"
+            .into(),
+    );
 
     m.insert("cmd.http.saved_bytes".into(), "บันทึก {} ไบต์ไปยัง {}".into());
 

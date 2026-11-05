@@ -40,7 +40,8 @@ fn print_usage() -> Result<bool> {
 }
 
 fn resolve_path(path_str: &str, nav: &Navigator) -> PathBuf {
-    let p = Path::new(path_str);
+    let expanded = crate::utils::paths::expand_path_str(path_str);
+    let p = Path::new(&expanded);
     if p.is_absolute() {
         p.to_path_buf()
     } else {

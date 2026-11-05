@@ -40,7 +40,7 @@ pub fn fill(m: &mut HashMap<String, String>) {
 
     m.insert(
         "cmd.image_disabled".into(),
-        "图像转换不可用（'image2doc' 功能已禁用）。".into(),
+        "图像显示不可用（'image' 功能已禁用）。".into(),
     );
 
     m.insert("cmd.terminated".into(), "命令已终止（Ctrl+C）".into());

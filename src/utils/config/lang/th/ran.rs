@@ -34,7 +34,7 @@ pub fn fill(m: &mut HashMap<String, String>) {
 
     m.insert(
         "ran.desc_reserved".into(),
-        " init, deinit, help, list, ls \u{2014} ชื่อเหล่านี้ใช้เป็นชื่อ target ไม่ได้.".into(),
+        " init, deinit, help, list, ls, check, fmt \u{2014} ชื่อเหล่านี้ใช้เป็นชื่อ target ไม่ได้.".into(),
     );
 
     m.insert(
@@ -111,4 +111,73 @@ pub fn fill(m: &mut HashMap<String, String>) {
     m.insert("ran.section_vars".into(), "ตัวแปร:".into());
 
     m.insert("ran.terminated".into(), "คำสั่งสิ้นสุด (Ctrl+C)".into());
+
+    m.insert("ran.check_title".into(), "ran check กำลังวิเคราะห์ {}".into());
+
+    m.insert("ran.check_ok".into(), "{} ไม่มีปัญหา".into());
+
+    m.insert("ran.check_problems".into(), "พบ {} ปัญหาใน {}".into());
+
+    m.insert("ran.check_error".into(), "ข้อผิดพลาด".into());
+
+    m.insert("ran.check_hint".into(), "คำแนะนำ".into());
+
+    m.insert(
+        "ran.help_check_fmt".into(),
+        " ran check วิเคราะห์ {} และรายงานทุกปัญหาพร้อมบรรทัด".into(),
+    );
+
+    m.insert(
+        "ran.help_fmt".into(),
+        " ran fmt <toml|json|yaml> แปลง ranfile (-o <ไฟล์>, -y ข้ามคำถาม)".into(),
+    );
+
+    m.insert(
+        "ran.fmt.usage".into(),
+        "วิธีใช้: ran fmt <toml|json|yaml> [-o <ไฟล์>] [-y]".into(),
+    );
+
+    m.insert(
+        "ran.fmt.unknown".into(),
+        "ไม่รู้จักรูปแบบ '{}' ใช้ toml, json หรือ yaml".into(),
+    );
+
+    m.insert(
+        "ran.fmt.current".into(),
+        "รูปแบบ ranfile ที่ตั้งไว้: {} (ran init จะสร้าง {})".into(),
+    );
+
+    m.insert(
+        "ran.fmt.no_file".into(),
+        "ไม่พบ ranfile ที่นี่ ตั้งรูปแบบเป็น {} แล้ว; รัน `ran init` เพื่อสร้าง {}".into(),
+    );
+
+    m.insert("ran.fmt.already".into(), "{} เป็น {} อยู่แล้ว".into());
+
+    m.insert(
+        "ran.fmt.confirm".into(),
+        "แปลง {} เป็น {} \u{2192} {}? [y|n] ".into(),
+    );
+
+    m.insert(
+        "ran.fmt.skipped".into(),
+        "ไม่ได้เขียนไฟล์ `ran init` จะสร้าง {}".into(),
+    );
+
+    m.insert(
+        "ran.fmt.exists".into(),
+        "{} มีอยู่แล้ว \u{2014} ลบก่อนหรือใช้ -o <ไฟล์>".into(),
+    );
+
+    m.insert("ran.fmt.written".into(), "เขียนแล้ว {}".into());
+
+    m.insert(
+        "ran.fmt.old_kept".into(),
+        "{} ยังอยู่; `ran` จะเลือก {} ก่อน (ลบไฟล์เก่าเพื่อไม่ให้มีสอง ranfile)".into(),
+    );
+
+    m.insert(
+        "ran.fmt.no_terminal".into(),
+        "ไม่ใช่เทอร์มินัล: ใส่ -y เพื่อยืนยันการแปลง".into(),
+    );
 }

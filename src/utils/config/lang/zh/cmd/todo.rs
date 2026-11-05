@@ -38,6 +38,41 @@ pub fn fill(m: &mut HashMap<String, String>) {
     );
 
     m.insert(
+        "cmd.todo.help_move".into(),
+        "  todo move|mv <N> <M>    把第 N 条移到第 M 位（其余顺移）".into(),
+    );
+
+    m.insert(
+        "cmd.todo.help_replace".into(),
+        "  todo replace|rp <N> <M> 交换第 N 条和第 M 条".into(),
+    );
+
+    m.insert(
+        "cmd.todo.move_usage".into(),
+        "用法：todo move <选择序号> <目标序号>  — 均从 1 开始".into(),
+    );
+
+    m.insert(
+        "cmd.todo.replace_usage".into(),
+        "用法：todo replace <选择序号> <目标序号>  — 均从 1 开始".into(),
+    );
+
+    m.insert(
+        "cmd.todo.task_moved".into(),
+        "已将第 {} 条移到第 {} 位：{}".into(),
+    );
+
+    m.insert(
+        "cmd.todo.task_replaced".into(),
+        "已交换第 {} 条和第 {} 条：{} <-> {}".into(),
+    );
+
+    m.insert(
+        "cmd.todo.same_position".into(),
+        "第 {} 条已经在该位置".into(),
+    );
+
+    m.insert(
         "cmd.todo.help_show".into(),
         "  todo                    显示所有任务".into(),
     );

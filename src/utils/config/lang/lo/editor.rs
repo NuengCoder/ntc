@@ -26,7 +26,7 @@ pub fn fill(m: &mut HashMap<String, String>) {
 
     m.insert("editor.clipboard_empty".into(), "Clipboard ວ່າງເປົ່າ".into());
 
-    m.insert("editor.close_btn".into(), "\u{2715}".into());
+    m.insert("editor.close_btn".into(), "x".into());
 
     m.insert("editor.cmd_already_at_root".into(), "ຢູ່ root ແລ້ວ".into());
 
@@ -169,7 +169,7 @@ pub fn fill(m: &mut HashMap<String, String>) {
 
     m.insert(
         "editor.cmd_visual_hint".into(),
-        "Visual mode ກົດລູກສອນເພື່ອເລືອກ, Esc ເພື່ອອອກ".into(),
+        "Visual mode \u{2014} ກົດລູກສອນເພື່ອເລືອກ, Esc ເພື່ອອອກ".into(),
     );
 
     m.insert("editor.color_off".into(), "Color: OFF".into());
@@ -439,11 +439,11 @@ pub fn fill(m: &mut HashMap<String, String>) {
         "Unknown gmode command: '{}'".into(),
     );
 
-    m.insert("editor.hint_normal".into(), " i=insert v=visual f=find b=files e=nfe t=term g=gmode n=save c=copy Sh=select :cmd ?=help 0=exit".into());
+    m.insert("editor.hint_normal".into(), " ?=help  i=insert v=visual f=find b=files e=nfe t=term g=gmode n=save c=copy Sh=select :cmd 0=exit".into());
 
     m.insert(
         "editor.hint_normal_msg".into(),
-        " i=insert v=visual :cmd ?=help 0=exit".into(),
+        " ?=help  i=insert v=visual :cmd 0=exit".into(),
     );
 
     m.insert("editor.hint_query".into(), "Query: {}".into());
@@ -637,7 +637,7 @@ pub fn fill(m: &mut HashMap<String, String>) {
 
     m.insert("editor.mode_nfe".into(), "[Nfe]".into());
 
-    m.insert("editor.hint_nfe".into(), " hjkl/wasd/ລູກສອນ ເລື່ອນ · Enter ເປີດ · n ສ້າງຟາຍ · m ສ້າງ directories · r ເປັນຊື່ · d ລຶບ · i/v ແກ້ໄຂ · :=ຂະໜາด/Tabs · Esc ກັບ".into());
+    m.insert("editor.hint_nfe".into(), " hjkl/wasd/ລູກສອນ ເລື່ອນ · Enter ເປີດ · g/: file|dir|line · n ສ້າງຟາຍ · m ສ້າງ directories · r ເປັນຊື່ · d ລຶບ · i/v ແກ້ໄຂ · :=ຂະໜາด/Tabs · Esc ກັບ".into());
 
     m.insert(
         "editor.hint_nfe_cmd_actions".into(),
@@ -645,6 +645,17 @@ pub fn fill(m: &mut HashMap<String, String>) {
     );
 
     m.insert("editor.nfe_unknown".into(), "Unknown nfe command: '{}' (try size full|def|N% | n <file> | m <dir> | rmd <dir> | rmf <file> | i | v)".into());
+
+    m.insert("editor.nfe_file_jumped".into(), "ໄປທີ່ຟາຍ: {}".into());
+
+    m.insert("editor.nfe_dir_jumped".into(), "ໄປທີ່ໂຟນເດີ: {}".into());
+
+    m.insert("editor.nfe_line_jumped".into(), "ໄປທີ່ແຖວ {}".into());
+
+    m.insert(
+        "editor.nfe_cmd_usage".into(),
+        "ການໃຊ້: file <ຊື່ຟາຍ> | dir <ຊື່ໂຟນເດີ> | line <+N|-N|N>".into(),
+    );
 
     m.insert(
         "editor.nfe_rm_usage".into(),
@@ -1059,11 +1070,11 @@ pub fn fill(m: &mut HashMap<String, String>) {
 
     m.insert("editor.save_prompt".into(), "ບັນທຶກໄຟລ໌ [Y|N]?".into());
 
-    m.insert("editor.saved".into(), "ບັນທຶກແລ້ວ \u{2713}".into());
+    m.insert("editor.saved".into(), "ບັນທຶກແລ້ວ ".into());
 
-    m.insert("editor.saved_full".into(), " Saved ✓".into());
+    m.insert("editor.saved_full".into(), " Saved ".into());
 
-    m.insert("editor.saved_marker".into(), " \u{2713}".into());
+    m.insert("editor.saved_marker".into(), " ".into());
 
     m.insert("editor.scratch".into(), "[scratch]".into());
 
@@ -1082,7 +1093,7 @@ pub fn fill(m: &mut HashMap<String, String>) {
 
     m.insert("editor.status_saved".into(), "saved".into());
 
-    m.insert("editor.status_saved_tag".into(), " \u{2713}".into());
+    m.insert("editor.status_saved_tag".into(), " ".into());
 
     m.insert(
         "editor.syntax_off".into(),

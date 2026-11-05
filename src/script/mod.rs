@@ -1,3 +1,4 @@
+pub(crate) mod check;
 pub(crate) mod interp;
 pub(crate) mod parser;
 pub(crate) mod runner;
@@ -20,6 +21,7 @@ pub(crate) fn print_usage() {
     println!("{}", t!("scr.help_continue"));
     println!("{}", t!("scr.help_init"));
     println!("{}", t!("scr.help_ls"));
+    println!("{}", t!("check.help", "scr"));
     println!("{}", t!("scr.help_help"));
     println!();
     println!("{}", t!("scr.desc_set").yellow());

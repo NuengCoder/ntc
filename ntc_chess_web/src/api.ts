@@ -1,4 +1,4 @@
-import type { GameState, LegalTarget, PositionPreview, Settings } from './types'
+import type { BotStatus, GameState, LegalTarget, PositionPreview, Settings } from './types'
 
 async function api<T>(url: string, init?: RequestInit): Promise<T> {
   const res = await fetch(url, init)
@@ -34,11 +34,59 @@ export function postMove(from: string, to: string, promo?: string): Promise<Game
   })
 }
 
-export function postNew(tc: string): Promise<GameState> {
+export interface NewGameOptions {
+  mode?: 'human' | 'bot'
+  bot?: string
+  level?: 'easy' | 'normal' | 'hard' | 'master'
+  side?: 'white' | 'black' | 'random'
+}
+
+export function postNew(tc: string, opts?: NewGameOptions): Promise<GameState> {
   return api('/api/chess/new', {
     method: 'POST',
     headers: json,
-    body: JSON.stringify({ tc }),
+    body: JSON.stringify({ tc, ...opts }),
+  })
+}
+
+export function getBots(): Promise<{ bots: BotStatus[] }> {
+  return api('/api/chess/bots')
+}
+
+export function installBot(id: string): Promise<{ ok?: boolean; bots: BotStatus[]; error?: string }> {
+  return api('/api/chess/bots/install', {
+    method: 'POST',
+    headers: json,
+    body: JSON.stringify({ id }),
+  })
+}
+
+export function uninstallBot(
+  id: string,
+): Promise<{ ok?: boolean; bots: BotStatus[]; error?: string }> {
+  return api('/api/chess/bots/uninstall', {
+    method: 'POST',
+    headers: json,
+    body: JSON.stringify({ id }),
+  })
+}
+
+export function selectBotEngine(
+  id: string,
+  engine: string,
+): Promise<{ ok?: boolean; bots: BotStatus[]; error?: string }> {
+  return api('/api/chess/bots/select', {
+    method: 'POST',
+    headers: json,
+    body: JSON.stringify({ id, engine }),
+  })
+}
+
+export function postBotMove(ply: number): Promise<GameState> {
+  return api('/api/chess/bot-move', {
+    method: 'POST',
+    headers: json,
+    body: JSON.stringify({ ply }),
   })
 }
 

@@ -3,36 +3,13 @@ use std::collections::HashMap;
 pub fn fill(m: &mut HashMap<String, String>) {
     m.insert("cmd.image.cancelled".into(), "ยกเลิกแล้ว.".into());
 
-    m.insert("cmd.image.default_label".into(), "ค่าเริ่มต้น".into());
-
     m.insert("cmd.image.desc_cancel".into(), "  {}. ยกเลิก".into());
-
-    m.insert("cmd.image.desc_html".into(), "  {}. HTML".into());
-
-    m.insert("cmd.image.desc_json".into(), "  {}. JSON".into());
-
-    m.insert(
-        "cmd.image.desc_markdown".into(),
-        "  {}. Markdown (ค่าเริ่มต้น)".into(),
-    );
-
-    m.insert(
-        "cmd.image.desc_narrative".into(),
-        "  {}. คำอธิบายเชิงบรรยาย (สำหรับ AI)".into(),
-    );
-
-    m.insert("cmd.image.desc_txt".into(), "  {}. TXT".into());
 
     m.insert("cmd.image.enter_number".into(), "ป้อนตัวเลข: ".into());
 
     m.insert(
-        "cmd.image.missing_out_format".into(),
-        "ไม่พบรูปแบบหลัง 'out'.".into(),
-    );
-
-    m.insert(
-        "cmd.image.missing_to_format".into(),
-        "ไม่พบรูปแบบหลัง 'to'.".into(),
+        "cmd.image.no_ansi".into(),
+        "เทอร์มินัลนี้ไม่รองรับสี ANSI จึงแสดง '{}' ในเทอร์มินัลไม่ได้".into(),
     );
 
     m.insert(
@@ -49,8 +26,7 @@ pub fn fill(m: &mut HashMap<String, String>) {
 
     m.insert(
         "cmd.image.usage".into(),
-        "การใช้งาน: image <เส้นทาง> [display|show [--sixel]|to|out <รูปแบบ>] [--ocr] [--layout]"
-            .into(),
+        "การใช้งาน: image [display|show] [--sixel] [<เส้นทาง>]".into(),
     );
 
     m.insert(

@@ -41,7 +41,8 @@ pub fn fill(m: &mut HashMap<String, String>) {
 
     m.insert(
         "ran.desc_reserved".into(),
-        " init, deinit, help, list, ls \u{2014} these cannot be used as target names.".into(),
+        " init, deinit, help, list, ls, check, fmt \u{2014} these cannot be used as target names."
+            .into(),
     );
 
     m.insert(
@@ -129,5 +130,78 @@ pub fn fill(m: &mut HashMap<String, String>) {
     m.insert(
         "ran.terminated".into(),
         "Command terminated (Ctrl+C)".into(),
+    );
+
+    m.insert("ran.check_title".into(), "ran check interpreting {}".into());
+
+    m.insert("ran.check_ok".into(), "{} no problem".into());
+
+    m.insert(
+        "ran.check_problems".into(),
+        "{} problem(s) found in {}".into(),
+    );
+
+    m.insert("ran.check_error".into(), "error".into());
+
+    m.insert("ran.check_hint".into(), "hint".into());
+
+    m.insert(
+        "ran.help_check_fmt".into(),
+        " ran check Interpret {} and report every problem with its line".into(),
+    );
+
+    m.insert(
+        "ran.help_fmt".into(),
+        " ran fmt <toml|json|yaml> Convert the ranfile (-o <file>, -y to skip the prompt)".into(),
+    );
+
+    m.insert(
+        "ran.fmt.usage".into(),
+        "Usage: ran fmt <toml|json|yaml> [-o <file>] [-y]".into(),
+    );
+
+    m.insert(
+        "ran.fmt.unknown".into(),
+        "Unknown format '{}'. Use toml, json or yaml.".into(),
+    );
+
+    m.insert(
+        "ran.fmt.current".into(),
+        "Ranfile format preference: {} (ran init creates {})".into(),
+    );
+
+    m.insert(
+        "ran.fmt.no_file".into(),
+        "No ranfile here. Preference is now {}; run `ran init` to create {}.".into(),
+    );
+
+    m.insert("ran.fmt.already".into(), "{} is already {}.".into());
+
+    m.insert(
+        "ran.fmt.confirm".into(),
+        "Convert {} to {} \u{2192} {}? [y|n] ".into(),
+    );
+
+    m.insert(
+        "ran.fmt.skipped".into(),
+        "Nothing written. `ran init` will create {}.".into(),
+    );
+
+    m.insert(
+        "ran.fmt.exists".into(),
+        "{} already exists \u{2014} remove it or pass -o <file>.".into(),
+    );
+
+    m.insert("ran.fmt.written".into(), "Wrote {}".into());
+
+    m.insert(
+        "ran.fmt.old_kept".into(),
+        "{} is still there; `ran` now prefers {} (delete the old file to avoid two ranfiles)."
+            .into(),
+    );
+
+    m.insert(
+        "ran.fmt.no_terminal".into(),
+        "Not a terminal: pass -y to confirm the conversion.".into(),
     );
 }

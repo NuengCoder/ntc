@@ -98,7 +98,8 @@ struct BodySource {
 /// path exists). `--body-file` forces the file interpretation.
 fn read_body_source(raw: &str, file_arg: Option<&str>) -> Result<BodySource> {
     if let Some(path_str) = file_arg {
-        return read_body_file(Path::new(path_str));
+        let expanded = crate::utils::paths::expand_path_str(path_str);
+        return read_body_file(Path::new(&expanded));
     }
     if raw == "-" {
         let content = crate::shell::stdin::read_to_string()
@@ -109,10 +110,11 @@ fn read_body_source(raw: &str, file_arg: Option<&str>) -> Result<BodySource> {
             file: None,
         });
     }
-    if BodyFormat::from_extension(Path::new(raw)).is_some() {
+    let expanded_raw = crate::utils::paths::expand_path_str(raw);
+    if BodyFormat::from_extension(Path::new(&expanded_raw)).is_some() {
         // A body-file extension means the value is a path, never a literal
         // body; a missing file is an error so a typo can't mail the filename.
-        return read_body_file(Path::new(raw));
+        return read_body_file(Path::new(&expanded_raw));
     }
     Ok(BodySource {
         content: raw.to_string(),

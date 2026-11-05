@@ -4,6 +4,36 @@ use std::time::SystemTime;
 
 pub const DEFAULT_PREVIEW_WIDTH_PCT: usize = 40;
 
+/// Find mode stops after this many hits so typing stays responsive.
+pub const FIND_LIMIT: usize = 200;
+/// And it never descends deeper than this.
+pub const FIND_MAX_DEPTH: usize = 20;
+
+/// Path as painted in the UI: the Windows verbatim (`\\?\`) prefix is
+/// stripped so paths read normally, and separators are left as the OS
+/// renders them elsewhere.
+pub fn display_path(path: &Path) -> String {
+    crate::filetype::strip_unc_prefix(path)
+}
+
+/// Ordering for one list of entries: the active sort column, then the name
+/// as a tie-break so `S` always reverses both the directory and the file
+/// block (directories have no size/extension of their own).
+pub fn compare_entries(a: &FileEntry, b: &FileEntry, mode: SortMode, desc: bool) -> Ordering {
+    let primary = match mode {
+        SortMode::Name => a.name.to_lowercase().cmp(&b.name.to_lowercase()),
+        SortMode::Size => a.size.cmp(&b.size),
+        SortMode::Date => a.modified.cmp(&b.modified),
+        SortMode::Type => a.extension().cmp(&b.extension()),
+    };
+    let cmp = primary.then_with(|| a.name.to_lowercase().cmp(&b.name.to_lowercase()));
+    if desc {
+        cmp.reverse()
+    } else {
+        cmp
+    }
+}
+
 #[derive(Clone, Copy, PartialEq)]
 pub enum SortMode {
     Name,
@@ -38,9 +68,28 @@ pub enum PanelFocus {
     Preview,
 }
 
+/// Where keystrokes go. The listing shown is always `entries`; each mode
+/// only decides what a key does and what the bottom bar says.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum NfeMode {
+    /// Plain directory listing.
+    Browse,
+    /// Recursive find from the directory `f` was pressed in: the results
+    /// (root-relative paths) replace the listing.
+    Find,
+    /// Live filter box (`/`): narrows the listing or the find results as
+    /// the text is typed.
+    Filter,
+    /// Command prompt (`g` / `:`): `file`, `dir`, `line`.
+    Prompt,
+}
+
 #[derive(Clone)]
 pub struct FileEntry {
     pub name: String,
+    /// Text painted in the list: the bare name in a directory listing, the
+    /// find-root-relative path in find mode.
+    pub display: String,
     pub path: PathBuf,
     pub is_dir: bool,
     pub size: u64,
@@ -83,12 +132,19 @@ impl FileEntry {
         let name = path.file_name()?.to_string_lossy().to_string();
         let meta = std::fs::metadata(path).ok()?;
         Some(Self {
+            display: name.clone(),
             name,
             path: path.to_path_buf(),
             is_dir: meta.is_dir(),
             size: meta.len(),
             modified: meta.modified().unwrap_or(SystemTime::UNIX_EPOCH),
         })
+    }
+
+    /// Paint a different row text (find results show their relative path).
+    pub fn with_display(mut self, display: impl Into<String>) -> Self {
+        self.display = display.into();
+        self
     }
 
     pub fn extension(&self) -> &str {
@@ -130,7 +186,7 @@ pub struct NfeState {
     pub viewer_ox: u32,
     pub viewer_oy: u32,
     /// Decoded source kept for re-gridding on zoom/resize.
-    #[cfg(feature = "image2doc")]
+    #[cfg(feature = "image")]
     pub viewer_src: Option<crate::nfe::image::DecodedImage>,
     /// Cached Sixel sequence + the exact key it was built for.
     /// Re-blit only on change (encode runs ~100ms at 1MP).
@@ -155,14 +211,24 @@ pub struct NfeState {
     // Help overlay
     pub help_visible: bool,
 
-    // Go-to-line prompt
-    pub line_prompt: String,
-    pub line_prompt_active: bool,
-
-    // Recursive find
+    // Input mode + prompt / find / filter state
+    pub mode: NfeMode,
+    /// True while `entries` holds find results instead of `current_dir`.
+    pub in_find: bool,
+    pub find_root: PathBuf,
     pub find_query: String,
     pub find_results: Vec<FileEntry>,
-    pub find_active: bool,
+    /// Find mode focus: `false` = typing the query, `true` = walking the
+    /// results with hjkl/arrows.
+    pub find_nav: bool,
+    pub saved_selected: usize,
+    pub saved_scroll: usize,
+    /// `g` / `:` command line: buffer, caret and Tab-cycle cursor.
+    pub prompt_buf: String,
+    pub prompt_cursor: usize,
+    pub prompt_cycle: usize,
+    pub prompt_cycle_start: usize,
+    pub prompt_cycle_tokens: Vec<String>,
 
     // Git status: entry name -> status char (M/A/D/?/U)
     pub git_status: std::collections::HashMap<String, char>,
@@ -183,6 +249,7 @@ impl NfeState {
         // navigation (`"src".parent()` is `Some("")` — an empty dir
         // with no escape) and every CWD-relative resolution after it.
         let dir = std::fs::canonicalize(&dir).unwrap_or(dir);
+        let find_root = dir.clone();
         let mut s = Self {
             current_dir: dir,
             entries: Vec::new(),
@@ -209,7 +276,7 @@ impl NfeState {
             zoom_idx: ZOOM_FIT_IDX,
             viewer_ox: 0,
             viewer_oy: 0,
-            #[cfg(feature = "image2doc")]
+            #[cfg(feature = "image")]
             viewer_src: None,
             viewer_sixel: None,
             viewer_kitty: None,
@@ -222,11 +289,19 @@ impl NfeState {
             status_msg: None,
             status_msg_timer: std::time::Instant::now(),
             help_visible: false,
-            line_prompt: String::new(),
-            line_prompt_active: false,
+            mode: NfeMode::Browse,
+            in_find: false,
+            find_root,
             find_query: String::new(),
             find_results: Vec::new(),
-            find_active: false,
+            find_nav: false,
+            saved_selected: 0,
+            saved_scroll: 0,
+            prompt_buf: String::new(),
+            prompt_cursor: 0,
+            prompt_cycle: usize::MAX,
+            prompt_cycle_start: 0,
+            prompt_cycle_tokens: Vec::new(),
             git_status: std::collections::HashMap::new(),
         };
         s.reload();
@@ -266,52 +341,41 @@ impl NfeState {
                 Err(_) => (Vec::new(), Vec::new()),
             };
 
-        let sort_fn = |a: &FileEntry, b: &FileEntry, mode: SortMode, desc: bool| -> Ordering {
-            let cmp = match mode {
-                SortMode::Name => a.name.to_lowercase().cmp(&b.name.to_lowercase()),
-                SortMode::Size => a.size.cmp(&b.size),
-                SortMode::Date => a.modified.cmp(&b.modified),
-                SortMode::Type => a.extension().cmp(&b.extension()),
-            };
-            if desc {
-                cmp.reverse()
-            } else {
-                cmp
-            }
-        };
-
-        let mode = self.sort_mode;
-        let desc = self.sort_desc;
-        dirs.sort_by(|a, b| sort_fn(a, b, mode, desc));
-        files.sort_by(|a, b| sort_fn(a, b, mode, desc));
-
-        let filter = self.filter.to_lowercase();
-        let all: Vec<FileEntry> = if filter.is_empty() {
-            let mut all = Vec::with_capacity(dirs.len() + files.len());
-            all.extend(dirs.clone());
-            all.extend(files.clone());
-            all
-        } else {
-            let mut all: Vec<FileEntry> = dirs
-                .clone()
-                .into_iter()
-                .chain(files.clone())
-                .filter(|e| e.name.to_lowercase().contains(&filter))
-                .collect();
-            all.sort_by(|a, b| sort_fn(a, b, mode, desc));
-            all
-        };
+        let (mode, desc) = (self.sort_mode, self.sort_desc);
+        dirs.sort_by(|a, b| compare_entries(a, b, mode, desc));
+        files.sort_by(|a, b| compare_entries(a, b, mode, desc));
 
         self.dirs = dirs;
         self.files = files;
-        self.entries = all;
+        self.rebuild_entries();
+
+        self.refresh_git_status();
+    }
+
+    /// Rebuild `entries` from the current base (directory listing, or the
+    /// find results) with the live filter applied. Cheap: no directory
+    /// re-read, no git probe — safe to call on every keystroke.
+    pub fn rebuild_entries(&mut self) {
+        let filter = self.filter.to_lowercase();
+        // Rows are matched on the painted text: the plain name in a
+        // listing, the relative path in find mode.
+        let keep = |e: &FileEntry| filter.is_empty() || e.display.to_lowercase().contains(&filter);
+
+        let mut entries = Vec::new();
+        if self.in_find {
+            entries.extend(self.find_results.iter().filter(|e| keep(e)).cloned());
+        } else {
+            entries.extend(self.dirs.iter().filter(|e| keep(e)).cloned());
+            entries.extend(self.files.iter().filter(|e| keep(e)).cloned());
+        }
+
+        self.entries = entries;
         self.selected = self.selected.min(self.entries.len().saturating_sub(1));
         self.scroll = self.scroll.min(self.entries.len().saturating_sub(1));
         self.preview_content.clear();
         self.preview_file = None;
         self.preview_image = None;
-
-        self.refresh_git_status();
+        self.panel_seq = None;
     }
 
     fn refresh_git_status(&mut self) {
@@ -339,14 +403,25 @@ impl NfeState {
     pub fn enter_dir(&mut self) {
         if let Some(entry) = self.current_entry() {
             if entry.is_dir {
-                self.current_dir = entry.path.clone();
-                self.selected = 0;
-                self.scroll = 0;
-                self.preview_content.clear();
-                self.preview_image = None;
-                self.reload();
+                let path = entry.path.clone();
+                self.adopt_dir(&path);
             }
         }
+    }
+
+    /// Move to `path` as a plain directory listing: find mode is left,
+    /// the filter box is emptied (a filter belongs to the listing it was
+    /// typed in) and the selection goes to the top.
+    fn adopt_dir(&mut self, path: &Path) {
+        self.mode = NfeMode::Browse;
+        self.leave_find();
+        self.filter.clear();
+        self.current_dir = std::fs::canonicalize(path).unwrap_or_else(|_| path.to_path_buf());
+        self.selected = 0;
+        self.scroll = 0;
+        self.preview_content.clear();
+        self.preview_image = None;
+        self.reload();
     }
 
     pub fn go_to_parent(&mut self) {
@@ -362,10 +437,8 @@ impl NfeState {
                 .filter(|p| p.is_dir())
                 .or_else(dirs::home_dir)
                 .unwrap_or_else(|| PathBuf::from("."));
-            self.current_dir = std::fs::canonicalize(&fallback).unwrap_or(fallback);
-            self.selected = 0;
-            self.scroll = 0;
-            self.reload();
+            let fallback = std::fs::canonicalize(&fallback).unwrap_or(fallback);
+            self.adopt_dir(&fallback);
             self.set_status("Recovered to a readable directory".to_string());
             return;
         }
@@ -373,8 +446,7 @@ impl NfeState {
             .current_dir
             .file_name()
             .map(|n| n.to_string_lossy().to_string());
-        self.current_dir = std::fs::canonicalize(&target).unwrap_or(target);
-        self.reload();
+        self.adopt_dir(&target);
         if let Some(name) = prev_name {
             if let Some(idx) = self.entries.iter().position(|e| e.name == name) {
                 self.selected = idx;
@@ -385,13 +457,7 @@ impl NfeState {
 
     pub fn go_to_dir(&mut self, path: &Path) {
         if path.exists() && path.is_dir() {
-            // Absolute only (see `new`): relative input must already be
-            // resolved against `current_dir` by the caller.
-            self.current_dir = std::fs::canonicalize(path).unwrap_or_else(|_| path.to_path_buf());
-            self.selected = 0;
-            self.scroll = 0;
-            self.preview_image = None;
-            self.reload();
+            self.adopt_dir(path);
         } else {
             self.set_status(format!("No such directory: {}", path.display()));
         }
@@ -514,7 +580,7 @@ impl NfeState {
                 return false;
             }
         };
-        #[cfg(feature = "image2doc")]
+        #[cfg(feature = "image")]
         {
             match crate::nfe::image::decode_for_viewer(&entry.path) {
                 Ok(src) => {
@@ -537,12 +603,13 @@ impl NfeState {
                         crate::nfe::sixel::PixelBackend::Sextant => "sextants",
                     };
                     // Legacy console gets an actionable hint, not just a
-                    // backend name: pixels need WT (W) or the OS viewer (o).
+                    // backend name: text sextants work, real pixels need the
+                    // OS viewer (`o`).
                     if backend == crate::nfe::sixel::PixelBackend::Sextant
                         && crate::nfe::sixel::is_legacy_console(&crate::nfe::sixel::snapshot_env())
                     {
                         self.set_status(format!(
-                            "Image view: {} ({}) — legacy console: W reopens in Windows Terminal, o uses the OS viewer",
+                            "Image view: {} ({}) — legacy console: o opens the image in the OS viewer",
                             label, reason
                         ));
                     } else {
@@ -556,7 +623,7 @@ impl NfeState {
                 }
             }
         }
-        #[cfg(not(feature = "image2doc"))]
+        #[cfg(not(feature = "image"))]
         {
             let _ = entry;
             self.set_status("Image view unavailable in this build".to_string());
@@ -573,7 +640,7 @@ impl NfeState {
         // NOTE: viewer_kitty is intentionally kept: the next normal
         // render consumes it to emit the Kitty delete (Kitty placements
         // persist as terminal objects — text repaint cannot erase them).
-        #[cfg(feature = "image2doc")]
+        #[cfg(feature = "image")]
         {
             self.viewer_src = None;
         }
@@ -663,56 +730,6 @@ impl NfeState {
         }
     }
 
-    /// WT relaunch argv for the current directory, split for testability:
-    /// `wt.exe new-tab -d <cwd> --title NFE <ntc.exe> --explorer <dir>`.
-    /// `None` when relaunch makes no sense (non-Windows, or pixels
-    /// already work in this terminal).
-    pub fn wt_relaunch_argv(&self) -> Option<Vec<String>> {
-        #[cfg(not(windows))]
-        {
-            let _ = self;
-            return None;
-        }
-        #[cfg(windows)]
-        {
-            use crate::nfe::sixel::PixelBackend;
-            if self.viewer_backend() != PixelBackend::Sextant {
-                return None;
-            }
-            let exe = std::env::current_exe().ok()?;
-            Some(vec![
-                "new-tab".to_string(),
-                "-d".to_string(),
-                self.current_dir.to_string_lossy().to_string(),
-                "--title".to_string(),
-                "NFE".to_string(),
-                exe.to_string_lossy().to_string(),
-                "--explorer".to_string(),
-                self.current_dir.to_string_lossy().to_string(),
-            ])
-        }
-    }
-
-    /// Relaunch this session inside Windows Terminal (conhost escape
-    /// hatch: real Sixel pixels there). Returns true when spawned —
-    /// the caller should quit afterwards for a clean handoff.
-    pub fn relaunch_in_wt(&mut self) -> bool {
-        let Some(argv) = self.wt_relaunch_argv() else {
-            self.set_status("Already pixel-capable (or not Windows)".to_string());
-            return false;
-        };
-        match std::process::Command::new("wt.exe").args(&argv).spawn() {
-            Ok(_) => {
-                self.set_status("Reopened in Windows Terminal".to_string());
-                true
-            }
-            Err(_) => {
-                self.set_status("Windows Terminal (wt.exe) not found".to_string());
-                false
-            }
-        }
-    }
-
     /// Reset zoom to fit.
     pub fn reset_viewer_zoom(&mut self) {
         self.zoom_idx = ZOOM_FIT_IDX;
@@ -768,7 +785,7 @@ impl NfeState {
     /// text-sample pan model) and fit it into `tw × th` device pixels.
     /// Shared by the Sixel and Kitty pixel paths. Returns the fitted
     /// image plus its pixel size, or `None` when the rect is empty.
-    #[cfg(feature = "image2doc")]
+    #[cfg(feature = "image")]
     fn viewer_fitted_crop(
         &self,
         cols: usize,
@@ -835,7 +852,7 @@ impl NfeState {
     /// the last blit (leave the screen alone) or when unavailable.
     /// `bg` fills register 0 (letterbox). Cell size is a parameter so
     /// tests never query the terminal.
-    #[cfg(feature = "image2doc")]
+    #[cfg(feature = "image")]
     pub fn sixel_seq(
         &mut self,
         cols: usize,
@@ -891,7 +908,7 @@ impl NfeState {
     /// Returns the chunks plus centering padding, or `None` when
     /// unchanged since the last blit. PNG payload at viewport device
     /// pixels; `c`/`r` force the cell fit on display.
-    #[cfg(feature = "image2doc")]
+    #[cfg(feature = "image")]
     pub fn kitty_seq(
         &mut self,
         cols: usize,
@@ -940,7 +957,7 @@ impl NfeState {
     /// Fit-decode `path` into at most `w × h` cells at `cw × ch`
     /// device pixels (aspect kept). Shared by both panel pixel paths.
     /// Returns the fitted image plus its pixel size.
-    #[cfg(feature = "image2doc")]
+    #[cfg(feature = "image")]
     fn panel_fitted(
         &self,
         path: &Path,
@@ -974,7 +991,7 @@ impl NfeState {
     /// Build the panel pixel payload for `path` at `w × h` cells and
     /// cache it under its key. Sextant backend builds nothing (the
     /// text grid path handles it). Overwrites any previous entry.
-    #[cfg(feature = "image2doc")]
+    #[cfg(feature = "image")]
     pub fn build_panel_seq(
         &mut self,
         path: &Path,
@@ -1038,7 +1055,7 @@ impl NfeState {
     /// The sample + pan math always runs (the Sixel path derives its
     /// crop from it); the text grid is skipped when Sixel is active.
     pub fn regrid_viewer(&mut self) {
-        #[cfg(feature = "image2doc")]
+        #[cfg(feature = "image")]
         {
             use crate::nfe::image::ImageMode;
             use crate::nfe::sixel::PixelBackend;
@@ -1085,7 +1102,7 @@ impl NfeState {
                 ),
             });
         }
-        #[cfg(not(feature = "image2doc"))]
+        #[cfg(not(feature = "image"))]
         {
             self.viewer_grid = None;
         }
@@ -1096,14 +1113,25 @@ impl NfeState {
         self.reload();
     }
 
+    /// `s`: next sort column. Both blocks (directories, files) and the
+    /// find results are re-sorted so the header always tells the truth.
     pub fn cycle_sort(&mut self) {
         self.sort_mode = self.sort_mode.next();
-        self.reload();
+        self.apply_sort();
+        self.set_status(format!("Sort: {}", self.sort_label()));
     }
 
+    /// `S`: flip the sort direction. Directories reverse too.
     pub fn toggle_sort_desc(&mut self) {
         self.sort_desc = !self.sort_desc;
-        self.reload();
+        self.apply_sort();
+        self.set_status(format!("Sort: {}", self.sort_label()));
+    }
+
+    /// `Name^` / `Size v` — the header label for the active sort.
+    pub fn sort_label(&self) -> String {
+        let arrow = if self.sort_desc { "v" } else { "^" };
+        format!("{} {}", self.sort_mode.label(), arrow)
     }
 
     pub fn refresh(&mut self) {
@@ -1116,132 +1144,318 @@ impl NfeState {
         self.help_visible = !self.help_visible;
     }
 
-    // ── Go-to-Line prompt ──
+    // ── Filter box (`/`) ──
 
-    pub fn start_line_prompt(&mut self) {
-        self.line_prompt = String::new();
-        self.line_prompt_active = true;
+    /// Open the filter box. Whatever text is already there stays live, so
+    /// `/` refines an active filter instead of starting over.
+    pub fn start_filter(&mut self) {
+        self.mode = NfeMode::Filter;
     }
 
-    pub fn cancel_line_prompt(&mut self) {
-        self.line_prompt.clear();
-        self.line_prompt_active = false;
+    /// Leave the filter box but keep the filter applied.
+    pub fn finish_filter(&mut self) {
+        if self.mode == NfeMode::Filter {
+            self.mode = self.listing_mode();
+        }
     }
 
-    pub fn execute_line_jump(&mut self) {
-        let input = self.line_prompt.trim();
-        if input.is_empty() {
-            self.cancel_line_prompt();
+    /// Cancel the filter box and show the whole listing again.
+    pub fn cancel_filter(&mut self) {
+        self.filter.clear();
+        self.selected = 0;
+        self.scroll = 0;
+        self.rebuild_entries();
+        self.finish_filter();
+    }
+
+    /// The mode the listing belongs to (find results keep find mode).
+    pub fn listing_mode(&self) -> NfeMode {
+        if self.in_find {
+            NfeMode::Find
+        } else {
+            NfeMode::Browse
+        }
+    }
+
+    /// Append to the filter and re-filter at once — no Enter needed.
+    pub fn filter_push(&mut self, c: char) {
+        self.filter.push(c);
+        self.refilter();
+    }
+
+    pub fn filter_backspace(&mut self) {
+        self.filter.pop();
+        self.refilter();
+    }
+
+    fn refilter(&mut self) {
+        self.selected = 0;
+        self.scroll = 0;
+        self.rebuild_entries();
+    }
+
+    // ── Recursive find mode (`f`) ──
+
+    /// Enter find mode: the search starts at the directory `f` was pressed
+    /// in, and its results (shown as relative paths) replace the listing.
+    pub fn start_find(&mut self) {
+        if self.in_find {
             return;
         }
-        if let Some(rest) = input.strip_prefix('+') {
-            if let Ok(n) = rest.parse::<usize>() {
-                self.scroll_down(n);
-            }
-        } else if let Some(rest) = input.strip_prefix('-') {
-            if let Ok(n) = rest.parse::<usize>() {
-                self.scroll_up(n);
-            }
-        } else if let Ok(n) = input.parse::<usize>() {
-            if n > 0 {
-                let idx = n
-                    .saturating_sub(1)
-                    .min(self.entries.len().saturating_sub(1));
-                self.selected = idx;
-                self.scroll_to_selected();
-            }
-        }
-        self.cancel_line_prompt();
-    }
-
-    // ── Recursive Find ──
-
-    pub fn start_find(&mut self) {
-        self.find_query = String::new();
-        self.find_results.clear();
-        self.find_active = true;
-    }
-
-    pub fn cancel_find(&mut self) {
+        self.saved_selected = self.selected;
+        self.saved_scroll = self.scroll;
+        self.in_find = true;
+        self.mode = NfeMode::Find;
+        self.find_nav = false;
+        self.find_root = self.current_dir.clone();
         self.find_query.clear();
         self.find_results.clear();
-        self.find_active = false;
-        self.reload();
+        self.filter.clear();
+        self.entries.clear();
+        self.selected = 0;
+        self.scroll = 0;
+        self.preview_content.clear();
+        self.preview_file = None;
+        self.preview_image = None;
+        self.panel_seq = None;
     }
 
+    /// Leave find mode and restore the directory listing it replaced.
+    pub fn cancel_find(&mut self) {
+        self.mode = NfeMode::Browse;
+        self.leave_find();
+    }
+
+    /// Drop the find result set and rebuild the directory listing.
+    fn leave_find(&mut self) {
+        if !self.in_find {
+            return;
+        }
+        self.in_find = false;
+        self.find_query.clear();
+        self.find_results.clear();
+        self.find_nav = false;
+        self.selected = self.saved_selected;
+        self.scroll = self.saved_scroll;
+        self.rebuild_entries();
+    }
+
+    /// Re-run the search for the current query. Bounded to [`FIND_LIMIT`]
+    /// hits and [`FIND_MAX_DEPTH`] levels so typing stays responsive.
     pub fn update_find(&mut self) {
+        self.find_results.clear();
+        self.entries.clear();
+        self.selected = 0;
+        self.scroll = 0;
+        self.preview_content.clear();
+        self.preview_file = None;
+        self.preview_image = None;
         if self.find_query.is_empty() {
-            self.find_results.clear();
             return;
         }
         let query = self.find_query.to_lowercase();
-        let show_hidden = self.show_hidden;
-        let root = self.current_dir.clone();
+        let root = self.find_root.clone();
         let mut results = Vec::new();
-
-        if let Ok(entries) = std::fs::read_dir(&root) {
-            for entry in entries.flatten() {
-                let path = entry.path();
-                if !show_hidden {
-                    if let Some(name) = path.file_name() {
-                        if name.to_string_lossy().starts_with('.') {
-                            continue;
-                        }
-                    }
-                }
-                let name = path
-                    .file_name()
-                    .map(|n| n.to_string_lossy().to_string())
-                    .unwrap_or_default();
-                if name.to_lowercase().contains(&query) {
-                    if let Some(fe) = FileEntry::from_path(&path) {
-                        results.push(fe);
-                    }
-                }
-                if path.is_dir() {
-                    Self::find_recursive(&path, &query, show_hidden, &mut results, 0);
-                }
-            }
-        }
-
-        results.truncate(200);
+        Self::find_recursive(&root, &root, &query, self.show_hidden, &mut results, 0);
         self.find_results = results;
+        self.rebuild_entries();
+    }
+
+    /// Move the find selection by `delta` rows (PageUp/PageDown use the
+    /// page height).
+    pub fn find_move(&mut self, delta: isize) {
+        if self.entries.is_empty() {
+            return;
+        }
+        let last = self.entries.len() - 1;
+        let next = (self.selected as isize + delta).clamp(0, last as isize) as usize;
+        self.selected = next;
+        self.scroll_to_selected();
+    }
+
+    /// Navigate to the selected find result. Directories are entered;
+    /// files get their parent listed with the file selected. Either way
+    /// find mode ends, so the explorer is back to a normal listing.
+    pub fn accept_find(&mut self) {
+        let Some(entry) = self.current_entry().cloned() else {
+            self.set_status("Nothing to open — type to search first".to_string());
+            return;
+        };
+        if entry.is_dir {
+            self.go_to_dir(&entry.path);
+            return;
+        }
+        let Some(parent) = entry.path.parent().map(|p| p.to_path_buf()) else {
+            self.set_status(format!("Cannot open: {}", entry.path.display()));
+            return;
+        };
+        let name = entry.name.clone();
+        self.go_to_dir(&parent);
+        if let Some(idx) = self.entries.iter().position(|e| e.name == name) {
+            self.selected = idx;
+            self.scroll_to_selected();
+        }
+        self.set_status(format!("Found: {}", display_path(&entry.path)));
     }
 
     fn find_recursive(
+        root: &Path,
         dir: &Path,
         query: &str,
         show_hidden: bool,
         results: &mut Vec<FileEntry>,
         depth: usize,
     ) {
-        if depth > 20 {
+        if depth > FIND_MAX_DEPTH || results.len() >= FIND_LIMIT {
             return;
         }
-        if let Ok(entries) = std::fs::read_dir(dir) {
+        let Ok(entries) = std::fs::read_dir(dir) else {
+            return;
+        };
+        for entry in entries.flatten() {
+            if results.len() >= FIND_LIMIT {
+                return;
+            }
+            let path = entry.path();
+            let name = entry.file_name().to_string_lossy().to_string();
+            if !show_hidden && name.starts_with('.') {
+                continue;
+            }
+            if name.to_lowercase().contains(query) {
+                if let Some(fe) = FileEntry::from_path(&path) {
+                    // The row shows where the hit lives, relative to the
+                    // directory find mode was started from.
+                    let display = path
+                        .strip_prefix(root)
+                        .unwrap_or(&path)
+                        .to_string_lossy()
+                        .replace('\\', "/");
+                    results.push(fe.with_display(display));
+                }
+            }
+            if path.is_dir() {
+                Self::find_recursive(root, &path, query, show_hidden, results, depth + 1);
+            }
+        }
+    }
+
+    // ── Line jump (`line` command, `l` shortcut) ──
+
+    /// Move the selection to row `N` (1-based) or by `+N` / `-N`.
+    /// Returns false when the text is not a line target.
+    pub fn jump_line(&mut self, input: &str) -> bool {
+        let input = input.trim();
+        if let Some(rest) = input.strip_prefix('+') {
+            match rest.parse::<usize>() {
+                Ok(n) => {
+                    self.scroll_down(n);
+                    true
+                }
+                Err(_) => false,
+            }
+        } else if let Some(rest) = input.strip_prefix('-') {
+            match rest.parse::<usize>() {
+                Ok(n) => {
+                    self.scroll_up(n);
+                    true
+                }
+                Err(_) => false,
+            }
+        } else {
+            match input.parse::<usize>() {
+                Ok(n) if n > 0 => {
+                    let idx = n
+                        .saturating_sub(1)
+                        .min(self.entries.len().saturating_sub(1));
+                    self.selected = idx;
+                    self.scroll_to_selected();
+                    true
+                }
+                _ => false,
+            }
+        }
+    }
+
+    // ── Sorting ──
+
+    /// Sort the active base list (directories + files, or find results).
+    fn sort_base(&mut self) {
+        let (mode, desc) = (self.sort_mode, self.sort_desc);
+        self.dirs.sort_by(|a, b| compare_entries(a, b, mode, desc));
+        self.files.sort_by(|a, b| compare_entries(a, b, mode, desc));
+        self.find_results
+            .sort_by(|a, b| compare_entries(a, b, mode, desc));
+    }
+
+    /// Re-sort and rebuild the visible list, keeping the cursor on the
+    /// same entry when it is still listed.
+    fn apply_sort(&mut self) {
+        let keep = self.current_entry().map(|e| e.path.clone());
+        self.sort_base();
+        self.rebuild_entries();
+        if let Some(path) = keep {
+            if let Some(idx) = self.entries.iter().position(|e| e.path == path) {
+                self.selected = idx;
+            }
+        }
+        self.scroll_to_selected();
+    }
+
+    /// First entry under `current_dir` matching `name`: an exact
+    /// (case-insensitive) name wins anywhere in the tree, otherwise the
+    /// first substring hit. `want_dir` restricts the search to dirs
+    /// (`Some(true)`), files (`Some(false)`) or anything (`None`).
+    pub(crate) fn find_match(&self, name: &str, want_dir: Option<bool>) -> Option<PathBuf> {
+        let needle = name.trim().to_lowercase();
+        if needle.is_empty() {
+            return None;
+        }
+        let mut queue = std::collections::VecDeque::new();
+        queue.push_back((self.current_dir.clone(), 0usize));
+        let mut partial: Option<PathBuf> = None;
+        while let Some((dir, depth)) = queue.pop_front() {
+            if depth > FIND_MAX_DEPTH {
+                continue;
+            }
+            let Ok(entries) = std::fs::read_dir(&dir) else {
+                continue;
+            };
             for entry in entries.flatten() {
                 let path = entry.path();
-                if !show_hidden {
-                    if let Some(name) = path.file_name() {
-                        if name.to_string_lossy().starts_with('.') {
-                            continue;
-                        }
+                let is_dir = entry.file_type().map(|t| t.is_dir()).unwrap_or(false);
+                if want_dir.map(|w| w == is_dir).unwrap_or(true) {
+                    let candidate = entry.file_name().to_string_lossy().to_lowercase();
+                    if candidate == needle {
+                        return Some(path);
+                    }
+                    if partial.is_none() && candidate.contains(&needle) {
+                        partial = Some(path.clone());
                     }
                 }
-                let name = path
-                    .file_name()
-                    .map(|n| n.to_string_lossy().to_string())
-                    .unwrap_or_default();
-                if name.to_lowercase().contains(query) && results.len() < 200 {
-                    if let Some(fe) = FileEntry::from_path(&path) {
-                        results.push(fe);
-                    }
-                }
-                if path.is_dir() && results.len() < 200 {
-                    Self::find_recursive(&path, query, show_hidden, results, depth + 1);
+                if is_dir {
+                    queue.push_back((path, depth + 1));
                 }
             }
         }
+        partial
+    }
+
+    /// List `path`'s parent and put the cursor on `path`.
+    pub(crate) fn reveal_file(&mut self, path: &Path) {
+        let Some(parent) = path.parent().map(|p| p.to_path_buf()) else {
+            self.set_status(format!("Cannot open: {}", path.display()));
+            return;
+        };
+        let name = path
+            .file_name()
+            .map(|n| n.to_string_lossy().to_string())
+            .unwrap_or_default();
+        self.go_to_dir(&parent);
+        if let Some(idx) = self.entries.iter().position(|e| e.name == name) {
+            self.selected = idx;
+            self.scroll_to_selected();
+        }
+        self.set_status(format!("Opened: {}", display_path(path)));
     }
 }
 
@@ -1356,7 +1570,7 @@ mod tests {
         let _ = std::fs::remove_dir_all(&root);
     }
 
-    #[cfg(feature = "image2doc")]
+    #[cfg(feature = "image")]
     fn write_gradient(path: &Path, w: u32, h: u32) {
         let mut img = image::RgbImage::new(w, h);
         for y in 0..h {
@@ -1371,7 +1585,7 @@ mod tests {
         img.save(path).unwrap();
     }
 
-    #[cfg(feature = "image2doc")]
+    #[cfg(feature = "image")]
     #[test]
     fn panel_preview_uses_sextants_by_default() {
         let root = tree("viewgrad");
@@ -1403,7 +1617,7 @@ mod tests {
         let _ = std::fs::remove_dir_all(&root);
     }
 
-    #[cfg(feature = "image2doc")]
+    #[cfg(feature = "image")]
     #[test]
     fn panel_pixel_builds_per_backend() {
         use crate::nfe::sixel::PixelBackend;
@@ -1441,7 +1655,7 @@ mod tests {
         let _ = std::fs::remove_dir_all(&root);
     }
 
-    #[cfg(feature = "image2doc")]
+    #[cfg(feature = "image")]
     #[test]
     fn kitty_seq_caches_like_sixel() {
         let root = tree("viewkit");
@@ -1459,7 +1673,7 @@ mod tests {
         let _ = std::fs::remove_dir_all(&root);
     }
 
-    #[cfg(feature = "image2doc")]
+    #[cfg(feature = "image")]
     #[test]
     fn sixel_seq_caches_and_rebuilds_on_change() {
         use crate::nfe::image::ImageMode;
@@ -1491,7 +1705,7 @@ mod tests {
         let _ = std::fs::remove_dir_all(&root);
     }
 
-    #[cfg(feature = "image2doc")]
+    #[cfg(feature = "image")]
     #[test]
     fn zoom_stops_step_and_clamp() {
         let root = tree("zoomstops");
@@ -1520,7 +1734,7 @@ mod tests {
         let _ = std::fs::remove_dir_all(&root);
     }
 
-    #[cfg(feature = "image2doc")]
+    #[cfg(feature = "image")]
     #[test]
     fn viewer_open_zoom_pan_close() {
         let root = tree("viewfull");
@@ -1582,31 +1796,6 @@ mod tests {
     }
 
     #[test]
-    fn wt_relaunch_argv_shape() {
-        use crate::nfe::sixel::PixelBackend;
-        let root = tree("wtre");
-        let mut s = NfeState::new(Some(&root));
-        // Pixel-capable or non-Windows: no relaunch.
-        s.backend_override = Some(PixelBackend::Kitty);
-        assert!(s.wt_relaunch_argv().is_none());
-        // Sextant backend: argv only makes sense on Windows.
-        s.backend_override = Some(PixelBackend::Sextant);
-        let argv = s.wt_relaunch_argv();
-        #[cfg(windows)]
-        {
-            let argv = argv.expect("relaunch argv on sextant/windows");
-            assert_eq!(argv[0], "new-tab");
-            assert!(argv.contains(&"--explorer".to_string()));
-            assert!(argv.contains(&"NFE".to_string()));
-        }
-        #[cfg(not(windows))]
-        {
-            assert!(argv.is_none());
-        }
-        let _ = std::fs::remove_dir_all(&root);
-    }
-
-    #[test]
     fn zoom_out_reaches_quarter() {
         let root = tree("zoomout");
         let mut s = NfeState::new(Some(&root));
@@ -1617,6 +1806,426 @@ mod tests {
         assert_eq!(s.zoom_factor(), 0.25);
         s.reset_viewer_zoom();
         assert_eq!(s.zoom_factor(), 1.0);
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn filter_is_live_and_cleared_on_directory_change() {
+        let root = tree("filtercd");
+        std::fs::create_dir_all(root.join("sub")).unwrap();
+        std::fs::write(root.join("sub").join("inner.txt"), "x").unwrap();
+        std::fs::write(root.join("keep.txt"), "x").unwrap();
+        let mut s = NfeState::new(Some(&root));
+        s.start_filter();
+        s.filter_push('s');
+        assert_eq!(s.mode, NfeMode::Filter);
+        assert_eq!(s.filter, "s");
+        // Live: no Enter was needed for `entries` to shrink.
+        assert!(!s.entries.is_empty());
+        assert!(s
+            .entries
+            .iter()
+            .all(|e| e.name.to_lowercase().contains('s')));
+        // Entering a directory clears the filter of the listing it came from.
+        let idx = s.entries.iter().position(|e| e.name == "sub").unwrap();
+        s.selected = idx;
+        s.enter_dir();
+        assert!(s.filter.is_empty());
+        assert_eq!(s.mode, NfeMode::Browse);
+        assert!(s.entries.iter().any(|e| e.name == "inner.txt"));
+        // Backspace then Esc clears the filter box itself.
+        s.start_filter();
+        s.filter_push('i');
+        assert_eq!(s.filter, "i");
+        s.cancel_filter();
+        assert!(s.filter.is_empty());
+        assert_eq!(s.mode, NfeMode::Browse);
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn sort_direction_reverses_directories_too() {
+        let root = tree("sortdir");
+        std::fs::create_dir_all(root.join("adir")).unwrap();
+        std::fs::create_dir_all(root.join("zdir")).unwrap();
+        std::fs::write(root.join("a_file.txt"), "x").unwrap();
+        std::fs::write(root.join("z_file.txt"), "x").unwrap();
+        let mut s = NfeState::new(Some(&root));
+        let dirs: Vec<String> = s.dirs.iter().map(|e| e.name.clone()).collect();
+        let files: Vec<String> = s.files.iter().map(|e| e.name.clone()).collect();
+        assert_eq!(dirs, vec!["adir", "docs", "src", "zdir"]);
+        assert_eq!(files, vec!["a_file.txt", "z_file.txt"]);
+        assert_eq!(s.sort_label(), "Name ^");
+
+        s.toggle_sort_desc();
+        assert_eq!(s.sort_label(), "Name v");
+        let rev_dirs: Vec<String> = s.dirs.iter().map(|e| e.name.clone()).collect();
+        let rev_files: Vec<String> = s.files.iter().map(|e| e.name.clone()).collect();
+        assert_eq!(rev_dirs, dirs.iter().rev().cloned().collect::<Vec<_>>());
+        assert_eq!(rev_files, files.iter().rev().cloned().collect::<Vec<_>>());
+        // The visible list keeps the dirs block first, both reversed.
+        assert_eq!(s.entries.first().map(|e| e.name.as_str()), Some("zdir"));
+
+        // Size/date/type give directories no useful key: the name
+        // tie-break keeps the direction visible anyway.
+        s.toggle_sort_desc();
+        s.sort_mode = SortMode::Size;
+        s.toggle_sort_desc();
+        let size_dirs: Vec<String> = s.dirs.iter().map(|e| e.name.clone()).collect();
+        assert_eq!(size_dirs, dirs.iter().rev().cloned().collect::<Vec<_>>());
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn find_mode_lists_root_relative_paths_and_navigates() {
+        let root = tree("findmode");
+        std::fs::create_dir_all(root.join("src").join("deep")).unwrap();
+        std::fs::write(root.join("main.rs"), "x").unwrap();
+        std::fs::write(root.join("src").join("main.rs"), "x").unwrap();
+        std::fs::write(root.join("src").join("deep").join("main.rs"), "x").unwrap();
+        let mut s = NfeState::new(Some(&root));
+        s.term_w = 100;
+        s.term_h = 30;
+        let listing: Vec<String> = s.entries.iter().map(|e| e.name.clone()).collect();
+
+        s.start_find();
+        assert!(s.in_find);
+        assert_eq!(s.mode, NfeMode::Find);
+        assert_eq!(s.find_root, std::fs::canonicalize(&root).unwrap());
+        assert!(s.entries.is_empty(), "find mode starts with no results");
+
+        s.find_query.push_str("main.rs");
+        s.update_find();
+        let displays: Vec<String> = s.entries.iter().map(|e| e.display.clone()).collect();
+        assert!(displays.contains(&"main.rs".to_string()), "{displays:?}");
+        assert!(
+            displays.contains(&"src/main.rs".to_string()),
+            "{displays:?}"
+        );
+        assert!(
+            displays.contains(&"src/deep/main.rs".to_string()),
+            "{displays:?}"
+        );
+        // Rows are find-root relative: never absolute, always `/`.
+        assert!(s.entries.iter().all(|e| !e.display.starts_with('/')));
+        assert!(s.entries.iter().all(|e| !e.display.contains('\\')));
+
+        // Enter on a file lists its directory with the file selected and
+        // leaves find mode.
+        s.selected = s
+            .entries
+            .iter()
+            .position(|e| e.display == "src/main.rs")
+            .unwrap();
+        s.accept_find();
+        assert!(!s.in_find);
+        assert_eq!(s.mode, NfeMode::Browse);
+        assert_eq!(s.current_dir.file_name().unwrap(), "src");
+        assert_eq!(s.current_entry().map(|e| e.name.as_str()), Some("main.rs"));
+
+        // Esc restores the original listing (same directory, same rows).
+        let mut s = NfeState::new(Some(&root));
+        s.start_find();
+        s.find_query.push_str("main");
+        s.update_find();
+        s.find_move(3);
+        s.cancel_find();
+        assert!(!s.in_find);
+        assert_eq!(s.mode, NfeMode::Browse);
+        assert_eq!(
+            s.entries.iter().map(|e| e.name.clone()).collect::<Vec<_>>(),
+            listing
+        );
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn find_results_can_be_filtered_live() {
+        let root = tree("findfilter");
+        std::fs::create_dir_all(root.join("src")).unwrap();
+        std::fs::write(root.join("main.rs"), "x").unwrap();
+        std::fs::write(root.join("src").join("main.rs"), "x").unwrap();
+        let mut s = NfeState::new(Some(&root));
+        s.start_find();
+        s.find_query.push_str("main.rs");
+        s.update_find();
+        assert_eq!(s.entries.len(), 2);
+        // `/` narrows the hits by path as they are typed.
+        s.start_filter();
+        s.filter_push('s');
+        s.filter_push('r');
+        assert_eq!(s.entries.len(), 1);
+        assert_eq!(s.entries[0].display, "src/main.rs");
+        s.finish_filter();
+        assert_eq!(s.mode, NfeMode::Find);
+        assert_eq!(s.entries.len(), 1);
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn command_prompt_hints_verbs_and_arguments() {
+        let root = tree("prompt");
+        std::fs::create_dir_all(root.join("target")).unwrap();
+        std::fs::write(root.join("hello.txt"), "x").unwrap();
+        let mut s = NfeState::new(Some(&root));
+
+        s.start_prompt("");
+        assert_eq!(s.mode, NfeMode::Prompt);
+        s.prompt_push('f');
+        // The first argument hints the verb list.
+        assert_eq!(s.prompt_ghost(), Some("ile ".to_string()));
+        s.prompt_accept();
+        assert_eq!(s.prompt_buf, "file ");
+        // Then `file ` hints the files of the current directory.
+        assert!(s.prompt_ghost().is_some());
+        s.prompt_push('h');
+        assert_eq!(s.prompt_ghost(), Some("ello.txt".to_string()));
+        s.prompt_accept();
+        assert_eq!(s.prompt_buf, "file hello.txt");
+        // A complete token has no resting hint; Tab can still cycle verbs.
+        assert_eq!(s.prompt_ghost(), None);
+        s.run_prompt();
+        assert_eq!(s.mode, NfeMode::Browse);
+        assert_eq!(
+            s.current_entry().map(|e| e.name.as_str()),
+            Some("hello.txt")
+        );
+
+        // `dir ` hints directories only (a trailing `/` continues the path).
+        let mut s = NfeState::new(Some(&root));
+        s.start_prompt("dir ");
+        let ghost = s.prompt_ghost().expect("dir hint");
+        assert!(
+            ghost == "docs/" || ghost == "src/" || ghost == "target/",
+            "{ghost}"
+        );
+        s.prompt_push('t');
+        s.prompt_accept();
+        assert_eq!(s.prompt_buf, "dir target/");
+        s.run_prompt();
+        assert_eq!(s.mode, NfeMode::Browse);
+        assert_eq!(s.current_dir.file_name().unwrap(), "target");
+
+        // `line ` never hints a number.
+        let mut s = NfeState::new(Some(&root));
+        s.start_prompt("line ");
+        assert_eq!(s.prompt_ghost(), None);
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn command_prompt_runs_file_dir_and_line() {
+        let root = tree("promptrun");
+        std::fs::create_dir_all(root.join("sub")).unwrap();
+        std::fs::write(root.join("sub").join("deep.txt"), "x").unwrap();
+        std::fs::write(root.join("top.txt"), "x").unwrap();
+        let mut s = NfeState::new(Some(&root));
+        assert!(s.entries.len() >= 1);
+
+        // `file` with a bare name finds the file in a subdirectory.
+        s.start_prompt("file deep.txt");
+        s.run_prompt();
+        assert_eq!(s.current_dir.file_name().unwrap(), "sub");
+        assert_eq!(s.current_entry().map(|e| e.name.as_str()), Some("deep.txt"));
+
+        // `dir` accepts nested paths and teleport-free names.
+        s.start_prompt("dir ..");
+        s.run_prompt();
+        assert_eq!(s.current_dir, std::fs::canonicalize(&root).unwrap());
+
+        // `line` moves the selection.
+        let len = s.entries.len();
+        assert!(len >= 3, "{len}");
+        s.start_prompt("line 2");
+        s.run_prompt();
+        assert_eq!(s.selected, 1);
+        s.start_prompt("line +1");
+        s.run_prompt();
+        assert_eq!(s.selected, 2);
+        s.start_prompt("line -1");
+        s.run_prompt();
+        assert_eq!(s.selected, 1);
+
+        // Errors keep the prompt open with the text intact.
+        s.start_prompt("line nope");
+        s.run_prompt();
+        assert_eq!(s.mode, NfeMode::Prompt);
+        s.start_prompt("bogus 1");
+        s.run_prompt();
+        assert_eq!(s.mode, NfeMode::Prompt);
+        s.start_prompt("file");
+        s.run_prompt();
+        assert_eq!(s.mode, NfeMode::Prompt);
+        s.start_prompt("file ghost.txt");
+        s.run_prompt();
+        assert_eq!(s.mode, NfeMode::Prompt);
+        // Esc leaves the prompt, not the app.
+        s.cancel_prompt();
+        assert_eq!(s.mode, NfeMode::Browse);
+        assert!(s.running);
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn command_prompt_tab_cycles_and_right_accepts() {
+        let root = tree("prompttab");
+        let mut s = NfeState::new(Some(&root));
+        s.start_prompt("d");
+        // Only `dir ` matches `d`.
+        assert_eq!(s.prompt_ghost(), Some("ir ".to_string()));
+        s.prompt_accept_or_right();
+        assert_eq!(s.prompt_buf, "dir ");
+        // Tab walks the candidates without touching the buffer.
+        s.start_prompt("li");
+        let ghost = s.prompt_ghost();
+        assert!(ghost.is_some());
+        let before = s.prompt_buf.clone();
+        s.prompt_tab();
+        assert_eq!(s.prompt_buf, before);
+        s.prompt_accept_or_end();
+        assert!(s.prompt_buf.starts_with("li"));
+        assert!(s.prompt_buf.len() > before.len() || s.prompt_buf == "line ");
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    /// Frame bytes with ANSI escapes removed (visual text only).
+    fn strip_ansi(text: &str) -> String {
+        let mut out = String::new();
+        let mut chars = text.chars().peekable();
+        while let Some(c) = chars.next() {
+            if c != '\x1b' {
+                out.push(c);
+                continue;
+            }
+            if chars.peek() == Some(&'[') {
+                chars.next();
+                for n in chars.by_ref() {
+                    if n.is_ascii_alphabetic() || n == '~' {
+                        break;
+                    }
+                }
+            }
+        }
+        out
+    }
+
+    #[test]
+    fn render_paints_find_command_and_filter_lines() {
+        let root = tree("renderlines");
+        std::fs::write(root.join("main.rs"), "fn main() {}\n").unwrap();
+        let mut s = NfeState::new(Some(&root));
+        s.term_w = 100;
+        s.term_h = 30;
+        s.backend_override = Some(crate::nfe::sixel::PixelBackend::Sextant);
+
+        // Find mode: the listing is replaced by root-relative hits and the
+        // bottom bar carries the query, the count and the key hints.
+        let mut out: Vec<u8> = Vec::new();
+        s.start_find();
+        s.find_query.push_str("main");
+        s.update_find();
+        s.render(&mut out).unwrap();
+        let text = String::from_utf8_lossy(&out);
+        assert!(text.contains("find: "), "{text}");
+        assert!(text.contains("main"), "{text}");
+        assert!(text.contains("hit(s)"), "{text}");
+        assert!(text.contains("main.rs"), "{text}");
+
+        // Command prompt: label + buffer, then the dimmed hint.
+        let mut out: Vec<u8> = Vec::new();
+        s.cancel_find();
+        s.start_prompt("fi");
+        s.render(&mut out).unwrap();
+        let text = String::from_utf8_lossy(&out);
+        assert!(text.contains("g: fi"), "{text}");
+        // The caret block splits the ghost in the raw stream, so check the
+        // visible text (escapes removed).
+        assert!(strip_ansi(&text).contains("g: file"), "{text}");
+
+        // Filter box: live text plus the match counter.
+        let mut out: Vec<u8> = Vec::new();
+        s.cancel_prompt();
+        s.start_filter();
+        s.filter_push('m');
+        s.render(&mut out).unwrap();
+        let text = String::from_utf8_lossy(&out);
+        assert!(text.contains("filter: m"), "{text}");
+        assert!(text.contains("match(es)"), "{text}");
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    /// Extract the bottom row of a rendered frame (raw escapes included) so
+    /// the caret can be asserted without a terminal.
+    fn last_row(bytes: &[u8]) -> String {
+        let text = String::from_utf8_lossy(bytes).to_string();
+        // Every `MoveTo(0, ROW)` on the status row starts a repaint of it.
+        let row = 29usize; // term_h - 1 for the fixtures below
+        let marker = format!("\x1b[{};1H", row + 1);
+        match text.rfind(&marker) {
+            Some(i) => text[i..].to_string(),
+            None => String::new(),
+        }
+    }
+
+    #[test]
+    fn command_prompt_paints_one_block_caret() {
+        let root = tree("caret");
+        std::fs::write(root.join("alpha.txt"), "x").unwrap();
+        std::fs::write(root.join("beta.txt"), "x").unwrap();
+        let mut s = NfeState::new(Some(&root));
+        s.term_w = 100;
+        s.term_h = 30;
+        s.backend_override = Some(crate::nfe::sixel::PixelBackend::Sextant);
+
+        // Caret at end of line, ghost showing: the first ghost cell is inverted.
+        let mut out: Vec<u8> = Vec::new();
+        s.start_prompt("fi");
+        s.render(&mut out).unwrap();
+        let row = last_row(&out);
+        assert_eq!(row.matches("\x1b[7m").count(), 1, "{row:?}");
+        let after = row.split("\x1b[7m").nth(1).unwrap_or("");
+        assert!(
+            after.starts_with('l'),
+            "caret should sit on the ghost: {row:?}"
+        );
+
+        // Mid-buffer caret inverts the character under it, not the first one.
+        let mut out: Vec<u8> = Vec::new();
+        s.start_prompt("file alpha.txt");
+        s.prompt_cursor = 5; // just after the word "file"
+        s.render(&mut out).unwrap();
+        let row = last_row(&out);
+        assert_eq!(row.matches("\x1b[7m").count(), 1, "{row:?}");
+        let after = row.split("\x1b[7m").nth(1).unwrap_or("");
+        assert!(after.starts_with('a'), "caret should sit on 'a': {row:?}");
+
+        // Caret at end of a real line (no ghost left): an inverted blank.
+        let mut out: Vec<u8> = Vec::new();
+        s.start_prompt("line");
+        s.prompt_cursor = 4;
+        s.render(&mut out).unwrap();
+        let row = last_row(&out);
+        assert_eq!(row.matches("\x1b[7m").count(), 1, "{row:?}");
+        let after = row.split("\x1b[7m").nth(1).unwrap_or("");
+        assert!(
+            after.starts_with(' '),
+            "caret should be an inverted blank: {row:?}"
+        );
+
+        // Result focus in find mode is a list, so no caret is painted.
+        let mut out: Vec<u8> = Vec::new();
+        s.cancel_prompt();
+        s.start_find();
+        s.find_query.push_str("alpha");
+        s.update_find();
+        s.find_nav = true;
+        s.render(&mut out).unwrap();
+        let row = last_row(&out);
+        assert!(row.contains("find: alpha"), "{row:?}");
+        assert!(
+            !row.contains("\x1b[7m"),
+            "no caret in result focus: {row:?}"
+        );
         let _ = std::fs::remove_dir_all(&root);
     }
 }

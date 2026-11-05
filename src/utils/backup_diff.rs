@@ -478,10 +478,10 @@ impl BackupDiff {
         let mut files_html = String::new();
         for (idx, diff) in diffs.iter().enumerate() {
             let (icon, status_class, status_label) = match diff.status {
-                FileStatus::Modified => ("⚠️", "status-modified", "Modified"),
-                FileStatus::New => ("🆕", "status-new", "New!"),
-                FileStatus::Deleted => ("🗑️", "status-deleted", "Deleted!"),
-                FileStatus::Unchanged => ("ℹ️", "status-unchanged", "Unchanged"),
+                FileStatus::Modified => ("M", "status-modified", "Modified"),
+                FileStatus::New => ("A", "status-new", "New!"),
+                FileStatus::Deleted => ("D", "status-deleted", "Deleted!"),
+                FileStatus::Unchanged => ("i", "status-unchanged", "Unchanged"),
             };
 
             let file_label = diff
@@ -493,8 +493,7 @@ impl BackupDiff {
             let is_binary_skipped =
                 diff.status == FileStatus::Modified && diff.side_by_side.is_empty();
             let side_by_side_html = if is_binary_skipped {
-                r#"<div class="binary-notice">📦 Binary file — diff not available</div>"#
-                    .to_string()
+                r#"<div class="binary-notice">Binary file — diff not available</div>"#.to_string()
             } else if diff.status == FileStatus::Modified && !diff.side_by_side.is_empty() {
                 let mut rows = String::new();
                 for sbs in &diff.side_by_side {
@@ -563,7 +562,7 @@ impl BackupDiff {
                 format!(
                     r#"<div class="sbs-container" id="sbs-{}">
                         <div class="sbs-header" onclick="toggleSbs('sbs-{}')">
-                            <span class="sbs-toggle">▼</span>
+                            <span class="sbs-toggle"></span>
                             <span class="sbs-title">Side-by-side diff ({} lines)</span>
                         </div>
                         <div class="sbs-body">
@@ -584,7 +583,7 @@ impl BackupDiff {
             files_html.push_str(&format!(
                 r#"<div class="file-entry {}">
                     <div class="file-info" onclick="toggleFile('file-{}')">
-                        <span class="file-toggle">▶</span>
+                        <span class="file-toggle"></span>
                         <span class="file-icon">{}</span>
                         <span class="file-path">{}</span>
                         <span class="file-status-label {}">{}</span>
@@ -642,8 +641,9 @@ body {{ font-family: 'Segoe UI', system-ui, -apple-system, sans-serif; backgroun
 .file-entry.status-unchanged {{ border-left: 4px solid #58a6ff; }}
 .file-info {{ padding: 10px 16px; cursor: pointer; display: flex; align-items: center; gap: 8px; transition: background 0.15s; user-select: none; }}
 .file-info:hover {{ background: #161b22; }}
-.file-toggle {{ font-size: 10px; color: #8b949e; transition: transform 0.2s; }}
-.file-toggle.open {{ transform: rotate(90deg); }}
+.file-toggle {{ font-size: 12px; color: #8b949e; font-family: 'Consolas', 'Courier New', monospace; width: 10px; }}
+.file-toggle::before {{ content: "+"; }}
+.file-toggle.open::before {{ content: "-"; }}
 .file-icon {{ font-size: 16px; }}
 .file-path {{ flex: 1; font-family: 'Consolas', 'Courier New', monospace; font-size: 14px; }}
 .file-status-label {{ font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 10px; text-transform: uppercase; }}
@@ -658,8 +658,9 @@ body {{ font-family: 'Segoe UI', system-ui, -apple-system, sans-serif; backgroun
 .sbs-container {{ border-top: 1px solid #30363d; }}
 .sbs-header {{ padding: 8px 16px; cursor: pointer; font-size: 13px; color: #8b949e; display: flex; align-items: center; gap: 6px; user-select: none; }}
 .sbs-header:hover {{ background: #161b22; }}
-.sbs-toggle {{ font-size: 10px; transition: transform 0.15s; }}
-.sbs-toggle.open {{ transform: rotate(180deg); }}
+.sbs-toggle {{ font-size: 12px; font-family: 'Consolas', 'Courier New', monospace; width: 10px; }}
+.sbs-toggle::before {{ content: "+"; }}
+.sbs-toggle.open::before {{ content: "-"; }}
 .sbs-title {{ font-weight: 500; }}
 .sbs-body {{ display: none; }}
 .sbs-body.open {{ display: block; }}
@@ -695,11 +696,11 @@ body {{ font-family: 'Segoe UI', system-ui, -apple-system, sans-serif; backgroun
 <body>
 <div class="container">
     <div class="header">
-        <h1>📊 {} vs Backup #{}</h1>
+        <h1>{} vs Backup #{}</h1>
         <div class="meta">
-            <span>📅 Generated: {}</span>
-            <span>📦 Backup date: {}</span>
-            <span>📁 {} total files</span>
+            <span>Generated: {}</span>
+            <span>Backup date: {}</span>
+            <span>{} total files</span>
         </div>
     </div>
     <div class="summary">
@@ -721,7 +722,7 @@ body {{ font-family: 'Segoe UI', system-ui, -apple-system, sans-serif; backgroun
         </div>
     </div>
     <div class="search-bar">
-        <input type="text" id="searchInput" placeholder="🔍 Search files..." oninput="filterFiles()">
+        <input type="text" id="searchInput" placeholder="Search files..." oninput="filterFiles()">
     </div>
     <div id="file-list">
         {}

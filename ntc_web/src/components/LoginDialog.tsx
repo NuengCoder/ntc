@@ -31,7 +31,7 @@ export function LoginDialog({ onDone }: Props) {
     <div className="overlay">
       <div className="dialog" onClick={e => e.stopPropagation()}>
         <form onSubmit={handleSubmit}>
-          <h3>🔒 Login required</h3>
+          <h3>Login required</h3>
           <input
             value={user}
             onChange={e => setUser(e.target.value)}

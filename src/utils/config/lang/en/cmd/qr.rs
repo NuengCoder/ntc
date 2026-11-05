@@ -6,7 +6,7 @@ pub fn fill(m: &mut HashMap<String, String>) {
         "Failed to decode QR #{}: {}".into(),
     );
 
-    m.insert("cmd.qr.decode_requires".into(), "QR decode requires feature 'image2doc' (enabled by default). Run with --features image2doc.".into());
+    m.insert("cmd.qr.decode_requires".into(), "QR decode requires feature 'image' (enabled by default). Run with --features image.".into());
 
     m.insert(
         "cmd.qr.decode_usage".into(),
@@ -69,7 +69,7 @@ pub fn fill(m: &mut HashMap<String, String>) {
 
     m.insert(
         "cmd.qr.image_save_requires".into(),
-        "Image saving requires feature 'image2doc' (enabled by default)".into(),
+        "Image saving requires feature 'image' (enabled by default)".into(),
     );
 
     m.insert(

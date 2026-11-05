@@ -16,11 +16,15 @@ mod alias_commands;
 mod arc;
 mod autoup;
 mod backup;
+pub(crate) mod check_common;
+pub(crate) mod check_formats;
+pub(crate) mod chess_bot;
 pub(crate) mod chess_engine;
 pub(crate) mod clipboard;
 mod config_commands;
 mod count;
 mod deadlock;
+mod dns_client;
 mod downloader;
 mod encode_decode;
 mod fmt;
@@ -35,6 +39,7 @@ mod misc;
 mod mode;
 mod nav;
 mod ndb;
+mod netdiag;
 mod nms;
 mod nsheet;
 mod nssh;
@@ -51,6 +56,7 @@ mod scr_commands;
 mod serve;
 mod serve_chess;
 mod serve_http;
+mod skill;
 mod smtp_client;
 mod sort;
 mod spec;
@@ -65,7 +71,7 @@ mod trim_text;
 pub(crate) mod upgrade;
 mod wi;
 
-#[cfg(feature = "image2doc")]
+#[cfg(feature = "image")]
 mod image;
 
 // ============================================================================
@@ -109,6 +115,15 @@ pub(crate) fn execute_single_command(
     let cmd = parts[0].to_lowercase();
     let args = parts.get(1).unwrap_or(&"").trim();
 
+    // Tutorial mode is a guided lab: only lesson commands run inside the
+    // workspace, and leaving the folder blocks everything but the way back.
+    if let Some(message) = crate::tutorial::restriction(&cmd, nav) {
+        print_error(&message);
+        crate::shell::pipeline::mark_failed();
+        return Ok(false);
+    }
+    crate::tutorial::note_command(&cmd, args);
+
     // `time` owns a full help screen; handle its help forms before generic
     // contextual help prints a shell completion hint for the same suffix.
     if cmd == "time" && matches!(args, "help" | "--help" | "-h") {
@@ -142,7 +157,16 @@ pub(crate) fn execute_single_command(
                     // built-in help; deeper `<cmd> <sub> --help` uses concise.
                     let flag_heavy = matches!(
                         root_of_prefix.as_str(),
-                        "http" | "dl" | "up" | "ping" | "dns" | "smtp" | "serve"
+                        "http"
+                            | "dl"
+                            | "up"
+                            | "ping"
+                            | "trace"
+                            | "tracert"
+                            | "traceroute"
+                            | "dns"
+                            | "smtp"
+                            | "serve"
                     );
                     let keep_native = flag_heavy && prefix_len <= 1;
                     // Short `-h` for flag-heavy commands is data/flag: never intercept.
@@ -250,15 +274,16 @@ pub(crate) fn execute_single_command(
         "rev" => rev::cmd_rev(args, nav),
         "theme" => theme::cmd_theme(args, nav),
         "up" => downloader::cmd_up(args, nav),
-        "ping" => downloader::cmd_ping(args, nav),
+        "ping" => netdiag::cmd_ping(args, nav),
+        "trace" | "tracert" | "traceroute" => netdiag::cmd_trace(args, nav),
         "smtp" => smtp_client::cmd_smtp(args, nav),
         "serve" => serve::cmd_serve(args, nav),
         "py_activate" => misc::cmd_venva(args, nav),
         "py_deactivate" => misc::cmd_venvd(args, nav),
         "showenv" => misc::cmd_show_env(args, nav),
-        #[cfg(feature = "image2doc")]
+        #[cfg(feature = "image")]
         "image" | "img" => image::cmd_image(args, nav),
-        #[cfg(not(feature = "image2doc"))]
+        #[cfg(not(feature = "image"))]
         "image" | "img" => {
             print_error(&t!("cmd.image_disabled"));
             Ok(false)
@@ -295,6 +320,7 @@ pub(crate) fn execute_single_command(
         "nsheet" => nsheet::cmd_nsheet(args, nav),
         "nssh" => nssh::cmd_nssh(args, nav),
         "deadlock" => deadlock::cmd_deadlock(args, nav),
+        "skill" => skill::cmd_skill(args, nav),
         "fake" => crate::fake::cmd_fake(args, nav),
         _ => misc::cmd_fallback(input, nav, watcher_handle),
     }
@@ -373,6 +399,19 @@ pub fn init_ctrlc_handler() {
         return;
     }
     let _ = ctrlc::set_handler(move || {
+        // In `ntc ps`, Ctrl-C drops the PowerShell host (state is lost, the
+        // next command starts a fresh one) so a runaway command can always
+        // be aborted.
+        if crate::shell::ext_complete::ps_mode_active() {
+            crate::shell::ext_complete::kill_host();
+        } else if crate::shell::ext_complete::bash_mode_active() {
+            // Same contract for the integrated bash host: state is lost, the
+            // next command starts a fresh shell.
+            crate::shell::ext_complete::bash_kill_host();
+        } else if crate::shell::ext_complete::zsh_mode_active() {
+            // Same contract for the integrated zsh host on macOS.
+            crate::shell::ext_complete::zsh_kill_host();
+        }
         let pid = CHILD_PID.load(Ordering::SeqCst);
         if pid > 0 {
             #[cfg(windows)]
@@ -494,11 +533,11 @@ fn help_topic_for_command(cmd: &str) -> Option<&'static str> {
     })
 }
 
-/// ── shared arg parser for fs / ds ─────────────────────────────────────────
-/// Accepts:  <pattern> [-d <depth>]   (depth flag must be at the end)
-/// Returns:  (pattern, max_depth)
+/// ── shared arg parser for fs / ds / locate ─────────────────────────────────
+/// Accepts:  <pattern> [-d <depth>] [--no-fuzzy|-no-fz]   (depth flag must be
+/// at the end). Returns `(pattern, max_depth, fuzzy)`.
 /// Handles double-quoted patterns: fs "my file.rs" -d 3
-fn parse_search_args(args: &str) -> (String, usize) {
+fn parse_search_args(args: &str) -> (String, usize, bool) {
     let default_depth = Config::global_get_max_depth();
 
     // Tokenize respecting double quotes
@@ -520,16 +559,28 @@ fn parse_search_args(args: &str) -> (String, usize) {
         parts.push(current);
     }
 
+    // `--no-fuzzy` / `-no-fz` disables the Jaro-Winkler fallback.
+    let mut fuzzy = true;
+    let mut kept: Vec<String> = Vec::with_capacity(parts.len());
+    for part in parts {
+        if part.eq_ignore_ascii_case("--no-fuzzy") || part.eq_ignore_ascii_case("-no-fz") {
+            fuzzy = false;
+        } else {
+            kept.push(part);
+        }
+    }
+    let parts = kept;
+
     // Look for -d <n> at the end: ["pattern", ..., "-d", "3"]
     let n = parts.len();
     if n >= 3 && parts[n - 2] == "-d" {
         if let Ok(depth) = parts[n - 1].parse::<usize>() {
             let pattern = parts[..n - 2].join(" ");
-            return (pattern, depth);
+            return (pattern, depth, fuzzy);
         }
     }
 
-    (args.to_string(), default_depth)
+    (parts.join(" "), default_depth, fuzzy)
 }
 
 /// Parsed arguments for `gs`.
@@ -788,7 +839,9 @@ fn show_file_selection_menu_range(
         let (name, path) = &files[idx];
         if copy_mode {
             print_info(&format!("Copying '{}' to clipboard...", name));
-            let show_lines = Config::global_get_show_line_numbers();
+            // `txtc --line/--no-line` must win over the config default here
+            // too, so the picker behaves exactly like `txtf`'s picker.
+            let show_lines = lines.unwrap_or_else(Config::global_get_show_line_numbers);
             let content = crate::output::cat_file_with_line_numbers(path, show_lines)?;
             crate::output::copy_to_clipboard(&content, "TXT")?;
             print_success(&format!("File '{}' copied to clipboard!", name));

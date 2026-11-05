@@ -3,8 +3,11 @@ use std::collections::HashMap;
 pub fn fill(m: &mut HashMap<String, String>) {
     m.insert(
         "cmd.views.usage".into(),
-        "ວິທີໃຊ້: views [path] [-n] [--size [ຂະໜາດຂັ້ນຕ່ຳ]] [--sort <name|ext|size>]".into(),
+        "ວິທີໃຊ້: views [path] [-n] [--size [ຂະໜາດຂັ້ນຕ່ຳ]] [--sort <name|ext|size>] [--trim <ຂໍ້ຄວາມ>]"
+            .into(),
     );
+
+    m.insert("cmd.views.missing_trim".into(), "ບໍ່ພົບຂໍ້ຄວາມຫຼັງ --trim".into());
 
     m.insert(
         "cmd.views.invalid_size".into(),

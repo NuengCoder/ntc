@@ -47,6 +47,6 @@ pub fn fill(m: &mut HashMap<String, String>) {
 
     m.insert(
         "backup_diff.select_title".into(),
-        "📊 Select a backup to diff against current project".into(),
+        "Select a backup to diff against current project".into(),
     );
 }

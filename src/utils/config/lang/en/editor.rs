@@ -29,7 +29,7 @@ pub fn fill(m: &mut HashMap<String, String>) {
 
     m.insert("editor.clipboard_empty".into(), "Clipboard is empty".into());
 
-    m.insert("editor.close_btn".into(), "\u{2715}".into());
+    m.insert("editor.close_btn".into(), "x".into());
 
     m.insert(
         "editor.cmd_already_at_root".into(),
@@ -520,11 +520,11 @@ pub fn fill(m: &mut HashMap<String, String>) {
         "Unknown gmode command: '{}'".into(),
     );
 
-    m.insert("editor.hint_normal".into(), " i=insert v=visual f=find b=files e=nfe t=term g=gmode x=save n=file m=dir c=copy Sh=select :cmd ?=help 0=exit".into());
+    m.insert("editor.hint_normal".into(), " ?=help  i=insert v=visual f=find b=files e=nfe t=term g=gmode x=save n=file m=dir c=copy Sh=select :cmd 0=exit".into());
 
     m.insert(
         "editor.hint_normal_msg".into(),
-        " i=insert v=visual :cmd ?=help 0=exit".into(),
+        " ?=help  i=insert v=visual :cmd 0=exit".into(),
     );
 
     m.insert("editor.hint_query".into(), "Query: {}".into());
@@ -724,13 +724,24 @@ pub fn fill(m: &mut HashMap<String, String>) {
 
     m.insert("editor.mode_nfe".into(), "[Nfe]".into());
 
-    m.insert("editor.hint_nfe".into(), " hjkl/wasd/arrows move · Enter open · n new file · m new dir · r rename · d delete · i/v edit · :=size/tabs · Esc back".into());
+    m.insert("editor.hint_nfe".into(), " hjkl/wasd/arrows move · Enter open · g/: file|dir|line · n new file · m new dir · r rename · d delete · i/v edit · Esc back".into());
 
     m.insert("editor.hint_nfe_cmd_actions".into(), "Enter=apply Tab=next hint \u{2192}=accept \u{2190}\u{2192}=caret Esc=cancel \u{00B7} :i/:v edit".into());
 
     m.insert("editor.nfe_unknown".into(), "Unknown nfe command: '{}' (try <number> | size full|def|N% | n <file> | m <dir> | rmd <dir> | rmf <file> | i | v)".into());
 
     m.insert("editor.nfe_jumped".into(), "Jumped to entry {}: {}".into());
+
+    m.insert("editor.nfe_file_jumped".into(), "Jumped to file: {}".into());
+
+    m.insert("editor.nfe_dir_jumped".into(), "Jumped to dir: {}".into());
+
+    m.insert("editor.nfe_line_jumped".into(), "Jumped to line {}".into());
+
+    m.insert(
+        "editor.nfe_cmd_usage".into(),
+        "Usage: file <file_name> | dir <dir_name> | line <+N|-N|N>".into(),
+    );
 
     m.insert(
         "editor.nfe_jump_range".into(),
@@ -1181,11 +1192,11 @@ pub fn fill(m: &mut HashMap<String, String>) {
 
     m.insert("editor.save_prompt".into(), "Save file [Y|N]?".into());
 
-    m.insert("editor.saved".into(), "Saved \u{2713}".into());
+    m.insert("editor.saved".into(), "Saved ".into());
 
-    m.insert("editor.saved_full".into(), " Saved ✓".into());
+    m.insert("editor.saved_full".into(), " Saved ".into());
 
-    m.insert("editor.saved_marker".into(), " \u{2713}".into());
+    m.insert("editor.saved_marker".into(), " ".into());
 
     m.insert("editor.scratch".into(), "[scratch]".into());
 
@@ -1204,7 +1215,7 @@ pub fn fill(m: &mut HashMap<String, String>) {
 
     m.insert("editor.status_saved".into(), "saved".into());
 
-    m.insert("editor.status_saved_tag".into(), " \u{2713}".into());
+    m.insert("editor.status_saved_tag".into(), " ".into());
 
     m.insert(
         "editor.syntax_off".into(),

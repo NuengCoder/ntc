@@ -56,7 +56,7 @@ pub fn fill(m: &mut HashMap<String, String>) {
 
     m.insert("theme.info_author".into(), "作者".into());
 
-    m.insert("theme.info_defined".into(), "\u{2713} 已定义".into());
+    m.insert("theme.info_defined".into(), "已定义".into());
 
     m.insert("theme.info_description".into(), "描述".into());
 
@@ -66,7 +66,7 @@ pub fn fill(m: &mut HashMap<String, String>) {
 
     m.insert("theme.info_syntax".into(), "语法颜色".into());
 
-    m.insert("theme.info_title".into(), "\u{1F3A8} 主题：{}".into());
+    m.insert("theme.info_title".into(), "主题：{}".into());
 
     m.insert(
         "theme.invalid_number".into(),
@@ -136,7 +136,7 @@ pub fn fill(m: &mut HashMap<String, String>) {
 
     m.insert("theme.ui.theme_prompt".into(), "theme>".into());
 
-    m.insert("theme.ui.title".into(), "\u{1F3A8} ntc 主题管理器".into());
+    m.insert("theme.ui.title".into(), "ntc 主题管理器".into());
 
     m.insert("theme.unknown_cmd".into(), "未知命令：{}".into());
 

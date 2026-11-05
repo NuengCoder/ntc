@@ -410,10 +410,11 @@ impl Editor {
                 self.term_w = w as usize;
                 self.term_h = h as usize;
                 let panel_h = self.terminal_content_rows();
+                let content_cols = self.terminal_content_cols();
                 let (max_scroll, max_scroll_x) = match self.terminal.as_ref() {
                     Some(t) => (
                         t.total_lines().saturating_sub(panel_h),
-                        t.width.saturating_sub(panel_h),
+                        t.width.saturating_sub(content_cols),
                     ),
                     None => (0, 0),
                 };

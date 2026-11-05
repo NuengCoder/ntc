@@ -233,13 +233,10 @@ pub fn fill(m: &mut HashMap<String, String>) {
 
     m.insert(
         "ntpkg.npm_node_found_at".into(),
-        "  ✓ 在 {} 找到 Node.js".into(),
+        "  在 {} 找到 Node.js".into(),
     );
 
-    m.insert(
-        "ntpkg.npm_node_not_found".into(),
-        "  ✗ 未找到 Node.js".into(),
-    );
+    m.insert("ntpkg.npm_node_not_found".into(), "  未找到 Node.js".into());
 
     m.insert(
         "ntpkg.npm_install_via_pkg".into(),
@@ -253,7 +250,7 @@ pub fn fill(m: &mut HashMap<String, String>) {
 
     m.insert("ntpkg.npm_ntpkg_cmd".into(), "    ntpkg install {}".into());
 
-    m.insert("ntpkg.npm_cmd".into(), "    npm i -g {}".into());
+    m.insert("ntpkg.npm_cmd".into(), "    npm install -g {}".into());
 
     m.insert(
         "ntpkg.npm_or_download_nodejs".into(),
@@ -265,9 +262,9 @@ pub fn fill(m: &mut HashMap<String, String>) {
         "  或通过 fnm/nvm/volta 安装".into(),
     );
 
-    m.insert("ntpkg.npm_found_at".into(), "  ✓ 在 {} 找到 npm".into());
+    m.insert("ntpkg.npm_found_at".into(), "  在 {} 找到 npm".into());
 
-    m.insert("ntpkg.npm_not_found".into(), "  ✗ 未找到 npm".into());
+    m.insert("ntpkg.npm_not_found".into(), "  未找到 npm".into());
 
     m.insert("ntpkg.npm_then_run".into(), "  然后运行：".into());
 
@@ -462,6 +459,11 @@ pub fn fill(m: &mut HashMap<String, String>) {
     m.insert(
         "ntpkg.src_nginx".into(),
         "nginx - Web 服务器 / 反向代理".into(),
+    );
+
+    m.insert(
+        "ntpkg.src_stockfish".into(),
+        "stockfish - UCI 国际象棋引擎 (Stockfish)".into(),
     );
 
     m.insert(

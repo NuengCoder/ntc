@@ -37,7 +37,7 @@ export default function MoveHistory({ moves, livePly, viewedPly, onSelect }: Mov
         <span>Moves</span>
         {viewedPly !== null ? (
           <button className="link history-now" onClick={() => onSelect(null)}>
-            ● Now
+            Now
           </button>
         ) : (
           <span className="history-live">live</span>

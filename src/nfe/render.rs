@@ -1,10 +1,12 @@
 use crossterm::cursor::MoveTo;
 use crossterm::queue;
-use crossterm::style::{Print, ResetColor, SetBackgroundColor, SetForegroundColor};
+use crossterm::style::{
+    Attribute, Print, ResetColor, SetAttribute, SetBackgroundColor, SetForegroundColor,
+};
 use crossterm::terminal::{Clear, ClearType};
 use std::io::Write;
 
-use crate::nfe::state::{NfeState, PanelFocus};
+use crate::nfe::state::{display_path, NfeMode, NfeState, PanelFocus, FIND_LIMIT};
 
 impl NfeState {
     pub fn render(&mut self, stdout: &mut impl Write) -> std::io::Result<()> {
@@ -40,8 +42,17 @@ impl NfeState {
     }
 
     fn render_path_bar(&self, stdout: &mut impl Write) -> std::io::Result<()> {
+        use crate::utils::ansi_text::{truncate_visible, visible_width};
         let cols = self.term_w;
-        let path_str = self.current_dir.to_string_lossy();
+        // Find mode labels the bar with the directory the search started
+        // in: every result path is relative to it.
+        // `strip_unc_prefix` hides the `\\?\` verbatim prefix Windows adds
+        // when a path is canonicalized.
+        let (label, path_str) = if self.in_find {
+            ("find: ", display_path(&self.find_root))
+        } else {
+            ("", display_path(&self.current_dir))
+        };
 
         let bg = crossterm::style::Color::Rgb {
             r: 30,
@@ -54,32 +65,33 @@ impl NfeState {
             b: 220,
         };
 
-        let icon = "\u{1F4C1} ";
-        let display = if path_str.len() + icon.len() > cols.saturating_sub(2) {
-            let max = cols.saturating_sub(icon.len() + 4);
-            let truncated: String = path_str
+        let full = format!(" {}{}", label, path_str);
+        let display = if visible_width(&full) > cols {
+            // Keep the tail (the deepest part of the path) visible.
+            let keep = cols.saturating_sub(visible_width(label) + 5);
+            let tail: String = path_str
                 .chars()
                 .rev()
-                .take(max)
+                .take(keep)
                 .collect::<Vec<_>>()
                 .into_iter()
                 .rev()
                 .collect();
-            format!("{}...{}", icon, truncated)
+            format!(" {}...{}", label, tail)
         } else {
-            format!("{}{}", icon, path_str)
+            full
         };
+        let display = truncate_visible(&display, cols);
 
         queue!(
             stdout,
             MoveTo(0, 0),
             SetBackgroundColor(bg),
             SetForegroundColor(fg),
-            Print(" "),
-            Print(&display),
+            Print(display),
         )?;
 
-        let remaining = cols.saturating_sub(display.chars().count() + 1);
+        let remaining = cols.saturating_sub(visible_width(display));
         if remaining > 0 {
             queue!(stdout, Print(" ".repeat(remaining)))?;
         }
@@ -148,17 +160,19 @@ impl NfeState {
                 let entry = &self.entries[idx];
                 let name_x = num_w;
 
-                let icon = if entry.is_dir { "\u{1F4C1} " } else { "  " };
+                // Rows paint `display`: the bare name in a listing, the
+                // find-root-relative path for find results.
+                let icon = if entry.is_dir { "> " } else { "  " };
                 let name_width = list_w.saturating_sub(1);
-                let display_name: String = if entry.name.chars().count() > name_width {
+                let display_name: String = if entry.display.chars().count() > name_width {
                     entry
-                        .name
+                        .display
                         .chars()
                         .take(name_width.saturating_sub(3))
                         .collect::<String>()
                         + "..."
                 } else {
-                    entry.name.clone()
+                    entry.display.clone()
                 };
 
                 let fg = if is_selected {
@@ -244,7 +258,7 @@ impl NfeState {
         // Shown-key match: leave every pixel on screen (text repaints
         // could never restore them). Anything else erases the old rect
         // first (bg repaint + Kitty delete), then blits.
-        #[cfg(feature = "image2doc")]
+        #[cfg(feature = "image")]
         {
             use crate::nfe::sixel::PixelBackend;
             let backend = self.viewer_backend();
@@ -318,7 +332,7 @@ impl NfeState {
         // Kitty delete — text alone cannot clear pixel graphics).
         if self.panel_shown.take().is_some() {
             self.erase_panel_rect(stdout, preview_x, content_top, preview_w, list_h, bg)?;
-            #[cfg(feature = "image2doc")]
+            #[cfg(feature = "image")]
             {
                 use crate::nfe::sixel::PixelBackend;
                 if self.viewer_backend() == PixelBackend::Kitty {
@@ -376,7 +390,13 @@ impl NfeState {
                 }
             }
         } else if self.entries.is_empty() {
-            let empty_msg = if self.filter.is_empty() {
+            let empty_msg = if self.in_find {
+                if self.find_query.is_empty() {
+                    "(type to search)"
+                } else {
+                    "(no matches)"
+                }
+            } else if self.filter.is_empty() {
                 "(empty directory)"
             } else {
                 "(no matches)"
@@ -570,7 +590,7 @@ impl NfeState {
         // Decide pixel blits BEFORE touching the screen: a cache hit
         // must skip BOTH the blit and the clear, or the retained image
         // is erased and never redrawn.
-        #[cfg(feature = "image2doc")]
+        #[cfg(feature = "image")]
         let sixel_blit: Option<(String, crate::nfe::image::BlitGeom)> = {
             use crate::nfe::sixel::PixelBackend;
             if self.viewer_backend() == PixelBackend::Sixel && self.viewer_src.is_some() {
@@ -581,7 +601,7 @@ impl NfeState {
                 None
             }
         };
-        #[cfg(feature = "image2doc")]
+        #[cfg(feature = "image")]
         let kitty_blit: Option<(Vec<String>, crate::nfe::image::BlitGeom)> = {
             use crate::nfe::sixel::PixelBackend;
             if self.viewer_backend() == PixelBackend::Kitty && self.viewer_src.is_some() {
@@ -593,9 +613,9 @@ impl NfeState {
             }
         };
         let paints_grid = self.viewer_grid.is_some();
-        #[cfg(feature = "image2doc")]
+        #[cfg(feature = "image")]
         let paints_pixels = sixel_blit.is_some() || kitty_blit.is_some();
-        #[cfg(not(feature = "image2doc"))]
+        #[cfg(not(feature = "image"))]
         let paints_pixels = false;
         if paints_pixels || paints_grid {
             for y in 0..rows {
@@ -615,20 +635,20 @@ impl NfeState {
             .and_then(|p| p.file_name())
             .map(|n| n.to_string_lossy().to_string())
             .unwrap_or_else(|| "(image)".to_string());
-        #[cfg(feature = "image2doc")]
+        #[cfg(feature = "image")]
         let (ow, oh) = self
             .viewer_src
             .as_ref()
             .map(|s| (s.orig_w, s.orig_h))
             .unwrap_or((0, 0));
-        #[cfg(not(feature = "image2doc"))]
+        #[cfg(not(feature = "image"))]
         let (ow, oh) = self
             .viewer_grid
             .as_ref()
             .map(|g| (g.orig_w, g.orig_h))
             .unwrap_or((0, 0));
         let backend_label = {
-            #[cfg(feature = "image2doc")]
+            #[cfg(feature = "image")]
             {
                 match self.viewer_backend() {
                     crate::nfe::sixel::PixelBackend::Kitty => "kitty".to_string(),
@@ -639,7 +659,7 @@ impl NfeState {
                     },
                 }
             }
-            #[cfg(not(feature = "image2doc"))]
+            #[cfg(not(feature = "image"))]
             {
                 "cells".to_string()
             }
@@ -661,7 +681,7 @@ impl NfeState {
             ResetColor,
         )?;
 
-        #[cfg(feature = "image2doc")]
+        #[cfg(feature = "image")]
         if kitty_blit.is_some() || sixel_blit.is_some() {
             // Kitty first: a fresh payload deletes the previous
             // placement, then transmits at the target cell. Cursor must
@@ -704,7 +724,7 @@ impl NfeState {
                     bg,
                 )?;
             }
-            let hint = " +/- zoom · 0 fit · arrows/hjkl pan · o open · W wt · Esc back ";
+            let hint = " +/- zoom · 0 fit · arrows/hjkl pan · o open · Esc back ";
             queue!(
                 stdout,
                 MoveTo(0, rows.saturating_sub(1) as u16),
@@ -772,7 +792,7 @@ impl NfeState {
             }
         }
 
-        let hint = " +/- zoom · 0 fit · arrows/hjkl pan · o open · W wt · Esc back ";
+        let hint = " +/- zoom · 0 fit · arrows/hjkl pan · o open · Esc back ";
         queue!(
             stdout,
             MoveTo(0, rows.saturating_sub(1) as u16),
@@ -838,7 +858,7 @@ impl NfeState {
                     }
                     let name = e.file_name().to_string_lossy().to_string();
                     let is_dir = e.file_type().map(|t| t.is_dir()).unwrap_or(false);
-                    let icon = if is_dir { "\u{1F4C1}" } else { " " };
+                    let icon = if is_dir { ">" } else { " " };
                     lines.push(format!(" {} {}", icon, name));
                     count += 1;
                     if count >= 50 {
@@ -869,16 +889,16 @@ impl NfeState {
             } else if crate::nfe::image::is_image_file(&entry.path) {
                 // Pixel backends skip the text grid (render builds the
                 // payload lazily); sextants grid up front as before.
-                #[cfg(feature = "image2doc")]
+                #[cfg(feature = "image")]
                 let pixel = self.viewer_backend() != crate::nfe::sixel::PixelBackend::Sextant;
-                #[cfg(not(feature = "image2doc"))]
+                #[cfg(not(feature = "image"))]
                 let pixel = false;
                 if pixel {
                     self.preview_content.clear();
                     self.preview_image = None;
                     self.panel_seq = None;
                 } else {
-                    #[cfg(feature = "image2doc")]
+                    #[cfg(feature = "image")]
                     {
                         let w = self.preview_width().saturating_sub(1).max(8);
                         let h = self.list_height().saturating_sub(1).max(4);
@@ -903,7 +923,7 @@ impl NfeState {
                             }
                         }
                     }
-                    #[cfg(not(feature = "image2doc"))]
+                    #[cfg(not(feature = "image"))]
                     {
                         self.preview_image = None;
                         self.preview_content =
@@ -939,26 +959,23 @@ impl NfeState {
     }
 
     fn render_status_bar(&self, stdout: &mut impl Write) -> std::io::Result<()> {
+        // Input modes paint their own prompt line; everything else gets the
+        // listing summary.
+        match self.mode {
+            NfeMode::Prompt => return self.render_prompt_line(stdout),
+            NfeMode::Filter => return self.render_filter_line(stdout),
+            NfeMode::Find => return self.render_find_line(stdout),
+            NfeMode::Browse => {}
+        }
+
         let cols = self.term_w;
         let status_row = self.term_h.saturating_sub(1);
-
-        // If an input mode is active, render the prompt instead
-        if self.line_prompt_active {
-            return self.render_line_prompt(stdout);
-        }
-        if self.find_active {
-            return self.render_find_prompt(stdout);
-        }
 
         let dir_count = self.dirs.len();
         let file_count = self.files.len();
         let total = dir_count + file_count;
         let sort_label = self.sort_mode.label();
-        let sort_arrow = if self.sort_desc {
-            "\u{25BC}"
-        } else {
-            "\u{25B2}"
-        };
+        let sort_arrow = if self.sort_desc { "v" } else { "^" };
 
         let mut left = format!(
             " {} items | {} dirs | {} files | Sort: {}{} ",
@@ -967,7 +984,7 @@ impl NfeState {
 
         let mut right = String::new();
         if let Some(ref msg) = self.status_msg {
-            if msg.len() + 2 < cols / 2 {
+            if msg.chars().count() + 2 < cols / 2 {
                 let elapsed = self.status_msg_timer.elapsed().as_secs();
                 if elapsed < 3 {
                     right = format!(" {} ", msg);
@@ -976,7 +993,7 @@ impl NfeState {
         }
         if right.is_empty() {
             if self.filter.is_empty() {
-                right = " h help | b back | f find | / filter | q quit ".to_string();
+                right = " h help | b back | f find | / filter | g cmd | q quit ".to_string();
             } else {
                 right = format!(" filter: {} ", self.filter);
             }
@@ -1017,10 +1034,117 @@ impl NfeState {
         Ok(())
     }
 
-    fn render_line_prompt(&self, stdout: &mut impl Write) -> std::io::Result<()> {
+    /// Paint one editable line at the bottom: `label` + the buffer split
+    /// at the caret + the dimmed completion hint between the halves, then
+    /// `right` flush against the right edge. Everything is truncated to
+    /// the terminal width so a long path can never wrap the row.
+    #[allow(clippy::too_many_arguments)] // one line: label, caret, buf, ghost, right, 3 colors
+    fn render_input_line(
+        &self,
+        stdout: &mut impl Write,
+        label: &str,
+        caret: usize,
+        buf: &str,
+        ghost: Option<String>,
+        right: &str,
+        bg: crossterm::style::Color,
+        fg: crossterm::style::Color,
+        dim: crossterm::style::Color,
+    ) -> std::io::Result<()> {
+        use crate::utils::ansi_text::visible_width;
         let cols = self.term_w;
         let status_row = self.term_h.saturating_sub(1);
-        let prompt = format!(" Go to line (+N / -N / N): {} ", self.line_prompt);
+        // The right-hand hint gets the space it needs, the line takes the rest.
+        let right = if visible_width(right) + 4 < cols {
+            right
+        } else {
+            ""
+        };
+        let budget = cols.saturating_sub(visible_width(right));
+
+        let (head, tail) = buf.split_at(caret.min(buf.len()));
+        let before = format!("{}{}", label, head);
+        // `usize::MAX` = no caret (the line is not editable right now).
+        let caret_col = if caret == usize::MAX {
+            None
+        } else {
+            Some(visible_width(&before))
+        };
+        let ghost = ghost.unwrap_or_default();
+
+        queue!(
+            stdout,
+            MoveTo(0, status_row as u16),
+            SetBackgroundColor(bg),
+            SetForegroundColor(fg),
+        )?;
+
+        // Paint character by character so the caret is exactly one inverted
+        // cell: on the character under it, or on the first ghost cell, or on a
+        // blank at end of line. Everything is clamped to `budget` so a long
+        // path can never wrap the row.
+        let mut col = 0usize;
+        let mut drawn = false;
+        for (text, is_ghost) in [
+            (before.as_str(), false),
+            (ghost.as_str(), true),
+            (tail, false),
+        ] {
+            if is_ghost && !ghost.is_empty() {
+                queue!(stdout, SetForegroundColor(dim))?;
+            }
+            for ch in text.chars() {
+                let w = visible_width(&ch.to_string()).max(1);
+                if col + w > budget {
+                    break;
+                }
+                match caret_col {
+                    Some(c) if !drawn && col >= c => {
+                        queue!(stdout, SetAttribute(Attribute::Reverse))?;
+                        queue!(stdout, Print(ch))?;
+                        queue!(stdout, SetAttribute(Attribute::NoReverse))?;
+                        drawn = true;
+                    }
+                    _ => queue!(stdout, Print(ch))?,
+                }
+                col += w;
+            }
+            if is_ghost && !ghost.is_empty() {
+                queue!(stdout, SetForegroundColor(fg))?;
+            }
+        }
+        if let Some(c) = caret_col {
+            if !drawn && c < budget {
+                // Caret at end of line: an inverted blank marks it.
+                queue!(
+                    stdout,
+                    MoveTo(c as u16, status_row as u16),
+                    SetAttribute(Attribute::Reverse),
+                    Print(' '),
+                    SetAttribute(Attribute::NoReverse),
+                )?;
+                col = c + 1;
+            }
+        }
+        if col < budget {
+            queue!(stdout, Print(" ".repeat(budget - col)))?;
+        }
+        if !right.is_empty() {
+            let x = cols.saturating_sub(visible_width(right));
+            queue!(
+                stdout,
+                MoveTo(x as u16, status_row as u16),
+                SetForegroundColor(dim),
+                Print(right),
+                SetForegroundColor(fg),
+            )?;
+        }
+        queue!(stdout, ResetColor)?;
+        Ok(())
+    }
+
+    /// `g` / `:` command prompt with its live completion hint.
+    fn render_prompt_line(&self, stdout: &mut impl Write) -> std::io::Result<()> {
         let bg = crossterm::style::Color::Rgb {
             r: 40,
             g: 40,
@@ -1031,25 +1155,64 @@ impl NfeState {
             g: 220,
             b: 240,
         };
-        queue!(
+        let dim = crossterm::style::Color::Rgb {
+            r: 120,
+            g: 120,
+            b: 150,
+        };
+        let right = match &self.status_msg {
+            Some(msg) if self.status_msg_timer.elapsed().as_secs() < 5 => format!(" {} ", msg),
+            _ => String::new(),
+        };
+        self.render_input_line(
             stdout,
-            MoveTo(0, status_row as u16),
-            SetBackgroundColor(bg),
-            SetForegroundColor(fg),
-            Print(format!("{:w$}", prompt, w = cols)),
-            ResetColor,
-        )?;
-        Ok(())
+            " g: ",
+            self.prompt_pos(),
+            &self.prompt_buf,
+            self.prompt_ghost(),
+            &right,
+            bg,
+            fg,
+            dim,
+        )
     }
 
-    fn render_find_prompt(&self, stdout: &mut impl Write) -> std::io::Result<()> {
-        let cols = self.term_w;
-        let status_row = self.term_h.saturating_sub(1);
-        let count = self.find_results.len();
-        let prompt = format!(
-            " Find (recursive): {}  [{} matches] ",
-            self.find_query, count
+    /// Live filter box (`/`).
+    fn render_filter_line(&self, stdout: &mut impl Write) -> std::io::Result<()> {
+        let bg = crossterm::style::Color::Rgb {
+            r: 30,
+            g: 50,
+            b: 40,
+        };
+        let fg = crossterm::style::Color::Rgb {
+            r: 190,
+            g: 240,
+            b: 200,
+        };
+        let dim = crossterm::style::Color::Rgb {
+            r: 120,
+            g: 140,
+            b: 130,
+        };
+        let right = format!(
+            " {} match(es) | Enter keep | Esc clear ",
+            self.entries.len()
         );
+        self.render_input_line(
+            stdout,
+            " filter: ",
+            self.filter.len(),
+            &self.filter,
+            None,
+            &right,
+            bg,
+            fg,
+            dim,
+        )
+    }
+
+    /// Find mode: query, hit count and what the keys do in this focus.
+    fn render_find_line(&self, stdout: &mut impl Write) -> std::io::Result<()> {
         let bg = crossterm::style::Color::Rgb {
             r: 40,
             g: 60,
@@ -1060,22 +1223,45 @@ impl NfeState {
             g: 255,
             b: 150,
         };
-        queue!(
+        let dim = crossterm::style::Color::Rgb {
+            r: 120,
+            g: 160,
+            b: 120,
+        };
+        let focus = if self.find_nav {
+            "hjkl/arrows move | Tab type | Enter open | Esc back"
+        } else {
+            "type to search | Tab list | Enter open | Esc back"
+        };
+        let hits = if self.entries.len() >= FIND_LIMIT {
+            format!("{}+", self.entries.len())
+        } else {
+            self.entries.len().to_string()
+        };
+        let right = format!(" {} hit(s) | {} ", hits, focus);
+        let caret = if self.find_nav {
+            usize::MAX
+        } else {
+            self.find_query.len()
+        };
+        self.render_input_line(
             stdout,
-            MoveTo(0, status_row as u16),
-            SetBackgroundColor(bg),
-            SetForegroundColor(fg),
-            Print(format!("{:w$}", prompt, w = cols)),
-            ResetColor,
-        )?;
-        Ok(())
+            " find: ",
+            caret,
+            &self.find_query,
+            None,
+            &right,
+            bg,
+            fg,
+            dim,
+        )
     }
 
     fn render_help_overlay(&self, stdout: &mut impl Write) -> std::io::Result<()> {
         let cols = self.term_w;
         let rows = self.term_h;
 
-        let bw = 52usize;
+        let bw = 60usize;
 
         fn bl(s: &str, bw: usize) -> String {
             let inner = s.chars().count();
@@ -1094,40 +1280,44 @@ impl NfeState {
 
         let lines = vec![
             bd(bw),
-            bl("              NFE Help", bw),
+            bl(&format!("{:^w$}", "NFE Help", w = bw - 2), bw),
             bs(bw),
             bl("  NAVIGATION", bw),
-            bl("  ↑/↓   j/k        Move selection up/down", bw),
-            bl("  →     Enter       Enter dir / load preview", bw),
-            bl("  ←     b           Go to parent directory", bw),
-            bl("  Tab               Toggle panel focus", bw),
-            bl("  ~                 Go to home directory", bw),
-            bl("  g                 Go to directory prompt", bw),
-            bl("  l                 Go to line (relative/abs)", bw),
+            bl("  Up/Down  j/k    Move selection", bw),
+            bl("  Right    Enter  Enter dir / load preview", bw),
+            bl("  Left     b      Go to parent directory", bw),
+            bl("  Tab             Toggle panel focus", bw),
+            bl("  ~               Go to home directory", bw),
             bs(bw),
-            bl("  SEARCH", bw),
-            bl("  f                 Recursive find (dirs+files)", bw),
-            bl("  /                 Filter current listing", bw),
+            bl("  FIND MODE (f)", bw),
+            bl("  type            Search below this dir, paths shown", bw),
+            bl("  Tab             Typing <-> result list", bw),
+            bl("  hjkl  arrows    Walk the results", bw),
+            bl("  Enter   l       Open the selected result", bw),
+            bl("  h  Left   Esc   Leave find mode", bw),
+            bl("  /               Filter the results live", bw),
+            bs(bw),
+            bl("  COMMAND (g or :)", bw),
+            bl("  file <name>     Select a file (opens its dir)", bw),
+            bl("  dir <name>      Enter a directory", bw),
+            bl("  line <+N|-N|N>  Move the selection", bw),
+            bl("  l               Shortcut for: line ", bw),
+            bl("  Tab             Cycle the hint", bw),
+            bl("  Right  Ctrl+E   Accept the hint", bw),
+            bs(bw),
+            bl("  FILTER (/)", bw),
+            bl("  type            Narrow as you type (no Enter)", bw),
+            bl("  Enter   Esc     Keep it / clear it", bw),
             bs(bw),
             bl("  FILE OPS", bw),
-            bl("  e                 Open in editor", bw),
-            bl("  r                 Rename", bw),
-            bl("  d                 Delete (with confirm)", bw),
-            bl("  n                 New file", bw),
-            bl("  m                 New directory", bw),
+            bl("  e r d n m       Open, rename, delete, new file/dir", bw),
             bs(bw),
             bl("  VIEW", bw),
-            bl("  i                 Toggle hidden files", bw),
-            bl("  s                 Cycle sort mode", bw),
-            bl("  S                 Toggle sort direction", bw),
-            bl("  v                 Image: sextant/half blocks", bw),
-            bl("  V                 Fullscreen image view", bw),
-            bl("  +/-/0             Zoom in/out/fit (viewer)", bw),
-            bl("  o                 Open image in OS viewer", bw),
-            bl("  W                 Reopen in Windows Terminal", bw),
-            bl("  F5                Refresh", bw),
+            bl("  i s S v V       Hidden, sort, direction, image, view", bw),
+            bl("  +/-/0   o       Zoom in/out/fit, open in OS viewer", bw),
+            bl("  F5              Refresh", bw),
             bs(bw),
-            bl("  q     Esc         Quit", bw),
+            bl("  q     Esc       Quit", bw),
             be(bw),
             format!("{:^w$}", " Press any key to close ", w = bw),
         ];

@@ -77,4 +77,40 @@ pub fn fill(m: &mut HashMap<String, String>) {
     );
 
     m.insert("help.scan.title".into(), "SCAN COMMANDS:".into());
+    m.insert(
+        "help.scan.waep".into(),
+        "scan waep <host|url> ## Enumerate web paths (/api, /admin, /upload, ...)".into(),
+    );
+
+    m.insert(
+        "help.scan.waep_base".into(),
+        "scan waep example.com/api -r -d 2 ## Recurse under a base path".into(),
+    );
+
+    m.insert(
+        "help.scan.waep_flags".into(),
+        "scan waep <target> [-w <file>] [-x <ext,...>] [-m GET|HEAD] [-s <codes>] [--all] ## Wordlist, suffixes, method, accepted statuses".into(),
+    );
+
+    m.insert(
+        "help.scan.waep_recursive".into(),
+        "scan waep <target> [-r] [-d 1-4] [-c 1-64] [--timeout <ms>] [-H 'Name: value'] [-A <ua>] [-o <file>] [-q] ## Recursion, speed, headers, output".into(),
+    );
+
+    m.insert(
+        "help.scan.example8".into(),
+        "scan waep http://127.0.0.1:55555/api ## Discover what an ntc serve API exposes".into(),
+    );
+
+    m.insert(
+        "help.scan.example9".into(),
+        "scan waep example.com -x php,html --all ## Show every response plus .php/.html variants"
+            .into(),
+    );
+
+    m.insert(
+        "help.scan.example10".into(),
+        "scan waep example.com/api -r -d 2 -c 32 ## Recurse two levels with 32 parallel probes"
+            .into(),
+    );
 }

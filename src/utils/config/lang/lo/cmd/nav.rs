@@ -23,6 +23,11 @@ pub fn fill(m: &mut HashMap<String, String>) {
     m.insert("cmd.nav.cd.navigated".into(), "ນຳທາງໄປທີ່: {}".into());
 
     m.insert(
+        "cmd.nav.cd.home_unavailable".into(),
+        "ບໍ່ສາມາດກຳນົດໂຮມໄດເຣັກທໍລີໄດ້ (ບໍ່ໄດ້ຕັ້ງ HOME / USERPROFILE)".into(),
+    );
+
+    m.insert(
         "cmd.nav.cd.tp_list".into(),
         "ໃຊ້ 'tp list' ເພື່ອເບິ່ງ savepoints ທັງໝົດ.".into(),
     );
@@ -61,10 +66,7 @@ pub fn fill(m: &mut HashMap<String, String>) {
         " fgo main.rs -d 5 # ຄົ້ນຫາລົງເລິກສູງສຸດ 5 ລະດັບ".into(),
     );
 
-    m.insert(
-        "cmd.nav.fgo.found".into(),
-        "\u{1f50d} ພົບ {} ໄຟລ໌ສຳລັບ \"{}\":".into(),
-    );
+    m.insert("cmd.nav.fgo.found".into(), "ພົບ {} ໄຟລ໌ສຳລັບ \"{}\":".into());
 
     m.insert(
         "cmd.nav.fgo.select".into(),
@@ -90,39 +92,24 @@ pub fn fill(m: &mut HashMap<String, String>) {
 
     m.insert("cmd.nav.invalid_selection".into(), "ການເລືອກບໍ່ຖືກຕ້ອງ.".into());
 
-    m.insert(
-        "cmd.nav.where.config_file".into(),
-        "\u{2699}\u{fe0f} ໄຟລ໌ Config:".into(),
-    );
+    m.insert("cmd.nav.where.config_file".into(), "ໄຟລ໌ Config:".into());
 
     m.insert(
         "cmd.nav.where.config_missing".into(),
-        "\u{26a0} ບໍ່ພົບໄຟລ໌ config (ຈະຖືກສ້າງເມື່ອບັນທຶກຄັ້ງທຳອິດ)".into(),
+        "ບໍ່ພົບໄຟລ໌ config (ຈະຖືກສ້າງເມື່ອບັນທຶກຄັ້ງທຳອິດ)".into(),
     );
 
-    m.insert(
-        "cmd.nav.where.config_size".into(),
-        "\u{1f4cf} ຂະໜາດ config:".into(),
-    );
+    m.insert("cmd.nav.where.config_size".into(), "ຂະໜາດ config:".into());
 
-    m.insert(
-        "cmd.nav.where.current_dir".into(),
-        "\u{1f4c2} ໄດເຣັກທໍຣີປັດຈຸບັນ:".into(),
-    );
+    m.insert("cmd.nav.where.current_dir".into(), "ໄດເຣັກທໍຣີປັດຈຸບັນ:".into());
 
-    m.insert(
-        "cmd.nav.where.executable".into(),
-        "\u{1f4c1} Executable:".into(),
-    );
+    m.insert("cmd.nav.where.executable".into(), "Executable:".into());
 
-    m.insert(
-        "cmd.nav.where.not_found".into(),
-        "\u{2717} ບໍ່ພົບ '{}' ໃນ PATH".into(),
-    );
+    m.insert("cmd.nav.where.not_found".into(), "ບໍ່ພົບ '{}' ໃນ PATH".into());
 
     m.insert(
         "cmd.nav.where.path_title".into(),
-        "\u{1f50d} ຕຳແໜ່ງຂອງ '{}' ໃນ PATH:".into(),
+        "ຕຳແໜ່ງຂອງ '{}' ໃນ PATH:".into(),
     );
 
     m.insert("cmd.nav.where.title".into(), "ຂໍ້ມູນບ່ອນຕັ້ງ ntc".into());

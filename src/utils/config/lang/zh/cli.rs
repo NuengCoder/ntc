@@ -19,7 +19,7 @@ pub fn fill(m: &mut HashMap<String, String>) {
 
     m.insert(
         "cli.example.image".into(),
-        " ntc -image screenshot.png to json 将图像转换为JSON以供AI使用\n".into(),
+        " ntc -image display screenshot.png 在终端内显示图片\n".into(),
     );
 
     m.insert(
@@ -311,7 +311,7 @@ pub fn fill(m: &mut HashMap<String, String>) {
         " ntc [选项]\n ntc -i <路径> [-o <输出>]\n ntc -i <路径> --cp 复制报告到剪贴板\n".into(),
     );
 
-    m.insert("cli.helpers.cli_examples".into(), " ntc 启动交互式 shell\n ntc @web 启动并传送到 'web' 保存点\n ntc --math \"3+4*5\" 计算数学表达式\n ntc --math \"sin(PI/2)\" 带函数和常量的数学计算\n ntc -i src 生成 src 目录的 TXT 报告\n ntc -i src --cp 复制目录树到剪贴板\n ntc -i src -f json --cp 复制 JSON 报告到剪贴板\n ntc -i src -f pdf 从 src 生成 PDF 报告\n ntc -i src -f docx 从 src 生成 DOCX 报告\n ntc -i src -f xlsx 从 src 生成 XLSX 报告（带依赖分析）\n ntc -i file.txt 显示文件内容\n ntc --setL ON 启用行号\n ntc --showcg 显示配置\n ntc -say \"Hello World\" 打印 Hello World\n ntc --watch ON 启用文件监视器\n ntc -image screenshot.png to json 转换图像为 JSON 用于 AI\n".into());
+    m.insert("cli.helpers.cli_examples".into(), " ntc 启动交互式 shell\n ntc @web 启动并传送到 'web' 保存点\n ntc --math \"3+4*5\" 计算数学表达式\n ntc --math \"sin(PI/2)\" 带函数和常量的数学计算\n ntc -i src 生成 src 目录的 TXT 报告\n ntc -i src --cp 复制目录树到剪贴板\n ntc -i src -f json --cp 复制 JSON 报告到剪贴板\n ntc -i src -f pdf 从 src 生成 PDF 报告\n ntc -i src -f docx 从 src 生成 DOCX 报告\n ntc -i src -f xlsx 从 src 生成 XLSX 报告（带依赖分析）\n ntc -i file.txt 显示文件内容\n ntc --setL ON 启用行号\n ntc --showcg 显示配置\n ntc -say \"Hello World\" 打印 Hello World\n ntc --watch ON 启用文件监视器\n ntc -image display screenshot.png 在终端内显示图片\n".into());
 
     m.insert("cli.helpers.config_header".into(), "配置选项：".into());
 
@@ -344,7 +344,7 @@ pub fn fill(m: &mut HashMap<String, String>) {
 
     m.insert("cli.helpers.report_options".into(), " -i, --input <路径> 处理文件或目录\n -o, --output <文件> 保存输出到指定文件\n -f, --format <格式> 输出格式：txt, html, json, md, pdf, docx, xlsx（默认：txt）\n --cp 复制报告到剪贴板而非保存到文件\n --size 显示当前目录大小\n --view 快速查看当前目录树\n --view --size 快速查看带目录大小\n".into());
 
-    m.insert("cli.helpers.shell_commands".into(), " ntc pathcp 复制路径到剪贴板\n ntc say \"hello\" --loop 3 循环打印文本\n ntc tl dir . 统计目录中的行数\n ntc ne 打开文本编辑器\n ntc size 显示目录大小\n ntc view 显示目录树\n ntc serve files --port 8080 在端口 8080 启动文件网盘服务器\n ntc dl https://example.com/file.zip --progress 带进度下载\n ntc encode b64 hello 对字符串进行 Base64 编码\n ntc qr \"text\" 在终端生成二维码\n ntc math 3+4*5 计算表达式\n ntc ral add btr \"cargo build --release\" 从 CLI 添加别名\n".into());
+    m.insert("cli.helpers.shell_commands".into(), " ntc pathcp 复制路径到剪贴板\n ntc say \"hello\" --loop 3 循环打印文本\n ntc tl dir . 统计目录中的行数\n ntc ne 打开文本编辑器\n ntc size 显示目录大小\n ntc view 显示目录树\n ntc serve files --port 8080 在端口 8080 启动文件网盘服务器\n ntc dl https://example.com/file.zip 带进度下载\n ntc encode b64 hello 对字符串进行 Base64 编码\n ntc qr \"text\" 在终端生成二维码\n ntc math 3+4*5 计算表达式\n ntc ral add btr \"cargo build --release\" 从 CLI 添加别名\n".into());
 
     m.insert(
         "cli.helpers.shell_header".into(),
@@ -896,7 +896,7 @@ pub fn fill(m: &mut HashMap<String, String>) {
 
     m.insert(
         "cli.shell_cmd.dl".into(),
-        " ntc dl https://example.com/file.zip --progress 带进度下载".into(),
+        " ntc dl https://example.com/file.zip 带进度下载".into(),
     );
 
     m.insert(

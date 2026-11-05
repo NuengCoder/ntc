@@ -374,6 +374,12 @@ pub fn fill(m: &mut HashMap<String, String>) {
 
     m.insert("ndb.dbal_note".into(), "Aliases store read-only queries only; writes are rejected. Type an alias name to run it. Values substitute literally — quote strings yourself: dbal run q \"'2026-01-01'\".".into());
 
+    m.insert("ndb.dbal_hint_note".into(), "Completions: dbal add q \"SELECT * FROM $t WHERE id = $id\" #t --hint-table #id --hint-table-col-name [table]. Only --hint-table and --hint-table-col-name apply here; the ndb hinter resolves them against the open database.".into());
+
+    m.insert("ndb.dbal_hints".into(), "hints: {}".into());
+
+    m.insert("ndb.dbal_bad_hint".into(), "Bad parameter hints ({}). Use #param --hint-table or #param --hint-table-col-name [table].".into());
+
     m.insert("ndb.dbal_params".into(), "params: {}".into());
 
     m.insert(

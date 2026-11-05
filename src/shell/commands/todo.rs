@@ -391,6 +391,61 @@ fn get_task_mut(tasks: &mut [Task], n: usize) -> Result<&mut Task> {
     Ok(&mut tasks[n - 1])
 }
 
+/// Parse `<select-n> <target-n>` for `todo mv` / `todo rp`. Both are 1-based;
+/// a missing, non-numeric or zero index reports `usage_key`.
+fn parse_pair(args: &str, usage_key: &str) -> Result<(usize, usize)> {
+    let args = args.trim();
+    if args.is_empty() {
+        bail!("{}", t!(usage_key));
+    }
+    let mut nums = args.split_whitespace();
+    let mut next = |usage: &str| -> Result<usize> {
+        let raw = nums.next().ok_or_else(|| anyhow!("{}", t!(usage)))?;
+        let n: usize = raw.parse().map_err(|_| anyhow!("{}", t!(usage_key)))?;
+        if n == 0 {
+            bail!("{}", t!("cmd.todo.one_based"));
+        }
+        Ok(n)
+    };
+    let from = next(usage_key)?;
+    let to = next(usage_key)?;
+    if nums.next().is_some() {
+        // The body validates arity so `usage_key` (a real message) is shown,
+        // never a raw key.
+        bail!("{}", t!(usage_key));
+    }
+    Ok((from, to))
+}
+
+/// Move the task at `from` to position `to` (1-based), shifting the rest:
+/// `[a,b,c,d,e]` + `mv 5 1` becomes `[e,a,b,c,d]`.
+fn move_task(tasks: &mut Vec<Task>, from: usize, to: usize) -> Result<()> {
+    if from == 0 || from > tasks.len() || to == 0 || to > tasks.len() {
+        bail!(
+            "{}",
+            t!("cmd.todo.task_not_found", from.max(to), tasks.len())
+        );
+    }
+    if from == to {
+        return Ok(());
+    }
+    let task = tasks.remove(from - 1);
+    tasks.insert(to - 1, task);
+    Ok(())
+}
+
+/// Swap the tasks at `a` and `b` (1-based): `[a,b,c,d,e]` + `rp 5 1` becomes
+/// `[e,b,c,d,a]`.
+fn swap_task(tasks: &mut [Task], a: usize, b: usize) -> Result<()> {
+    if a == 0 || a > tasks.len() || b == 0 || b > tasks.len() {
+        bail!("{}", t!("cmd.todo.task_not_found", a.max(b), tasks.len()));
+    }
+    if a != b {
+        tasks.swap(a - 1, b - 1);
+    }
+    Ok(())
+}
+
 pub fn cmd_todo(args: &str, nav: &mut Navigator) -> Result<bool> {
     let parts: Vec<&str> = args.splitn(2, ' ').collect();
     let subcmd = parts.first().copied().unwrap_or("");
@@ -404,6 +459,8 @@ pub fn cmd_todo(args: &str, nav: &mut Navigator) -> Result<bool> {
         "undo" | "un" | "uncheck" | "reopen" => cmd_undo(subargs, &cwd),
         "edit" | "ed" | "rnm" | "rename" => cmd_edit(subargs, &cwd),
         "rm" | "remove" => cmd_rm(subargs, &cwd),
+        "move" | "mv" => cmd_move(subargs, &cwd),
+        "replace" | "rp" | "swap" => cmd_replace(subargs, &cwd),
         "clear" | "cl" => cmd_clear(subargs, &cwd),
         _ => {
             print_error(&t!("cmd.todo.unknown_sub", subcmd));
@@ -423,6 +480,8 @@ fn print_usage() {
     println!("  {}", t!("cmd.todo.help_undo"));
     println!("  {}", t!("cmd.todo.help_edit"));
     println!("  {}", t!("cmd.todo.help_rm"));
+    println!("  {}", t!("cmd.todo.help_move"));
+    println!("  {}", t!("cmd.todo.help_replace"));
     println!("  {}", t!("cmd.todo.help_clear"));
     println!("  {}", t!("cmd.todo.help_format"));
 }
@@ -613,6 +672,53 @@ fn cmd_rm(args: &str, cwd: &Path) -> Result<bool> {
     Ok(false)
 }
 
+fn cmd_move(args: &str, cwd: &Path) -> Result<bool> {
+    let (from, to) = match parse_pair(args, "cmd.todo.move_usage") {
+        Ok(v) => v,
+        Err(e) => {
+            print_error(&e.to_string());
+            return Ok(false);
+        }
+    };
+    let mut tasks = load_tasks(cwd)?;
+    if from == to {
+        print_info(&t!("cmd.todo.same_position", from));
+        return Ok(false);
+    }
+    if let Err(e) = move_task(&mut tasks, from, to) {
+        print_error(&e.to_string());
+        return Ok(false);
+    }
+    let label = tasks[to - 1].text.clone();
+    save_tasks(cwd, &tasks)?;
+    print_success(&t!("cmd.todo.task_moved", from, to, label));
+    Ok(false)
+}
+
+fn cmd_replace(args: &str, cwd: &Path) -> Result<bool> {
+    let (a, b) = match parse_pair(args, "cmd.todo.replace_usage") {
+        Ok(v) => v,
+        Err(e) => {
+            print_error(&e.to_string());
+            return Ok(false);
+        }
+    };
+    let mut tasks = load_tasks(cwd)?;
+    if a == b {
+        print_info(&t!("cmd.todo.same_position", a));
+        return Ok(false);
+    }
+    if let Err(e) = swap_task(&mut tasks, a, b) {
+        print_error(&e.to_string());
+        return Ok(false);
+    }
+    let first = tasks[a - 1].text.clone();
+    let second = tasks[b - 1].text.clone();
+    save_tasks(cwd, &tasks)?;
+    print_success(&t!("cmd.todo.task_replaced", a, b, first, second));
+    Ok(false)
+}
+
 fn cmd_clear(_args: &str, cwd: &Path) -> Result<bool> {
     let tasks = load_tasks(cwd)?;
     if tasks.is_empty() {
@@ -778,5 +884,105 @@ mod tests {
         // Second load reads the migrated file, not the legacy one.
         let again = load_tasks_migrating(dir.path(), "md").unwrap();
         assert_eq!(again, tasks);
+    }
+
+    #[test]
+    fn move_and_swap_reorder_like_the_examples() {
+        let mut tasks: Vec<Task> = ["a", "b", "c", "d", "e"]
+            .iter()
+            .map(|s| Task {
+                done: false,
+                priority: 0,
+                text: (*s).into(),
+            })
+            .collect();
+        move_task(&mut tasks, 5, 1).unwrap();
+        let order: Vec<&str> = tasks.iter().map(|t| t.text.as_str()).collect();
+        assert_eq!(order, vec!["e", "a", "b", "c", "d"]);
+
+        let mut tasks: Vec<Task> = ["a", "b", "c", "d", "e"]
+            .iter()
+            .map(|s| Task {
+                done: false,
+                priority: 0,
+                text: (*s).into(),
+            })
+            .collect();
+        swap_task(&mut tasks, 5, 1).unwrap();
+        let order: Vec<&str> = tasks.iter().map(|t| t.text.as_str()).collect();
+        assert_eq!(order, vec!["e", "b", "c", "d", "a"]);
+
+        // Middle moves keep the relative order of everyone else.
+        let mut tasks: Vec<Task> = ["a", "b", "c", "d"]
+            .iter()
+            .map(|s| Task {
+                done: false,
+                priority: 0,
+                text: (*s).into(),
+            })
+            .collect();
+        move_task(&mut tasks, 2, 3).unwrap();
+        let order: Vec<&str> = tasks.iter().map(|t| t.text.as_str()).collect();
+        assert_eq!(order, vec!["a", "c", "b", "d"]);
+
+        // Same index is a no-op, out-of-range is rejected.
+        move_task(&mut tasks, 2, 2).unwrap();
+        assert!(move_task(&mut tasks, 0, 1).is_err());
+        assert!(move_task(&mut tasks, 1, 9).is_err());
+        assert!(swap_task(&mut tasks, 1, 9).is_err());
+    }
+
+    #[test]
+    fn pair_parser_rejects_bad_input() {
+        assert_eq!(parse_pair("1 5", "cmd.todo.move_usage").unwrap(), (1, 5));
+        assert_eq!(
+            parse_pair("  5   1  ", "cmd.todo.move_usage").unwrap(),
+            (5, 1)
+        );
+        assert!(parse_pair("", "cmd.todo.move_usage").is_err());
+        assert!(parse_pair("5", "cmd.todo.move_usage").is_err());
+        assert!(parse_pair("0 1", "cmd.todo.move_usage").is_err());
+        assert!(parse_pair("1 x", "cmd.todo.move_usage").is_err());
+        assert!(parse_pair("1 2 3", "cmd.todo.move_usage").is_err());
+    }
+
+    #[test]
+    fn move_and_replace_roundtrip_through_a_file() {
+        let dir = tempfile::tempdir().unwrap();
+        let tasks: Vec<Task> = ["one", "two", "three"]
+            .iter()
+            .map(|s| Task {
+                done: false,
+                priority: 0,
+                text: (*s).into(),
+            })
+            .collect();
+        save_tasks(dir.path(), &tasks).unwrap();
+
+        cmd_move("3 1", dir.path()).unwrap();
+        let order: Vec<String> = load_tasks(dir.path())
+            .unwrap()
+            .into_iter()
+            .map(|t| t.text)
+            .collect();
+        assert_eq!(order, vec!["three", "one", "two"]);
+
+        cmd_replace("1 3", dir.path()).unwrap();
+        let order: Vec<String> = load_tasks(dir.path())
+            .unwrap()
+            .into_iter()
+            .map(|t| t.text)
+            .collect();
+        assert_eq!(order, vec!["two", "one", "three"]);
+
+        // Nothing changed when the indices are equal or out of range.
+        cmd_move("2 2", dir.path()).unwrap();
+        cmd_replace("9 1", dir.path()).unwrap();
+        let order: Vec<String> = load_tasks(dir.path())
+            .unwrap()
+            .into_iter()
+            .map(|t| t.text)
+            .collect();
+        assert_eq!(order, vec!["two", "one", "three"]);
     }
 }

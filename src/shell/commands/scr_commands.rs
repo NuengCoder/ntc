@@ -25,6 +25,13 @@ pub(crate) fn cmd_scr(args: &str, nav: &mut Navigator) -> Result<bool> {
         "help" | "-h" | "--help" => script::print_usage(),
         "init" => cmd_scr_init(tokens.get(i + 1).copied().unwrap_or("")),
         "ls" | "list" => cmd_scr_ls(nav),
+        // Must come before the run-a-file arm so `scr check` never tries to
+        // execute a file named `check`.
+        "check" => {
+            let cwd = nav.current_path().to_path_buf();
+            let target = tokens[i + 1..].join(" ");
+            super::check_common::run("scr", &target, &cwd, ".ntc", super::check_formats::script);
+        }
         file => {
             let script_args: Vec<String> = tokens[i + 1..].iter().map(|s| s.to_string()).collect();
             cmd_scr_run(file, &script_args, continue_on_err, nav)?;
@@ -129,7 +136,8 @@ fn cmd_scr_run(
 
 /// Resolve a (possibly relative) script path against the navigator's cwd.
 fn resolve_script_path(file: &str, cwd: &Path) -> PathBuf {
-    let p = Path::new(file);
+    let expanded = crate::utils::paths::expand_path_str(file);
+    let p = Path::new(&expanded);
     if p.is_absolute() {
         p.to_path_buf()
     } else {

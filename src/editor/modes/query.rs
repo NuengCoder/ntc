@@ -48,7 +48,7 @@ impl Editor {
                     _ => match code {
                         // Esc alone exits: plain `q` must stay typeable
                         // (`qal …`, `/quit`). The result message goes away
-                        // too so Normal doesn't inherit a stale `✦`.
+                        // too so Normal doesn't inherit a stale ``.
                         KeyCode::Esc => {
                             self.query_buf.clear();
                             self.prompt_cursor = 0;
@@ -1157,7 +1157,7 @@ mod tests {
     #[test]
     fn query_result_visible_until_next_keystroke() {
         // State contract for the hint bar: a successful query leaves a
-        // `status_msg` behind (painted as `✦ …`); composing the next
+        // `status_msg` behind (painted as `…`); composing the next
         // command or leaving the mode retires it.
         let mut editor = test_editor(&["foo bar", "baz"]);
         editor.prev_mode = Mode::Normal;

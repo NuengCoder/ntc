@@ -1,0 +1,6 @@
+Run this to build for aarch64-linux
+sudo pacman -S rust-aarch64-gnu
+yay -Ss alsa aarch64
+export PKG_CONFIG_ALLOW_CROSS=1
+export PKG_CONFIG_PATH=/usr/aarch64-linux-gnu/lib/pkgconfig:$PKG_CONFIG_PATH
+cargo build --target aarch64-unknown-linux-gnu --release

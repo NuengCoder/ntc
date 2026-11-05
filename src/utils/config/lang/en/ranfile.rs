@@ -6,7 +6,7 @@ pub fn fill(m: &mut HashMap<String, String>) {
         "Available targets:".into(),
     );
 
-    m.insert("ranfile.depends_on".into(), " ─▶ depends on: ".into());
+    m.insert("ranfile.depends_on".into(), " ─> depends on: ".into());
 
     m.insert(
         "ranfile.runner.hint".into(),

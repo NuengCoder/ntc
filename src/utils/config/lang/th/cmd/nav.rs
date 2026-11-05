@@ -23,6 +23,11 @@ pub fn fill(m: &mut HashMap<String, String>) {
     m.insert("cmd.nav.cd.navigated".into(), "นำทางไปที่: {}".into());
 
     m.insert(
+        "cmd.nav.cd.home_unavailable".into(),
+        "ไม่สามารถกำหนดโฮมไดเรกทอรีได้ (ไม่ได้ตั้ง HOME / USERPROFILE)".into(),
+    );
+
+    m.insert(
         "cmd.nav.cd.tp_list".into(),
         "ใช้ 'tp list' เพื่อดูจุดบันทึกทั้งหมด.".into(),
     );
@@ -61,10 +66,7 @@ pub fn fill(m: &mut HashMap<String, String>) {
         "  fgo main.rs -d 5 # ค้นหาลึกสุด 5 ระดับ".into(),
     );
 
-    m.insert(
-        "cmd.nav.fgo.found".into(),
-        "\u{1f50d} พบ {} ไฟล์สำหรับ \"{}\":".into(),
-    );
+    m.insert("cmd.nav.fgo.found".into(), "พบ {} ไฟล์สำหรับ \"{}\":".into());
 
     m.insert(
         "cmd.nav.fgo.select".into(),
@@ -90,39 +92,24 @@ pub fn fill(m: &mut HashMap<String, String>) {
 
     m.insert("cmd.nav.invalid_selection".into(), "การเลือกไม่ถูกต้อง.".into());
 
-    m.insert(
-        "cmd.nav.where.config_file".into(),
-        "\u{2699}\u{fe0f} ไฟล์การกำหนดค่า:".into(),
-    );
+    m.insert("cmd.nav.where.config_file".into(), "ไฟล์การกำหนดค่า:".into());
 
     m.insert(
         "cmd.nav.where.config_missing".into(),
-        "\u{26a0} ไม่พบไฟล์การกำหนดค่า (จะสร้างขึ้นเมื่อบันทึกครั้งแรก)".into(),
+        "ไม่พบไฟล์การกำหนดค่า (จะสร้างขึ้นเมื่อบันทึกครั้งแรก)".into(),
     );
 
-    m.insert(
-        "cmd.nav.where.config_size".into(),
-        "\u{1f4cf} ขนาดการกำหนดค่า:".into(),
-    );
+    m.insert("cmd.nav.where.config_size".into(), "ขนาดการกำหนดค่า:".into());
 
-    m.insert(
-        "cmd.nav.where.current_dir".into(),
-        "\u{1f4c2} ไดเรกทอรีปัจจุบัน:".into(),
-    );
+    m.insert("cmd.nav.where.current_dir".into(), "ไดเรกทอรีปัจจุบัน:".into());
 
-    m.insert(
-        "cmd.nav.where.executable".into(),
-        "\u{1f4c1} ไฟล์ปฏิบัติการ:".into(),
-    );
+    m.insert("cmd.nav.where.executable".into(), "ไฟล์ปฏิบัติการ:".into());
 
-    m.insert(
-        "cmd.nav.where.not_found".into(),
-        "\u{2717} ไม่พบ '{}' ใน PATH".into(),
-    );
+    m.insert("cmd.nav.where.not_found".into(), "ไม่พบ '{}' ใน PATH".into());
 
     m.insert(
         "cmd.nav.where.path_title".into(),
-        "\u{1f50d} ตำแหน่งของ '{}' ใน PATH:".into(),
+        "ตำแหน่งของ '{}' ใน PATH:".into(),
     );
 
     m.insert("cmd.nav.where.title".into(), "ข้อมูลตำแหน่งของ ntc".into());

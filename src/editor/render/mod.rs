@@ -6,17 +6,62 @@ use crossterm::cursor::MoveTo;
 use crossterm::queue;
 use crossterm::style::{Print, ResetColor, SetBackgroundColor, SetForegroundColor};
 use crossterm::terminal::{Clear, ClearType};
-use std::io::Write;
 
-use super::{byte_to_col, char_col_width, gutter_width, Editor, Mode};
+use super::{
+    char_col_width, display_cells, display_col, gutter_width, is_ctrl_char, Editor, LayoutSig, Mode,
+};
 
 impl Editor {
-    pub(crate) fn render(&mut self, stdout: &mut std::io::Stdout) -> std::io::Result<()> {
+    pub(crate) fn render(&mut self, stdout: &mut impl std::io::Write) -> std::io::Result<()> {
         let theme = crate::utils::theme::ThemeManager::current();
         let is_run = self.run_panel_open;
         let rows = self.visible_text_rows();
         let tab_bar_y = 0;
         let content_y = 1;
+        let tabstop = self.editor_cfg.tab_size.max(1);
+
+        // Any geometry or overlay change invalidates every row; a diff-only
+        // repaint would leave the previous layout's rows on screen.
+        let sig = LayoutSig {
+            term_w: self.term_w,
+            term_h: self.term_h,
+            sv_x: self.sv.x,
+            sv_offset: self.sv.offset,
+            sidebar_open: self.sidebar.open as usize,
+            sidebar_cols: if self.sidebar.open {
+                self.sidebar_cols()
+            } else {
+                0
+            },
+            run_open: self.run_panel_open,
+            run_h: self.run_panel_height(),
+            term_open: self.terminal.is_some(),
+            tab: self.active_tab,
+            overlay: self.completion.is_some()
+                || self.sighelp.is_some()
+                || self.hover_text.is_some()
+                || self.nfe_box.is_some(),
+        };
+        if sig != self.layout_sig {
+            self.layout_sig = sig;
+            self.mark_all_dirty();
+        }
+
+        // Overlays paint on top of the sidebar. While one is open the
+        // sidebar is untouched (its signature still matches); the frame
+        // that closes it must repaint the area underneath, once.
+        let overlay_active = matches!(
+            self.mode,
+            Mode::Help | Mode::Gosc | Mode::Encoding | Mode::GitDiff | Mode::FileFinder
+        ) || self.nfe_box.is_some()
+            || self.completion.is_some()
+            || self.sighelp.is_some()
+            || self.hover_text.is_some()
+            || self.terminal.is_some();
+        if self.overlay_was_active && !overlay_active {
+            self.sidebar.last_paint_sig = None;
+        }
+        self.overlay_was_active = overlay_active;
 
         let cols = self.term_w;
         let eo = self.editor_offset();
@@ -50,6 +95,10 @@ impl Editor {
             let ds = self.dirty_start.saturating_sub(vis_start).min(rows);
             let de = self.dirty_end.saturating_sub(vis_start).min(rows);
             let has_text_work = ds < rows && de > ds;
+            // Widest line actually painted this frame: keeps the cached
+            // buffer maximum fresh without scanning the file (the horizontal
+            // scrollbar below is drawn outside the text block).
+            let mut painted_max_width = 0usize;
 
             if has_text_work {
                 let mut all_sel: Vec<((usize, usize), (usize, usize))> = Vec::new();
@@ -131,32 +180,28 @@ impl Editor {
                         )?;
                     }
 
-                    let line_vis_width = byte_to_col(line, line.len());
+                    let line_vis_width = display_col(line, line.len(), tabstop);
+                    painted_max_width = painted_max_width.max(line_vis_width);
                     let visible_start_col = self.sv.x;
 
+                    // Expand tabs and escape control bytes once: only these
+                    // cells reach `Print`, so a stray `ESC` inside a file can
+                    // never be interpreted by the terminal.
                     let mut col_acc = 0usize;
-                    let mut byte_acc = 0usize;
-                    let mut skip_done = false;
                     let mut display_chars: Vec<(char, usize, usize)> = Vec::new();
 
-                    for ch in line.chars() {
+                    for (ch, byte_start) in display_cells(line, tabstop) {
                         let w = char_col_width(ch);
-                        if !skip_done {
-                            if col_acc + w > visible_start_col {
-                                skip_done = true;
-                            } else {
-                                col_acc += w;
-                                byte_acc += ch.len_utf8();
-                                continue;
-                            }
+                        if col_acc + w <= visible_start_col {
+                            col_acc += w;
+                            continue;
                         }
                         let vis_col = col_acc.saturating_sub(visible_start_col);
                         if vis_col >= text_cols {
                             break;
                         }
-                        display_chars.push((ch, byte_acc, vis_col));
+                        display_chars.push((ch, byte_start, vis_col));
                         col_acc += w;
-                        byte_acc += ch.len_utf8();
                     }
 
                     let mut last_x = eo + gw;
@@ -344,7 +389,7 @@ impl Editor {
 
                     if is_cur && (self.cursor_visible || self.editor_cfg.cursor_blink_rate_ms == 0)
                     {
-                        let cursor_col = byte_to_col(self.current(), self.cursor.byte);
+                        let cursor_col = display_col(self.current(), self.cursor.byte, tabstop);
                         let screen_col = if cursor_col >= self.sv.x {
                             eo + gw + (cursor_col - self.sv.x)
                         } else {
@@ -352,8 +397,14 @@ impl Editor {
                         };
                         if screen_col < cols {
                             let line_s = self.current();
+                            // A tab or control byte must never be block-
+                            // printed; the cursor already covers the cell.
                             let cursor_ch = if self.cursor.byte < line_s.len() {
-                                line_s[self.cursor.byte..].chars().next().unwrap_or(' ')
+                                line_s[self.cursor.byte..]
+                                    .chars()
+                                    .next()
+                                    .map(|c| if is_ctrl_char(c) || c == '\t' { ' ' } else { c })
+                                    .unwrap_or(' ')
                             } else {
                                 ' '
                             };
@@ -370,7 +421,7 @@ impl Editor {
                     if self.cursor_visible || self.editor_cfg.cursor_blink_rate_ms == 0 {
                         for ec in &self.cursor.extra_cursors {
                             if ec.y == idx {
-                                let cursor_col = byte_to_col(&self.lines[idx], ec.byte);
+                                let cursor_col = display_col(&self.lines[idx], ec.byte, tabstop);
                                 let screen_col = if cursor_col >= self.sv.x {
                                     eo + gw + (cursor_col - self.sv.x)
                                 } else {
@@ -378,11 +429,22 @@ impl Editor {
                                 };
                                 if screen_col < cols {
                                     let line_s = &self.lines[idx];
-                                    let cursor_ch = if ec.byte < line_s.len() {
-                                        line_s[ec.byte..].chars().next().unwrap_or(' ')
-                                    } else {
-                                        ' '
-                                    };
+                                    let cursor_ch =
+                                        if ec.byte < line_s.len() {
+                                            line_s[ec.byte..]
+                                                .chars()
+                                                .next()
+                                                .map(|c| {
+                                                    if is_ctrl_char(c) || c == '\t' {
+                                                        ' '
+                                                    } else {
+                                                        c
+                                                    }
+                                                })
+                                                .unwrap_or(' ')
+                                        } else {
+                                            ' '
+                                        };
                                     queue!(
                                         stdout,
                                         MoveTo(screen_col as u16, sy as u16),
@@ -449,12 +511,24 @@ impl Editor {
 
             {
                 let hrow = content_y + rows;
-                let max_vis = self
-                    .lines
-                    .iter()
-                    .map(|l| byte_to_col(l, l.len()))
-                    .max()
-                    .unwrap_or(0);
+                // The widest line is cached: recomputing it over the whole
+                // buffer every frame is O(file) work for one scrollbar glyph.
+                // Recompute only when the buffer length or file changes, then
+                // keep it fresh from the lines painted above.
+                if self.max_line_width_len != self.lines.len()
+                    || self.max_line_width_path != self.path
+                {
+                    self.max_line_width_len = self.lines.len();
+                    self.max_line_width_path = self.path.clone();
+                    self.max_line_width = self
+                        .lines
+                        .iter()
+                        .map(|l| display_col(l, l.len(), tabstop))
+                        .max()
+                        .unwrap_or(0);
+                }
+                let max_vis = self.max_line_width.max(painted_max_width);
+                self.max_line_width = max_vis;
                 if max_vis > text_cols {
                     let h_avail = editor_cols.saturating_sub(2);
                     let thumb_start = self.sv.x * h_avail / max_vis;

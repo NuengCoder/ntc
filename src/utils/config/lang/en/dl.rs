@@ -71,18 +71,18 @@ pub fn fill(m: &mut HashMap<String, String>) {
     );
 
     m.insert(
-        "dl.help.opt_progress".into(),
-        " --progress Show download progress bar".into(),
+        "dl.help.opt_history".into(),
+        " --history Show download history".into(),
     );
 
     m.insert(
         "dl.help.opt_resume".into(),
-        " --resume Resume partial download".into(),
+        " --resume Resume an unfinished download (pick from a list)".into(),
     );
 
     m.insert(
         "dl.help.opt_stop".into(),
-        " --stop Show download history".into(),
+        " --stop Stop a running download (pick from a list)".into(),
     );
 
     m.insert("dl.help.options".into(), "Options:".into());
@@ -167,5 +167,63 @@ pub fn fill(m: &mut HashMap<String, String>) {
     m.insert(
         "dl.url_required".into(),
         "URL is required. Usage: dl <url>".into(),
+    );
+
+    m.insert("dl.active_title".into(), "Running downloads:".into());
+
+    m.insert("dl.cancelled".into(), "Cancelled.".into());
+
+    m.insert("dl.incomplete_title".into(), "Unfinished downloads:".into());
+
+    m.insert("dl.invalid_choice".into(), "Invalid choice.".into());
+
+    m.insert("dl.no_active".into(), "No download is running.".into());
+
+    m.insert(
+        "dl.nothing_incomplete".into(),
+        "No unfinished download to resume.".into(),
+    );
+
+    m.insert("dl.resuming".into(), "Resuming {} from {}".into());
+
+    m.insert(
+        "dl.select_resume".into(),
+        "Select a download to resume [1-N] (empty or q cancels): ".into(),
+    );
+
+    m.insert(
+        "dl.select_stop".into(),
+        "Select a download to stop [1-N] (empty or q cancels): ".into(),
+    );
+
+    m.insert(
+        "dl.stopped_ok".into(),
+        "Stopped {}. Resume it with 'dl --resume'.".into(),
+    );
+
+    m.insert(
+        "dl.stopped_stale".into(),
+        "Marked {} as stopped (it was no longer running).".into(),
+    );
+
+    m.insert(
+        "dl.dns_unsupported_type".into(),
+        "Unsupported record type: {} (supported: {})".into(),
+    );
+
+    m.insert("dl.dns_rcode".into(), "server returned {} ({})".into());
+
+    m.insert(
+        "dl.dns_timeout".into(),
+        "no answer from the DNS server (timeout)".into(),
+    );
+
+    m.insert("dl.dns_malformed".into(), "malformed DNS response".into());
+
+    m.insert("dl.dns_io".into(), "DNS network error: {}".into());
+
+    m.insert(
+        "dl.dns_system_fallback".into(),
+        "Falling back to the system DNS tools...".into(),
     );
 }

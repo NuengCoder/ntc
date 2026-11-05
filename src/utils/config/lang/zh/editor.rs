@@ -23,7 +23,7 @@ pub fn fill(m: &mut HashMap<String, String>) {
 
     m.insert("editor.clipboard_empty".into(), "剪贴板为空".into());
 
-    m.insert("editor.close_btn".into(), "\u{2715}".into());
+    m.insert("editor.close_btn".into(), "x".into());
 
     m.insert("editor.cmd_already_at_root".into(), "已在根目录".into());
 
@@ -406,7 +406,7 @@ pub fn fill(m: &mut HashMap<String, String>) {
         "未知 gmode 命令：'{}'".into(),
     );
 
-    m.insert("editor.hint_normal".into(), " i=插入 v=可视 f=查找 b=文件 e=导航 t=终端 g=命令 x=保存 n=文件 m=目录 c=复制 Sh=选择 :命令 ?=帮助 0=退出".into());
+    m.insert("editor.hint_normal".into(), " ?=帮助  i=插入 v=可视 f=查找 b=文件 e=导航 t=终端 g=命令 x=保存 n=文件 m=目录 c=复制 Sh=选择 :命令 0=退出".into());
 
     m.insert(
         "editor.term_run_usage".into(),
@@ -415,7 +415,7 @@ pub fn fill(m: &mut HashMap<String, String>) {
 
     m.insert(
         "editor.hint_normal_msg".into(),
-        " i=插入 v=可视 :命令 ?=帮助 0=退出".into(),
+        " ?=帮助  i=插入 v=可视 :命令 0=退出".into(),
     );
 
     m.insert("editor.hint_query".into(), "查询：{}".into());
@@ -605,7 +605,7 @@ pub fn fill(m: &mut HashMap<String, String>) {
 
     m.insert(
         "editor.hint_nfe".into(),
-        " hjkl/wasd/方向键移动 · Enter 打开 · i/v 编辑 · :=宽度 · Esc 返回".into(),
+        " hjkl/wasd/方向键移动 · Enter 打开 · g/: file|dir|line · i/v 编辑 · Esc 返回".into(),
     );
 
     m.insert(
@@ -614,6 +614,17 @@ pub fn fill(m: &mut HashMap<String, String>) {
     );
 
     m.insert("editor.nfe_unknown".into(), "未知 nfe 命令：'{}'（试试 size full|def|N% | n <文件> | m <目录> | rmd <目录> | rmf <文件> | i | v）".into());
+
+    m.insert("editor.nfe_file_jumped".into(), "已跳到文件：{}".into());
+
+    m.insert("editor.nfe_dir_jumped".into(), "已跳到目录：{}".into());
+
+    m.insert("editor.nfe_line_jumped".into(), "已跳到第 {} 行".into());
+
+    m.insert(
+        "editor.nfe_cmd_usage".into(),
+        "用法：file <文件名> | dir <目录名> | line <+N|-N|N>".into(),
+    );
 
     m.insert(
         "editor.nfe_rm_usage".into(),
@@ -961,11 +972,11 @@ pub fn fill(m: &mut HashMap<String, String>) {
 
     m.insert("editor.save_prompt".into(), "保存文件 [Y|N]？".into());
 
-    m.insert("editor.saved".into(), "已保存 \u{2713}".into());
+    m.insert("editor.saved".into(), "已保存 ".into());
 
-    m.insert("editor.saved_full".into(), " 已保存 ✓".into());
+    m.insert("editor.saved_full".into(), " 已保存 ".into());
 
-    m.insert("editor.saved_marker".into(), " \u{2713}".into());
+    m.insert("editor.saved_marker".into(), " ".into());
 
     m.insert("editor.scratch".into(), "[草稿]".into());
 
@@ -984,7 +995,7 @@ pub fn fill(m: &mut HashMap<String, String>) {
 
     m.insert("editor.status_saved".into(), "已保存".into());
 
-    m.insert("editor.status_saved_tag".into(), " \u{2713}".into());
+    m.insert("editor.status_saved_tag".into(), " ".into());
 
     m.insert("editor.syntax_off".into(), "语法高亮：关".into());
 

@@ -12,7 +12,10 @@ use super::render::{self, format_box_table};
 use super::{print_table_box, run_sql, Action, LastQuery, NdbCommand};
 use crate::config::Config;
 use crate::output::print_error;
-use crate::shell::alias::{extract_param_names, parse_call_syntax, substitute_params};
+use crate::shell::alias::{
+    extract_param_names, parse_call_syntax, serialize_hint_spec, split_hint_annotations_bare,
+    substitute_params,
+};
 use crate::t;
 use crate::utils::terminal::asciify;
 
@@ -144,6 +147,18 @@ fn unquote(s: &str) -> &str {
     }
 }
 
+/// Split trailing `#param --hint-*` annotations off an `add`/`edit` body.
+/// Reuses the `ral` parser, so `--hint-table` /
+/// `--hint-table-col-name [table]` validate and serialize identically.
+fn split_sql_hints(rest: &[String]) -> Result<(String, Option<String>), &'static str> {
+    let (sql, hints) = split_hint_annotations_bare(&rest.join(" "))?;
+    let spec = serialize_hint_spec(&hints);
+    Ok((
+        unquote(&sql).to_string(),
+        if spec.is_empty() { None } else { Some(spec) },
+    ))
+}
+
 /// Print the `dbal` usage listing.
 fn print_usage() {
     println!();
@@ -163,6 +178,7 @@ fn print_usage() {
     }
     println!();
     println!("{}", t!("ndb.dbal_note").dimmed());
+    println!("{}", t!("ndb.dbal_hint_note").dimmed());
     println!();
 }
 
@@ -259,13 +275,18 @@ pub(crate) fn handle_dbal(
                 println!("{}", t!("ndb.dbal_name_rules").dimmed());
                 return Action::Stay;
             }
-            let joined = rest[1..].join(" ");
-            let sql = unquote(&joined);
-            if !db::is_read_only_sql(sql) {
+            let (sql, hints) = match split_sql_hints(&rest[1..]) {
+                Ok(parts) => parts,
+                Err(code) => {
+                    print_error(&t!("ndb.dbal_bad_hint", code));
+                    return Action::Stay;
+                }
+            };
+            if !db::is_read_only_sql(&sql) {
                 print_error(&t!("ndb.dbal_blocked"));
                 return Action::Stay;
             }
-            match Config::add_db_alias(name, sql) {
+            match Config::add_db_alias_with_hints(name, &sql, hints.as_deref()) {
                 Ok(_) => println!("{}", t!("ndb.dbal_added", name, scope_label()).green()),
                 Err(e) => print_error(&t!("ndb.query_failed", e)),
             }
@@ -277,13 +298,18 @@ pub(crate) fn handle_dbal(
                 return Action::Stay;
             }
             let name = &rest[0];
-            let joined = rest[1..].join(" ");
-            let sql = unquote(&joined);
-            if !db::is_read_only_sql(sql) {
+            let (sql, hints) = match split_sql_hints(&rest[1..]) {
+                Ok(parts) => parts,
+                Err(code) => {
+                    print_error(&t!("ndb.dbal_bad_hint", code));
+                    return Action::Stay;
+                }
+            };
+            if !db::is_read_only_sql(&sql) {
                 print_error(&t!("ndb.dbal_blocked"));
                 return Action::Stay;
             }
-            match Config::update_db_alias(name, sql) {
+            match Config::update_db_alias_with_hints(name, &sql, hints.as_deref()) {
                 Ok(true) => println!("{}", t!("ndb.dbal_updated", name).green()),
                 Ok(false) => print_error(&t!("ndb.dbal_not_found", name)),
                 Err(e) => print_error(&t!("ndb.query_failed", e)),
@@ -325,6 +351,9 @@ pub(crate) fn handle_dbal(
                     let params = extract_param_names(&sql);
                     if !params.is_empty() {
                         println!("  {}", t!("ndb.dbal_params", params.join(", ")).dimmed());
+                    }
+                    if let Some(spec) = Config::get_db_alias_hints().get(&name.to_lowercase()) {
+                        println!("  {}", t!("ndb.dbal_hints", spec).dimmed());
                     }
                 }
                 None => print_error(&t!("ndb.dbal_not_found", name)),
@@ -396,7 +425,7 @@ pub(crate) fn handle_dbal(
 
 #[cfg(test)]
 mod tests {
-    use super::{resolve_body, split_statements, validate_dbal_name};
+    use super::{resolve_body, split_sql_hints, split_statements, validate_dbal_name};
 
     #[test]
     fn statements_split_outside_quotes_only() {
@@ -441,6 +470,47 @@ mod tests {
         // Templates without params pass through untouched.
         let out = resolve_body("SELECT 1", &[]);
         assert_eq!(out, Ok("SELECT 1".to_string()));
+    }
+
+    #[test]
+    fn sql_hints_split_into_a_stored_spec() {
+        let (sql, spec) = split_sql_hints(&[
+            "SELECT".to_string(),
+            "*".to_string(),
+            "FROM".to_string(),
+            "$t".to_string(),
+            "WHERE".to_string(),
+            "id".to_string(),
+            "=".to_string(),
+            "$id".to_string(),
+            "#t".to_string(),
+            "--hint-table".to_string(),
+            "#id".to_string(),
+            "--hint-table-col-name".to_string(),
+            "users".to_string(),
+        ])
+        .unwrap();
+        assert_eq!(sql, "SELECT * FROM $t WHERE id = $id");
+        assert_eq!(
+            spec.as_deref(),
+            Some("#t --hint-table #id --hint-table-col-name users")
+        );
+        // No annotations: plain SQL, no spec.
+        let (sql, spec) = split_sql_hints(&["SELECT".to_string(), "1".to_string()]).unwrap();
+        assert_eq!(sql, "SELECT 1");
+        assert_eq!(spec, None);
+        // Unknown placeholders are rejected exactly like `ral add`.
+        assert_eq!(
+            split_sql_hints(&[
+                "SELECT".to_string(),
+                "*".to_string(),
+                "FROM".to_string(),
+                "$t".to_string(),
+                "#x".to_string(),
+                "--hint-table".to_string(),
+            ]),
+            Err("unknown_param")
+        );
     }
 
     #[test]

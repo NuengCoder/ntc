@@ -1,18 +1,19 @@
 //! Playback engine for `nms`: a thin wrapper over `rodio` that exposes the
-//! control surface the TUI needs (pause, seek, volume, position) plus a
-//! lock-free "level tap" so the UI can draw a real waveform without sharing
-//! the audio source across threads.
+//! control surface the countdown needs (position, duration, finished) and
+//! starts playback at an optional offset.
+//!
+//! symphonia (rodio's decoder) covers the common audio containers but has no
+//! demuxer for video, so [`AudioPlayer::open`] retries through ffmpeg.
 
 use std::fs::File;
 use std::io::BufReader;
-use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicU32, Ordering};
-use std::sync::Arc;
+use std::path::Path;
 use std::time::Duration;
 
 use rodio::cpal::traits::HostTrait;
-use rodio::source::SeekError;
-use rodio::{ChannelCount, Decoder, MixerDeviceSink, Player, SampleRate, Source};
+use rodio::{Decoder, MixerDeviceSink, Player, Source};
+
+use super::ffmpeg;
 
 /// Why playback could not start.
 #[derive(Debug)]
@@ -21,6 +22,11 @@ pub enum PlayError {
     NoDevice,
     /// The file could not be opened or decoded.
     Decode(String),
+    /// Needs ffmpeg (video container, or a codec symphonia cannot read) but no
+    /// ffmpeg binary was found.
+    NoFfmpeg,
+    /// The media has no audio track to play.
+    NoAudio,
 }
 
 impl std::fmt::Display for PlayError {
@@ -28,89 +34,13 @@ impl std::fmt::Display for PlayError {
         match self {
             PlayError::NoDevice => write!(f, "no audio output device"),
             PlayError::Decode(m) => write!(f, "{}", m),
+            PlayError::NoFfmpeg => write!(f, "ffmpeg is required to decode this file"),
+            PlayError::NoAudio => write!(f, "no audio track"),
         }
     }
 }
 
 impl std::error::Error for PlayError {}
-
-/// Cross-thread level information written by the audio thread and read by the UI.
-///
-/// Values are the bit patterns of `f32` amplitudes in `0.0..=1.0`.
-#[derive(Default)]
-pub struct Levels {
-    /// Peak amplitude observed since the last [`Levels::take_peak`].
-    peak: AtomicU32,
-    /// Most recent instantaneous amplitude (for the VU-style meter).
-    level: AtomicU32,
-}
-
-impl Levels {
-    #[inline]
-    fn push(&self, sample: f32) {
-        let a = sample.abs().min(1.0);
-        self.level.store(a.to_bits(), Ordering::Relaxed);
-        let current = f32::from_bits(self.peak.load(Ordering::Relaxed));
-        if a > current {
-            self.peak.store(a.to_bits(), Ordering::Relaxed);
-        }
-    }
-
-    /// Read and reset the accumulated peak (called once per UI frame).
-    pub fn take_peak(&self) -> f32 {
-        f32::from_bits(self.peak.swap(0, Ordering::Relaxed))
-    }
-
-    /// Most recent instantaneous amplitude.
-    pub fn level(&self) -> f32 {
-        f32::from_bits(self.level.load(Ordering::Relaxed))
-    }
-}
-
-/// A `Source` wrapper that records amplitudes into [`Levels`] as they are
-/// pulled by the audio thread, then forwards them untouched.
-struct TapSource<S: Source> {
-    inner: S,
-    levels: Arc<Levels>,
-}
-
-impl<S: Source> Iterator for TapSource<S> {
-    type Item = S::Item;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        let item = self.inner.next();
-        if let Some(sample) = item.as_ref() {
-            self.levels.push(*sample);
-        }
-        item
-    }
-
-    fn size_hint(&self) -> (usize, Option<usize>) {
-        self.inner.size_hint()
-    }
-}
-
-impl<S: Source> Source for TapSource<S> {
-    fn current_span_len(&self) -> Option<usize> {
-        self.inner.current_span_len()
-    }
-
-    fn channels(&self) -> ChannelCount {
-        self.inner.channels()
-    }
-
-    fn sample_rate(&self) -> SampleRate {
-        self.inner.sample_rate()
-    }
-
-    fn total_duration(&self) -> Option<Duration> {
-        self.inner.total_duration()
-    }
-
-    fn try_seek(&mut self, pos: Duration) -> Result<(), SeekError> {
-        self.inner.try_seek(pos)
-    }
-}
 
 /// True when the machine has an enumerable default output device.
 ///
@@ -127,11 +57,21 @@ pub fn probe_output_device() -> bool {
 ///
 /// Returns `None` for unreadable / unsupported files, or when the format does
 /// not expose a total length (some headerless streams). No audio device is
-/// required, so this works on headless machines.
+/// required, so this works on headless machines. Containers symphonia refuses
+/// (most video) fall back to ffprobe.
 pub fn probe_duration(path: &Path) -> Option<Duration> {
     let file = File::open(path).ok()?;
-    let decoder = Decoder::new(BufReader::new(file)).ok()?;
-    decoder.total_duration()
+    if let Ok(decoder) = Decoder::new(BufReader::new(file)) {
+        return decoder.total_duration();
+    }
+    ffmpeg::probe(path).and_then(|p| p.duration)
+}
+
+/// Open the default output device, with rodio's drop notice silenced.
+fn open_sink() -> Result<MixerDeviceSink, PlayError> {
+    let mut sink = rodio::DeviceSinkBuilder::open_default_sink().map_err(|_| PlayError::NoDevice)?;
+    sink.log_on_drop(false);
+    Ok(sink)
 }
 
 /// An opened media track plus its device sink.
@@ -142,81 +82,79 @@ pub struct AudioPlayer {
     /// Kept alive so the mixer stays connected to the OS sink.
     _sink: MixerDeviceSink,
     player: Player,
-    levels: Arc<Levels>,
     duration: Option<Duration>,
-    volume: f32,
-    path: PathBuf,
+    /// Where the source started: an ffmpeg stream seeked with `-ss` begins at
+    /// zero, so this is added back to report absolute track time.
+    offset: Duration,
 }
 
 impl AudioPlayer {
-    /// Open the default output device and decode `path`, starting playback.
+    /// Open `path` on the default output device, starting at `start_from`.
+    ///
+    /// Tries symphonia first — no subprocess, the fast path for mp3/flac/wav —
+    /// and falls back to ffmpeg when the container or codec is beyond it.
+    pub fn open(path: &Path, start_from: Duration) -> Result<Self, PlayError> {
+        match Self::new(path, start_from) {
+            Err(PlayError::Decode(native)) => Self::with_ffmpeg(path, start_from, native),
+            other => other,
+        }
+    }
+
+    /// Decode `path` with symphonia and append it, starting at `start_from`.
     ///
     /// Returns [`PlayError::NoDevice`] when no sound driver is available and
     /// [`PlayError::Decode`] when the file cannot be read or decoded.
-    pub fn new(path: &Path) -> Result<Self, PlayError> {
-        let mut sink =
-            rodio::DeviceSinkBuilder::open_default_sink().map_err(|_| PlayError::NoDevice)?;
-        // Silence rodio's "Dropping DeviceSink" message on exit.
-        sink.log_on_drop(false);
-        let player = Player::connect_new(sink.mixer());
-
+    pub fn new(path: &Path, start_from: Duration) -> Result<Self, PlayError> {
         let file = File::open(path).map_err(|e| PlayError::Decode(e.to_string()))?;
         let decoder =
             Decoder::new(BufReader::new(file)).map_err(|e| PlayError::Decode(e.to_string()))?;
 
+        // Decode before touching the device: an unreadable file must not
+        // occupy (and then release) the output for nothing.
         let duration = decoder.total_duration();
-        let levels = Arc::new(Levels::default());
-        let tap = TapSource {
-            inner: decoder,
-            levels: levels.clone(),
-        };
+        let sink = open_sink()?;
+        let player = Player::connect_new(sink.mixer());
+        player.append(decoder);
+        player.play();
+        if !start_from.is_zero() {
+            // Not every container supports seeking; fall back to the start.
+            let _ = player.try_seek(start_from);
+        }
 
-        player.set_volume(1.0);
-        player.append(tap);
+        Ok(Self {
+            _sink: sink,
+            player,
+            duration,
+            offset: Duration::ZERO,
+        })
+    }
+
+    /// Stream the audio track of `path` through ffmpeg, starting at `start_from`.
+    ///
+    /// `native` is the symphonia error that made the fallback necessary; it is
+    /// only kept for the message when ffmpeg cannot decode either.
+    fn with_ffmpeg(path: &Path, start_from: Duration, native: String) -> Result<Self, PlayError> {
+        let probe = ffmpeg::probe(path);
+        if probe.as_ref().is_some_and(|p| !p.has_audio) {
+            return Err(PlayError::NoAudio);
+        }
+        let duration = probe.and_then(|p| p.duration);
+        let source = ffmpeg::FfmpegPcm::spawn(path, start_from, duration).map_err(|e| match e {
+            ffmpeg::FfmpegError::NotFound => PlayError::NoFfmpeg,
+            ffmpeg::FfmpegError::Failed(m) => PlayError::Decode(format!("{} (ffmpeg: {})", native, m)),
+        })?;
+
+        let sink = open_sink()?;
+        let player = Player::connect_new(sink.mixer());
+        player.append(source);
         player.play();
 
         Ok(Self {
             _sink: sink,
             player,
-            levels,
             duration,
-            volume: 1.0,
-            path: path.to_path_buf(),
+            offset: start_from,
         })
-    }
-
-    /// Re-open the current file and restart playback from `0s`.
-    ///
-    /// The device sink is reused (no device re-enumeration) but a fresh
-    /// [`Player`] is connected so the position resets to zero and the previous
-    /// source is dropped. The current volume is preserved. Used by the TUI's
-    /// `a` (replay) key and after a finished track freezes.
-    pub fn restart(&mut self) -> Result<(), PlayError> {
-        let file = File::open(&self.path).map_err(|e| PlayError::Decode(e.to_string()))?;
-        let decoder =
-            Decoder::new(BufReader::new(file)).map_err(|e| PlayError::Decode(e.to_string()))?;
-        let duration = decoder.total_duration();
-        let levels = Arc::new(Levels::default());
-        let tap = TapSource {
-            inner: decoder,
-            levels: levels.clone(),
-        };
-
-        let player = Player::connect_new(self._sink.mixer());
-        player.set_volume(self.volume);
-        player.append(tap);
-        player.play();
-
-        // Assigning drops the previous player, stopping the old source.
-        self.player = player;
-        self.levels = levels;
-        self.duration = duration;
-        Ok(())
-    }
-
-    /// Path being played.
-    pub fn path(&self) -> &Path {
-        &self.path
     }
 
     /// Total duration, when the decoder knows it.
@@ -224,60 +162,14 @@ impl AudioPlayer {
         self.duration
     }
 
-    /// Current playback position.
+    /// Current playback position, counted from the start of the track.
     pub fn position(&self) -> Duration {
-        self.player.get_pos()
-    }
-
-    /// True while playback is paused.
-    pub fn is_paused(&self) -> bool {
-        self.player.is_paused()
+        self.offset + self.player.get_pos()
     }
 
     /// True when the track has finished (no queued sources left).
     pub fn finished(&self) -> bool {
         self.player.empty()
-    }
-
-    /// Pause if playing, resume if paused.
-    pub fn toggle_pause(&self) {
-        if self.player.is_paused() {
-            self.player.play();
-        } else {
-            self.player.pause();
-        }
-    }
-
-    /// Seek by `secs` (negative rewinds). Clamped to the track bounds.
-    pub fn seek_relative(&self, secs: f32) {
-        let pos = self.position();
-        let target = if secs >= 0.0 {
-            pos + Duration::from_secs_f32(secs)
-        } else {
-            pos.saturating_sub(Duration::from_secs_f32(-secs))
-        };
-        let _ = self.player.try_seek(target);
-    }
-
-    /// Adjust volume by `delta` (clamped to `0.0..=2.0`).
-    pub fn adjust_volume(&mut self, delta: f32) {
-        self.volume = (self.volume + delta).clamp(0.0, 2.0);
-        self.player.set_volume(self.volume);
-    }
-
-    /// Current volume multiplier (`1.0` = normal).
-    pub fn volume(&self) -> f32 {
-        self.volume
-    }
-
-    /// Read and reset the peak amplitude since the previous call.
-    pub fn take_peak(&self) -> f32 {
-        self.levels.take_peak()
-    }
-
-    /// Most recent instantaneous amplitude.
-    pub fn level(&self) -> f32 {
-        self.levels.level()
     }
 }
 
@@ -286,28 +178,19 @@ mod tests {
     use super::*;
 
     #[test]
-    fn levels_track_peak_and_reset() {
-        let l = Levels::default();
-        l.push(0.5);
-        l.push(-0.75);
-        l.push(0.2);
-        assert!((l.take_peak() - 0.75).abs() < 1e-6);
-        // Peak is drained; only fresh samples count.
-        assert_eq!(l.take_peak(), 0.0);
-        // Level keeps the most recent (absolute) sample.
-        assert!((l.level() - 0.2).abs() < 1e-6);
-    }
-
-    #[test]
-    fn levels_clamp_out_of_range() {
-        let l = Levels::default();
-        l.push(5.0);
-        assert!((l.take_peak() - 1.0).abs() < 1e-6);
-    }
-
-    #[test]
     fn probe_never_panics() {
         // Result is irrelevant on CI; it must simply not panic on any host.
         let _ = probe_output_device();
+    }
+
+    #[test]
+    fn missing_file_is_a_decode_error() {
+        // The decoder is opened before the device, so a missing file reports
+        // the read failure rather than depending on the host's sound driver.
+        match AudioPlayer::new(Path::new("ntc-definitely-missing.mp3"), Duration::ZERO) {
+            Err(PlayError::Decode(_)) => {}
+            Err(other) => panic!("missing file must report a decode error: {}", other),
+            Ok(_) => panic!("missing file must not open"),
+        }
     }
 }

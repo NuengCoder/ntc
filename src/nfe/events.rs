@@ -1,9 +1,8 @@
 use crate::nfe::fileops;
-use crate::nfe::state::{NfeState, PanelFocus};
+use crate::nfe::state::{NfeMode, NfeState, PanelFocus};
 
 use anyhow::Result;
-use crossterm::event::{self, Event, KeyCode, KeyEventKind, MouseEvent, MouseEventKind};
-use std::time::Duration;
+use crossterm::event::{Event, KeyCode, KeyEventKind, KeyModifiers, MouseEvent, MouseEventKind};
 
 pub enum Action {
     Continue,
@@ -39,24 +38,34 @@ pub fn handle_event(state: &mut NfeState, ev: Event) -> Result<Action> {
         return Ok(Action::Continue);
     }
 
-    // If line prompt is active, route to line prompt handler
-    if state.line_prompt_active {
-        if let Event::Key(key) = &ev {
-            if key.kind == KeyEventKind::Press {
-                handle_line_prompt(state, *key);
+    // Input modes own the keyboard; the main loop repaints after every
+    // event, so filter/query edits show up as they are typed.
+    match state.mode {
+        NfeMode::Prompt => {
+            if let Event::Key(key) = &ev {
+                if key.kind == KeyEventKind::Press {
+                    handle_prompt_key(state, *key);
+                }
             }
+            return Ok(Action::Continue);
         }
-        return Ok(Action::Continue);
-    }
-
-    // If find is active, route to find handler
-    if state.find_active {
-        if let Event::Key(key) = &ev {
-            if key.kind == KeyEventKind::Press {
-                handle_find_mode(state, *key)?;
+        NfeMode::Filter => {
+            if let Event::Key(key) = &ev {
+                if key.kind == KeyEventKind::Press {
+                    handle_filter_key(state, *key);
+                }
             }
+            return Ok(Action::Continue);
         }
-        return Ok(Action::Continue);
+        NfeMode::Find => {
+            if let Event::Key(key) = &ev {
+                if key.kind == KeyEventKind::Press {
+                    handle_find_key(state, *key);
+                }
+            }
+            return Ok(Action::Continue);
+        }
+        NfeMode::Browse => {}
     }
 
     match ev {
@@ -85,7 +94,7 @@ fn handle_key(state: &mut NfeState, key: crossterm::event::KeyEvent) -> Result<A
         KeyCode::Esc | KeyCode::Char('q') => {
             if !state.filter.is_empty() {
                 state.filter.clear();
-                state.reload();
+                state.rebuild_entries();
             } else {
                 state.running = false;
                 return Ok(Action::Quit);
@@ -191,9 +200,16 @@ fn handle_key(state: &mut NfeState, key: crossterm::event::KeyEvent) -> Result<A
             Ok(Action::Continue)
         }
 
-        KeyCode::Char('g') => {
+        // ── g · : : command prompt (file / dir / line) ──
+        KeyCode::Char('g') | KeyCode::Char(':') => {
             state.focus = PanelFocus::List;
-            enter_goto_mode(state)?;
+            state.start_prompt("");
+            Ok(Action::Continue)
+        }
+
+        // ── l: line jump, pre-filled into the command prompt ──
+        KeyCode::Char('l') => {
+            state.start_prompt("line ");
             Ok(Action::Continue)
         }
 
@@ -209,13 +225,7 @@ fn handle_key(state: &mut NfeState, key: crossterm::event::KeyEvent) -> Result<A
             Ok(Action::Continue)
         }
 
-        // ── l: Go to line ──
-        KeyCode::Char('l') => {
-            state.start_line_prompt();
-            Ok(Action::Continue)
-        }
-
-        // ── f: Recursive find ──
+        // ── f: recursive find mode ──
         KeyCode::Char('f') => {
             state.start_find();
             Ok(Action::Continue)
@@ -267,20 +277,14 @@ fn handle_key(state: &mut NfeState, key: crossterm::event::KeyEvent) -> Result<A
             Ok(Action::Continue)
         }
 
-        // ── o: open image in OS viewer · W: relaunch in WT ──
+        // ── o: open the selected image in the OS viewer ──
         KeyCode::Char('o') => {
             state.open_external();
             Ok(Action::Continue)
         }
-        KeyCode::Char('W') => {
-            if state.relaunch_in_wt() {
-                return Ok(Action::Quit);
-            }
-            Ok(Action::Continue)
-        }
 
         KeyCode::Char('/') => {
-            enter_filter_mode(state)?;
+            state.start_filter();
             Ok(Action::Continue)
         }
 
@@ -304,64 +308,142 @@ fn handle_key(state: &mut NfeState, key: crossterm::event::KeyEvent) -> Result<A
     }
 }
 
-// ── Line prompt handler ──
+// ── Command prompt (g / :) ──
 
-fn handle_line_prompt(state: &mut NfeState, key: crossterm::event::KeyEvent) {
+fn handle_prompt_key(state: &mut NfeState, key: crossterm::event::KeyEvent) {
+    // Ctrl+E accepts the ghost hint, like End.
+    if key.modifiers.contains(KeyModifiers::CONTROL) && key.code == KeyCode::Char('e') {
+        state.prompt_accept_or_end();
+        return;
+    }
     match key.code {
-        KeyCode::Esc => {
-            state.cancel_line_prompt();
-        }
-        KeyCode::Enter => {
-            state.execute_line_jump();
-        }
-        KeyCode::Backspace => {
-            state.line_prompt.pop();
-        }
-        KeyCode::Char(c) => {
-            if c == '+' || c == '-' || c.is_ascii_digit() {
-                state.line_prompt.push(c);
-            }
-        }
+        KeyCode::Esc => state.cancel_prompt(),
+        KeyCode::Enter => state.run_prompt(),
+        KeyCode::Tab => state.prompt_tab(),
+        KeyCode::Backspace => state.prompt_backspace(),
+        KeyCode::Delete => state.prompt_delete(),
+        KeyCode::Left => state.prompt_move_left(),
+        KeyCode::Right => state.prompt_accept_or_right(),
+        KeyCode::Home => state.prompt_home(),
+        KeyCode::End => state.prompt_accept_or_end(),
+        KeyCode::Char(c) => state.prompt_push(c),
         _ => {}
     }
 }
 
-// ── Find mode handler ──
+// ── Filter box (/) — live, no Enter needed ──
 
-fn handle_find_mode(state: &mut NfeState, key: crossterm::event::KeyEvent) -> Result<()> {
+fn handle_filter_key(state: &mut NfeState, key: crossterm::event::KeyEvent) {
     match key.code {
-        KeyCode::Esc => {
-            state.cancel_find();
-        }
-        KeyCode::Enter => {
-            // Select the first find result and navigate to its directory
-            if let Some(entry) = state.find_results.first().cloned() {
-                if entry.is_dir {
-                    state.go_to_dir(&entry.path);
-                } else if let Some(parent) = entry.path.parent() {
-                    state.go_to_dir(parent);
-                    // Try to select the file
-                    let name = entry.name.clone();
-                    if let Some(idx) = state.entries.iter().position(|e| e.name == name) {
-                        state.selected = idx;
-                        state.scroll_to_selected();
-                    }
-                }
-                state.set_status(format!("Found: {}", entry.path.display()));
+        KeyCode::Esc => state.cancel_filter(),
+        KeyCode::Enter => state.finish_filter(),
+        KeyCode::Backspace => state.filter_backspace(),
+        KeyCode::Char(c) => state.filter_push(c),
+        _ => {}
+    }
+}
+
+// ── Find mode (f) ──
+
+fn handle_find_key(state: &mut NfeState, key: crossterm::event::KeyEvent) {
+    if !state.find_nav {
+        // Typing focus: every printable character narrows the search.
+        match key.code {
+            KeyCode::Esc => {
+                state.cancel_find();
+                return;
             }
-            state.cancel_find();
+            KeyCode::Enter => {
+                state.accept_find();
+                return;
+            }
+            KeyCode::Tab => {
+                state.find_nav = true;
+                return;
+            }
+            KeyCode::Up => {
+                state.find_move(-1);
+                return;
+            }
+            KeyCode::Down => {
+                state.find_move(1);
+                return;
+            }
+            KeyCode::PageUp => {
+                let n = state.list_height().saturating_sub(1) as isize;
+                state.find_move(-n);
+                return;
+            }
+            KeyCode::PageDown => {
+                let n = state.list_height().saturating_sub(1) as isize;
+                state.find_move(n);
+                return;
+            }
+            KeyCode::Left => {
+                state.cancel_find();
+                return;
+            }
+            KeyCode::Right => {
+                state.accept_find();
+                return;
+            }
+            KeyCode::Backspace => {
+                state.find_query.pop();
+                state.update_find();
+                return;
+            }
+            KeyCode::Char(c) => {
+                state.find_query.push(c);
+                state.update_find();
+                return;
+            }
+            _ => return,
         }
+    }
+
+    // Results focus: hjkl and the arrows walk the hit list.
+    match key.code {
+        // Esc always leaves find mode; `Tab`/`h` return to typing.
+        KeyCode::Esc => state.cancel_find(),
+        KeyCode::Tab => state.find_nav = false,
+        KeyCode::Enter | KeyCode::Char('l') | KeyCode::Right => state.accept_find(),
+        KeyCode::Char('h') | KeyCode::Left => {
+            state.find_nav = false;
+            state.set_status("Find: typing again (Esc leaves find mode)".to_string());
+        }
+        KeyCode::Char('k') | KeyCode::Up => state.find_move(-1),
+        KeyCode::Char('j') | KeyCode::Down => state.find_move(1),
+        KeyCode::PageUp => {
+            let n = state.list_height().saturating_sub(1) as isize;
+            state.find_move(-n);
+        }
+        KeyCode::PageDown => {
+            let n = state.list_height().saturating_sub(1) as isize;
+            state.find_move(n);
+        }
+        KeyCode::Home => {
+            state.selected = 0;
+            state.scroll = 0;
+        }
+        KeyCode::End => {
+            state.selected = state.entries.len().saturating_sub(1);
+            state.scroll_to_selected();
+        }
+        // `/` in the result list narrows the hits without losing the query
+        // (typing focus keeps `/` literal, so `src/main.rs` stays typeable).
+        KeyCode::Char('/') => state.start_filter(),
         KeyCode::Backspace => {
+            state.find_nav = false;
             state.find_query.pop();
             state.update_find();
         }
         KeyCode::Char(c) => {
+            state.find_nav = false;
             state.find_query.push(c);
             state.update_find();
         }
         _ => {}
     }
-    Ok(())
 }
 
 // ── Fullscreen image viewer keys ──
@@ -382,14 +464,8 @@ fn handle_viewer_key(state: &mut NfeState, key: crossterm::event::KeyEvent) -> A
             state.reset_viewer_zoom();
         }
         // o: OS viewer (real pixels on every terminal).
-        // W: relaunch in Windows Terminal (conhost escape hatch).
         KeyCode::Char('o') => {
             state.open_external();
-        }
-        KeyCode::Char('W') => {
-            if state.relaunch_in_wt() {
-                return Action::Quit;
-            }
         }
         KeyCode::Char('v') => {
             state.toggle_preview_mode();
@@ -432,7 +508,7 @@ fn handle_viewer_key(state: &mut NfeState, key: crossterm::event::KeyEvent) -> A
 // ── Mouse handler ──
 
 fn handle_mouse(state: &mut NfeState, mouse: MouseEvent) {
-    if state.help_visible || state.line_prompt_active || state.find_active || state.viewer_active {
+    if state.help_visible || state.mode != NfeMode::Browse || state.viewer_active {
         return;
     }
 
@@ -475,200 +551,115 @@ fn handle_mouse(state: &mut NfeState, mouse: MouseEvent) {
     }
 }
 
-// ── Goto mode (g key) ──
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::nfe::state::{NfeMode, NfeState};
+    use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 
-fn enter_goto_mode(state: &mut NfeState) -> Result<()> {
-    use crossterm::cursor::MoveTo;
-    use crossterm::queue;
-    use crossterm::style::{Print, ResetColor, SetBackgroundColor, SetForegroundColor};
-    use std::io::{stdout, Write};
+    fn tree(tag: &str) -> std::path::PathBuf {
+        let root = std::env::temp_dir().join(format!("ntc_nfe_ev_{}_{}", tag, std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        std::fs::create_dir_all(root.join("sub")).unwrap();
+        std::fs::write(root.join("main.rs"), "x").unwrap();
+        std::fs::write(root.join("sub").join("nested.rs"), "x").unwrap();
+        root
+    }
 
-    let status_row = state.term_h.saturating_sub(1);
-    let mut buf = String::new();
+    fn press(code: KeyCode) -> Event {
+        Event::Key(KeyEvent::new(code, KeyModifiers::NONE))
+    }
 
-    loop {
-        let prompt = format!(" Go to: {} ", buf);
-        let bg = crossterm::style::Color::Rgb {
-            r: 40,
-            g: 40,
-            b: 60,
-        };
-        let fg = crossterm::style::Color::Rgb {
-            r: 220,
-            g: 220,
-            b: 240,
-        };
-
-        queue!(
-            stdout(),
-            MoveTo(0, status_row as u16),
-            SetBackgroundColor(bg),
-            SetForegroundColor(fg),
-            Print(format!("{:w$}", prompt, w = state.term_w)),
-            ResetColor,
-        )?;
-        stdout().flush()?;
-
-        if !event::poll(Duration::from_millis(100))? {
-            continue;
-        }
-
-        match event::read()? {
-            Event::Key(key) if key.kind == KeyEventKind::Press => match key.code {
-                KeyCode::Esc => {
-                    break;
-                }
-                KeyCode::Enter => {
-                    if !buf.is_empty() {
-                        let target = state.resolve_goto(&buf);
-                        if target.exists() && target.is_dir() {
-                            state.go_to_dir(&target);
-                        } else if go_to_teleport(state, buf.trim()).unwrap_or(false) {
-                            // Teleport bookmark matched.
-                        } else {
-                            state.set_status(format!("No such directory: {}", buf.trim()));
-                        }
-                    }
-                    break;
-                }
-                KeyCode::Char(c) => {
-                    buf.push(c);
-                }
-                KeyCode::Backspace => {
-                    buf.pop();
-                }
-                KeyCode::Tab => {
-                    // Complete against the current directory (never the
-                    // process CWD): split the buffer into a base dir +
-                    // partial name, both resolved against current_dir.
-                    let (base, partial) = match buf.rfind(['/', '\\']) {
-                        Some(pos) => {
-                            let base = state.resolve_goto(&buf[..=pos]);
-                            (base, buf[pos + 1..].to_string())
-                        }
-                        None => (state.current_dir.clone(), buf.clone()),
-                    };
-                    if let Ok(entries) = std::fs::read_dir(&base) {
-                        let lower = partial.to_lowercase();
-                        let mut matches: Vec<String> = entries
-                            .filter_map(|e| e.ok())
-                            .map(|e| e.file_name().to_string_lossy().to_string())
-                            .filter(|n| n.to_lowercase().starts_with(&lower))
-                            .collect();
-                        matches.sort();
-                        if matches.len() == 1 {
-                            let completed = if base == state.current_dir {
-                                matches[0].clone()
-                            } else {
-                                let mut s = buf[..buf.len() - partial.len()].to_string();
-                                s.push_str(&matches[0]);
-                                s
-                            };
-                            buf = completed;
-                        } else if matches.len() > 1 {
-                            state.set_status(format!(
-                                "{} matches: {}",
-                                matches.len(),
-                                matches
-                                    .iter()
-                                    .take(5)
-                                    .cloned()
-                                    .collect::<Vec<_>>()
-                                    .join(", ")
-                            ));
-                        }
-                    }
-                }
-                _ => {}
-            },
-            _ => {}
+    fn send(state: &mut NfeState, keys: &str) {
+        for c in keys.chars() {
+            handle_event(state, press(KeyCode::Char(c))).unwrap();
         }
     }
 
-    state.scroll_to_selected();
-    Ok(())
-}
+    #[test]
+    fn find_mode_routes_typing_navigation_and_filter() {
+        let root = tree("findkeys");
+        let mut s = NfeState::new(Some(&root));
 
-// ── Filter mode (/ key) ──
+        handle_event(&mut s, press(KeyCode::Char('f'))).unwrap();
+        assert_eq!(s.mode, NfeMode::Find);
+        assert!(s.in_find);
 
-fn enter_filter_mode(state: &mut NfeState) -> Result<()> {
-    use crossterm::cursor::MoveTo;
-    use crossterm::queue;
-    use crossterm::style::{Print, ResetColor, SetBackgroundColor, SetForegroundColor};
-    use std::io::{stdout, Write};
+        // Typing focus: every printable character narrows the search.
+        send(&mut s, "nested");
+        assert_eq!(s.find_query, "nested");
+        assert_eq!(s.entries.len(), 1);
+        assert_eq!(s.entries[0].display, "sub/nested.rs");
 
-    let status_row = state.term_h.saturating_sub(1);
-    let mut filter = state.filter.clone();
+        // Tab moves focus to the result list: hjkl walks it, it does not
+        // type into the query.
+        handle_event(&mut s, press(KeyCode::Tab)).unwrap();
+        assert!(s.find_nav);
+        let before = s.find_query.clone();
+        handle_event(&mut s, press(KeyCode::Char('k'))).unwrap();
+        handle_event(&mut s, press(KeyCode::Char('j'))).unwrap();
+        assert_eq!(s.find_query, before);
 
-    loop {
-        let prompt = format!(" Filter: {} ", filter);
-        let bg = crossterm::style::Color::Rgb {
-            r: 40,
-            g: 40,
-            b: 60,
-        };
-        let fg = crossterm::style::Color::Rgb {
-            r: 220,
-            g: 220,
-            b: 240,
-        };
+        // `/` narrows the hit list without touching the query.
+        handle_event(&mut s, press(KeyCode::Char('/'))).unwrap();
+        assert_eq!(s.mode, NfeMode::Filter);
+        send(&mut s, "zz");
+        assert!(s.entries.is_empty());
+        handle_event(&mut s, press(KeyCode::Esc)).unwrap();
+        assert_eq!(s.mode, NfeMode::Find);
+        assert_eq!(s.find_query, "nested");
 
-        queue!(
-            stdout(),
-            MoveTo(0, status_row as u16),
-            SetBackgroundColor(bg),
-            SetForegroundColor(fg),
-            Print(format!("{:w$}", prompt, w = state.term_w)),
-            ResetColor,
-        )?;
-        stdout().flush()?;
-
-        if !event::poll(Duration::from_millis(100))? {
-            continue;
-        }
-
-        match event::read()? {
-            Event::Key(key) if key.kind == KeyEventKind::Press => match key.code {
-                KeyCode::Esc => {
-                    state.filter = String::new();
-                    state.reload();
-                    break;
-                }
-                KeyCode::Enter => {
-                    state.reload();
-                    break;
-                }
-                KeyCode::Char(c) => {
-                    filter.push(c);
-                    state.filter = filter.clone();
-                    state.reload();
-                }
-                KeyCode::Backspace => {
-                    filter.pop();
-                    state.filter = filter.clone();
-                    state.reload();
-                }
-                _ => {}
-            },
-            _ => {}
-        }
+        // Esc leaves find mode (never the app).
+        handle_event(&mut s, press(KeyCode::Esc)).unwrap();
+        assert_eq!(s.mode, NfeMode::Browse);
+        assert!(!s.in_find);
+        assert!(s.running);
+        let _ = std::fs::remove_dir_all(&root);
     }
 
-    if !state.filter.is_empty() && state.entries.is_empty() {
-        state.filter.clear();
-        state.reload();
+    #[test]
+    fn browse_keys_open_command_and_live_filter() {
+        let root = tree("browsekeys");
+        let mut s = NfeState::new(Some(&root));
+
+        // `:` and `g` both open the command prompt.
+        handle_event(&mut s, press(KeyCode::Char(':'))).unwrap();
+        assert_eq!(s.mode, NfeMode::Prompt);
+        send(&mut s, "file main.rs");
+        assert_eq!(s.prompt_buf, "file main.rs");
+        handle_event(&mut s, press(KeyCode::Enter)).unwrap();
+        assert_eq!(s.mode, NfeMode::Browse);
+        assert_eq!(s.current_entry().map(|e| e.name.as_str()), Some("main.rs"));
+
+        handle_event(&mut s, press(KeyCode::Char('g'))).unwrap();
+        assert_eq!(s.mode, NfeMode::Prompt);
+        handle_event(&mut s, press(KeyCode::Esc)).unwrap();
+        assert_eq!(s.mode, NfeMode::Browse);
+
+        // `/` filters as the text is typed; Enter keeps it.
+        handle_event(&mut s, press(KeyCode::Char('/'))).unwrap();
+        assert_eq!(s.mode, NfeMode::Filter);
+        send(&mut s, "ne");
+        assert_eq!(s.filter, "ne");
+        assert!(s.entries.iter().all(|e| e.display.contains("ne")));
+        assert!(s.entries.is_empty(), "no listing row contains 'ne'");
+        handle_event(&mut s, press(KeyCode::Enter)).unwrap();
+        assert_eq!(s.mode, NfeMode::Browse);
+        assert_eq!(s.filter, "ne");
+        let _ = std::fs::remove_dir_all(&root);
     }
 
-    state.scroll_to_selected();
-    Ok(())
-}
-
-fn go_to_teleport(state: &mut NfeState, name: &str) -> Result<bool> {
-    use crate::teleport::TeleportManager;
-    if let Some(path) = TeleportManager::get_path(name) {
-        state.go_to_dir(&path);
-        Ok(true)
-    } else {
-        Ok(false)
+    #[test]
+    fn w_is_not_bound_any_more() {
+        let root = tree("nokeyw");
+        let mut s = NfeState::new(Some(&root));
+        let selected = s.selected;
+        send(&mut s, "wW");
+        // No jump, no relaunch, no exit: the keys are simply unused.
+        assert_eq!(s.selected, selected);
+        assert_eq!(s.mode, NfeMode::Browse);
+        assert!(s.running);
+        assert!(s.filter.is_empty());
+        let _ = std::fs::remove_dir_all(&root);
     }
 }

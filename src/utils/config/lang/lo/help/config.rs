@@ -179,4 +179,30 @@ pub fn fill(m: &mut HashMap<String, String>) {
     );
 
     m.insert("help.config.serve".into(), "config serve [ບໍລິການ] [--port-default ພອດ] [--bind-default ທີ່ຢູ່] ## ຄ່າເລີ່ມຕົ້ນ serve ລາຍບໍລິການ (alias: serve config)".into());
+
+    m.insert(
+        "help.config.integration_shell".into(),
+        "config integration_shell ON|OFF ## ເຕີມຊື່ shell ທີ່ຕິດຕັ້ງ (powershell ເທິງ Windows, bash ເທິງ Linux desktop, cmd, …), ແຟລັກໂຕເອີ້ນ ແລະ ເປີດໂໝດ ntc ps ເທິງ Windows / ntc <distro> ເທິງ Linux (alias: is)".into(),
+    );
+
+    m.insert(
+        "help.config.code_tools".into(),
+        "config code_tools ON|OFF ## ເຕີມເຄື່ອງມືຂຽນໂປຣແກຣມ/ຄອມໄພເລີທີ່ຕິດຕັ້ງ (g++, python, java, cargo, …) ແລະ ແຟລັກ (alias: ct)".into(),
+    );
+
+    m.insert(
+        "help.config.env".into(),
+        "config env NAME value [-g|-l|-os|-osg] ## ຕັ້ງຕົວແປສະພາບແວດລ້ອມ NTC (ບໍ່ໃສ່ຄ່າ: ສະແດງລາຍການ; ໃສ່ຊື່: ສະແດງຄ່າ)".into(),
+    );
+
+    m.insert(
+        "help.config.env_os".into(),
+        "  -g global | -l local | -os ເຊສຊັນນີ້ | -osg ບັນທຶກຖາວອນໃນ OS ## ຄ່າເລີ່ມຕົ້ນ: local ຖ້າມີ ntconfig.toml, ບໍ່ດັ່ງນັ້ນ global".into(),
+    );
+
+    m.insert(
+        "help.config.rmenv".into(),
+        "config rmenv NAME [-g|-l|-os|-osg|-all] ## ລຶບຕົວແປສະພາບແວດລ້ອມ NTC (-all: ທຸກບ່ອນເກັບ + ເຊສຊັນ)"
+            .into(),
+    );
 }

@@ -2,7 +2,9 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import {
   getMoves,
   getPosition,
+  getSettings,
   getState,
+  postBotMove,
   postDraw,
   postMove,
   postNew,
@@ -10,13 +12,12 @@ import {
   postResign,
   postUndo,
 } from '../api'
+import { TC_OPTIONS } from '../constants'
 import { playSfx } from '../sfx'
 import { TERMINAL_STATUS, type GameState, type LegalTarget, type PositionPreview } from '../types'
 import Board, { findKing, sqToIndex, indexToSq, PieceGlyph, type AnimMove } from './Board'
 import BackButton from './BackButton'
 import MoveHistory from './MoveHistory'
-
-const TC_OPTIONS = ['1+0', '3+2', '5+0', '10+0', '15+10', '30+0', 'unlimited']
 
 // Standard material values (kings excluded — priceless).
 const PIECE_VALUE: Record<string, number> = { P: 1, N: 3, B: 3, R: 5, Q: 9 }
@@ -76,6 +77,15 @@ function statusText(s: GameState): string {
     default:
       return s.status
   }
+}
+
+function isBotTurnState(s: GameState | null): boolean {
+  return !!s && s.mode === 'bot' && !!s.bot && s.turn === s.bot.color
+}
+
+function humanColorOf(s: GameState | null): 'w' | 'b' | null {
+  if (!s || s.mode !== 'bot' || !s.bot) return null
+  return s.bot.color === 'w' ? 'b' : 'w'
 }
 
 // Build a slide-ghost from a known board (mover art + castling rook hop).
@@ -164,6 +174,19 @@ export default function GameScreen({ onExit }: { onExit(): void }) {
   const [preview, setPreview] = useState<PositionPreview | null>(null)
   const previewPly = useRef<number | null>(null)
 
+  // Board-highlight display filters from Settings (server still computes
+  // hot/pinned/silver every position; we just choose what to paint).
+  const [highlights, setHighlights] = useState({ pinned: true, danger: true })
+
+  // Bot games: request a reply whenever it is the engine's turn. The
+  // server guards expected ply and in-flight searches, so a duplicate
+  // call is harmless; the refs simply avoid a request storm.
+  const [botThinking, setBotThinking] = useState(false)
+  const [botRetry, setBotRetry] = useState(0)
+  const botBusyRef = useRef(false)
+  const botPlyRef = useRef(-1)
+  const autoFlipRef = useRef<string | null>(null)
+
   // A poll response is stale when it rewinds the move count (pre-move
   // read resolving late) or un-terminates a finished game (pre-resign /
   // pre-draw read). Hotseat invariants: move count only grows, terminal
@@ -224,6 +247,97 @@ export default function GameScreen({ onExit }: { onExit(): void }) {
       cancelDragFrame()
     }
   }, [refresh])
+
+  // Highlight toggles are read on mount and again whenever the tab becomes
+  // visible, so a change made in Settings on another tab or device applies
+  // without a hard reload. Leaving Settings also remounts this screen.
+  useEffect(() => {
+    function load() {
+      getSettings()
+        .then((s) =>
+          setHighlights({
+            pinned: (s['chess.highlight.pinned'] ?? 'on') === 'on',
+            danger: (s['chess.highlight.danger'] ?? 'on') === 'on',
+          }),
+        )
+        .catch(() => {})
+    }
+    function onVis() {
+      if (!document.hidden) load()
+    }
+    load()
+    document.addEventListener('visibilitychange', onVis)
+    return () => document.removeEventListener('visibilitychange', onVis)
+  }, [])
+
+  // In a bot game, orient the board to the human's side the first time we
+  // see the bot's colour. Manual Flip still works afterwards.
+  useEffect(() => {
+    const s = stateRef.current
+    if (!s || s.mode !== 'bot' || !s.bot) return
+    const key = s.bot.color
+    if (autoFlipRef.current === key) return
+    autoFlipRef.current = key
+    const want = s.bot.color === 'w'
+    setFlipped(want)
+    try {
+      localStorage.setItem('ntc.chess.flip', want ? '1' : '0')
+    } catch {
+      /* private mode — session-only */
+    }
+  }, [state?.mode, state?.bot?.color])
+
+  // Ask the engine for its reply when it is the bot's turn. Errors are
+  // retried lazily: `bot_busy`/`stale_ply` mean another tab or a poll beat
+  // us, not a broken engine.
+  useEffect(() => {
+    const s = state
+    if (!s || s.mode !== 'bot' || !s.bot) return
+    if (s.turn !== s.bot.color) {
+      botPlyRef.current = -1
+      setBotThinking(false)
+      return
+    }
+    if (TERMINAL_STATUS.has(s.status) || viewPly !== null) {
+      setBotThinking(false)
+      return
+    }
+    const ply = s.moves.length
+    if (botBusyRef.current || botPlyRef.current === ply) return
+    botBusyRef.current = true
+    botPlyRef.current = ply
+    setBotThinking(true)
+    markMutating()
+    postBotMove(ply)
+      .then((ns) => {
+        if (ns.error) {
+          botPlyRef.current = -1
+          if (ns.error === 'bot_busy' || ns.error === 'stale_ply') {
+            window.setTimeout(() => setBotRetry((n) => n + 1), 700)
+          } else if (ns.error === 'not_bot_turn') {
+            /* server moved on; the next poll will reconcile */
+          } else if (ns.error === 'bot_not_installed') {
+            setNotice('Bot is no longer installed')
+          } else {
+            setNotice(`Bot error (${ns.error})`)
+          }
+          return
+        }
+        if (ns.sfx) playSfx(ns.sfx === 'win' ? 'lose' : ns.sfx)
+        if (ns.bot_fallback) setNotice('Engine hiccup — bot played a legal fallback move')
+        setState(ns)
+      })
+      .catch((e) => {
+        botPlyRef.current = -1
+        setNotice(e instanceof Error ? e.message : 'Bot move failed')
+        window.setTimeout(() => setBotRetry((n) => n + 1), 1200)
+      })
+      .finally(() => {
+        botBusyRef.current = false
+        setBotThinking(false)
+      })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [state, viewPly, botRetry])
 
   // If selection becomes stale (opponent... same-screen turn change), clear it.
   useEffect(() => {
@@ -313,28 +427,46 @@ export default function GameScreen({ onExit }: { onExit(): void }) {
   async function doUndoOnce(): Promise<boolean> {
     const cur = stateRef.current
     if (!cur || cur.moves.length === 0) return false
+    // Bot games take back the bot reply too, so the human is on move
+    // again. If the engine is still thinking (human just moved), one ply
+    // is enough.
+    let plies = 1
+    if (cur.mode === 'bot' && cur.bot) {
+      const humanColor = cur.bot.color === 'w' ? 'b' : 'w'
+      plies = Math.min(cur.turn === humanColor ? 2 : 1, cur.moves.length)
+    }
     try {
-      const ns = await postUndo()
-      if (ns.error || !ns.undone) {
-        if (!ns.error) setNotice('Nothing to undo')
-        return false
+      let boardBefore = cur.board
+      let beforeLast = cur.board
+      let last: GameState | null = null
+      for (let i = 0; i < plies; i++) {
+        const ns = await postUndo()
+        if (ns.error || !ns.undone) {
+          if (!ns.error && i === 0) setNotice('Nothing to undo')
+          break
+        }
+        beforeLast = boardBefore
+        last = ns
+        boardBefore = ns.board
       }
-      // Reversed slide: buildAnim from the pre-undo board yields the
-      // mover art at `to` plus the reversed rook hop for castling
-      // takebacks. `back` also hides the origin square mid-flight.
+      if (!last) return false
+      const undone = last.undone!
+      // Reversed slide: buildAnim from the board just before the final
+      // takeback yields the mover art at `to` plus the reversed rook hop
+      // for castling takebacks. `back` also hides the origin mid-flight.
       animSeq.current += 1
       justUndidRef.current = true
       setAnim({
         ...buildAnim(
-          cur.board,
-          ns.undone.to,
-          ns.undone.from,
-          `undo-${ns.moves.length}-${ns.undone.san}`,
+          beforeLast,
+          undone.to,
+          undone.from,
+          `undo-${last.moves.length}-${undone.san}`,
           true,
         ),
         back: true,
       })
-      setState(ns)
+      setState(last)
       setSelected(null)
       setTargets([])
       return true
@@ -455,6 +587,7 @@ export default function GameScreen({ onExit }: { onExit(): void }) {
     suppressClick.current = false
     const s = stateRef.current
     if (!s || TERMINAL_STATUS.has(s.status) || promo || viewPly !== null) return
+    if (isBotTurnState(s)) return
     if (e.button !== undefined && e.button !== 0 && e.pointerType === 'mouse') return
     const code = s.board[sqToIndex(sq)]
     if (!code || code[0] !== s.turn) return
@@ -569,6 +702,7 @@ export default function GameScreen({ onExit }: { onExit(): void }) {
     }
     const s = stateRef.current
     if (!s || TERMINAL_STATUS.has(s.status) || promo) return
+    if (botBusyRef.current || isBotTurnState(s)) return
     const code = s.board[sq.charCodeAt(0) - 97 + (sq.charCodeAt(1) - 49) * 8]
     // Click a target square → move there.
     if (selected) {
@@ -665,8 +799,10 @@ export default function GameScreen({ onExit }: { onExit(): void }) {
     const s = stateRef.current
     if (!s) return
     markMutating()
+    const human = humanColorOf(s)
+    const loser = human ?? s.turn
     try {
-      const ns = await postResign(s.turn === 'w' ? 'white' : 'black')
+      const ns = await postResign(loser === 'w' ? 'white' : 'black')
       if (!ns.error) playSfx('lose')
       setState(ns.error ? s : ns)
       setConfirmResign(false)
@@ -696,6 +832,9 @@ export default function GameScreen({ onExit }: { onExit(): void }) {
   // live clocks/score context. Overlays that need live evaluation
   // (check, hot, pinned, silver) stay dark in preview.
   const isPreview = viewPly !== null && preview !== null
+  const bot = state.mode === 'bot' ? state.bot : null
+  const humanColor = humanColorOf(state)
+  const botTurn = !!bot && state.turn === bot.color && !over
   const showBoard = isPreview && preview ? preview.board : state.board
   const showLast = isPreview && preview ? preview.last_move : state.last_move
   const showCapW = isPreview && preview ? preview.captured_by_white : state.captured_by_white
@@ -710,9 +849,12 @@ export default function GameScreen({ onExit }: { onExit(): void }) {
     <div className="game">
       <div className="game-top">
         <BackButton onBack={onExit} />
-        <span className="tc-label">{state.clocks.tc}</span>
+        <span className="tc-label">
+          {state.clocks.tc}
+          {bot ? ` — ${bot.name} (${bot.level_label})` : ''}
+        </span>
         <button className="back-btn" onClick={toggleFlip} title={flipped ? "White at bottom" : "Black at bottom"}>
-          ⇄ Flip
+          Flip
         </button>
       </div>
 
@@ -738,14 +880,14 @@ export default function GameScreen({ onExit }: { onExit(): void }) {
             lastFrom={showLast?.from ?? null}
             lastTo={showLast?.to ?? null}
             checkKing={isPreview ? null : checkSq}
-            hotSquares={isPreview ? [] : (state.hot ?? [])}
-            pinnedSquares={isPreview ? [] : (state.pinned ?? [])}
-            silverSquares={isPreview ? [] : (state.silver ?? [])}
+            hotSquares={isPreview || !highlights.danger ? [] : (state.hot ?? [])}
+            pinnedSquares={isPreview || !highlights.pinned ? [] : (state.pinned ?? [])}
+            silverSquares={isPreview || !highlights.pinned ? [] : (state.silver ?? [])}
             anim={isPreview ? null : anim}
             flipped={flipped}
             drag={dragPos}
             dragFrom={dragPos?.from ?? null}
-            interactive={!over && !isPreview}
+            interactive={!over && !isPreview && !botTurn}
             onSquare={handleSquare}
             onPress={onPress}
             onDragMove={onDragMove}
@@ -784,7 +926,18 @@ export default function GameScreen({ onExit }: { onExit(): void }) {
         </div>
 
         <div className="side-col">
-          <div className="status">{viewedLabel ?? statusText(state)}</div>
+          <div className="status">
+            {viewedLabel ??
+              (botThinking ? `${bot?.name ?? 'Bot'} is thinking…` : statusText(state))}
+          </div>
+          {bot && (
+            <div className="meta">
+              <span>
+                You play {humanColor === 'w' ? 'White' : 'Black'}
+              </span>
+              <span>{bot.name} · {bot.level_label}</span>
+            </div>
+          )}
           {notice && (
             <div className="notice" onClick={() => setNotice(null)}>
               {notice}
@@ -813,9 +966,15 @@ export default function GameScreen({ onExit }: { onExit(): void }) {
               }}
               onContextMenu={(e) => e.preventDefault()}
               disabled={state.moves.length === 0 || promo !== null || isPreview}
-              title={isPreview ? "Return to live first" : "Undo last move (hold to rewind)"}
+              title={
+                isPreview
+                  ? 'Return to live first'
+                  : bot
+                    ? 'Undo your move and the bot reply (hold to rewind)'
+                    : 'Undo last move (hold to rewind)'
+              }
             >
-              ↩ Undo
+              Undo
             </button>
           </div>
 
@@ -824,7 +983,7 @@ export default function GameScreen({ onExit }: { onExit(): void }) {
               {confirmResign && !isPreview ? (
                 <>
                   <button className="danger" onClick={resign}>
-                    Confirm resign ({state.turn === 'w' ? 'white' : 'black'})
+                    Confirm resign ({humanColor ?? state.turn})
                   </button>
                   <button onClick={() => setConfirmResign(false)}>Cancel</button>
                 </>
@@ -837,13 +996,15 @@ export default function GameScreen({ onExit }: { onExit(): void }) {
                   Resign
                 </button>
               )}
-              <button
-                onClick={draw}
-                disabled={isPreview}
-                title={isPreview ? 'Return to live first' : undefined}
-              >
-                Draw (agree)
-              </button>
+              {!bot && (
+                <button
+                  onClick={draw}
+                  disabled={isPreview}
+                  title={isPreview ? 'Return to live first' : undefined}
+                >
+                  Draw (agree)
+                </button>
+              )}
             </div>
           )}
 

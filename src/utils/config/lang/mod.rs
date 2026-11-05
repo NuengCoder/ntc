@@ -277,6 +277,58 @@ mod tests {
         "help.search.qur",
     ];
 
+    /// Every `ran check` key must exist in all four bundled language packs.
+    const RAN_CHECK_KEYS: &[&str] = &[
+        "ran.check_title",
+        "ran.check_ok",
+        "ran.check_problems",
+        "ran.check_error",
+        "ran.check_hint",
+        "ran.help_check_fmt",
+        "help.ran.check",
+    ];
+
+    #[test]
+    fn ran_check_keys_exist_in_all_languages() {
+        assert_keys_present(super::en::build_map(), "english", RAN_CHECK_KEYS);
+        assert_keys_present(super::zh::build_map(), "chinese", RAN_CHECK_KEYS);
+        assert_keys_present(super::th::build_map(), "thai", RAN_CHECK_KEYS);
+        assert_keys_present(super::lo::build_map(), "lao", RAN_CHECK_KEYS);
+    }
+
+    /// Every `ran fmt` key must exist in all four bundled language packs.
+    const RAN_FMT_KEYS: &[&str] = &[
+        "ran.help_fmt",
+        "ran.fmt.usage",
+        "ran.fmt.unknown",
+        "ran.fmt.current",
+        "ran.fmt.no_file",
+        "ran.fmt.already",
+        "ran.fmt.confirm",
+        "ran.fmt.skipped",
+        "ran.fmt.exists",
+        "ran.fmt.written",
+        "ran.fmt.old_kept",
+        "ran.fmt.no_terminal",
+        "help.ran.fmt",
+    ];
+
+    #[test]
+    fn ran_fmt_keys_exist_in_all_languages() {
+        assert_keys_present(super::en::build_map(), "english", RAN_FMT_KEYS);
+        assert_keys_present(super::zh::build_map(), "chinese", RAN_FMT_KEYS);
+        assert_keys_present(super::th::build_map(), "thai", RAN_FMT_KEYS);
+        assert_keys_present(super::lo::build_map(), "lao", RAN_FMT_KEYS);
+    }
+
+    #[test]
+    fn ran_fmt_keys_are_translated_outside_english() {
+        let en = super::en::build_map();
+        assert_translated(super::zh::build_map(), &en, "chinese", RAN_FMT_KEYS);
+        assert_translated(super::th::build_map(), &en, "thai", RAN_FMT_KEYS);
+        assert_translated(super::lo::build_map(), &en, "lao", RAN_FMT_KEYS);
+    }
+
     #[test]
     fn qur_keys_exist_in_all_languages() {
         assert_keys_present(super::en::build_map(), "english", QUR_KEYS);
@@ -442,6 +494,73 @@ mod tests {
         assert_keys_present(super::lo::build_map(), "lao", GIT_KEYS);
     }
 
+    /// Every `integration_shell` key must exist in all four bundled packs.
+    const ISHELL_KEYS: &[&str] = &[
+        "help.config.integration_shell",
+        "msg.setIS.bash_completion_install",
+        "msg.setIS.bash_completion_missing",
+        "msg.setIS.bash_completion_ok",
+        "msg.setIS.bash_exited",
+        "msg.setIS.bash_linux_only",
+        "msg.setIS.bash_missing",
+        "msg.setIS.bash_start_failed",
+        "msg.setIS.bash_stopped",
+        "msg.setIS.error",
+        "msg.setIS.off",
+        "msg.setIS.on",
+        "msg.setIS.platform",
+        "msg.setIS.ps_windows_only",
+        "msg.setIS.status",
+        "msg.setIS.zsh_exited",
+        "msg.setIS.zsh_macos_only",
+        "msg.setIS.zsh_missing",
+        "msg.setIS.zsh_start_failed",
+        "msg.setIS.zsh_stopped",
+        "msg.showcg.label_integration_shell",
+    ];
+
+    #[test]
+    fn ishell_keys_exist_in_all_languages() {
+        assert_keys_present(super::en::build_map(), "english", ISHELL_KEYS);
+        assert_keys_present(super::zh::build_map(), "chinese", ISHELL_KEYS);
+        assert_keys_present(super::th::build_map(), "thai", ISHELL_KEYS);
+        assert_keys_present(super::lo::build_map(), "lao", ISHELL_KEYS);
+    }
+
+    /// Every `code_tools` config key must exist in all four bundled packs.
+    const CTOOLS_KEYS: &[&str] = &[
+        "help.config.code_tools",
+        "msg.setCT.error",
+        "msg.setCT.off",
+        "msg.setCT.on",
+        "msg.setCT.status",
+        "msg.showcg.label_code_tools",
+    ];
+
+    #[test]
+    fn ctools_keys_exist_in_all_languages() {
+        assert_keys_present(super::en::build_map(), "english", CTOOLS_KEYS);
+        assert_keys_present(super::zh::build_map(), "chinese", CTOOLS_KEYS);
+        assert_keys_present(super::th::build_map(), "thai", CTOOLS_KEYS);
+        assert_keys_present(super::lo::build_map(), "lao", CTOOLS_KEYS);
+    }
+
+    /// `http` help and QUERY warnings must exist in all four bundled packs.
+    const HTTP_KEYS: &[&str] = &[
+        "cmd.http.help_example7",
+        "cmd.http.help_methods",
+        "cmd.http.query_no_body",
+        "cmd.http.query_no_content_type",
+    ];
+
+    #[test]
+    fn http_keys_exist_in_all_languages() {
+        assert_keys_present(super::en::build_map(), "english", HTTP_KEYS);
+        assert_keys_present(super::zh::build_map(), "chinese", HTTP_KEYS);
+        assert_keys_present(super::th::build_map(), "thai", HTTP_KEYS);
+        assert_keys_present(super::lo::build_map(), "lao", HTTP_KEYS);
+    }
+
     /// Every `dir_view` config key must exist in all four bundled language packs.
     const DIR_VIEW_KEYS: &[&str] = &[
         "help.config.dir_view",
@@ -604,6 +723,7 @@ mod tests {
         "ndb.dbal_add",
         "ndb.dbal_add_usage",
         "ndb.dbal_added",
+        "ndb.dbal_bad_hint",
         "ndb.dbal_blocked",
         "ndb.dbal_cls",
         "ndb.dbal_cls_usage",
@@ -611,6 +731,8 @@ mod tests {
         "ndb.dbal_edit",
         "ndb.dbal_edit_usage",
         "ndb.dbal_exec",
+        "ndb.dbal_hint_note",
+        "ndb.dbal_hints",
         "ndb.dbal_info",
         "ndb.dbal_info_usage",
         "ndb.dbal_invalid_name",
@@ -1146,6 +1268,11 @@ mod tests {
         "cmd.nms.help_size",
         "cmd.nms.help_long",
         "cmd.nms.help_care",
+        "cmd.nms.help_start",
+        "cmd.nms.start_usage",
+        "cmd.nms.invalid_start",
+        "cmd.nms.playing",
+        "cmd.nms.stop_hint",
         "cmd.nms.keys_title",
         "cmd.nms.help_keys",
         "cmd.nms.examples_title",
@@ -1266,6 +1393,51 @@ mod tests {
         assert_keys_present(super::zh::build_map(), "chinese", LOCAL_SCOPE_KEYS);
         assert_keys_present(super::th::build_map(), "thai", LOCAL_SCOPE_KEYS);
         assert_keys_present(super::lo::build_map(), "lao", LOCAL_SCOPE_KEYS);
+    }
+
+    /// Every `config env` / `config rmenv` / `showenv` key must exist in all
+    /// four bundled language packs.
+    const ENV_KEYS: &[&str] = &[
+        "cmd.config.env.title",
+        "cmd.config.env.store_local",
+        "cmd.config.env.store_global",
+        "cmd.config.env.store_session",
+        "cmd.config.env.store_os",
+        "cmd.config.env.store_process",
+        "cmd.config.env.empty",
+        "cmd.config.env.list_hint",
+        "cmd.config.env.get",
+        "cmd.config.env.not_set",
+        "cmd.config.env.protected",
+        "cmd.config.env.invalid_name",
+        "cmd.config.env.os_fail",
+        "cmd.config.env.set_os",
+        "cmd.config.env.os_wiring",
+        "cmd.config.env.set",
+        "cmd.config.env.no_local",
+        "cmd.config.env.remove_missing",
+        "cmd.config.env.removed",
+        "cmd.config.env.flag_conflict",
+        "cmd.config.env.rm_usage",
+        "help.config.env",
+        "help.config.env_os",
+        "help.config.rmenv",
+        "misc.show_env.ntc_header",
+        "misc.show_env.ntc_empty",
+        "misc.show_env.ntc_local",
+        "misc.show_env.ntc_global",
+        "misc.show_env.ntc_session",
+        "misc.show_env.os_header",
+        "misc.show_env.os_more",
+        "misc.show_env.os_masked",
+    ];
+
+    #[test]
+    fn env_keys_exist_in_all_languages() {
+        assert_keys_present(super::en::build_map(), "english", ENV_KEYS);
+        assert_keys_present(super::zh::build_map(), "chinese", ENV_KEYS);
+        assert_keys_present(super::th::build_map(), "thai", ENV_KEYS);
+        assert_keys_present(super::lo::build_map(), "lao", ENV_KEYS);
     }
 
     /// Every `scan files` / `scan dir` key must exist in all four bundled
@@ -1614,5 +1786,101 @@ mod tests {
             untranslated.is_empty(),
             "lao pack still shows English for: {untranslated:?}"
         );
+    }
+
+    /// Every idle ghost-typing suggestion must exist in all four bundled packs.
+    const IDLE_KEYS: &[&str] = &[
+        "idle.tp",
+        "idle.explorer",
+        "idle.ne",
+        "idle.view",
+        "idle.search",
+        "idle.todo",
+        "idle.git",
+        "idle.serve",
+        "idle.empty",
+        "idle.help",
+        "idle.tutorial",
+        "idle.ral",
+        "idle.ran",
+        "idle.pipe",
+        "idle.math",
+        "idle.qr",
+        "idle.theme",
+        "idle.backup",
+        "idle.tl",
+        "idle.size",
+        "idle.report",
+        "idle.scr",
+        "idle.time",
+        "idle.encode",
+        "idle.fmt",
+        "idle.arc",
+        "idle.scan",
+        "idle.sys",
+        "idle.showcg",
+        "idle.ntpkg",
+        "idle.ndb",
+        "idle.nsheet",
+        "idle.fgo",
+        "idle.back",
+        "idle.viewf",
+        "idle.views",
+        "idle.txtf",
+        "idle.text",
+        "idle.count",
+        "idle.files",
+        "idle.config",
+        "idle.opencg",
+        "idle.local",
+        "idle.project",
+        "idle.tpb",
+        "idle.qur",
+        "idle.fsc",
+        "idle.ignore",
+        "idle.igcare",
+        "idle.http",
+        "idle.dl",
+        "idle.dns",
+        "idle.up",
+        "idle.ping",
+        "idle.trace",
+        "idle.smtp",
+        "idle.ipcfg",
+        "idle.wi",
+        "idle.spec",
+        "idle.tmprt",
+        "idle.clip",
+        "idle.qsc",
+        "idle.pathman",
+        "idle.autoup",
+        "idle.mode",
+        "idle.python",
+        "idle.decode",
+        "idle.image",
+        "idle.nssh",
+        "idle.nms",
+        "idle.fake",
+        "idle.deadlock",
+        "idle.ntpx",
+        "idle.pathcp",
+        "idle.say",
+        "idle.ui",
+    ];
+
+    #[test]
+    fn idle_keys_exist_in_all_languages() {
+        assert_keys_present(super::en::build_map(), "english", IDLE_KEYS);
+        assert_keys_present(super::zh::build_map(), "chinese", IDLE_KEYS);
+        assert_keys_present(super::th::build_map(), "thai", IDLE_KEYS);
+        assert_keys_present(super::lo::build_map(), "lao", IDLE_KEYS);
+    }
+
+    #[test]
+    fn idle_keys_are_translated_outside_english() {
+        let en = super::en::build_map();
+        assert_translated(super::zh::build_map(), &en, "chinese", IDLE_KEYS);
+        assert_translated(super::th::build_map(), &en, "thai", IDLE_KEYS);
+        assert_translated(super::lo::build_map(), &en, "lao", IDLE_KEYS);
     }
 }

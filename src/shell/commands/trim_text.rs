@@ -13,6 +13,7 @@
 
 use crate::navigator::Navigator;
 use crate::output::print_error;
+use crate::shell::pipeline::strip_ansi_text;
 use crate::shell::stdin;
 use crate::t;
 use anyhow::Result;
@@ -77,6 +78,13 @@ fn split_args(
     }
 }
 
+/// Stdin text with terminal styling removed. Patterns are matched against the
+/// plain text, so color/hyperlink escapes from an upstream tool never survive
+/// into `trim`'s output.
+fn clean_stdin(text: String) -> String {
+    strip_ansi_text(&text)
+}
+
 pub(crate) fn cmd_trim(args: &str, _nav: &mut Navigator) -> Result<bool> {
     let tokens = tokenize(args);
     if tokens.is_empty() {
@@ -93,7 +101,7 @@ pub(crate) fn cmd_trim(args: &str, _nav: &mut Navigator) -> Result<bool> {
     let text = match inline_text {
         Some(text) => text,
         None => match stdin::read_to_string() {
-            Some(text) => text,
+            Some(text) => clean_stdin(text),
             None => {
                 print_error(&t!("misc.trim.usage"));
                 return Ok(false);
@@ -131,6 +139,22 @@ mod tests {
         let piped = apply_trim("nice ... bro ...\r\n", &pats(&[" ..."]));
         assert_eq!(inline, "nice bro");
         assert_eq!(piped.trim_end_matches(['\r', '\n']), inline);
+    }
+
+    #[test]
+    fn stdin_colours_are_stripped_before_trimming() {
+        let colored = clean_stdin("\x1b[31mnice\x1b[0m ... bro ...\r\n".to_string());
+        assert_eq!(colored, "nice ... bro ...\r\n");
+        assert_eq!(
+            apply_trim(&colored, &pats(&[" ..."])).trim_end_matches(['\r', '\n']),
+            "nice bro"
+        );
+    }
+
+    #[test]
+    fn stdin_hyperlinks_are_stripped() {
+        let linked = clean_stdin("\x1b]8;;https://example.com\x07link\x1b]8;;\x07".to_string());
+        assert_eq!(linked, "link");
     }
 
     #[test]

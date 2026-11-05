@@ -146,6 +146,25 @@ pub fn fill(m: &mut HashMap<String, String>) {
         "cmd.serve.lock_on".into(),
         "Read-only mode (--lock): uploads, edits, creates and deletes are blocked".into(),
     );
+    m.insert(
+        "cmd.serve.url_web".into(),
+        "web UI:        {}  (browse + drag-and-drop upload)".into(),
+    );
+
+    m.insert(
+        "cmd.serve.url_upload".into(),
+        "upload:        {}  (POST multipart, field 'file')".into(),
+    );
+
+    m.insert(
+        "cmd.serve.url_download".into(),
+        "download:      {}  (append the file path)".into(),
+    );
+
+    m.insert(
+        "cmd.serve.url_info".into(),
+        "info:          {}  (what this is + curl/wget/ntc recipes)".into(),
+    );
 
     m.insert(
         "cmd.serve.example_auth".into(),

@@ -233,10 +233,10 @@ pub fn fill(m: &mut HashMap<String, String>) {
 
     m.insert(
         "ntpkg.npm_node_found_at".into(),
-        "  ✓ ພົບ Node.js ທີ່: {}".into(),
+        "  ພົບ Node.js ທີ່: {}".into(),
     );
 
-    m.insert("ntpkg.npm_node_not_found".into(), "  ✗ ບໍ່ພົບ Node.js".into());
+    m.insert("ntpkg.npm_node_not_found".into(), "  ບໍ່ພົບ Node.js".into());
 
     m.insert("ntpkg.npm_install_via_pkg".into(), "  ຕິດຕັ້ງຜ່ານ pkg:".into());
 
@@ -247,7 +247,7 @@ pub fn fill(m: &mut HashMap<String, String>) {
 
     m.insert("ntpkg.npm_ntpkg_cmd".into(), "    ntpkg install {}".into());
 
-    m.insert("ntpkg.npm_cmd".into(), "    npm i -g {}".into());
+    m.insert("ntpkg.npm_cmd".into(), "    npm install -g {}".into());
 
     m.insert(
         "ntpkg.npm_or_download_nodejs".into(),
@@ -259,9 +259,9 @@ pub fn fill(m: &mut HashMap<String, String>) {
         "  ຫຼືຕິດຕັ້ງຜ່ານ fnm/nvm/volta".into(),
     );
 
-    m.insert("ntpkg.npm_found_at".into(), "  ✓ ພົບ npm ທີ່: {}".into());
+    m.insert("ntpkg.npm_found_at".into(), "  ພົບ npm ທີ່: {}".into());
 
-    m.insert("ntpkg.npm_not_found".into(), "  ✗ ບໍ່ພົບ npm".into());
+    m.insert("ntpkg.npm_not_found".into(), "  ບໍ່ພົບ npm".into());
 
     m.insert("ntpkg.npm_then_run".into(), "  ຈາກນັ້ນຮັນ:".into());
 
@@ -486,6 +486,11 @@ pub fn fill(m: &mut HashMap<String, String>) {
     m.insert(
         "ntpkg.src_nginx".into(),
         "nginx - Web server / reverse proxy".into(),
+    );
+
+    m.insert(
+        "ntpkg.src_stockfish".into(),
+        "stockfish - UCI chess engine (Stockfish)".into(),
     );
 
     m.insert(

@@ -5,7 +5,7 @@ pub fn fill(m: &mut HashMap<String, String>) {
 
     m.insert(
         "cmd.nms.help_play".into(),
-        "nms play <文件>                                 全屏声音播放器（视频仅播放音频）".into(),
+        "nms play [-sf <时长>] <文件>                     在终端播放声音（Ctrl+C 停止；视频仅播放音频）".into(),
     );
 
     m.insert(
@@ -41,16 +41,35 @@ pub fn fill(m: &mut HashMap<String, String>) {
         "  --care            忽略忽略规则（care 模式）".into(),
     );
 
-    m.insert("cmd.nms.keys_title".into(), "播放器按键：".into());
+    m.insert(
+        "cmd.nms.help_start".into(),
+        "  -sf, --start-from <时长>  从 <时长> 开始播放（仅 play，如 -sf 30）".into(),
+    );
+
+    m.insert(
+        "cmd.nms.start_usage".into(),
+        "用法：-sf <时长>（如 -sf 30、-sf 1mn）".into(),
+    );
+
+    m.insert(
+        "cmd.nms.invalid_start".into(),
+        "无效的开始时间：'{}'（如 30、1mn）".into(),
+    );
+
+    m.insert("cmd.nms.playing".into(), "♪ {}  [{}]".into());
+
+    m.insert("cmd.nms.stop_hint".into(), "按 Ctrl+C 停止".into());
+
+    m.insert("cmd.nms.keys_title".into(), "播放：".into());
 
     m.insert(
         "cmd.nms.help_keys".into(),
-        "  空格 暂停/继续 · ←/→ 快进快退 5 秒 · ↑/↓ 音量 · a 重播 · q 退出".into(),
+        "  实时位置 / 剩余时间倒计时 · Ctrl+C 停止 · -sf <时长> 从指定位置开始".into(),
     );
 
     m.insert("cmd.nms.examples_title".into(), "示例：".into());
 
-    m.insert("cmd.nms.example_play".into(), "nms play song.mp3".into());
+    m.insert("cmd.nms.example_play".into(), "nms play -sf 30 song.mp3".into());
 
     m.insert("cmd.nms.example_video".into(), "nms play movie.mp4".into());
 
@@ -71,6 +90,18 @@ pub fn fill(m: &mut HashMap<String, String>) {
         "cmd.nms.no_sound_device".into(),
         "此设备未找到声卡设备 —— 无法在此播放音频".into(),
     );
+
+    m.insert(
+        "cmd.nms.need_ffmpeg".into(),
+        "无法播放 '{}'：此容器或编码需要 ffmpeg".into(),
+    );
+
+    m.insert(
+        "cmd.nms.install_ffmpeg".into(),
+        "可执行以下命令安装：ntpkg install ffmpeg".into(),
+    );
+
+    m.insert("cmd.nms.no_audio_track".into(), "'{}' 没有音轨".into());
 
     m.insert("cmd.nms.play_failed".into(), "无法播放 '{}'：{}".into());
 

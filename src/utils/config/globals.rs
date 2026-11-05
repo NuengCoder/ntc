@@ -224,6 +224,16 @@ impl Config {
         cfg.save();
     }
 
+    pub fn global_get_idle_hint_enabled() -> bool {
+        Self::read_global().idle_hint_enabled
+    }
+
+    pub fn global_set_idle_hint_enabled(enabled: bool) {
+        let mut cfg = Self::write_global();
+        cfg.idle_hint_enabled = enabled;
+        cfg.save();
+    }
+
     pub fn global_get_git_integration_enabled() -> bool {
         Self::read_global().git_integration_enabled
     }
@@ -232,6 +242,26 @@ impl Config {
         cfg.git_integration_enabled = enabled;
         cfg.save();
         crate::utils::git::invalidate();
+    }
+
+    pub fn global_get_integration_shell_enabled() -> bool {
+        Self::read_global().integration_shell_enabled
+    }
+    pub fn global_set_integration_shell_enabled(enabled: bool) {
+        let mut cfg = Self::write_global();
+        cfg.integration_shell_enabled = enabled;
+        cfg.save();
+        crate::shell::ext_complete::invalidate();
+    }
+
+    pub fn global_get_code_tools_enabled() -> bool {
+        Self::read_global().code_tools_enabled
+    }
+    pub fn global_set_code_tools_enabled(enabled: bool) {
+        let mut cfg = Self::write_global();
+        cfg.code_tools_enabled = enabled;
+        cfg.save();
+        crate::shell::ext_complete::invalidate();
     }
 
     pub fn global_get_language() -> String {
@@ -276,6 +306,82 @@ impl Config {
         let mut cfg = Self::write_global();
         cfg.teleports = teleports;
         cfg.save();
+    }
+
+    // ---- NTC environment variables ----
+
+    /// Environment variables defined in the local `ntconfig.toml`.
+    pub fn get_local_env() -> HashMap<String, String> {
+        Self::read_local_config()
+            .map(|l| l.env.unwrap_or_default())
+            .unwrap_or_default()
+    }
+
+    /// Environment variables defined in the global ntc config.
+    pub fn get_global_env() -> HashMap<String, String> {
+        Self::read_global().env.clone()
+    }
+
+    /// Effective NTC environment: global entries overlaid by local ones.
+    pub fn get_env_merged() -> HashMap<String, String> {
+        let mut merged = Self::get_global_env();
+        merged.extend(Self::get_local_env());
+        merged
+    }
+
+    /// Effective NTC environment split by store: `(global, local)`.
+    pub fn get_env_by_source() -> (HashMap<String, String>, HashMap<String, String>) {
+        (Self::get_global_env(), Self::get_local_env())
+    }
+
+    /// Write one variable to the local `ntconfig.toml`.
+    /// Returns false when the current directory has no local config.
+    pub fn set_local_env_var(name: &str, value: &str) -> bool {
+        if Self::get_local_config_path().is_none() {
+            return false;
+        }
+        let mut local = Self::read_local_config().unwrap_or_default();
+        local
+            .env
+            .get_or_insert_with(HashMap::new)
+            .insert(name.to_string(), value.to_string());
+        Self::write_local_config(&local).is_ok()
+    }
+
+    /// Write one variable to the global ntc config.
+    pub fn set_global_env_var(name: &str, value: &str) {
+        let mut cfg = Self::write_global();
+        cfg.env.insert(name.to_string(), value.to_string());
+        cfg.save();
+    }
+
+    /// Remove one variable from the local `ntconfig.toml`.
+    /// Returns true when the variable existed there.
+    pub fn remove_local_env_var(name: &str) -> bool {
+        if Self::get_local_config_path().is_none() {
+            return false;
+        }
+        let mut local = Self::read_local_config().unwrap_or_default();
+        let removed = local
+            .env
+            .as_mut()
+            .and_then(|env| env.remove(name))
+            .is_some();
+        if removed {
+            let _ = Self::write_local_config(&local);
+        }
+        removed
+    }
+
+    /// Remove one variable from the global ntc config.
+    /// Returns true when the variable existed there.
+    pub fn remove_global_env_var(name: &str) -> bool {
+        let mut cfg = Self::write_global();
+        let removed = cfg.env.remove(name).is_some();
+        if removed {
+            cfg.save();
+        }
+        removed
     }
 
     pub fn global_rename_run_alias(old_name: &str, new_name: &str) -> bool {
@@ -535,29 +641,72 @@ impl Config {
         Self::get_local_config_path().is_some()
     }
 
-    /// Insert or overwrite a `dbal` entry. Returns `true` when it landed in
-    /// the local config, `false` for the global config.
-    pub fn add_db_alias(
+    /// Merged `dbal` completion hints (global overlaid by local), keyed by
+    /// lowercased alias name. Values are `serialize_hint_spec` output.
+    pub fn get_db_alias_hints() -> HashMap<String, String> {
+        let mut merged = Self::read_global().db_alias_hints.clone();
+        if let Ok(local) = Self::read_local_config() {
+            if let Some(map) = local.db_alias_hints {
+                merged.extend(map);
+            }
+        }
+        merged
+    }
+
+    /// Insert or overwrite a `dbal` entry (and its `#param` hints, when
+    /// given). Returns `true` when it landed in the local config.
+    pub fn add_db_alias_with_hints(
         name: &str,
         sql: &str,
+        hints: Option<&str>,
     ) -> std::result::Result<bool, Box<dyn std::error::Error>> {
         let name_lower = name.to_lowercase();
         if Self::get_local_config_path().is_some() {
             let mut local = Self::read_local_config().unwrap_or_default();
-            if local.db_aliases.is_none() {
-                local.db_aliases = Some(HashMap::new());
-            }
-            if let Some(ref mut map) = local.db_aliases {
-                map.insert(name_lower, sql.to_string());
+            local
+                .db_aliases
+                .get_or_insert_with(HashMap::new)
+                .insert(name_lower.clone(), sql.to_string());
+            match hints {
+                Some(spec) => {
+                    local
+                        .db_alias_hints
+                        .get_or_insert_with(HashMap::new)
+                        .insert(name_lower, spec.to_string());
+                }
+                None => {
+                    if let Some(map) = local.db_alias_hints.as_mut() {
+                        map.remove(&name_lower);
+                        if map.is_empty() {
+                            local.db_alias_hints = None;
+                        }
+                    }
+                }
             }
             Self::write_local_config(&local)?;
             Ok(true)
         } else {
             let mut cfg = Self::write_global();
-            cfg.db_aliases.insert(name_lower, sql.to_string());
+            cfg.db_aliases.insert(name_lower.clone(), sql.to_string());
+            match hints {
+                Some(spec) => {
+                    cfg.db_alias_hints.insert(name_lower, spec.to_string());
+                }
+                None => {
+                    cfg.db_alias_hints.remove(&name_lower);
+                }
+            }
             cfg.save();
             Ok(false)
         }
+    }
+
+    /// Insert or overwrite a `dbal` entry without hints.
+    pub fn add_db_alias(
+        name: &str,
+        sql: &str,
+    ) -> std::result::Result<bool, Box<dyn std::error::Error>> {
+        Self::add_db_alias_with_hints(name, sql, None)
     }
 
     /// Remove a `dbal` entry from the routed store. Returns `true` when an
@@ -566,61 +715,87 @@ impl Config {
         let name_lower = name.to_lowercase();
         if Self::get_local_config_path().is_some() {
             let mut local = Self::read_local_config().unwrap_or_default();
-            match local
-                .db_aliases
-                .as_mut()
-                .and_then(|m| m.remove(&name_lower))
-            {
-                Some(_) => {
-                    if local.db_aliases.as_ref().is_some_and(|m| m.is_empty()) {
-                        local.db_aliases = None;
-                    }
-                    Self::write_local_config(&local)?;
-                    Ok(true)
+            let mut removed = false;
+            if let Some(map) = local.db_aliases.as_mut() {
+                removed = map.remove(&name_lower).is_some();
+                if map.is_empty() {
+                    local.db_aliases = None;
                 }
-                None => Ok(false),
             }
+            if removed {
+                if let Some(map) = local.db_alias_hints.as_mut() {
+                    map.remove(&name_lower);
+                    if map.is_empty() {
+                        local.db_alias_hints = None;
+                    }
+                }
+                Self::write_local_config(&local)?;
+            }
+            Ok(removed)
         } else {
             let mut cfg = Self::write_global();
             let removed = cfg.db_aliases.remove(&name_lower).is_some();
+            cfg.db_alias_hints.remove(&name_lower);
             cfg.save();
             Ok(removed)
         }
     }
 
     /// Replace the SQL of an existing `dbal` entry in the routed store.
+    /// `hints: None` keeps the stored annotations (an edit that only changes
+    /// the SQL must not silently drop its completions).
     /// Returns `true` when the entry existed and was updated.
-    pub fn update_db_alias(
+    pub fn update_db_alias_with_hints(
         name: &str,
         sql: &str,
+        hints: Option<&str>,
     ) -> std::result::Result<bool, Box<dyn std::error::Error>> {
         let name_lower = name.to_lowercase();
         if Self::get_local_config_path().is_some() {
             let mut local = Self::read_local_config().unwrap_or_default();
-            let entry = local
+            let exists = local
                 .db_aliases
                 .as_mut()
-                .and_then(|m| m.get_mut(&name_lower));
-            match entry {
-                Some(slot) => {
+                .and_then(|m| m.get_mut(&name_lower))
+                .map(|slot| {
                     *slot = sql.to_string();
-                    Self::write_local_config(&local)?;
-                    Ok(true)
-                }
-                None => Ok(false),
+                })
+                .is_some();
+            if !exists {
+                return Ok(false);
             }
+            if let Some(spec) = hints {
+                local
+                    .db_alias_hints
+                    .get_or_insert_with(HashMap::new)
+                    .insert(name_lower, spec.to_string());
+            }
+            Self::write_local_config(&local)?;
+            Ok(true)
         } else {
             let mut cfg = Self::write_global();
-            if let std::collections::hash_map::Entry::Occupied(mut e) =
-                cfg.db_aliases.entry(name_lower)
-            {
-                e.insert(sql.to_string());
-                cfg.save();
-                Ok(true)
-            } else {
-                Ok(false)
+            let mut exists = false;
+            if let Some(slot) = cfg.db_aliases.get_mut(&name_lower) {
+                *slot = sql.to_string();
+                exists = true;
             }
+            if !exists {
+                return Ok(false);
+            }
+            if let Some(spec) = hints {
+                cfg.db_alias_hints.insert(name_lower, spec.to_string());
+            }
+            cfg.save();
+            Ok(true)
         }
+    }
+
+    /// Replace the SQL of an existing `dbal` entry, keeping its hints.
+    pub fn update_db_alias(
+        name: &str,
+        sql: &str,
+    ) -> std::result::Result<bool, Box<dyn std::error::Error>> {
+        Self::update_db_alias_with_hints(name, sql, None)
     }
 
     /// Rename a `dbal` entry, keeping it in whichever store holds it.
@@ -638,10 +813,12 @@ impl Config {
         if merged.contains_key(&new_lower) {
             return false;
         }
+        let hints = Self::get_db_alias_hints().get(&old_lower).cloned();
         // Remove from both stores, then re-add through the normal routing.
         {
             let mut cfg = Self::write_global();
             cfg.db_aliases.remove(&old_lower);
+            cfg.db_alias_hints.remove(&old_lower);
             cfg.save();
         }
         if Self::get_local_config_path().is_some() {
@@ -653,12 +830,20 @@ impl Config {
                         local.db_aliases = None;
                     }
                 }
+                if let Some(ref mut map) = local.db_alias_hints {
+                    if map.remove(&old_lower).is_some() {
+                        touched = true;
+                    }
+                    if map.is_empty() {
+                        local.db_alias_hints = None;
+                    }
+                }
                 if touched {
                     let _ = Self::write_local_config(&local);
                 }
             }
         }
-        Self::add_db_alias(&new_lower, &sql).is_ok()
+        Self::add_db_alias_with_hints(&new_lower, &sql, hints.as_deref()).is_ok()
     }
 
     /// Clear the routed store's `dbal` entries. Returns the count removed.
@@ -667,12 +852,14 @@ impl Config {
             let mut local = Self::read_local_config().unwrap_or_default();
             let count = local.db_aliases.as_ref().map(|m| m.len()).unwrap_or(0);
             local.db_aliases = None;
+            local.db_alias_hints = None;
             Self::write_local_config(&local)?;
             Ok(count)
         } else {
             let mut cfg = Self::write_global();
             let count = cfg.db_aliases.len();
             cfg.db_aliases.clear();
+            cfg.db_alias_hints.clear();
             cfg.save();
             Ok(count)
         }
@@ -1423,6 +1610,17 @@ impl Config {
     pub fn global_set_intro_view_enabled(enabled: bool) {
         let mut cfg = Self::write_global();
         cfg.intro_view_enabled = enabled;
+        cfg.save();
+    }
+
+    /// Ranfile format `ran init` creates (`toml`, `json` or `yaml`).
+    pub fn global_get_ran_format() -> String {
+        Self::read_global().ran_format.clone()
+    }
+
+    pub fn global_set_ran_format(fmt: &str) {
+        let mut cfg = Self::write_global();
+        cfg.ran_format = fmt.to_string();
         cfg.save();
     }
 

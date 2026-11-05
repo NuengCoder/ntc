@@ -41,6 +41,41 @@ pub fn fill(m: &mut HashMap<String, String>) {
     );
 
     m.insert(
+        "cmd.todo.help_move".into(),
+        "  todo move|mv <N> <M>    Move task N to position M (others shift)".into(),
+    );
+
+    m.insert(
+        "cmd.todo.help_replace".into(),
+        "  todo replace|rp <N> <M> Swap the tasks at N and M".into(),
+    );
+
+    m.insert(
+        "cmd.todo.move_usage".into(),
+        "Usage: todo move <select-n> <target-n>  — both 1-based".into(),
+    );
+
+    m.insert(
+        "cmd.todo.replace_usage".into(),
+        "Usage: todo replace <select-n> <target-n>  — both 1-based".into(),
+    );
+
+    m.insert(
+        "cmd.todo.task_moved".into(),
+        "Moved task {} to position {}: {}".into(),
+    );
+
+    m.insert(
+        "cmd.todo.task_replaced".into(),
+        "Swapped tasks {} and {}: {} <-> {}".into(),
+    );
+
+    m.insert(
+        "cmd.todo.same_position".into(),
+        "Task {} is already at that position".into(),
+    );
+
+    m.insert(
         "cmd.todo.help_show".into(),
         "  todo                    Show all tasks".into(),
     );

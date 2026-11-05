@@ -29,7 +29,7 @@ pub fn fill(m: &mut HashMap<String, String>) {
 
     m.insert(
         "alias.ral.cls_warning".into(),
-        "\u{26A0}\u{FE0F} WARNING: This will delete ALL run aliases!".into(),
+        "WARNING: This will delete ALL run aliases!".into(),
     );
 
     m.insert("alias.ral.config_path".into(), " Config: {}".into());
@@ -174,10 +174,7 @@ pub fn fill(m: &mut HashMap<String, String>) {
         "Hint list '{}' is used by: {}. Use --force to remove anyway.".into(),
     );
 
-    m.insert(
-        "alias.ral.hintn_info_title".into(),
-        "📌 Hint List Info".into(),
-    );
+    m.insert("alias.ral.hintn_info_title".into(), "Hint List Info".into());
 
     m.insert("alias.ral.hintn_info_name".into(), "Name".into());
 
@@ -225,12 +222,12 @@ pub fn fill(m: &mut HashMap<String, String>) {
 
     m.insert(
         "alias.ral.example_hint_values".into(),
-        "ral add srv \"ssh $p\" #p --hint [8080,5050,5000]".into(),
+        "ral add srv \"ssh ${p}\" #p --hint [8080,5050,5000]".into(),
     );
 
     m.insert(
         "alias.ral.example_hintn".into(),
-        "ral hintn add port [8080,5050,5000] + ral add srvn \"ssh $p\" #p --hint-n port".into(),
+        "ral hintn add port [8080,5050,5000] + ral add srvn \"ssh ${p}\" #p --hint-n port".into(),
     );
 
     m.insert(
@@ -247,7 +244,7 @@ pub fn fill(m: &mut HashMap<String, String>) {
         "local (ntconfig.toml)".into(),
     );
 
-    m.insert("alias.ral.info_title".into(), "\u{1F4CC} Alias Info".into());
+    m.insert("alias.ral.info_title".into(), "Alias Info".into());
 
     m.insert(
         "alias.ral.info_edit_copied".into(),
@@ -309,8 +306,7 @@ pub fn fill(m: &mut HashMap<String, String>) {
 
     m.insert(
         "alias.ral.param_cmd".into(),
-        " ral add <name>(x) <command> Create parameterised alias (use $x or ${{x}} in command)"
-            .into(),
+        " ral add <name>(x) <command> Create parameterised alias (use ${{x}} in command)".into(),
     );
 
     m.insert(
@@ -497,4 +493,9 @@ pub fn fill(m: &mut HashMap<String, String>) {
     m.insert("alias.ral.scope_global".into(), "global config".into());
 
     m.insert("alias.ral.cls_target".into(), "Target: {}".into());
+
+    m.insert(
+        "alias.ral.bare_env_warning".into(),
+        "Bare $NAME is an environment variable in ral. Use ${name} for parameters: {}".into(),
+    );
 }

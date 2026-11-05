@@ -44,13 +44,15 @@ impl HtmlReportGenerator {
                 .replace('>', "&gt;")
                 .replace('"', "&quot;");
             files_html.push_str(&format!(
-                r#"<div class="file"><div class="file-header">📄 {}</div><div class="file-content"><pre>{}</pre></div></div>"#,
+                r#"<div class="file"><div class="file-header">{}</div><div class="file-content"><pre>{}</pre></div></div>"#,
                 escaped_name, content_html
             ));
         }
 
         if !unsupported.is_empty() {
-            files_html.push_str(r#"<div class="skipped"><strong>⚠️ Skipped files (unsupported format):</strong><ul>"#);
+            files_html.push_str(
+                r#"<div class="skipped"><strong>Skipped files (unsupported format):</strong><ul>"#,
+            );
             for path in &unsupported {
                 let name = path.file_name().unwrap_or_default().to_string_lossy();
                 files_html.push_str(&format!("<li>{}</li>", name));
@@ -102,7 +104,7 @@ fn escape_html(text: &str) -> String {
 fn tree_widget(node: &TreeNode, root_name: &str) -> String {
     let mut out = String::new();
     out.push_str(&format!(
-        "<div class=\"ntree-root\">\u{1F4C1} {}</div>",
+        "<div class=\"ntree-root\">{}</div>",
         escape_html(root_name)
     ));
     out.push_str(&tree_list(node));
@@ -117,18 +119,18 @@ fn tree_list(node: &TreeNode) -> String {
     for child in &node.children {
         if child.is_dir {
             out.push_str("<li class=\"ntree-dir\"><details><summary>");
-            out.push_str(&format!("\u{1F4C1} {}", escape_html(&child.name)));
+            out.push_str(&format!("{}", escape_html(&child.name)));
             out.push_str("</summary>");
             out.push_str(&tree_list(child));
             out.push_str("</details></li>");
         } else {
             let icon = if child.is_supported == Some(false) {
-                "\u{1F5CE}"
+                "[unsupported] "
             } else {
-                "\u{1F4C4}"
+                ""
             };
             out.push_str(&format!(
-                "<li class=\"ntree-file\">{} {}</li>",
+                "<li class=\"ntree-file\">{}{}</li>",
                 icon,
                 escape_html(&child.name)
             ));
@@ -199,7 +201,7 @@ mod tests {
         let html = tree_widget(&tree, "root & co");
         assert!(html.contains("a&lt;b&gt;&amp;c.bin"));
         assert!(html.contains("root &amp; co"));
-        assert!(html.contains("\u{1F5CE}"));
+        assert!(html.contains("[unsupported] a&lt;b&gt;&amp;c.bin"));
         assert!(!html.contains("a<b>"));
     }
 }

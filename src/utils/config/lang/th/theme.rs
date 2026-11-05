@@ -68,7 +68,7 @@ pub fn fill(m: &mut HashMap<String, String>) {
 
     m.insert("theme.info_author".into(), "ผู้เขียน".into());
 
-    m.insert("theme.info_defined".into(), "\u{2713} กำหนดแล้ว".into());
+    m.insert("theme.info_defined".into(), "กำหนดแล้ว".into());
 
     m.insert("theme.info_description".into(), "คำอธิบาย".into());
 
@@ -78,7 +78,7 @@ pub fn fill(m: &mut HashMap<String, String>) {
 
     m.insert("theme.info_syntax".into(), "สีไวยากรณ์".into());
 
-    m.insert("theme.info_title".into(), "\u{1F3A8} ธีม: {}".into());
+    m.insert("theme.info_title".into(), "ธีม: {}".into());
 
     m.insert(
         "theme.invalid_number".into(),
@@ -154,7 +154,7 @@ pub fn fill(m: &mut HashMap<String, String>) {
 
     m.insert("theme.ui.theme_prompt".into(), "theme>".into());
 
-    m.insert("theme.ui.title".into(), "\u{1F3A8} ตัวจัดการธีมของ ntc".into());
+    m.insert("theme.ui.title".into(), "ตัวจัดการธีมของ ntc".into());
 
     m.insert("theme.unknown_cmd".into(), "คำสั่งไม่รู้จัก: {}".into());
 

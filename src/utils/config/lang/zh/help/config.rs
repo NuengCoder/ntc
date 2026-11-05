@@ -174,4 +174,30 @@ pub fn fill(m: &mut HashMap<String, String>) {
         "help.config.intro_view".into(),
         "config intro_view ON|OFF ## 显示/隐藏启动 logo、ntpkg 与 watcher 提示（别名: iv）".into(),
     );
+
+    m.insert(
+        "help.config.integration_shell".into(),
+        "config integration_shell ON|OFF ## 补全已安装的 shell 名称（powershell 仅 Windows、bash 仅 Linux 桌面、cmd 等）、启动参数，并在 Windows 上启用 ntc ps 模式、在 Linux 上启用 ntc <发行版> 模式（别名: is）".into(),
+    );
+
+    m.insert(
+        "help.config.code_tools".into(),
+        "config code_tools ON|OFF ## 补全已安装的编程工具/编译器（g++、python、java、cargo 等）及其参数（别名: ct）".into(),
+    );
+
+    m.insert(
+        "help.config.env".into(),
+        "config env NAME value [-g|-l|-os|-osg] ## 设置 NTC 环境变量（不带参数：列出；仅名称：显示）".into(),
+    );
+
+    m.insert(
+        "help.config.env_os".into(),
+        "  -g 全局 | -l 本地 | -os 当前会话 | -osg 持久化到操作系统 ## 默认：存在 ntconfig.toml 时为本地，否则全局".into(),
+    );
+
+    m.insert(
+        "help.config.rmenv".into(),
+        "config rmenv NAME [-g|-l|-os|-osg|-all] ## 移除 NTC 环境变量（-all：所有存储 + 会话）"
+            .into(),
+    );
 }

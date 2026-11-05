@@ -8,7 +8,7 @@ pub fn fill(m: &mut HashMap<String, String>) {
 
     m.insert(
         "cmd.qr.decode_requires".into(),
-        "二维码解码需要 'image2doc' 功能（默认启用）。使用 --features image2doc 运行。".into(),
+        "二维码解码需要 'image' 功能（默认启用）。使用 --features image 运行。".into(),
     );
 
     m.insert(
@@ -68,7 +68,7 @@ pub fn fill(m: &mut HashMap<String, String>) {
 
     m.insert(
         "cmd.qr.image_save_requires".into(),
-        "图像保存需要 'image2doc' 功能（默认启用）".into(),
+        "图像保存需要 'image' 功能（默认启用）".into(),
     );
 
     m.insert(

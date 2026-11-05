@@ -7,6 +7,7 @@ use std::io::{Read, Write};
 use std::path::PathBuf;
 use std::time::{Duration, Instant};
 
+use super::dns_client;
 use crate::navigator::Navigator;
 use crate::output::{print_error, print_info, print_success, print_warning};
 use crate::t;
@@ -19,6 +20,10 @@ struct DownloadRecord {
     size: u64,
     status: String,
     time: String,
+    /// Process running the transfer, so `dl --stop` can end it. Absent on
+    /// records written before this field existed.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pid: Option<u32>,
 }
 
 fn downloads_db_path() -> PathBuf {
@@ -49,6 +54,101 @@ fn save_records(records: &[DownloadRecord]) {
     }
 }
 
+/// Staging path for `file`: the transfer is written here and renamed into
+/// place only once it completes.
+fn part_path_for(file: &str) -> PathBuf {
+    PathBuf::from(file).with_extension("part")
+}
+
+/// Bytes already staged for `file`, or 0 when nothing was downloaded yet.
+fn staged_size(file: &str) -> u64 {
+    fs::metadata(part_path_for(file))
+        .map(|m| m.len())
+        .unwrap_or(0)
+}
+
+/// Insert or update the record for `url` + `file`. Downloads acknowledge
+/// themselves as `downloading` first, then `completed` / `failed` / `stopped`,
+/// which is what the `--stop` and `--resume` pickers read.
+fn set_record(url: &str, file: &str, status: &str, size: u64, pid: Option<u32>) {
+    let mut records = load_records();
+    let time = chrono::Local::now().format("%Y-%m-%d %H:%M:%S").to_string();
+    match records.iter_mut().find(|r| r.url == url && r.file == file) {
+        Some(r) => {
+            r.status = status.to_string();
+            r.size = size;
+            r.time = time;
+            r.pid = pid;
+        }
+        None => records.push(DownloadRecord {
+            url: url.to_string(),
+            file: file.to_string(),
+            size,
+            status: status.to_string(),
+            time,
+            pid,
+        }),
+    }
+    save_records(&records);
+}
+
+/// Move the staging file onto its final name. Windows refuses to rename over
+/// an existing file, so a stale destination is removed first.
+fn finalize_part(part: &std::path::Path, dest: &std::path::Path) -> std::io::Result<()> {
+    match fs::rename(part, dest) {
+        Ok(()) => Ok(()),
+        Err(_) => {
+            let _ = fs::remove_file(dest);
+            fs::rename(part, dest)
+        }
+    }
+}
+
+/// One-line interactive picker over `count` entries. `None` on empty input,
+/// `q`, EOF or an out-of-range number.
+fn prompt_choice(count: usize, prompt_key: &str) -> Option<usize> {
+    print!("{}", t!(prompt_key));
+    let _ = std::io::stdout().flush();
+    let mut line = String::new();
+    if std::io::stdin().read_line(&mut line).is_err() {
+        return None;
+    }
+    let line = line.trim();
+    if line.is_empty() || line.eq_ignore_ascii_case("q") {
+        return None;
+    }
+    match line.parse::<usize>() {
+        Ok(n) if n >= 1 && n <= count => Some(n - 1),
+        _ => {
+            print_error(&t!("dl.invalid_choice"));
+            None
+        }
+    }
+}
+
+/// End a download running in another ntc process.
+#[cfg(unix)]
+fn terminate_pid(pid: u32) -> bool {
+    // SAFETY: `kill` takes a plain pid and signal number; no pointers.
+    unsafe { libc::kill(pid as i32, libc::SIGTERM) == 0 }
+}
+
+#[cfg(windows)]
+fn terminate_pid(pid: u32) -> bool {
+    std::process::Command::new("taskkill")
+        .args(["/PID", &pid.to_string(), "/F"])
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .status()
+        .map(|s| s.success())
+        .unwrap_or(false)
+}
+
+#[cfg(not(any(unix, windows)))]
+fn terminate_pid(_pid: u32) -> bool {
+    false
+}
+
 pub fn cmd_dl(args: &str, _nav: &mut Navigator) -> Result<bool> {
     let tokens = tokenize(args);
     if tokens.is_empty() || tokens[0] == "help" || tokens[0] == "--help" || tokens[0] == "-h" {
@@ -59,7 +159,7 @@ pub fn cmd_dl(args: &str, _nav: &mut Navigator) -> Result<bool> {
     let mut i = 0;
     let mut url = String::new();
     let mut output: Option<String> = None;
-    let mut progress = false;
+    let mut history = false;
     let mut resume = false;
     let mut stop = false;
     let mut cancel = false;
@@ -75,7 +175,9 @@ pub fn cmd_dl(args: &str, _nav: &mut Navigator) -> Result<bool> {
                         .clone(),
                 );
             }
-            "--progress" => progress = true,
+            // Accepted and ignored: progress is always shown now.
+            "--progress" => {}
+            "--history" => history = true,
             "--resume" => resume = true,
             "--stop" => stop = true,
             "--cancel" | "--cancle" => {
@@ -96,6 +198,9 @@ pub fn cmd_dl(args: &str, _nav: &mut Navigator) -> Result<bool> {
         i += 1;
     }
 
+    if history {
+        return cmd_dl_history();
+    }
     if stop {
         return cmd_dl_stop();
     }
@@ -103,27 +208,26 @@ pub fn cmd_dl(args: &str, _nav: &mut Navigator) -> Result<bool> {
         return cmd_dl_cancel(&url);
     }
     if url.is_empty() {
+        if resume {
+            return cmd_dl_resume();
+        }
         anyhow::bail!("{}", t!("dl.url_required"));
     }
 
-    do_download(&url, output.as_deref(), progress, resume)
+    do_download(&url, output.as_deref(), resume)
 }
 
-fn do_download(url: &str, output: Option<&str>, show_progress: bool, resume: bool) -> Result<bool> {
+fn do_download(url: &str, output: Option<&str>, resume: bool) -> Result<bool> {
     let filename = output
         .map(|s| s.to_string())
         .unwrap_or_else(|| url.rsplit('/').next().unwrap_or("download").to_string());
     let path = PathBuf::from(&filename);
-    let part_path = path.with_extension("part");
+    let part_path = part_path_for(&filename);
 
-    let existing_size = if resume {
-        if part_path.exists() {
-            fs::metadata(&part_path).map(|m| m.len()).unwrap_or(0)
-        } else if path.exists() {
-            fs::metadata(&path).map(|m| m.len()).unwrap_or(0)
-        } else {
-            0
-        }
+    // The transfer always lands in `<name>.part` and is renamed on success, so
+    // an interrupted download stays resumable under its real name.
+    let existing_size = if resume && part_path.exists() {
+        fs::metadata(&part_path).map(|m| m.len()).unwrap_or(0)
     } else {
         0
     };
@@ -150,73 +254,83 @@ fn do_download(url: &str, output: Option<&str>, show_progress: bool, resume: boo
         anyhow::bail!("{}", t!("dl.http_error", status.as_u16(), url));
     }
 
+    // A server that ignored the `Range` header replies 200 with the whole
+    // body, so a partial file has to restart instead of being appended to.
+    let start_size = if status == 206 { existing_size } else { 0 };
     let total = response
         .headers()
         .get("content-length")
         .and_then(|v| v.to_str().ok())
         .and_then(|v| v.parse::<u64>().ok())
         .unwrap_or(0)
-        + existing_size;
+        + start_size;
 
-    let download_path = if resume { &part_path } else { &path };
+    let mut file = if start_size > 0 {
+        fs::OpenOptions::new().append(true).open(&part_path)
+    } else {
+        fs::OpenOptions::new()
+            .create(true)
+            .write(true)
+            .truncate(true)
+            .open(&part_path)
+    }
+    .with_context(|| t!("dl.failed_create", part_path.display()))?;
 
-    let mut file = fs::File::create(download_path)
-        .with_context(|| t!("dl.failed_create", download_path.display()))?;
-
-    if existing_size > 0 && status == 206 {
-        // Append mode for resume
-        file = fs::OpenOptions::new()
-            .append(true)
-            .open(download_path)
-            .with_context(|| t!("dl.failed_append", download_path.display()))?;
+    // Always shown now; `--progress` is a no-op kept for old notes.
+    let pb = ProgressBar::new(total);
+    pb.set_style(
+        ProgressStyle::default_bar()
+            .template("{msg}\n{wide_bar} {bytes}/{total_bytes} ({eta})")
+            .unwrap_or_else(|_| ProgressStyle::default_bar())
+            .progress_chars("##-"),
+    );
+    pb.set_message(t!("dl.downloading", &filename));
+    if start_size > 0 {
+        pb.set_position(start_size);
     }
 
-    let pb = if show_progress {
-        let bar = ProgressBar::new(total);
-        bar.set_style(
-            ProgressStyle::default_bar()
-                .template("{msg}\n{wide_bar} {bytes}/{total_bytes} ({eta})")
-                .unwrap_or_else(|_| ProgressStyle::default_bar())
-                .progress_chars("##-"),
-        );
-        bar.set_message(t!("dl.downloading", &filename));
-        if existing_size > 0 {
-            bar.set_position(existing_size);
-        }
-        Some(bar)
-    } else {
-        None
-    };
-
     let start = Instant::now();
-    let mut downloaded = existing_size;
+    let mut downloaded = start_size;
     let mut chunk = vec![0u8; 65536];
     let mut body = response.into_body();
     let mut reader = body.as_reader();
 
-    loop {
-        let n = reader
-            .read(&mut chunk)
-            .context("Failed to read download stream")?;
-        if n == 0 {
-            break;
+    // Claim the transfer before the first byte: an interrupted download keeps
+    // a `downloading` row with this pid, which `dl --stop` acts on.
+    set_record(
+        url,
+        &filename,
+        "downloading",
+        start_size,
+        Some(std::process::id()),
+    );
+
+    let transferred = (|| -> Result<u64> {
+        loop {
+            let n = reader
+                .read(&mut chunk)
+                .context("Failed to read download stream")?;
+            if n == 0 {
+                break;
+            }
+            file.write_all(&chunk[..n])
+                .context("Failed to write downloaded data")?;
+            downloaded += n as u64;
+            pb.set_position(downloaded);
         }
-        file.write_all(&chunk[..n])
-            .context("Failed to write downloaded data")?;
-        downloaded += n as u64;
-        if let Some(ref bar) = pb {
-            bar.set_position(downloaded);
-        }
+        Ok(downloaded)
+    })();
+    if let Err(e) = transferred {
+        drop(file);
+        let staged = staged_size(&filename);
+        set_record(url, &filename, "failed", staged, None);
+        return Err(e);
     }
 
-    if let Some(bar) = pb {
-        bar.finish_and_clear();
-    }
-
-    if resume && status == 206 {
-        // Rename .part to final name on successful resume
-        fs::rename(&part_path, &path).context("Failed to finalize resumed download")?;
-    }
+    pb.finish_and_clear();
+    // Close the handle before renaming: Windows will not move an open file.
+    drop(file);
+    finalize_part(&part_path, &path).context("Failed to finalize download")?;
 
     let elapsed = start.elapsed();
     let ms = elapsed.as_millis();
@@ -247,21 +361,13 @@ fn do_download(url: &str, output: Option<&str>, show_progress: bool, resume: boo
         speed_str
     ));
 
-    // Save record
-    let mut records = load_records();
-    records.push(DownloadRecord {
-        url: url.to_string(),
-        file: filename,
-        size: downloaded,
-        status: "completed".to_string(),
-        time: chrono::Local::now().format("%Y-%m-%d %H:%M:%S").to_string(),
-    });
-    save_records(&records);
+    set_record(url, &filename, "completed", downloaded, None);
 
     Ok(false)
 }
 
-fn cmd_dl_stop() -> Result<bool> {
+/// `dl --history` — the record table (previously `--stop`).
+fn cmd_dl_history() -> Result<bool> {
     let records = load_records();
     if records.is_empty() {
         print_info(&t!("dl.no_records"));
@@ -286,6 +392,111 @@ fn cmd_dl_stop() -> Result<bool> {
     println!();
     print_info(&t!("dl.cancel_hint"));
     Ok(false)
+}
+
+/// `dl --stop` — list the transfers that are still marked `downloading` and
+/// end the one the user picks. The staged `.part` file is kept so
+/// `dl --resume` can continue it.
+fn cmd_dl_stop() -> Result<bool> {
+    let records = load_records();
+    let active: Vec<usize> = records
+        .iter()
+        .enumerate()
+        .filter(|(_, r)| r.status == "downloading")
+        .map(|(i, _)| i)
+        .collect();
+    if active.is_empty() {
+        print_info(&t!("dl.no_active"));
+        return Ok(false);
+    }
+    println!("{}", t!("dl.active_title").bold());
+    println!();
+    for (n, idx) in active.iter().enumerate() {
+        let r = &records[*idx];
+        let done = staged_size(&r.file).max(r.size);
+        println!(
+            " {}. {}  {}  {}",
+            n + 1,
+            r.file.dimmed(),
+            format_size(done),
+            r.time
+        );
+    }
+    println!();
+    let Some(choice) = prompt_choice(active.len(), "dl.select_stop") else {
+        print_info(&t!("dl.cancelled"));
+        return Ok(false);
+    };
+    let rec = &records[active[choice]];
+    let ended = rec
+        .pid
+        .filter(|pid| *pid != std::process::id())
+        .map(terminate_pid)
+        .unwrap_or(false);
+    let file = rec.file.clone();
+    let mut records = load_records();
+    if let Some(r) = records.get_mut(active[choice]) {
+        r.status = "stopped".to_string();
+        r.pid = None;
+        r.size = staged_size(&r.file).max(r.size);
+    }
+    save_records(&records);
+    if ended {
+        print_success(&t!("dl.stopped_ok", file));
+    } else {
+        print_warning(&t!("dl.stopped_stale", file));
+    }
+    Ok(false)
+}
+
+/// `dl --resume` with no URL — list the unfinished transfers and continue the
+/// one the user picks.
+fn cmd_dl_resume() -> Result<bool> {
+    let records = load_records();
+    let pending: Vec<usize> = records
+        .iter()
+        .enumerate()
+        .filter(|(_, r)| r.status != "completed")
+        .map(|(i, _)| i)
+        .collect();
+    if pending.is_empty() {
+        print_info(&t!("dl.nothing_incomplete"));
+        return Ok(false);
+    }
+    println!("{}", t!("dl.incomplete_title").bold());
+    println!();
+    for (n, idx) in pending.iter().enumerate() {
+        let r = &records[*idx];
+        println!(
+            " {}. {}  {}  {}  {}",
+            n + 1,
+            r.status.yellow(),
+            format_size(staged_size(&r.file)),
+            r.time,
+            r.file.dimmed()
+        );
+    }
+    println!();
+    let Some(choice) = prompt_choice(pending.len(), "dl.select_resume") else {
+        print_info(&t!("dl.cancelled"));
+        return Ok(false);
+    };
+    let rec = &records[pending[choice]];
+    if rec.url.is_empty() {
+        print_error(&t!("dl.not_found", &rec.file));
+        return Ok(false);
+    }
+    println!(
+        "{}",
+        t!(
+            "dl.resuming",
+            &rec.file,
+            format_size(staged_size(&rec.file))
+        )
+        .dimmed()
+    );
+    let (url, file) = (rec.url.clone(), rec.file.clone());
+    do_download(&url, Some(&file), true)
 }
 
 fn cmd_dl_cancel(target: &str) -> Result<bool> {
@@ -330,101 +541,294 @@ fn cmd_dl_cancel(target: &str) -> Result<bool> {
 
 // ── Upload ────────────────────────────────────────────────────────────────
 
+const UP_DEFAULT_TIMEOUT: u64 = 300;
+
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+enum Transport {
+    /// multipart/form-data with the file in a `file` field, which is what
+    /// `ntc serve files` and most upload endpoints expect.
+    Multipart,
+    /// The raw file bytes as the request body.
+    Raw,
+}
+
+struct UpOptions {
+    url: String,
+    file: Option<String>,
+    data: Option<String>,
+    headers: Vec<(String, String)>,
+    forms: Vec<(String, String)>,
+    auth: Option<String>,
+    bearer: Option<String>,
+    transport: Transport,
+    method: &'static str,
+    no_fallback: bool,
+    timeout: u64,
+}
+
 pub fn cmd_up(args: &str, _nav: &mut Navigator) -> Result<bool> {
     let tokens = tokenize(args);
     if tokens.is_empty() || tokens[0] == "help" || tokens[0] == "--help" || tokens[0] == "-h" {
         print_up_help();
         return Ok(false);
     }
+    let opts = parse_up_args(&tokens)?;
+    do_upload(&opts)
+}
 
+/// Parses `up` arguments order-independently: the first `http(s)://` token is
+/// the URL, the other positional is the file.
+fn parse_up_args(tokens: &[String]) -> Result<UpOptions> {
+    let mut opts = UpOptions {
+        url: String::new(),
+        file: None,
+        data: None,
+        headers: Vec::new(),
+        forms: Vec::new(),
+        auth: None,
+        bearer: None,
+        transport: Transport::Multipart,
+        method: "POST",
+        no_fallback: false,
+        timeout: UP_DEFAULT_TIMEOUT,
+    };
+    let mut raw = false;
+    let mut put = false;
+    let mut literal = false;
     let mut i = 0;
-    let mut url = String::new();
-    let mut file_path: Option<String> = None;
-    let mut data: Option<String> = None;
-    let mut headers: Vec<(String, String)> = Vec::new();
-    let mut method = "PUT";
 
     while i < tokens.len() {
-        match tokens[i].as_str() {
+        let token = tokens[i].as_str();
+        let is_flag = !literal
+            && matches!(
+                token,
+                "--" | "-H"
+                    | "--header"
+                    | "-d"
+                    | "--data"
+                    | "-a"
+                    | "--auth"
+                    | "--bearer"
+                    | "-F"
+                    | "--form"
+                    | "--raw"
+                    | "--put"
+                    | "--post"
+                    | "--no-fallback"
+                    | "--timeout"
+            );
+
+        if !is_flag {
+            if token.starts_with("http://") || token.starts_with("https://") {
+                if opts.url.is_empty() {
+                    opts.url = token.to_string();
+                } else if opts.file.is_none() {
+                    opts.file = Some(token.to_string());
+                }
+            } else if opts.file.is_none() {
+                opts.file = Some(token.to_string());
+            }
+            i += 1;
+            continue;
+        }
+
+        match token {
+            "--" => literal = true,
             "-H" | "--header" => {
                 i += 1;
-                let h = tokens
+                let header = tokens
                     .get(i)
                     .ok_or_else(|| anyhow::anyhow!("{}", t!("dl.missing_header")))?;
-                if let Some((k, v)) = h.split_once(':') {
-                    headers.push((k.trim().to_string(), v.trim().to_string()));
-                } else {
-                    anyhow::bail!("{}", t!("dl.invalid_header", h));
+                match header.split_once(':') {
+                    Some((key, value)) => opts
+                        .headers
+                        .push((key.trim().to_string(), value.trim().to_string())),
+                    None => anyhow::bail!("{}", t!("dl.invalid_header", header)),
                 }
             }
             "-d" | "--data" => {
                 i += 1;
-                data = Some(
+                opts.data = Some(
                     tokens
                         .get(i)
                         .ok_or_else(|| anyhow::anyhow!("{}", t!("dl.missing_data")))?
                         .clone(),
                 );
             }
-            "--post" => method = "POST",
-            "--" => break,
-            _ => {
-                if file_path.is_none() {
-                    file_path = Some(tokens[i].clone());
-                } else if url.is_empty() {
-                    url = tokens[i].clone();
+            "-a" | "--auth" => {
+                i += 1;
+                opts.auth = Some(
+                    tokens
+                        .get(i)
+                        .ok_or_else(|| anyhow::anyhow!("{}", t!("up.missing_auth")))?
+                        .clone(),
+                );
+            }
+            "--bearer" => {
+                i += 1;
+                opts.bearer = Some(
+                    tokens
+                        .get(i)
+                        .ok_or_else(|| anyhow::anyhow!("{}", t!("up.missing_bearer")))?
+                        .clone(),
+                );
+            }
+            "-F" | "--form" => {
+                i += 1;
+                let field = tokens
+                    .get(i)
+                    .ok_or_else(|| anyhow::anyhow!("{}", t!("up.missing_form")))?;
+                match field.split_once('=') {
+                    Some((name, value)) => opts
+                        .forms
+                        .push((name.trim().to_string(), value.to_string())),
+                    None => anyhow::bail!("{}", t!("up.invalid_form", field)),
                 }
             }
+            "--raw" => raw = true,
+            "--put" => put = true,
+            "--post" => put = false,
+            "--no-fallback" => opts.no_fallback = true,
+            "--timeout" => {
+                i += 1;
+                let value = tokens
+                    .get(i)
+                    .ok_or_else(|| anyhow::anyhow!("{}", t!("up.missing_timeout")))?;
+                let secs: u64 = value
+                    .parse()
+                    .map_err(|_| anyhow::anyhow!("{}", t!("up.invalid_timeout", value)))?;
+                if secs == 0 {
+                    anyhow::bail!("{}", t!("up.invalid_timeout", value));
+                }
+                opts.timeout = secs;
+            }
+            _ => literal = true,
         }
         i += 1;
     }
 
-    if url.is_empty() {
+    if opts.url.is_empty() {
         anyhow::bail!("{}", t!("dl.up_url_required"));
     }
+    if opts.file.is_some() && opts.data.is_some() {
+        anyhow::bail!("{}", t!("up.conflict"));
+    }
 
-    do_upload(
-        &url,
-        file_path.as_deref(),
-        data.as_deref(),
-        &headers,
-        method,
-    )
+    if opts.file.is_some() && !raw && !put {
+        opts.transport = Transport::Multipart;
+    } else {
+        opts.transport = Transport::Raw;
+    }
+    opts.method = if put { "PUT" } else { "POST" };
+
+    Ok(opts)
 }
 
-fn do_upload(
-    url: &str,
-    file_path: Option<&str>,
-    data: Option<&str>,
-    headers: &[(String, String)],
-    method: &str,
-) -> Result<bool> {
+struct UploadOutcome {
+    status: u16,
+    status_text: String,
+    body: String,
+    elapsed: Duration,
+}
+
+fn do_upload(opts: &UpOptions) -> Result<bool> {
     let agent = ureq::Agent::config_builder()
-        .timeout_global(Some(Duration::from_secs(300)))
+        .timeout_global(Some(Duration::from_secs(opts.timeout)))
         .http_status_as_error(false)
         .build()
         .new_agent();
 
-    let mut req_builder = ureq::http::Request::builder().method(method).uri(url);
+    let file_bytes = match opts.file.as_deref() {
+        Some(path) => Some(fs::read(path).with_context(|| t!("dl.failed_read", path))?),
+        None => None,
+    };
 
-    for (k, v) in headers {
-        req_builder = req_builder.header(k.as_str(), v.as_str());
+    let mut transport = opts.transport;
+    let mut method = opts.method;
+    let mut retried = false;
+
+    loop {
+        let outcome = send_upload(&agent, opts, transport, method, file_bytes.as_deref())?;
+        let rejected = matches!(outcome.status, 405 | 415 | 501);
+        if !retried && rejected && !opts.no_fallback && file_bytes.is_some() {
+            let (next_transport, next_method) = match transport {
+                Transport::Multipart => (Transport::Raw, "PUT"),
+                Transport::Raw => (Transport::Multipart, "POST"),
+            };
+            print_info(&t!("up.fallback_retry", outcome.status, next_method));
+            transport = next_transport;
+            method = next_method;
+            retried = true;
+            continue;
+        }
+        print_upload_result(method, &opts.url, &outcome);
+        return Ok(false);
+    }
+}
+
+fn send_upload(
+    agent: &ureq::Agent,
+    opts: &UpOptions,
+    transport: Transport,
+    method: &str,
+    file_bytes: Option<&[u8]>,
+) -> Result<UploadOutcome> {
+    let mut builder = ureq::http::Request::builder().method(method).uri(&opts.url);
+
+    for (key, value) in &opts.headers {
+        builder = builder.header(key.as_str(), value.as_str());
     }
 
-    let start = Instant::now();
+    if let Some(token) = &opts.bearer {
+        builder = builder.header("Authorization", format!("Bearer {}", token));
+    } else if let Some(credentials) = &opts.auth {
+        let encoded = base64::Engine::encode(
+            &base64::engine::general_purpose::STANDARD,
+            credentials.as_str(),
+        );
+        builder = builder.header("Authorization", format!("Basic {}", encoded));
+    }
 
-    let response = if let Some(path) = file_path {
-        let file_data = fs::read(path).with_context(|| t!("dl.failed_read", path))?;
-        let total = file_data.len();
-        if !headers
-            .iter()
-            .any(|(k, _)| k.eq_ignore_ascii_case("content-type"))
-        {
-            req_builder = req_builder.header("Content-Type", guess_mime(path));
+    let has_content_type = opts
+        .headers
+        .iter()
+        .any(|(key, _)| key.eq_ignore_ascii_case("content-type"));
+
+    let mut label = String::from("upload");
+    let body: Vec<u8> = if let Some(bytes) = file_bytes {
+        let path = opts.file.as_deref().unwrap_or("upload");
+        let name = file_basename(path);
+        label = name.to_string();
+        match transport {
+            Transport::Multipart => {
+                let boundary = multipart_boundary();
+                if !has_content_type {
+                    builder = builder.header(
+                        "Content-Type",
+                        format!("multipart/form-data; boundary={}", boundary),
+                    );
+                }
+                multipart_body(&boundary, name, guess_mime(name), bytes, &opts.forms)
+            }
+            Transport::Raw => {
+                if !has_content_type {
+                    builder = builder.header("Content-Type", guess_mime(name));
+                }
+                bytes.to_vec()
+            }
         }
-        let req = req_builder
-            .body(file_data)
-            .map_err(|e| anyhow::anyhow!("{}", t!("dl.invalid_request", e)))?;
+    } else if let Some(data) = &opts.data {
+        if !has_content_type {
+            builder = builder.header("Content-Type", "text/plain");
+        }
+        label = String::from("data");
+        data.clone().into_bytes()
+    } else {
+        Vec::new()
+    };
+
+    let total = body.len();
+    let pb = if total > 0 {
         let pb = ProgressBar::new(total as u64);
         pb.set_style(
             ProgressStyle::default_bar()
@@ -432,50 +836,51 @@ fn do_upload(
                 .unwrap_or_else(|_| ProgressStyle::default_bar())
                 .progress_chars("##-"),
         );
-        pb.set_message(t!("dl.uploading", path, format_size(total as u64)));
-        let resp = agent
-            .run(req)
-            .with_context(|| t!("dl.upload_failed", url))?;
-        pb.finish_and_clear();
-        resp
-    } else if let Some(body) = data {
-        if !headers
-            .iter()
-            .any(|(k, _)| k.eq_ignore_ascii_case("content-type"))
-        {
-            req_builder = req_builder.header("Content-Type", "text/plain");
-        }
-        let req = req_builder
-            .body(body.to_string())
-            .map_err(|e| anyhow::anyhow!("{}", t!("dl.invalid_request", e)))?;
-        agent
-            .run(req)
-            .with_context(|| t!("dl.request_failed", url))?
+        pb.set_message(t!("dl.uploading", label, format_size(total as u64)));
+        Some(pb)
     } else {
-        let req = req_builder
-            .body(())
-            .map_err(|e| anyhow::anyhow!("{}", t!("dl.invalid_request", e)))?;
-        agent
-            .run(req)
-            .with_context(|| t!("dl.request_failed", url))?
+        None
     };
 
+    let start = Instant::now();
+    let request = builder
+        .body(body)
+        .map_err(|e| anyhow::anyhow!("{}", t!("dl.invalid_request", e)))?;
+    let response = agent
+        .run(request)
+        .with_context(|| t!("dl.upload_failed", &opts.url))?;
+    if let Some(pb) = pb {
+        pb.finish_and_clear();
+    }
     let elapsed = start.elapsed();
     let status = response.status();
-    let status_text = status.canonical_reason().unwrap_or("Unknown");
+    let status_text = status.canonical_reason().unwrap_or("Unknown").to_string();
+    let body = response.into_body().read_to_string().unwrap_or_default();
 
-    let status_line = format!("{} {} {}  {}", method, url, status, status_text);
-    if status.is_success() {
+    Ok(UploadOutcome {
+        status: status.as_u16(),
+        status_text,
+        body,
+        elapsed,
+    })
+}
+
+fn print_upload_result(method: &str, url: &str, outcome: &UploadOutcome) {
+    let status_line = format!(
+        "{} {} {}  {}",
+        method, url, outcome.status, outcome.status_text
+    );
+    if (200..300).contains(&outcome.status) {
         println!("{}", status_line.green().bold());
-    } else if status.is_server_error() {
+    } else if outcome.status >= 500 {
         println!("{}", status_line.red().bold());
-    } else if status.is_client_error() {
+    } else if outcome.status >= 400 {
         println!("{}", status_line.yellow().bold());
     } else {
         println!("{}", status_line.cyan().bold());
     }
 
-    let ms = elapsed.as_millis();
+    let ms = outcome.elapsed.as_millis();
     let time_str = if ms < 1000 {
         format!("{}ms", ms)
     } else {
@@ -483,25 +888,77 @@ fn do_upload(
     };
     println!("{}", time_str.dimmed());
 
-    let body = response.into_body().read_to_string().unwrap_or_default();
-    if !body.is_empty() {
-        println!();
-        if body.trim().starts_with('{') || body.trim().starts_with('[') {
-            if let Ok(v) = serde_json::from_str::<serde_json::Value>(&body) {
-                if let Ok(pretty) = serde_json::to_string_pretty(&v) {
-                    println!("{}", pretty);
-                } else {
-                    println!("{}", body);
-                }
-            } else {
-                println!("{}", body);
+    let body = &outcome.body;
+    if body.is_empty() {
+        return;
+    }
+    println!();
+    let trimmed = body.trim();
+    if trimmed.starts_with('{') || trimmed.starts_with('[') {
+        if let Ok(value) = serde_json::from_str::<serde_json::Value>(trimmed) {
+            if let Ok(pretty) = serde_json::to_string_pretty(&value) {
+                println!("{}", pretty);
+                return;
             }
-        } else {
-            println!("{}", body);
         }
     }
+    println!("{}", body);
+}
 
-    Ok(false)
+fn multipart_boundary() -> String {
+    let nanos = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_nanos())
+        .unwrap_or(0);
+    format!("----ntc{}{}", std::process::id(), nanos)
+}
+
+fn multipart_body(
+    boundary: &str,
+    filename: &str,
+    mime: &str,
+    bytes: &[u8],
+    forms: &[(String, String)],
+) -> Vec<u8> {
+    let mut out = Vec::with_capacity(bytes.len() + 320);
+    for (name, value) in forms {
+        out.extend_from_slice(format!("--{}\r\n", boundary).as_bytes());
+        out.extend_from_slice(
+            format!(
+                "Content-Disposition: form-data; name=\"{}\"\r\n\r\n",
+                sanitize_field(name)
+            )
+            .as_bytes(),
+        );
+        out.extend_from_slice(value.as_bytes());
+        out.extend_from_slice(b"\r\n");
+    }
+    out.extend_from_slice(format!("--{}\r\n", boundary).as_bytes());
+    out.extend_from_slice(
+        format!(
+            "Content-Disposition: form-data; name=\"file\"; filename=\"{}\"\r\n",
+            sanitize_field(filename)
+        )
+        .as_bytes(),
+    );
+    out.extend_from_slice(format!("Content-Type: {}\r\n\r\n", mime).as_bytes());
+    out.extend_from_slice(bytes);
+    out.extend_from_slice(format!("\r\n--{}--\r\n", boundary).as_bytes());
+    out
+}
+
+/// Strips the bytes that would break a multipart header line.
+fn sanitize_field(value: &str) -> String {
+    value
+        .chars()
+        .filter(|c| *c != '"' && *c != '\r' && *c != '\n')
+        .collect()
+}
+
+fn file_basename(path: &str) -> &str {
+    path.rsplit(|c| c == '/' || c == '\\')
+        .find(|part| !part.is_empty())
+        .unwrap_or(path)
 }
 
 fn guess_mime(path: &str) -> &'static str {
@@ -577,18 +1034,19 @@ fn print_dl_help() {
     println!();
     println!("{}", t!("dl.help.options").bold());
     println!("{}", t!("dl.help.opt_o"));
-    println!("{}", t!("dl.help.opt_progress"));
     println!("{}", t!("dl.help.opt_resume"));
     println!("{}", t!("dl.help.opt_stop"));
+    println!("{}", t!("dl.help.opt_history"));
     println!("{}", t!("dl.help.opt_cancel"));
     println!("{}", t!("dl.help.opt_help"));
     println!();
     println!("{}", t!("dl.help.examples").bold());
     println!("  dl https://example.com/file.zip");
-    println!("  dl https://example.com/file.zip --progress");
     println!("  dl https://example.com/file.zip -o myfile.zip");
     println!("  dl https://example.com/file.zip --resume");
+    println!("  dl --resume");
     println!("  dl --stop");
+    println!("  dl --history");
     println!("  dl --cancel 2");
 }
 
@@ -603,95 +1061,24 @@ fn print_up_help() {
     println!("{}", t!("up.help.options").bold());
     println!("{}", t!("up.help.opt_header"));
     println!("{}", t!("up.help.opt_data"));
+    println!("{}", t!("up.help.opt_auth"));
+    println!("{}", t!("up.help.opt_bearer"));
+    println!("{}", t!("up.help.opt_form"));
+    println!("{}", t!("up.help.opt_raw"));
+    println!("{}", t!("up.help.opt_put"));
+    println!("{}", t!("up.help.opt_timeout"));
+    println!("{}", t!("up.help.opt_no_fallback"));
     println!("{}", t!("up.help.opt_post"));
     println!("{}", t!("up.help.opt_help"));
     println!();
     println!("{}", t!("up.help.examples").bold());
     println!("  up myfile.txt https://example.com/upload");
-    println!("  up data.json https://api.example.com/data --post");
+    println!("  up https://127.0.0.1:8080/api/upload myfile.txt -a user:pass");
+    println!("  up myfile.bin https://host/put --put --raw");
+    println!("  up myfile.txt https://host/upload -F tag=release -F owner=ci");
     println!(
         "  up -d \"hello world\" https://echo.free.beeceptor.com -H \"Content-Type: text/plain\""
     );
-}
-
-// ── Ping ──────────────────────────────────────────────────────────────────
-
-pub fn cmd_ping(args: &str, _nav: &mut Navigator) -> Result<bool> {
-    let tokens = tokenize(args);
-    if tokens.is_empty() || tokens[0] == "help" || tokens[0] == "--help" || tokens[0] == "-h" {
-        print_ping_help();
-        return Ok(false);
-    }
-
-    let mut host = String::new();
-    let mut count: u32 = 4;
-    let mut i = 0;
-
-    while i < tokens.len() {
-        match tokens[i].as_str() {
-            "-c" | "--count" => {
-                i += 1;
-                count = tokens
-                    .get(i)
-                    .ok_or_else(|| anyhow::anyhow!("{}", t!("dl.ping_missing_count")))?
-                    .parse()
-                    .map_err(|_| anyhow::anyhow!("{}", t!("dl.ping_invalid_count")))?;
-            }
-            "--" => break,
-            _ => {
-                if host.is_empty() {
-                    host = tokens[i].clone();
-                }
-            }
-        }
-        i += 1;
-    }
-
-    if host.is_empty() {
-        anyhow::bail!("{}", t!("dl.ping_host_required"));
-    }
-
-    #[cfg(windows)]
-    let status = std::process::Command::new("ping")
-        .args(["-n", &count.to_string(), &host])
-        .spawn()
-        .and_then(|mut c| c.wait());
-
-    #[cfg(not(windows))]
-    let status = std::process::Command::new("ping")
-        .args(["-c", &count.to_string(), &host])
-        .spawn()
-        .and_then(|mut c| c.wait());
-
-    match status {
-        Ok(exit) => {
-            if let Some(code) = exit.code() {
-                if code != 0 && code != 1 {
-                    print_warning(&t!("dl.ping_exit_code", code));
-                }
-            }
-        }
-        Err(e) => {
-            print_error(&t!("dl.ping_failed", e));
-        }
-    }
-
-    Ok(false)
-}
-
-fn print_ping_help() {
-    println!("{}", t!("ping.help.title").bold());
-    println!();
-    println!("{}", t!("ping.help.usage").bold());
-    println!("{}", t!("ping.help.usage_line"));
-    println!();
-    println!("{}", t!("ping.help.options").bold());
-    println!("{}", t!("ping.help.opt_count"));
-    println!("{}", t!("ping.help.opt_help"));
-    println!();
-    println!("{}", t!("ping.help.examples").bold());
-    println!("  ping example.com");
-    println!("  ping 127.0.0.1 -c 10");
 }
 
 // ── DNS ───────────────────────────────────────────────────────────────────
@@ -731,16 +1118,82 @@ pub fn cmd_dns(args: &str, _nav: &mut Navigator) -> Result<bool> {
     }
 
     match record.to_uppercase().as_str() {
-        "A" | "AAAA" => resolve_a(&host, &record),
+        "A" => {
+            resolve_a(&host, "A")?;
+        }
+        "AAAA" => {
+            resolve_a(&host, "AAAA")?;
+        }
         "ALL" => {
             resolve_a(&host, "A")?;
             resolve_a(&host, "AAAA")?;
-            Ok(false)
+            for rtype in [
+                dns_client::RRType::Mx,
+                dns_client::RRType::Ns,
+                dns_client::RRType::Txt,
+                dns_client::RRType::Soa,
+            ] {
+                print_dns_records(&host, rtype);
+            }
         }
-        _ => {
-            // Fallback to system dig/nslookup for non-A records
-            system_dns_lookup(&host, &record)
+        other => match dns_client::RRType::from_label(other) {
+            Some(rtype) => print_dns_records(&host, rtype),
+            None => print_error(&t!(
+                "dl.dns_unsupported_type",
+                record,
+                dns_client::SUPPORTED_TYPES
+            )),
+        },
+    }
+
+    Ok(false)
+}
+
+/// Queries one typed record and prints it; `PTR` also accepts an IP literal.
+fn print_dns_records(host: &str, rtype: dns_client::RRType) {
+    let label = rtype.label();
+    let query = if rtype == dns_client::RRType::Ptr {
+        dns_client::reverse_name(host).unwrap_or_else(|| host.to_string())
+    } else {
+        host.to_string()
+    };
+
+    println!("{} {} records:", host.bold(), label.cyan());
+
+    match dns_client::resolve(&query, rtype) {
+        Ok(records) => {
+            let matching: Vec<dns_client::Record> = records
+                .into_iter()
+                .filter(|record| record.rtype == rtype)
+                .collect();
+            if matching.is_empty() {
+                println!("{}", t!("dl.dns_no_records", "─".dimmed(), label));
+            } else {
+                for record in matching {
+                    println!("  {}  {}", "OK".green().bold(), record.render());
+                }
+            }
         }
+        Err(dns_client::DnsError::Network(message)) => {
+            // No answer at all: only then fall back to dig/nslookup.
+            print_warning(&t!("dl.dns_io", message));
+            print_warning(&t!("dl.dns_system_fallback"));
+            if let Err(e) = system_dns_lookup(host, label) {
+                print_error(&format!("{}", e));
+            }
+        }
+        Err(error) => println!("  {}  {}", "FAIL".red().bold(), dns_error_text(&error)),
+    }
+}
+
+fn dns_error_text(error: &dns_client::DnsError) -> String {
+    match error {
+        dns_client::DnsError::Rcode(code) => {
+            t!("dl.dns_rcode", code, dns_client::rcode_name(*code))
+        }
+        dns_client::DnsError::Timeout => t!("dl.dns_timeout"),
+        dns_client::DnsError::Malformed => t!("dl.dns_malformed"),
+        dns_client::DnsError::Network(message) => t!("dl.dns_io", message),
     }
 }
 
@@ -837,8 +1290,11 @@ fn print_dns_help() {
     println!("{}", t!("dns.help.examples").bold());
     println!("  dns example.com");
     println!("  dns example.com -t AAAA");
-    println!("  dns example.com -t ALL");
     println!("  dns example.com -t MX");
+    println!("  dns example.com -t TXT");
+    println!("  dns example.com -t SOA");
+    println!("  dns 8.8.8.8 -t PTR");
+    println!("  dns example.com -t ALL");
 }
 
 #[cfg(test)]
@@ -846,14 +1302,14 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_ping_parse_defaults() {
-        // tokenize doesn't parse, it just splits — parsing is done in cmd_ping
+    fn tokenize_splits_a_bare_host() {
+        // `tokienize` only splits; each command parses its own flags.
         let t = tokenize("example.com");
         assert_eq!(t, vec!["example.com"]);
     }
 
     #[test]
-    fn test_ping_parse_with_flags() {
+    fn tokenize_keeps_host_and_flags_in_order() {
         let t = tokenize("example.com -c 5 -p 443 -t 1");
         assert_eq!(t, vec!["example.com", "-c", "5", "-p", "443", "-t", "1"]);
     }
@@ -971,6 +1427,7 @@ mod tests {
             size: 1024,
             status: "completed".into(),
             time: "2024-01-01 12:00:00".into(),
+            pid: None,
         };
         let json = serde_json::to_string(&rec).unwrap();
         let parsed: DownloadRecord = serde_json::from_str(&json).unwrap();
@@ -985,5 +1442,95 @@ mod tests {
         // Should always return a Vec (possibly empty), never panic
         let records = load_records();
         assert!(records.len() < 1000);
+    }
+    fn up_opts(args: &str) -> UpOptions {
+        parse_up_args(&tokenize(args)).expect("valid up args")
+    }
+
+    #[test]
+    fn up_accepts_url_before_file() {
+        let opts = up_opts("https://example.com/upload file.txt");
+        assert_eq!(opts.url, "https://example.com/upload");
+        assert_eq!(opts.file.as_deref(), Some("file.txt"));
+    }
+
+    #[test]
+    fn up_accepts_file_before_url() {
+        let opts = up_opts("file.txt https://example.com/upload");
+        assert_eq!(opts.url, "https://example.com/upload");
+        assert_eq!(opts.file.as_deref(), Some("file.txt"));
+    }
+
+    #[test]
+    fn up_data_with_url_is_not_a_file() {
+        let opts = up_opts("-d \"hello\" https://echo.example.com");
+        assert_eq!(opts.url, "https://echo.example.com");
+        assert!(opts.file.is_none());
+        assert_eq!(opts.data.as_deref(), Some("hello"));
+    }
+
+    #[test]
+    fn up_file_defaults_to_multipart_post() {
+        let opts = up_opts("file.txt https://h/up");
+        assert_eq!(opts.method, "POST");
+        assert_eq!(opts.transport, Transport::Multipart);
+    }
+
+    #[test]
+    fn up_put_forces_raw_put() {
+        let opts = up_opts("file.bin https://h/put --put --raw");
+        assert_eq!(opts.method, "PUT");
+        assert_eq!(opts.transport, Transport::Raw);
+    }
+
+    #[test]
+    fn up_parses_auth_headers_and_forms() {
+        let opts =
+            up_opts("f.txt https://h/u -a user:pass --bearer tok -H \"X-A: 1\" -F tag=release");
+        assert_eq!(opts.auth.as_deref(), Some("user:pass"));
+        assert_eq!(opts.bearer.as_deref(), Some("tok"));
+        assert_eq!(opts.headers, vec![("X-A".to_string(), "1".to_string())]);
+        assert_eq!(opts.forms, vec![("tag".to_string(), "release".to_string())]);
+    }
+
+    #[test]
+    fn up_rejects_bad_arguments() {
+        assert!(parse_up_args(&tokenize("f.txt https://h/u --timeout 0")).is_err());
+        assert!(parse_up_args(&tokenize("f.txt https://h/u --timeout abc")).is_err());
+        assert!(parse_up_args(&tokenize("f.txt -d x https://h/u")).is_err());
+        // no URL at all
+        assert!(parse_up_args(&tokenize("f.txt")).is_err());
+    }
+
+    #[test]
+    fn multipart_body_wraps_file_with_fields() {
+        let body = multipart_body(
+            "BOUND",
+            "a.txt",
+            "text/plain",
+            b"hi",
+            &[("tag".to_string(), "x".to_string())],
+        );
+        let text = String::from_utf8_lossy(&body);
+        assert!(text.starts_with("--BOUND\r\n"));
+        assert!(text.contains("name=\"tag\""));
+        assert!(text.contains("name=\"file\"; filename=\"a.txt\""));
+        assert!(text.contains("Content-Type: text/plain"));
+        assert!(text.contains("\r\n\r\nhi\r\n"));
+        assert!(text.ends_with("--BOUND--\r\n"));
+    }
+
+    #[test]
+    fn multipart_body_sanitizes_filenames() {
+        let body = multipart_body("B", "bad\"\r\nname.txt", "text/plain", b"", &[]);
+        let text = String::from_utf8_lossy(&body);
+        assert!(text.contains("filename=\"badname.txt\""));
+    }
+
+    #[test]
+    fn file_basename_handles_both_separators() {
+        assert_eq!(file_basename("a/b/c.txt"), "c.txt");
+        assert_eq!(file_basename("a\\b\\c.txt"), "c.txt");
+        assert_eq!(file_basename("c.txt"), "c.txt");
     }
 }

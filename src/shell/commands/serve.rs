@@ -6,7 +6,7 @@ use anyhow::{Context, Result};
 use colored::*;
 use rusqlite::params;
 use std::collections::HashMap;
-use std::io::{BufRead, BufReader, Read, Write};
+use std::io::{BufRead, BufReader, Read, Seek, SeekFrom, Write};
 use std::net::{Ipv4Addr, SocketAddr, TcpListener, TcpStream, UdpSocket};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::AtomicBool;
@@ -19,7 +19,18 @@ struct Frontend;
 
 enum ApiResponse {
     Bytes(Vec<u8>),
-    Stream { head: Vec<u8>, path: PathBuf },
+    Stream {
+        head: Vec<u8>,
+        path: PathBuf,
+    },
+    /// `head` is already complete; `len` bytes from `start` are streamed from
+    /// `path` (used for `Range` downloads, so a paused transfer can resume).
+    StreamRange {
+        head: Vec<u8>,
+        path: PathBuf,
+        start: u64,
+        len: u64,
+    },
 }
 
 const MAX_UPLOAD: u64 = 10 * 1024 * 1024 * 1024;
@@ -261,16 +272,25 @@ pub fn cmd_serve_files(args: &str, _nav: &mut Navigator) -> Result<bool> {
     let addr = format!("{}:{}", bind, port);
     let listener = TcpListener::bind(&addr).context(format!("Bind to {}", addr))?;
     listener.set_nonblocking(false)?;
-    print_info(&format!(
-        "HTTP server on {}",
-        format!("http://{}", addr).cyan()
-    ));
+    let base_url = public_base_url(&bind, port);
+    print_info(&format!("HTTP server on {}", base_url.as_str().cyan()));
     if let Some((ref user, _)) = auth {
         print_info(&t!("cmd.serve.auth_on", user));
     }
     if locked {
         print_info(&t!("cmd.serve.lock_on"));
     }
+    // Every URL a client needs, so nobody has to guess the API shape.
+    print_info(&t!("cmd.serve.url_web", base_url.as_str()));
+    print_info(&t!(
+        "cmd.serve.url_upload",
+        format!("{}/api/upload", base_url)
+    ));
+    print_info(&t!(
+        "cmd.serve.url_download",
+        format!("{}/download/root/", base_url)
+    ));
+    print_info(&t!("cmd.serve.url_info", format!("{}/info", base_url)));
 
     if share_mode {
         print_share_block(port, &bind, share_path.as_deref(), !no_qr || want_qr);
@@ -287,18 +307,24 @@ pub fn cmd_serve_files(args: &str, _nav: &mut Navigator) -> Result<bool> {
     let web = if web_dir.is_empty() {
         None
     } else {
-        Some(PathBuf::from(web_dir))
+        Some(PathBuf::from(crate::utils::paths::expand_path_str(
+            &web_dir,
+        )))
     };
     listener.set_nonblocking(true)?;
 
     let auth = auth.map(|(u, p)| std::sync::Arc::new((u, p)));
+    let base_url = std::sync::Arc::new(base_url.clone());
     while !shutdown.load(std::sync::atomic::Ordering::Relaxed) {
         match listener.accept() {
             Ok((stream, _)) => {
                 let db = db.clone();
                 let web = web.clone();
                 let auth = auth.clone();
-                std::thread::spawn(move || handle_connection(stream, db, spa, web, auth, locked));
+                let base_url = base_url.clone();
+                std::thread::spawn(move || {
+                    handle_connection(stream, db, spa, web, auth, locked, base_url)
+                });
             }
             Err(e) if e.kind() == std::io::ErrorKind::WouldBlock => {
                 std::thread::sleep(std::time::Duration::from_millis(200));
@@ -573,6 +599,7 @@ fn handle_connection(
     web_dir: Option<PathBuf>,
     auth: Option<std::sync::Arc<(String, String)>>,
     locked: bool,
+    base_url: std::sync::Arc<String>,
 ) {
     // The accepted socket may inherit non-blocking mode from the listener;
     // restore blocking semantics so reads/writes behave predictably.
@@ -602,6 +629,10 @@ fn handle_connection(
     let mut boundary = String::new();
     let mut expect_continue = false;
     let mut authorization = String::new();
+    let mut range_header = String::new();
+    let mut host_header = String::new();
+    let mut forwarded_host = String::new();
+    let mut forwarded_proto = String::new();
     loop {
         let mut line = String::new();
         if reader.read_line(&mut line).is_err() {
@@ -625,8 +656,20 @@ fn handle_connection(
             if key == "expect" && val.to_lowercase().contains("100-continue") {
                 expect_continue = true;
             }
+            if key == "range" {
+                range_header = val.clone();
+            }
             if key == "authorization" {
-                authorization = val;
+                authorization = val.clone();
+            }
+            if key == "host" {
+                host_header = val.clone();
+            }
+            if key == "x-forwarded-host" {
+                forwarded_host = val.clone();
+            }
+            if key == "x-forwarded-proto" {
+                forwarded_proto = val;
             }
         }
     }
@@ -643,7 +686,7 @@ fn handle_connection(
             let expected = basic_expectation(&creds.0, &creds.1);
             if !auth_matches(&authorization, &expected) {
                 let token_ok = method == "GET"
-                    && path == "/api/download"
+                    && (path == "/api/download" || path.starts_with("/download/"))
                     && query_has_valid_download_token(query);
                 if !token_ok {
                     respond_unauthorized(&mut stream);
@@ -745,8 +788,8 @@ fn handle_connection(
     }
 
     // Route
-    let response = if path.starts_with("/api/") {
-        handle_api(
+    let response = match route_request(method, path) {
+        Route::Api => handle_api(
             method,
             path,
             query,
@@ -755,9 +798,32 @@ fn handle_connection(
             upload_file.as_deref(),
             db,
             locked,
-        )
-    } else {
-        ApiResponse::Bytes(serve_static(path, spa_mode, &web_dir))
+        ),
+        // Everything lives under `/root/`: entering the bare URL walks the
+        // user into it so every later link is root-relative.
+        Route::RootRedirect => ApiResponse::Bytes(redirect_to_root()),
+        // Bare download base: send the client into the real root so the URL
+        // printed at startup works when pasted whole.
+        Route::DownloadRedirect => ApiResponse::Bytes(redirect_to("/download/root/")),
+        // Use the URL the client actually reached (tunnel, LAN IP, custom
+        // domain) instead of the bind address, so a shared /info page shows
+        // working links instead of http://127.0.0.1:<port>.
+        Route::Info => ApiResponse::Bytes(info_page(
+            &request_base_url(&host_header, &forwarded_host, &forwarded_proto, &base_url),
+            auth.is_some(),
+            locked,
+        )),
+        Route::Download(target) => serve_download(&target, &range_header, method == "HEAD", &db),
+        Route::Static => {
+            // `/root/<dir>` is a client-side route: hand back the SPA shell so
+            // a reload (or a copied folder link) lands on the same directory.
+            let requested = if method == "GET" || method == "HEAD" {
+                spa_path(path)
+            } else {
+                path
+            };
+            ApiResponse::Bytes(serve_static(requested, spa_mode, &web_dir))
+        }
     };
 
     if let Some(p) = &upload_file {
@@ -781,6 +847,33 @@ fn handle_connection(
                             }
                         }
                         Err(_) => break,
+                    }
+                }
+            }
+        }
+        ApiResponse::StreamRange {
+            head,
+            path,
+            start,
+            len,
+        } => {
+            let _ = write_all_retry(&mut stream, &head);
+            if let Ok(mut file) = std::fs::File::open(&path) {
+                if file.seek(SeekFrom::Start(start)).is_ok() {
+                    let mut remaining = len;
+                    let mut buf = vec![0u8; 65536];
+                    while remaining > 0 {
+                        let want = remaining.min(buf.len() as u64) as usize;
+                        match file.read(&mut buf[..want]) {
+                            Ok(0) => break,
+                            Ok(n) => {
+                                if write_all_retry(&mut stream, &buf[..n]).is_err() {
+                                    break;
+                                }
+                                remaining -= n as u64;
+                            }
+                            Err(_) => break,
+                        }
                     }
                 }
             }
@@ -930,6 +1023,7 @@ pub(crate) fn json_error(status: u16) -> Vec<u8> {
     let reason = match status {
         400 => "Bad Request",
         404 => "Not Found",
+        405 => "Method Not Allowed",
         409 => "Conflict",
         413 => "Payload Too Large",
         500 => "Internal Server Error",
@@ -944,6 +1038,270 @@ pub(crate) fn json_ok(data: Vec<u8>) -> Vec<u8> {
 }
 
 // ── Static file serving ───────────────────────────────────────────────────
+
+/// `GET /` → `/root/`. The share root is always `/root`, so a URL copied from
+/// the address bar keeps working after the user walks into a subdirectory.
+fn redirect_to_root() -> Vec<u8> {
+    redirect_to("/root/")
+}
+
+/// 302 to `location` (kept tiny so it can be built without the response type).
+fn redirect_to(location: &str) -> Vec<u8> {
+    format!(
+        "HTTP/1.1 302 Found\r\nLocation: {}\r\nContent-Length: 0\r\nConnection: close\r\n\r\n",
+        location
+    )
+    .into_bytes()
+}
+
+/// URL a client should use: the bound address when it is concrete, the LAN
+/// address when binding to every interface, loopback otherwise.
+pub(crate) fn public_base_url(bind: &str, port: u16) -> String {
+    let host = match bind {
+        "0.0.0.0" | "::" | "[::]" | "*" => primary_lan_ip()
+            .map(|ip| ip.to_string())
+            .unwrap_or_else(|| "127.0.0.1".to_string()),
+        other => other.to_string(),
+    };
+    format!("http://{}:{}", host, port)
+}
+
+/// Base URL for a request: prefer the `Host` the client sent (and the
+/// `X-Forwarded-Proto` scheme when a tunnel/proxy set it) so the `/info` page
+/// is reachable through cloudflared and other reverse proxies. Falls back to
+/// the URL computed from the bind address when `Host` is missing.
+pub(crate) fn request_base_url(
+    host: &str,
+    forwarded_host: &str,
+    forwarded_proto: &str,
+    fallback: &str,
+) -> String {
+    // A proxy may rewrite `Host` to the backend and pass the public hostname
+    // separately; the forwarded value wins when present.
+    let forwarded = sanitize_host(forwarded_host);
+    let host = if forwarded.is_empty() {
+        sanitize_host(host)
+    } else {
+        forwarded
+    };
+    if host.is_empty() {
+        return fallback.to_string();
+    }
+    // Proxies may append a list (`https,http`); the first value is the
+    // client-facing one. Without a hint, inherit the fallback scheme.
+    let scheme = match forwarded_proto
+        .split(',')
+        .next()
+        .unwrap_or("")
+        .trim()
+        .to_ascii_lowercase()
+        .as_str()
+    {
+        "http" => "http",
+        "https" => "https",
+        _ => {
+            if fallback.starts_with("https://") {
+                "https"
+            } else {
+                "http"
+            }
+        }
+    };
+    format!("{}://{}", scheme, host)
+}
+
+/// Keep a `Host` value only when it is a plain authority (letters, digits,
+/// `.`, `-`, `_`, `:` and IPv6 brackets). Anything else is dropped so the
+/// page can never echo an injected HTML/URL fragment back to the browser.
+fn sanitize_host(host: &str) -> String {
+    let host = host.trim();
+    if host.is_empty() || host.len() > 255 {
+        return String::new();
+    }
+    if !host
+        .chars()
+        .all(|c| c.is_ascii_alphanumeric() || matches!(c, '.' | '-' | '_' | ':' | '[' | ']'))
+    {
+        return String::new();
+    }
+    host.to_string()
+}
+
+/// The `/info` page: a self-contained explanation of the running server plus
+/// copy/paste upload and download recipes for every client we support.
+fn info_page(base: &str, auth: bool, locked: bool) -> Vec<u8> {
+    let html = crate::utils::serve_info::render(base, auth, locked);
+    let mut out = format!(
+        "HTTP/1.1 200 OK\r\nContent-Type: text/html; charset=utf-8\r\nContent-Length: {}\r\nCache-Control: no-store\r\nConnection: close\r\n\r\n",
+        html.as_bytes().len()
+    )
+    .into_bytes();
+    out.extend_from_slice(html.as_bytes());
+    out
+}
+
+/// What a request line resolves to. Kept pure so the routing table can be
+/// tested without a socket.
+#[derive(Debug, PartialEq, Eq)]
+pub(crate) enum Route {
+    Api,
+    RootRedirect,
+    DownloadRedirect,
+    Info,
+    Download(String),
+    Static,
+}
+
+pub(crate) fn route_request(method: &str, path: &str) -> Route {
+    if path.starts_with("/api/") {
+        return Route::Api;
+    }
+    if method == "GET" && (path == "/" || path == "/root") {
+        return Route::RootRedirect;
+    }
+    if method == "GET" && (path == "/download" || path == "/download/") {
+        return Route::DownloadRedirect;
+    }
+    if method == "GET" && matches!(path, "/info" | "/help" | "/about") {
+        return Route::Info;
+    }
+    if let Some(target) = download_target(path) {
+        return Route::Download(target);
+    }
+    Route::Static
+}
+
+/// `/download/root/<path/to/file>` → the share-relative path. The bare
+/// `/download/<path>` spelling is accepted too, so either form can be copied.
+fn download_target(path: &str) -> Option<String> {
+    let rest = path.strip_prefix("/download/")?;
+    let rest = if rest == "root" {
+        ""
+    } else {
+        rest.strip_prefix("root/").unwrap_or(rest)
+    };
+    Some(clean_path(rest))
+}
+
+/// Client-side routes under `/root/…` are answered with the SPA shell.
+fn spa_path(path: &str) -> &str {
+    if path == "/root" || path.starts_with("/root/") {
+        "/"
+    } else {
+        path
+    }
+}
+
+/// Resolve `bytes=<start>-<end>` against `total`. `None` means "send the whole
+/// file": no header, a suffix range, or an unsatisfiable offset.
+fn parse_range(header: &str, total: u64) -> Option<(u64, u64)> {
+    if total == 0 {
+        return None;
+    }
+    let spec = header.trim().strip_prefix("bytes=")?;
+    let (from, to) = spec.split_once('-')?;
+    let start = from.trim().parse::<u64>().ok()?;
+    if start >= total {
+        return None;
+    }
+    let end = to.trim().parse::<u64>().unwrap_or(total - 1).min(total - 1);
+    if end < start {
+        return None;
+    }
+    Some((start, end))
+}
+
+/// Serve a file from `/download/…`. Honours `Range` (so the page can pause a
+/// transfer and resume it later), and never rewrites the stored file.
+fn serve_download(
+    target: &str,
+    range_header: &str,
+    head_only: bool,
+    db: &Arc<Mutex<rusqlite::Connection>>,
+) -> ApiResponse {
+    let (dir_path, filename) = match split_path(target) {
+        Ok(p) => p,
+        Err(_) => return ApiResponse::Bytes(json_error(400)),
+    };
+    let row: Option<(Option<String>, Option<Vec<u8>>)> = {
+        let db = lock(db);
+        db.query_row(
+            "SELECT disk_name, data FROM files WHERE path = ?1 AND filename = ?2 AND is_dir = 0",
+            params![dir_path, filename],
+            |row| Ok((row.get(0)?, row.get(1)?)),
+        )
+        .ok()
+    };
+    let Some((disk_name, blob)) = row else {
+        return ApiResponse::Bytes(json_error(404));
+    };
+
+    enum Body {
+        File(PathBuf),
+        Memory(Vec<u8>),
+    }
+    let (total, body) = match (disk_name, blob) {
+        (Some(d), _) => {
+            let path = files_dir().join(&d);
+            match std::fs::metadata(&path) {
+                Ok(m) => (m.len(), Body::File(path)),
+                Err(_) => return ApiResponse::Bytes(json_error(404)),
+            }
+        }
+        (_, Some(b)) => (b.len() as u64, Body::Memory(b)),
+        _ => return ApiResponse::Bytes(json_error(404)),
+    };
+
+    let resolved = parse_range(range_header, total);
+    let (status, len, extra) = match resolved {
+        Some((start, end)) => (
+            206u16,
+            end - start + 1,
+            format!(
+                "Content-Range: bytes {}-{}/{}\r\nAccept-Ranges: bytes\r\n",
+                start, end, total
+            ),
+        ),
+        None => (200u16, total, "Accept-Ranges: bytes\r\n".to_string()),
+    };
+    let reason = if status == 206 {
+        "Partial Content"
+    } else {
+        "OK"
+    };
+    let ct = mime_guess::from_path(&filename)
+        .first_or_octet_stream()
+        .to_string();
+    let head = format!(
+        "HTTP/1.1 {} {}\r\nContent-Type: {}\r\nContent-Disposition: attachment; filename=\"{}\"\r\nContent-Length: {}\r\nConnection: close\r\nAccess-Control-Allow-Origin: *\r\nAccess-Control-Expose-Headers: Content-Range, Content-Length\r\n{}\r\n",
+        status,
+        reason,
+        ct,
+        filename.replace('"', ""),
+        len,
+        extra
+    );
+    if head_only {
+        return ApiResponse::Bytes(head.into_bytes());
+    }
+    match body {
+        Body::File(path) => ApiResponse::StreamRange {
+            head: head.into_bytes(),
+            path,
+            start: resolved.map(|(s, _)| s).unwrap_or(0),
+            len,
+        },
+        Body::Memory(data) => {
+            let slice = match resolved {
+                Some((start, end)) => data[start as usize..=end as usize].to_vec(),
+                None => data,
+            };
+            let mut out = head.into_bytes();
+            out.extend(slice);
+            ApiResponse::Bytes(out)
+        }
+    }
+}
 
 fn serve_static(path: &str, spa_mode: bool, web_dir: &Option<PathBuf>) -> Vec<u8> {
     let clean = if path == "/" {
@@ -1041,8 +1399,28 @@ fn handle_api(
         ("POST", "/api/create-folder") => ApiResponse::Bytes(api_create_folder(body, db)),
         ("DELETE", "/api/delete") => ApiResponse::Bytes(api_delete(query, db)),
         ("PATCH", "/api/rename") => ApiResponse::Bytes(api_rename(body, db)),
+        // A known endpoint reached with the wrong verb: answer 405 (not 404)
+        // so endpoint discovery (`scan waep`) can tell it exists.
+        _ if is_known_api_path(path) => ApiResponse::Bytes(json_error(405)),
         _ => ApiResponse::Bytes(json_error(404)),
     }
+}
+
+/// Routes `/api/*` that exist, regardless of the method used.
+fn is_known_api_path(path: &str) -> bool {
+    matches!(
+        path,
+        "/api/files"
+            | "/api/download"
+            | "/api/download-token"
+            | "/api/upload"
+            | "/api/upload-chunk"
+            | "/api/upload-finalize"
+            | "/api/upload-cancel"
+            | "/api/create-folder"
+            | "/api/delete"
+            | "/api/rename"
+    )
 }
 
 pub(crate) fn parse_query(query: &str) -> HashMap<String, String> {
@@ -2195,6 +2573,151 @@ mod tests {
         )));
     }
 
+    #[test]
+    fn route_table_covers_the_info_and_download_shortcuts() {
+        assert_eq!(route_request("GET", "/"), Route::RootRedirect);
+        assert_eq!(route_request("GET", "/root"), Route::RootRedirect);
+        // The bare download base redirects; the real root serves files.
+        assert_eq!(route_request("GET", "/download"), Route::DownloadRedirect);
+        assert_eq!(route_request("GET", "/download/"), Route::DownloadRedirect);
+        assert_eq!(
+            route_request("GET", "/download/root/a/b.txt"),
+            Route::Download("/a/b.txt".to_string())
+        );
+        // The info page and its aliases.
+        assert_eq!(route_request("GET", "/info"), Route::Info);
+        assert_eq!(route_request("GET", "/help"), Route::Info);
+        assert_eq!(route_request("GET", "/about"), Route::Info);
+        // API routes never fall through to the SPA.
+        assert_eq!(route_request("POST", "/api/upload"), Route::Api);
+        assert_eq!(route_request("GET", "/api/files"), Route::Api);
+        // Anything else is a static/SPA request.
+        assert_eq!(route_request("GET", "/root/src"), Route::Static);
+        assert_eq!(route_request("GET", "/favicon.ico"), Route::Static);
+        assert_eq!(route_request("POST", "/upload"), Route::Static);
+    }
+
+    #[test]
+    fn request_url_prefers_the_host_header_for_tunnels() {
+        // A cloudflared tunnel forwards the public host + https scheme.
+        assert_eq!(
+            request_base_url(
+                "blue-cat.trycloudflare.com",
+                "",
+                "https",
+                "http://127.0.0.1:55555"
+            ),
+            "https://blue-cat.trycloudflare.com"
+        );
+        // Local requests keep their own host:port.
+        assert_eq!(
+            request_base_url("127.0.0.1:55555", "", "", "http://127.0.0.1:55555"),
+            "http://127.0.0.1:55555"
+        );
+        // A forwarded host beats a rewritten backend Host.
+        assert_eq!(
+            request_base_url(
+                "127.0.0.1:55555",
+                "public.example.com",
+                "https",
+                "http://127.0.0.1:55555"
+            ),
+            "https://public.example.com"
+        );
+        // Proxy lists use the first scheme; missing Host keeps the fallback.
+        assert_eq!(
+            request_base_url("example.com", "", "https, http", "http://127.0.0.1"),
+            "https://example.com"
+        );
+        assert_eq!(
+            request_base_url("", "", "https", "http://127.0.0.1:8080"),
+            "http://127.0.0.1:8080"
+        );
+        // A malformed/injected Host is ignored rather than echoed.
+        assert_eq!(
+            request_base_url("<script>alert(1)</script>", "", "", "http://127.0.0.1"),
+            "http://127.0.0.1"
+        );
+    }
+
+    #[test]
+    fn known_api_paths_answer_405_not_404() {
+        // The method fallback tells endpoint scanners the path exists.
+        let resp = json_error(405);
+        let body = String::from_utf8_lossy(&resp);
+        assert!(body.starts_with("HTTP/1.1 405 Method Not Allowed"));
+        assert!(is_known_api_path("/api/upload"));
+        assert!(is_known_api_path("/api/upload-chunk"));
+        assert!(!is_known_api_path("/api/nope"));
+    }
+
+    #[test]
+    fn info_page_sets_html_headers_and_reports_its_length() {
+        let resp = info_page("http://127.0.0.1:8080", false, false);
+        let text = String::from_utf8_lossy(&resp);
+        assert!(text.starts_with("HTTP/1.1 200 OK\r\n"), "{text:.80}");
+        assert!(text.contains("Content-Type: text/html; charset=utf-8"));
+        assert!(text.contains("http://127.0.0.1:8080/api/upload"));
+        let (head, body) = text.split_once("\r\n\r\n").unwrap();
+        let len: usize = head
+            .lines()
+            .find_map(|l| l.strip_prefix("Content-Length: "))
+            .and_then(|v| v.trim().parse().ok())
+            .unwrap();
+        assert_eq!(len, body.len());
+    }
+
+    #[test]
+    fn root_urls_are_rewritten() {
+        // `/` and `/root` walk into the share root.
+        assert_eq!(&redirect_to_root()[..12], b"HTTP/1.1 302");
+        assert_eq!(spa_path("/root"), "/");
+        assert_eq!(spa_path("/root/docs"), "/");
+        assert_eq!(spa_path("/assets/x.js"), "/assets/x.js");
+    }
+
+    #[test]
+    fn download_urls_decode_to_share_paths() {
+        assert_eq!(
+            download_target("/download/root/hello.c").as_deref(),
+            Some("/hello.c")
+        );
+        assert_eq!(
+            download_target("/download/root/a/b.txt").as_deref(),
+            Some("/a/b.txt")
+        );
+        // Bare spelling keeps working.
+        assert_eq!(
+            download_target("/download/a/b.txt").as_deref(),
+            Some("/a/b.txt")
+        );
+        // A file whose name merely starts with "root" is not stripped twice.
+        assert_eq!(
+            download_target("/download/root/rootable.txt").as_deref(),
+            Some("/rootable.txt")
+        );
+        assert_eq!(download_target("/download/root").as_deref(), Some("/"));
+        assert_eq!(download_target("/api/files"), None);
+        // Traversal collapses inside the share root.
+        assert_eq!(
+            download_target("/download/root/../x").as_deref(),
+            Some("/x")
+        );
+    }
+
+    #[test]
+    fn range_headers_resolve() {
+        assert_eq!(parse_range("", 100), None);
+        assert_eq!(parse_range("bytes=0-", 100), Some((0, 99)));
+        assert_eq!(parse_range("bytes=10-19", 100), Some((10, 19)));
+        assert_eq!(parse_range("bytes=90-999", 100), Some((90, 99)));
+        // Unsatisfiable / suffix ranges fall back to the whole file.
+        assert_eq!(parse_range("bytes=100-", 100), None);
+        assert_eq!(parse_range("bytes=-20", 100), None);
+        assert_eq!(parse_range("items=0-1", 100), None);
+        assert_eq!(parse_range("bytes=0-", 0), None);
+    }
+
     fn locked_response_status(method: &str, path: &str) -> u16 {
         // handle_api is behind a DB handle; locked mutations return before touching it,
         // so an empty in-memory DB is enough to observe the 403 gate.
@@ -2209,7 +2732,7 @@ mod tests {
                     .and_then(|s| s.parse::<u16>().ok())
                     .unwrap_or(0)
             }
-            ApiResponse::Stream { .. } => 200,
+            ApiResponse::Stream { .. } | ApiResponse::StreamRange { .. } => 200,
         }
     }
 
@@ -2252,7 +2775,9 @@ mod tests {
                 let head = String::from_utf8_lossy(&b);
                 assert!(head.contains("400"), "expected 400, got: {}", head);
             }
-            ApiResponse::Stream { .. } => panic!("unexpected stream"),
+            ApiResponse::Stream { .. } | ApiResponse::StreamRange { .. } => {
+                panic!("unexpected stream")
+            }
         }
     }
 }

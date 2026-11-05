@@ -378,8 +378,8 @@ impl Editor {
             return;
         }
         if self.terminal.is_none() {
-            let (tw, th) = crate::editor::helpers::term_size();
-            let term_h = (th / 2) as u16;
+            let (tw, th) = self.terminal_pty_size();
+            let term_h = th;
             let cwd = std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from("."));
             match crate::editor::terminal::TerminalState::spawn_ntc_shell(tw as u16, term_h, &cwd) {
                 Ok(term) => {
@@ -437,8 +437,8 @@ impl Editor {
         // Fall back to the process CWD when the configured cwd does not
         // exist (e.g. unsaved parent).
         if self.terminal.is_none() {
-            let (tw, th) = crate::editor::helpers::term_size();
-            let term_h = (th / 2) as u16;
+            let (tw, th) = self.terminal_pty_size();
+            let term_h = th;
             let cwd = if resolved.cwd.exists() {
                 resolved.cwd.clone()
             } else {
@@ -507,5 +507,16 @@ impl Editor {
 
     pub(crate) fn terminal_content_cols(&self) -> usize {
         self.terminal_content_size().0
+    }
+
+    /// PTY size for the embedded shell: exactly the panel's content grid.
+    ///
+    /// The child formats every full-width line it prints (rulers, boxes, the
+    /// nav view, wrapped output) to the size it is given, so it must be told
+    /// the grid the panel actually shows — not the whole window, which is
+    /// several columns and rows larger and left the shell's rulers clipped.
+    pub(crate) fn terminal_pty_size(&self) -> (u16, u16) {
+        let (cols, rows) = self.terminal_content_size();
+        (cols.max(1) as u16, rows.max(1) as u16)
     }
 }

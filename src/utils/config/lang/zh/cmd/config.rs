@@ -132,7 +132,7 @@ pub fn fill(m: &mut HashMap<String, String>) {
 
     m.insert(
         "cmd.config.local.exists_warning".into(),
-        "\u{26a0}\u{fe0f} ntconfig.toml 已存在！".into(),
+        "ntconfig.toml 已存在！".into(),
     );
 
     m.insert(
@@ -152,12 +152,12 @@ pub fn fill(m: &mut HashMap<String, String>) {
 
     m.insert(
         "cmd.config.local.template_hint".into(),
-        "\u{1f4dd} 这是一个已注释的模板 — 尚无活动设置".into(),
+        "这是一个已注释的模板 — 尚无活动设置".into(),
     );
 
     m.insert(
         "cmd.config.local.tip_global".into(),
-        "\u{1f4a1} 提示：全局设置（传送点、输出路径、深度）保持全局".into(),
+        "提示：全局设置（传送点、输出路径、深度）保持全局".into(),
     );
 
     m.insert(
@@ -197,7 +197,7 @@ pub fn fill(m: &mut HashMap<String, String>) {
 
     m.insert(
         "cmd.config.local_deinit.title".into(),
-        "\u{26A0}\u{FE0F} 本地配置删除".into(),
+        "本地配置删除".into(),
     );
 
     m.insert(
@@ -360,7 +360,7 @@ pub fn fill(m: &mut HashMap<String, String>) {
 
     m.insert(
         "cmd.config.resetcg.warning_title".into(),
-        "\u{26A0}\u{FE0F} 配置重置警告".into(),
+        "配置重置警告".into(),
     );
 
     m.insert(
@@ -401,10 +401,7 @@ pub fn fill(m: &mut HashMap<String, String>) {
         "已从以下位置恢复配置：{}".into(),
     );
 
-    m.insert(
-        "cmd.config.restorecg.title".into(),
-        "\u{1F4CB} 可用备份：".into(),
-    );
+    m.insert("cmd.config.restorecg.title".into(), "可用备份：".into());
 
     m.insert("cmd.config.mgmt_header".into(), "管理：".into());
 
@@ -518,5 +515,100 @@ pub fn fill(m: &mut HashMap<String, String>) {
     m.insert(
         "cmd.config.local.precedence_hint".into(),
         "本地条目优先；全局条目继续生效，全局配置不会被修改。".into(),
+    );
+
+    // ---- config env / config rmenv ----
+
+    m.insert("cmd.config.env.title".into(), "NTC 环境变量：".into());
+
+    m.insert(
+        "cmd.config.env.store_local".into(),
+        "本地 (ntconfig.toml)".into(),
+    );
+
+    m.insert(
+        "cmd.config.env.store_global".into(),
+        "全局 (ntc 配置)".into(),
+    );
+
+    m.insert("cmd.config.env.store_session".into(), "会话 (-os)".into());
+
+    m.insert(
+        "cmd.config.env.store_os".into(),
+        "操作系统环境（持久化）".into(),
+    );
+
+    m.insert("cmd.config.env.store_process".into(), "进程".into());
+
+    m.insert(
+        "cmd.config.env.empty".into(),
+        "尚未设置 NTC 环境变量。使用：config env NAME value".into(),
+    );
+
+    m.insert(
+        "cmd.config.env.list_hint".into(),
+        "提示：config env NAME value [-g|-l|-os|-osg] | config env NAME | config rmenv NAME [-all]"
+            .into(),
+    );
+
+    m.insert("cmd.config.env.get".into(), "{} = {}  [{}]".into());
+
+    m.insert(
+        "cmd.config.env.not_set".into(),
+        "{} 未在 NTC 或操作系统环境中设置。".into(),
+    );
+
+    m.insert(
+        "cmd.config.env.protected".into(),
+        "'{}' 受保护。PATH 条目请使用 'usrpath' / 'syspath'。".into(),
+    );
+
+    m.insert(
+        "cmd.config.env.invalid_name".into(),
+        "变量名 '{}' 无效（使用字母、数字和下划线；不能以数字开头）。".into(),
+    );
+
+    m.insert(
+        "cmd.config.env.os_fail".into(),
+        "更新操作系统环境失败：{}".into(),
+    );
+
+    m.insert(
+        "cmd.config.env.set_os".into(),
+        "{} = {} 已保存到 {}，并在当前会话中生效。".into(),
+    );
+
+    m.insert(
+        "cmd.config.env.os_wiring".into(),
+        "将此行添加到 shell 配置文件即可在新 shell 中加载：{}".into(),
+    );
+
+    m.insert("cmd.config.env.set".into(), "{} = {} 已保存到 {}。".into());
+
+    m.insert(
+        "cmd.config.env.no_local".into(),
+        "当前目录没有 ntconfig.toml。请先运行 'local init' 或使用 -g。".into(),
+    );
+
+    m.insert(
+        "cmd.config.env.remove_missing".into(),
+        "{} 未在所选存储中设置。".into(),
+    );
+
+    m.insert("cmd.config.env.removed".into(), "已从 {} 移除 {}。".into());
+
+    m.insert(
+        "cmd.config.env.flag_conflict".into(),
+        "标志冲突。请使用 -g、-l、-os、-osg 或 -all 之一。".into(),
+    );
+
+    m.insert(
+        "cmd.config.env.rm_usage".into(),
+        "用法：config rmenv NAME [-g|-l|-os|-osg|-all]".into(),
+    );
+
+    m.insert(
+        "help.config.idle".into(),
+        " idle|gt [on|off]  开关空提示符上的 ghost typing（别名：ghost_typing）".into(),
     );
 }

@@ -356,6 +356,12 @@ pub fn fill(m: &mut HashMap<String, String>) {
 
     m.insert("ndb.dbal_note".into(), "别名仅保存只读查询；写入会被拒绝。直接输入别名即可运行。参数值按字面替换——字符串请自行加引号：dbal run q \"'2026-01-01'\"。".into());
 
+    m.insert("ndb.dbal_hint_note".into(), "补全：dbal add q \"SELECT * FROM $t WHERE id = $id\" #t --hint-table #id --hint-table-col-name [table]。此处仅支持 --hint-table 和 --hint-table-col-name，ndb 补全会根据当前打开的数据库解析它们。".into());
+
+    m.insert("ndb.dbal_hints".into(), "补全提示：{}".into());
+
+    m.insert("ndb.dbal_bad_hint".into(), "参数补全提示有误（{}）。请使用 #param --hint-table 或 #param --hint-table-col-name [table]。".into());
+
     m.insert("ndb.dbal_params".into(), "参数：{}".into());
 
     m.insert("ndb.dbal_missing_args".into(), "缺少参数值：{}".into());

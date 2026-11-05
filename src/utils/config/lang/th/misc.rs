@@ -176,7 +176,7 @@ pub fn fill(m: &mut HashMap<String, String>) {
 
     m.insert(
         "misc.ds.usage".into(),
-        "การใช้งาน: ds <รูปแบบ> [-d <ความลึก>]".into(),
+        "การใช้งาน: ds <รูปแบบ> [-d <ความลึก>] [--no-fuzzy|-no-fz]".into(),
     );
 
     m.insert(
@@ -196,7 +196,7 @@ pub fn fill(m: &mut HashMap<String, String>) {
 
     m.insert(
         "misc.fs.usage".into(),
-        "การใช้งาน: fs <รูปแบบ> [-d <ความลึก>]".into(),
+        "การใช้งาน: fs <รูปแบบ> [-d <ความลึก>] [--no-fuzzy|-no-fz]".into(),
     );
 
     m.insert(
@@ -223,10 +223,7 @@ pub fn fill(m: &mut HashMap<String, String>) {
         "  fsc main.rs -d 5 # ค้นหาลึกสุด 5 ระดับ".into(),
     );
 
-    m.insert(
-        "misc.fsc.found".into(),
-        "\u{1F50D} พบ {} ไฟล์สำหรับ \"{}\":".into(),
-    );
+    m.insert("misc.fsc.found".into(), "พบ {} ไฟล์สำหรับ \"{}\":".into());
 
     m.insert("misc.fsc.invalid_input".into(), "ข้อมูลนำเข้าไม่ถูกต้อง.".into());
 
@@ -243,7 +240,7 @@ pub fn fill(m: &mut HashMap<String, String>) {
 
     m.insert(
         "misc.fsc.usage".into(),
-        "การใช้งาน: fsc <รูปแบบ> [-d <ความลึก>]".into(),
+        "การใช้งาน: fsc <รูปแบบ> [-d <ความลึก>] [--no-fuzzy|-no-fz]".into(),
     );
 
     m.insert(
@@ -299,6 +296,13 @@ pub fn fill(m: &mut HashMap<String, String>) {
     m.insert("misc.gs.searching".into(), "กำลังค้นหาเนื้อหา...".into());
 
     m.insert(
+        "misc.gs.searching_header".into(),
+        "กำลังค้นหาเนื้อหา \"{}\" (ความลึก: {})...".into(),
+    );
+
+    m.insert("misc.gs.depth_unlimited".into(), "ไม่จำกัด".into());
+
+    m.insert(
         "misc.gs.many_results".into(),
         "gs: พบ {} จากการตรงกัน แสดง 20,000 รายการแรก. แคบการค้นหาให้แคบลง.".into(),
     );
@@ -332,7 +336,7 @@ pub fn fill(m: &mut HashMap<String, String>) {
 
     m.insert(
         "misc.locate.header".into(),
-        "\u{1F50D} {} สำหรับ \"{}\" ({} ผลลัพธ์):".into(),
+        "{} สำหรับ \"{}\" ({} ผลลัพธ์):".into(),
     );
 
     m.insert("misc.locate.label_didyoumean".into(), "คุณหมายถึง?".into());
@@ -343,12 +347,12 @@ pub fn fill(m: &mut HashMap<String, String>) {
 
     m.insert(
         "misc.locate.no_results".into(),
-        "\n\u{1F50D} ไม่มีผลลัพธ์สำหรับ \"{}\"\n".into(),
+        "\nไม่มีผลลัพธ์สำหรับ \"{}\"\n".into(),
     );
 
     m.insert(
         "misc.locate.usage".into(),
-        "การใช้งาน: locate <รูปแบบ> [-d <ความลึก>]".into(),
+        "การใช้งาน: locate <รูปแบบ> [-d <ความลึก>] [--no-fuzzy|-no-fz]".into(),
     );
 
     m.insert("misc.mkd.created".into(), "สร้างไดเรกทอรีแล้ว: {}".into());
@@ -426,7 +430,7 @@ pub fn fill(m: &mut HashMap<String, String>) {
         "คัดลอกเส้นทางไปยังคลิปบอร์ดแล้ว: {}".into(),
     );
 
-    m.insert("misc.pip.found".into(), "\u{2713} พบ pip ที่: {}".into());
+    m.insert("misc.pip.found".into(), "พบ pip ที่: {}".into());
 
     m.insert(
         "misc.pip.not_found".into(),
@@ -667,34 +671,25 @@ pub fn fill(m: &mut HashMap<String, String>) {
 
     m.insert(
         "misc.show_env.other_header".into(),
-        "\u{1F527} ตัวแปร Python/Venv อื่น ๆ:".into(),
+        "ตัวแปร Python/Venv อื่น ๆ:".into(),
     );
 
-    m.insert(
-        "misc.show_env.path_full".into(),
-        "\u{1F4C2} PATH (ทั้งหมด):".into(),
-    );
+    m.insert("misc.show_env.path_full".into(), "PATH (ทั้งหมด):".into());
 
     m.insert(
         "misc.show_env.path_header".into(),
-        "\u{1F4C2} PATH (รายการแรก ๆ):".into(),
+        "PATH (รายการแรก ๆ):".into(),
     );
 
     m.insert("misc.show_env.shell_label".into(), "เชลล์:".into());
 
-    m.insert(
-        "misc.show_env.summary_header".into(),
-        "\u{1F4CA} สรุป:".into(),
-    );
+    m.insert("misc.show_env.summary_header".into(), "สรุป:".into());
 
-    m.insert(
-        "misc.show_env.sys_header".into(),
-        "\u{1F4BB} ข้อมูลระบบ:".into(),
-    );
+    m.insert("misc.show_env.sys_header".into(), "ข้อมูลระบบ:".into());
 
     m.insert(
         "misc.show_env.venv_header".into(),
-        "\u{1F40D} สภาพแวดล้อม virtual ของ Python:".into(),
+        "สภาพแวดล้อม virtual ของ Python:".into(),
     );
 
     m.insert("misc.size.bytes_label".into(), "ไบต์:".into());
@@ -731,10 +726,7 @@ pub fn fill(m: &mut HashMap<String, String>) {
 
     m.insert("misc.tp.info_source".into(), "แหล่งที่มา".into());
 
-    m.insert(
-        "misc.tp.info_title".into(),
-        "\u{1F4CC} ข้อมูลจุดบันทึกเทเลพอร์ต".into(),
-    );
+    m.insert("misc.tp.info_title".into(), "ข้อมูลจุดบันทึกเทเลพอร์ต".into());
 
     m.insert(
         "misc.tp.invalid_format".into(),
@@ -836,5 +828,39 @@ pub fn fill(m: &mut HashMap<String, String>) {
     m.insert(
         "misc.venvd.not_in_venv".into(),
         "ไม่ได้อยู่ในสภาพแวดล้อม virtual".into(),
+    );
+
+    m.insert(
+        "misc.show_env.ntc_header".into(),
+        "ตัวแปรสภาพแวดล้อมของ NTC:".into(),
+    );
+
+    m.insert(
+        "misc.show_env.ntc_empty".into(),
+        "(ยังไม่ได้ตั้ง — ใช้: config env NAME value)".into(),
+    );
+
+    m.insert(
+        "misc.show_env.ntc_local".into(),
+        "local (ntconfig.toml)".into(),
+    );
+
+    m.insert(
+        "misc.show_env.ntc_global".into(),
+        "global (คอนฟิก ntc)".into(),
+    );
+
+    m.insert("misc.show_env.ntc_session".into(), "เซสชัน (-os)".into());
+
+    m.insert("misc.show_env.os_header".into(), "สภาพแวดล้อม OS:".into());
+
+    m.insert(
+        "misc.show_env.os_more".into(),
+        "... และอีก {} รายการ (ใช้ 'showenv --all')".into(),
+    );
+
+    m.insert(
+        "misc.show_env.os_masked".into(),
+        "*** (ใช้ 'showenv --all' เพื่อแสดง)".into(),
     );
 }

@@ -183,4 +183,23 @@ pub fn fill(m: &mut HashMap<String, String>) {
     m.insert("help.config.serve".into(), "config serve [service] [--port-default N] [--bind-default ADDR] ## Per-service serve defaults (alias: serve config)".into());
 
     m.insert("help.config.intro_view".into(), "config intro_view ON|OFF ## Show/hide the startup logo, ntpkg and watcher notices (alias: iv)".into());
+
+    m.insert("help.config.integration_shell".into(), "config integration_shell ON|OFF ## Complete installed shell names (powershell on Windows, bash on Linux desktop, cmd, …), their launcher flags, and enable interactive ntc ps on Windows / ntc <distro> on Linux (alias: is)".into());
+
+    m.insert("help.config.code_tools".into(), "config code_tools ON|OFF ## Complete installed programming tools/compilers (g++, python, java, cargo, …) and their flags (alias: ct)".into());
+
+    m.insert(
+        "help.config.env".into(),
+        "config env NAME value [-g|-l|-os|-osg] ## Set an NTC env var (bare: list; NAME alone: show)".into(),
+    );
+
+    m.insert(
+        "help.config.env_os".into(),
+        "  -g global | -l local | -os this session | -osg persist to OS ## default: local if ntconfig.toml exists, else global".into(),
+    );
+
+    m.insert(
+        "help.config.rmenv".into(),
+        "config rmenv NAME [-g|-l|-os|-osg|-all] ## Remove an NTC env var (-all: every store + session)".into(),
+    );
 }

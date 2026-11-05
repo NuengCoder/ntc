@@ -6,7 +6,7 @@ use crate::navigator::{clear_screen, Navigator};
 use crate::output::{cat_file, print_error, print_info, print_success, print_warning};
 use crate::search;
 use crate::session::SessionState;
-use crate::shell::help::{print_interactive_help, print_tp_help};
+use crate::shell::help::{print_compact_help, print_interactive_help, print_tp_help};
 use crate::shell::helpers::{
     parse_target_arg_allow_file, resolve_file_operand, run_with_spinner, show_nav_view,
     suppress_watch_refresh,
@@ -16,6 +16,7 @@ use crate::teleport::TeleportManager;
 use crate::watcher;
 
 use crate::t;
+use crate::utils::paths;
 use anyhow::Result;
 use colored::*;
 use std::env;
@@ -176,6 +177,10 @@ pub fn cmd_version(_args: &str, _nav: &mut Navigator) -> Result<bool> {
 pub fn cmd_help(args: &str, _nav: &mut Navigator) -> Result<bool> {
     let topic = args.trim();
     if topic.is_empty() {
+        // Compact by default: subcommand + what it is. `help --all` keeps the
+        // long reference (every subcommand, note and example).
+        print_compact_help();
+    } else if matches!(topic.to_lowercase().as_str(), "-a" | "--all" | "all") {
         print_interactive_help();
     } else if !crate::shell::help::print_topic_help(topic) {
         print_error(&t!("help.unknown_topic", topic));
@@ -183,9 +188,8 @@ pub fn cmd_help(args: &str, _nav: &mut Navigator) -> Result<bool> {
     Ok(false)
 }
 
-pub fn cmd_tutorial(_args: &str, nav: &mut Navigator) -> Result<bool> {
-    crate::tutorial::run_tutorial(nav)?;
-    Ok(false)
+pub fn cmd_tutorial(args: &str, nav: &mut Navigator) -> Result<bool> {
+    crate::tutorial::command(args, nav)
 }
 
 pub fn cmd_exit(_args: &str, _nav: &mut Navigator) -> Result<bool> {
@@ -584,7 +588,8 @@ pub fn cmd_tp(args: &str, nav: &mut Navigator) -> Result<bool> {
                     let add_parts: Vec<&str> = subargs.splitn(2, ' ').collect();
                     let name = add_parts[0];
                     if add_parts.len() > 1 {
-                        let path = std::path::Path::new(add_parts[1]);
+                        let expanded = paths::expand_path_str(add_parts[1]);
+                        let path = std::path::Path::new(&expanded);
                         TeleportManager::add(name, path.to_path_buf())?;
                     } else {
                         TeleportManager::add_current(nav, name)?;
@@ -824,8 +829,8 @@ pub fn cmd_fs(args: &str, nav: &mut Navigator) -> Result<bool> {
         println!("{}", t!("misc.fs.example3"));
         return Ok(false);
     }
-    let (pattern, max_depth) = parse_search_args(args);
-    let results = crate::search::search_files(nav.current_path(), &pattern, max_depth);
+    let (pattern, max_depth, fuzzy) = parse_search_args(args);
+    let results = crate::search::search_files_opts(nav.current_path(), &pattern, max_depth, fuzzy);
     let output = crate::search::format_search_results(&results, &pattern, max_depth, true);
     print!("{}", output);
     Ok(false)
@@ -839,8 +844,9 @@ pub fn cmd_ds(args: &str, nav: &mut Navigator) -> Result<bool> {
         println!("{}", t!("misc.ds.example3"));
         return Ok(false);
     }
-    let (pattern, max_depth) = parse_search_args(args);
-    let results = crate::search::search_directories(nav.current_path(), &pattern, max_depth);
+    let (pattern, max_depth, fuzzy) = parse_search_args(args);
+    let results =
+        crate::search::search_directories_opts(nav.current_path(), &pattern, max_depth, fuzzy);
     let output = crate::search::format_search_results(&results, &pattern, max_depth, false);
     print!("{}", output);
     Ok(false)
@@ -853,8 +859,8 @@ pub fn cmd_fsc(args: &str, nav: &mut Navigator) -> Result<bool> {
         println!("{}", t!("misc.fsc.example2"));
         return Ok(false);
     }
-    let (pattern, max_depth) = parse_search_args(args);
-    let results = crate::search::search_files(nav.current_path(), &pattern, max_depth);
+    let (pattern, max_depth, fuzzy) = parse_search_args(args);
+    let results = crate::search::search_files_opts(nav.current_path(), &pattern, max_depth, fuzzy);
     if results.is_empty() {
         let output = crate::search::format_search_results(&results, &pattern, max_depth, true);
         print!("{}", output);
@@ -924,8 +930,8 @@ pub fn cmd_locate(args: &str, nav: &mut Navigator) -> Result<bool> {
         println!("{}", t!("misc.locate.example3"));
         return Ok(false);
     }
-    let (pattern, max_depth) = parse_search_args(args);
-    let results = search::search_all(nav.current_path(), &pattern, max_depth);
+    let (pattern, max_depth, fuzzy) = parse_search_args(args);
+    let results = search::search_all_opts(nav.current_path(), &pattern, max_depth, fuzzy);
     if results.is_empty() {
         println!("{}", t!("misc.locate.no_results", pattern).dimmed());
     } else {
@@ -950,7 +956,11 @@ pub fn cmd_locate(args: &str, nav: &mut Navigator) -> Result<bool> {
                 .bold()
         );
         for (i, r) in results.iter().enumerate() {
-            let icon = if r.full_path.is_dir() { "📁" } else { "📄" };
+            let icon = if r.full_path.is_dir() {
+                "[dir]"
+            } else {
+                "[file]"
+            };
             if r.match_kind == search::MatchKind::Fuzzy {
                 println!(
                     "  {}. {} {} ({:.0}% match)",
@@ -1787,11 +1797,12 @@ pub fn cmd_venva(args: &str, nav: &mut Navigator) -> Result<bool> {
         }
         found.unwrap()
     } else {
-        let path = Path::new(args);
+        let expanded = paths::expand_path_str(args);
+        let path = Path::new(&expanded);
         if path.is_absolute() {
             path.to_path_buf()
         } else {
-            current_path.join(args)
+            current_path.join(path)
         }
     };
 
@@ -1880,7 +1891,7 @@ pub fn cmd_show_env(args: &str, _nav: &mut Navigator) -> Result<bool> {
         for (i, entry) in entries.iter().enumerate().take(max_display) {
             let marker =
                 if entry.contains("venv") || entry.contains(".venv") || entry.contains("env") {
-                    "🐍"
+                    ""
                 } else {
                     "  "
                 };
@@ -1906,13 +1917,79 @@ pub fn cmd_show_env(args: &str, _nav: &mut Navigator) -> Result<bool> {
             for (i, entry) in entries.iter().enumerate() {
                 let marker =
                     if entry.contains("venv") || entry.contains(".venv") || entry.contains("env") {
-                        "🐍"
+                        ""
                     } else {
                         "  "
                     };
                 println!("  {}. {} {}", (i + 1).to_string().yellow(), marker, entry);
             }
         }
+    }
+    println!();
+
+    // NTC-managed environment variables (local → global → session)
+    println!("{}", t!("misc.show_env.ntc_header").green().bold());
+    let (global_env, local_env) = Config::get_env_by_source();
+    let session_env = paths::session_env();
+    let mut any_ntc = false;
+    for (label_key, map) in [
+        ("misc.show_env.ntc_local", &local_env),
+        ("misc.show_env.ntc_global", &global_env),
+        ("misc.show_env.ntc_session", &session_env),
+    ] {
+        if map.is_empty() {
+            continue;
+        }
+        any_ntc = true;
+        println!("  {}", t!(label_key).yellow().bold());
+        let mut names: Vec<&String> = map.keys().collect();
+        names.sort();
+        for name in names {
+            println!(
+                "    {} = {}",
+                name.cyan(),
+                map.get(name)
+                    .map(String::as_str)
+                    .unwrap_or_default()
+                    .dimmed()
+            );
+        }
+    }
+    if !any_ntc {
+        println!("  {}", t!("misc.show_env.ntc_empty").dimmed());
+    }
+    println!();
+
+    // OS / process environment
+    println!("{}", t!("misc.show_env.os_header").blue().bold());
+    let mut os_vars: Vec<(String, String)> = std::env::vars().collect();
+    os_vars.sort_by(|a, b| a.0.cmp(&b.0));
+    let os_limit = if show_all {
+        os_vars.len()
+    } else {
+        depth.unwrap_or(os_vars.len().min(20))
+    };
+    for (name, value) in os_vars.iter().take(os_limit) {
+        let upper = name.to_uppercase();
+        let sensitive = ["KEY", "TOKEN", "SECRET", "PASSWORD", "PASSWD"]
+            .iter()
+            .any(|needle| upper.contains(needle));
+        let shown = if sensitive && !show_all {
+            t!("misc.show_env.os_masked")
+        } else {
+            value.clone()
+        };
+        println!("  {} = {}", name.cyan(), shown.dimmed());
+    }
+    if os_vars.len() > os_limit {
+        println!(
+            "  {}",
+            t!(
+                "misc.show_env.os_more",
+                (os_vars.len() - os_limit).to_string()
+            )
+            .dimmed()
+        );
     }
     println!();
 
@@ -1965,7 +2042,7 @@ pub fn cmd_show_env(args: &str, _nav: &mut Navigator) -> Result<bool> {
     if std::env::var("VIRTUAL_ENV").is_ok() {
         println!(
             "  {} {} {}",
-            "✅",
+            "",
             t!("misc.show_env.active"),
             "ACTIVE".green().bold()
         );
@@ -1973,7 +2050,7 @@ pub fn cmd_show_env(args: &str, _nav: &mut Navigator) -> Result<bool> {
     } else {
         println!(
             "  {} {} {}",
-            "❌",
+            "",
             t!("misc.show_env.not_active"),
             "NOT ACTIVE".red().bold()
         );

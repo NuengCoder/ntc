@@ -28,6 +28,26 @@ pub fn fill(m: &mut HashMap<String, String>) {
         "todo ## 显示所有任务（来自当前目录的 future_todo.txt）".into(),
     );
 
+    m.insert(
+        "help.todo.move".into(),
+        "todo move <N> <M> ## 把第 N 条移到第 M 位（其余顺移）".into(),
+    );
+
+    m.insert(
+        "help.todo.replace".into(),
+        "todo replace <N> <M> ## 交换第 N 条和第 M 条".into(),
+    );
+
+    m.insert(
+        "help.todo.example4".into(),
+        "todo mv 5 1 ## 把第 5 条移到最前".into(),
+    );
+
+    m.insert(
+        "help.todo.example5".into(),
+        "todo rp 5 1 ## 交换第 5 条和第 1 条".into(),
+    );
+
     m.insert("help.todo.title".into(), "待办事项命令：".into());
 
     m.insert(

@@ -14,7 +14,7 @@ pub fn fill(m: &mut HashMap<String, String>) {
 
     m.insert(
         "backup.clear_history_prompt".into(),
-        "\u{26A0} ล้างประวัติการเลิกทำ? ไม่สามารถยกเลิกได้ (y/N):".into(),
+        "ล้างประวัติการเลิกทำ? ไม่สามารถยกเลิกได้ (y/N):".into(),
     );
 
     m.insert("backup.cleared".into(), "ลบแบ็กอัปทั้งหมดแล้ว.".into());
@@ -231,10 +231,7 @@ pub fn fill(m: &mut HashMap<String, String>) {
         " 3. สร้างแบ็กอัปใหม่ของสถานะปัจจุบัน".into(),
     );
 
-    m.insert(
-        "backup.recreate_will_title".into(),
-        "\u{26A0}\u{FE0F} RECREATE จะ:".into(),
-    );
+    m.insert("backup.recreate_will_title".into(), "RECREATE จะ:".into());
 
     m.insert(
         "backup.recreated".into(),
@@ -252,12 +249,12 @@ pub fn fill(m: &mut HashMap<String, String>) {
 
     m.insert(
         "backup.restore_create_title".into(),
-        "\u{26A0} ไฟล์ต่อไปนี้จะถูกสร้าง ({}):".into(),
+        "ไฟล์ต่อไปนี้จะถูกสร้าง ({}):".into(),
     );
 
     m.insert(
         "backup.restore_delete_title".into(),
-        "\u{26A0} ไฟล์ต่อไปนี้จะถูกลบ (ไม่อยู่ในแบ็กอัป) ({}):".into(),
+        "ไฟล์ต่อไปนี้จะถูกลบ (ไม่อยู่ในแบ็กอัป) ({}):".into(),
     );
 
     m.insert(
@@ -279,7 +276,7 @@ pub fn fill(m: &mut HashMap<String, String>) {
 
     m.insert(
         "backup.restore_overwrite_title".into(),
-        "\u{26A0} ไฟล์ต่อไปนี้จะถูกเขียนทับ ({}):".into(),
+        "ไฟล์ต่อไปนี้จะถูกเขียนทับ ({}):".into(),
     );
 
     m.insert("backup.restore_preview_title".into(), "ตัวอย่างการกู้คืน".into());
@@ -435,7 +432,7 @@ pub fn fill(m: &mut HashMap<String, String>) {
 
     m.insert(
         "backup.warning_title".into(),
-        "\u{26A0}\u{FE0F} คำเตือน: การดำเนินการนี้จะลบแบ็กอัปทั้งหมดของโปรเจกต์นี้!".into(),
+        "คำเตือน: การดำเนินการนี้จะลบแบ็กอัปทั้งหมดของโปรเจกต์นี้!".into(),
     );
 
     m.insert(

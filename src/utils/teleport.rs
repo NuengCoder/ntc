@@ -22,8 +22,9 @@ const RESERVED_NAMES: &[&str] = &[
 pub struct TeleportManager;
 
 impl TeleportManager {
-    /// Push current directory onto navigation stack before teleporting
-    fn push_to_stack(path: PathBuf) {
+    /// Record a directory in the teleport history stack (used by `cd` and
+    /// every jump). Consecutive duplicates are collapsed.
+    pub fn remember_location(path: PathBuf) {
         let mut session = SessionState::write_global();
         let mut deque: VecDeque<PathBuf> = session.nav_stack.drain(..).collect();
         // Don't push duplicate consecutive entries
@@ -163,7 +164,7 @@ impl TeleportManager {
 
         if let Some(path) = teleports.get(&name_lower) {
             // Push current location to stack before teleporting
-            Self::push_to_stack(nav.current_path().to_path_buf());
+            Self::remember_location(nav.current_path().to_path_buf());
 
             nav.go_to(path)?;
             clear_screen();
@@ -190,7 +191,7 @@ impl TeleportManager {
         let (name, path) = &teleports_vec[index - 1];
 
         // Push current location to stack before teleporting
-        Self::push_to_stack(nav.current_path().to_path_buf());
+        Self::remember_location(nav.current_path().to_path_buf());
 
         nav.go_to(path)?;
         clear_screen();
@@ -359,7 +360,7 @@ impl TeleportManager {
         match input.parse::<usize>() {
             Ok(num) if num > 0 && num <= sorted.len() => {
                 let (name, path) = &sorted[num - 1];
-                Self::push_to_stack(nav.current_path().to_path_buf());
+                Self::remember_location(nav.current_path().to_path_buf());
                 nav.go_to(path)?;
                 clear_screen();
                 print_success(&t!("teleport.jumped", name, nav.display_path()));

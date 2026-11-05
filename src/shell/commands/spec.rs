@@ -37,22 +37,24 @@ pub fn cmd_spec(_args: &str, _nav: &mut Navigator) -> Result<bool> {
     let mut sys = System::new_all();
     sys.refresh_all();
 
-    let brand = sys
-        .cpus()
-        .first()
-        .map(|c| c.brand().to_string())
-        .unwrap_or_default();
+    let brand = cpu_brand(&sys);
     let (cpu_vendor, cpu_gen, cpu_model) = parse_cpu(&brand);
 
-    let cores = sys.physical_core_count().unwrap_or(0);
-    let threads = sys.cpus().len();
+    // `sysinfo` can report no physical count on Android; fall back to the
+    // logical processors so the row never shows "0 / 0".
+    let threads = if sys.cpus().is_empty() {
+        std::thread::available_parallelism()
+            .map(|n| n.get())
+            .unwrap_or(0)
+    } else {
+        sys.cpus().len()
+    };
+    let cores = sys
+        .physical_core_count()
+        .filter(|n| *n > 0)
+        .unwrap_or(threads);
 
     let gpu_list = gpu_info();
-    let gpu = if gpu_list.is_empty() {
-        t!("cmd.spec.unknown")
-    } else {
-        gpu_list.join(", ")
-    };
 
     let ram = crate::explorer::human_readable_size(sys.total_memory());
 
@@ -79,7 +81,7 @@ pub fn cmd_spec(_args: &str, _nav: &mut Navigator) -> Result<bool> {
             format!(
                 "{}{}",
                 kind_part,
-                crate::explorer::human_readable_size(size)
+                format_disk_usage(size, d.available_space())
             ),
         ));
     }
@@ -96,7 +98,7 @@ pub fn cmd_spec(_args: &str, _nav: &mut Navigator) -> Result<bool> {
     let b = |s: String| crate::utils::terminal::asciify(&s);
     let r = |label: &str, value: &str| {
         format!(
-            "│ {:<18} {:<width$} │",
+            "│ {:<18} {:<width$} ",
             label,
             truncate(value, VAL_W),
             width = VAL_W
@@ -107,7 +109,7 @@ pub fn cmd_spec(_args: &str, _nav: &mut Navigator) -> Result<bool> {
     println!("{}", b(format!("┌{}┐", "─".repeat(BOX_W))));
     println!(
         "{}",
-        b(format!("│{:^width$}│", t!("cmd.spec.title"), width = BOX_W))
+        b(format!("│{:^width$}", t!("cmd.spec.title"), width = BOX_W))
     );
     println!("{}", b(format!("├{}┤", "─".repeat(BOX_W))));
     println!("{}", b(r(&t!("cmd.spec.cpu"), &brand)));
@@ -121,7 +123,16 @@ pub fn cmd_spec(_args: &str, _nav: &mut Navigator) -> Result<bool> {
             &format!("{} / {}", cores, threads)
         ))
     );
-    println!("{}", b(r(&t!("cmd.spec.gpu"), &gpu)));
+    let gpu_first = gpu_list
+        .first()
+        .cloned()
+        .unwrap_or_else(|| t!("cmd.spec.unknown"));
+    println!("{}", b(r(&t!("cmd.spec.gpu"), &gpu_first)));
+    // One row per adapter: a joined list is cut by the fixed value width
+    // ("… RTX 50" instead of "… RTX 5060").
+    for extra in gpu_list.iter().skip(1) {
+        println!("{}", b(r("", extra)));
+    }
     println!("{}", b(r(&t!("cmd.spec.ram"), &ram)));
     println!(
         "{}",
@@ -399,6 +410,24 @@ fn disk_kind(d: &sysinfo::Disk) -> String {
     }
 }
 
+/// Format a disk as `used/total percent% free` (for example
+/// `200 GB/300 GB 67% 100 GB free`). Falls back to the total size when the
+/// filesystem does not report available space.
+fn format_disk_usage(total: u64, available: u64) -> String {
+    let total_fmt = crate::explorer::human_readable_size(total);
+    if total == 0 || available > total {
+        return total_fmt;
+    }
+    let used = total.saturating_sub(available);
+    let percent = (used as f64 / total as f64 * 100.0).round() as u64;
+    let free_fmt = crate::explorer::human_readable_size(available);
+    format!(
+        "{}/{total_fmt} {percent}% {free_fmt} {}",
+        crate::explorer::human_readable_size(used),
+        t!("cmd.spec.free"),
+    )
+}
+
 fn manufacturer_name() -> String {
     #[cfg(windows)]
     {
@@ -673,6 +702,59 @@ fn gpu_info() -> Vec<String> {
     }
 }
 
+/// CPU brand string, with an Android fallback when `sysinfo` returns an empty
+/// brand (`/proc/cpuinfo` on many phones has no `model name`).
+fn cpu_brand(sys: &System) -> String {
+    let brand = sys
+        .cpus()
+        .first()
+        .map(|c| c.brand().trim().to_string())
+        .unwrap_or_default();
+    if !brand.is_empty() {
+        return brand;
+    }
+    platform_cpu_brand().unwrap_or_default()
+}
+
+#[cfg(target_os = "android")]
+fn platform_cpu_brand() -> Option<String> {
+    for prop in ["ro.soc.model", "ro.board.platform", "ro.hardware"] {
+        if let Some(value) = run_capture("getprop", &[prop]) {
+            if !is_placeholder(&value) {
+                return Some(value);
+            }
+        }
+    }
+    let text = std::fs::read_to_string("/proc/cpuinfo").ok()?;
+    parse_cpuinfo_brand(&text)
+}
+
+#[cfg(not(target_os = "android"))]
+fn platform_cpu_brand() -> Option<String> {
+    None
+}
+
+/// First non-placeholder brand-ish line of a `/proc/cpuinfo` dump.
+/// Android kernels often expose `Hardware` / `Processor` instead of
+/// `model name`, so check both.
+#[allow(dead_code)]
+fn parse_cpuinfo_brand(text: &str) -> Option<String> {
+    for key in ["model name", "Hardware", "Processor"] {
+        for line in text.lines() {
+            let Some((k, v)) = line.split_once(':') else {
+                continue;
+            };
+            if k.trim().eq_ignore_ascii_case(key) {
+                let v = v.trim();
+                if !v.is_empty() && !is_placeholder(v) {
+                    return Some(v.to_string());
+                }
+            }
+        }
+    }
+    None
+}
+
 fn truncate(s: &str, max: usize) -> String {
     if s.chars().count() <= max {
         return s.to_string();
@@ -685,4 +767,47 @@ fn truncate(s: &str, max: usize) -> String {
         out.push(c);
     }
     out
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn disk_usage_shows_used_total_percent_and_free() {
+        let gb = 1024 * 1024 * 1024;
+        let s = format_disk_usage(300 * gb, 100 * gb);
+        assert!(s.starts_with("200.00 GB/300.00 GB 67% 100.00 GB "), "{s}");
+    }
+
+    #[test]
+    fn disk_usage_falls_back_when_total_unknown() {
+        assert_eq!(format_disk_usage(0, 0), "0 B");
+        // `available > total` means the filesystem reported nonsense.
+        assert_eq!(format_disk_usage(5, 10), "5 B");
+    }
+
+    #[test]
+    fn cpuinfo_brand_prefers_model_name_then_hardware() {
+        // `model name` wins when the kernel exposes one ...
+        let with_model = "model name\t: ARMv8 Processor rev 1 (v8l)\nHardware\t: QCS6490\n";
+        assert_eq!(
+            parse_cpuinfo_brand(with_model).as_deref(),
+            Some("ARMv8 Processor rev 1 (v8l)")
+        );
+        // ... then `Hardware` (the SoC), then `Processor`.
+        let android =
+            "Processor\t: AArch64 Processor rev 1\nHardware\t: Qualcomm Technologies, Inc SM8550\n";
+        assert_eq!(
+            parse_cpuinfo_brand(android).as_deref(),
+            Some("Qualcomm Technologies, Inc SM8550")
+        );
+        let hardware_only = "processor\t: 0\nHardware\t: QCS6490\n";
+        assert_eq!(
+            parse_cpuinfo_brand(hardware_only).as_deref(),
+            Some("QCS6490")
+        );
+        assert_eq!(parse_cpuinfo_brand(""), None);
+        assert_eq!(parse_cpuinfo_brand("Hardware\t: \n"), None);
+    }
 }

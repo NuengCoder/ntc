@@ -61,6 +61,7 @@ const TEXT_EXTENSIONS: &[&str] = &[
     "ntc.ral",
     "ntc.igcare",
     "ntc.math",
+    "ntc_fake",
     "ntc_theme",
     "vert",
     "frag",

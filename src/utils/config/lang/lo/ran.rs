@@ -34,7 +34,7 @@ pub fn fill(m: &mut HashMap<String, String>) {
 
     m.insert(
         "ran.desc_reserved".into(),
-        " init, deinit, help, list, ls \u{2014} ສິ່ງເຫຼົ່ານີ້ບໍ່ສາມາດໃຊ້ເປັນຊື່ target.".into(),
+        " init, deinit, help, list, ls, check, fmt \u{2014} ສິ່ງເຫຼົ່ານີ້ບໍ່ສາມາດໃຊ້ເປັນຊື່ target.".into(),
     );
 
     m.insert(
@@ -111,4 +111,73 @@ pub fn fill(m: &mut HashMap<String, String>) {
     m.insert("ran.section_vars".into(), "Variables:".into());
 
     m.insert("ran.terminated".into(), "ຄຳສັ່ງຖືກຢຸດ (Ctrl+C)".into());
+
+    m.insert("ran.check_title".into(), "ran check ກຳລັງອ່ານ {}".into());
+
+    m.insert("ran.check_ok".into(), "{} ບໍ່ມີບັນຫາ".into());
+
+    m.insert("ran.check_problems".into(), "ພົບ {} ບັນຫາໃນ {}".into());
+
+    m.insert("ran.check_error".into(), "ຂໍ້ຜິດພາດ".into());
+
+    m.insert("ran.check_hint".into(), "ຄຳແນະນຳ".into());
+
+    m.insert(
+        "ran.help_check_fmt".into(),
+        " ran check ອ່ານ {} ແລະ ລາຍງານທຸກບັນຫາພ້ອມແຖວ".into(),
+    );
+
+    m.insert(
+        "ran.help_fmt".into(),
+        " ran fmt <toml|json|yaml> ແປງ ranfile (-o <ໄຟລ໌>, -y ຂ້າມຄຳຖາມ)".into(),
+    );
+
+    m.insert(
+        "ran.fmt.usage".into(),
+        "ການໃຊ້: ran fmt <toml|json|yaml> [-o <ໄຟລ໌>] [-y]".into(),
+    );
+
+    m.insert(
+        "ran.fmt.unknown".into(),
+        "ບໍ່ຮູ້ຈັກຮູບແບບ '{}' ໃຊ້ toml, json ຫຼື yaml".into(),
+    );
+
+    m.insert(
+        "ran.fmt.current".into(),
+        "ຮູບແບບ ranfile ທີ່ຕັ້ງໄວ້: {} (ran init ຈະສ້າງ {})".into(),
+    );
+
+    m.insert(
+        "ran.fmt.no_file".into(),
+        "ບໍ່ພົບ ranfile ຢູ່ນີ້. ຕັ້ງຮູບແບບເປັນ {} ແລ້ວ; ຣັນ `ran init` ເພື່ອສ້າງ {}".into(),
+    );
+
+    m.insert("ran.fmt.already".into(), "{} ເປັນ {} ຢູ່ແລ້ວ".into());
+
+    m.insert(
+        "ran.fmt.confirm".into(),
+        "ແປງ {} ເປັນ {} \u{2192} {}? [y|n] ".into(),
+    );
+
+    m.insert(
+        "ran.fmt.skipped".into(),
+        "ບໍ່ໄດ້ຂຽນໄຟລ໌. `ran init` ຈະສ້າງ {}".into(),
+    );
+
+    m.insert(
+        "ran.fmt.exists".into(),
+        "{} ມີຢູ່ແລ້ວ \u{2014} ລຶບກ່ອນ ຫຼື ໃຊ້ -o <ໄຟລ໌>".into(),
+    );
+
+    m.insert("ran.fmt.written".into(), "ຂຽນແລ້ວ {}".into());
+
+    m.insert(
+        "ran.fmt.old_kept".into(),
+        "{} ຍັງຢູ່; `ran` ຈະເລືອກ {} ກ່ອນ (ລຶບໄຟລ໌ເກົ່າເພື່ອບໍ່ໃຫ້ມີສອງ ranfile)".into(),
+    );
+
+    m.insert(
+        "ran.fmt.no_terminal".into(),
+        "ບໍ່ແມ່ນເທີມິນັລ: ໃສ່ -y ເພື່ອຢືນຢັນການແປງ".into(),
+    );
 }

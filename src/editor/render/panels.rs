@@ -7,10 +7,12 @@ use crossterm::style::{
 use crossterm::terminal::{Clear, ClearType};
 
 use super::super::{Editor, Focus};
+use crate::shell::pipeline::strip_ansi_text;
 use crate::t;
+use crate::utils::ansi_text::{expand_tabs, sanitize_control, truncate_visible, visible_width};
 
 impl Editor {
-    pub(crate) fn render_run_panel(&self, stdout: &mut std::io::Stdout) -> std::io::Result<()> {
+    pub(crate) fn render_run_panel(&self, stdout: &mut impl std::io::Write) -> std::io::Result<()> {
         let theme = crate::utils::theme::ThemeManager::current();
         let split = self.run_split_row();
         let panel_top = split + 1;
@@ -66,15 +68,14 @@ impl Editor {
             let idx = self.sv.run + i;
             let row = panel_top + i;
             let line = self.run_lines.get(idx).map(|s| s.as_str()).unwrap_or("~");
-            let truncated = if line.len() > editor_cols {
-                if line.is_char_boundary(editor_cols) {
-                    &line[..editor_cols]
-                } else {
-                    &line[..line.floor_char_boundary(editor_cols)]
-                }
-            } else {
-                line
-            };
+            // Child output arrives with colour codes and possibly raw control
+            // bytes: strip the escapes, escape the rest, align tabs, then clip
+            // by visible width (never by byte count).
+            let clean = expand_tabs(
+                &sanitize_control(&strip_ansi_text(line)),
+                self.editor_cfg.tab_size.max(1),
+            );
+            let truncated = truncate_visible(&clean, editor_cols);
             if use_color {
                 queue!(
                     stdout,
@@ -99,14 +100,36 @@ impl Editor {
         Ok(())
     }
 
-    pub(crate) fn render_sidebar(&self, stdout: &mut std::io::Stdout) -> std::io::Result<()> {
+    /// Cheap hash of everything the sidebar paints from. A frame whose
+    /// signature matches the last painted one is skipped entirely, so
+    /// cursor blinks and text edits no longer repaint the whole tree.
+    fn sidebar_paint_sig(&self) -> u64 {
+        use std::hash::{Hash, Hasher};
+        let mut h = std::collections::hash_map::DefaultHasher::new();
+        self.term_h.hash(&mut h);
+        self.sidebar_cols().hash(&mut h);
+        self.sidebar.scroll.hash(&mut h);
+        self.sidebar.selected.hash(&mut h);
+        self.sidebar.revision.hash(&mut h);
+        self.sidebar.git_revision.hash(&mut h);
+        self.editor_cfg.color_enabled.hash(&mut h);
+        self.path.hash(&mut h);
+        h.finish()
+    }
+
+    pub(crate) fn render_sidebar(
+        &mut self,
+        stdout: &mut impl std::io::Write,
+    ) -> std::io::Result<()> {
+        let sig = self.sidebar_paint_sig();
+        if self.sidebar.last_paint_sig == Some(sig) {
+            return Ok(());
+        }
         let theme = crate::utils::theme::ThemeManager::current();
         let use_color = self.editor_cfg.color_enabled;
-        let git_map = if crate::config::Config::global_get_git_integration_enabled() {
-            crate::utils::git::status_map(&self.sidebar.root)
-        } else {
-            std::collections::HashMap::new()
-        };
+        // Refreshed on a worker thread by the event loop, never here: the
+        // paint path must not block on a `git status` spawn.
+        let git_map = &self.sidebar.git_map;
         let content_top = 0;
         let rows = self.term_h;
         let sw = self.sidebar_cols();
@@ -175,7 +198,7 @@ impl Editor {
                 let mut x = 2 + num_w + node.depth * 2;
                 if x < sw {
                     if node.is_dir {
-                        let ind = if node.expanded { "▼" } else { "▶" };
+                        let ind = if node.expanded { "-" } else { "+" };
                         let ind_fg = if use_color {
                             theme.editor.sidebar_dir.to_crossterm()
                         } else {
@@ -205,12 +228,9 @@ impl Editor {
 
                     if x < sw {
                         let max_name = sw.saturating_sub(x + 1);
-                        let display: String = if node.name.chars().count() > max_name {
-                            node.name
-                                .chars()
-                                .take(max_name.saturating_sub(3))
-                                .collect::<String>()
-                                + "..."
+                        let display: String = if visible_width(&node.name) > max_name {
+                            let cut = truncate_visible(&node.name, max_name.saturating_sub(3));
+                            format!("{cut}...")
                         } else {
                             node.name.clone()
                         };
@@ -242,7 +262,7 @@ impl Editor {
                                     'U' => theme.shell.git_conflict.to_crossterm(),
                                     _ => theme.shell.git_modified.to_crossterm(),
                                 };
-                                let sx = x + display.chars().count() + 1;
+                                let sx = x + visible_width(&display) + 1;
                                 if sx < sw {
                                     queue!(
                                         stdout,
@@ -282,12 +302,13 @@ impl Editor {
             )?;
         }
 
+        self.sidebar.last_paint_sig = Some(sig);
         Ok(())
     }
 
     pub(crate) fn render_terminal_panel(
         &self,
-        stdout: &mut std::io::Stdout,
+        stdout: &mut impl std::io::Write,
     ) -> std::io::Result<()> {
         let theme = crate::utils::theme::ThemeManager::current();
         let (btop, bleft, bright, bbottom) = self.terminal_box();
@@ -517,7 +538,15 @@ impl Editor {
                     }
 
                     // Right overflow indicator (passthrough colors)
-                    if line_idx < total && line.len() > scroll_x + max_cells {
+                    // Every grid row is padded to the PTY width, so `len()`
+                    // is always the full width and would flag *every* row as
+                    // overflowing. Only real text past the right edge counts.
+                    let content_extent = line
+                        .iter()
+                        .rposition(|c| c.ch != '\0' && c.ch != ' ')
+                        .map(|p| p + 1)
+                        .unwrap_or(0);
+                    if line_idx < total && content_extent > scroll_x + max_cells {
                         queue!(
                             stdout,
                             MoveTo((content_x0 + max_cells - 1) as u16, row as u16),

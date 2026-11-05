@@ -23,6 +23,8 @@ pub fn fill(m: &mut HashMap<String, String>) {
 
     m.insert("cmd.spec.total".into(), "Total".into());
 
+    m.insert("cmd.spec.free".into(), "free".into());
+
     m.insert("cmd.spec.os".into(), "OS".into());
 
     m.insert("cmd.spec.manufacturer".into(), "Manufacturer".into());

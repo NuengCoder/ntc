@@ -1,0 +1,19 @@
+[build-system]
+requires = ["maturin>=1.5,<2.0"]
+build-backend = "maturin"
+
+[project]
+name = "ntc-cli"
+dynamic = ["version"]
+description = "Navigate, Toolkit, Center - A Combine of Navigation, Project Toolkit Center hub"
+readme = "README.md"
+requires-python = ">=3.8"
+license = { text = "MIT" }
+authors = [{ name = "NuengCoder" }]
+
+[project.urls]
+Homepage = "https://github.com/NuengCoder/ntc"
+
+[tool.maturin]
+bindings = "bin"
+strip = true

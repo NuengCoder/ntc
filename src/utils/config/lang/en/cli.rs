@@ -19,7 +19,7 @@ pub fn fill(m: &mut HashMap<String, String>) {
 
     m.insert(
         "cli.example.image".into(),
-        " ntc -image screenshot.png to json Convert image to JSON for AI\n".into(),
+        " ntc -image display screenshot.png Show an image inline\n".into(),
     );
 
     m.insert(
@@ -330,7 +330,7 @@ pub fn fill(m: &mut HashMap<String, String>) {
 
     m.insert("cli.helpers.basic_usage".into(), " ntc [OPTIONS]\n ntc -i <path> [-o <output>]\n ntc -i <path> --cp Copy report to clipboard\n".into());
 
-    m.insert("cli.helpers.cli_examples".into(), " ntc Launch interactive shell\n ntc @web Launch and teleport to 'web' savepoint\n ntc --math \"3+4*5\" Evaluate math expression\n ntc --math \"sin(PI/2)\" Math with functions and constants\n ntc -i src Generate TXT report of src directory\n ntc -i src --cp Copy directory tree to clipboard\n ntc -i src -f json --cp Copy JSON report to clipboard\n ntc -i src -f pdf Generate PDF report from src\n ntc -i src -f docx Generate DOCX report from src\n ntc -i src -f xlsx Generate XLSX report (with dependency analysis)\n ntc -i file.txt Display file contents\n ntc --setL ON Enable line numbers\n ntc --showcg Show configuration\n ntc -say \"Hello World\" Print Hello World\n ntc --watch ON Enable file watcher\n ntc -image screenshot.png to json Convert image to JSON for AI\n".into());
+    m.insert("cli.helpers.cli_examples".into(), " ntc Launch interactive shell\n ntc @web Launch and teleport to 'web' savepoint\n ntc --math \"3+4*5\" Evaluate math expression\n ntc --math \"sin(PI/2)\" Math with functions and constants\n ntc -i src Generate TXT report of src directory\n ntc -i src --cp Copy directory tree to clipboard\n ntc -i src -f json --cp Copy JSON report to clipboard\n ntc -i src -f pdf Generate PDF report from src\n ntc -i src -f docx Generate DOCX report from src\n ntc -i src -f xlsx Generate XLSX report (with dependency analysis)\n ntc -i file.txt Display file contents\n ntc --setL ON Enable line numbers\n ntc --showcg Show configuration\n ntc -say \"Hello World\" Print Hello World\n ntc --watch ON Enable file watcher\n ntc -image display screenshot.png Show an image inline\n".into());
 
     m.insert(
         "cli.helpers.config_header".into(),
@@ -369,7 +369,7 @@ pub fn fill(m: &mut HashMap<String, String>) {
 
     m.insert("cli.helpers.report_options".into(), " -i, --input <path> Process a file or directory\n -o, --output <file> Save output to specified file\n -f, --format <FORMAT> Output format: txt, html, json, md, pdf, docx, xlsx (default: txt)\n --cp Copy report to clipboard instead of saving to file\n --size Show current directory size\n --view Quick view of current directory tree\n --view --size Quick view with directory sizes\n".into());
 
-    m.insert("cli.helpers.shell_commands".into(), " ntc pathcp Copy path to clipboard\n ntc say \"hello\" --loop 3 Print text with loop\n ntc tl dir . Count lines in directory\n ntc ne Open text editor\n ntc size Show directory size\n ntc view Show directory tree\n ntc serve files --port 8080 Start files drive server on port 8080\n ntc dl https://example.com/file.zip --progress Download with progress\n ntc encode b64 hello Base64 encode a string\n ntc qr \"text\" Generate QR code in terminal\n ntc math 3+4*5 Evaluate expression\n ntc ral add btr \"cargo build --release\" Add alias from CLI\n".into());
+    m.insert("cli.helpers.shell_commands".into(), " ntc pathcp Copy path to clipboard\n ntc say \"hello\" --loop 3 Print text with loop\n ntc tl dir . Count lines in directory\n ntc ne Open text editor\n ntc size Show directory size\n ntc view Show directory tree\n ntc serve files --port 8080 Start files drive server on port 8080\n ntc dl https://example.com/file.zip Download with progress\n ntc encode b64 hello Base64 encode a string\n ntc qr \"text\" Generate QR code in terminal\n ntc math 3+4*5 Evaluate expression\n ntc ral add btr \"cargo build --release\" Add alias from CLI\n".into());
 
     m.insert(
         "cli.helpers.shell_header".into(),
@@ -983,7 +983,7 @@ pub fn fill(m: &mut HashMap<String, String>) {
 
     m.insert(
         "cli.shell_cmd.dl".into(),
-        " ntc dl https://example.com/file.zip --progress Download with progress".into(),
+        " ntc dl https://example.com/file.zip Download with progress".into(),
     );
 
     m.insert(

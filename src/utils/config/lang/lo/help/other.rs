@@ -28,7 +28,7 @@ pub fn fill(m: &mut HashMap<String, String>) {
 
     m.insert(
         "help.other.tutorial".into(),
-        "tutorial ## ເລີ່ມ tutorial ຂັ້ນຕອນ interactive".into(),
+        "tutorial [ບົດຮຽນ] ## ບົດຮຽນປະຕິບັດໃນ sandbox (cd, view, ne, ral, ran)".into(),
     );
 
     m.insert("help.other.ui".into(), "ui ## ສະແດງໂໝດ UI ປັດຈຸບັນ".into());

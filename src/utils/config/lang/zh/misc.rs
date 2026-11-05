@@ -26,7 +26,10 @@ pub fn fill(m: &mut HashMap<String, String>) {
         " ds test # 部分匹配：找到 test_utils/ 等".into(),
     );
 
-    m.insert("misc.ds.usage".into(), "用法：ds <模式> [-d <深度>]".into());
+    m.insert(
+        "misc.ds.usage".into(),
+        "用法：ds <模式> [-d <深度>] [--no-fuzzy|-no-fz]".into(),
+    );
 
     m.insert(
         "misc.fs.example1".into(),
@@ -43,7 +46,10 @@ pub fn fill(m: &mut HashMap<String, String>) {
         " fs main # 部分匹配：找到 main_helper.c 等".into(),
     );
 
-    m.insert("misc.fs.usage".into(), "用法：fs <模式> [-d <深度>]".into());
+    m.insert(
+        "misc.fs.usage".into(),
+        "用法：fs <模式> [-d <深度>] [--no-fuzzy|-no-fz]".into(),
+    );
 
     m.insert("misc.fsc.copied".into(), "'{}' 已复制到剪贴板！".into());
 
@@ -68,7 +74,7 @@ pub fn fill(m: &mut HashMap<String, String>) {
 
     m.insert(
         "misc.fsc.found".into(),
-        "\u{1F50D} 找到 {} 个文件匹配 \"{}\"：".into(),
+        "找到 {} 个文件匹配 \"{}\"：".into(),
     );
 
     m.insert("misc.fsc.invalid_input".into(), "无效的输入。".into());
@@ -86,7 +92,7 @@ pub fn fill(m: &mut HashMap<String, String>) {
 
     m.insert(
         "misc.fsc.usage".into(),
-        "用法：fsc <模式> [-d <深度>]".into(),
+        "用法：fsc <模式> [-d <深度>] [--no-fuzzy|-no-fz]".into(),
     );
 
     m.insert(
@@ -142,6 +148,13 @@ pub fn fill(m: &mut HashMap<String, String>) {
     m.insert("misc.gs.searching".into(), "正在搜索内容...".into());
 
     m.insert(
+        "misc.gs.searching_header".into(),
+        "正在搜索内容 \"{}\"（深度：{}）...".into(),
+    );
+
+    m.insert("misc.gs.depth_unlimited".into(), "无限".into());
+
+    m.insert(
         "misc.gs.many_results".into(),
         "gs：找到 {} 个匹配，显示前20,000个。请缩小搜索范围。".into(),
     );
@@ -174,7 +187,7 @@ pub fn fill(m: &mut HashMap<String, String>) {
 
     m.insert(
         "misc.locate.header".into(),
-        "\u{1F50D} {} \"{}\"（{} 个结果）：".into(),
+        "{} \"{}\"（{} 个结果）：".into(),
     );
 
     m.insert(
@@ -188,12 +201,12 @@ pub fn fill(m: &mut HashMap<String, String>) {
 
     m.insert(
         "misc.locate.no_results".into(),
-        "\n\u{1F50D} 未找到 \"{}\" 的结果\n".into(),
+        "\n未找到 \"{}\" 的结果\n".into(),
     );
 
     m.insert(
         "misc.locate.usage".into(),
-        "用法：locate <模式> [-d <深度>]".into(),
+        "用法：locate <模式> [-d <深度>] [--no-fuzzy|-no-fz]".into(),
     );
 
     m.insert("misc.mkd.created".into(), "已创建目录：{}".into());
@@ -256,10 +269,7 @@ pub fn fill(m: &mut HashMap<String, String>) {
 
     m.insert("misc.pathcp.copied".into(), "路径已复制到剪贴板：{}".into());
 
-    m.insert(
-        "misc.pip.found".into(),
-        "\u{2713} 在以下位置找到 pip：{}".into(),
-    );
+    m.insert("misc.pip.found".into(), "在以下位置找到 pip：{}".into());
 
     m.insert(
         "misc.pip.not_found".into(),
@@ -466,34 +476,25 @@ pub fn fill(m: &mut HashMap<String, String>) {
 
     m.insert(
         "misc.show_env.other_header".into(),
-        "\u{1F527} 其他Python/Venv变量：".into(),
+        "其他Python/Venv变量：".into(),
     );
 
-    m.insert(
-        "misc.show_env.path_full".into(),
-        "\u{1F4C2} PATH（完整）：".into(),
-    );
+    m.insert("misc.show_env.path_full".into(), "PATH（完整）：".into());
 
     m.insert(
         "misc.show_env.path_header".into(),
-        "\u{1F4C2} PATH（前几个条目）：".into(),
+        "PATH（前几个条目）：".into(),
     );
 
     m.insert("misc.show_env.shell_label".into(), "Shell：".into());
 
-    m.insert(
-        "misc.show_env.summary_header".into(),
-        "\u{1F4CA} 摘要：".into(),
-    );
+    m.insert("misc.show_env.summary_header".into(), "摘要：".into());
 
-    m.insert(
-        "misc.show_env.sys_header".into(),
-        "\u{1F4BB} 系统信息：".into(),
-    );
+    m.insert("misc.show_env.sys_header".into(), "系统信息：".into());
 
     m.insert(
         "misc.show_env.venv_header".into(),
-        "\u{1F40D} Python虚拟环境：".into(),
+        "Python虚拟环境：".into(),
     );
 
     m.insert("misc.size.bytes_label".into(), "字节：".into());
@@ -527,10 +528,7 @@ pub fn fill(m: &mut HashMap<String, String>) {
 
     m.insert("misc.tp.info_source".into(), "来源".into());
 
-    m.insert(
-        "misc.tp.info_title".into(),
-        "\u{1F4CC} 传送保存点信息".into(),
-    );
+    m.insert("misc.tp.info_title".into(), "传送保存点信息".into());
 
     m.insert(
         "misc.tp.invalid_format".into(),
@@ -680,5 +678,33 @@ pub fn fill(m: &mut HashMap<String, String>) {
     m.insert(
         "misc.trim.empty_pattern".into(),
         "trim：模式不能为空".into(),
+    );
+
+    m.insert("misc.show_env.ntc_header".into(), "NTC 环境变量：".into());
+
+    m.insert(
+        "misc.show_env.ntc_empty".into(),
+        "（未设置 — 使用：config env NAME value）".into(),
+    );
+
+    m.insert(
+        "misc.show_env.ntc_local".into(),
+        "本地 (ntconfig.toml)".into(),
+    );
+
+    m.insert("misc.show_env.ntc_global".into(), "全局 (ntc 配置)".into());
+
+    m.insert("misc.show_env.ntc_session".into(), "会话 (-os)".into());
+
+    m.insert("misc.show_env.os_header".into(), "操作系统环境：".into());
+
+    m.insert(
+        "misc.show_env.os_more".into(),
+        "……以及另外 {} 个（使用 'showenv --all'）".into(),
+    );
+
+    m.insert(
+        "misc.show_env.os_masked".into(),
+        "***（使用 'showenv --all' 显示）".into(),
     );
 }

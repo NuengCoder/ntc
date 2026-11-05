@@ -1,6 +1,6 @@
 [package]
 name = "ntc"
-version = "2.4.7"
+version = "2.4.8"
 edition = "2021"
 description = "Navigate, Toolkit, Center - A Combine of Navigation , Project Toolkit Center hub"
 authors = ["NuengCoder"]
@@ -15,9 +15,8 @@ name = "ntc"
 path = "src/lib.rs"
 
 [features]
-default = ["image2doc", "ocr"]
-image2doc = ["dep:image"]
-ocr = []
+default = ["image"]
+image = ["dep:image"]
 
 [dependencies]
 walkdir = "2.5"
@@ -78,6 +77,9 @@ rodio = "0.23"
 version = "0.59"
 features = [
     "Win32_Foundation",
+    "Win32_NetworkManagement_IpHelper",
+    "Win32_NetworkManagement_Ndis",
+    "Win32_Networking_WinSock",
     "Win32_Security_Authorization",
     "Win32_Security_Credentials",
     "Win32_System_Console",
@@ -114,3 +116,4 @@ It helps navigate, visualize, and report on directory structures."""
 depends = "$auto"  # Automatically detects if you need libc, etc.
 [patch.crates-io]
 termios = { path = "patches/termios" }
+

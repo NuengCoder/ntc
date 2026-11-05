@@ -43,7 +43,7 @@ pub fn fill(m: &mut HashMap<String, String>) {
 
     m.insert(
         "misc.ds.usage".into(),
-        "Usage: ds <pattern> [-d <depth>]".into(),
+        "Usage: ds <pattern> [-d <depth>] [--no-fuzzy|-no-fz]".into(),
     );
 
     m.insert(
@@ -63,7 +63,7 @@ pub fn fill(m: &mut HashMap<String, String>) {
 
     m.insert(
         "misc.fs.usage".into(),
-        "Usage: fs <pattern> [-d <depth>]".into(),
+        "Usage: fs <pattern> [-d <depth>] [--no-fuzzy|-no-fz]".into(),
     );
 
     m.insert("misc.fsc.copied".into(), "Copied '{}' to clipboard!".into());
@@ -89,7 +89,7 @@ pub fn fill(m: &mut HashMap<String, String>) {
 
     m.insert(
         "misc.fsc.found".into(),
-        "\u{1F50D} Found {} file(s) for \"{}\":".into(),
+        "Found {} file(s) for \"{}\":".into(),
     );
 
     m.insert("misc.fsc.invalid_input".into(), "Invalid input.".into());
@@ -116,7 +116,7 @@ pub fn fill(m: &mut HashMap<String, String>) {
 
     m.insert(
         "misc.fsc.usage".into(),
-        "Usage: fsc <pattern> [-d <depth>]".into(),
+        "Usage: fsc <pattern> [-d <depth>] [--no-fuzzy|-no-fz]".into(),
     );
 
     m.insert(
@@ -170,6 +170,13 @@ pub fn fill(m: &mut HashMap<String, String>) {
     );
 
     m.insert("misc.gs.searching".into(), "Searching contents...".into());
+
+    m.insert(
+        "misc.gs.searching_header".into(),
+        "Searching Contents \"{}\" (depth: {})...".into(),
+    );
+
+    m.insert("misc.gs.depth_unlimited".into(), "unlimited".into());
 
     m.insert(
         "misc.gs.many_results".into(),
@@ -356,7 +363,7 @@ pub fn fill(m: &mut HashMap<String, String>) {
 
     m.insert(
         "misc.locate.header".into(),
-        "\u{1F50D} {} for \"{}\" ({} result(s)):".into(),
+        "{} for \"{}\" ({} result(s)):".into(),
     );
 
     m.insert(
@@ -370,12 +377,12 @@ pub fn fill(m: &mut HashMap<String, String>) {
 
     m.insert(
         "misc.locate.no_results".into(),
-        "\n\u{1F50D} No results for \"{}\"\n".into(),
+        "\nNo results for \"{}\"\n".into(),
     );
 
     m.insert(
         "misc.locate.usage".into(),
-        "Usage: locate <pattern> [-d <depth>]".into(),
+        "Usage: locate <pattern> [-d <depth>] [--no-fuzzy|-no-fz]".into(),
     );
 
     m.insert("misc.mkd.created".into(), "Created directory: {}".into());
@@ -475,7 +482,7 @@ pub fn fill(m: &mut HashMap<String, String>) {
         "Path copied to clipboard: {}".into(),
     );
 
-    m.insert("misc.pip.found".into(), "\u{2713} pip found at: {}".into());
+    m.insert("misc.pip.found".into(), "pip found at: {}".into());
 
     m.insert(
         "misc.pip.not_found".into(),
@@ -749,34 +756,28 @@ pub fn fill(m: &mut HashMap<String, String>) {
 
     m.insert(
         "misc.show_env.other_header".into(),
-        "\u{1F527} Other Python/Venv Variables:".into(),
+        "Other Python/Venv Variables:".into(),
     );
 
-    m.insert(
-        "misc.show_env.path_full".into(),
-        "\u{1F4C2} PATH (full):".into(),
-    );
+    m.insert("misc.show_env.path_full".into(), "PATH (full):".into());
 
     m.insert(
         "misc.show_env.path_header".into(),
-        "\u{1F4C2} PATH (first few entries):".into(),
+        "PATH (first few entries):".into(),
     );
 
     m.insert("misc.show_env.shell_label".into(), "Shell:".into());
 
-    m.insert(
-        "misc.show_env.summary_header".into(),
-        "\u{1F4CA} Summary:".into(),
-    );
+    m.insert("misc.show_env.summary_header".into(), "Summary:".into());
 
     m.insert(
         "misc.show_env.sys_header".into(),
-        "\u{1F4BB} System Information:".into(),
+        "System Information:".into(),
     );
 
     m.insert(
         "misc.show_env.venv_header".into(),
-        "\u{1F40D} Python Virtual Environment:".into(),
+        "Python Virtual Environment:".into(),
     );
 
     m.insert("misc.size.bytes_label".into(), "Bytes:".into());
@@ -815,7 +816,7 @@ pub fn fill(m: &mut HashMap<String, String>) {
 
     m.insert(
         "misc.tp.info_title".into(),
-        "\u{1F4CC} Teleport Savepoint Info".into(),
+        "Teleport Savepoint Info".into(),
     );
 
     m.insert(
@@ -922,5 +923,39 @@ pub fn fill(m: &mut HashMap<String, String>) {
     m.insert(
         "misc.venvd.not_in_venv".into(),
         "Not in a virtual environment".into(),
+    );
+
+    m.insert(
+        "misc.show_env.ntc_header".into(),
+        "NTC environment variables:".into(),
+    );
+
+    m.insert(
+        "misc.show_env.ntc_empty".into(),
+        "(none set — use: config env NAME value)".into(),
+    );
+
+    m.insert(
+        "misc.show_env.ntc_local".into(),
+        "local (ntconfig.toml)".into(),
+    );
+
+    m.insert(
+        "misc.show_env.ntc_global".into(),
+        "global (ntc config)".into(),
+    );
+
+    m.insert("misc.show_env.ntc_session".into(), "session (-os)".into());
+
+    m.insert("misc.show_env.os_header".into(), "OS environment:".into());
+
+    m.insert(
+        "misc.show_env.os_more".into(),
+        "... and {} more (use 'showenv --all')".into(),
+    );
+
+    m.insert(
+        "misc.show_env.os_masked".into(),
+        "*** (use 'showenv --all' to reveal)".into(),
     );
 }

@@ -71,18 +71,18 @@ pub fn fill(m: &mut HashMap<String, String>) {
     );
 
     m.insert(
-        "dl.help.opt_progress".into(),
-        "   --progress แสดงแถบความคืบหน้าการดาวน์โหลด".into(),
+        "dl.help.opt_history".into(),
+        "   --history แสดงประวัติการดาวน์โหลด".into(),
     );
 
     m.insert(
         "dl.help.opt_resume".into(),
-        "   --resume ดำเนินการดาวน์โหลดต่อจากที่ค้าง".into(),
+        "   --resume ดำเนินการดาวน์โหลดต่อรายการที่ยังไม่เสร็จ (เลือกจากรายการ)".into(),
     );
 
     m.insert(
         "dl.help.opt_stop".into(),
-        "   --stop แสดงประวัติการดาวน์โหลด".into(),
+        "   --stop หยุดการดาวน์โหลดที่กำลังทำงาน (เลือกจากรายการ)".into(),
     );
 
     m.insert("dl.help.options".into(), "ตัวเลือก:".into());
@@ -149,5 +149,66 @@ pub fn fill(m: &mut HashMap<String, String>) {
     m.insert(
         "dl.url_required".into(),
         "ต้องระบุ URL. การใช้งาน: dl <url>".into(),
+    );
+
+    m.insert("dl.active_title".into(), "รายการที่กำลังดาวน์โหลด:".into());
+
+    m.insert("dl.cancelled".into(), "ยกเลิกแล้ว.".into());
+
+    m.insert(
+        "dl.incomplete_title".into(),
+        "รายการที่ยังดาวน์โหลดไม่เสร็จ:".into(),
+    );
+
+    m.insert("dl.invalid_choice".into(), "ตัวเลือกไม่ถูกต้อง.".into());
+
+    m.insert("dl.no_active".into(), "ไม่มีการดาวน์โหลดที่กำลังทำงาน.".into());
+
+    m.insert(
+        "dl.nothing_incomplete".into(),
+        "ไม่มีรายการที่ยังดาวน์โหลดไม่เสร็จให้ทำต่อ.".into(),
+    );
+
+    m.insert("dl.resuming".into(), "กำลังทำต่อ {} จาก {}".into());
+
+    m.insert(
+        "dl.select_resume".into(),
+        "เลือกไฟล์ที่จะทำต่อ [1-N] (เว้นว่างหรือ q เพื่อยกเลิก): ".into(),
+    );
+
+    m.insert(
+        "dl.select_stop".into(),
+        "เลือกไฟล์ที่จะหยุด [1-N] (เว้นว่างหรือ q เพื่อยกเลิก): ".into(),
+    );
+
+    m.insert(
+        "dl.stopped_ok".into(),
+        "หยุด {} แล้ว ทำต่อได้ด้วย 'dl --resume'.".into(),
+    );
+
+    m.insert(
+        "dl.stopped_stale".into(),
+        "ทำเครื่องหมาย {} เป็นหยุดแล้ว (ไม่ได้ทำงานอยู่แล้ว).".into(),
+    );
+
+    m.insert(
+        "dl.dns_unsupported_type".into(),
+        "ไม่รองรับประเภทระเบียน: {} (รองรับ: {})".into(),
+    );
+
+    m.insert("dl.dns_rcode".into(), "เซิร์ฟเวอร์ตอบกลับ {} ({})".into());
+
+    m.insert(
+        "dl.dns_timeout".into(),
+        "ไม่มีการตอบกลับจากเซิร์ฟเวอร์ DNS (หมดเวลา)".into(),
+    );
+
+    m.insert("dl.dns_malformed".into(), "การตอบกลับ DNS ผิดรูปแบบ".into());
+
+    m.insert("dl.dns_io".into(), "ข้อผิดพลาดเครือข่าย DNS: {}".into());
+
+    m.insert(
+        "dl.dns_system_fallback".into(),
+        "เปลี่ยนไปใช้เครื่องมือ DNS ของระบบ...".into(),
     );
 }

@@ -350,6 +350,16 @@ pub fn fill(m: &mut HashMap<String, String>) {
 
     m.insert("ndb.dbal_note".into(), "alias ເກັບສະເພາະຄິຣີອ່ານເທົ່ານັ້ນ; ການຂຽນຖືກປະຕິເສດ ພິມຊື່ alias ເພື່ອເຮັດ ຄ່າແທນທີ່ຕາມຕົວອັກສອນ — ໃສ່ເຄື່ອງໝາຍຄຳເວົ້າສຳລັບສະຕຣິງເອງ: dbal run q \"'2026-01-01'\"".into());
 
+    m.insert("ndb.dbal_hint_note".into(), "ການເຕີມຂໍ້ຄວາມ: dbal add q \"SELECT * FROM $t WHERE id = $id\" #t --hint-table #id --hint-table-col-name [table]. ຢູ່ນີ້ໃຊ້ໄດ້ສະເພາະ --hint-table ແລະ --hint-table-col-name ເຊິ່ງ hinter ຂອງ ndb ຈະແກ້ໄຂຕາມຖານຂໍ້ມູນທີ່ເປີດຢູ່".into());
+
+    m.insert("ndb.dbal_hints".into(), "ຄໍາໃບ້: {}".into());
+
+    m.insert(
+        "ndb.dbal_bad_hint".into(),
+        "ຄໍາໃບ້ພາຣາມິເຕີບໍ່ຖືກຕ້ອງ ({}) ໃຊ້ #param --hint-table ຫຼື #param --hint-table-col-name [table]"
+            .into(),
+    );
+
     m.insert("ndb.dbal_params".into(), "ພາຣາມິເຕີ: {}".into());
 
     m.insert("ndb.dbal_missing_args".into(), "ຂາດຄ່າພາຣາມິເຕີ: {}".into());

@@ -176,7 +176,7 @@ pub fn fill(m: &mut HashMap<String, String>) {
 
     m.insert(
         "misc.ds.usage".into(),
-        "Usage: ds <pattern> [-d <depth>]".into(),
+        "Usage: ds <pattern> [-d <depth>] [--no-fuzzy|-no-fz]".into(),
     );
 
     m.insert(
@@ -196,7 +196,7 @@ pub fn fill(m: &mut HashMap<String, String>) {
 
     m.insert(
         "misc.fs.usage".into(),
-        "Usage: fs <pattern> [-d <depth>]".into(),
+        "Usage: fs <pattern> [-d <depth>] [--no-fuzzy|-no-fz]".into(),
     );
 
     m.insert(
@@ -223,10 +223,7 @@ pub fn fill(m: &mut HashMap<String, String>) {
         " fsc main.rs -d 5 # ຄົ້ນຫາສູງເຖິງ 5 ລະດັບ".into(),
     );
 
-    m.insert(
-        "misc.fsc.found".into(),
-        "\u{1F50D} ພົບໄຟລ໌ {} ສຳລັບ \"{}\":".into(),
-    );
+    m.insert("misc.fsc.found".into(), "ພົບໄຟລ໌ {} ສຳລັບ \"{}\":".into());
 
     m.insert("misc.fsc.invalid_input".into(), "ຂໍ້ມູນເຂົ້າບໍ່ຖືກຕ້ອງ.".into());
 
@@ -240,7 +237,7 @@ pub fn fill(m: &mut HashMap<String, String>) {
 
     m.insert(
         "misc.fsc.usage".into(),
-        "Usage: fsc <pattern> [-d <depth>]".into(),
+        "Usage: fsc <pattern> [-d <depth>] [--no-fuzzy|-no-fz]".into(),
     );
 
     m.insert(
@@ -296,6 +293,13 @@ pub fn fill(m: &mut HashMap<String, String>) {
     m.insert("misc.gs.searching".into(), "ກຳລັງຄົ້ນຫາເນື້ອໃນ...".into());
 
     m.insert(
+        "misc.gs.searching_header".into(),
+        "ກຳລັງຄົ້ນຫາເນື້ອໃນ \"{}\" (ຄວາມເລິກ: {})...".into(),
+    );
+
+    m.insert("misc.gs.depth_unlimited".into(), "ບໍ່ຈຳກັດ".into());
+
+    m.insert(
         "misc.gs.many_results".into(),
         "gs: ພົບ {} ລາຍການ, ສະແດງ 20,000 ທຳອິດ. ຈຳກັດການຄົ້ນຫາໃຫ້ແຄບລົງ.".into(),
     );
@@ -329,7 +333,7 @@ pub fn fill(m: &mut HashMap<String, String>) {
 
     m.insert(
         "misc.locate.header".into(),
-        "\u{1F50D} {} ສຳລັບ \"{}\" ({} ຜົນ):".into(),
+        "{} ສຳລັບ \"{}\" ({} ຜົນ):".into(),
     );
 
     m.insert(
@@ -343,12 +347,12 @@ pub fn fill(m: &mut HashMap<String, String>) {
 
     m.insert(
         "misc.locate.no_results".into(),
-        "\n\u{1F50D} ບໍ່ມີຜົນສຳລັບ \"{}\"\n".into(),
+        "\nບໍ່ມີຜົນສຳລັບ \"{}\"\n".into(),
     );
 
     m.insert(
         "misc.locate.usage".into(),
-        "Usage: locate <pattern> [-d <depth>]".into(),
+        "Usage: locate <pattern> [-d <depth>] [--no-fuzzy|-no-fz]".into(),
     );
 
     m.insert("misc.mkd.created".into(), "ສ້າງໄດເຣັກທໍຣີ: {}".into());
@@ -423,7 +427,7 @@ pub fn fill(m: &mut HashMap<String, String>) {
         "ສຳເນົາ path ໃສ່ clipboard: {}".into(),
     );
 
-    m.insert("misc.pip.found".into(), "\u{2713} ພົບ pip ທີ່: {}".into());
+    m.insert("misc.pip.found".into(), "ພົບ pip ທີ່: {}".into());
 
     m.insert(
         "misc.pip.not_found".into(),
@@ -652,34 +656,25 @@ pub fn fill(m: &mut HashMap<String, String>) {
 
     m.insert(
         "misc.show_env.other_header".into(),
-        "\u{1F527} ຕົວແປ Other Python/Venv:".into(),
+        "ຕົວແປ Other Python/Venv:".into(),
     );
 
-    m.insert(
-        "misc.show_env.path_full".into(),
-        "\u{1F4C2} PATH (full):".into(),
-    );
+    m.insert("misc.show_env.path_full".into(), "PATH (full):".into());
 
     m.insert(
         "misc.show_env.path_header".into(),
-        "\u{1F4C2} PATH (ສອງສາມລາຍການທຳອິດ):".into(),
+        "PATH (ສອງສາມລາຍການທຳອິດ):".into(),
     );
 
     m.insert("misc.show_env.shell_label".into(), "Shell:".into());
 
-    m.insert(
-        "misc.show_env.summary_header".into(),
-        "\u{1F4CA} ສະຫຼຸບ:".into(),
-    );
+    m.insert("misc.show_env.summary_header".into(), "ສະຫຼຸບ:".into());
 
-    m.insert(
-        "misc.show_env.sys_header".into(),
-        "\u{1F4BB} ຂໍ້ມູນລະບົບ:".into(),
-    );
+    m.insert("misc.show_env.sys_header".into(), "ຂໍ້ມູນລະບົບ:".into());
 
     m.insert(
         "misc.show_env.venv_header".into(),
-        "\u{1F40D} Python Virtual Environment:".into(),
+        "Python Virtual Environment:".into(),
     );
 
     m.insert("misc.size.bytes_label".into(), "Bytes:".into());
@@ -716,10 +711,7 @@ pub fn fill(m: &mut HashMap<String, String>) {
 
     m.insert("misc.tp.info_source".into(), "Source".into());
 
-    m.insert(
-        "misc.tp.info_title".into(),
-        "\u{1F4CC} ຂໍ້ມູນ Teleport Savepoint".into(),
-    );
+    m.insert("misc.tp.info_title".into(), "ຂໍ້ມູນ Teleport Savepoint".into());
 
     m.insert(
         "misc.tp.invalid_format".into(),
@@ -821,5 +813,39 @@ pub fn fill(m: &mut HashMap<String, String>) {
     m.insert(
         "misc.venvd.not_in_venv".into(),
         "ບໍ່ໄດ້ຢູ່ໃນ virtual environment".into(),
+    );
+
+    m.insert(
+        "misc.show_env.ntc_header".into(),
+        "ຕົວແປສະພາບແວດລ້ອມຂອງ NTC:".into(),
+    );
+
+    m.insert(
+        "misc.show_env.ntc_empty".into(),
+        "(ຍັງບໍ່ໄດ້ຕັ້ງ — ໃຊ້: config env NAME value)".into(),
+    );
+
+    m.insert(
+        "misc.show_env.ntc_local".into(),
+        "local (ntconfig.toml)".into(),
+    );
+
+    m.insert(
+        "misc.show_env.ntc_global".into(),
+        "global (ຄອນຟິກ ntc)".into(),
+    );
+
+    m.insert("misc.show_env.ntc_session".into(), "ເຊສຊັນ (-os)".into());
+
+    m.insert("misc.show_env.os_header".into(), "ສະພາບແວດລ້ອມ OS:".into());
+
+    m.insert(
+        "misc.show_env.os_more".into(),
+        "... ແລະ ອີກ {} ລາຍການ (ໃຊ້ 'showenv --all')".into(),
+    );
+
+    m.insert(
+        "misc.show_env.os_masked".into(),
+        "*** (ໃຊ້ 'showenv --all' ເພື່ອສະແດງ)".into(),
     );
 }

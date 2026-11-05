@@ -39,5 +39,12 @@ pub fn fill(m: &mut HashMap<String, String>) {
         " บทเรียน NTC \u{2014} ขั้นตอน {}/{} ".into(),
     );
 
-    m.insert("tutorial.tip_label".into(), "\u{1F4A1} เคล็ดลับ:".into());
+    m.insert("tutorial.tip_label".into(), "เคล็ดลับ:".into());
+
+    m.insert("tutorial.command_label".into(), "คำสั่ง:".into());
+
+    m.insert(
+        "tutorial.command_usage".into(),
+        "พิมพ์เองแล้วกด Enter \u{2014} ntc จะไม่รันให้คุณ".into(),
+    );
 }

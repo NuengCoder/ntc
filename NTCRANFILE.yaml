@@ -1,0 +1,138 @@
+vars:
+  adb: ntc-v2.4.8-aarch64-linux-android.tar.gz
+  adb_w: target/aarch64-linux-android/release
+  deb: ntc_2.4.8-1_amd64.deb
+  deb_w: target/debian/ntc_2.4.8-1_amd64.deb
+  lux: ntc-v2.4.8-linux-x86_64.tar.gz
+  lux_arm: ntc-v2.4.8-linux-aarch64.tar.gz
+  lux_arm_w: target/aarch64-unknown-linux-gnu/release
+  lux_w: target/release
+  ver: 2.4.8
+  win: ntc-v2.4.8-windows-x86_64.zip
+  win7amd: ntc-v2.4.8-windows7-x86_64.zip
+  win7amd_dir: target/win7-amd64
+  win7amd_w: target/win7-amd64/x86_64-win7-windows-msvc/release/ntc.exe
+  win7arm: ntc-v2.4.8-windows7-arm64.zip
+  win7arm_dir: target/win7-arm64
+  win7arm_w: target/win7-arm64/aarch64-win7-windows-msvc/release/ntc.exe
+  win_arm: ntc-v2.4.8-windows-arm64.zip
+  win_arm_w: target/aarch64-pc-windows-msvc/release/ntc.exe
+  win_w: target/release/ntc.exe
+  wini: ntc-installer-2.4.8.exe
+  wini7: ntc-installer-2.4.8-win7-x64.exe
+  wini7_w: installer/ntc-installer-2.4.8-win7-x64.exe
+  wini7u: ntc-installer-2.4.8-win7-x64-user.exe
+  wini_w: installer/ntc-installer-2.4.8.exe
+  winiu: ntc-installer-2.4.8-user.exe
+  winiz: ntc-installer-2.4.8.zip
+  winiz7: ntc-installer-2.4.8-win7-x64.zip
+targets:
+  aarch64_linux:
+    deps: []
+    cmd: cross build --target aarch64-unknown-linux-gnu --release
+  all1:
+    deps:
+    - reset
+    - android
+    - win32
+    - win7amd
+    - win7arm
+    cmd: echo all done!
+  all2:
+    deps:
+    - debian
+    - aarch64_linux
+    cmd: cargo build --release
+  android:
+    deps: []
+    cmd: cargo ndk --target aarch64-linux-android --platform 26 build --release
+  build:
+    deps: []
+    cmd: cargo build --release && start installer.iss
+  build-user:
+    deps: []
+    cmd: cargo build --release && iscc /DUSERINSTALL installer.iss
+  build-win7:
+    deps:
+    - win7amd
+    cmd: iscc win7amd.iss
+  build-win7-user:
+    deps:
+    - win7amd
+    cmd: iscc /DUSERINSTALL win7amd.iss
+  clean:
+    deps: []
+    cmd: cargo clean && cleantmp && cleancrash
+  cpdeb:
+    deps: []
+    cmd: cp $(deb_w) .
+  cpwin:
+    deps: []
+    cmd: cp $(wini_w) . && arc create $(winiz) $(wini) && rmf $(wini)
+  cpwin7:
+    deps: []
+    cmd: cp $(wini7_w) . && arc create $(winiz7) $(wini7) && rmf $(wini7)
+  debian:
+    deps: []
+    cmd: cargo deb
+  padb:
+    deps: []
+    cmd: adb push ntc-v$(ver)-aarch64-linux-android.tar.gz /sdcard/Download/
+  pull:
+    deps: []
+    cmd: git pull origin main --rebase
+  push:
+    deps: []
+    cmd: git add . && git commit -m $(ver) && git tag v$(ver) && git push origin main --tags
+  repush:
+    deps: []
+    cmd: git push origin --delete v$(ver) && git push origin main --tags
+  reset:
+    deps: []
+    cmd: cargo clean && cargo build --release
+  rmpack:
+    deps: []
+    cmd: rmf $(lux) ,  $(adb) , $(lux_arm) ,  $(win) ,  $(deb) ,  $(win_arm) ,  $(win7amd) , $(win7arm) , $(winiz) ,$(winiz7) 
+  rmtag:
+    deps: []
+    cmd: git tag -d v$(ver) && git push origin --delete v$(ver)
+  setpack:
+    deps:
+    - tar
+    - zip
+    - zip_arm
+    - zip_win7amd
+    - zip_win7arm
+    - cpdeb
+    - cpwin
+    - cpwin7
+    cmd: echo pack setup completed!
+  standalone:
+    deps: []
+    cmd: cargo build --release && echo done...!
+  tar:
+    deps: []
+    cmd: arc create $(adb) $(adb_w)/ntc && arc create $(lux) $(lux_w)/ntc && arc create $(lux_arm) $(lux_arm_w)/ntc
+  win32:
+    deps: []
+    cmd: packaging\build_win32.cmd
+  win7amd:
+    deps: []
+    cmd: packaging\build_win7amd.cmd
+  win7arm:
+    deps: []
+    cmd: packaging\build_win7arm.cmd
+  zip:
+    deps: []
+    cmd: arc create $(win) $(win_w)
+  zip_arm:
+    deps: []
+    cmd: arc create $(win_arm) $(win_arm_w)
+  zip_win7amd:
+    deps:
+    - win7amd
+    cmd: arc create $(win7amd) $(win7amd_w)
+  zip_win7arm:
+    deps:
+    - win7arm
+    cmd: arc create $(win7arm) $(win7arm_w)

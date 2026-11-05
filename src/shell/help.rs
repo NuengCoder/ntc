@@ -25,6 +25,82 @@ fn example_row(key: &str) {
     }
 }
 
+/// `help` (no topic) entries: `(label, description key)`, in the same order
+/// as the full reference below. Labels list the command or the aliases it
+/// stands for, so a user can type the one they know.
+const COMPACT_HELP: &[(&str, &str)] = &[
+    ("cd", "help.compact.nav"),
+    ("config", "help.compact.config"),
+    ("ne", "help.compact.editor"),
+    ("theme", "help.compact.theme"),
+    ("tp", "help.compact.teleport"),
+    ("ran", "help.compact.ran"),
+    ("scr", "help.compact.scr"),
+    ("ral", "help.compact.alias"),
+    ("view", "help.compact.view"),
+    ("size", "help.compact.size"),
+    ("report", "help.compact.report"),
+    ("backup", "help.compact.backup"),
+    ("gs", "help.compact.search"),
+    ("ignore", "help.compact.igcare"),
+    ("net", "help.compact.network"),
+    ("tmprt", "help.compact.tmprt"),
+    ("time", "help.compact.time"),
+    ("git", "help.compact.git"),
+    ("clip", "help.compact.clipboard"),
+    ("qsc", "help.compact.qsc"),
+    ("todo", "help.compact.todo"),
+    ("arc", "help.compact.arc"),
+    ("scan", "help.compact.scan"),
+    ("tl", "help.compact.tl"),
+    ("ntpkg", "help.compact.ntpkg"),
+    ("skill", "help.compact.skill"),
+    ("qr", "help.compact.qr"),
+    ("pathman", "help.compact.pathman"),
+    ("autoup", "help.compact.autoup"),
+    ("mode", "help.compact.mode"),
+    ("nfe", "help.compact.explorer"),
+    ("math", "help.compact.math"),
+    ("py_activate", "help.compact.python"),
+    ("encode", "help.compact.encdec"),
+    ("fmt", "help.compact.fmt"),
+    ("image", "help.compact.image"),
+    ("ndb", "help.compact.ndb"),
+    ("nsheet", "help.compact.nsheet"),
+    ("nssh", "help.compact.nssh"),
+    ("nms", "help.compact.nms"),
+    ("fake", "help.compact.fake"),
+    ("deadlock", "help.compact.deadlock"),
+    ("sys", "help.compact.syscmd"),
+    ("pipe", "help.compact.pipe"),
+    ("mkf", "help.compact.fileops"),
+    ("clear", "help.compact.other"),
+];
+
+/// Default `help`: one line per command area (what it is), no subcommands or
+/// examples. `help --all` still prints the full reference.
+pub(super) fn print_compact_help() {
+    println!("╔══════════════════════════════════════════════════════════════════╗");
+    println!(
+        "║{}║",
+        format!(
+            "{:^66}",
+            format!(
+                "ntc {} - {}",
+                env!("CARGO_PKG_VERSION"),
+                t!("help.compact.title")
+            )
+        )
+    );
+    println!("╚══════════════════════════════════════════════════════════════════╝");
+    for (label, key) in COMPACT_HELP {
+        println!("  {:<12} {}", label, t!(key));
+    }
+    println!();
+    println!("{}", t!("help.compact.footer").dimmed());
+}
+
+/// The full reference behind `help --all` (and `help <topic>` sections).
 pub(super) fn print_interactive_help() {
     println!("╔══════════════════════════════════════════════════════════════════╗");
     println!(
@@ -62,6 +138,7 @@ pub(super) fn print_interactive_help() {
     print_fileops_help();
     print_tl_help();
     print_ntpkg_help();
+    print_skill_help();
     print_qr_help();
     print_pathman_help();
     print_autoup_help();
@@ -100,9 +177,8 @@ pub(super) fn print_topic_help(topic: &str) -> bool {
         "backup" => print_backup_help(),
         "search" | "gs" | "fs" | "ds" | "locate" | "fsc" | "qur" => print_search_help(),
         "igcare" | "ignore" | "care" | "igcared" => print_igcare_help(),
-        "network" | "http" | "dl" | "up" | "ping" | "dns" | "smtp" | "serve" | "ipcfg" => {
-            print_network_help()
-        }
+        "network" | "http" | "dl" | "up" | "ping" | "trace" | "tracert" | "traceroute" | "dns"
+        | "smtp" | "serve" | "ipcfg" => print_network_help(),
         "tmprt" => print_tmprt_help(),
         "time" => print_time_help(),
         "git" => print_git_help(),
@@ -122,6 +198,7 @@ pub(super) fn print_topic_help(topic: &str) -> bool {
         }
         "tl" => print_tl_help(),
         "ntpkg" | "ntpx" => print_ntpkg_help(),
+        "skill" => print_skill_help(),
         "qr" => print_qr_help(),
         "pathman" | "usrpath" | "syspath" => print_pathman_help(),
         "autoup" => print_autoup_help(),
@@ -194,6 +271,9 @@ fn print_config_help() {
     usage("help.config.showenv");
     usage("help.config.showenv_all");
     usage("help.config.showenv_d");
+    usage("help.config.env");
+    usage("help.config.env_os");
+    usage("help.config.rmenv");
     println!("{}", t!("help.examples_header").green());
     example_row("help.config.example1");
     example_row("help.config.example2");
@@ -271,6 +351,8 @@ fn print_ran_help() {
     usage("help.ran.init");
     usage("help.ran.deinit");
     usage("help.ran.list");
+    usage("help.ran.check");
+    usage("help.ran.fmt");
     usage("help.ran.help");
     println!("{}", t!("help.examples_header").green());
     example_row("help.ran.example1");
@@ -295,6 +377,7 @@ fn print_alias_help() {
     section_header("help.alias.title");
     usage("help.alias.add");
     usage("help.alias.add_param");
+    usage("help.alias.env_ref");
     usage("help.alias.add_defaults");
     usage("help.alias.add_array");
     usage("help.alias.add_rest");
@@ -332,6 +415,10 @@ fn print_scan_help() {
     usage("help.scan.care");
     usage("help.scan.port");
     usage("help.scan.ip");
+    usage("help.scan.waep");
+    usage("help.scan.waep_base");
+    usage("help.scan.waep_flags");
+    usage("help.scan.waep_recursive");
     println!("{}", t!("help.examples_header").green());
     example_row("help.scan.example1");
     example_row("help.scan.example2");
@@ -340,6 +427,9 @@ fn print_scan_help() {
     example_row("help.scan.example5");
     example_row("help.scan.example6");
     example_row("help.scan.example7");
+    example_row("help.scan.example8");
+    example_row("help.scan.example9");
+    example_row("help.scan.example10");
 }
 
 fn print_view_help() {
@@ -408,6 +498,7 @@ fn print_view_help() {
     usage("help.views.size");
     usage("help.views.sort");
     usage("help.views.newline");
+    usage("help.views.trim");
     usage("help.views.note");
     println!("{}", t!("help.examples_header").green());
     example_row("help.views.example1");
@@ -512,6 +603,8 @@ fn print_network_help() {
     usage("help.network.dl");
     usage("help.network.up");
     usage("help.network.ping");
+    usage("help.network.ping_flags");
+    usage("help.network.trace");
     usage("help.network.dns");
     usage("help.network.smtp");
     usage("help.network.spec");
@@ -734,6 +827,32 @@ fn print_ntpkg_help() {
     example_row("help.ntpkg.example9");
 }
 
+fn print_skill_help() {
+    section_header("help.skill.title");
+    usage("help.skill.download");
+    usage("help.skill.add");
+    usage("help.skill.remove");
+    usage("help.skill.delete");
+    usage("help.skill.edit");
+    usage("help.skill.list");
+    usage("help.skill.list_all");
+    usage("help.skill.avail");
+    usage("help.skill.info");
+    usage("help.skill.sub");
+    usage("help.skill.help");
+    println!("{}", t!("help.examples_header").green());
+    example_row("help.skill.example1");
+    example_row("help.skill.example2");
+    example_row("help.skill.example3");
+    example_row("help.skill.example4");
+    example_row("help.skill.example5");
+    example_row("help.skill.example6");
+    example_row("help.skill.example7");
+    example_row("help.skill.example8");
+    example_row("help.skill.example9");
+    example_row("help.skill.example10");
+}
+
 fn print_qr_help() {
     section_header("help.qr.title");
     usage("help.qr.encode");
@@ -872,10 +991,6 @@ fn print_image_help() {
     usage("help.image.display");
     usage("help.image.show");
     usage("help.image.sixel");
-    usage("help.image.convert");
-    usage("help.image.save");
-    usage("help.image.ocr");
-    usage("help.image.layout");
     println!("{}", t!("help.examples_header").green());
     example_row("help.image.example1");
     example_row("help.image.example2");
@@ -1180,6 +1295,22 @@ fn print_scan_context_help(parts: &[&str], lowers: &[String]) -> bool {
         "ext" => println!("scan ext <ext...> [-d|--depth <n>] [-s|--size] [--care]"),
         "port" => println!("scan port [host] [--top N | --ports <spec> | --all] [--timeout MS]"),
         "ip" => println!("scan ip [cidr] [--top N | --ports <spec>] [--timeout MS]"),
+        // waep is flag-heavy: show usage, examples, flags and option notes
+        // instead of collapsing to the subcommand list.
+        "waep" | "web" => {
+            usage("help.scan.waep");
+            usage("help.scan.waep_base");
+            usage("help.scan.waep_flags");
+            usage("help.scan.waep_recursive");
+            println!("{}", t!("cmd.scan.waep_flags_title").green());
+            for line in t!("cmd.scan.waep_flags").lines() {
+                println!("  {}", line.trim_start());
+            }
+            println!("{}", t!("cmd.scan.waep_options_title").green());
+            for line in t!("cmd.scan.waep_options").lines() {
+                println!("  {}", line.trim_start());
+            }
+        }
         _ => {
             // Unknown subcommand: re-list valid choices (corrective).
             for s in subcommands_for(&[parts[0]]) {

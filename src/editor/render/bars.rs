@@ -3,13 +3,14 @@ use crossterm::queue;
 use crossterm::style::{Color, Print, ResetColor, SetBackgroundColor, SetForegroundColor};
 use crossterm::terminal::{Clear, ClearType};
 
-use super::super::{byte_to_col, Editor, Focus, Mode};
+use super::super::{display_col, Editor, Focus, Mode};
 use crate::t;
+use crate::utils::ansi_text::{truncate_visible, visible_width};
 
 impl Editor {
     pub(crate) fn render_tab_bar(
         &self,
-        stdout: &mut std::io::Stdout,
+        stdout: &mut impl std::io::Write,
         y: usize,
         x_offset: usize,
         width: usize,
@@ -33,7 +34,7 @@ impl Editor {
             }
             let name = self.tab_display_name(tab);
             let label = self.tab_label(i);
-            let close_btn = "✕";
+            let close_btn = "x";
             let label_chars = label.chars().count();
             let full_w = label_chars + 1 + close_btn.chars().count();
             let is_active = i == active;
@@ -82,7 +83,7 @@ impl Editor {
             if full_w > remaining {
                 let avail = remaining.saturating_sub(2);
                 if avail > 3 {
-                    let truncated_name: String = name.chars().take(avail).collect();
+                    let truncated_name = truncate_visible(&name, avail).to_string();
                     let short = format!(" {}… {} ", truncated_name, close_btn);
                     queue!(
                         stdout,
@@ -126,7 +127,7 @@ impl Editor {
                 Print("│"),
                 MoveTo(close_all_x as u16, y as u16),
                 SetForegroundColor(theme.editor.gutter_text.to_crossterm()),
-                Print("✕"),
+                Print("x"),
                 ResetColor,
             )?;
         }
@@ -137,7 +138,7 @@ impl Editor {
 
     pub(crate) fn render_cwd_bar(
         &self,
-        stdout: &mut std::io::Stdout,
+        stdout: &mut impl std::io::Write,
         x_offset: usize,
     ) -> std::io::Result<()> {
         let theme = crate::utils::theme::ThemeManager::current();
@@ -193,7 +194,7 @@ impl Editor {
 
     pub(crate) fn render_status_bar(
         &self,
-        stdout: &mut std::io::Stdout,
+        stdout: &mut impl std::io::Write,
         x_offset: usize,
     ) -> std::io::Result<()> {
         let theme = crate::utils::theme::ThemeManager::current();
@@ -225,7 +226,11 @@ impl Editor {
             } else {
                 String::new()
             };
-            let col = byte_to_col(self.current(), self.cursor.byte) + 1;
+            let col = display_col(
+                self.current(),
+                self.cursor.byte,
+                self.editor_cfg.tab_size.max(1),
+            ) + 1;
             let total = self.lines.len();
             let git_frag = if crate::config::Config::global_get_git_integration_enabled() {
                 crate::utils::git::prompt_fragment(
@@ -266,11 +271,11 @@ impl Editor {
             (status, right)
         };
 
-        let pad = avail_w.saturating_sub(status.len() + right.len() + 2);
+        let pad = avail_w.saturating_sub(visible_width(&status) + visible_width(&right) + 2);
         let mut full = format!("{}{}{} ", status, " ".repeat(pad), right);
-        if full.chars().count() > avail_w {
-            let end = full.floor_char_boundary(avail_w);
-            full.truncate(end);
+        if visible_width(&full) > avail_w {
+            let cut = truncate_visible(&full, avail_w).len();
+            full.truncate(cut);
         }
 
         let use_color = self.editor_cfg.color_enabled;
@@ -297,7 +302,7 @@ impl Editor {
 
     pub(crate) fn render_hint_bar(
         &self,
-        stdout: &mut std::io::Stdout,
+        stdout: &mut impl std::io::Write,
         x_offset: usize,
     ) -> std::io::Result<()> {
         let theme = crate::utils::theme::ThemeManager::current();
@@ -403,14 +408,14 @@ impl Editor {
                 Mode::Help => (String::new(), format!(" {}", t!("editor.hint_help"))),
                 Mode::Visual => {
                     if let Some(ref msg) = self.status_msg {
-                        (format!(" ✦ {}  │", msg), t!("editor.hint_visual"))
+                        (format!(" {}  │", msg), t!("editor.hint_visual"))
                     } else {
                         (String::new(), t!("editor.hint_visual_no_msg"))
                     }
                 }
                 Mode::Insert => {
                     if let Some(ref msg) = self.status_msg {
-                        (format!(" ✦ {}  │", msg), t!("editor.hint_insert_msg"))
+                        (format!(" {}  │", msg), t!("editor.hint_insert_msg"))
                     } else {
                         (String::new(), t!("editor.hint_insert"))
                     }
@@ -427,14 +432,14 @@ impl Editor {
                             ),
                         )
                     } else if let Some(ref msg) = self.status_msg {
-                        (format!(" ✦ {}  │", msg), t!("editor.hint_normal_msg"))
+                        (format!(" {}  │", msg), t!("editor.hint_normal_msg"))
                     } else {
                         (String::new(), t!("editor.hint_normal"))
                     }
                 }
                 Mode::InsertMulti => {
                     if let Some(ref msg) = self.status_msg {
-                        (format!(" ✦ {}  │", msg), t!("editor.hint_insert_multi_msg"))
+                        (format!(" {}  │", msg), t!("editor.hint_insert_multi_msg"))
                     } else {
                         (String::new(), t!("editor.hint_insert_multi"))
                     }
@@ -535,7 +540,7 @@ impl Editor {
                     // result (`status_msg`) on the message row — otherwise a
                     // successful query shows no feedback while staying here.
                     if let Some(ref msg) = self.status_msg {
-                        (format!(" ✦ {}  │", msg), hint)
+                        (format!(" {}  │", msg), hint)
                     } else {
                         (String::new(), hint)
                     }
@@ -558,7 +563,7 @@ impl Editor {
                         caret = Some(prompt_caret_col(" nfe:", buf, pos));
                         let hint = format!("{}  {}", prompt, t!("editor.hint_nfe_cmd_actions"));
                         if let Some(ref msg) = self.status_msg {
-                            (format!(" ✦ {}  │", msg), hint)
+                            (format!(" {}  │", msg), hint)
                         } else {
                             (String::new(), hint)
                         }
@@ -567,7 +572,7 @@ impl Editor {
                     // `status_msg`, so it must be surfaced here or the
                     // confirmation never appears.
                     None => match self.status_msg {
-                        Some(ref msg) => (format!(" ✦ {}  │", msg), t!("editor.hint_nfe")),
+                        Some(ref msg) => (format!(" {}  │", msg), t!("editor.hint_nfe")),
                         None => (String::new(), t!("editor.hint_nfe")),
                     },
                 },
@@ -583,12 +588,7 @@ impl Editor {
         let hint_bg = theme.editor.hint_bg.to_crossterm();
 
         if !status_line.is_empty() {
-            let trimmed = if status_line.len() > avail_w {
-                let byte_end = status_line.floor_char_boundary(avail_w);
-                &status_line[..byte_end]
-            } else {
-                &status_line
-            };
+            let trimmed = truncate_visible(&status_line, avail_w);
             queue!(
                 stdout,
                 MoveTo(x_offset as u16, msg_y as u16),
@@ -600,12 +600,7 @@ impl Editor {
             )?;
         }
 
-        let hint_trimmed = if hint.len() > avail_w {
-            let byte_end = hint.floor_char_boundary(avail_w);
-            &hint[..byte_end]
-        } else {
-            &hint
-        };
+        let hint_trimmed = truncate_visible(&hint, avail_w);
 
         let ghost_fg = if use_color {
             theme.editor.gutter_text.to_crossterm()

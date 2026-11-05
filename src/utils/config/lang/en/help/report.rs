@@ -54,7 +54,8 @@ pub fn fill(m: &mut HashMap<String, String>) {
 
     m.insert(
         "help.report.txtc".into(),
-        "txtc <file> ## Copy file content to clipboard".into(),
+        "txtc [--line|--no-line] <file> ## Copy file content to clipboard (line numbers on/off)"
+            .into(),
     );
 
     m.insert("help.report.txtf".into(), "txtf [--head N|--tail N|--betw A:B] [--line|--no-line] [file|dir|@tp/file|@tp/dir] ## Display file content or pick a file from a directory (--line/--no-line override the line-number setting)".into());
@@ -101,6 +102,6 @@ pub fn fill(m: &mut HashMap<String, String>) {
 
     m.insert(
         "help.report.example4".into(),
-        "txtc file.txt ## Copy file content to clipboard".into(),
+        "txtc --no-line file.txt ## Copy without line numbers".into(),
     );
 }

@@ -28,7 +28,7 @@ pub fn fill(m: &mut HashMap<String, String>) {
 
     m.insert(
         "help.other.tutorial".into(),
-        "tutorial ## 启动交互式分步教程".into(),
+        "tutorial [课程] ## 在沙盒中动手实践的课程 (cd, view, ne, ral, ran)".into(),
     );
 
     m.insert("help.other.ui".into(), "ui ## 显示当前UI模式".into());

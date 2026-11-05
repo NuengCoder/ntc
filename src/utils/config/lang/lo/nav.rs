@@ -5,7 +5,7 @@ pub fn fill(m: &mut HashMap<String, String>) {
 
     m.insert("nav.cancelled".into(), "ຖືກຍົກເລີກ.".into());
 
-    m.insert("nav.config_exists".into(), " \u{2713} ມີໄຟລ໌ config ຢູ່".into());
+    m.insert("nav.config_exists".into(), " ມີໄຟລ໌ config ຢູ່".into());
 
     m.insert(
         "nav.drive_prompt".into(),

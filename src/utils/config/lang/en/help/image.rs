@@ -1,9 +1,16 @@
 use std::collections::HashMap;
 
 pub fn fill(m: &mut HashMap<String, String>) {
+    m.insert("help.image.title".into(), "IMAGE COMMANDS:".into());
+
     m.insert(
-        "help.image.convert".into(),
-        "image <path> to <fmt> ## Convert and display output (json|md|html|txt|desc)".into(),
+        "help.image.interactive".into(),
+        "image ## Pick an image from the current dir and show it inline".into(),
+    );
+
+    m.insert(
+        "help.image.open".into(),
+        "image <path> ## Show the image inline (same as display)".into(),
     );
 
     m.insert(
@@ -22,39 +29,12 @@ pub fn fill(m: &mut HashMap<String, String>) {
     );
 
     m.insert(
-        "help.image.interactive".into(),
-        "image ## Interactive image converter (pick from current dir)".into(),
-    );
-
-    m.insert(
-        "help.image.layout".into(),
-        "image <path> --layout ## Enable UI layout detection".into(),
-    );
-
-    m.insert(
-        "help.image.ocr".into(),
-        "image <path> --ocr ## Enable OCR text extraction".into(),
-    );
-
-    m.insert(
-        "help.image.open".into(),
-        "image <path> ## Open image in default viewer".into(),
-    );
-
-    m.insert(
-        "help.image.save".into(),
-        "image <path> out <fmt> ## Convert and save to setO path".into(),
-    );
-
-    m.insert("help.image.title".into(), "IMAGE COMMANDS:".into());
-
-    m.insert(
         "help.image.example1".into(),
-        "image screenshot.png to json ## Convert image to JSON for AI".into(),
+        "image screenshot.png ## Show an image inline".into(),
     );
 
     m.insert(
         "help.image.example2".into(),
-        "image photo.jpg --ocr ## Extract text from image via OCR".into(),
+        "image display photo.jpg --sixel ## Force sixel rendering".into(),
     );
 }

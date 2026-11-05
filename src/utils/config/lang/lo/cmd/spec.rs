@@ -23,6 +23,8 @@ pub fn fill(m: &mut HashMap<String, String>) {
 
     m.insert("cmd.spec.total".into(), "ລວມ".into());
 
+    m.insert("cmd.spec.free".into(), "ຫວ່າງ".into());
+
     m.insert("cmd.spec.os".into(), "ລະບົບປະຕິບັດການ".into());
 
     m.insert("cmd.spec.manufacturer".into(), "ຜູ້ຜະລິດ".into());

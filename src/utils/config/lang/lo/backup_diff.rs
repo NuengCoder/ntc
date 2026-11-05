@@ -41,6 +41,6 @@ pub fn fill(m: &mut HashMap<String, String>) {
 
     m.insert(
         "backup_diff.select_title".into(),
-        "\u{1F4CA} ເລືອກ backup ເພື່ອປຽບທຽບກັບໂຄງການປັດຈຸບັນ".into(),
+        "ເລືອກ backup ເພື່ອປຽບທຽບກັບໂຄງການປັດຈຸບັນ".into(),
     );
 }

@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: 'Version to publish (e.g. v2.4.7). Only used for manual runs.'
+        description: 'Version to publish (e.g. v2.4.8). Only used for manual runs.'
         required: false
         default: ''
 
@@ -103,6 +103,70 @@ jobs:
           files: release-assets/*
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          
+  build-wheels:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+            manylinux: "2_28"
+            artifact: linux-x64
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+            artifact: win-x64
+          - os: macos-15
+            target: x86_64-apple-darwin
+            artifact: macos-x64
+          - os: macos-latest
+            target: aarch64-apple-darwin
+            artifact: macos-arm64
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: ntc_web/package-lock.json
+      - name: Build frontend (required by build.rs)
+        run: |
+          cd ntc_web && npm ci && npm run build
+          cd ../ntc_chess_web && npm ci && npm run build
+      - uses: PyO3/maturin-action@v1
+        with:
+          command: build
+          target: ${{ matrix.target }}
+          manylinux: ${{ matrix.manylinux || 'auto' }}
+          args: --release --out dist
+          # ALSA + other native libs for rodio / printpdf on Linux
+          before-script-linux: |
+            if command -v apt-get >/dev/null; then
+              apt-get update
+              apt-get install -y libasound2-dev libssl-dev pkg-config
+            fi
+      - uses: actions/upload-artifact@v4
+        with:
+          name: wheel-${{ matrix.artifact }}
+          path: dist/*.whl
+
+  publish-pypi:
+    needs: [build-wheels]
+    if: startsWith(github.ref, 'refs/tags/')
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write   # trusted publishing
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: wheels
+          pattern: wheel-*
+          merge-multiple: true
+      - uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          packages-dir: wheels/
+          # skip-existing: true
 
   publish-npm:
     needs: [release]

@@ -652,7 +652,8 @@ fn cmd_cp(tokens: &[String], nav: &mut Navigator) -> Result<bool> {
     }
     let cwd = nav.current_path().to_path_buf();
     let resolve_local = |s: &str| -> PathBuf {
-        let p = Path::new(s);
+        let expanded = crate::utils::paths::expand_path_str(s);
+        let p = Path::new(&expanded);
         if p.is_absolute() {
             p.to_path_buf()
         } else {

@@ -10,12 +10,13 @@ pub fn fill(m: &mut HashMap<String, String>) {
 
     m.insert(
         "dns.help.opt_type".into(),
-        "  -t, --type <type> ประเภทระเบียน: A, AAAA, ALL, MX, NS, CNAME เป็นต้น (ค่าเริ่มต้น A)".into(),
+        "  -t, --type <type> ประเภทระเบียน: A, AAAA, MX, NS, CNAME, TXT, PTR, SOA, ALL (ค่าเริ่มต้น A)"
+            .into(),
     );
 
     m.insert(
         "dns.help.opt_type_sub".into(),
-        "  MX/NS/CNAME/etc ใช้ dig/nslookup ของระบบ".into(),
+        "  ระเบียนที่ไม่ใช่ A ใช้ DNS client ในตัว (dig/nslookup เฉพาะกรณีสำรอง)".into(),
     );
 
     m.insert("dns.help.options".into(), "ตัวเลือก:".into());

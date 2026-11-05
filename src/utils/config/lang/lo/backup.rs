@@ -14,7 +14,7 @@ pub fn fill(m: &mut HashMap<String, String>) {
 
     m.insert(
         "backup.clear_history_prompt".into(),
-        "\u{26A0} ລຶບ undo history? ອັນນີ້ບໍ່ສາມາດກັບຄືນໄດ້. (y/N):".into(),
+        "ລຶບ undo history? ອັນນີ້ບໍ່ສາມາດກັບຄືນໄດ້. (y/N):".into(),
     );
 
     m.insert("backup.cleared".into(), "ລຶບ backup ທັງໝົດແລ້ວ.".into());
@@ -225,10 +225,7 @@ pub fn fill(m: &mut HashMap<String, String>) {
         " 3. ສ້າງ backup ສົດຂອງສະພາບປັດຈຸບັນ".into(),
     );
 
-    m.insert(
-        "backup.recreate_will_title".into(),
-        "\u{26A0}\u{FE0F} RECREATE ຈະ:".into(),
-    );
+    m.insert("backup.recreate_will_title".into(), "RECREATE ຈະ:".into());
 
     m.insert(
         "backup.recreated".into(),
@@ -246,12 +243,12 @@ pub fn fill(m: &mut HashMap<String, String>) {
 
     m.insert(
         "backup.restore_create_title".into(),
-        "\u{26A0} ໄຟລ໌ຕໍ່ໄປນີ້ຈະຖືກສ້າງ ({}):".into(),
+        "ໄຟລ໌ຕໍ່ໄປນີ້ຈະຖືກສ້າງ ({}):".into(),
     );
 
     m.insert(
         "backup.restore_delete_title".into(),
-        "\u{26A0} ໄຟລ໌ຕໍ່ໄປນີ້ຈະຖືກລຶບ (ບໍ່ຢູ່ໃນ backup) ({}):".into(),
+        "ໄຟລ໌ຕໍ່ໄປນີ້ຈະຖືກລຶບ (ບໍ່ຢູ່ໃນ backup) ({}):".into(),
     );
 
     m.insert(
@@ -273,7 +270,7 @@ pub fn fill(m: &mut HashMap<String, String>) {
 
     m.insert(
         "backup.restore_overwrite_title".into(),
-        "\u{26A0} ໄຟລ໌ຕໍ່ໄປນີ້ຈະຖືກຂຽນທັບ ({}):".into(),
+        "ໄຟລ໌ຕໍ່ໄປນີ້ຈະຖືກຂຽນທັບ ({}):".into(),
     );
 
     m.insert(
@@ -435,7 +432,7 @@ pub fn fill(m: &mut HashMap<String, String>) {
 
     m.insert(
         "backup.warning_title".into(),
-        "\u{26A0}\u{FE0F} ຄຳເຕືອນ: ອັນນີ້ຈະລຶບ backup ທັງໝົດຂອງໂຄງການນີ້!".into(),
+        "ຄຳເຕືອນ: ອັນນີ້ຈະລຶບ backup ທັງໝົດຂອງໂຄງການນີ້!".into(),
     );
 
     m.insert(

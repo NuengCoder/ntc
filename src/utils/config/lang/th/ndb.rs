@@ -362,6 +362,16 @@ pub fn fill(m: &mut HashMap<String, String>) {
 
     m.insert("ndb.dbal_note".into(), "alias เก็บเฉพาะคิวรีอ่านอย่างเดียว; การเขียนถูกปฏิเสธ พิมพ์ชื่อ alias เพื่อทำ ค่าแทนที่ตามตัวอักษร — ใส่เครื่องหมายคำพูดสำหรับสตริงเอง: dbal run q \"'2026-01-01'\"".into());
 
+    m.insert("ndb.dbal_hint_note".into(), "การเติมข้อความ: dbal add q \"SELECT * FROM $t WHERE id = $id\" #t --hint-table #id --hint-table-col-name [table] ใช้ได้เฉพาะ --hint-table และ --hint-table-col-name ที่นี่ ซึ่ง hinter ของ ndb จะแก้ไขโดยอิงจากฐานข้อมูลที่เปิดอยู่".into());
+
+    m.insert("ndb.dbal_hints".into(), "คำใบ้: {}".into());
+
+    m.insert(
+        "ndb.dbal_bad_hint".into(),
+        "คำใบ้พารามิเตอร์ไม่ถูกต้อง ({}) ใช้ #param --hint-table หรือ #param --hint-table-col-name [table]"
+            .into(),
+    );
+
     m.insert("ndb.dbal_params".into(), "พารามิเตอร์: {}".into());
 
     m.insert("ndb.dbal_missing_args".into(), "ขาดค่าพารามิเตอร์: {}".into());

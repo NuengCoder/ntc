@@ -10,5 +10,5 @@ pub(crate) fn install_opencode(
     _source: &PackageSource,
     _vdir: &Path,
 ) -> Result<()> {
-    npm_guide::print_npm_guide("opencode", "opencode-ai")
+    npm_guide::print_npm_guide("opencode", "@opencode/cli")
 }

@@ -159,6 +159,99 @@ pub fn sq_name(sq: u8) -> String {
     )
 }
 
+/// FEN for `pos`. `fullmove` is the 1-based move number (opening = 1);
+/// [`Position`] does not track it, so the caller supplies it.
+pub fn to_fen(pos: &Position, fullmove: u32) -> String {
+    let mut board = String::with_capacity(90);
+    for rank in (0..8u8).rev() {
+        let mut empty = 0u8;
+        for file in 0..8u8 {
+            match pos.board[sq_at(file, rank) as usize] {
+                Some(Piece { kind, color }) => {
+                    if empty > 0 {
+                        board.push((b'0' + empty) as char);
+                        empty = 0;
+                    }
+                    let ch = match kind {
+                        Kind::Pawn => 'p',
+                        Kind::Knight => 'n',
+                        Kind::Bishop => 'b',
+                        Kind::Rook => 'r',
+                        Kind::Queen => 'q',
+                        Kind::King => 'k',
+                    };
+                    board.push(match color {
+                        Color::White => ch.to_ascii_uppercase(),
+                        Color::Black => ch,
+                    });
+                }
+                None => empty += 1,
+            }
+        }
+        if empty > 0 {
+            board.push((b'0' + empty) as char);
+        }
+        if rank > 0 {
+            board.push('/');
+        }
+    }
+
+    let turn = match pos.turn {
+        Color::White => 'w',
+        Color::Black => 'b',
+    };
+
+    let mut castle = String::new();
+    if pos.castle & WK != 0 {
+        castle.push('K');
+    }
+    if pos.castle & WQ != 0 {
+        castle.push('Q');
+    }
+    if pos.castle & BK != 0 {
+        castle.push('k');
+    }
+    if pos.castle & BQ != 0 {
+        castle.push('q');
+    }
+    if castle.is_empty() {
+        castle.push('-');
+    }
+
+    let ep = pos.ep.map(sq_name).unwrap_or_else(|| "-".to_string());
+
+    format!(
+        "{} {} {} {} {} {}",
+        board, turn, castle, ep, pos.halfmove, fullmove
+    )
+}
+
+/// Parse a UCI move (`"e2e4"`, `"e7e8q"`) into a fully legal engine move.
+/// Engine output is never trusted: the move must exist in
+/// [`legal_moves_for`] with the same promotion.
+pub fn move_from_uci(pos: &Position, uci: &str) -> Option<Move> {
+    let s = uci.trim();
+    if !s.is_ascii() || (s.len() != 4 && s.len() != 5) {
+        return None;
+    }
+    let from = parse_sq(&s[0..2])?;
+    let to = parse_sq(&s[2..4])?;
+    let promo = if s.len() == 5 {
+        match s.as_bytes()[4].to_ascii_lowercase() {
+            b'q' => Some(Kind::Queen),
+            b'r' => Some(Kind::Rook),
+            b'b' => Some(Kind::Bishop),
+            b'n' => Some(Kind::Knight),
+            _ => return None,
+        }
+    } else {
+        None
+    };
+    legal_moves_for(pos, from)
+        .into_iter()
+        .find(|m| m.to == to && m.promo == promo)
+}
+
 pub fn initial_position() -> Position {
     let mut board: [Option<Piece>; 64] = [None; 64];
     let back = [
@@ -2452,6 +2545,75 @@ mod tests {
             hot.contains(&parse_sq("e3").unwrap()),
             "open file must be 2v1 hot: {:?}",
             hot
+        );
+    }
+
+    #[test]
+    fn fen_initial_and_after_e4() {
+        let pos = initial_position();
+        assert_eq!(
+            to_fen(&pos, 1),
+            "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"
+        );
+
+        let mut pos = initial_position();
+        play(&mut pos, "e2", "e4", None);
+        assert_eq!(
+            to_fen(&pos, 1),
+            "rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq e3 0 1"
+        );
+        play(&mut pos, "e7", "e5", None);
+        assert_eq!(
+            to_fen(&pos, 2),
+            "rnbqkbnr/pppp1ppp/8/4p3/4P3/8/PPPP1PPP/RNBQKBNR w KQkq e6 0 2"
+        );
+    }
+
+    #[test]
+    fn fen_tracks_castling_rights_and_ep_window() {
+        let mut pos = initial_position();
+        play(&mut pos, "g1", "f3", None);
+        play(&mut pos, "g8", "f6", None);
+        play(&mut pos, "e2", "e4", None);
+        play(&mut pos, "d7", "d5", None);
+        // White can capture en passant on d6; the FEN carries the target.
+        assert!(to_fen(&pos, 3).contains(" w KQkq d6 "));
+        play(&mut pos, "e4", "e5", None);
+        play(&mut pos, "f6", "g8", None);
+        play(&mut pos, "g2", "g3", None);
+        play(&mut pos, "g8", "f6", None);
+        assert!(to_fen(&pos, 5).contains(" w KQkq - "));
+
+        // King move clears both white rights.
+        let mut pos = initial_position();
+        play(&mut pos, "e2", "e4", None);
+        play(&mut pos, "e7", "e5", None);
+        play(&mut pos, "e1", "e2", None);
+        assert!(to_fen(&pos, 2).contains(" b kq "));
+    }
+
+    #[test]
+    fn uci_move_parsing_accepts_legal_and_rejects_junk() {
+        let pos = initial_position();
+        assert_eq!(move_from_uci(&pos, "e2e4"), Some(mv("e2", "e4")));
+        assert_eq!(move_from_uci(&pos, "e2e5"), None);
+        assert_eq!(move_from_uci(&pos, "a1a8"), None);
+        assert_eq!(move_from_uci(&pos, "e2e4 ponder"), None);
+        assert_eq!(move_from_uci(&pos, "0000"), None);
+
+        let mut pos = empty_pos(Color::White);
+        put(&mut pos, "a7", Kind::Pawn, Color::White);
+        assert_eq!(
+            move_from_uci(&pos, "a7a8q"),
+            Some(Move {
+                from: parse_sq("a7").unwrap(),
+                to: parse_sq("a8").unwrap(),
+                promo: Some(Kind::Queen),
+            })
+        );
+        assert_eq!(
+            move_from_uci(&pos, "a7a8n").unwrap().promo,
+            Some(Kind::Knight)
         );
     }
 }

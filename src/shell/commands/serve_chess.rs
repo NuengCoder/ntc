@@ -4,9 +4,10 @@
 //! reserved in `chess.db` for the online phase). REST + polling like
 //! the other serve services; no `--auth` by design.
 
+use super::chess_bot::{self, BotManager, UciEngine};
 use super::chess_engine::{
     self, apply_move, in_check, initial_position, legal_moves_for, parse_sq, sq_name, to_san,
-    Color, Kind, Piece, Position, Status,
+    Color, Kind, Move, Piece, Position, Status,
 };
 use super::serve::{
     json_error, json_ok, parse_query, print_share_block, response_bytes, spawn_cloudflared,
@@ -48,6 +49,8 @@ const SETTING_DEFAULTS: &[(&str, &str)] = &[
     ("sfx.win", "80"),
     ("sfx.lose", "80"),
     ("chess.tc", "10+0"),
+    ("chess.highlight.pinned", "on"),
+    ("chess.highlight.danger", "on"),
 ];
 
 fn ensure_chess_db_at(path: &Path) -> Result<rusqlite::Connection> {
@@ -100,6 +103,22 @@ fn db_set_setting(db: &rusqlite::Connection, key: &str, value: &str) -> Result<(
 
 fn is_setting_key(key: &str) -> bool {
     SETTING_DEFAULTS.iter().any(|(k, _)| *k == key)
+}
+
+fn validate_setting(key: &str, value: &str) -> bool {
+    if !is_setting_key(key) {
+        return false;
+    }
+    if key.starts_with("sfx.") {
+        return value.parse::<u32>().is_ok_and(|n| n <= 100);
+    }
+    if key.starts_with("chess.highlight.") {
+        return value == "on" || value == "off";
+    }
+    if key == "chess.tc" {
+        return parse_tc(value).is_ok();
+    }
+    true
 }
 
 // ── Sessions (one game per device) ──────────────────────────────────────────
@@ -284,6 +303,17 @@ struct Snapshot {
     last_result: Option<(Option<Color>, String)>,
 }
 
+#[derive(Clone, Debug, Default)]
+pub enum GameMode {
+    #[default]
+    Human,
+    Bot {
+        bot_id: String,
+        level: String,
+        color: Color,
+    },
+}
+
 pub struct Game {
     pos: Position,
     moves: Vec<MoveRecord>,
@@ -297,6 +327,9 @@ pub struct Game {
     over: Option<EndState>,
     last_result: Option<(Option<Color>, String)>,
     history: Vec<Snapshot>,
+    mode: GameMode,
+    bot_busy: bool,
+    bot_engine: Arc<Mutex<Option<UciEngine>>>,
 }
 
 fn color_name(c: Color) -> &'static str {
@@ -354,6 +387,10 @@ fn parse_tc(spec: &str) -> Result<(Option<i64>, Option<i64>, i64, String)> {
 
 impl Game {
     pub fn new(tc_spec: &str) -> Result<Game> {
+        Self::new_with(tc_spec, GameMode::Human)
+    }
+
+    pub fn new_with(tc_spec: &str, mode: GameMode) -> Result<Game> {
         let (w, b, incr, label) = parse_tc(tc_spec)?;
         Ok(Game {
             pos: initial_position(),
@@ -368,6 +405,9 @@ impl Game {
             over: None,
             last_result: None,
             history: Vec::new(),
+            mode,
+            bot_busy: false,
+            bot_engine: Arc::new(Mutex::new(None)),
         })
     }
 
@@ -376,6 +416,52 @@ impl Game {
             Color::White => &mut self.white_ms,
             Color::Black => &mut self.black_ms,
         }
+    }
+
+    pub fn bot_color(&self) -> Option<Color> {
+        match &self.mode {
+            GameMode::Human => None,
+            GameMode::Bot { color, .. } => Some(*color),
+        }
+    }
+
+    pub fn is_bot_turn(&self) -> bool {
+        self.bot_color().is_some_and(|c| self.pos.turn == c)
+    }
+
+    pub fn mode_json(&self) -> (&'static str, serde_json::Value) {
+        match &self.mode {
+            GameMode::Human => ("human", serde_json::Value::Null),
+            GameMode::Bot {
+                bot_id,
+                level,
+                color,
+            } => {
+                let name = chess_bot::bot_def(bot_id)
+                    .map(|d| d.name)
+                    .unwrap_or(bot_id.as_str());
+                (
+                    "bot",
+                    serde_json::json!({
+                        "id": bot_id,
+                        "name": name,
+                        "level": level,
+                        "level_label": chess_bot::level_label(level),
+                        "color": color_short(*color),
+                    }),
+                )
+            }
+        }
+    }
+
+    /// Apply an engine reply. Re-validates the move against the rules
+    /// engine; never trusts UCI output blindly.
+    pub fn apply_bot_reply(&mut self, uci: &str) -> Result<(String, &'static str), String> {
+        if !self.is_bot_turn() {
+            return Err("not_bot_turn".to_string());
+        }
+        let mv = chess_engine::move_from_uci(&self.pos, uci).ok_or("illegal".to_string())?;
+        self.do_move(mv.from, mv.to, mv.promo)
     }
 
     /// Tick the side-to-move clock. Flag-fall ends the game immediately.
@@ -544,7 +630,12 @@ impl Game {
     }
 
     /// Fresh game. A live game abandoned this way forfeits: side to move loses.
+    /// `mode = None` preserves the current mode (New/Rematch in bot games).
     pub fn reset(&mut self, tc_spec: &str) -> Result<bool> {
+        self.reset_with(tc_spec, None)
+    }
+
+    pub fn reset_with(&mut self, tc_spec: &str, mode: Option<GameMode>) -> Result<bool> {
         let (w, b, incr, label) = parse_tc(tc_spec)?;
         let abandoned = self.over.is_none() && !self.moves.is_empty();
         if abandoned {
@@ -553,6 +644,7 @@ impl Game {
             });
         }
         let last_result = self.last_result.clone();
+        let mode = mode.unwrap_or_else(|| self.mode.clone());
         *self = Game {
             pos: initial_position(),
             moves: Vec::new(),
@@ -566,6 +658,9 @@ impl Game {
             over: None,
             last_result,
             history: Vec::new(),
+            mode,
+            bot_busy: false,
+            bot_engine: Arc::new(Mutex::new(None)),
         };
         Ok(abandoned)
     }
@@ -642,6 +737,7 @@ impl Game {
             .moves
             .last()
             .map(|m| serde_json::json!({"from": m.from, "to": m.to, "san": m.san}));
+        let (mode, bot) = self.mode_json();
         serde_json::to_vec(&serde_json::json!({
             "board": board,
             "turn": color_short(self.pos.turn),
@@ -658,6 +754,8 @@ impl Game {
             "hot": chess_engine::hanging_squares(&self.pos).iter().map(|s| sq_name(*s)).collect::<Vec<_>>(),
             "pinned": chess_engine::pinned_squares(&self.pos).iter().map(|s| sq_name(*s)).collect::<Vec<_>>(),
             "silver": chess_engine::silver_squares(&self.pos).iter().map(|s| sq_name(*s)).collect::<Vec<_>>(),
+            "mode": mode,
+            "bot": bot,
             "last_result": self.last_result.as_ref().map(|(w, r)| serde_json::json!({
                 "winner": w.map(color_name), "reason": r
             })),
@@ -699,6 +797,14 @@ fn parse_promo(s: &str) -> Option<Kind> {
         "N" => Some(Kind::Knight),
         _ => None,
     }
+}
+
+fn uci_from_move(mv: Move) -> String {
+    let mut out = format!("{}{}", sq_name(mv.from), sq_name(mv.to));
+    if let Some(kind) = mv.promo {
+        out.push_str(&kind.code().to_ascii_lowercase());
+    }
+    out
 }
 
 // ── Entry ─────────────────────────────────────────────────────────────────
@@ -787,6 +893,7 @@ pub fn cmd_serve_chess(args: &str, _nav: &mut Navigator) -> Result<bool> {
     }
 
     let db = Arc::new(Mutex::new(ensure_chess_db()?));
+    let bots = Arc::new(BotManager::new());
     let default_tc = {
         let guard = db.lock().unwrap_or_else(|e| e.into_inner());
         db_setting(&guard, "chess.tc")
@@ -822,10 +929,11 @@ pub fn cmd_serve_chess(args: &str, _nav: &mut Navigator) -> Result<bool> {
             Ok((stream, _)) => {
                 let sessions = sessions.clone();
                 let db = db.clone();
+                let bots = bots.clone();
                 let web = web.clone();
                 let shutdown = shutdown.clone();
                 std::thread::spawn(move || {
-                    handle_chess_connection(stream, sessions, db, web, shutdown)
+                    handle_chess_connection(stream, sessions, db, bots, web, shutdown)
                 });
             }
             Err(e) if e.kind() == std::io::ErrorKind::WouldBlock => {
@@ -887,6 +995,7 @@ fn handle_chess_connection(
     stream: TcpStream,
     sessions: Arc<ChessSessions>,
     db: Arc<Mutex<rusqlite::Connection>>,
+    bots: Arc<BotManager>,
     web: Option<PathBuf>,
     shutdown: Arc<AtomicBool>,
 ) {
@@ -998,7 +1107,7 @@ fn handle_chess_connection(
             // Per-device session: each browser owns an isolated hotseat game.
             let (game, new_cookie) =
                 sessions.session_for(cookie.as_deref().and_then(cookie_session_id));
-            let mut bytes = route_chess_api(&method, &path, &query, &body, &game, &db);
+            let mut bytes = route_chess_api(&method, &path, &query, &body, &game, &db, &bots);
             if let Some(id) = new_cookie {
                 bytes = inject_cookie(bytes, &id);
             }
@@ -1069,6 +1178,7 @@ fn route_chess_api(
     body: &[u8],
     game: &Arc<Mutex<Game>>,
     db: &Arc<Mutex<rusqlite::Connection>>,
+    bots: &Arc<BotManager>,
 ) -> Vec<u8> {
     match (method, path) {
         ("GET", "/api/chess/state") => {
@@ -1128,6 +1238,11 @@ fn route_chess_api(
             match (from, to) {
                 (Some(f), Some(t)) => {
                     let mut g = lock_game(game);
+                    if g.is_bot_turn() {
+                        return json_ok(
+                            serde_json::to_vec(&serde_json::json!({"error": "bot_turn"})).unwrap(),
+                        );
+                    }
                     match g.do_move(f, t, promo) {
                         Ok((san, sfx)) => {
                             let mut state: serde_json::Value =
@@ -1151,8 +1266,60 @@ fn route_chess_api(
                 .and_then(|x| x.as_str())
                 .unwrap_or("10+0")
                 .to_string();
+            let mode = match v.get("mode").and_then(|x| x.as_str()) {
+                Some("bot") => {
+                    let bot_id = v
+                        .get("bot")
+                        .and_then(|x| x.as_str())
+                        .unwrap_or("stockfish")
+                        .to_string();
+                    if chess_bot::bot_def(&bot_id).is_none() {
+                        return json_ok(
+                            serde_json::to_vec(&serde_json::json!({"error": "unknown_bot"}))
+                                .unwrap(),
+                        );
+                    }
+                    let level = v
+                        .get("level")
+                        .and_then(|x| x.as_str())
+                        .unwrap_or("normal")
+                        .to_string();
+                    if !chess_bot::level_valid(&level) {
+                        return json_ok(
+                            serde_json::to_vec(&serde_json::json!({"error": "bad_level"})).unwrap(),
+                        );
+                    }
+                    let ready = bots
+                        .status(&bot_id)
+                        .is_some_and(|s| s.phase == chess_bot::BotPhase::Ready);
+                    if !ready {
+                        return json_ok(
+                            serde_json::to_vec(&serde_json::json!({"error": "bot_not_installed"}))
+                                .unwrap(),
+                        );
+                    }
+                    let bot_color = match v.get("side").and_then(|x| x.as_str()) {
+                        Some("black") => Color::White,
+                        Some("random") => {
+                            if rand::random::<bool>() {
+                                Color::Black
+                            } else {
+                                Color::White
+                            }
+                        }
+                        _ => Color::Black,
+                    };
+                    Some(GameMode::Bot {
+                        bot_id,
+                        level,
+                        color: bot_color,
+                    })
+                }
+                Some("human") => Some(GameMode::Human),
+                _ => None,
+            };
             let mut g = lock_game(game);
-            match g.reset(&tc) {
+            match g.reset_with(&tc, mode) {
                 Ok(abandoned) => {
                     let mut state: serde_json::Value =
                         serde_json::from_slice(&g.state_json()).unwrap_or_default();
@@ -1162,6 +1329,183 @@ fn route_chess_api(
                 Err(e) => json_ok(
                     serde_json::to_vec(&serde_json::json!({"error": e.to_string()})).unwrap(),
                 ),
+            }
+        }
+        ("GET", "/api/chess/bots") => {
+            let list = bots.list();
+            json_ok(serde_json::to_vec(&serde_json::json!({"bots": list})).unwrap())
+        }
+        ("POST", "/api/chess/bots/install") => {
+            let v: serde_json::Value = serde_json::from_slice(body).unwrap_or_default();
+            let id = v.get("id").and_then(|x| x.as_str()).unwrap_or("");
+            match bots.install(id) {
+                Ok(()) => {
+                    let list = bots.list();
+                    json_ok(
+                        serde_json::to_vec(&serde_json::json!({
+                            "ok": true, "bots": list
+                        }))
+                        .unwrap(),
+                    )
+                }
+                Err(e) => json_ok(
+                    serde_json::to_vec(&serde_json::json!({"error": e.to_string()})).unwrap(),
+                ),
+            }
+        }
+        ("POST", "/api/chess/bots/uninstall") => {
+            let v: serde_json::Value = serde_json::from_slice(body).unwrap_or_default();
+            let id = v.get("id").and_then(|x| x.as_str()).unwrap_or("");
+            match bots.uninstall(id) {
+                Ok(()) => {
+                    let list = bots.list();
+                    json_ok(
+                        serde_json::to_vec(&serde_json::json!({
+                            "ok": true, "bots": list
+                        }))
+                        .unwrap(),
+                    )
+                }
+                Err(e) => json_ok(
+                    serde_json::to_vec(&serde_json::json!({"error": e.to_string()})).unwrap(),
+                ),
+            }
+        }
+        ("POST", "/api/chess/bots/select") => {
+            let v: serde_json::Value = serde_json::from_slice(body).unwrap_or_default();
+            let id = v.get("id").and_then(|x| x.as_str()).unwrap_or("");
+            let engine = v.get("engine").and_then(|x| x.as_str()).unwrap_or("");
+            match bots.select(id, engine) {
+                Ok(()) => {
+                    let list = bots.list();
+                    json_ok(
+                        serde_json::to_vec(&serde_json::json!({
+                            "ok": true, "bots": list
+                        }))
+                        .unwrap(),
+                    )
+                }
+                Err(e) => json_ok(
+                    serde_json::to_vec(&serde_json::json!({"error": e.to_string()})).unwrap(),
+                ),
+            }
+        }
+        ("POST", "/api/chess/bot-move") => {
+            let v: serde_json::Value = serde_json::from_slice(body).unwrap_or_default();
+            let client_ply = v.get("ply").and_then(|x| x.as_u64()).map(|n| n as usize);
+            let (slot, bin, fen, level, expected) = {
+                let mut g = lock_game(game);
+                if let Some(ply) = client_ply {
+                    if ply != g.moves.len() {
+                        return json_ok(
+                            serde_json::to_vec(&serde_json::json!({"error": "stale_ply"})).unwrap(),
+                        );
+                    }
+                }
+                let (bot_id, level, bot_color) = match &g.mode {
+                    GameMode::Bot {
+                        bot_id,
+                        level,
+                        color,
+                    } => (bot_id.clone(), level.clone(), *color),
+                    GameMode::Human => {
+                        return json_ok(
+                            serde_json::to_vec(&serde_json::json!({"error": "not_bot_game"}))
+                                .unwrap(),
+                        )
+                    }
+                };
+                if g.over.is_some() {
+                    return json_ok(g.state_json());
+                }
+                if g.bot_busy {
+                    return json_ok(
+                        serde_json::to_vec(&serde_json::json!({"error": "bot_busy"})).unwrap(),
+                    );
+                }
+                if g.pos.turn != bot_color {
+                    return json_ok(
+                        serde_json::to_vec(&serde_json::json!({"error": "not_bot_turn"})).unwrap(),
+                    );
+                }
+                let bin = match bots.status(&bot_id) {
+                    Some(s) if s.phase == chess_bot::BotPhase::Ready => s.binary,
+                    _ => None,
+                };
+                let Some(bin) = bin else {
+                    return json_ok(
+                        serde_json::to_vec(&serde_json::json!({"error": "bot_not_installed"}))
+                            .unwrap(),
+                    );
+                };
+                g.bot_busy = true;
+                g.tick();
+                if g.over.is_some() {
+                    g.bot_busy = false;
+                    return json_ok(g.state_json());
+                }
+                let fullmove = (g.moves.len() / 2 + 1) as u32;
+                (
+                    g.bot_engine.clone(),
+                    bin,
+                    chess_engine::to_fen(&g.pos, fullmove),
+                    level,
+                    g.moves.len(),
+                )
+            };
+
+            let engine_result: std::result::Result<String, String> = (|| {
+                let mut guard = slot.lock().unwrap_or_else(|e| e.into_inner());
+                if guard.is_none() {
+                    let mut engine = UciEngine::spawn(&bin).map_err(|e| format!("{:#}", e))?;
+                    engine.handshake().map_err(|e| format!("{:#}", e))?;
+                    engine.configure(&level).map_err(|e| format!("{:#}", e))?;
+                    *guard = Some(engine);
+                }
+                guard
+                    .as_mut()
+                    .unwrap()
+                    .best_move(&fen, &level)
+                    .map_err(|e| format!("{:#}", e))
+            })();
+            if engine_result.is_err() {
+                // Drop the broken process; the next move gets a fresh one.
+                let mut guard = slot.lock().unwrap_or_else(|e| e.into_inner());
+                *guard = None;
+            }
+
+            let mut g = lock_game(game);
+            g.bot_busy = false;
+            if g.moves.len() != expected || !g.is_bot_turn() {
+                return json_ok(g.state_json());
+            }
+            let (uci, fallback) = match engine_result {
+                Ok(mv) => (mv, false),
+                Err(e) => {
+                    eprintln!("[chess] bot engine error: {}", e);
+                    let legal = chess_engine::all_legal(&g.pos);
+                    if legal.is_empty() {
+                        return json_ok(g.state_json());
+                    }
+                    let mv = legal[rand::random::<u64>() as usize % legal.len()];
+                    (uci_from_move(mv), true)
+                }
+            };
+            match g.apply_bot_reply(&uci) {
+                Ok((san, sfx)) => {
+                    let mut state: serde_json::Value =
+                        serde_json::from_slice(&g.state_json()).unwrap_or_default();
+                    state["san"] = serde_json::Value::String(san);
+                    state["sfx"] = serde_json::Value::String(sfx.to_string());
+                    state["bot_move"] = serde_json::Value::Bool(true);
+                    if fallback {
+                        state["bot_fallback"] = serde_json::Value::Bool(true);
+                    }
+                    json_ok(serde_json::to_vec(&state).unwrap())
+                }
+                Err(code) => {
+                    json_ok(serde_json::to_vec(&serde_json::json!({"error": code})).unwrap())
+                }
             }
         }
         ("POST", "/api/chess/resign") => {
@@ -1245,14 +1589,8 @@ fn route_chess_api(
             };
             let key = v.get("key").and_then(|x| x.as_str()).unwrap_or("");
             let value = v.get("value").and_then(|x| x.as_str()).unwrap_or("");
-            if !is_setting_key(key) {
+            if !validate_setting(key, value) {
                 return json_error(400);
-            }
-            if key.starts_with("sfx.") {
-                match value.parse::<u32>() {
-                    Ok(n) if n <= 100 => {}
-                    _ => return json_error(400),
-                }
             }
             let conn = lock_db(db);
             match db_set_setting(&conn, key, value) {
@@ -1596,11 +1934,104 @@ mod tests {
         assert_eq!(db_setting(&conn, "sfx.move"), "80");
         assert_eq!(db_setting(&conn, "sfx.check"), "80");
         assert_eq!(db_setting(&conn, "chess.tc"), "10+0");
+        assert_eq!(db_setting(&conn, "chess.highlight.pinned"), "on");
+        assert_eq!(db_setting(&conn, "chess.highlight.danger"), "on");
         db_set_setting(&conn, "sfx.move", "42").unwrap();
         assert_eq!(db_setting(&conn, "sfx.move"), "42");
+        db_set_setting(&conn, "chess.highlight.pinned", "off").unwrap();
+        db_set_setting(&conn, "chess.highlight.danger", "off").unwrap();
+        assert_eq!(db_setting(&conn, "chess.highlight.pinned"), "off");
+        assert_eq!(db_setting(&conn, "chess.highlight.danger"), "off");
         assert!(!is_setting_key("nope"));
         assert!(is_setting_key("sfx.win"));
         assert!(is_setting_key("sfx.check"));
+    }
+
+    #[test]
+    fn validate_setting_accepts_toggles_and_rejects_junk() {
+        assert!(validate_setting("chess.highlight.pinned", "on"));
+        assert!(validate_setting("chess.highlight.pinned", "off"));
+        assert!(validate_setting("chess.highlight.danger", "off"));
+        assert!(!validate_setting("chess.highlight.pinned", "0"));
+        assert!(!validate_setting("chess.highlight.danger", "true"));
+        assert!(!validate_setting("chess.highlight.unknown", "on"));
+        // Existing keys keep their own rules.
+        assert!(validate_setting("sfx.move", "0"));
+        assert!(validate_setting("sfx.move", "100"));
+        assert!(!validate_setting("sfx.move", "101"));
+        assert!(!validate_setting("sfx.move", "loud"));
+        assert!(validate_setting("chess.tc", "5+3"));
+        assert!(validate_setting("chess.tc", "unlimited"));
+        assert!(!validate_setting("chess.tc", "0+0"));
+        assert!(!validate_setting("chess.tc", "abc"));
+        assert!(!validate_setting("nope", "on"));
+    }
+
+    #[test]
+    fn state_json_reports_hotseat_mode() {
+        let mut g = game();
+        let state: serde_json::Value = serde_json::from_slice(&g.state_json()).unwrap();
+        assert_eq!(state["mode"], "human");
+        assert!(state["bot"].is_null());
+    }
+
+    #[test]
+    fn bot_mode_tracks_color_and_applies_engine_replies() {
+        let mut g = Game::new_with(
+            "10+0",
+            GameMode::Bot {
+                bot_id: "stockfish".to_string(),
+                level: "normal".to_string(),
+                color: Color::Black,
+            },
+        )
+        .unwrap();
+        assert_eq!(g.bot_color(), Some(Color::Black));
+        // Human (White) starts, so it is not the bot's turn yet.
+        assert!(!g.is_bot_turn());
+        assert_eq!(g.apply_bot_reply("e7e5"), Err("not_bot_turn".to_string()));
+
+        g.do_move(parse_sq("e2").unwrap(), parse_sq("e4").unwrap(), None)
+            .unwrap();
+        assert!(g.is_bot_turn());
+        // Illegal UCI is rejected by the rules engine, not trusted.
+        assert_eq!(g.apply_bot_reply("e7e4"), Err("illegal".to_string()));
+        assert_eq!(g.moves.len(), 1);
+        // A legal reply lands normally with SAN + clock bookkeeping.
+        let (san, _) = g.apply_bot_reply("e7e5").unwrap();
+        assert_eq!(san, "e5");
+        assert_eq!(g.moves.len(), 2);
+
+        let state: serde_json::Value = serde_json::from_slice(&g.state_json()).unwrap();
+        assert_eq!(state["mode"], "bot");
+        assert_eq!(state["bot"]["id"], "stockfish");
+        assert_eq!(state["bot"]["level"], "normal");
+        assert_eq!(state["bot"]["color"], "b");
+        assert_eq!(state["bot"]["name"], "Stockfish");
+
+        // Rematch keeps the bot mode when no new mode is supplied.
+        assert!(g.reset_with("10+0", None).is_ok());
+        assert_eq!(g.bot_color(), Some(Color::Black));
+        assert_eq!(g.moves.len(), 0);
+    }
+
+    #[test]
+    fn bot_mode_resolves_side_choice() {
+        // Bot playing White means the bot moves first from the opening.
+        let g = Game::new_with(
+            "5+0",
+            GameMode::Bot {
+                bot_id: "stockfish".to_string(),
+                level: "hard".to_string(),
+                color: Color::White,
+            },
+        )
+        .unwrap();
+        assert!(g.is_bot_turn());
+        let (mode, bot) = g.mode_json();
+        assert_eq!(mode, "bot");
+        assert_eq!(bot["color"], "w");
+        assert_eq!(bot["level"], "hard");
     }
 
     #[test]
@@ -1745,10 +2176,11 @@ mod tests {
         let db = Arc::new(Mutex::new(
             ensure_chess_db_at(&dir.path().join("c.db")).unwrap(),
         ));
+        let bots = Arc::new(BotManager::new());
         let shutdown = Arc::new(AtomicBool::new(false));
         let handle = std::thread::spawn(move || {
             let (stream, _) = listener.accept().unwrap();
-            handle_chess_connection(stream, sessions, db, None, shutdown);
+            handle_chess_connection(stream, sessions, db, bots, None, shutdown);
         });
 
         let mut sock = std::net::TcpStream::connect(("127.0.0.1", port)).unwrap();

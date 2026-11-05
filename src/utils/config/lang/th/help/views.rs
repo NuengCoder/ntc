@@ -27,6 +27,11 @@ pub fn fill(m: &mut HashMap<String, String>) {
     );
 
     m.insert(
+        "help.views.trim".into(),
+        "views --trim <ข้อความ> ## ลบข้อความออกจากชื่อและตัวคั่นกลุ่ม ... (ใช้ซ้ำได้ คงสีไว้)".into(),
+    );
+
+    m.insert(
         "help.views.note".into(),
         "ไม่มีแท็ก [Directory]/[ignored] - สีบอกชนิดของรายการ ความลึกคงที่ที่ 1 และคำนวณขนาดด้วยความหมายของ --care เสมอ ใช้ --size เพื่อแสดงขนาด".into(),
     );

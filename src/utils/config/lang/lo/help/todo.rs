@@ -28,6 +28,26 @@ pub fn fill(m: &mut HashMap<String, String>) {
         "todo ## ສະແດງວຽກທັງໝົດ (ຈາກ future_todo.txt ໃນ CWD)".into(),
     );
 
+    m.insert(
+        "help.todo.move".into(),
+        "todo move <N> <M> ## ຍ້າຍລາຍການທີ່ N ໄປຕຳແໜ່ງ M".into(),
+    );
+
+    m.insert(
+        "help.todo.replace".into(),
+        "todo replace <N> <M> ## ສະຫຼັບລາຍການທີ່ N ກັບ M".into(),
+    );
+
+    m.insert(
+        "help.todo.example4".into(),
+        "todo mv 5 1 ## ຍ້າຍລາຍການທີ່ 5 ຂຶ້ນເທິງສຸດ".into(),
+    );
+
+    m.insert(
+        "help.todo.example5".into(),
+        "todo rp 5 1 ## ສະຫຼັບລາຍການທີ່ 5 ກັບ 1".into(),
+    );
+
     m.insert("help.todo.title".into(), "ຄຳສັ່ງ TODO:".into());
 
     m.insert(

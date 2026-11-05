@@ -3,27 +3,27 @@ use std::collections::HashMap;
 pub fn fill(m: &mut HashMap<String, String>) {
     m.insert(
         "help.explorer.hint1".into(),
-        "h=help, l=go to line, b=parent dir, f=find".into(),
+        "h=help, b=parent dir, f=find (hits show their paths)".into(),
     );
 
     m.insert(
         "help.explorer.hint2".into(),
-        "/=filter, e=editor, r=rename, d=delete".into(),
+        "g/:=command (file|dir|line), /=live filter, e=editor".into(),
     );
 
     m.insert(
         "help.explorer.hint3".into(),
-        "n=new file, m=new dir, i=hidden toggle".into(),
+        "r=rename, d=delete, n=new file, m=new dir, i=hidden toggle".into(),
     );
 
     m.insert(
         "help.explorer.hint4".into(),
-        "s/sort toggle, S=sort reverse, F5=refresh".into(),
+        "s=sort mode, S=sort direction (dirs too), F5=refresh".into(),
     );
 
     m.insert(
         "help.explorer.hint5".into(),
-        "q/Esc=quit, mouse=click/scroll".into(),
+        "find: type/Backspace=query, Tab=hjkl/arrows, Enter=open, Esc=back".into(),
     );
 
     m.insert(

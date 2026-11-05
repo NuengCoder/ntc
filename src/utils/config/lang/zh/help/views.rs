@@ -27,6 +27,11 @@ pub fn fill(m: &mut HashMap<String, String>) {
     );
 
     m.insert(
+        "help.views.trim".into(),
+        "views --trim <文本> ## 从名称和 ... 分组分隔符中移除文本（可重复，保留颜色）".into(),
+    );
+
+    m.insert(
         "help.views.note".into(),
         "没有 [Directory]/[ignored] 标签 —— 颜色表示类型。深度固定为 1，大小始终按 --care 语义计算。使用 --size 显示大小。".into(),
     );

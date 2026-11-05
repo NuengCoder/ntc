@@ -3,12 +3,12 @@ use std::collections::HashMap;
 pub fn fill(m: &mut HashMap<String, String>) {
     m.insert(
         "help.network.dl".into(),
-        "dl <url> ## 下载文件（--progress, --resume, --stop, --cancel）".into(),
+        "dl <url> ## 下载文件（--resume, --stop, --history, --cancel）".into(),
     );
 
     m.insert(
         "help.network.dns".into(),
-        "dns <主机> ## DNS查询（-t 记录类型：A, AAAA, ALL, MX, NS 等）".into(),
+        "dns <主机> ## DNS查询（-t A, AAAA, MX, NS, CNAME, TXT, PTR, SOA, ALL）".into(),
     );
 
     m.insert(
@@ -51,7 +51,7 @@ pub fn fill(m: &mut HashMap<String, String>) {
 
     m.insert(
         "help.network.up".into(),
-        "up <文件> <url> ## 上传文件（--post, -H, -d）".into(),
+        "up <文件> <url> ## 上传文件（默认 multipart POST；--put, --raw, -a, --bearer, -F, -H, -d）".into(),
     );
 
     m.insert(
@@ -66,7 +66,7 @@ pub fn fill(m: &mut HashMap<String, String>) {
 
     m.insert(
         "help.network.example3".into(),
-        "dl https://example.com/file.zip --progress ## 下载并显示进度".into(),
+        "dl https://example.com/file.zip ## 下载并显示进度".into(),
     );
 
     m.insert(
@@ -82,5 +82,15 @@ pub fn fill(m: &mut HashMap<String, String>) {
     m.insert(
         "help.network.example6".into(),
         "serve files --port 8080 ## 在端口 8080 启动文件网盘服务器".into(),
+    );
+    m.insert(
+        "help.network.trace".into(),
+        "trace <主机> [-m N] [-w 毫秒] ## 逐跳路由追踪（tracert/traceroute，回退 TTL 探测）".into(),
+    );
+
+    m.insert(
+        "help.network.ping_flags".into(),
+        "ping <主机> [-c N] [--forever] [-w 毫秒] [-s 字节] [-t TTL] [-4|-6] ## 带参数的 ICMP ping"
+            .into(),
     );
 }

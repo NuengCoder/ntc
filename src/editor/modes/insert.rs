@@ -106,9 +106,9 @@ impl Editor {
                             self.focus = crate::editor::Focus::Editor;
                             self.mark_all_dirty();
                         } else {
-                            let (tw, th) = crate::editor::helpers::term_size();
-                            // Fixed 50% of the editor text field.
-                            let term_h = (th / 2) as u16;
+                            let (tw, th) = self.terminal_pty_size();
+                            // The PTY grid must be the panel's content size.
+                            let term_h = th;
                             let cwd = std::env::current_dir()
                                 .unwrap_or_else(|_| std::path::PathBuf::from("."));
                             match crate::editor::terminal::TerminalState::spawn_ntc_shell(

@@ -271,6 +271,8 @@ pub fn detect_language(ext: &str) -> Option<SyntaxLanguage> {
         "igcare" => Some(SyntaxLanguage::NtcIgcare),
         "math" => Some(SyntaxLanguage::NtcMath),
         "ntc_theme" => Some(SyntaxLanguage::NtcTheme),
+        // `.ntc_fake` bundles are TOML (or JSON) tables.
+        "ntc_fake" => Some(SyntaxLanguage::Dotenv),
 
         "iss" => Some(SyntaxLanguage::InnoSetup),
         "lock" => Some(SyntaxLanguage::LockFile),

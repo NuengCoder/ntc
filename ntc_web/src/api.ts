@@ -59,59 +59,145 @@ export function listFiles(path: string): Promise<FilesResponse> {
   return api(`/api/files?path=${encodeURIComponent(p)}`)
 }
 
-export function downloadFile(id: number, filename: string, onProgress?: (pct: number) => void): Promise<void> {
-  // XHR (not fetch-blob) so download progress is visible in the Files UI.
-  // Sends the Basic header when `serve --auth` is on; server always sends
-  // Content-Length so e.total is known.
-  return new Promise((resolve, reject) => {
-    const xhr = new XMLHttpRequest()
-    xhr.open('GET', API + `/api/download?id=${id}`)
-    xhr.responseType = 'blob'
-    const creds = sessionStorage.getItem(CRED_KEY)
-    if (creds) xhr.setRequestHeader('Authorization', `Basic ${creds}`)
-    xhr.onprogress = (e) => {
-      if (e.lengthComputable && onProgress) {
-        onProgress(Math.round((e.loaded / e.total) * 100))
-      }
-    }
-    xhr.onload = () => {
-      if (xhr.status === 401) notifyUnauthorized()
-      if (xhr.status < 200 || xhr.status >= 300) {
-        const text = typeof xhr.response === 'string' ? xhr.response : `HTTP ${xhr.status}`
-        reject(new ApiError(typeof text === 'string' ? text : `HTTP ${xhr.status}`, xhr.status))
-        return
-      }
-      const blob = xhr.response as Blob
-      const url = URL.createObjectURL(blob)
-      const a = document.createElement('a')
-      a.href = url
-      a.download = filename
-      document.body.appendChild(a)
-      a.click()
-      a.remove()
-      setTimeout(() => URL.revokeObjectURL(url), 5000)
-      if (onProgress) onProgress(100)
-      resolve()
-    }
-    xhr.onerror = () => reject(new Error('Network error'))
-    xhr.ontimeout = () => reject(new Error('Download timed out'))
-    xhr.send()
-  })
+// Stable, shareable link for a file inside the share root. `/download/root`
+// mirrors the `/root/...` browse URL: `/root/hello.c` downloads from
+// `/download/root/hello.c`.
+export function shareUrl(filePath: string): string {
+  return API + '/download/root' + encodeURI(filePath)
 }
 
-// Plain-link URL for browser-native progress (download tray).
-// Without --auth it's just /api/download?id=..; with --auth it mints a
-// short-lived ?token=.. so the link works without the Basic header.
-export async function getNativeDownloadUrl(id: number): Promise<string> {
+export interface DownloadHandle {
+  pause: () => void
+  resume: () => void
+  cancel: () => void
+  done: Promise<void>
+}
+
+// In-app download with real pause/resume: the body is read as a stream, so
+// pausing keeps the bytes already received and resuming asks the server for
+// the rest with `Range: bytes=<received>-`.
+export function startDownload(
+  filePath: string,
+  name: string,
+  onProgress: (pct: number) => void,
+): DownloadHandle {
+  const chunks: Uint8Array[] = []
+  let received = 0
+  let paused = false
+  let cancelled = false
+  let controller: AbortController | null = null
+  let settled = false
+  let resolveDone: () => void = () => {}
+  let rejectDone: (e: Error) => void = () => {}
+  const done = new Promise<void>((resolve, reject) => {
+    resolveDone = resolve
+    rejectDone = reject
+  })
+
+  function finish(err?: Error) {
+    if (settled) return
+    settled = true
+    if (err) rejectDone(err)
+    else resolveDone()
+  }
+
+  function save() {
+    const blob = new Blob(chunks as BlobPart[])
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = name
+    document.body.appendChild(a)
+    a.click()
+    a.remove()
+    setTimeout(() => URL.revokeObjectURL(url), 5000)
+  }
+
+  // One request. Resolves true when the whole file has arrived, false when
+  // the server sent a shorter range and another request is needed.
+  async function fetchOnce(): Promise<boolean> {
+    const ctrl = new AbortController()
+    controller = ctrl
+    const headers: Record<string, string> = { ...authHeaders() }
+    if (received > 0) headers['Range'] = `bytes=${received}-`
+    const res = await fetch(shareUrl(filePath), { headers, signal: ctrl.signal })
+    if (res.status === 401) notifyUnauthorized()
+    if (!res.ok && res.status !== 206) {
+      throw new ApiError(`HTTP ${res.status}`, res.status)
+    }
+    const cr = res.headers.get('Content-Range')
+    const cl = res.headers.get('Content-Length')
+    const total = cr
+      ? parseInt((/\/(\d+)\s*$/.exec(cr) || [])[1] || '0', 10)
+      : received + (cl ? parseInt(cl, 10) : 0)
+    const reader = res.body?.getReader()
+    if (!reader) throw new Error('Streaming is not supported by this browser')
+    for (;;) {
+      const { done: end, value } = await reader.read()
+      if (end) break
+      if (value) {
+        chunks.push(value)
+        received += value.byteLength
+        if (total > 0) onProgress(Math.min(100, Math.floor((received / total) * 100)))
+      }
+    }
+    return total === 0 || received >= total
+  }
+
+  async function pump() {
+    while (!paused && !cancelled) {
+      try {
+        if (await fetchOnce()) {
+          onProgress(100)
+          save()
+          finish()
+          return
+        }
+      } catch (e: any) {
+        // An abort is a pause/cancel, not a failure.
+        if (paused || cancelled) return
+        finish(e instanceof Error ? e : new Error(String(e)))
+        return
+      }
+    }
+  }
+
+  void pump()
+
+  return {
+    pause: () => {
+      if (settled) return
+      paused = true
+      controller?.abort()
+    },
+    resume: () => {
+      if (settled || !paused) return
+      paused = false
+      void pump()
+    },
+    cancel: () => {
+      if (settled) return
+      cancelled = true
+      controller?.abort()
+      finish(new Error('cancelled'))
+    },
+    done,
+  }
+}
+
+// Plain-link URL for browser-native progress (download tray). Without
+// --auth it is the share link itself; with --auth a short-lived id token is
+// appended so the link works without the Basic header.
+export async function getNativeDownloadUrl(filePath: string, id: number): Promise<string> {
   if (!hasCredentials()) {
-    return API + `/api/download?id=${id}`
+    return shareUrl(filePath)
   }
   const res = await api<{ token: string; url: string }>(`/api/download-token`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ id }),
   })
-  return API + res.url
+  return `${shareUrl(filePath)}?id=${id}&token=${encodeURIComponent(res.token)}`
 }
 
 const CHUNK_SIZE = 80 * 1024 * 1024 // 80 MB, keeps each request under the tunnel's ~100 MB cap

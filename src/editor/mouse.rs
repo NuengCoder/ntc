@@ -1,6 +1,6 @@
 use crossterm::event::{MouseButton, MouseEvent, MouseEventKind};
 
-use super::{col_to_byte, gutter_width, Editor, Focus};
+use super::{display_col_to_byte, gutter_width, Editor, Focus};
 use crate::t;
 
 impl Editor {
@@ -77,7 +77,11 @@ impl Editor {
         }
         let text_col = editor_c - gw;
         let scroll_col = self.sv.x + text_col;
-        let byte = col_to_byte(&self.lines[line_idx], scroll_col);
+        let byte = display_col_to_byte(
+            &self.lines[line_idx],
+            scroll_col,
+            self.editor_cfg.tab_size.max(1),
+        );
         Some((line_idx, byte))
     }
 
@@ -124,7 +128,7 @@ impl Editor {
                     }
                 }
 
-                // Tab bar: far-right X closes all tabs, per-tab ✕ closes
+                // Tab bar: far-right X closes all tabs, per-tab closes
                 // that tab, and clicking the rest of a tab switches to it
                 // without changing the current mode.
                 if (m.row as usize) < tab_bar_h && col >= eo {

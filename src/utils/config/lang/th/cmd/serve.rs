@@ -159,6 +159,25 @@ pub fn fill(m: &mut HashMap<String, String>) {
         "cmd.serve.lock_on".into(),
         "โหมดอ่านอย่างเดียว (--lock): บล็อกอัปโหลด แก้ไข สร้าง และลบแล้ว".into(),
     );
+    m.insert(
+        "cmd.serve.url_web".into(),
+        "หน้าเว็บ:      {}  (เรียกดู + ลากไฟล์มาอัปโหลด)".into(),
+    );
+
+    m.insert(
+        "cmd.serve.url_upload".into(),
+        "อัปโหลด:      {}  (POST multipart, ฟิลด์ 'file')".into(),
+    );
+
+    m.insert(
+        "cmd.serve.url_download".into(),
+        "ดาวน์โหลด:    {}  (ต่อด้วยเส้นทางไฟล์)".into(),
+    );
+
+    m.insert(
+        "cmd.serve.url_info".into(),
+        "ข้อมูล:       {}  (คืออะไร + ตัวอย่าง curl/wget/ntc)".into(),
+    );
 
     m.insert("cmd.serve.invalid_port".into(), "พอร์ตไม่ถูกต้อง".into());
 

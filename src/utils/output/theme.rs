@@ -56,7 +56,7 @@ pub fn print_success(msg: &str) {
     drop(theme);
     println!(
         "{} {}",
-        c.paint_ansi_bold(icon("✓", "+")),
+        c.paint_ansi_bold(icon("+", "+")),
         c.paint_ansi(msg)
     );
 }
@@ -68,7 +68,7 @@ pub fn print_error(msg: &str) {
     drop(theme);
     eprintln!(
         "{} {}",
-        c.paint_ansi_bold(icon("✗", "x")),
+        c.paint_ansi_bold(icon("x", "x")),
         c.paint_ansi(msg)
     );
 }
@@ -78,7 +78,7 @@ pub fn print_info(msg: &str) {
     let theme = crate::utils::theme::ThemeManager::current();
     let c = theme.shell.info.clone();
     drop(theme);
-    println!("{} {}", c.paint_ansi(icon("ℹ", "i")), c.paint_ansi(msg));
+    println!("{} {}", c.paint_ansi("i"), c.paint_ansi(msg));
 }
 
 /// Print warning message using theme color (unified raw-ANSI on every OS).
@@ -86,5 +86,5 @@ pub fn print_warning(msg: &str) {
     let theme = crate::utils::theme::ThemeManager::current();
     let c = theme.shell.warning.clone();
     drop(theme);
-    println!("{} {}", c.paint_ansi(icon("⚠", "!")), c.paint_ansi(msg));
+    println!("{} {}", c.paint_ansi(icon("!", "!")), c.paint_ansi(msg));
 }

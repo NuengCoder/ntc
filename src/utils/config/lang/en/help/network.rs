@@ -3,12 +3,12 @@ use std::collections::HashMap;
 pub fn fill(m: &mut HashMap<String, String>) {
     m.insert(
         "help.network.dl".into(),
-        "dl <url> ## Download file (--progress, --resume, --stop, --cancel)".into(),
+        "dl <url> ## Download file (--resume, --stop, --history, --cancel)".into(),
     );
 
     m.insert(
         "help.network.dns".into(),
-        "dns <host> ## DNS lookup (-t record type: A, AAAA, ALL, MX, NS, etc)".into(),
+        "dns <host> ## DNS lookup (-t A, AAAA, MX, NS, CNAME, TXT, PTR, SOA, ALL)".into(),
     );
 
     m.insert(
@@ -51,7 +51,8 @@ pub fn fill(m: &mut HashMap<String, String>) {
 
     m.insert(
         "help.network.up".into(),
-        "up <file> <url> ## Upload file (--post, -H, -d)".into(),
+        "up <file> <url> ## Upload file (multipart POST; --put, --raw, -a, --bearer, -F, -H, -d)"
+            .into(),
     );
 
     m.insert(
@@ -66,7 +67,7 @@ pub fn fill(m: &mut HashMap<String, String>) {
 
     m.insert(
         "help.network.example3".into(),
-        "dl https://example.com/file.zip --progress ## Download with progress".into(),
+        "dl https://example.com/file.zip ## Download with progress".into(),
     );
 
     m.insert(
@@ -82,5 +83,15 @@ pub fn fill(m: &mut HashMap<String, String>) {
     m.insert(
         "help.network.example6".into(),
         "serve files --port 8080 ## Start files drive server on port 8080".into(),
+    );
+    m.insert(
+        "help.network.trace".into(),
+        "trace <host> [-m N] [-w MS] ## Hop-by-hop route (tracert/traceroute, TTL-walk fallback)"
+            .into(),
+    );
+
+    m.insert(
+        "help.network.ping_flags".into(),
+        "ping <host> [-c N] [--forever] [-w MS] [-s BYTES] [-t TTL] [-4|-6] ## ICMP echo with flags".into(),
     );
 }

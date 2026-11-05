@@ -90,6 +90,7 @@ fn fetch_available_versions(name: &str) -> Result<Vec<String>> {
         "tesseract" => vec!["latest".to_string()],
         "freebuff" => vec!["latest".to_string()],
         "nginx" => fetch_nginx_versions()?,
+        "stockfish" => fetch_stockfish_versions()?,
         _ => vec![],
     };
 
@@ -144,6 +145,7 @@ pub fn get_source(name: &str, version: &str) -> Option<PackageSource> {
         "imagemagick" => imagemagick_source(version),
         "tesseract" => tesseract_source(version),
         "nginx" => nginx_source(version),
+        "stockfish" => stockfish_source(version),
         "opencode" | "mimocode" | "kilocode" | "omniroute" | "vscode" | "freebuff" => {
             Some(PackageSource {
                 name: name.to_string(),
@@ -199,6 +201,7 @@ pub fn list_supported_languages() -> Vec<&'static str> {
         "imagemagick",
         "tesseract",
         "nginx",
+        "stockfish",
     ]
 }
 
@@ -244,6 +247,7 @@ pub fn list_packages_with_descriptions() -> Vec<(&'static str, String)> {
         ("imagemagick", t!("ntpkg.src_imagemagick")),
         ("tesseract", t!("ntpkg.src_tesseract")),
         ("nginx", t!("ntpkg.src_nginx")),
+        ("stockfish", t!("ntpkg.src_stockfish")),
     ]
 }
 
@@ -380,6 +384,156 @@ fn platform_nginx_archive() -> ArchiveType {
     {
         ArchiveType::TarGz
     }
+}
+
+// ── Stockfish (UCI chess engine) ─────────────────────────────────────
+
+fn fetch_stockfish_versions() -> Result<Vec<String>> {
+    let url = "https://api.github.com/repos/official-stockfish/Stockfish/releases?per_page=100";
+    let response = ureq::get(url)
+        .header("User-Agent", "ntc")
+        .call()
+        .context("Failed to fetch Stockfish versions from GitHub")?;
+
+    let mut body = response.into_body();
+    let mut raw = String::new();
+    body.as_reader()
+        .read_to_string(&mut raw)
+        .context("Failed to read GitHub response body")?;
+
+    let releases: Vec<serde_json::Value> =
+        serde_json::from_str(&raw).context("Failed to parse GitHub releases JSON")?;
+
+    let mut versions: Vec<String> = Vec::new();
+    for release in releases {
+        let tag = release["tag_name"].as_str().unwrap_or("");
+        // Release tags look like `sf_19` / `sf_17.1`; development
+        // snapshots (`stockfish-dev-...`) are intentionally skipped.
+        let Some(stripped) = tag.strip_prefix("sf_") else {
+            continue;
+        };
+        if is_stockfish_valid_version(stripped) && !versions.iter().any(|v| v == stripped) {
+            versions.push(stripped.to_string());
+        }
+    }
+
+    versions.sort_by(|a, b| {
+        let a_parts: Vec<u32> = a.split('.').filter_map(|p| p.parse().ok()).collect();
+        let b_parts: Vec<u32> = b.split('.').filter_map(|p| p.parse().ok()).collect();
+        b_parts.cmp(&a_parts)
+    });
+
+    Ok(versions)
+}
+
+fn is_stockfish_valid_version(s: &str) -> bool {
+    if s.is_empty() {
+        return false;
+    }
+    let parts: Vec<&str> = s.split('.').collect();
+    if parts.len() > 2 {
+        return false;
+    }
+    parts
+        .iter()
+        .all(|p| !p.is_empty() && p.chars().all(|c| c.is_ascii_digit()))
+}
+
+fn stockfish_major(version: &str) -> u32 {
+    version
+        .split('.')
+        .next()
+        .and_then(|p| p.parse().ok())
+        .unwrap_or(0)
+}
+
+/// Release asset name for a platform. Stockfish 19 and newer publish
+/// universal binaries; older releases ship one binary per CPU feature set.
+fn stockfish_asset_name(
+    os: &str,
+    arch: &str,
+    major: u32,
+    avx2: bool,
+    bmi2: bool,
+) -> Option<&'static str> {
+    if major >= 19 {
+        return match (os, arch) {
+            ("windows", "x86_64") => Some("stockfish-windows-x86-64-universal.zip"),
+            ("windows", "aarch64") => Some("stockfish-windows-arm64-universal.zip"),
+            ("linux", "x86_64") => Some("stockfish-linux-x86-64-universal.tar.gz"),
+            ("linux", "aarch64") => Some("stockfish-linux-arm64-universal.tar.gz"),
+            ("macos", _) => Some("stockfish-macos-universal.tar.gz"),
+            _ => None,
+        };
+    }
+
+    match (os, arch) {
+        ("windows", "x86_64") if avx2 => Some("stockfish-windows-x86-64-avx2.zip"),
+        ("windows", "x86_64") if bmi2 => Some("stockfish-windows-x86-64-bmi2.zip"),
+        ("windows", "x86_64") => Some("stockfish-windows-x86-64.zip"),
+        ("windows", "aarch64") => Some("stockfish-windows-armv8.zip"),
+        ("linux", "x86_64") if avx2 => Some("stockfish-ubuntu-x86-64-avx2.tar"),
+        ("linux", "x86_64") if bmi2 => Some("stockfish-ubuntu-x86-64-bmi2.tar"),
+        ("linux", "x86_64") => Some("stockfish-ubuntu-x86-64.tar"),
+        ("macos", "aarch64") => Some("stockfish-macos-m1-apple-silicon.tar"),
+        ("macos", "x86_64") if avx2 => Some("stockfish-macos-x86-64-avx2.tar"),
+        ("macos", "x86_64") => Some("stockfish-macos-x86-64.tar"),
+        _ => None,
+    }
+}
+
+fn stockfish_archive_for(name: &str) -> ArchiveType {
+    let n = name.to_ascii_lowercase();
+    if n.ends_with(".zip") {
+        ArchiveType::Zip
+    } else if n.ends_with(".tar.gz") || n.ends_with(".tgz") {
+        ArchiveType::TarGz
+    } else {
+        ArchiveType::Tar
+    }
+}
+
+#[cfg(target_arch = "x86_64")]
+fn stockfish_cpu_features() -> (bool, bool) {
+    (
+        std::is_x86_feature_detected!("avx2"),
+        std::is_x86_feature_detected!("bmi2"),
+    )
+}
+
+#[cfg(not(target_arch = "x86_64"))]
+fn stockfish_cpu_features() -> (bool, bool) {
+    (false, false)
+}
+
+fn stockfish_source(version: &str) -> Option<PackageSource> {
+    let major = stockfish_major(version);
+    let key = manager::platform_key();
+    let (os, arch) = key.split_once('-')?;
+    let (avx2, bmi2) = stockfish_cpu_features();
+
+    let mut urls = HashMap::new();
+    if let Some(name) = stockfish_asset_name(os, arch, major, avx2, bmi2) {
+        urls.insert(
+            key.clone(),
+            format!(
+                "https://github.com/official-stockfish/Stockfish/releases/download/sf_{version}/{name}"
+            ),
+        );
+    }
+
+    let archive_type = urls
+        .get(&key)
+        .map(|u| stockfish_archive_for(u))
+        .unwrap_or(ArchiveType::Zip);
+
+    Some(PackageSource {
+        name: "stockfish".to_string(),
+        version: version.to_string(),
+        urls,
+        sha256: HashMap::new(),
+        archive_type,
+    })
 }
 
 fn python_source(version: &str) -> Option<PackageSource> {
@@ -3192,6 +3346,109 @@ mod tests {
     /// Regression test for `ntpkg install python 3.14.5` failing with
     /// "Failed to write downloaded file": the source itself must resolve to
     /// a real python.org URL with the matching archive type.
+    #[test]
+    fn stockfish_versions_are_parsed_strictly() {
+        assert!(is_stockfish_valid_version("19"));
+        assert!(is_stockfish_valid_version("17.1"));
+        assert!(!is_stockfish_valid_version(""));
+        assert!(!is_stockfish_valid_version("dev-1"));
+        assert!(!is_stockfish_valid_version("17.1.2"));
+        assert!(!is_stockfish_valid_version("17."));
+        assert_eq!(stockfish_major("19"), 19);
+        assert_eq!(stockfish_major("17.1"), 17);
+    }
+
+    #[test]
+    fn stockfish_assets_follow_release_naming() {
+        // Stockfish 19+ ships universal binaries per OS.
+        assert_eq!(
+            stockfish_asset_name("windows", "x86_64", 19, false, false),
+            Some("stockfish-windows-x86-64-universal.zip")
+        );
+        assert_eq!(
+            stockfish_asset_name("windows", "aarch64", 19, false, false),
+            Some("stockfish-windows-arm64-universal.zip")
+        );
+        assert_eq!(
+            stockfish_asset_name("linux", "x86_64", 19, false, false),
+            Some("stockfish-linux-x86-64-universal.tar.gz")
+        );
+        assert_eq!(
+            stockfish_asset_name("linux", "aarch64", 19, false, false),
+            Some("stockfish-linux-arm64-universal.tar.gz")
+        );
+        assert_eq!(
+            stockfish_asset_name("macos", "x86_64", 19, false, false),
+            Some("stockfish-macos-universal.tar.gz")
+        );
+        assert_eq!(
+            stockfish_asset_name("macos", "aarch64", 19, false, false),
+            Some("stockfish-macos-universal.tar.gz")
+        );
+
+        // Older releases stay on the per-CPU asset names.
+        assert_eq!(
+            stockfish_asset_name("windows", "x86_64", 17, true, true),
+            Some("stockfish-windows-x86-64-avx2.zip")
+        );
+        assert_eq!(
+            stockfish_asset_name("windows", "x86_64", 17, false, true),
+            Some("stockfish-windows-x86-64-bmi2.zip")
+        );
+        assert_eq!(
+            stockfish_asset_name("windows", "x86_64", 17, false, false),
+            Some("stockfish-windows-x86-64.zip")
+        );
+        assert_eq!(
+            stockfish_asset_name("linux", "x86_64", 17, false, false),
+            Some("stockfish-ubuntu-x86-64.tar")
+        );
+        assert_eq!(
+            stockfish_asset_name("macos", "aarch64", 17, false, false),
+            Some("stockfish-macos-m1-apple-silicon.tar")
+        );
+        assert_eq!(
+            stockfish_asset_name("macos", "x86_64", 17, false, false),
+            Some("stockfish-macos-x86-64.tar")
+        );
+        // No prebuilt Linux arm64 engine before the universal builds.
+        assert_eq!(
+            stockfish_asset_name("linux", "aarch64", 17, false, false),
+            None
+        );
+
+        assert_eq!(
+            stockfish_archive_for("stockfish-windows-x86-64-universal.zip"),
+            ArchiveType::Zip
+        );
+        assert_eq!(
+            stockfish_archive_for("stockfish-macos-universal.tar.gz"),
+            ArchiveType::TarGz
+        );
+        assert_eq!(
+            stockfish_archive_for("stockfish-ubuntu-x86-64.tar"),
+            ArchiveType::Tar
+        );
+    }
+
+    #[test]
+    fn stockfish_source_targets_current_platform() {
+        let src = stockfish_source("19").expect("stockfish source should resolve");
+        let key = manager::platform_key();
+        let Some(url) = src.urls.get(&key) else {
+            // Architectures without a prebuilt engine may stay empty.
+            return;
+        };
+        assert!(
+            url.starts_with(
+                "https://github.com/official-stockfish/Stockfish/releases/download/sf_19/"
+            ),
+            "unexpected stockfish URL: {url}"
+        );
+        assert!(url.contains("stockfish-"));
+        assert_eq!(src.archive_type, stockfish_archive_for(url));
+    }
+
     #[test]
     fn python_source_matches_platform_archive() {
         let src = python_source("3.14.5").expect("python source should resolve");

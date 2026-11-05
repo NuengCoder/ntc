@@ -3,17 +3,17 @@ use std::collections::HashMap;
 pub fn fill(m: &mut HashMap<String, String>) {
     m.insert(
         "help.search.ds".into(),
-        "ds <pattern> [-d <n>] ## Search directories by name".into(),
+        "ds <pattern> [-d <n>] [--no-fuzzy] ## Search directories by name (exact/partial only with --no-fuzzy)".into(),
     );
 
     m.insert(
         "help.search.fs".into(),
-        "fs <pattern> [-d <n>] ## Search files by name (fuzzy fallback)".into(),
+        "fs <pattern> [-d <n>] [--no-fuzzy] ## Search files by name (fuzzy fallback unless --no-fuzzy)".into(),
     );
 
     m.insert(
         "help.search.fsc".into(),
-        "fsc <pattern> [-d <n>] ## Search files, pick one to display & optionally copy".into(),
+        "fsc <pattern> [-d <n>] [--no-fuzzy] ## Search files, pick one to display & optionally copy".into(),
     );
 
     m.insert("help.search.gs".into(), "gs <pattern> [-p <glob>] [-s [line|path|size]] [-d <n>] [-l <n>] [-i] ## Search file contents (simple grep)".into());
@@ -25,7 +25,7 @@ pub fn fill(m: &mut HashMap<String, String>) {
 
     m.insert(
         "help.search.locate".into(),
-        "locate <pattern> [-d <n>] ## Search both files and directories".into(),
+        "locate <pattern> [-d <n>] [--no-fuzzy] ## Search both files and directories".into(),
     );
 
     m.insert(

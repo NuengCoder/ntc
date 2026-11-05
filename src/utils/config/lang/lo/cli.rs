@@ -19,7 +19,7 @@ pub fn fill(m: &mut HashMap<String, String>) {
 
     m.insert(
         "cli.example.image".into(),
-        " ntc -image screenshot.png to json ແປງຮູບພາບເປັນ JSON ສຳລັບ AI\n".into(),
+        " ntc -image display screenshot.png ສະແດງຮູບໃນ terminal\n".into(),
     );
 
     m.insert(
@@ -324,7 +324,7 @@ pub fn fill(m: &mut HashMap<String, String>) {
 
     m.insert("cli.helpers.basic_usage".into(), " ntc [OPTIONS]\n ntc -i <path> [-o <output>]\n ntc -i <path> --cp ສຳເນົາບົດລາຍງານໃສ່ clipboard\n".into());
 
-    m.insert("cli.helpers.cli_examples".into(), " ntc ເປີດ interactive shell\n ntc @web ເປີດ ແລະ teleport ໄປທີ່ savepoint 'web'\n ntc --math \"3+4*5\" ຄິດໄລ່ນິພົດຄະນິດສາດ\n ntc --math \"sin(PI/2)\" ຄະນິດສາດກັບຟັງຊັນ ແລະ ຄ່າຄົງທີ່\n ntc -i src ສ້າງບົດລາຍງານ TXT ຂອງໄດເຣັກທໍຣີ src\n ntc -i src --cp ສຳເນົາຕົ້ນໄມ້ໄດເຣັກທໍຣີໃສ່ clipboard\n ntc -i src -f json --cp ສຳເນົາບົດລາຍງານ JSON ໃສ່ clipboard\n ntc -i src -f pdf ສ້າງບົດລາຍງານ PDF ຈາກ src\n ntc -i src -f docx ສ້າງບົດລາຍງານ DOCX ຈາກ src\n ntc -i src -f xlsx ສ້າງບົດລາຍງານ XLSX (ພ້ອມການວິເຄາະ dependency)\n ntc -i file.txt ສະແດງເນື້ອໃນໄຟລ໌\n ntc --setL ON ເປີດໃຊ້ງານເບີແຖວ\n ntc --showcg ສະແດງການຕັ້ງຄ່າ\n ntc -say \"Hello World\" ພິມ Hello World\n ntc --watch ON ເປີດໃຊ້ງານ file watcher\n ntc -image screenshot.png to json ແປງຮູບພາບເປັນ JSON ສຳລັບ AI\n".into());
+    m.insert("cli.helpers.cli_examples".into(), " ntc ເປີດ interactive shell\n ntc @web ເປີດ ແລະ teleport ໄປທີ່ savepoint 'web'\n ntc --math \"3+4*5\" ຄິດໄລ່ນິພົດຄະນິດສາດ\n ntc --math \"sin(PI/2)\" ຄະນິດສາດກັບຟັງຊັນ ແລະ ຄ່າຄົງທີ່\n ntc -i src ສ້າງບົດລາຍງານ TXT ຂອງໄດເຣັກທໍຣີ src\n ntc -i src --cp ສຳເນົາຕົ້ນໄມ້ໄດເຣັກທໍຣີໃສ່ clipboard\n ntc -i src -f json --cp ສຳເນົາບົດລາຍງານ JSON ໃສ່ clipboard\n ntc -i src -f pdf ສ້າງບົດລາຍງານ PDF ຈາກ src\n ntc -i src -f docx ສ້າງບົດລາຍງານ DOCX ຈາກ src\n ntc -i src -f xlsx ສ້າງບົດລາຍງານ XLSX (ພ້ອມການວິເຄາະ dependency)\n ntc -i file.txt ສະແດງເນື້ອໃນໄຟລ໌\n ntc --setL ON ເປີດໃຊ້ງານເບີແຖວ\n ntc --showcg ສະແດງການຕັ້ງຄ່າ\n ntc -say \"Hello World\" ພິມ Hello World\n ntc --watch ON ເປີດໃຊ້ງານ file watcher\n ntc -image display screenshot.png ສະແດງຮູບໃນ terminal\n".into());
 
     m.insert("cli.helpers.config_header".into(), "ຕົວເລືອກການຕັ້ງຄ່າ:".into());
 
@@ -360,7 +360,7 @@ pub fn fill(m: &mut HashMap<String, String>) {
 
     m.insert("cli.helpers.report_options".into(), " -i, --input <path> ປະມວນຜົນໄຟລ໌ ຫຼື ໄດເຣັກທໍຣີ\n -o, --output <file> ບັນທຶກຜົນລັບໄປໃສ່ໄຟລ໌ທີ່ກຳນົດ\n -f, --format <FORMAT> ຮູບແບບຜົນລັບ: txt, html, json, md, pdf, docx, xlsx (ເລີ່ມຕົ້ນ: txt)\n --cp ສຳເນົາບົດລາຍງານໃສ່ clipboard ແທນການບັນທຶກເປັນໄຟລ໌\n --size ສະແດງຂະໜາດໄດເຣັກທໍຣີປັດຈຸບັນ\n --view ເບິ່ງຕົ້ນໄມ້ໄດເຣັກທໍຣີປັດຈຸບັນຢ່າງໄວ\n --view --size ເບິ່ງໄວພ້ອມຂະໜາດໄດເຣັກທໍຣີ\n".into());
 
-    m.insert("cli.helpers.shell_commands".into(), " ntc pathcp ສຳເນົາ path ໃສ່ clipboard\n ntc say \"hello\" --loop 3 ພິມຂໍ້ຄວາມດ້ວຍ loop\n ntc tl dir . ນັບແຖວໃນໄດເຣັກທໍຣີ\n ntc ne ເປີດ text editor\n ntc size ສະແດງຂະໜາດໄດເຣັກທໍຣີ\n ntc view ສະແດງຕົ້ນໄມ້ໄດເຣັກທໍຣີ\n ntc serve files --port 8080 ເລີ່ມ file-drive server ຢູ່ port 8080\n ntc dl https://example.com/file.zip --progress ດາວໂຫຼດພ້ອມ progress\n ntc encode b64 hello Base64 encode ສະຕຣິງ\n ntc qr \"text\" ສ້າງລະຫັດ QR ໃນ terminal\n ntc math 3+4*5 ຄິດໄລ່ນິພົດ\n ntc ral add btr \"cargo build --release\" ເພີ່ມ alias ຈາກ CLI\n".into());
+    m.insert("cli.helpers.shell_commands".into(), " ntc pathcp ສຳເນົາ path ໃສ່ clipboard\n ntc say \"hello\" --loop 3 ພິມຂໍ້ຄວາມດ້ວຍ loop\n ntc tl dir . ນັບແຖວໃນໄດເຣັກທໍຣີ\n ntc ne ເປີດ text editor\n ntc size ສະແດງຂະໜາດໄດເຣັກທໍຣີ\n ntc view ສະແດງຕົ້ນໄມ້ໄດເຣັກທໍຣີ\n ntc serve files --port 8080 ເລີ່ມ file-drive server ຢູ່ port 8080\n ntc dl https://example.com/file.zip ດາວໂຫຼດພ້ອມ progress\n ntc encode b64 hello Base64 encode ສະຕຣິງ\n ntc qr \"text\" ສ້າງລະຫັດ QR ໃນ terminal\n ntc math 3+4*5 ຄິດໄລ່ນິພົດ\n ntc ral add btr \"cargo build --release\" ເພີ່ມ alias ຈາກ CLI\n".into());
 
     m.insert(
         "cli.helpers.shell_header".into(),
@@ -951,7 +951,7 @@ pub fn fill(m: &mut HashMap<String, String>) {
 
     m.insert(
         "cli.shell_cmd.dl".into(),
-        " ntc dl https://example.com/file.zip --progress ດາວໂຫຼດພ້ອມ progress".into(),
+        " ntc dl https://example.com/file.zip ດາວໂຫຼດພ້ອມ progress".into(),
     );
 
     m.insert(

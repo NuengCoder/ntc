@@ -74,6 +74,26 @@ pub(crate) enum Mode {
     Nfe,
 }
 
+/// Layout inputs that decide how many rows/columns the text area has.
+///
+/// `render()` compares this frame-to-frame: when any of it changes (resize, run
+/// panel or sidebar opening, tab switch, overlay) every row is repainted,
+/// otherwise rows drawn under the previous geometry survive as ghost lines.
+#[derive(Clone, Copy, PartialEq, Eq, Default, Debug)]
+pub(crate) struct LayoutSig {
+    pub(crate) term_w: usize,
+    pub(crate) term_h: usize,
+    pub(crate) sv_x: usize,
+    pub(crate) sv_offset: usize,
+    pub(crate) sidebar_open: usize,
+    pub(crate) sidebar_cols: usize,
+    pub(crate) run_open: bool,
+    pub(crate) run_h: usize,
+    pub(crate) term_open: bool,
+    pub(crate) tab: usize,
+    pub(crate) overlay: bool,
+}
+
 /// Which panel has keyboard focus.
 #[derive(Clone, Copy, PartialEq, Debug)]
 pub(crate) enum Focus {
@@ -372,6 +392,21 @@ pub(crate) struct Sidebar {
     pub(crate) dir_cache: HashMap<PathBuf, (Instant, Vec<FileNode>, Vec<FileNode>)>,
     // Cache TTL in seconds (default: 5)
     pub(crate) cache_ttl_secs: u64,
+    /// Bumped whenever the flattened tree changes; part of the paint
+    /// signature so an unchanged sidebar can skip its repaint.
+    pub(crate) revision: u64,
+    /// Signature of the last painted sidebar frame (`None` = repaint).
+    pub(crate) last_paint_sig: Option<u64>,
+    /// Parsed `git status` for `root`, refreshed on a worker thread so the
+    /// paint path never blocks on a `git status` process spawn.
+    pub(crate) git_map: HashMap<PathBuf, char>,
+    pub(crate) git_revision: u64,
+    git_req: Option<std::sync::mpsc::Sender<PathBuf>>,
+    git_res: Option<std::sync::mpsc::Receiver<(PathBuf, HashMap<PathBuf, char>)>>,
+    git_inflight: bool,
+    /// Force the next `request_git_refresh` through the TTL.
+    git_stale: bool,
+    git_checked: Instant,
 }
 
 impl Sidebar {
@@ -391,6 +426,15 @@ impl Sidebar {
             _watcher: None,
             dir_cache: HashMap::new(),
             cache_ttl_secs: 5,
+            revision: 0,
+            last_paint_sig: None,
+            git_map: HashMap::new(),
+            git_revision: 0,
+            git_req: None,
+            git_res: None,
+            git_inflight: false,
+            git_stale: true,
+            git_checked: Instant::now(),
         };
         s.rebuild_tree();
         #[cfg(windows)]
@@ -425,6 +469,82 @@ impl Sidebar {
     /// or removing entries the cached rows are stale).
     pub(crate) fn invalidate_cache(&mut self) {
         self.dir_cache.clear();
+        self.git_stale = true;
+        self.last_paint_sig = None;
+    }
+
+    /// Drain the git worker. Returns true when a fresh map was applied
+    /// (the caller should repaint).
+    pub(crate) fn poll_git(&mut self) -> bool {
+        let Some(rx) = self.git_res.take() else {
+            return false;
+        };
+        let mut latest = None;
+        while let Ok(msg) = rx.try_recv() {
+            latest = Some(msg);
+        }
+        self.git_res = Some(rx);
+        let Some((dir, map)) = latest else {
+            return false;
+        };
+        self.git_inflight = false;
+        if dir != self.root {
+            return false;
+        }
+        self.git_map = map;
+        self.git_revision = self.git_revision.wrapping_add(1);
+        self.last_paint_sig = None;
+        true
+    }
+
+    /// Ask the git worker for a fresh status map when one may be due.
+    /// Cheap to call every loop turn: the worker is spawned once, and
+    /// `min_interval` throttles requests.
+    pub(crate) fn request_git_refresh(&mut self, min_interval: std::time::Duration) {
+        if self.git_inflight || (!self.git_stale && self.git_checked.elapsed() < min_interval) {
+            return;
+        }
+        if !crate::config::Config::global_get_git_integration_enabled() {
+            if !self.git_map.is_empty() {
+                self.git_map.clear();
+                self.git_revision = self.git_revision.wrapping_add(1);
+                self.last_paint_sig = None;
+            }
+            return;
+        }
+        if self.git_req.is_none() {
+            let (req_tx, req_rx) = std::sync::mpsc::channel::<PathBuf>();
+            let (res_tx, res_rx) =
+                std::sync::mpsc::channel::<(PathBuf, HashMap<PathBuf, char>)>();
+            let spawned = std::thread::Builder::new()
+                .name("ntc-git-status".to_string())
+                .spawn(move || {
+                    while let Ok(dir) = req_rx.recv() {
+                        let map = crate::utils::git::status_map(&dir);
+                        if res_tx.send((dir, map)).is_err() {
+                            break;
+                        }
+                    }
+                })
+                .is_ok();
+            if !spawned {
+                return;
+            }
+            self.git_req = Some(req_tx);
+            self.git_res = Some(res_rx);
+        }
+        let Some(tx) = &self.git_req else {
+            return;
+        };
+        if tx.send(self.root.clone()).is_ok() {
+            self.git_inflight = true;
+            self.git_stale = false;
+            self.git_checked = Instant::now();
+        } else {
+            self.git_req = None;
+            self.git_res = None;
+            self.git_inflight = false;
+        }
     }
 
     /// Check for directory changes and rebuild tree if needed.
@@ -447,7 +567,15 @@ impl Sidebar {
     }
 
     pub(crate) fn rebuild_tree(&mut self) {
-        self.root = std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from("."));
+        let root = std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from("."));
+        if root != self.root {
+            // A different tree: results for the old root would paint the
+            // wrong symbols (and hide the real ones).
+            self.root = root;
+            self.git_map.clear();
+            self.git_revision = self.git_revision.wrapping_add(1);
+            self.git_stale = true;
+        }
         // Save expanded directory paths before clearing
         let expanded: std::collections::HashSet<std::path::PathBuf> = self
             .nodes
@@ -496,6 +624,8 @@ impl Sidebar {
             i += 1;
         }
         self.selected = self.selected.min(self.nodes.len().saturating_sub(1));
+        self.revision = self.revision.wrapping_add(1);
+        self.last_paint_sig = None;
     }
 
     fn get_cached_children(
@@ -604,6 +734,8 @@ impl Sidebar {
         );
         let insert_at = idx + 1;
         self.nodes.splice(insert_at..insert_at, children);
+        self.revision = self.revision.wrapping_add(1);
+        self.last_paint_sig = None;
     }
 
     pub(crate) fn collapse(&mut self, idx: usize) {
@@ -617,6 +749,8 @@ impl Sidebar {
             remove_end += 1;
         }
         self.nodes.drain(idx + 1..remove_end);
+        self.revision = self.revision.wrapping_add(1);
+        self.last_paint_sig = None;
     }
 
     pub(crate) fn toggle_expand(&mut self, idx: usize) {
@@ -908,6 +1042,18 @@ pub(crate) struct Editor {
     // Dirty region tracking
     pub(crate) dirty_start: usize,
     pub(crate) dirty_end: usize,
+    /// Geometry of the last painted frame; see [`LayoutSig`].
+    pub(crate) layout_sig: LayoutSig,
+    /// Widest line in the buffer (display columns). Recomputed only when
+    /// the buffer length or path changes, then kept fresh from the lines
+    /// painted each frame — the horizontal scrollbar must not cost an
+    /// O(buffer) scan per keystroke.
+    pub(crate) max_line_width: usize,
+    pub(crate) max_line_width_path: std::path::PathBuf,
+    pub(crate) max_line_width_len: usize,
+    /// True while a full-screen overlay painted over the sidebar last
+    /// frame, so closing it forces one sidebar repaint.
+    pub(crate) overlay_was_active: bool,
 
     // Sub-structs for grouped state
     pub(crate) cursor: CursorState,
@@ -1078,6 +1224,11 @@ impl Editor {
             unsaved_guard: None,
             dirty_start: 0,
             dirty_end: 0,
+            layout_sig: LayoutSig::default(),
+            max_line_width: 0,
+            max_line_width_path: std::path::PathBuf::new(),
+            max_line_width_len: usize::MAX,
+            overlay_was_active: false,
             cursor: CursorState::new(),
             search: SearchState::new(),
             sv: ScrollState::new(),

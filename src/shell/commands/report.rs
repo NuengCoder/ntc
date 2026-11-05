@@ -132,6 +132,8 @@ struct FileView {
 /// Resolve a `view`/`txtf` operand: `@name[/sub...]` teleport paths or a
 /// disk path relative to the navigator's directory.
 fn resolve_view_operand(name: &str, nav: &Navigator) -> Option<PathBuf> {
+    let expanded = crate::utils::paths::expand_path_str(name);
+    let name = expanded.as_str();
     if name.starts_with('@') {
         return TeleportManager::resolve_subpath(name);
     }
@@ -390,10 +392,28 @@ pub fn cmd_views(args: &str, nav: &mut Navigator) -> Result<bool> {
     let mut show_size = false;
     let mut sort = crate::explorer::TreeSortKey::Char;
     let mut newline = false;
+    let mut trims: Vec<String> = Vec::new();
     let mut i = 0;
     while i < parsed.rest.len() {
         match parsed.rest[i].to_lowercase().as_str() {
             "-n" => newline = true,
+            "--trim" => {
+                let Some(v) = parsed.rest.get(i + 1) else {
+                    print_error(&t!("cmd.views.missing_trim"));
+                    println!("{}", t!("cmd.views.usage"));
+                    return Ok(false);
+                };
+                if !v.is_empty() {
+                    trims.push(v.to_lowercase());
+                }
+                i += 1;
+            }
+            other if other.starts_with("--trim=") => {
+                let v = other.trim_start_matches("--trim=");
+                if !v.is_empty() {
+                    trims.push(v.to_lowercase());
+                }
+            }
             "-s" | "--size" => {
                 show_size = true;
                 if let Some(v) = next_size_value(&parsed.rest, i) {
@@ -484,27 +504,39 @@ pub fn cmd_views(args: &str, nav: &mut Navigator) -> Result<bool> {
     // When `--size` is set each entry is shown as `name (size)`; the
     // `visible` width includes the size so line-wrapping in bare mode
     // stays correct.
+    // `--trim` removes its text from each name, and an entry whose name
+    // trims away completely is dropped instead of printed blank.
     let mut groups: Vec<Vec<(usize, String)>> = Vec::new();
     for (is_dir, is_ignored) in [(true, false), (false, false), (true, true), (false, true)] {
         let names: Vec<(usize, String)> = tree
             .children
             .iter()
             .filter(|n| n.is_dir == is_dir && n.is_ignored == is_ignored)
-            .map(|n| {
-                let painted = paint(n, &n.name);
+            .filter_map(|n| {
+                let base = trim_text(&n.name, &trims);
+                if base.is_empty() {
+                    return None;
+                }
+                let painted = paint(n, &base);
                 if show_size {
                     let s = crate::explorer::human_readable_size(n.size.unwrap_or(0));
                     let text = format!("{} ({})", painted, s);
-                    let visible = n.name.chars().count() + 1 + 1 + s.chars().count() + 1;
-                    (visible, text)
+                    let visible = base.chars().count() + 1 + 1 + s.chars().count() + 1;
+                    Some((visible, text))
                 } else {
-                    (n.name.chars().count(), painted)
+                    Some((base.chars().count(), painted))
                 }
             })
             .collect();
         if !names.is_empty() {
             groups.push(names);
         }
+    }
+
+    // Everything filtered away: say so rather than printing a blank line.
+    if groups.is_empty() {
+        println!("{}", t!("cmd.views.empty"));
+        return Ok(false);
     }
 
     // `-n`: one entry per line.
@@ -518,7 +550,9 @@ pub fn cmd_views(args: &str, nav: &mut Navigator) -> Result<bool> {
     }
 
     // Bare `views`: names flow inline, groups joined by `...`, wrapped to
-    // the terminal width.
+    // the terminal width. `--trim` applies to the separator too, so
+    // `views --trim ...` prints the same listing as `views | trim ...`.
+    let separator = trim_text("...", &trims);
     let width = crossterm::terminal::size()
         .map(|(w, _)| w as usize)
         .unwrap_or(100)
@@ -527,8 +561,14 @@ pub fn cmd_views(args: &str, nav: &mut Navigator) -> Result<bool> {
     let mut line_w = 0usize;
     let mut first_group = true;
     for group in groups {
-        if !first_group {
-            views_flow_push(&mut line, &mut line_w, 3, "...", width);
+        if !first_group && !separator.is_empty() {
+            views_flow_push(
+                &mut line,
+                &mut line_w,
+                separator.chars().count(),
+                &separator,
+                width,
+            );
         }
         first_group = false;
         for (visible, name) in group {
@@ -539,6 +579,39 @@ pub fn cmd_views(args: &str, nav: &mut Navigator) -> Result<bool> {
         println!("{}", line);
     }
     Ok(false)
+}
+
+/// Remove every (case-insensitive) occurrence of each `--trim` value from
+/// `text` — the same edit `views | trim <text>` makes. May return an empty
+/// string: callers drop the entry (or the group separator) in that case.
+fn trim_text(text: &str, trims: &[String]) -> String {
+    if trims.is_empty() {
+        return text.to_string();
+    }
+    let mut out = String::with_capacity(text.len());
+    let mut i = 0;
+    while i < text.len() {
+        let rest = &text[i..];
+        let mut matched = 0;
+        for pat in trims {
+            if !pat.is_empty()
+                && rest.len() >= pat.len()
+                && rest.is_char_boundary(pat.len())
+                && rest[..pat.len()].to_lowercase() == *pat
+            {
+                matched = pat.len();
+                break;
+            }
+        }
+        if matched > 0 {
+            i += matched;
+        } else {
+            let ch = rest.chars().next().unwrap_or('\u{0}');
+            out.push(ch);
+            i += ch.len_utf8();
+        }
+    }
+    out
 }
 
 /// Append one already-painted word to the flowing line, starting a new
@@ -939,15 +1012,60 @@ pub fn cmd_report(args: &str, _nav: &mut Navigator) -> Result<bool> {
     Ok(false)
 }
 
+/// Parsed `txtc` args: an optional file plus the `--line` / `--no-line`
+/// override. Flags may come before or after the file (`txtc --line a.txt`).
+#[derive(Debug, Default)]
+pub(crate) struct TxtcArgs {
+    pub file: Option<String>,
+    pub lines: Option<bool>,
+}
+
+/// Parse `txtc` args. `Err((key, arg))` is a lang key plus the offending
+/// value for `print_error(&t!(key, arg))`, mirroring [`parse_txtf_args`].
+pub(crate) fn parse_txtc_args(args: &str) -> Result<TxtcArgs, (String, String)> {
+    let mut out = TxtcArgs::default();
+    let toks: Vec<String> = tokenize_spans(args)
+        .into_iter()
+        .map(|(s, _, _)| s)
+        .collect();
+    for tok in toks {
+        match tok.as_str() {
+            "--line" | "--lines" | "-l" => out.lines = Some(true),
+            "--no-line" | "--no-lines" | "-nl" => out.lines = Some(false),
+            other => {
+                if out.file.is_some() {
+                    return Err(("cmd.report.unknown_option".to_string(), other.to_string()));
+                }
+                out.file = Some(other.to_string());
+            }
+        }
+    }
+    Ok(out)
+}
+
+/// Effective line-number setting for one `txtc` call: an explicit
+/// `--line`/`--no-line` always wins over the config default, exactly like
+/// `txtf`. Shared with the interactive picker so both paths agree.
+pub(crate) fn txtc_show_lines(lines: Option<bool>) -> bool {
+    lines.unwrap_or_else(Config::global_get_show_line_numbers)
+}
+
 pub fn cmd_txtc(args: &str, nav: &mut Navigator) -> Result<bool> {
-    if args.is_empty() {
-        let files = list_supported_files(nav)?;
-        show_file_selection_menu(nav, files, true)?;
-    } else {
-        let target = Path::new(args);
+    let parsed = match parse_txtc_args(args) {
+        Ok(p) => p,
+        Err((key, arg)) => {
+            print_error(&t!(&key, arg));
+            return Ok(false);
+        }
+    };
+    if let Some(ref file) = parsed.file {
+        let expanded = crate::utils::paths::expand_path_str(file);
+        let target = Path::new(&expanded);
         if target.is_file() {
             if is_supported_format(target) {
-                let show_lines = Config::global_get_show_line_numbers();
+                // `--line` / `--no-line` override the config default, exactly
+                // like `txtf`.
+                let show_lines = txtc_show_lines(parsed.lines);
                 let content = crate::output::cat_file_with_line_numbers(target, show_lines)?;
 
                 #[cfg(target_os = "android")]
@@ -979,11 +1097,15 @@ pub fn cmd_txtc(args: &str, nav: &mut Navigator) -> Result<bool> {
                     print_success(&t!("cmd.report.copied_clipboard", target.display()));
                 }
             } else {
-                print_warning(&t!("cmd.report.skipped_unsupported", args));
+                print_warning(&t!("cmd.report.skipped_unsupported", file));
             }
         } else {
-            print_error(&t!("cmd.report.file_not_found", args));
+            print_error(&t!("cmd.report.file_not_found", file));
         }
+    } else {
+        // No file on the line: pick one interactively, same line-number rule.
+        let files = list_supported_files(nav)?;
+        show_file_selection_menu_range(nav, files, true, None, parsed.lines)?;
     }
     Ok(false)
 }
@@ -1310,6 +1432,41 @@ mod tests {
     }
 
     #[test]
+    fn parse_txtc_args_file_and_line_flags() {
+        let a = parse_txtc_args("a.txt").unwrap();
+        assert_eq!(a.file.as_deref(), Some("a.txt"));
+        assert_eq!(a.lines, None);
+
+        let a = parse_txtc_args("--line a.txt").unwrap();
+        assert_eq!((a.file.as_deref(), a.lines), (Some("a.txt"), Some(true)));
+
+        let a = parse_txtc_args("a.txt --no-line").unwrap();
+        assert_eq!((a.file.as_deref(), a.lines), (Some("a.txt"), Some(false)));
+
+        // Short forms.
+        assert_eq!(parse_txtc_args("-l a.txt").unwrap().lines, Some(true));
+        assert_eq!(parse_txtc_args("a.txt -nl").unwrap().lines, Some(false));
+
+        // Flags only, no file: the picker runs with the override.
+        let a = parse_txtc_args("--no-line").unwrap();
+        assert_eq!(a.file, None);
+        assert_eq!(a.lines, Some(false));
+
+        // Quoted names with spaces survive.
+        let a = parse_txtc_args("--line \"my file.txt\"").unwrap();
+        assert_eq!(a.file.as_deref(), Some("my file.txt"));
+
+        // A second bare token (or a range flag) is an error, never silent.
+        assert!(parse_txtc_args("a.txt b.txt").is_err());
+        assert!(parse_txtc_args("--head 5 a.txt").is_err());
+
+        // An explicit flag always wins over the configured default, so
+        // `txtc --no-line` can never keep line numbers — same rule as txtf.
+        assert!(!txtc_show_lines(Some(false)));
+        assert!(txtc_show_lines(Some(true)));
+    }
+
+    #[test]
     fn parse_txtf_args_file_and_flags_any_order() {
         let p = parse_txtf_args("a.txt").unwrap();
         assert_eq!(p.file.as_deref(), Some("a.txt"));
@@ -1451,5 +1608,39 @@ mod tests {
         assert_eq!(exts, vec!["rs", "md"]);
         assert!(seen);
         assert!(!cleaned.contains("-e"));
+    }
+
+    #[test]
+    fn trim_text_removes_every_occurrence_case_insensitively() {
+        let trims = vec!["src".to_string()];
+        assert_eq!(trim_text("SRC_main_src.rs", &trims), "_main_.rs");
+    }
+
+    #[test]
+    fn trim_text_applies_each_pattern() {
+        let trims = vec!["-".to_string(), ".".to_string()];
+        assert_eq!(trim_text("a-b-c.txt", &trims), "abctxt");
+    }
+
+    #[test]
+    fn trim_text_can_empty_an_entry() {
+        // A fully trimmed name must report empty so `views` can drop it,
+        // instead of silently printing the name it was told to hide.
+        let trims = vec!["src".to_string()];
+        assert_eq!(trim_text("src", &trims), "");
+    }
+
+    #[test]
+    fn trim_text_removes_the_group_separator() {
+        // `views --trim ...` uses the same edit on the `...` between groups.
+        let trims = vec!["...".to_string()];
+        assert_eq!(trim_text("...", &trims), "");
+        assert_eq!(trim_text("src", &trims), "src");
+    }
+
+    #[test]
+    fn trim_text_does_not_split_multibyte_names() {
+        let trims = vec!["é".to_string()];
+        assert_eq!(trim_text("café.txt", &trims), "caf.txt");
     }
 }

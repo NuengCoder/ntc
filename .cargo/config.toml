@@ -15,8 +15,9 @@ rustflags = ["-Ctarget-feature=+crt-static"]
 # triple (packaging/build_win7arm.cmd). Library dirs come from build.rs
 # (cargo:rustc-link-search: repo-local packaging/arm64-libs plus the
 # machine-local MSVC/SDK ARM64 dirs read from the vcvars environment).
-# NOTE: the scripts pin vcvars to MSVC 14.44 (-vcvars_ver=14.44), the
-# toolchain with the complete ARM64 set (HostX64\arm64 tools plus
+# NOTE: the scripts pin vcvars (-vcvars_ver) to the newest MSVC toolset
+# that ships the complete ARM64 set (headers, HostX64\arm64 tools plus
 # lib\arm64\msvcrt.lib/oldnames.lib). rust-lld links it fine.
 linker = "rust-lld"
 rustflags = ["-Clinker-flavor=lld-link"]
+

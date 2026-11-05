@@ -12,8 +12,18 @@ pub fn fill(m: &mut HashMap<String, String>) {
     );
 
     m.insert(
+        "help.ran.fmt".into(),
+        "ran fmt <toml|json|yaml> ## แปลง ranfile เป็นรูปแบบอื่น (-o <ไฟล์>, -y)".into(),
+    );
+
+    m.insert(
         "help.ran.init".into(),
         "ran init ## สร้างเทมเพลต NTCRANFILE.toml".into(),
+    );
+
+    m.insert(
+        "help.ran.check".into(),
+        "ran check ## ตรวจสอบ NTCRANFILE.toml และบอกตำแหน่งปัญหา".into(),
     );
 
     m.insert(

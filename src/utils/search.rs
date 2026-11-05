@@ -233,6 +233,16 @@ fn walk_dirs<'a>(
 /// * `pattern`   - Filename or partial name to search for (case-insensitive)
 /// * `max_depth` - 0 = current dir only, n = recurse n levels, usize::MAX = unlimited
 pub fn search_files(root: &Path, pattern: &str, max_depth: usize) -> Vec<SearchResult> {
+    search_files_opts(root, pattern, max_depth, true)
+}
+
+/// [`search_files`] with the fuzzy fallback optionally disabled (`--no-fuzzy`).
+pub fn search_files_opts(
+    root: &Path,
+    pattern: &str,
+    max_depth: usize,
+    fuzzy: bool,
+) -> Vec<SearchResult> {
     let pattern_lower = pattern.to_lowercase();
     let ignored_dirs = Config::get_ignored_dirs_combined();
     let fmt_cfg = FormatConfig::from_both();
@@ -279,6 +289,10 @@ pub fn search_files(root: &Path, pattern: &str, max_depth: usize) -> Vec<SearchR
         return partial_matches;
     }
 
+    if !fuzzy {
+        return Vec::new();
+    }
+
     // Fuzzy fallback — collect names for scoring, keep Candidate for path lookup
     let candidate_names: Vec<String> = fuzzy_candidates.iter().map(|c| c.name.clone()).collect();
     let fuzzy_hits = top_fuzzy_matches(&candidate_names, pattern, MAX_FUZZY_SUGGESTIONS);
@@ -314,6 +328,16 @@ pub fn search_files(root: &Path, pattern: &str, max_depth: usize) -> Vec<SearchR
 /// * `pattern`   - Directory name or partial name to search for (case-insensitive)
 /// * `max_depth` - 0 = current dir only, n = recurse n levels, usize::MAX = unlimited
 pub fn search_directories(root: &Path, pattern: &str, max_depth: usize) -> Vec<SearchResult> {
+    search_directories_opts(root, pattern, max_depth, true)
+}
+
+/// [`search_directories`] with the fuzzy fallback optionally disabled.
+pub fn search_directories_opts(
+    root: &Path,
+    pattern: &str,
+    max_depth: usize,
+    fuzzy: bool,
+) -> Vec<SearchResult> {
     let pattern_lower = pattern.to_lowercase();
     let ignored_dirs = Config::get_ignored_dirs_combined();
     let use_wildcard = has_wildcards(pattern);
@@ -358,6 +382,10 @@ pub fn search_directories(root: &Path, pattern: &str, max_depth: usize) -> Vec<S
         return partial_matches;
     }
 
+    if !fuzzy {
+        return Vec::new();
+    }
+
     let candidate_names: Vec<String> = fuzzy_candidates.iter().map(|c| c.name.clone()).collect();
     let fuzzy_hits = top_fuzzy_dir_matches(&candidate_names, pattern, MAX_FUZZY_SUGGESTIONS);
 
@@ -388,8 +416,18 @@ pub fn search_directories(root: &Path, pattern: &str, max_depth: usize) -> Vec<S
 /// * `pattern`   - Name or partial name to search for (case-insensitive)
 /// * `max_depth` - 0 = current dir only, n = recurse n levels, usize::MAX = unlimited
 pub fn search_all(root: &Path, pattern: &str, max_depth: usize) -> Vec<SearchResult> {
-    let files = search_files(root, pattern, max_depth);
-    let dirs = search_directories(root, pattern, max_depth);
+    search_all_opts(root, pattern, max_depth, true)
+}
+
+/// [`search_all`] with the fuzzy fallback optionally disabled (`--no-fuzzy`).
+pub fn search_all_opts(
+    root: &Path,
+    pattern: &str,
+    max_depth: usize,
+    fuzzy: bool,
+) -> Vec<SearchResult> {
+    let files = search_files_opts(root, pattern, max_depth, fuzzy);
+    let dirs = search_directories_opts(root, pattern, max_depth, fuzzy);
 
     let has_exact = files.iter().any(|r| r.match_kind == MatchKind::Exact)
         || dirs.iter().any(|r| r.match_kind == MatchKind::Exact);
@@ -766,7 +804,7 @@ pub fn highlight_segments<'a>(text: &'a str, pattern: &str) -> Vec<(&'a str, boo
 /// including every alternative of an OR pattern. Uses explicit ANSI codes so
 /// output is red even when piped/redirected.
 pub fn highlight_pattern(line: &str, pattern: &str) -> String {
-    if pattern.is_empty() {
+    if pattern.is_empty() || highlight_opt_out() {
         return line.to_string();
     }
     const RED: &str = "\x1b[31m";
@@ -782,6 +820,16 @@ pub fn highlight_pattern(line: &str, pattern: &str) -> String {
         }
     }
     out
+}
+
+/// `gs` highlights matches even when its output is piped or redirected, but an
+/// explicit opt-out (`NO_COLOR`, `TERM=dumb`) always wins so scripts and CI
+/// logs never get escape codes.
+fn highlight_opt_out() -> bool {
+    if std::env::var_os("NO_COLOR").is_some() {
+        return true;
+    }
+    matches!(std::env::var("TERM").as_deref(), Ok("dumb") | Ok(""))
 }
 
 fn truncate_for_display(line: &str, max_chars: usize) -> String {
@@ -806,19 +854,17 @@ pub fn format_content_results(
     total_found: usize,
 ) -> String {
     let depth_label = if max_depth == usize::MAX {
-        "unlimited".to_string()
+        crate::t!("misc.gs.depth_unlimited").to_string()
     } else {
         max_depth.to_string()
     };
 
     let mut output = String::new();
-    output.push_str(&format!(
-        "\n🔍 Searching file contents for \"{}\" (max depth: {})...\n\n",
-        pattern, depth_label
-    ));
+    output.push_str(&crate::t!("misc.gs.searching_header", pattern, depth_label));
+    output.push('\n');
 
     if results.is_empty() {
-        output.push_str("  No matches found.\n");
+        output.push_str(&format!("  {}\n", crate::t!("cmd.gs.no_matches")));
         return output;
     }
 
@@ -917,7 +963,7 @@ pub fn format_search_results(
 
     let mut output = String::new();
     output.push_str(&format!(
-        "\n🔍 Searching {} for \"{}\" (max depth: {})...\n\n",
+        "\nSearching {} for \"{}\" (max depth: {})...\n\n",
         item_type, pattern, depth_label
     ));
 

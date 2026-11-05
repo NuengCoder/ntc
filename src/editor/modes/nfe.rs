@@ -69,9 +69,11 @@ impl Editor {
 
     /// Run one `nfe:` prompt line: `size full|def|N%`, `n <file>`,
     /// `m <dir>`, `rmd`/`rmf`, `i` (insert), `v` (visual), `qt`/`aqt`
-    /// (close tabs, like gmode), `t`/`T`/`t<n>`/`T<n>` (switch tabs), or a
-    /// bare number to jump to the sidebar entry with that number. Clears
-    /// the prompt on success so navigation resumes; leaves it open on error.
+    /// (close tabs, like gmode), `t`/`T`/`t<n>`/`T<n>` (switch tabs),
+    /// `file <name>` / `dir <name>` / `line <+N|-N|N>` (navigation, same
+    /// grammar as the standalone explorer), or a bare number to jump to the
+    /// sidebar entry with that number. Clears the prompt on success so
+    /// navigation resumes; leaves it open on error.
     fn run_nfe_command(&mut self, cmd: &str) {
         let cmd = cmd.trim();
         match cmd {
@@ -145,6 +147,9 @@ impl Editor {
             },
             (Some("n"), Some(name), None) => self.nfe_create_file(name),
             (Some("m"), Some(name), None) => self.nfe_create_dir(name),
+            (Some("file"), Some(name), None) => self.nfe_jump_file(name),
+            (Some("dir"), Some(name), None) => self.nfe_jump_dir(name),
+            (Some("line"), Some(target), None) => self.nfe_jump_line(target),
             (Some("i") | Some("I"), None, None) => self.nfe_to_insert(),
             (Some("v") | Some("V"), None, None) => self.nfe_to_visual(),
             (Some("rmd"), Some(name), None) => self.nfe_remove_dir(name),
@@ -152,12 +157,117 @@ impl Editor {
             (Some("n") | Some("m"), _, _) => {
                 self.status_msg = Some(t!("editor.nfe_new_usage"));
             }
+            (Some("file") | Some("dir") | Some("line"), _, _) => {
+                self.status_msg = Some(t!("editor.nfe_cmd_usage"));
+            }
             (Some("rmd") | Some("rmf"), _, _) => {
                 self.status_msg = Some(t!("editor.nfe_rm_usage"));
             }
             _ => {
                 self.status_msg = Some(t!("editor.nfe_unknown", cmd));
             }
+        }
+    }
+
+    /// `file <name>`: reveal the file in the sidebar and open it. Names are
+    /// sidebar-root relative; a bare name is looked up anywhere below it.
+    fn nfe_jump_file(&mut self, name: &str) {
+        let root = self.sidebar.root.clone();
+        let Some(path) = resolve_nav_target(&root, name, Some(false)) else {
+            self.status_msg = Some(t!("editor.nfe_rm_not_exist", name));
+            return;
+        };
+        self.nfe_reveal_path(&path);
+        self.open_file(&path);
+        // Opening a file must not drop nfe focus.
+        self.mode = Mode::Nfe;
+        self.status_msg = Some(t!("editor.nfe_file_jumped", name));
+        self.nfe_cmd = None;
+        self.nfe_ensure_visible();
+        self.mark_all_dirty();
+    }
+
+    /// `dir <name>`: reveal the directory in the sidebar and select it.
+    fn nfe_jump_dir(&mut self, name: &str) {
+        let root = self.sidebar.root.clone();
+        let Some(path) = resolve_nav_target(&root, name, Some(true)) else {
+            self.status_msg = Some(t!("editor.nfe_rm_not_exist", name));
+            return;
+        };
+        self.nfe_reveal_path(&path);
+        self.status_msg = Some(t!("editor.nfe_dir_jumped", name));
+        self.nfe_cmd = None;
+        self.nfe_ensure_visible();
+        self.mark_all_dirty();
+    }
+
+    /// `line <+N|-N|N>`: move the buffer cursor like gmode's `<n>`.
+    fn nfe_jump_line(&mut self, target: &str) {
+        let target = target.trim();
+        let total = self.lines.len();
+        let moved = if let Some(rest) = target.strip_prefix('+') {
+            rest.parse::<usize>()
+                .ok()
+                .map(|n| (self.cursor.y + n).min(total.saturating_sub(1)))
+        } else if let Some(rest) = target.strip_prefix('-') {
+            rest.parse::<usize>()
+                .ok()
+                .map(|n| self.cursor.y.saturating_sub(n))
+        } else {
+            target
+                .parse::<usize>()
+                .ok()
+                .filter(|n| *n >= 1 && *n <= total)
+                .map(|n| n - 1)
+        };
+        match moved {
+            Some(y) => {
+                self.cursor.y = y;
+                self.cursor.byte = 0;
+                self.scroll_visible();
+                self.status_msg = Some(t!("editor.nfe_line_jumped", y + 1));
+                self.nfe_cmd = None;
+            }
+            None => {
+                self.status_msg = Some(t!("editor.mode_jump_range", target, total));
+            }
+        }
+        self.mark_all_dirty();
+    }
+
+    /// Show `path` in the sidebar: expand every ancestor below the root,
+    /// then select the row itself.
+    fn nfe_reveal_path(&mut self, path: &std::path::Path) {
+        if path == self.sidebar.root {
+            return;
+        }
+        if let Some(idx) = self.sidebar.nodes.iter().position(|n| n.path == path) {
+            self.sidebar.selected = idx;
+            return;
+        }
+        // Expand the tree one level at a time until the target appears.
+        for _ in 0..64 {
+            if let Some(idx) = self.sidebar.nodes.iter().position(|n| n.path == path) {
+                self.sidebar.selected = idx;
+                return;
+            }
+            // Deepest ancestor row below the root that can expand further.
+            // The `..` pseudo-row is skipped: it points outside the tree.
+            let Some(idx) = self
+                .sidebar
+                .nodes
+                .iter()
+                .enumerate()
+                .filter(|(_, n)| n.is_dir && n.name != ".." && path.starts_with(&n.path))
+                .max_by_key(|(_, n)| n.path.components().count())
+                .map(|(i, _)| i)
+            else {
+                return;
+            };
+            if self.sidebar.nodes[idx].expanded {
+                return;
+            }
+            self.sidebar.expand(idx);
         }
     }
 
@@ -551,7 +661,9 @@ impl Editor {
                     (false, KeyCode::Char('v')) | (false, KeyCode::Char('V')) => {
                         self.nfe_to_visual()
                     }
-                    (false, KeyCode::Char(':')) | (false, KeyCode::Char(';')) => {
+                    (false, KeyCode::Char(':'))
+                    | (false, KeyCode::Char(';'))
+                    | (false, KeyCode::Char('g')) => {
                         self.nfe_cmd = Some(String::new());
                         self.status_msg = None;
                         self.mark_all_dirty();
@@ -851,6 +963,61 @@ impl Editor {
         self.nfe_ensure_visible();
         self.mark_all_dirty();
     }
+}
+
+/// Resolve a `file` / `dir` navigation target against the sidebar root.
+/// Absolute paths and explicit relative paths are used as-is; a bare name
+/// is looked up anywhere under the root (exact name first, then the first
+/// substring hit). `want_dir` restricts the kind: `Some(true)` dirs,
+/// `Some(false)` files, `None` anything.
+pub(crate) fn resolve_nav_target(
+    root: &std::path::Path,
+    name: &str,
+    want_dir: Option<bool>,
+) -> Option<std::path::PathBuf> {
+    let name = name.trim();
+    if name.is_empty() {
+        return None;
+    }
+    let rel = std::path::Path::new(name);
+    let direct = if rel.is_absolute() {
+        rel.to_path_buf()
+    } else {
+        root.join(rel)
+    };
+    if direct.exists() && want_dir.map(|w| w == direct.is_dir()).unwrap_or(true) {
+        return Some(direct);
+    }
+    // Bare name: walk the tree (bounded) for a match.
+    let needle = rel.file_name()?.to_string_lossy().to_lowercase();
+    let mut queue = std::collections::VecDeque::new();
+    queue.push_back((root.to_path_buf(), 0usize));
+    let mut partial: Option<std::path::PathBuf> = None;
+    while let Some((dir, depth)) = queue.pop_front() {
+        if depth > 20 {
+            continue;
+        }
+        let Ok(entries) = std::fs::read_dir(&dir) else {
+            continue;
+        };
+        for entry in entries.flatten() {
+            let path = entry.path();
+            let is_dir = entry.file_type().map(|t| t.is_dir()).unwrap_or(false);
+            if is_dir {
+                queue.push_back((path.clone(), depth + 1));
+            }
+            if want_dir.map(|w| w == is_dir).unwrap_or(true) {
+                let candidate = entry.file_name().to_string_lossy().to_lowercase();
+                if candidate == needle {
+                    return Some(path);
+                }
+                if partial.is_none() && candidate.contains(&needle) {
+                    partial = Some(path);
+                }
+            }
+        }
+    }
+    partial
 }
 
 /// Resolve an `n`/`m` name against the sidebar root. Rejects empty
@@ -1500,5 +1667,111 @@ mod tests {
             modifiers: KeyModifiers::NONE,
         });
         assert_eq!(editor.sidebar.scroll, 0);
+    }
+
+    #[test]
+    fn nfe_prompt_navigates_with_file_dir_line() {
+        let root = temp_root("nav-verbs");
+        std::fs::create_dir_all(root.join("sub")).unwrap();
+        std::fs::write(root.join("sub").join("inner.txt"), "one\ntwo\nthree\nfour").unwrap();
+        let mut editor = nfe_test_editor(&root);
+        editor.init_tabs();
+        editor.sidebar.root = root.clone();
+        editor.sidebar.nodes = vec![
+            crate::editor::types::FileNode {
+                name: "..".to_string(),
+                path: root.parent().unwrap().to_path_buf(),
+                is_dir: true,
+                expanded: false,
+                depth: 0,
+            },
+            crate::editor::types::FileNode {
+                name: "sub".to_string(),
+                path: root.join("sub"),
+                is_dir: true,
+                expanded: false,
+                depth: 0,
+            },
+        ];
+        editor.mode = Mode::Nfe;
+
+        // dir: reveal and select the directory row.
+        editor.nfe_cmd = Some(String::new());
+        editor.run_nfe_command("dir sub");
+        assert!(editor.nfe_cmd.is_none());
+        assert_eq!(
+            editor.sidebar.nodes[editor.sidebar.selected].path,
+            root.join("sub")
+        );
+
+        // file: expand the tree, select the row and open the file, keeping
+        // nfe focus.
+        editor.nfe_cmd = Some(String::new());
+        editor.run_nfe_command("file sub/inner.txt");
+        assert!(editor.nfe_cmd.is_none());
+        assert_eq!(editor.path, root.join("sub").join("inner.txt"));
+        assert_eq!(editor.mode, Mode::Nfe);
+        assert!(editor
+            .sidebar
+            .nodes
+            .iter()
+            .any(|n| n.path == root.join("sub").join("inner.txt")));
+
+        // line: absolute and relative moves inside the 4-line buffer.
+        editor.run_nfe_command("line 3");
+        assert_eq!(editor.cursor.y, 2);
+        editor.run_nfe_command("line -1");
+        assert_eq!(editor.cursor.y, 1);
+        editor.run_nfe_command("line +2");
+        assert_eq!(editor.cursor.y, 3);
+        assert!(editor.nfe_cmd.is_none());
+
+        // Bad targets / verbs keep the prompt open so the line can be fixed.
+        editor.nfe_cmd = Some(String::new());
+        editor.run_nfe_command("line 99");
+        assert!(editor.nfe_cmd.is_some());
+        editor.nfe_cmd = Some(String::new());
+        editor.run_nfe_command("dir ghost");
+        assert!(editor.nfe_cmd.is_some());
+        editor.nfe_cmd = Some(String::new());
+        editor.run_nfe_command("file");
+        assert!(editor.nfe_cmd.is_some());
+        assert!(editor.status_msg.is_some());
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn nfe_prompt_hints_file_dir_line() {
+        let root = temp_root("verb-hints");
+        std::fs::write(root.join("hello.txt"), "x").unwrap();
+        std::fs::create_dir_all(root.join("sub")).unwrap();
+        let mut editor = nfe_test_editor(&root);
+        editor.sidebar.root = root.clone();
+        editor.mode = Mode::Nfe;
+
+        // First argument: the three verbs.
+        editor.nfe_cmd = Some("fi".to_string());
+        editor.prompt_cursor = 2;
+        assert_eq!(editor.prompt_ghost(), Some("le ".to_string()));
+        editor.prompt_tab();
+        editor.prompt_accept_or_right();
+        assert_eq!(editor.nfe_cmd.as_deref(), Some("file "));
+
+        // `file ` hints names in the sidebar root.
+        editor.prompt_cursor = 5;
+        assert_eq!(editor.prompt_ghost(), Some("hello.txt".to_string()));
+
+        // `dir ` hints directories (with the trailing `/`).
+        editor.nfe_cmd = Some("dir su".to_string());
+        editor.prompt_cursor = 6;
+        assert_eq!(editor.prompt_ghost(), Some("b/".to_string()));
+
+        // `line ` takes a number: no hint.
+        editor.nfe_cmd = Some("line ".to_string());
+        editor.prompt_cursor = 5;
+        assert_eq!(editor.prompt_ghost(), None);
+        editor.nfe_cmd = Some("line +".to_string());
+        editor.prompt_cursor = 6;
+        assert_eq!(editor.prompt_ghost(), None);
     }
 }

@@ -69,7 +69,10 @@ pub fn fill(m: &mut HashMap<String, String>) {
 
     m.insert("cmd.nms.examples_title".into(), "示例：".into());
 
-    m.insert("cmd.nms.example_play".into(), "nms play -sf 30 song.mp3".into());
+    m.insert(
+        "cmd.nms.example_play".into(),
+        "nms play -sf 30 song.mp3".into(),
+    );
 
     m.insert("cmd.nms.example_video".into(), "nms play movie.mp4".into());
 

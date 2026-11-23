@@ -10,7 +10,7 @@ use std::path::PathBuf;
 use std::sync::atomic::Ordering;
 use std::sync::RwLock;
 
-use super::{Theme, THEME_CHANGED};
+use super::{Theme, ThemeColor, THEME_CHANGED};
 
 pub struct ThemeManager {
     current_theme: RwLock<Theme>,
@@ -19,17 +19,24 @@ pub struct ThemeManager {
 
 impl ThemeManager {
     fn config_path() -> Option<PathBuf> {
-        dirs::config_dir().map(|d| d.join("ntc").join("theme.toml"))
+        Some(
+            crate::utils::paths::config_home()
+                .join("ntc")
+                .join("theme.toml"),
+        )
     }
 
     pub fn themes_dir() -> Option<PathBuf> {
-        dirs::config_dir().map(|d| d.join("ntc").join("themes"))
+        Some(
+            crate::utils::paths::config_home()
+                .join("ntc")
+                .join("themes"),
+        )
     }
 
     fn load_themes() -> HashMap<String, Theme> {
         let mut themes = HashMap::new();
         themes.insert("default".to_string(), Theme::default_theme());
-        themes.insert("light".to_string(), Theme::light_theme());
 
         if let Some(themes_dir) = Self::themes_dir() {
             if let Ok(entries) = fs::read_dir(themes_dir) {
@@ -38,8 +45,12 @@ impl ThemeManager {
                     if let Some(ext) = path.extension().and_then(|e| e.to_str()) {
                         if ext == "ntc_theme" || ext == "toml" {
                             if let Ok(content) = fs::read_to_string(&path) {
-                                if let Ok(theme) = toml::from_str::<Theme>(&content) {
-                                    themes.insert(theme.name.clone(), theme);
+                                if let Ok(mut theme) = toml::from_str::<Theme>(&content) {
+                                    apply_missing_editor_defaults(&content, &mut theme);
+                                    // Light themes are retired; ignore files left by older installs.
+                                    if theme.name != "light" {
+                                        themes.insert(theme.name.clone(), theme);
+                                    }
                                 }
                             }
                         }
@@ -172,17 +183,15 @@ impl ThemeManager {
             let _ = fs::create_dir_all(&themes_dir);
         }
 
+        // Light themes are no longer bundled; remove the file older releases wrote.
+        let _ = fs::remove_file(themes_dir.join("light.ntc_theme"));
+
         // Only write files that don't already exist on disk.
         // Previously this checked list_themes() which always returned
         // ["default", "light"] from the hardcoded map — causing writes every startup.
         let default_path = themes_dir.join("default.ntc_theme");
         if !default_path.exists() {
             let _ = fs::write(&default_path, Self::get_default_theme_content());
-        }
-
-        let light_path = themes_dir.join("light.ntc_theme");
-        if !light_path.exists() {
-            let _ = fs::write(&light_path, Self::get_light_theme_content());
         }
 
         let example_path = themes_dir.join("example.ntc_theme");
@@ -216,16 +225,36 @@ regex = "bright_red"
 tag = "bright_cyan"
 constant = "cyan"
 normal = "bright_white"
+muted = "bright_black"
+table_header = "cyan"
+table_border = "cyan"
+line_number = "yellow"
 
 [shell]
 prompt_bracket = "bright_cyan"
 prompt_path = "cyan"
 prompt_watcher = "yellow"
 prompt_arrow = "green"
+ntc_command = "yellow"
+txtf_file = "bright_green"
+ral_name = "bright_magenta"
+ral_command = "yellow"
+ntc_sub_command = "bright_cyan"
+sub_sub_command = "bright_blue"
+flag1 = "yellow"
+flag2 = "bright_yellow"
+tp_name = "bright_blue"
+tp_path = "cyan"
+ral_ls_alias = "cyan"
+tp_ls_tp_name = "cyan"
 success = "green"
 error = "red"
 warning = "yellow"
 info = "cyan"
+muted = "bright_black"
+table_header = "cyan"
+table_border = "cyan"
+line_number = "yellow"
 tree_branch = { r = 30, g = 220, b = 220 }
 tree_dir = "bright_magenta"
 tree_file = "yellow"
@@ -247,10 +276,11 @@ git_untracked = "bright_black"
 git_conflict = "bright_red"
 
 [editor]
-editor_bg = { r = 21, g = 19, b = 26 }
-gutter_bg = { r = 24, g = 22, b = 30 }
+editor_bg = { r = 46, g = 44, b = 51 }
+gutter_bg = { r = 38, g = 36, b = 44 }
 status_bg = { r = 130, g = 100, b = 210 }
 hint_bg = { r = 28, g = 26, b = 34 }
+text_field_bg = { r = 60, g = 60, b = 60 }
 sidebar_bg = { r = 21, g = 19, b = 26 }
 sidebar_selected_bg = { r = 50, g = 45, b = 65 }
 run_panel_bg = { r = 26, g = 24, b = 32 }
@@ -267,6 +297,7 @@ search_current_bg = { r = 130, g = 100, b = 210 }
 border = { r = 50, g = 46, b = 62 }
 scrollbar = { r = 38, g = 35, b = 48 }
 scrollbar_thumb = { r = 130, g = 100, b = 210 }
+indent_guide = { r = 45, g = 41, b = 56 }
 sidebar_dir = { r = 134, g = 215, b = 235 }
 sidebar_file = { r = 200, g = 200, b = 215 }
 sidebar_current = { r = 255, g = 208, b = 145 }
@@ -274,90 +305,6 @@ sidebar_selected = "white"
 run_header_fg = { r = 95, g = 145, b = 205 }
 run_header_unfocused_fg = { r = 45, g = 85, b = 120 }
 run_output_fg = { r = 185, g = 198, b = 212 }
-"#
-        .to_string()
-    }
-
-    fn get_light_theme_content() -> String {
-        r#"# ntc Light Theme
-name = "light"
-author = "NuengCoder"
-description = "Light theme for bright environments"
-
-[syntax]
-keyword = { r = 120, g = 60, b = 180 }
-string = { r = 30, g = 140, b = 50 }
-comment = { r = 120, g = 120, b = 120 }
-number = { r = 200, g = 120, b = 40 }
-type = { r = 40, g = 140, b = 160 }
-builtin = { r = 180, g = 60, b = 80 }
-function = { r = 50, g = 140, b = 180 }
-operator = { r = 80, g = 80, b = 80 }
-punctuation = { r = 100, g = 100, b = 100 }
-attribute = { r = 130, g = 80, b = 200 }
-macro_token = { r = 150, g = 100, b = 210 }
-regex = { r = 200, g = 120, b = 60 }
-tag = { r = 40, g = 160, b = 140 }
-constant = { r = 180, g = 130, b = 60 }
-normal = { r = 30, g = 30, b = 30 }
-
-[shell]
-prompt_bracket = "bright_blue"
-prompt_path = "blue"
-prompt_watcher = "yellow"
-prompt_arrow = "green"
-success = "green"
-error = "red"
-warning = "yellow"
-info = "blue"
-tree_branch = "green"
-tree_dir = "blue"
-tree_file = "black"
-tree_ignored = "bright_black"
-tree_size = "yellow"
-command_output = "black"
-separator = "bright_blue"
-help_header = "bright_blue"
-help_section = "blue"
-help_example = "green"
-teleport_name = "blue"
-alias_name = "blue"
-alias_command = "bright_black"
-git_branch = "blue"
-git_added = "green"
-git_modified = "yellow"
-git_deleted = "red"
-git_untracked = "bright_black"
-git_conflict = "bright_red"
-
-[editor]
-editor_bg = { r = 245, g = 245, b = 245 }
-gutter_bg = { r = 240, g = 240, b = 240 }
-status_bg = { r = 100, g = 80, b = 200 }
-hint_bg = { r = 235, g = 235, b = 235 }
-sidebar_bg = { r = 240, g = 240, b = 240 }
-sidebar_selected_bg = { r = 210, g = 210, b = 220 }
-run_panel_bg = { r = 235, g = 235, b = 235 }
-gutter_text = { r = 120, g = 120, b = 120 }
-status_text = "white"
-status_modified = "yellow"
-hint_text = { r = 80, g = 140, b = 180 }
-cursor_bg = "black"
-cursor_text = "white"
-extra_cursor_bg = { r = 220, g = 100, b = 120 }
-selection_bg = { r = 200, g = 190, b = 220 }
-search_match_bg = { r = 210, g = 210, b = 220 }
-search_current_bg = { r = 160, g = 120, b = 220 }
-border = { r = 180, g = 180, b = 200 }
-scrollbar = { r = 180, g = 180, b = 200 }
-scrollbar_thumb = { r = 140, g = 100, b = 200 }
-sidebar_dir = { r = 60, g = 140, b = 160 }
-sidebar_file = { r = 60, g = 60, b = 60 }
-sidebar_current = { r = 200, g = 120, b = 40 }
-sidebar_selected = "black"
-run_header_fg = { r = 60, g = 100, b = 140 }
-run_header_unfocused_fg = { r = 35, g = 65, b = 95 }
-run_output_fg = { r = 40, g = 50, b = 60 }
 "#
         .to_string()
     }
@@ -384,16 +331,36 @@ regex = "bright_yellow"
 tag = "bright_cyan"
 constant = "yellow"
 normal = "white"
+muted = "bright_black"
+table_header = "cyan"
+table_border = "cyan"
+line_number = "yellow"
 
 [shell]
 prompt_bracket = "cyan"
 prompt_path = "blue"
 prompt_watcher = "yellow"
 prompt_arrow = "green"
+ntc_command = "yellow"
+txtf_file = "bright_green"
+ral_name = "bright_magenta"
+ral_command = "yellow"
+ntc_sub_command = "bright_cyan"
+sub_sub_command = "bright_blue"
+flag1 = "yellow"
+flag2 = "bright_yellow"
+tp_name = "bright_blue"
+tp_path = "cyan"
+ral_ls_alias = "cyan"
+tp_ls_tp_name = "cyan"
 success = "green"
 error = "red"
 warning = "yellow"
 info = "cyan"
+muted = "bright_black"
+table_header = "cyan"
+table_border = "cyan"
+line_number = "yellow"
 tree_branch = "green"
 tree_dir = "blue"
 tree_file = "white"
@@ -415,10 +382,11 @@ git_untracked = "bright_black"
 git_conflict = "bright_red"
 
 [editor]
-editor_bg = { r = 13, g = 13, b = 21 }
-gutter_bg = { r = 13, g = 13, b = 21 }
+editor_bg = { r = 46, g = 46, b = 54 }
+gutter_bg = { r = 36, g = 36, b = 44 }
 status_bg = { r = 162, g = 119, b = 255 }
 hint_bg = { r = 21, g = 21, b = 29 }
+text_field_bg = { r = 60, g = 60, b = 60 }
 sidebar_bg = { r = 13, g = 13, b = 21 }
 sidebar_selected_bg = { r = 44, g = 44, b = 58 }
 run_panel_bg = { r = 22, g = 22, b = 30 }
@@ -435,6 +403,7 @@ search_current_bg = { r = 162, g = 119, b = 255 }
 border = { r = 61, g = 61, b = 77 }
 scrollbar = { r = 61, g = 61, b = 77 }
 scrollbar_thumb = { r = 162, g = 119, b = 255 }
+indent_guide = { r = 50, g = 50, b = 65 }
 sidebar_dir = { r = 120, g = 220, b = 232 }
 sidebar_file = { r = 200, g = 200, b = 208 }
 sidebar_current = { r = 255, g = 202, b = 133 }
@@ -444,6 +413,138 @@ run_header_unfocused_fg = { r = 45, g = 85, b = 120 }
 run_output_fg = { r = 180, g = 200, b = 210 }
 "#
         .to_string()
+    }
+
+    /// Add theme fields that are absent from `content` without touching any
+    /// existing value. Comments and unknown keys are preserved; only complete
+    /// `key = value` lines are appended to their section.
+    pub fn merge_missing_theme_fields(
+        content: &str,
+        theme_name: &str,
+    ) -> Result<(String, Vec<String>), String> {
+        let existing: toml::Value = toml::from_str(content).map_err(|e| e.to_string())?;
+        let existing_table = existing
+            .as_table()
+            .ok_or_else(|| "theme file must contain a table".to_string())?;
+        let template: toml::Value =
+            toml::from_str(&Self::get_example_theme_template()).map_err(|e| e.to_string())?;
+        let template_table = template
+            .as_table()
+            .ok_or_else(|| "theme template is not a table".to_string())?;
+
+        let mut added = Vec::new();
+        let mut top_level = Vec::new();
+        for key in ["name", "author", "description"] {
+            if existing_table.contains_key(key) {
+                continue;
+            }
+            let value = if key == "name" {
+                toml::Value::String(theme_name.to_string())
+            } else {
+                match template_table.get(key) {
+                    Some(value) => value.clone(),
+                    None => continue,
+                }
+            };
+            top_level.push(format!("{} = {}", key, value));
+            added.push(key.to_string());
+        }
+
+        let mut section_additions: Vec<(&str, Vec<String>)> = Vec::new();
+        for section in ["syntax", "shell", "editor"] {
+            let Some(template_section) = template_table.get(section).and_then(|v| v.as_table())
+            else {
+                continue;
+            };
+            let existing_section = existing_table.get(section).and_then(|v| v.as_table());
+            let mut lines = Vec::new();
+            for (key, value) in template_section {
+                if existing_section.is_some_and(|table| table.contains_key(key)) {
+                    continue;
+                }
+                lines.push(format!("{} = {}", key, value));
+                added.push(format!("{}.{}", section, key));
+            }
+            if !lines.is_empty() {
+                section_additions.push((section, lines));
+            }
+        }
+
+        if added.is_empty() {
+            return Ok((content.to_string(), added));
+        }
+        let newline = if content.contains("\r\n") {
+            "\r\n"
+        } else {
+            "\n"
+        };
+        let mut lines: Vec<String> = content.lines().map(str::to_string).collect();
+
+        if !top_level.is_empty() {
+            let first_section = lines
+                .iter()
+                .position(|line| section_name(line).is_some())
+                .unwrap_or(lines.len());
+            lines.splice(first_section..first_section, top_level);
+        }
+
+        for (section, missing) in section_additions {
+            if let Some(start) = lines
+                .iter()
+                .position(|line| section_name(line) == Some(section))
+            {
+                let end = lines
+                    .iter()
+                    .enumerate()
+                    .skip(start + 1)
+                    .find(|(_, line)| section_name(line).is_some())
+                    .map(|(idx, _)| idx)
+                    .unwrap_or(lines.len());
+                let mut insert_at = end;
+                while insert_at > start + 1 && lines[insert_at - 1].trim().is_empty() {
+                    insert_at -= 1;
+                }
+                lines.splice(insert_at..insert_at, missing);
+            } else {
+                if lines.last().is_some_and(|line| !line.trim().is_empty()) {
+                    lines.push(String::new());
+                }
+                lines.push(format!("[{}]", section));
+                lines.extend(missing);
+            }
+        }
+
+        let mut merged = lines.join(newline);
+        merged.push_str(newline);
+        toml::from_str::<Theme>(&merged).map_err(|e| e.to_string())?;
+        Ok((merged, added))
+    }
+
+    /// Fill in fields added by newer ntc releases for one theme file.
+    /// Existing values and comments are left untouched.
+    pub fn update_theme(name: &str) -> Result<usize, String> {
+        if name.is_empty()
+            || !name
+                .chars()
+                .all(|c| c.is_alphanumeric() || c == '_' || c == '-')
+        {
+            return Err(
+                "Theme name can only contain letters, numbers, underscores, and hyphens"
+                    .to_string(),
+            );
+        }
+        let themes_dir = Self::themes_dir().ok_or("Failed to get themes directory")?;
+        let path = themes_dir.join(format!("{}.ntc_theme", name));
+        if !path.exists() {
+            return Err(format!("Theme '{}' has no theme file to update", name));
+        }
+        let content = fs::read_to_string(&path).map_err(|e| e.to_string())?;
+        let (merged, added) = Self::merge_missing_theme_fields(&content, name)?;
+        if !added.is_empty() {
+            fs::write(&path, &merged).map_err(|e| e.to_string())?;
+            Self::reload_themes();
+        }
+        Ok(added.len())
     }
 
     pub fn create_theme(name: &str) -> Result<(), String> {
@@ -466,7 +567,7 @@ run_output_fg = { r = 180, g = 200, b = 210 }
         let mut content = Self::get_example_theme_template();
         content = content.replace("name = \"mytheme\"", &format!("name = \"{}\"", name));
         fs::write(&theme_path, content).map_err(|e| e.to_string())?;
-        let _ = crate::editor::edit_file(&theme_path);
+        let _ = crate::shell::commands::builtin::ne::editor::edit_file(&theme_path);
         Self::reload_themes();
         Ok(())
     }
@@ -492,20 +593,23 @@ run_output_fg = { r = 180, g = 200, b = 210 }
     }
 
     pub fn remove_theme(name: &str) -> Result<(), String> {
-        if name == "default" || name == "light" {
-            return Err("Cannot remove built-in themes (default, light)".to_string());
+        if name == "default" {
+            return Err("Cannot remove the built-in theme 'default'".to_string());
         }
         if !Self::theme_exists(name) {
             return Err(format!("Theme '{}' not found", name));
         }
+        let current = Self::current();
+        if current.name == name {
+            return Err(format!(
+                "Cannot remove the current theme '{}'; switch to another theme first",
+                name
+            ));
+        }
+        drop(current);
         let themes_dir = Self::themes_dir().ok_or("Failed to get themes directory")?;
         let theme_path = themes_dir.join(format!("{}.ntc_theme", name));
         fs::remove_file(theme_path).map_err(|e| e.to_string())?;
-        let current = Self::current();
-        if current.name == name {
-            drop(current);
-            Self::set_theme("default");
-        }
         Self::reload_themes();
         Ok(())
     }
@@ -539,11 +643,22 @@ run_output_fg = { r = 180, g = 200, b = 210 }
     }
 
     pub fn reload_themes() {
+        let current_name = Self::current().name.clone();
         let mut themes = Self::global()
             .available_themes
             .write()
             .unwrap_or_else(|e| e.into_inner());
         *themes = Self::load_themes();
+        // Re-read the active theme too, so edits to the theme file currently
+        // in use take effect on the next frame instead of only after restart.
+        if let Some(theme) = themes.get(&current_name).cloned() {
+            drop(themes);
+            let mut current = Self::global()
+                .current_theme
+                .write()
+                .unwrap_or_else(|e| e.into_inner());
+            *current = theme;
+        }
     }
 
     pub fn install_theme(path: &std::path::Path) -> Result<(), String> {
@@ -560,6 +675,36 @@ run_output_fg = { r = 180, g = 200, b = 210 }
     pub fn take_theme_changed() -> bool {
         THEME_CHANGED.swap(false, Ordering::Acquire)
     }
+}
+
+/// Fill editor fields added after a theme file was written. A missing
+/// `text_field_bg` follows the theme's editor background instead of the
+/// serde default, so older and custom themes don't keep a dark input box.
+fn apply_missing_editor_defaults(content: &str, theme: &mut Theme) {
+    let defines_text_field = toml::from_str::<toml::Value>(content)
+        .ok()
+        .and_then(|doc| {
+            doc.get("editor")
+                .and_then(|editor| editor.get("text_field_bg"))
+                .map(|_| ())
+        })
+        .is_some();
+    if !defines_text_field {
+        theme.editor.text_field_bg = ThemeColor::input_bg_from(&theme.editor.editor_bg);
+    }
+}
+
+/// Parse a bare `[section]` header. Inline comments are ignored.
+fn section_name(line: &str) -> Option<&str> {
+    let trimmed = line.trim();
+    let without_comment = trimmed
+        .split_once('#')
+        .map_or(trimmed, |(head, _)| head.trim());
+    without_comment
+        .strip_prefix('[')
+        .and_then(|rest| rest.strip_suffix(']'))
+        .map(str::trim)
+        .filter(|name| !name.is_empty())
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -598,3 +743,109 @@ macro_rules! themed {
 // ============================================================================
 // Tests
 // ============================================================================
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::utils::theme::ThemeColor;
+
+    #[test]
+    fn merge_adds_missing_fields_without_overriding_existing_ones() {
+        let content = "# keep this comment\nname = \"mine\"\n\n[syntax]\nkeyword = \"red\"\n\n[shell]\nprompt_path = \"blue\"\n";
+        let (merged, added) = ThemeManager::merge_missing_theme_fields(content, "mine").unwrap();
+
+        assert!(merged.contains("# keep this comment"));
+        assert!(merged.contains("keyword = \"red\""));
+        assert!(merged.contains("prompt_path = \"blue\""));
+        assert!(merged.contains("string = \"green\""));
+        assert!(merged.contains("[editor]"));
+        assert!(!merged.contains("keyword = \"magenta\""));
+        assert!(added.iter().any(|key| key == "syntax.string"));
+        assert!(added.iter().any(|key| key == "shell.prompt_bracket"));
+        assert!(added.iter().any(|key| key == "shell.ral_ls_alias"));
+        assert!(added.iter().any(|key| key == "shell.tp_ls_tp_name"));
+
+        let theme: Theme = toml::from_str(&merged).unwrap();
+        assert_eq!(theme.name, "mine");
+        assert_eq!(theme.syntax.keyword, ThemeColor::Red);
+        assert_eq!(theme.shell.prompt_path, ThemeColor::Blue);
+        assert_eq!(theme.shell.ral_ls_alias, ThemeColor::Cyan);
+        assert_eq!(theme.shell.tp_ls_tp_name, ThemeColor::Cyan);
+    }
+
+    #[test]
+    fn merge_empty_theme_starts_with_the_requested_name() {
+        let (merged, added) = ThemeManager::merge_missing_theme_fields("", "empty").unwrap();
+        assert!(merged.starts_with("name = \"empty\""));
+        assert!(added.iter().any(|key| key == "syntax.keyword"));
+        let theme: Theme = toml::from_str(&merged).unwrap();
+        assert_eq!(theme.name, "empty");
+    }
+
+    #[test]
+    fn merge_leaves_a_complete_theme_byte_for_byte_unchanged() {
+        let content = ThemeManager::get_example_theme_template();
+        let (merged, added) =
+            ThemeManager::merge_missing_theme_fields(&content, "mytheme").unwrap();
+        assert!(added.is_empty());
+        assert_eq!(merged, content);
+    }
+
+    #[test]
+    fn missing_text_field_bg_follows_editor_bg() {
+        let content = "name = \"old\"\n[editor]\neditor_bg = { r = 20, g = 21, b = 22 }\n";
+        let mut theme: Theme = toml::from_str(content).unwrap();
+        apply_missing_editor_defaults(content, &mut theme);
+        assert_eq!(
+            theme.editor.text_field_bg,
+            ThemeColor::input_bg_from(&theme.editor.editor_bg)
+        );
+        assert_ne!(
+            theme.editor.text_field_bg,
+            ThemeColor::Rgb {
+                r: 60,
+                g: 60,
+                b: 60
+            }
+        );
+    }
+
+    #[test]
+    fn explicit_text_field_bg_is_not_replaced() {
+        let content = "name = \"mine\"\n[editor]\neditor_bg = { r = 20, g = 21, b = 22 }\ntext_field_bg = { r = 1, g = 2, b = 3 }\n";
+        let mut theme: Theme = toml::from_str(content).unwrap();
+        apply_missing_editor_defaults(content, &mut theme);
+        assert_eq!(
+            theme.editor.text_field_bg,
+            ThemeColor::Rgb { r: 1, g: 2, b: 3 }
+        );
+    }
+
+    #[test]
+    fn text_field_fallback_contrasts_with_editor_bg() {
+        assert_eq!(
+            ThemeColor::input_bg_from(&ThemeColor::Rgb {
+                r: 20,
+                g: 20,
+                b: 20
+            }),
+            ThemeColor::Rgb {
+                r: 56,
+                g: 56,
+                b: 56
+            }
+        );
+        assert_eq!(
+            ThemeColor::input_bg_from(&ThemeColor::Rgb {
+                r: 240,
+                g: 240,
+                b: 240
+            }),
+            ThemeColor::Rgb {
+                r: 216,
+                g: 216,
+                b: 216
+            }
+        );
+    }
+}

@@ -17,6 +17,26 @@ pub fn fill(m: &mut HashMap<String, String>) {
     );
 
     m.insert(
+        "help.theme.example1".into(),
+        "theme list ## ລາຍຊື່ themes ທີ່ມີທັງໝົດ".into(),
+    );
+
+    m.insert(
+        "help.theme.example2".into(),
+        "theme dark ## ສະຫຼັບໄປ theme 'dark'".into(),
+    );
+
+    m.insert(
+        "help.theme.example3".into(),
+        "theme current ## ສະແດງຂໍ້ມູນ theme ປັດຈຸບັນ".into(),
+    );
+
+    m.insert(
+        "help.theme.example4".into(),
+        "theme add mytheme ## ສ້າງ theme ໃໝ່".into(),
+    );
+
+    m.insert(
         "help.theme.export".into(),
         "theme export <name> ## ສົ່ງອອກ theme ເປັນໄຟລ໌ .ntc_theme".into(),
     );
@@ -51,7 +71,10 @@ pub fn fill(m: &mut HashMap<String, String>) {
         "theme reload ## ໂຫຼດ themes ຄືນໃໝ່ຈາກ disk".into(),
     );
 
-    m.insert("help.theme.rm".into(), "theme rm <name> ## ລຶບ theme".into());
+    m.insert(
+        "help.theme.rm".into(),
+        "theme rm <name...> [-f|--force] ## ລຶບ theme".into(),
+    );
 
     m.insert(
         "help.theme.rnm".into(),
@@ -60,10 +83,15 @@ pub fn fill(m: &mut HashMap<String, String>) {
 
     m.insert(
         "help.theme.switch".into(),
-        "theme <name> ## ສະຫຼັບໄປ theme ຕາມຊື່".into(),
+        "theme use <name> ## ສະຫຼັບໄປ theme ຕາມຊື່".into(),
     );
 
     m.insert("help.theme.title".into(), "ຄຳສັ່ງ THEME:".into());
+
+    m.insert(
+        "help.theme.update".into(),
+        "theme update <name> ## ເພີ່ມຟິລດ໌ທີ່ຂາດໃຫ້ theme ທີ່ມີຢູ່".into(),
+    );
 
     m.insert(
         "help.theme.where".into(),
@@ -71,22 +99,7 @@ pub fn fill(m: &mut HashMap<String, String>) {
     );
 
     m.insert(
-        "help.theme.example1".into(),
-        "theme list ## ລາຍຊື່ themes ທີ່ມີທັງໝົດ".into(),
-    );
-
-    m.insert(
-        "help.theme.example2".into(),
-        "theme dark ## ສະຫຼັບໄປ theme 'dark'".into(),
-    );
-
-    m.insert(
-        "help.theme.example3".into(),
-        "theme current ## ສະແດງຂໍ້ມູນ theme ປັດຈຸບັນ".into(),
-    );
-
-    m.insert(
-        "help.theme.example4".into(),
-        "theme add mytheme ## ສ້າງ theme ໃໝ່".into(),
+        "help.theme.install".into(),
+        "theme install ## ຕິດຕັ້ງທີມຈາກແຄັດຕາລັອກ GitHub ຂອງ ntc".into(),
     );
 }

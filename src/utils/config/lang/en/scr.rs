@@ -109,4 +109,151 @@ pub fn fill(m: &mut HashMap<String, String>) {
         "scr.syscmd_terminated".into(),
         "Command terminated (Ctrl+C)".into(),
     );
+
+    // ── script language ─────────────────────────────────────────────────
+    m.insert("scr.help_syntax_header".into(), "Syntax:".into());
+
+    m.insert(
+        "scr.help_direct".into(),
+        " <file.ntc> [args...] Run a script without the scr prefix".into(),
+    );
+
+    m.insert(
+        "scr.desc_expr".into(),
+        " set NAME = <expr> Values, arithmetic, function calls".into(),
+    );
+
+    m.insert(
+        "scr.desc_if".into(),
+        " if <cond> / else if / else / end Conditional block".into(),
+    );
+
+    m.insert(
+        "scr.desc_while".into(),
+        " while <cond> / end Loop while a condition holds".into(),
+    );
+
+    m.insert(
+        "scr.desc_for".into(),
+        " for VAR in <list> / end Loop over words".into(),
+    );
+
+    m.insert(
+        "scr.desc_loop".into(),
+        " loop [count] / end Repeat count times (default: until break)".into(),
+    );
+
+    m.insert(
+        "scr.desc_break".into(),
+        " break / continue Leave a loop, or skip to the next round".into(),
+    );
+
+    m.insert(
+        "scr.desc_func".into(),
+        " func NAME(params) / end Define a function".into(),
+    );
+
+    m.insert(
+        "scr.desc_call".into(),
+        " call NAME(args) Call a function".into(),
+    );
+
+    m.insert(
+        "scr.desc_return".into(),
+        " return [value] Leave a function with a value".into(),
+    );
+
+    m.insert(
+        "scr.desc_input".into(),
+        " input NAME [prompt] Read a line into a variable".into(),
+    );
+
+    m.insert("scr.desc_exit".into(), " exit Stop the script".into());
+
+    m.insert(
+        "scr.desc_functions_header".into(),
+        "Expression functions:".into(),
+    );
+
+    m.insert(
+        "scr.desc_fn_nprintf".into(),
+        " nprintf(fmt, ...) Format like the nprintf builtin".into(),
+    );
+
+    m.insert(
+        "scr.desc_fn_strings".into(),
+        " len / upper / lower / trim / str String helpers".into(),
+    );
+
+    m.insert(
+        "scr.desc_fn_math".into(),
+        " int / abs Numeric helpers".into(),
+    );
+
+    m.insert(
+        "scr.desc_fn_env".into(),
+        " env(NAME) Read an environment variable".into(),
+    );
+
+    m.insert("scr.input_prompt".into(), "> ".into());
+
+    m.insert(
+        "scr.input_eof".into(),
+        "No input for '{}' \u{2014} stopping the script".into(),
+    );
+
+    m.insert("scr.parse_error".into(), "{}:{} \u{2014} {}".into());
+
+    m.insert(
+        "scr.parse_failed".into(),
+        "Script '{}' has {} syntax error(s); nothing was run".into(),
+    );
+
+    m.insert(
+        "scr.err_expr".into(),
+        "invalid expression '{}': {}".into(),
+    );
+
+    m.insert(
+        "scr.err_loop_limit".into(),
+        "loop exceeded {} iterations and was stopped".into(),
+    );
+
+    m.insert("scr.err_func_missing".into(), "unknown function '{}'".into());
+
+    m.insert(
+        "scr.err_func_args".into(),
+        "'{}' takes {} argument(s), got {}".into(),
+    );
+
+    m.insert(
+        "scr.err_recursion".into(),
+        "'{}' nested more than {} calls deep".into(),
+    );
+
+    m.insert(
+        "scr.err_break_outside_loop".into(),
+        "`break` / `continue` cannot leave function '{}'".into(),
+    );
+
+    m.insert(
+        "scr.nested_too_deep".into(),
+        "Scripts are nested more than {} levels deep; stopping".into(),
+    );
+
+    m.insert(
+        "scr.pipe_refused".into(),
+        "'{}' sets `set-pipe = fail`, so it cannot be piped or redirected".into(),
+    );
+
+    m.insert(
+        "scr.desc_pipe".into(),
+        " set-pipe = on|off May this script be piped or redirected".into(),
+    );
+
+    m.insert(
+        "scr.desc_showexc".into(),
+        " set-showexc = on|off Show the [n] Executing: trace".into(),
+    );
+
 }

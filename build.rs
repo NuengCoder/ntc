@@ -133,21 +133,18 @@ fn arm64_link_search() {
         let lib = Path::new(&vc).join("lib").join("ARM64");
         println!("cargo:rustc-link-search=native={}", lib.display());
     }
-    match (
+    if let (Ok(dir), Ok(ver)) = (
         std::env::var("WindowsSdkDir"),
         std::env::var("WindowsSDKVersion"),
     ) {
-        (Ok(dir), Ok(ver)) => {
-            let base = Path::new(&dir).join("lib").join(&ver);
-            println!(
-                "cargo:rustc-link-search=native={}",
-                base.join("ucrt").join("arm64").display()
-            );
-            println!(
-                "cargo:rustc-link-search=native={}",
-                base.join("um").join("arm64").display()
-            );
-        }
-        _ => {}
+        let base = Path::new(&dir).join("lib").join(&ver);
+        println!(
+            "cargo:rustc-link-search=native={}",
+            base.join("ucrt").join("arm64").display()
+        );
+        println!(
+            "cargo:rustc-link-search=native={}",
+            base.join("um").join("arm64").display()
+        );
     }
 }

@@ -297,4 +297,50 @@ pub fn fill(m: &mut HashMap<String, String>) {
         "cmd.smtp.password_hidden".into(),
         "******** (ซ่อนอยู่ - ใช้ --deadlock)".into(),
     );
+
+    m.insert(
+        "cmd.smtp.file_created".into(),
+        "สร้าง {} แล้ว - กรอกข้อมูล SMTP ของคุณ แล้วส่งด้วย: smtp -r {}".into(),
+    );
+    m.insert(
+        "cmd.smtp.file_exists".into(),
+        "{} มีอยู่แล้ว (ใช้ --force เพื่อเขียนทับ)".into(),
+    );
+    m.insert(
+        "cmd.smtp.file_incomplete".into(),
+        "การตั้งค่า SMTP ต้องมีเซิร์ฟเวอร์ ผู้ใช้ และรหัสผ่าน: {}".into(),
+    );
+    m.insert(
+        "cmd.smtp.file_invalid".into(),
+        "JSON การตั้งค่า SMTP ไม่ถูกต้อง: {}".into(),
+    );
+    m.insert(
+        "cmd.smtp.file_missing".into(),
+        "ไม่พบการตั้งค่า SMTP: {} (สร้างด้วย: smtp init)".into(),
+    );
+    m.insert(
+        "cmd.smtp.file_read_fail".into(),
+        "อ่านการตั้งค่า SMTP ไม่ได้: {}".into(),
+    );
+    m.insert(
+        "cmd.smtp.file_write_fail".into(),
+        "เขียนการตั้งค่า SMTP ไม่ได้: {}".into(),
+    );
+    m.insert(
+        "cmd.smtp.help_file_init".into(),
+        "  smtp init [file] [--force]      สร้าง ntc_smtp.json พร้อม server/user/password/to/files"
+            .into(),
+    );
+    m.insert(
+        "cmd.smtp.help_file_send".into(),
+        "  smtp -r ntc_smtp.json -s \"TITLE\" -b \"BODY\" [-f FILE] [-t TO]".into(),
+    );
+    m.insert(
+        "cmd.smtp.help_file_title".into(),
+        "การตั้งค่าไฟล์เดียว (ntc_smtp.json):".into(),
+    );
+    m.insert(
+        "cmd.smtp.missing_read_file".into(),
+        "ไม่มีไฟล์การตั้งค่าหลัง -r (ตัวอย่าง: -r ntc_smtp.json)".into(),
+    );
 }

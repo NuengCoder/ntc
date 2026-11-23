@@ -495,4 +495,38 @@ pub fn fill(m: &mut HashMap<String, String>) {
         "alias.ral.bare_env_warning".into(),
         "ตอนนี้ $NAME แบบไม่มีวงเล็บคือตัวแปรสภาพแวดล้อม ใช้ ${name} สำหรับพารามิเตอร์: {}".into(),
     );
+
+    m.insert(
+        "alias.ral.install_cmd".into(),
+        " ral install ติดตั้ง run aliases จากแคตตาล็อก GitHub ของ ntc".into(),
+    );
+
+    m.insert(
+        "alias.ral.install_downloading".into(),
+        "กำลังดาวน์โหลด {}...".into(),
+    );
+
+    m.insert("alias.ral.install_failed".into(), "ติดตั้งไม่สำเร็จ: {}".into());
+
+    m.insert(
+        "alias.ral.install_fetching".into(),
+        "กำลังดึงไฟล์ .ntc.ral จาก GitHub...".into(),
+    );
+
+    m.insert(
+        "alias.ral.install_none".into(),
+        "ไม่พบไฟล์ .ntc.ral ที่ติดตั้งได้".into(),
+    );
+
+    m.insert(
+        "alias.ral.install_prompt".into(),
+        "เลือกไฟล์ (0 เพื่อยกเลิก):".into(),
+    );
+
+    m.insert("alias.ral.install_title".into(), "ติดตั้ง run aliases".into());
+
+    m.insert(
+        "alias.ral.installed".into(),
+        "ติดตั้ง aliases จาก {} แล้ว".into(),
+    );
 }

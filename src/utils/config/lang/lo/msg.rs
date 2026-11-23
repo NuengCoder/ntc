@@ -256,6 +256,26 @@ pub fn fill(m: &mut HashMap<String, String>) {
 
     m.insert("msg.showcg.label_serve_chess".into(), "Serve chess:".into());
 
+    m.insert("msg.showcg.label_serve_git".into(), "Serve git:".into());
+
+    m.insert("msg.showcg.label_serve_arc".into(), "Serve arc:".into());
+
+    m.insert("msg.showcg.label_serve_theme".into(), "Serve theme:".into());
+
+    m.insert("msg.showcg.label_serve_ndb".into(), "Serve ndb:".into());
+
+    m.insert(
+        "msg.showcg.label_serve_backup".into(),
+        "Serve backup:".into(),
+    );
+
+    m.insert("msg.showcg.label_serve_fake".into(), "Serve fake:".into());
+
+    m.insert(
+        "msg.showcg.label_serve_config".into(),
+        "Serve config:".into(),
+    );
+
     m.insert("msg.showcg.title".into(), "ການຕັ້ງຄ່າປັດຈຸບັນ".into());
 
     m.insert("msg.size.bytes_label".into(), "Bytes:".into());
@@ -433,5 +453,33 @@ pub fn fill(m: &mut HashMap<String, String>) {
     m.insert(
         "msg.setIdle.error".into(),
         "ຄ່າທີ່ບໍ່ຮູ້ຈັກ: {} (ໃຊ້ ON ຫຼື OFF)".into(),
+    );
+
+    m.insert(
+        "msg.setIV.error".into(),
+        "ວິທີໃຊ້: config intro_view ON|OFF".into(),
+    );
+    m.insert(
+        "msg.setIV.off".into(),
+        "ປິດມຸມມອງເລີ່ມຕົ້ນແລ້ວ (ບໍ່ມີໂລໂກ້, ບໍ່ມີແຈ້ງເຕືອນ ntpkg ຫຼື watcher).".into(),
+    );
+    m.insert(
+        "msg.setIV.on".into(),
+        "ເປີດມຸມມອງເລີ່ມຕົ້ນແລ້ວ (ໂລໂກ້, ແຈ້ງເຕືອນ ntpkg ແລະ watcher).".into(),
+    );
+    m.insert("msg.setIV.status".into(), "ມຸມມອງເລີ່ມຕົ້ນ: {}".into());
+    m.insert(
+        "msg.setTD.error".into(),
+        "ວິທີໃຊ້: config todo format <txt|md|json|toml|yaml|html>".into(),
+    );
+    m.insert(
+        "msg.setTD.set".into(),
+        "ຕັ້ງຮູບແບບ todo ເປັນ {} ແລ້ວ (ໄຟລ໌: future_todo.{}).".into(),
+    );
+    m.insert("msg.setTD.status".into(), "ຮູບແບບ todo: {}".into());
+    m.insert("msg.showcg.label_intro_view".into(), "ມຸມມອງເລີ່ມຕົ້ນ:".into());
+    m.insert(
+        "msg.showcg.label_serve_mdview".into(),
+        "Serve mdview:".into(),
     );
 }

@@ -5,8 +5,8 @@ use crate::output::{print_error, print_info, print_success};
 use crate::session::SessionState;
 use crate::shell::show_nav_view;
 use crate::t;
+use crate::utils::theme::style::{ShellRole, ThemeColorize};
 use anyhow::Result;
-use colored::*;
 use std::collections::VecDeque;
 use std::io::{self, Write};
 use std::path::PathBuf;
@@ -285,12 +285,15 @@ impl TeleportManager {
 
         let mut sorted: Vec<(String, PathBuf)> = teleports.into_iter().collect();
         sorted.sort_by(|a, b| a.0.cmp(&b.0));
+        let tp_name_color = crate::utils::theme::ThemeManager::current()
+            .shell
+            .role(ShellRole::TpLsTpName);
 
         for (i, (name, path)) in sorted.iter().enumerate() {
             println!(
                 "  {}. {} -> {}",
                 (i + 1).to_string().yellow(),
-                name.blue(),
+                tp_name_color.paint_ansi(name),
                 path.display().to_string().dimmed()
             );
         }

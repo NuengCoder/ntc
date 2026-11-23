@@ -1,0 +1,22 @@
+use std::collections::HashMap;
+
+pub fn fill(m: &mut HashMap<String, String>) {
+    m.insert("help.cd.title".into(), "CD ຄຳສັ່ງ:".into());
+
+    m.insert("help.cd.usage".into(), "cd <path> ## ນຳທາງໄປໄດເຣັກທໍຣີ".into());
+
+    m.insert(
+        "help.cd.cd_tp".into(),
+        "cd to <tp_name> ## Teleport ໄປຈຸດທີ່ບັນທຶກໄວ້".into(),
+    );
+
+    m.insert(
+        "help.cd.example1".into(),
+        "cd src ## ນຳທາງໄປທີ່ໄດເຣັກທໍຣີ src".into(),
+    );
+
+    m.insert(
+        "help.cd.example2".into(),
+        "cd to web ## Teleport ໄປຈຸດບັນທຶກ 'web'".into(),
+    );
+}

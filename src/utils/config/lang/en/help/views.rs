@@ -32,7 +32,10 @@ pub fn fill(m: &mut HashMap<String, String>) {
         "views --trim <text> ## Remove text from names and the ... group separator (repeatable, keeps colours)".into(),
     );
 
-    m.insert("help.views.note".into(), "No [Directory]/[ignored] tags - colours show the kind. Depth is fixed at 1 and sizes are always computed with --care semantics. Use --size to display sizes.".into());
+    m.insert(
+        "help.views.note".into(),
+        "No [Directory]/[ignored] tags - colours show the kind. Depth is fixed at 1 and sizes are always computed with --care semantics. Use --size to display sizes.".into(),
+    );
 
     m.insert(
         "help.views.example1".into(),

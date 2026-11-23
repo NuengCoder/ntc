@@ -4,11 +4,17 @@ pub fn fill(m: &mut HashMap<String, String>) {
     m.insert("cmd.config.local.init_all_removed".into(), "'local init --all' ถูกลบแล้ว - local config ไม่สามารถคัดลอกการตั้งค่า global ได้อีกต่อไป ใช้ 'local init' เพื่อสร้างเทมเพลต".into());
 
     m.insert(
+        "cmd.config.init.all_removed".into(),
+        "'init all' ถูกลบแล้ว - ให้รัน 'init ran', 'init local' หรือ 'init opencode' แยกกัน (หรือรวมกัน)"
+            .into(),
+    );
+
+    m.insert(
         "cmd.config.local.precedence_hint".into(),
         "รายการ local มีความสำคัญกว่า รายการ global ยังทำงานต่อ และ config global จะไม่ถูกแก้ไข".into(),
     );
 
-    m.insert("cmd.config.deinit.confirm".into(), "ลบ {}? (y/N): ".into());
+    m.insert("cmd.config.deinit.confirm".into(), "ลบ {}? [y|n]> ".into());
 
     m.insert(
         "cmd.config.deinit.local_not_found".into(),
@@ -41,7 +47,12 @@ pub fn fill(m: &mut HashMap<String, String>) {
 
     m.insert(
         "cmd.config.deinit.usage".into(),
-        "การใช้งาน: deinit [--all | --ran | --local | --opencode] [--force]".into(),
+        "การใช้งาน: deinit [ran | local | opencode]".into(),
+    );
+
+    m.insert(
+        "cmd.config.deinit.flags_removed".into(),
+        "'deinit all' และ '--force' ถูกลบแล้ว - การลบย้อนกลับไม่ได้ ให้ระบุ 'ran', 'local' หรือ 'opencode' และทุกการลบจะถามยืนยัน".into(),
     );
 
     m.insert(
@@ -95,12 +106,87 @@ pub fn fill(m: &mut HashMap<String, String>) {
 
     m.insert(
         "cmd.config.init.usage".into(),
-        "การใช้งาน: init [--all | --ran | --local | --opencode] [--force]".into(),
+        "การใช้งาน: init [ran | local | opencode | project] [-f|--force]".into(),
     );
 
     m.insert(
         "cmd.config.init.opencode_ready".into(),
         "OpenCode scaffold พร้อมแล้ว: {}".into(),
+    );
+
+    m.insert(
+        "cmd.config.init.project.usage".into(),
+        "การใช้งาน: init project [ชื่อ] [--lang <python,rust,go,js,ts,java,c,c++,other>] [--license <MIT,APACHE>] [--no <docker,git,ai,doc,ntc,oc,lc>]".into(),
+    );
+
+    m.insert(
+        "cmd.config.init.project.creating".into(),
+        "กำลังสร้างไดเรกทอรีโปรเจกต์ {}".into(),
+    );
+
+    m.insert(
+        "cmd.config.init.project.invalid_name".into(),
+        "ชื่อโปรเจกต์ไม่ถูกต้อง: {}".into(),
+    );
+
+    m.insert(
+        "cmd.config.init.project.done".into(),
+        "โปรเจกต์พร้อมแล้ว: {} (ไฟล์ใหม่ {} ไฟล์)".into(),
+    );
+
+    m.insert(
+        "cmd.config.init.project.git_created".into(),
+        "เริ่มต้น Git repository ว่างแล้ว".into(),
+    );
+
+    m.insert(
+        "cmd.config.init.project.git_exists".into(),
+        "มี Git repository อยู่แล้ว".into(),
+    );
+
+    m.insert(
+        "cmd.config.init.project.git_missing".into(),
+        "ไม่พบ Git ติดตั้งได้ด้วย `ntpkg install git`".into(),
+    );
+
+    m.insert(
+        "cmd.config.init.project.venv_prompt".into(),
+        "ต้องการสร้าง Python virtual environment (.venv) หรือไม่?".into(),
+    );
+
+    m.insert(
+        "cmd.config.init.project.venv_created".into(),
+        "สร้าง virtual environment แล้ว: {}".into(),
+    );
+
+    m.insert(
+        "cmd.config.init.project.venv_failed".into(),
+        "ไม่สามารถสร้าง virtual environment จะดำเนินการต่อโดยไม่มี".into(),
+    );
+
+    m.insert(
+        "cmd.config.init.project.lang_ready".into(),
+        "scaffold ภาษาพร้อมแล้ว: {}".into(),
+    );
+
+    m.insert(
+        "cmd.config.init.project.lang_unknown".into(),
+        "ไม่รู้จักภาษา ใช้ python, rust, go, js, ts, java, c, c++ หรือ other".into(),
+    );
+
+    m.insert(
+        "cmd.config.init.project.license_unknown".into(),
+        "ไม่รู้จัก license ใช้ MIT หรือ APACHE".into(),
+    );
+
+    m.insert(
+        "cmd.config.init.project.no_unknown".into(),
+        "ไม่รู้จักหมวดหมู่ --no: {} ใช้ docker, git, ai, doc, ntc, oc หรือ lc".into(),
+    );
+
+    m.insert(
+        "cmd.config.init.project.tool_missing".into(),
+        "ยังไม่ได้ติดตั้ง {} ติดตั้งได้ด้วย: {}".into(),
     );
 
     m.insert("cmd.config.lang.active".into(), "{} (ใช้งานอยู่)".into());
@@ -485,7 +571,7 @@ pub fn fill(m: &mut HashMap<String, String>) {
 
     m.insert("cmd.config.serve.status".into(), "  {}: {}:{}".into());
 
-    m.insert("cmd.config.serve.usage".into(), "วิธีใช้: serve config [files|http-server|chess] [--port-default <พอร์ต>] [--bind-default <ที่อยู่>] (alias: config serve …)".into());
+    m.insert("cmd.config.serve.usage".into(), "วิธีใช้: serve config [files|http-server|chess|git|arc|theme|ndb] [--port-default <พอร์ต>] [--bind-default <ที่อยู่>] (alias: config serve …)".into());
 
     m.insert(
         "cmd.config.serve.example_show".into(),
@@ -509,7 +595,7 @@ pub fn fill(m: &mut HashMap<String, String>) {
 
     m.insert(
         "cmd.config.serve.invalid_service".into(),
-        "ไม่รู้จักบริการ '{}' (ใช้ files|http-server|chess)".into(),
+        "ไม่รู้จักบริการ '{}' (ใช้ files|http-server|chess|git|arc|theme|ndb|fake|config)".into(),
     );
 
     m.insert(
@@ -552,12 +638,12 @@ pub fn fill(m: &mut HashMap<String, String>) {
 
     m.insert(
         "cmd.config.env.empty".into(),
-        "ยังไม่ได้ตั้งตัวแปรสภาพแวดล้อมของ NTC ใช้: config env NAME value".into(),
+        "ยังไม่ได้ตั้งตัวแปรสภาพแวดล้อมของ NTC ใช้: config env NAME value (หรือ NAME=value)".into(),
     );
 
     m.insert(
         "cmd.config.env.list_hint".into(),
-        "เคล็ดลับ: config env NAME value [-g|-l|-os|-osg] | config env NAME | config rmenv NAME [-all]".into(),
+        "เคล็ดลับ: config env NAME value|NAME=value [-g|-l|-os|-osg] | config env NAME | config rmenv NAME [-all]".into(),
     );
 
     m.insert("cmd.config.env.get".into(), "{} = {}  [{}]".into());

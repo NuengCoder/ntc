@@ -11,13 +11,15 @@ use crate::watcher;
 use anyhow::Result;
 use rustyline::completion::{Completer, Pair};
 use rustyline::error::ReadlineError;
-use rustyline::highlight::Highlighter;
+use rustyline::highlight::{CmdKind, Highlighter};
 use rustyline::hint::Hinter;
 use rustyline::history::FileHistory;
 use rustyline::validate::Validator;
 use rustyline::{Cmd, ConditionalEventHandler, Event, EventContext, RepeatCount};
 use rustyline::{Config as RlConfig, Context, Editor};
 use rustyline::{EventHandler, KeyCode, KeyEvent, Modifiers};
+use std::borrow::Cow;
+use std::io::IsTerminal;
 use std::sync::Arc;
 
 /// Combined rustyline helper wrapping our custom hinter.
@@ -45,7 +47,15 @@ impl Hinter for NtcHelper {
     }
 }
 
-impl Highlighter for NtcHelper {}
+impl Highlighter for NtcHelper {
+    fn highlight<'l>(&self, line: &'l str, _pos: usize) -> Cow<'l, str> {
+        crate::shell::prompt_highlight::highlight_line(line)
+    }
+
+    fn highlight_char(&self, line: &str, _pos: usize, _kind: CmdKind) -> bool {
+        crate::shell::prompt_highlight::has_highlights(line)
+    }
+}
 impl Completer for NtcHelper {
     type Candidate = Pair;
     fn complete(
@@ -108,10 +118,28 @@ impl ConditionalEventHandler for RightIgnoresIdleHint {
     }
 }
 
+/// Read one line of a piped/redirected script from process stdin.
+///
+/// rustyline's Windows backend reports EOF after the first line when stdin is
+/// not a terminal, so scripted runs (`printf 'a\nb\n' | ntc`) must read stdin
+/// directly instead of going through `rl.readline`.
+fn read_script_line() -> Result<String, ReadlineError> {
+    let mut line = String::new();
+    match std::io::stdin().read_line(&mut line) {
+        Ok(0) => Err(ReadlineError::Eof),
+        Ok(_) => Ok(line.trim_end_matches(['\r', '\n']).to_string()),
+        Err(e) => Err(ReadlineError::Io(e)),
+    }
+}
+
 /// Read the bodies of every `<<` heredoc declared on `line`, prompting with
 /// a `heredoc>` continuation until each delimiter line is seen. Returns
 /// `None` when input is aborted (EOF / Ctrl-C), in which case nothing runs.
-fn read_heredocs_interactive(rl: &mut Editor<NtcHelper, FileHistory>, line: &str) -> Option<()> {
+fn read_heredocs_interactive(
+    rl: &mut Editor<NtcHelper, FileHistory>,
+    line: &str,
+    script_input: bool,
+) -> Option<()> {
     let delims = crate::shell::pipeline::scan_heredoc_delims(line);
     if delims.is_empty() {
         crate::shell::pipeline::set_heredoc_bodies(Vec::new());
@@ -121,7 +149,11 @@ fn read_heredocs_interactive(rl: &mut Editor<NtcHelper, FileHistory>, line: &str
     for delim in delims {
         let mut body = String::new();
         loop {
-            let readline = rl.readline("heredoc> ");
+            let readline = if script_input {
+                read_script_line()
+            } else {
+                rl.readline("heredoc> ")
+            };
             crate::shell::idle::prompt_ended();
             match readline {
                 Ok(l) => {
@@ -282,11 +314,42 @@ pub fn embedded_in_editor() -> bool {
     std::env::var("NTC_IN_EDITOR").is_ok()
 }
 
+/// Explicit startup directory for this process, set by `ntc --here` and
+/// `ntc -p/--path <dir>`. When present the interactive shell starts there
+/// and does not restore the last session directory.
+static STARTUP_DIR: std::sync::Mutex<Option<std::path::PathBuf>> = std::sync::Mutex::new(None);
+
+pub(crate) fn set_startup_dir(dir: std::path::PathBuf) {
+    if let Ok(mut slot) = STARTUP_DIR.lock() {
+        *slot = Some(dir);
+    }
+}
+
+fn take_startup_dir() -> Option<std::path::PathBuf> {
+    STARTUP_DIR.lock().ok().and_then(|mut slot| slot.take())
+}
+
+/// `ntc --here`: start in the launch directory and leave the saved session
+/// untouched (neither restore nor save).
+static SESSION_DISABLED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+pub(crate) fn disable_session() {
+    SESSION_DISABLED.store(true, std::sync::atomic::Ordering::Relaxed);
+}
+
+fn session_disabled() -> bool {
+    SESSION_DISABLED.load(std::sync::atomic::Ordering::Relaxed)
+}
+
 pub fn run_shell() -> Result<()> {
     let mut nav = Navigator::new()?;
-    // Embedded shell: keep the spawn cwd (editor's current cwd).
-    // Standalone shell: restore the last session directory as before.
-    if !embedded_in_editor() {
+    if let Some(startup) = take_startup_dir() {
+        // `--here` / `--path`: start exactly where the caller asked, even if
+        // a previous session ended somewhere else.
+        nav.go_to(&startup)?;
+    } else if !embedded_in_editor() {
+        // Embedded shell: keep the spawn cwd (editor's current cwd).
+        // Standalone shell: restore the last session directory as before.
         let last_dir = SessionState::read_global().last_directory.clone();
         if let Some(ref last_dir) = last_dir {
             if last_dir.exists() {
@@ -302,8 +365,12 @@ pub fn run_shell_with_nav(nav: Navigator) -> Result<()> {
 }
 
 pub fn run_classic_shell(mut nav: Navigator) -> Result<()> {
+    // Piped/redirected stdin is a command script, not a terminal to edit.
+    let script_input = !std::io::stdin().is_terminal();
+    crate::shell::stdin::set_script_mode(script_input);
+
     // Inject active ntpkg runtime bin directories into PATH
-    let pkg_dirs = crate::ntpkg::build_package_path_entries();
+    let pkg_dirs = crate::shell::commands::builtin::ntpkg::ntpkg::build_package_path_entries();
     if !pkg_dirs.is_empty() {
         let path_sep = if cfg!(windows) { ";" } else { ":" };
         let current_path = std::env::var("PATH").unwrap_or_default();
@@ -395,7 +462,6 @@ pub fn run_classic_shell(mut nav: Navigator) -> Result<()> {
                 "╚══════════════════════════════════════════════════════════════════╝"
             )
         );
-        println!();
         println!(
             "{}",
             crate::utils::theme::ThemeColor::BrightBlack.paint_ansi(&t!("entry.startup_hint"))
@@ -457,7 +523,7 @@ pub fn run_classic_shell(mut nav: Navigator) -> Result<()> {
 
         // Build the prompt. Host modes keep ntc's line editor in charge while
         // a foreign shell executes the lines.
-        let tutorial_prefix = crate::tutorial::prompt_prefix();
+        let tutorial_prefix = crate::shell::commands::builtin::tutorial::tutorial::prompt_prefix();
         let prompt = match mode {
             ForeignMode::Ps => host_prompt("ps", &host_dir, &display_path),
             ForeignMode::Bash => host_prompt(
@@ -480,18 +546,29 @@ pub fn run_classic_shell(mut nav: Navigator) -> Result<()> {
             }
         };
 
-        // A new prompt shows the next idle-mode suggestion.
-        if let Some(helper) = rl.helper_mut() {
-            helper.hinter.next_idle_hint();
+        // A new prompt shows the next idle-mode suggestion. Pass its visible
+        // width so the ghost starts right after the caret (see `shell::idle`).
+        // Scripted input has no prompt or ghost to draw.
+        if !script_input {
+            let prompt_width = crate::utils::ansi_text::visible_width(&prompt);
+            if let Some(helper) = rl.helper_mut() {
+                helper.hinter.next_idle_hint(prompt_width);
+            }
         }
-        let readline = rl.readline(&prompt);
+        let readline = if script_input {
+            read_script_line()
+        } else {
+            rl.readline(&prompt)
+        };
         // The idle ghost is drawn outside rustyline; stop the animator (and
         // forget the ghost) as soon as the prompt is done, before running the
         // command or printing "^C".
         crate::shell::idle::prompt_ended();
         let line = match readline {
             Ok(line) => {
-                rl.add_history_entry(&line).ok();
+                if !script_input {
+                    rl.add_history_entry(&line).ok();
+                }
                 line
             }
             Err(ReadlineError::Interrupted) => {
@@ -518,7 +595,7 @@ pub fn run_classic_shell(mut nav: Navigator) -> Result<()> {
 
         // Raw line before alias expansion: `tutorial` lessons check it so
         // running a freshly created alias still counts.
-        crate::tutorial::note_input(line);
+        crate::shell::commands::builtin::tutorial::tutorial::note_input(line);
 
         // ── ntc ps mode: PowerShell runs the line, ntc keeps the editor ──
         if mode == ForeignMode::Ps {
@@ -702,7 +779,7 @@ pub fn run_classic_shell(mut nav: Navigator) -> Result<()> {
         // Expand all aliases in the entire line (interactive `--select-*` menus included)
         // Heredocs (`<<EOF`) are read from the terminal before expansion.
         if crate::shell::pipeline::has_heredoc(line) {
-            if read_heredocs_interactive(&mut rl, line).is_none() {
+            if read_heredocs_interactive(&mut rl, line, script_input).is_none() {
                 continue;
             }
         } else {
@@ -754,7 +831,7 @@ pub fn run_classic_shell(mut nav: Navigator) -> Result<()> {
         // Tutorial progress: check the goal after the command has run (so a
         // `cd` has already moved us). Never reveals the answer.
         if !should_exit {
-            crate::tutorial::after_command(&nav);
+            crate::shell::commands::builtin::tutorial::tutorial::after_command(&nav);
         }
 
         // `clear` already redrew the view: swallow any pending watcher events
@@ -790,8 +867,8 @@ pub fn run_classic_shell(mut nav: Navigator) -> Result<()> {
         }
 
         if should_exit {
-            // Embedded shell: never overwrite the outer session's directory.
-            if !embedded_in_editor() {
+            // Embedded shell / `--here`: never touch the saved session.
+            if !embedded_in_editor() && !session_disabled() {
                 SessionState::write_global().last_directory =
                     Some(nav.current_path().to_path_buf());
                 SessionState::save_global();
@@ -804,9 +881,9 @@ pub fn run_classic_shell(mut nav: Navigator) -> Result<()> {
         }
     }
 
-    // Also save on EOF (skipped when embedded in the editor)
+    // Also save on EOF (skipped when embedded in the editor or `--here`)
     crate::shell::ext_complete::shutdown_all();
-    if !embedded_in_editor() {
+    if !embedded_in_editor() && !session_disabled() {
         SessionState::write_global().last_directory = Some(nav.current_path().to_path_buf());
         SessionState::save_global();
     }

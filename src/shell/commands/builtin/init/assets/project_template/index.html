@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{{name}}</title>
+    <style>
+      :root {
+        color-scheme: dark;
+        --bg: #171a21;
+        --panel: #232836;
+        --ink: #e6e9f2;
+        --muted: #9aa3b8;
+        --accent: #7c6cf0;
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        min-height: 100vh;
+        display: grid;
+        place-items: center;
+        background: var(--bg);
+        color: var(--ink);
+        font-family: ui-sans-serif, system-ui, sans-serif;
+      }
+      main {
+        max-width: 40rem;
+        padding: 2.5rem;
+        border: 1px solid #2f3547;
+        border-radius: 12px;
+        background: var(--panel);
+      }
+      h1 { margin: 0 0 0.5rem; }
+      p { color: var(--muted); line-height: 1.6; }
+      code { color: var(--accent); }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>{{name}}</h1>
+      <p>Project scaffolded with <code>ntc init project</code>.</p>
+      <p>Replace this page with your own entry point.</p>
+    </main>
+  </body>
+</html>

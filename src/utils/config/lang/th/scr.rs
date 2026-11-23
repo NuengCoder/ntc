@@ -94,4 +94,145 @@ pub fn fill(m: &mut HashMap<String, String>) {
     m.insert("scr.syscmd_exit".into(), "คำสั่งออกด้วยรหัส: {}".into());
 
     m.insert("scr.syscmd_terminated".into(), "คำสั่งสิ้นสุด (Ctrl+C)".into());
+
+    // ── ภาษาเขียนสคริปต์ ────────────────────────────────────────────────
+    m.insert("scr.help_syntax_header".into(), "ไวยากรณ์:".into());
+
+    m.insert(
+        "scr.help_direct".into(),
+        " <file.ntc> [args...] เรียกสคริปต์โดยไม่ต้องพิมพ์ scr".into(),
+    );
+
+    m.insert(
+        "scr.desc_expr".into(),
+        " set NAME = <expr> ค่า การคำนวณ การเรียกฟังก์ชัน".into(),
+    );
+
+    m.insert(
+        "scr.desc_if".into(),
+        " if <เงื่อนไข> / else if / else / end บล็อกเงื่อนไข".into(),
+    );
+
+    m.insert(
+        "scr.desc_while".into(),
+        " while <เงื่อนไข> / end วนซ้ำขณะเงื่อนไขเป็นจริง".into(),
+    );
+
+    m.insert(
+        "scr.desc_for".into(),
+        " for VAR in <รายการ> / end วนซ้ำตามคำ".into(),
+    );
+
+    m.insert(
+        "scr.desc_loop".into(),
+        " loop [จำนวน] / end ทำซ้ำตามจำนวน (ค่าเริ่มต้น: จนกว่าจะ break)".into(),
+    );
+
+    m.insert(
+        "scr.desc_break".into(),
+        " break / continue ออกจากลูป หรือข้ามไปรอบถัดไป".into(),
+    );
+
+    m.insert(
+        "scr.desc_func".into(),
+        " func NAME(พารามิเตอร์) / end ประกาศฟังก์ชัน".into(),
+    );
+
+    m.insert(
+        "scr.desc_call".into(),
+        " call NAME(อาร์กิวเมนต์) เรียกฟังก์ชัน".into(),
+    );
+
+    m.insert(
+        "scr.desc_return".into(),
+        " return [ค่า] ออกจากฟังก์ชันพร้อมค่า".into(),
+    );
+
+    m.insert(
+        "scr.desc_input".into(),
+        " input NAME [ข้อความ] อ่านหนึ่งบรรทัดเข้าตัวแปร".into(),
+    );
+
+    m.insert("scr.desc_exit".into(), " exit หยุดสคริปต์".into());
+
+    m.insert("scr.desc_functions_header".into(), "ฟังก์ชันในนิพจน์:".into());
+
+    m.insert(
+        "scr.desc_fn_nprintf".into(),
+        " nprintf(fmt, ...) จัดรูปแบบเหมือนคำสั่ง nprintf".into(),
+    );
+
+    m.insert(
+        "scr.desc_fn_strings".into(),
+        " len / upper / lower / trim / str ฟังก์ชันข้อความ".into(),
+    );
+
+    m.insert(
+        "scr.desc_fn_math".into(),
+        " int / abs ฟังก์ชันตัวเลข".into(),
+    );
+
+    m.insert(
+        "scr.desc_fn_env".into(),
+        " env(NAME) อ่านตัวแปรสภาพแวดล้อม".into(),
+    );
+
+    m.insert("scr.input_prompt".into(), "> ".into());
+
+    m.insert(
+        "scr.input_eof".into(),
+        "ไม่มีข้อมูลสำหรับ '{}' — หยุดสคริปต์".into(),
+    );
+
+    m.insert("scr.parse_error".into(), "{}:{} — {}".into());
+
+    m.insert(
+        "scr.parse_failed".into(),
+        "สคริปต์ '{}' มีข้อผิดพลาดไวยากรณ์ {} จุด จึงไม่ถูกเรียก".into(),
+    );
+
+    m.insert("scr.err_expr".into(), "นิพจน์ไม่ถูกต้อง '{}': {}".into());
+
+    m.insert("scr.err_loop_limit".into(), "ลูปเกิน {} รอบ จึงหยุด".into());
+
+    m.insert(
+        "scr.err_func_missing".into(),
+        "ไม่รู้จักฟังก์ชัน '{}'".into(),
+    );
+
+    m.insert(
+        "scr.err_func_args".into(),
+        "'{}' ต้องการ {} อาร์กิวเมนต์ แต่ได้ {}".into(),
+    );
+
+    m.insert(
+        "scr.err_recursion".into(),
+        "'{}' เรียกซ้อนเกิน {} ชั้น".into(),
+    );
+
+    m.insert(
+        "scr.err_break_outside_loop".into(),
+        "`break` / `continue` ออกจากฟังก์ชัน '{}' ไม่ได้".into(),
+    );
+
+    m.insert(
+        "scr.nested_too_deep".into(),
+        "สคริปต์ซ้อนกันเกิน {} ชั้น จึงหยุด".into(),
+    );
+
+    m.insert(
+        "scr.pipe_refused".into(),
+        "'{}' ตั้ง `set-pipe = fail` จึงใช้กับไปป์หรือเปลี่ยนเส้นทางไม่ได้".into(),
+    );
+
+    m.insert(
+        "scr.desc_pipe".into(),
+        " set-pipe = on|off อนุญาตให้สคริปต์นี้ถูกไปป์หรือเปลี่ยนเส้นทางหรือไม่".into(),
+    );
+
+    m.insert(
+        "scr.desc_showexc".into(),
+        " set-showexc = on|off แสดงบรรทัด [n] Executing: หรือไม่".into(),
+    );
+
 }

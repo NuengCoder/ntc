@@ -69,7 +69,10 @@ pub fn fill(m: &mut HashMap<String, String>) {
 
     m.insert("cmd.nms.examples_title".into(), "ຕົວຢ່າງ:".into());
 
-    m.insert("cmd.nms.example_play".into(), "nms play -sf 30 song.mp3".into());
+    m.insert(
+        "cmd.nms.example_play".into(),
+        "nms play -sf 30 song.mp3".into(),
+    );
 
     m.insert("cmd.nms.example_video".into(), "nms play movie.mp4".into());
 
@@ -101,10 +104,7 @@ pub fn fill(m: &mut HashMap<String, String>) {
         "ຕິດຕັ້ງໄດ້ດ້ວຍ: ntpkg install ffmpeg".into(),
     );
 
-    m.insert(
-        "cmd.nms.no_audio_track".into(),
-        "'{}' ບໍ່ມີແຮກສຽງ".into(),
-    );
+    m.insert("cmd.nms.no_audio_track".into(), "'{}' ບໍ່ມີແຮກສຽງ".into());
 
     m.insert("cmd.nms.play_failed".into(), "ຫຼິ້ນ '{}' ບໍ່ໄດ້: {}".into());
 

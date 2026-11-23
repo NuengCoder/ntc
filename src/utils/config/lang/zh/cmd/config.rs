@@ -3,7 +3,7 @@ use std::collections::HashMap;
 pub fn fill(m: &mut HashMap<String, String>) {
     m.insert(
         "cmd.config.deinit.confirm".into(),
-        "删除 {}？（y/N）：".into(),
+        "删除 {}？[y|n]> ".into(),
     );
 
     m.insert(
@@ -37,7 +37,13 @@ pub fn fill(m: &mut HashMap<String, String>) {
 
     m.insert(
         "cmd.config.deinit.usage".into(),
-        "用法：deinit [--all | --ran | --local | --opencode] [--force]".into(),
+        "用法：deinit [ran | local | opencode]".into(),
+    );
+
+    m.insert(
+        "cmd.config.deinit.flags_removed".into(),
+        "已移除 'deinit all' 和 '--force' —— 删除无法回滚。请使用 'ran'、'local' 或 'opencode'；每次删除都会要求确认。"
+            .into(),
     );
 
     m.insert(
@@ -91,12 +97,87 @@ pub fn fill(m: &mut HashMap<String, String>) {
 
     m.insert(
         "cmd.config.init.usage".into(),
-        "用法：init [--all | --ran | --local | --opencode] [--force]".into(),
+        "用法：init [ran | local | opencode | project] [-f|--force]".into(),
     );
 
     m.insert(
         "cmd.config.init.opencode_ready".into(),
         "OpenCode 脚手架已就绪：{}".into(),
+    );
+
+    m.insert(
+        "cmd.config.init.project.usage".into(),
+        "用法：init project [名称] [--lang <python,rust,go,js,ts,java,c,c++,other>] [--license <MIT,APACHE>] [--no <docker,git,ai,doc,ntc,oc,lc>]".into(),
+    );
+
+    m.insert(
+        "cmd.config.init.project.creating".into(),
+        "正在创建项目目录 {}".into(),
+    );
+
+    m.insert(
+        "cmd.config.init.project.invalid_name".into(),
+        "无效的项目名称：{}".into(),
+    );
+
+    m.insert(
+        "cmd.config.init.project.done".into(),
+        "项目已就绪：{}（新建 {} 个文件）".into(),
+    );
+
+    m.insert(
+        "cmd.config.init.project.git_created".into(),
+        "已初始化空的 Git 仓库。".into(),
+    );
+
+    m.insert(
+        "cmd.config.init.project.git_exists".into(),
+        "Git 仓库已初始化。".into(),
+    );
+
+    m.insert(
+        "cmd.config.init.project.git_missing".into(),
+        "Git 不可用。请运行 `ntpkg install git` 安装。".into(),
+    );
+
+    m.insert(
+        "cmd.config.init.project.venv_prompt".into(),
+        "是否创建 Python 虚拟环境（.venv）？".into(),
+    );
+
+    m.insert(
+        "cmd.config.init.project.venv_created".into(),
+        "已创建虚拟环境：{}".into(),
+    );
+
+    m.insert(
+        "cmd.config.init.project.venv_failed".into(),
+        "无法创建虚拟环境，将继续。".into(),
+    );
+
+    m.insert(
+        "cmd.config.init.project.lang_ready".into(),
+        "语言脚手架已就绪：{}".into(),
+    );
+
+    m.insert(
+        "cmd.config.init.project.lang_unknown".into(),
+        "未知语言。请使用 python、rust、go、js、ts、java、c、c++ 或 other。".into(),
+    );
+
+    m.insert(
+        "cmd.config.init.project.license_unknown".into(),
+        "未知许可证。请使用 MIT 或 APACHE。".into(),
+    );
+
+    m.insert(
+        "cmd.config.init.project.no_unknown".into(),
+        "未知的 --no 类别：{}。请使用 docker、git、ai、doc、ntc、oc 或 lc。".into(),
+    );
+
+    m.insert(
+        "cmd.config.init.project.tool_missing".into(),
+        "未安装 {}。请使用以下命令安装：{}".into(),
     );
 
     m.insert("cmd.config.lang.active".into(), "{}（活动中）".into());
@@ -467,7 +548,7 @@ pub fn fill(m: &mut HashMap<String, String>) {
 
     m.insert("cmd.config.serve.status".into(), "  {}: {}:{}".into());
 
-    m.insert("cmd.config.serve.usage".into(), "用法：serve config [files|http-server|chess] [--port-default <端口>] [--bind-default <地址>]（别名：config serve …）".into());
+    m.insert("cmd.config.serve.usage".into(), "用法：serve config [files|http-server|chess|git|arc|theme|ndb] [--port-default <端口>] [--bind-default <地址>]（别名：config serve …）".into());
 
     m.insert(
         "cmd.config.serve.example_show".into(),
@@ -491,7 +572,7 @@ pub fn fill(m: &mut HashMap<String, String>) {
 
     m.insert(
         "cmd.config.serve.invalid_service".into(),
-        "未知服务 '{}'（请用 files|http-server|chess）".into(),
+        "未知服务 '{}'（请用 files|http-server|chess|git|arc|theme|ndb|fake|config）".into(),
     );
 
     m.insert(
@@ -509,6 +590,12 @@ pub fn fill(m: &mut HashMap<String, String>) {
     m.insert(
         "cmd.config.local.init_all_removed".into(),
         "'local init --all' 已被移除 —— 本地配置不再复制全局设置。请使用 'local init' 生成模板。"
+            .into(),
+    );
+
+    m.insert(
+        "cmd.config.init.all_removed".into(),
+        "已移除 'init all' —— 请分别运行 'init ran'、'init local' 或 'init opencode'（也可以组合）。"
             .into(),
     );
 
@@ -542,12 +629,12 @@ pub fn fill(m: &mut HashMap<String, String>) {
 
     m.insert(
         "cmd.config.env.empty".into(),
-        "尚未设置 NTC 环境变量。使用：config env NAME value".into(),
+        "尚未设置 NTC 环境变量。使用：config env NAME value（或 NAME=value）".into(),
     );
 
     m.insert(
         "cmd.config.env.list_hint".into(),
-        "提示：config env NAME value [-g|-l|-os|-osg] | config env NAME | config rmenv NAME [-all]"
+        "提示：config env NAME value|NAME=value [-g|-l|-os|-osg] | config env NAME | config rmenv NAME [-all]"
             .into(),
     );
 

@@ -2,13 +2,28 @@ use std::collections::HashMap;
 
 pub fn fill(m: &mut HashMap<String, String>) {
     m.insert(
+        "help.scan.care".into(),
+        "scan ext <นามสกุล...> --care ## รวมทุกไฟล์ (โหมด care)".into(),
+    );
+
+    m.insert(
         "help.scan.depth".into(),
         "scan ext <นามสกุล...> -d, --depth <n> ## จำกัดความลึกการสแกน".into(),
     );
 
     m.insert(
+        "help.scan.dir".into(),
+        "scan dir [แบบ] ## แสดงไดเรกทอรีตามชื่อ (* = ทั้งหมด)".into(),
+    );
+
+    m.insert(
         "help.scan.example1".into(),
         "scan ext rs ## แสดงไฟล์ .rs ทั้งหมด".into(),
+    );
+
+    m.insert(
+        "help.scan.example10".into(),
+        "scan waep example.com/api -r -d 2 -c 32 ## ไล่สองระดับด้วย 32 probe พร้อมกัน".into(),
     );
 
     m.insert(
@@ -42,6 +57,16 @@ pub fn fill(m: &mut HashMap<String, String>) {
     );
 
     m.insert(
+        "help.scan.example8".into(),
+        "scan waep http://127.0.0.1:55555/api ## ดูว่า API ของ ntc serve เปิดอะไรไว้".into(),
+    );
+
+    m.insert(
+        "help.scan.example9".into(),
+        "scan waep example.com -x php,html --all ## แสดงทุกการตอบกลับ รวม .php/.html".into(),
+    );
+
+    m.insert(
         "help.scan.ext".into(),
         "scan ext <นามสกุล...> ## แสดงไฟล์ตามนามสกุล (ไม่นับบรรทัด)".into(),
     );
@@ -52,8 +77,8 @@ pub fn fill(m: &mut HashMap<String, String>) {
     );
 
     m.insert(
-        "help.scan.dir".into(),
-        "scan dir [แบบ] ## แสดงไดเรกทอรีตามชื่อ (* = ทั้งหมด)".into(),
+        "help.scan.ip".into(),
+        "scan ip [cidr] [--top N | --ports <spec>] ## กวาดหาโฮสต์ + ARP".into(),
     );
 
     m.insert(
@@ -62,21 +87,12 @@ pub fn fill(m: &mut HashMap<String, String>) {
     );
 
     m.insert(
-        "help.scan.ip".into(),
-        "scan ip [cidr] [--top N | --ports <spec>] ## กวาดหาโฮสต์ + ARP".into(),
-    );
-
-    m.insert(
         "help.scan.size".into(),
         "scan ext <นามสกุล...> -s, --size ## แสดงขนาดและผลรวม".into(),
     );
 
-    m.insert(
-        "help.scan.care".into(),
-        "scan ext <นามสกุล...> --care ## รวมทุกไฟล์ (โหมด care)".into(),
-    );
-
     m.insert("help.scan.title".into(), "คำสั่ง SCAN:".into());
+
     m.insert(
         "help.scan.waep".into(),
         "scan waep <โฮสต์|URL> ## ค้นหาเส้นทางบนเว็บ (/api, /admin, /upload, ...)".into(),
@@ -95,20 +111,5 @@ pub fn fill(m: &mut HashMap<String, String>) {
     m.insert(
         "help.scan.waep_recursive".into(),
         "scan waep <เป้าหมาย> [-r] [-d 1-4] [-c 1-64] [--timeout <ms>] [-H 'ชื่อ: ค่า'] [-A <ua>] [-o <ไฟล์>] [-q] ## การไล่, ความเร็ว, header, เอาต์พุต".into(),
-    );
-
-    m.insert(
-        "help.scan.example8".into(),
-        "scan waep http://127.0.0.1:55555/api ## ดูว่า API ของ ntc serve เปิดอะไรไว้".into(),
-    );
-
-    m.insert(
-        "help.scan.example9".into(),
-        "scan waep example.com -x php,html --all ## แสดงทุกการตอบกลับ รวม .php/.html".into(),
-    );
-
-    m.insert(
-        "help.scan.example10".into(),
-        "scan waep example.com/api -r -d 2 -c 32 ## ไล่สองระดับด้วย 32 probe พร้อมกัน".into(),
     );
 }

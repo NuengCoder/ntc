@@ -2,7 +2,82 @@
 
 ## [Unreleased]
 
+### Breaking Changes
+
+- **`where` now prints only the ntc executable path**: use `where -a` / `where --all` for the full location panel
+- **`init all` removed**: run `init ran`, `init local` and/or `init opencode` instead; `local init --all` stays rejected
+- **`deinit all` and `deinit --force` removed**: `deinit` accepts only `ran`, `local` or `opencode` (bare `deinit` still means `ran local`). A removal cannot be rolled back, so every file asks `[y|n]` before it is deleted
+- **`serve config` is now the configuration web GUI**: the CLI per-service editor (and its `config serve …` alias) is unchanged at `config serve`
+- **`help` group topics removed**: `help nav`, `help network`, `help fileops`, `help search`, `help other` and the other group names no longer resolve (`Unknown help topic`); use the command's own topic or `help` / `help --all`
+
 ### New Features
+
+#### nprintf — bash-style printf
+- `print` is no longer an alias of `say`; that name is gone and `nprintf <format> [arguments...]` is its own command
+- The format follows bash: `%s %d %i %u %o %x %X %c %b %q %f %e %E %g %G %a %A %%`, the flags `-+ #0`, width and precision (including `*`), backslash escapes (`\n`, `\t`, `\xHH`, `\0NNN`, `\c`) and format reuse while arguments remain
+- `%b` expands escapes in its argument and `%q` shell-quotes one; a bad number reports `nprintf: 'x': invalid number` and prints as 0
+- One-shot commands re-quote the OS argv before the shell sees it, so `ntc nprintf "%s has %d items\n" cart 3` keeps the format intact instead of splitting it on spaces
+- Remaining bash edge cases: negative `*` width left-aligns and negative `*` precision is ignored, unsigned conversions ignore `+`/space, non-finite floats print `inf`/`nan`, `%a` honours precision (rounded), octal escapes are byte values, and `--` ends options
+- Nothing is appended automatically, so `nprintf "..."` composes in pipelines; `help nprintf`, completion and all four language packs document it, and the Shell & PATH tutorial has an nprintf formatting step
+- `help nprintf` is now a real reference: every conversion, the flags/width/precision forms, each backslash escape, quoting, reuse and missing arguments are listed — and it explains that nprintf never adds a newline, so `\n` is only needed when the output should end the line
+- Ghost-text completion works inside the format: type `%` to cycle the conversions, or a trailing backslash to cycle newline, tab, backslash and the other escapes; any flags or width already typed are kept, Tab rotates the candidates and Right accepts the remainder
+
+#### where — executable by default, every location with `-a`
+- Bare `where` prints only the path to the ntc executable
+- `where -a` / `where --all` replaces the old bare `where` panel and adds the editor config, session, packages, deadlock vault, themes, history, SSH profiles, skills, crash recovery and tutorial paths under the ntc config directory
+- `where <binary>` prints only the first PATH match; `where <binary> -a` (or `--all`) lists every match, and the flag works before or after the binary
+- Help, compact help and all four language packs document the change
+
+#### hinter — local `ntconfig.toml` changes are picked up live
+- The hinter now fingerprints the local `ntconfig.toml` (path, modification time, size), so creating, editing or deleting it while ntc is running refreshes local `ral` aliases and `-g` suggestions on the next keystroke
+- Changing into or out of a project refreshes the same cache, and `ral import` / `igcare import` local-file hints are covered by a hinter-level regression test
+
+#### mode — relaunch keeps the current directory
+- `mode admin` and `mode normal` pass `--here` and `-WorkingDirectory`, so the new shell starts in the same project directory instead of restoring a different session directory; local `ntconfig.toml` aliases and `ral`/`igcare` file hints stay available in normal mode
+
+#### gs — match filters and `-I`
+- `gs -i` is now `gs -I`; the old spelling prints a rename hint instead of searching for the literal text `-i`
+- New match filters: `-x` searches the pattern literally (`a\|b` is the text `a|b`, so the OR shortcut is off), `-h` matches lines starting with a term, `-g` matches lines ending with one, `-w` matches a whole line, and `-z` stops ignoring case
+- `-h` / `-g` / `-w` are exclusive and matching is done on the trimmed line, so indentation and trailing blanks don't break an anchor; combining two of them errors with a hint
+- Everything downstream follows the filters: highlighting marks exactly what matched, sorting/limiting/context still apply, piped text honours the same rules, and `qur -s` keeps its old behaviour
+- `gs -I` toggles the same switches live with `x`, `h`, `g`, `w` and `z` (the active state shows in the header and each toggle re-runs the search), and `?` opens a key overlay that `Esc` / `q` closes back into the pager
+- Help, completion and hint text document the new flags; the pager hint bar now advertises the toggles
+
+#### shell — `a ; b` runs `b` even when `a` fails
+- `;` is a command separator with bash semantics: `a ; b` runs `b` whatever `a` did, while `&&` / `||` keep their conditional runs and `a ; b` is the only accepted spelling — `a;b`, `a; b` and `a ;b` stay one command's text, and a quoted `;` is data, exactly like `|`, `&&`, `>` and the rest
+- Alias expansion, `time` and the hinter treat `;` as a separator too, so aliases in the later segment expand and completion starts a fresh command after it
+
+#### sys — `--log` is a switch, `--delay` carries the seconds
+- `sys --log <seconds>` is gone: `-l`/`--log` turns logging on and the write interval comes from `-d`/`--delay [seconds:-1]`, where the missing value (-1, also `-d -1`) means the built-in 15s — `sys -l -d 5` and `sys --log --delay 5` both write every 5 seconds
+- Short flags combine, so `sys -ld 5` is `sys -l -d 5` (and `-dl 5` works too); `sys -d` without `-l` logs nothing
+- `--log=5` now fails with a hint instead of silently dropping the value, and the usage line plus a new short-form example document both spellings
+
+#### usrpath / syspath — Linux support
+- `usrpath` and `syspath` are no longer Windows-only: on Linux `usrpath` edits `~/.config/ntc/usrpath.sh` (source it from your shell profile) and `syspath` edits the `PATH` line of `/etc/environment`, with `/etc/profile.d/ntc-syspath.sh` kept in sync as a mirror for login shells started outside a PAM session
+- `syspath` rewrites only the `PATH` line of `/etc/environment`, so comments and every other variable in that file are preserved; a file without a `PATH` line gets one appended, seeded from the PATH already in effect so the first `add` extends rather than replaces the system PATH
+- macOS is supported through the same commands: `usrpath` edits `~/Library/Application Support/ntc/usrpath.sh` (source it from `~/.zprofile`) and `syspath` edits `/etc/paths.d/ntc`, one directory per line, which `path_helper` reads at login — so system entries are additive and `/etc/paths` is left alone
+- `syspath` on Linux is root-owned, so a non-root session writes it through `sudo tee` automatically; `usrpath` stays in the user's own config directory and needs no elevation
+- Both commands expand `~`, `$VAR` and `%VAR%` in the path argument, and `usrpath show` / `syspath show` print the file backing the list on Linux
+- An empty list now prints `(empty)` instead of the literal `║  {}` the box frame used to show
+- Windows keeps the registry backend (`HKCU\Environment` / `HKLM\…\Environment`) unchanged; other platforms report that the command is unsupported instead of claiming `Windows-only`
+
+#### help — one section per command
+- `help` now lists every command alphabetically as a flat compact list (no group headings); `help --all` prints one section per command in the same order, including commands that were only reachable through a group topic before
+- Each section is named after its command (`help.cd.*`, `help.ral.*`, …) and keeps its usage lines, notes and examples, so a command's help is translated independently of the others in all four bundled packs
+- `help` completion offers the flat list of command names, and `pipe` is the one non-command topic (`PIPES & REDIRECTION [NON-COMMAND]`)
+- Every registry command now has its own section, including ones that previously had no group section; the old `syscmd` topic is folded into the `sys` section and `config idle` gained a row
+- Usage rows longer than the help column now print their description on the next line instead of running into the syntax, `deadlock`, `fake` and `time` use the same two-column layout as the other sections, the `mkf` and `igcare` sections lost their leftover group titles, `ndb` no longer lists `sql` twice and `help` documents `help <command>` and `help --all`
+- The `report` section no longer advertises the removed `report <fmt> [path]` / `report <fmt> --cp` shortcuts; project reports are `report project <fmt> [path] --name <file>` and the legacy forms now print the `legacy_removed` hint instead
+
+#### serve — configuration and fake-data GUIs
+- `serve config [--port N] [--bind ADDR]` opens a browser page that lists every NTC setting and every serve service's port/bind; each change is validated and written through the same setters as the CLI
+- `serve fake [--port N] [--bind ADDR]` opens the fake-data GUI: search types by name/category, use a saved `fake group`, set rows/format/seed/locale/unique, then preview as a table or raw `txt`/`json`/`csv`/`sql` with copy and download
+- `serve backup [path] [--port N] [--bind ADDR]` opens the backup GUI: list/create snapshots, diff against the current tree, restore (full or deleted-only), undo the last restore, clear all, and recreate a fresh backup; the folder defaults to the current directory and every mutating action is confirmed in the page
+- `showcg` now prints one row per serve service (`files`, `http-server`, `chess`, `git`, `arc`, `theme`, `ndb`, `backup`, `fake`, `config`) instead of only the original three
+- `config serve <service>` accepts the new `backup`, `fake` and `config` services, and those three default to loopback like `serve ndb`
+
+#### tl — optional directory
+- `tl dir [path]` defaults to the current directory, so bare `tl dir` and `tl dir .` are the same
 
 #### search — `--no-fuzzy`
 - `fs`, `ds`, `fsc` and `locate` accept `--no-fuzzy` (or `-no-fz`) to skip the Jaro-Winkler fallback and keep exact/partial matches only; the flag is documented in each usage line and in `help search`
@@ -38,10 +113,76 @@
 - `skill info <harness>` scans this repo's harness folder (and the global one) and reports every skill it holds, marking copies ntc manages
 - `skill download --name <name>` installs a skill under a different name (the folder and `SKILL.md` frontmatter are renamed together); `skill install`/`skill i` are aliases of `skill download`, `skill uninstall`/`skill u` of `skill delete`
 
+#### scr — real control flow, functions and direct execution
+- `.ntc` scripts gained a block language: `if` / `else if` / `else` / `end`, `while <cond>`, `for VAR in <list>`, `loop [count]`, plus `break`, `continue`, `return` and `exit`. `end` also accepts `endif`, `fi`, `done` and `}` so the closing word can match the opener
+- Expressions replaced plain substitution in `set` and every condition: `+ - * / %` with parentheses, the comparisons `== != < <= > >=`, `&& || !` (or `and` / `or` / `not`), `contains`, and the builtins `nprintf(fmt, …)`, `len`, `upper`, `lower`, `trim`, `str`, `int`, `abs` and `env(NAME)`. `+` concatenates when either side is not a number, so `set p = $dir + "/" + $file` works
+- `nprintf` is usable inside a script both as a command and as a function: `nprintf "%02d\n" $i` prints, `set label = nprintf("%02d", $i)` captures the formatted text into a variable
+- Functions: `func name(params) … end` with `call name(args)`, `call name a b`, `return [value]`, and `set total = call add(1, 2)` to capture a return value. Definitions are hoisted, so a function may be called before the line that declares it; parameters live in their own scope and do not leak
+- `input NAME [prompt]` reads one line from the terminal into a variable, and end of input stops the script instead of spinning
+- Plain values stay verbatim: `set p = C:\Users\me` and `set msg = "two words"` are stored exactly as written, and a value that cannot be parsed as an expression falls back to the old literal behaviour
+- Scripts can be started three ways: `scr deploy.ntc`, `run deploy.ntc`, and `ntc deploy.ntc` — plus just typing `deploy.ntc` at the prompt, which now resolves to the script instead of hitting the OS
+- Runtime errors carry the real source line (skipped comments and blank lines no longer shift the numbering), a syntax error stops the script before anything runs, and `scr check` reports unbalanced blocks, `else` outside an `if`, duplicate function names, a missing `for … in` and a missing `if` condition
+- A single loop is capped at one million iterations and function recursion at 64 frames, so a wrong condition cannot hang the shell
+- `scr init` writes a template that shows variables, both kinds of loop, a function, `input` and `nprintf`; `help scr`, the usage screen and all four language packs document the syntax
+- Two per-file switches joined the language: `set-pipe = on|off` decides whether the script may be piped or redirected (`off` / `0` / `false` / `fail` refuses the pipeline before the script starts, from either `deploy.ntc | …` or `scr deploy.ntc | …`), and `set-showexc = on|off` silences the `[n] Executing: …` trace so a script's output stays clean. Both accept `1/true/on/yes` and `0/false/off/no/fail`, are read before execution rather than run as commands, and a bad value is reported by `scr check`
+
+#### serve mdview — local markdown editor and live preview
+- `serve mdview [dir]` hosts a split-pane markdown editor: a rail listing every `.md` / `.markdown` file under the start folder (hidden folders, `node_modules`, `target`, `dist` and `build` skipped, four levels deep, 500 files max), a filter, and a New-file dialog
+- Typing re-renders the preview as you go — headings, fenced code, blockquotes, nested and ordered lists, task lists, tables, rules and inline spans — with Split / Editor / Preview modes and a word, character and line count in the status bar
+- `Ctrl+S` saves through a temp file and a rename, so a failed write never truncates the file; the tab shows a dirty dot, and closing or switching files asks before discarding unsaved edits
+- `Ctrl+N` / `Ctrl+B` / `Ctrl+I` insert markdown, `Tab` indents, and the theme plus the pane mode persist in `localStorage`
+- Requests are confined to the start folder: absolute paths, `..`, symlinks that escape and non-markdown extensions are rejected, and the page is a single embedded document with no external assets
+- Documents can now show pictures and play media: `![shot](pics/a.png)` renders an image, `![demo](clips/build.mp4)` renders a video player with controls and seeking, and `![note](a.mp3)` renders an audio player. Paths resolve relative to the document (`../img/a.png` from `docs/guide.md` is `img/a.png`), a leading `/` means the served folder, and `http(s)://` URLs are used as written
+- Media streams from the served folder through `GET /raw?path=…`: images, video and audio only, `Range` honoured (so a video scrubs instead of downloading first), 64 KB chunks so a large clip never lands in memory, and the same traversal rules as the editor. A video shows its first frame instead of a black box, and keeps its position while you type
+- `[other](other.md)` inside a document opens that file in the editor, and `#docs%2Fguide.md` in the address bar reopens a document after a reload
+- Raw HTML blocks render instead of being escaped, so a README keeps its centred badge and demo: `<p align="center">`, `<img>`, `<video>`, `<a>`, `<b>`, `<br>`, `<h1>` and the other usual tags pass through. It is a curated allowlist — an unknown tag is dropped, `on*` handlers, `style`, `class` and `javascript:` URLs never survive, `<script>` / `<iframe>` / `<object>` / `<embed>` are removed entirely, and media inside a tag goes through the same folder check as markdown images
+- The editor pane is now syntax highlighted, and the colours come from the **active ntc theme**: the textarea is transparent over a highlighted layer, so headings, list markers, quotes, inline code, links, table pipes and raw HTML tags are coloured while you type. The palette is served from `GET /api/theme` (the same `syntax.*` roles `ne` uses, converted to `#rrggbb`), the pane background is the theme's editor background, and light/dark follows the theme's brightness until you pick a page theme by hand
+- New `ThemeColor::to_hex` expands named, RGB and xterm-256 colours to CSS hex, so any theme — including a custom `ntc_theme` with `ansi = 208` or `rgb = [30, 144, 255]` — drives the page
+
+#### select menus — the matching name is ghosted after the caret
+- Numbered pickers now show the item they would choose: typing `3` displays `3 index.html` with the name painted in the idle colour, so the hint reads as part of the prompt and never as typed text
+- The hint is display-only — it is never inserted into the buffer and never sent to the command, so `3` still means `3`
+- The shared `InteractiveMenu` picker does the same, so `txtf`, `txtc`, `alias` with select, `ndb`, `ral`, `skill`, `ntpkg install` and `nssh` profiles are covered too, alongside the hand-rolled `gos`, `gosc`, `godrive`, `fgo`, `fsc`, `backup` restore, `backup diff` and `dl --stop` / `dl --resume` prompts
+
+#### ne — `.ntc` language service
+- `.ntc` scripts get the same in-editor assistance `.mq4/.mq5` files have: a completion list while typing, signature help inside `name(…)`, and the active-parameter hover line, all gated to insert mode with a single cursor
+- Candidates are drawn from the file itself (`func` definitions with their comment block, `set` / `for` / `input` variables) and from the language (`if` / `while` / `for` / `loop` / `func` / `call` / `return` / `input` / `break` / `continue` / `exit` / `end` / `set-pipe` / `set-showexc`, plus the expression functions `nprintf`, `len`, `upper`, `lower`, `trim`, `str`, `int`, `abs`, `env`)
+- Shell commands complete too, taken from the live command registry rather than a hardcoded list, so a new built-in shows up without touching the editor; each kind keeps its own tag (`[F]`unction, `[V]`ar, `[K]`eyword, `[C]`ommand) and user symbols sort first
+- Accepting a function inserts `name()` and drops the cursor inside the parentheses, where signature help names the parameter you are filling in; `nprintf(` works the same way
+- `.ntc` keywords are highlighted in full — the highlighter previously knew only `set`, `run`, `ls`, `init`, `list` and `help`
+- The highlighter now understands the whole language: `set-pipe` / `set-showexc` stay one keyword token instead of splitting on the hyphen, `for` / `input` colour their variable name, `call` colours its target, and `in` is a keyword
+- Variables complete only after a `$`: typing `co` offers the commands, while `$co` offers `count` and nothing else, so a variable can no longer be confused with a same-named command. Accepting leaves the `$` in place
+- `Ctrl+N` toggles the language service (completion, signature help and the hover line) and clears whatever it left on screen; the file finder moved to `Ctrl+B`
+- `:lsp` in command mode toggles the same switch, `:lsp on` / `:lsp off` sets it, and a bad argument prints the usage line. `lsp`, `lsp on` and `lsp off` complete in the command prompt
+- `Tab` indents `.ntc` files by two columns, and the vertical indent guides step by two to match; an explicit `[tabs]` entry for `ntc` still wins
+
+#### serve git — tabbed dashboard
+- The single scrolling page is now a hash-routed dashboard: a left rail (Repository, Changes, History, Branches, Remotes, Stash, Tags, Actions), a content pane and an inspector column for diffs and commit details. Deep links such as `#/changes/file/src%2Fmain.rs` and `#/history/<hash>` survive a reload and can be bookmarked
+- Changes unifies status, staging and committing: path filter, `All / Staged / Unstaged / Untracked / Conflicts` segmented filter, per-row Stage/Unstage/Discard, Shift-click ranges and a sticky commit footer (`Ctrl+Enter`)
+- The diff viewer parses `@@` hunk headers for old/new line-number gutters and colours added, removed and hunk lines; the inspector shows the staged and unstaged sides separately
+- Global chrome: branch, upstream and `↑ahead ↓behind` in the rail, a merge/rebase/conflict banner on every tab, session command history with copy, error toasts, a light/dark theme toggle and an opt-in 5-second auto-refresh
+- Keyboard: `1`–`8` switch tabs, `/` focuses the filter, `j`/`k` and `Space` walk the file list, `R` reloads, `Esc` closes the inspector
+- The conflict resolver moved to Actions (still one click from the banner and from Branches); reset, revert, cherry-pick, clean and remote URL management are documented as terminal-only until their endpoints land
+- Assets are split into `assets/git/index.html`, `app.css`, `app.js`, `diff.js` and `tabs/*.js`, served from an allowlist of embedded files with `Cache-Control: no-store`. The API is unchanged, so every action still echoes the exact git command it ran
+
 #### serve chess — highlight toggles and AI bots
 - Settings gained on/off switches for the board overlays: `Pinned pieces` hides the gray king pins and aqua relative pins, `Hanging danger` hides the orange attacked squares; checks and last-move highlights always stay visible
 - `vs AI Bot` is live: pick Stockfish, download the engine once from its official GPLv3 release (progress shown, nothing bundled with ntc), then choose your side, difficulty (easy / normal / hard / master) and clock
 - The engine runs locally over UCI: the board locks while it thinks, Undo takes back your move plus the bot reply, Resign uses your colour, and a crashed or timed-out engine plays a legal fallback move instead of stalling the game
+
+#### serve theme — editable TOML field and Update button
+- The Theme TOML field now paints every keystroke locally, so text stays visible
+  while the file is temporarily invalid instead of freezing on the last good parse
+- `Update` adds theme fields missing from the file (same merge as
+  `theme update <name>`) without touching values you already set
+
+#### serve ndb — folder picker, native auth and safe writes
+- `serve ndb` now serves the databases in the folder where it starts: the page lists every readable `.db` / `.sqlite` / `.sqlite3` file (name, size, table count, modified date) and opens the one you click; Refresh rescans the folder without a restart. The positional `<file.db>` is gone — `serve ndb app.db` errors and points at the picker
+- Opening a database keeps the table/view list, schema view (`CREATE` SQL, columns, indexes, foreign keys, triggers), paged row grid, read-only SQL console and CSV/JSON export; a "Change database" button returns to the picker
+- `--auth user:pass` now gates every route, the page included, so the browser shows its own Basic-auth dialog on first load and every same-origin request carries the credentials; the in-page login card and its `sessionStorage` cache are gone
+- `--write` opts into row-level writes (`INSERT` / `UPDATE` / `DELETE` / `REPLACE` only, one statement at a time): the write console appears, asks for confirmation, takes one `<name>.bak.<YYYYMMDD-HHMMSS>` copy per file before the first write and reports `written` plus the backup name. Without `--write` the console is hidden and the same request is rejected with a read-only error; DDL, `ATTACH`, `VACUUM` and scripts stay blocked
+- Database names from `?db=` are resolved against the pinned start folder: empty names, absolute paths, drive letters, `/`, `\`, `.`/`..`, subfolders, symlinks out of the folder and non-database extensions all answer `400`, so no request can walk outside the listed folder
+- Bound to `127.0.0.1` by default; binding to a LAN address still requires `--auth user:pass`. `--port`, `--bind`, `--tunnel`, `--share`, `--qr` and `serve config ndb` work like the other services
 
 #### fake — expanded type catalogue
 - 20 new types: `major`, `programming_language`, `adobe_tools`, `os`, `hacker_tools`, `dev_tools`, `emotion`, `weather`, `ai_llm`, `ai_harness`, `computer_brand`, `ram`, `disk`, `cpu`, `gpu`, `school_subject`, `dsa`, `sql`, `nosql` and `website`
@@ -63,7 +204,29 @@
 - The rotation gained `tutorial`, `ral add`, `ran list`, `gs <text> | sort -u | head 10`, `math 3+4*5`, `qr <text>`, `theme list` and `backup create`, translated in all four bundled packs
 - `ran list` only shows when the folder actually has an `NTCRANFILE.toml`, the same context rule already used for `todo add` and `git status`
 
+#### sys — tree / flat view, CPU summary and process count
+- `v` toggles the process panel between the collapsible parent/child tree and a flat list of every process, sorted by the active column; pressing `v` again returns to the tree and the hint bar shows `v=flat` / `v=tree`
+- The flat view lists every process on one level with that process's own CPU/MEM (no subtree totals), and `Enter` is ignored because there is nothing to expand
+- A total CPU gauge now sits above MEM and SWAP, using the same 17-cell bar and colour thresholds, and the hint bar reports `procs:<total>` (`procs:<matched>/<total>` while a filter is active)
+
+#### count — `-l` / `--line`
+- `count -l` (or `--line`) prints the number of lines in piped input, so `gs TODO | count -l` reports how many lines the search produced
+- The flag needs piped input (or a `<` redirect) and takes no needle: `count -l <arg>`, `count <arg> -l`, `--line=5` and short bundles such as `-la` / `-al` all fail with a clear message instead of falling back to occurrence counting
+- Plain `count <needle>` is unchanged; `count -l` now appears in `help count`, tab completion and the idle suggestion (`view task.txt | count -l`)
+
+#### gs — context windows and a pattern-first interactive pager
+- `gs <pattern> -A <n> -B <n>` prints each match with n lines after / before it, using grep's `path-line-text` for context and `path:line:text` for the match, with one blank line after each block; overlapping or touching windows merge into a single block, and the first 10 matches are shown unless `-l <n>` says otherwise
+- `gs -i [pattern]` makes the pattern optional: with none, the pager opens on a centred `[pattern: …]` editor, and `f` reopens it at any time; Enter searches, while an empty Enter or Esc cancels, so OR patterns such as `main\|wow` can be typed without shell quoting
+- The pager previews lines around the selected match and `c` sets how many (0-10, default 5 each side), `0`-`9` jumps straight to that result, and `Enter` or `e` opens the hit in ntceditor; the hint bar starts with `?=help` (reserved, not wired yet)
+- The selected result row and the preview's found line use a readable foreground over the selection background instead of painting themselves invisible
+
 ### Fixes
+
+#### gs / nfe — `cfg color off` respected
+- The `gs` pager and standalone `nfe` still painted theme colours, a hardcoded red match highlight and the file browser's own palette with colour output disabled; both now fall back to the terminal's default foreground/background and emit no colour escapes
+
+#### shell — completion matches dispatch
+- Root completion now comes from the command registry. `ls` no longer appears because it was never a dispatchable command (it only ever reached the system fallback); `ui`, which is dispatchable, now appears.
 
 #### serve — `/info` follows the URL you used
 - The `/info` page builds its links from the request `Host` (and `X-Forwarded-Host` / `X-Forwarded-Proto`), so opening it through a cloudflared tunnel shows the tunnel URL instead of `http://127.0.0.1:<port>`; the host is sanitised before being echoed
@@ -82,7 +245,24 @@
 - Idle hints wait 30 s on an untouched empty prompt, type the suggestion one character at a time, hold it for 15 s, wipe it and start the next one until a key is pressed
 - The `search` suggestion was replaced with `gs` (ntc has no `search` command)
 
-## [2.4.8] - 2026-10-30
+### Internal
+
+#### command architecture refactor — no user-facing command changes
+- One static command registry (`CommandSpec`) is now the single source of truth for dispatch, help topics, contextual help, subcommand/flag completion, prompt highlighting and alias-name validation; the old parallel `match` tables were removed so these can no longer drift from each other
+- Completion is data-driven: each command owns a `CompletionSpec` tree instead of a giant `subcommands_for` match; the shell hinter was split into an orchestrator plus `tree`, `providers` and `files` modules
+- `commands/mod.rs` is trimmed to pipeline glue, the tutorial guard, the nested-shell guard and the system/math/teleport fallback; help-topic and contextual-root lookups go straight to the registry
+- The `serve` service table is shared by the dispatcher, `serve` help, `showcg` and `config serve`, and a test guards the completion root against drifting from it
+- A plugin seam is staged for 2.5.0 (out-of-process JSON-RPC contract, manifest parsing/validation, an empty process-wide registry and the reserved `plugin` namespace). No plugin command loads in this release and dispatch is unchanged; see `docs/architecture/plugins.md`
+- Behaviour is preserved throughout: command dispatch, help output and completion are unchanged, and the help golden snapshots stay byte-identical
+
+#### src/ directory flatten — no user-facing command changes
+- The top level of `src/` is now just `cli/`, `shell/`, `utils/`, `lib.rs` and `main.rs`; every feature engine folded into its existing command wrapper under `shell/commands/builtin/<cmd>/` (for example `ndb` → `builtin/ndb/ndb/`, `editor` and `mql` → `builtin/ne/`), and the shared `syntax` highlighter moved to `utils/syntax/`
+- Full call-site migration: every `crate::<engine>` reference now uses the engine's canonical path and the crate-root engine declarations were removed with no re-export left behind (the `utils` compatibility re-exports are unchanged)
+- The dead `lsp` server module was removed — it had no callers and no CLI flag — together with its orphaned `clap.arg.lsp*` and `cli.run.help_lsp*` translation keys in all four language packs
+- No new `builtin/<cmd>/` directories were created; engines nest only inside wrappers that already exist
+- Behaviour is preserved throughout: dispatch, help output and completion are unchanged, the help golden snapshots stay byte-identical, and the full test suite passes with all features and with no default features
+
+## [2.4.9] - 2026-10-30
 
 ### New Features
 

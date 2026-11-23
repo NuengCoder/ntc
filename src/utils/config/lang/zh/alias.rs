@@ -498,4 +498,35 @@ pub fn fill(m: &mut HashMap<String, String>) {
         "alias.ral.bare_env_warning".into(),
         "现在裸 $NAME 表示环境变量。参数请使用 ${name}：{}".into(),
     );
+
+    m.insert(
+        "alias.ral.install_cmd".into(),
+        " ral install 从 ntc GitHub 目录安装运行别名".into(),
+    );
+
+    m.insert(
+        "alias.ral.install_downloading".into(),
+        "正在下载 {}...".into(),
+    );
+
+    m.insert("alias.ral.install_failed".into(), "安装失败：{}".into());
+
+    m.insert(
+        "alias.ral.install_fetching".into(),
+        "正在从 GitHub 获取 .ntc.ral 文件...".into(),
+    );
+
+    m.insert(
+        "alias.ral.install_none".into(),
+        "未找到可安装的 .ntc.ral 文件。".into(),
+    );
+
+    m.insert(
+        "alias.ral.install_prompt".into(),
+        "选择文件（0 取消）：".into(),
+    );
+
+    m.insert("alias.ral.install_title".into(), "安装运行别名".into());
+
+    m.insert("alias.ral.installed".into(), "已从 {} 安装别名".into());
 }

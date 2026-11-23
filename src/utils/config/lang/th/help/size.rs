@@ -7,23 +7,6 @@ pub fn fill(m: &mut HashMap<String, String>) {
     );
 
     m.insert(
-        "help.size.path".into(),
-        "size -p, --path <path|@tp> ## แสดงขนาดของไฟล์ เส้นทาง หรือจุดเทเลพอร์ตที่ระบุ".into(),
-    );
-
-    m.insert(
-        "help.size.size".into(),
-        "size ## แสดงขนาดไดเรกทอรีปัจจุบัน".into(),
-    );
-
-    m.insert(
-        "help.size.time".into(),
-        "size -t, --time ## แสดงเวลาที่ใช้".into(),
-    );
-
-    m.insert("help.size.title".into(), "คำสั่งขนาด (SIZE):".into());
-
-    m.insert(
         "help.size.example1".into(),
         "size ## แสดงขนาดไดเรกทอรีปัจจุบัน".into(),
     );
@@ -42,4 +25,21 @@ pub fn fill(m: &mut HashMap<String, String>) {
         "help.size.example4".into(),
         "size @web --care -t ## โหมด care พร้อมเวลาที่ใช้สำหรับจุดเทเลพอร์ต".into(),
     );
+
+    m.insert(
+        "help.size.path".into(),
+        "size -p, --path <path|@tp> ## แสดงขนาดของไฟล์ เส้นทาง หรือจุดเทเลพอร์ตที่ระบุ".into(),
+    );
+
+    m.insert(
+        "help.size.size".into(),
+        "size ## แสดงขนาดไดเรกทอรีปัจจุบัน".into(),
+    );
+
+    m.insert(
+        "help.size.time".into(),
+        "size -t, --time ## แสดงเวลาที่ใช้".into(),
+    );
+
+    m.insert("help.size.title".into(), "คำสั่งขนาด (SIZE):".into());
 }

@@ -68,4 +68,13 @@ pub fn fill(m: &mut HashMap<String, String>) {
         "cmd.clipboard.unknown_sub".into(),
         "未知的 clip 子命令：{}".into(),
     );
+
+    m.insert(
+        "cmd.clipboard.clear_error".into(),
+        "清空系统剪贴板失败：{}。".into(),
+    );
+    m.insert(
+        "cmd.clipboard.copied_piped".into(),
+        "已将管道输入复制到剪贴板。".into(),
+    );
 }

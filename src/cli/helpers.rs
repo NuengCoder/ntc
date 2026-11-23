@@ -1,12 +1,14 @@
 use crate::t;
+use crate::utils::theme::style::ThemeColorize;
 use anyhow::Result;
-use colored::*;
 
 pub(super) fn print_help() {
     println!("{}", "ntc — Navigate, Toolkit, Center".green().bold());
     println!();
     println!("{}", t!("cli.new.usage_header"));
     println!("{}", t!("cli.new.usage_shell"));
+    println!("{}", t!("cli.new.usage_here"));
+    println!("{}", t!("cli.new.usage_path"));
     println!("{}", t!("cli.new.usage_cmd"));
     println!("{}", t!("cli.new.usage_new"));
     println!("{}", t!("cli.new.usage_upgrade"));

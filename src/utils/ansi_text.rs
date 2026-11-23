@@ -4,7 +4,7 @@
 // Everything here is intentionally allocation-light and never slices a string
 // in the middle of a UTF-8 character or an ANSI escape sequence.
 
-use crate::editor::char_col_width;
+use crate::shell::commands::builtin::ne::editor::char_col_width;
 
 /// Byte length of the ANSI escape sequence starting at `bytes[i]` (which must
 /// be `0x1B`), or `1` when the sequence is incomplete / unknown.

@@ -12,18 +12,6 @@ pub fn fill(m: &mut HashMap<String, String>) {
     );
 
     m.insert(
-        "help.qr.save".into(),
-        "qr encode <文本> -o <文件> ## 将QR码保存为PNG图像".into(),
-    );
-
-    m.insert(
-        "help.qr.image".into(),
-        "qr encode <图像> -o <文件> ## 将图像编码为二维码（扫描即可查看图像）".into(),
-    );
-
-    m.insert("help.qr.title".into(), "QR码命令：".into());
-
-    m.insert(
         "help.qr.example1".into(),
         "qr \"Hello World\" ## 在终端显示二维码".into(),
     );
@@ -42,4 +30,16 @@ pub fn fill(m: &mut HashMap<String, String>) {
         "help.qr.example4".into(),
         "qr encode image.png -o imageqrcode.png ## 将图像编码为二维码，扫描即显示".into(),
     );
+
+    m.insert(
+        "help.qr.image".into(),
+        "qr encode <图像> -o <文件> ## 将图像编码为二维码（扫描即可查看图像）".into(),
+    );
+
+    m.insert(
+        "help.qr.save".into(),
+        "qr encode <文本> -o <文件> ## 将QR码保存为PNG图像".into(),
+    );
+
+    m.insert("help.qr.title".into(), "QR码命令：".into());
 }

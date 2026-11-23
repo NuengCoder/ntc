@@ -3,10 +3,10 @@ use std::collections::HashMap;
 pub fn fill(m: &mut HashMap<String, String>) {
     m.insert(
         "cmd.time.count_usage".into(),
-        "วิธีใช้: time count <ระยะเวลา>".into(),
+        "วิธีใช้: time --count <ระยะเวลา>".into(),
     );
 
-    m.insert("cmd.time.run_usage".into(), "วิธีใช้: time run <คำสั่ง>".into());
+    m.insert("cmd.time.run_usage".into(), "วิธีใช้: time <คำสั่ง>".into());
 
     m.insert("cmd.time.executing".into(), "กำลังเรียก: {}".into());
 
@@ -55,17 +55,17 @@ pub fn fill(m: &mut HashMap<String, String>) {
 
     m.insert(
         "cmd.time.compare_usage".into(),
-        "วิธีใช้: time compare <คำสั่ง A> --with <คำสั่ง B> [-w]".into(),
+        "วิธีใช้: time <คำสั่ง A> --compare <คำสั่ง B> [-w]".into(),
     );
 
     m.insert(
         "cmd.time.bench_usage".into(),
-        "วิธีใช้: time bench [--runs N] <คำสั่ง>".into(),
+        "วิธีใช้: time --bench <n> <คำสั่ง>".into(),
     );
 
     m.insert(
         "cmd.time.invalid_runs".into(),
-        "time bench: จำนวนรอบไม่ถูกต้อง '{}' กรุณาใช้จำนวนเต็มบวก".into(),
+        "time --bench: จำนวนรอบไม่ถูกต้อง '{}' กรุณาใช้จำนวนเต็มบวก".into(),
     );
 
     m.insert(

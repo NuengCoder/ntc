@@ -1,0 +1,2263 @@
+//! `serve files` — the file-drive web UI and its HTTP/JSON API.
+//!
+//! Owns the SQLite index, chunked uploads, download tokens, the `/info`
+//! page and the embedded React frontend.
+//!
+//! Size note: kept as one file (~2.1k lines) because the index schema, the
+//! upload/token state and the HTTP handlers all operate on the same tables
+//! and request context; a split would spread one schema across modules.
+
+use super::share::print_share_block;
+use super::share::public_base_url;
+use super::tunnel::spawn_cloudflared;
+use crate::config::{Config, ServeService};
+use crate::navigator::Navigator;
+use crate::output::{print_error, print_info, print_warning};
+use crate::shell::commands::support::args::is_help_request;
+use crate::shell::commands::support::net::http::{
+    auth_matches, basic_expectation, json_error, json_ok, parse_auth, parse_query,
+    request_base_url, respond, respond_unauthorized, response_bytes, write_all_retry,
+};
+use crate::shell::commands::support::net::tokenize;
+use crate::t;
+use crate::utils::theme::style::ThemeColorize;
+use anyhow::{Context, Result};
+use rusqlite::params;
+use std::collections::HashMap;
+use std::io::{BufRead, BufReader, Read, Seek, SeekFrom, Write};
+use std::net::{TcpListener, TcpStream};
+use std::path::{Path, PathBuf};
+use std::sync::atomic::AtomicBool;
+use std::sync::{Arc, Mutex};
+
+#[derive(rust_embed::Embed)]
+#[folder = "ntc_web/dist"]
+struct Frontend;
+
+enum ApiResponse {
+    Bytes(Vec<u8>),
+    Stream {
+        head: Vec<u8>,
+        path: PathBuf,
+    },
+    /// `head` is already complete; `len` bytes from `start` are streamed from
+    /// `path` (used for `Range` downloads, so a paused transfer can resume).
+    StreamRange {
+        head: Vec<u8>,
+        path: PathBuf,
+        start: u64,
+        len: u64,
+    },
+}
+
+const MAX_UPLOAD: u64 = 10 * 1024 * 1024 * 1024;
+// Chunked uploads split large files into pieces this size (each request must
+// stay under Cloudflare's ~100 MB per-request body cap when served via a
+// trycloudflare tunnel).
+const CHUNK_MAX: u64 = 100 * 1024 * 1024;
+// A single socket read that produces no bytes aborts after BODY_READ_TIMEOUT;
+// if no bytes arrive for BODY_IDLE_TIMEOUT the upload is considered stalled.
+const BODY_READ_TIMEOUT: u64 = 30;
+const BODY_IDLE_TIMEOUT: u64 = 180;
+
+// ── SQLite ────────────────────────────────────────────────────────────────
+
+fn db_path() -> PathBuf {
+    dirs::config_dir()
+        .unwrap_or_else(|| PathBuf::from("."))
+        .join("ntc")
+        .join("serve.db")
+}
+fn files_dir() -> PathBuf {
+    dirs::config_dir()
+        .unwrap_or_else(|| PathBuf::from("."))
+        .join("ntc")
+        .join("serve")
+        .join("files")
+}
+fn chunks_dir() -> PathBuf {
+    dirs::config_dir()
+        .unwrap_or_else(|| PathBuf::from("."))
+        .join("ntc")
+        .join("serve")
+        .join("chunks")
+}
+fn ensure_db() -> Result<rusqlite::Connection> {
+    let path = db_path();
+    std::fs::create_dir_all(path.parent().unwrap())?;
+    std::fs::create_dir_all(files_dir())?;
+    std::fs::create_dir_all(chunks_dir())?;
+    let conn = rusqlite::Connection::open(&path)?;
+    conn.execute_batch(
+        "CREATE TABLE IF NOT EXISTS files (
+        id INTEGER PRIMARY KEY AUTOINCREMENT, filename TEXT NOT NULL,
+        path TEXT NOT NULL DEFAULT '/', is_dir INTEGER DEFAULT 0,
+        size INTEGER DEFAULT 0, disk_name TEXT, data BLOB,
+        uploaded_at TEXT DEFAULT (datetime('now')))",
+    )?;
+    // Migration: add data column for existing databases
+    let _ = conn.execute_batch("ALTER TABLE files ADD COLUMN data BLOB");
+    Ok(conn)
+}
+
+pub fn cmd_serve_files(args: &str, _nav: &mut Navigator) -> Result<bool> {
+    let tokens = tokenize(args);
+    if is_help_request(&tokens) {
+        print_serve_help();
+        return Ok(false);
+    }
+    // Defaults come from `serve config files` (see `config serve`).
+    let mut port = Config::global_get_serve_port(ServeService::Files);
+    let mut bind = Config::global_get_serve_bind(ServeService::Files);
+    let mut use_tunnel = false;
+    let mut spa = false;
+    let mut web_dir = String::new();
+    let mut auth: Option<(String, String)> = None;
+    let mut share_mode = false;
+    let mut share_path: Option<String> = None;
+    let mut no_qr = false;
+    let mut want_qr = false;
+    let mut locked = false;
+
+    let mut i = 0;
+    while i < tokens.len() {
+        match tokens[i].as_str() {
+            "-p" | "--port" => {
+                i += 1;
+                port = tokens
+                    .get(i)
+                    .ok_or_else(|| anyhow::anyhow!("{}", t!("cmd.serve.missing_port")))?
+                    .parse()
+                    .map_err(|_| anyhow::anyhow!("{}", t!("cmd.serve.invalid_port")))?;
+            }
+            "-b" | "--bind" => {
+                i += 1;
+                bind = tokens
+                    .get(i)
+                    .ok_or_else(|| anyhow::anyhow!("{}", t!("cmd.serve.missing_bind")))?
+                    .clone();
+            }
+            "-t" | "--tunnel" => {
+                use_tunnel = true;
+            }
+            "--spa" => {
+                spa = true;
+            }
+            "--share" => {
+                share_mode = true;
+                // Optional path right after --share (must not look like a flag).
+                if let Some(next) = tokens.get(i + 1) {
+                    if !next.starts_with('-') {
+                        share_path = Some(next.clone());
+                        i += 1;
+                    }
+                }
+            }
+            "--qr" => {
+                want_qr = true;
+                share_mode = true;
+            }
+            "--no-qr" => {
+                no_qr = true;
+            }
+            "--lock" => {
+                locked = true;
+            }
+            "--auth" => {
+                i += 1;
+                let value = tokens
+                    .get(i)
+                    .ok_or_else(|| anyhow::anyhow!("{}", t!("cmd.serve.missing_auth")))?;
+                auth = Some(parse_auth(value)?);
+            }
+            "-w" | "--web-dir" => {
+                i += 1;
+                web_dir = tokens
+                    .get(i)
+                    .ok_or_else(|| anyhow::anyhow!("{}", t!("cmd.serve.missing_dir")))?
+                    .clone();
+            }
+            "--" => break,
+            _ => {
+                if let Ok(p) = tokens[i].parse::<u16>() {
+                    port = p;
+                } else {
+                    anyhow::bail!("{}", t!("cmd.serve.unknown_option", tokens[i]));
+                }
+            }
+        }
+        i += 1;
+    }
+
+    let db = Arc::new(Mutex::new(ensure_db()?));
+    // Chunk uploads are single-session; anything left from a previous (crashed)
+    // session is garbage and can be removed now that no uploads are active.
+    if let Ok(rd) = std::fs::read_dir(chunks_dir()) {
+        for e in rd.flatten() {
+            let _ = std::fs::remove_file(e.path());
+        }
+    }
+    let addr = format!("{}:{}", bind, port);
+    let listener = TcpListener::bind(&addr).context(format!("Bind to {}", addr))?;
+    listener.set_nonblocking(false)?;
+    let base_url = public_base_url(&bind, port);
+    print_info(&format!("HTTP server on {}", base_url.as_str().cyan()));
+    if let Some((ref user, _)) = auth {
+        print_info(&t!("cmd.serve.auth_on", user));
+    }
+    if locked {
+        print_info(&t!("cmd.serve.lock_on"));
+    }
+    // Every URL a client needs, so nobody has to guess the API shape.
+    print_info(&t!("cmd.serve.url_web", base_url.as_str()));
+    print_info(&t!(
+        "cmd.serve.url_upload",
+        format!("{}/api/upload", base_url)
+    ));
+    print_info(&t!(
+        "cmd.serve.url_download",
+        format!("{}/download/root/", base_url)
+    ));
+    print_info(&t!("cmd.serve.url_info", format!("{}/info", base_url)));
+
+    if share_mode {
+        print_share_block(port, &bind, share_path.as_deref(), !no_qr || want_qr);
+    }
+
+    if use_tunnel {
+        spawn_cloudflared(port);
+    }
+
+    let shutdown = Arc::new(AtomicBool::new(false));
+    crate::shell::commands::init_ctrlc_handler();
+    crate::shell::commands::register_shutdown_flag(shutdown.clone());
+
+    let web = if web_dir.is_empty() {
+        None
+    } else {
+        Some(PathBuf::from(crate::utils::paths::expand_path_str(
+            &web_dir,
+        )))
+    };
+    listener.set_nonblocking(true)?;
+
+    let auth = auth.map(|(u, p)| std::sync::Arc::new((u, p)));
+    let base_url = std::sync::Arc::new(base_url.clone());
+    while !shutdown.load(std::sync::atomic::Ordering::Relaxed) {
+        match listener.accept() {
+            Ok((stream, _)) => {
+                let db = db.clone();
+                let web = web.clone();
+                let auth = auth.clone();
+                let base_url = base_url.clone();
+                std::thread::spawn(move || {
+                    handle_connection(stream, db, spa, web, auth, locked, base_url)
+                });
+            }
+            Err(e) if e.kind() == std::io::ErrorKind::WouldBlock => {
+                std::thread::sleep(std::time::Duration::from_millis(200));
+            }
+            Err(e) => print_warning(&format!("Accept: {}", e)),
+        }
+    }
+    print_info(&t!("cmd.serve.stopped"));
+    crate::shell::commands::unregister_shutdown_flag(&shutdown);
+    crate::shell::commands::init_ctrlc_handler();
+    Ok(false)
+}
+
+// ── Auth ────────────────────────────────────────────────────────────────────
+//
+// `serve --auth <user:pass>` protects every `/api/*` route with HTTP Basic.
+// The static frontend (`/`) stays public so the login page itself always
+// loads; the React app attaches the header and shows a login dialog on 401.
+
+/// Short-lived download tokens so a browser-native `<a href>` download can
+/// show the browser's own progress bar even when `--auth` is on (plain links
+/// can't attach the `Authorization` header).
+///
+/// Token is bound to one file id, valid 5 min, reusable within the window
+/// (lets the browser retry). Stored in-memory only.
+const DOWNLOAD_TOKEN_TTL_SECS: u64 = 300;
+
+fn download_tokens() -> &'static std::sync::Mutex<HashMap<String, (i64, u64)>> {
+    static TOKENS: std::sync::OnceLock<std::sync::Mutex<HashMap<String, (i64, u64)>>> =
+        std::sync::OnceLock::new();
+    TOKENS.get_or_init(|| std::sync::Mutex::new(HashMap::new()))
+}
+
+fn now_epoch() -> u64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_secs()
+}
+
+fn mint_download_token(file_id: i64) -> String {
+    static CTR: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+    let n = CTR.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    let nanos = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_nanos();
+    // No extra deps: (pid, nanos, counter, file_id) hashed twice for spread.
+    use std::collections::hash_map::DefaultHasher;
+    use std::hash::{Hash, Hasher};
+    let mut h1 = DefaultHasher::new();
+    (std::process::id(), nanos, n, file_id).hash(&mut h1);
+    let a = h1.finish();
+    let mut h2 = DefaultHasher::new();
+    (
+        nanos ^ ((a as u128) << 64 | a as u128),
+        n.wrapping_mul(0x9e37_79b9_7f4a_7c15),
+    )
+        .hash(&mut h2);
+    let b = h2.finish();
+    let token = format!("{:016x}{:016x}", a, b);
+    let exp = now_epoch().saturating_add(DOWNLOAD_TOKEN_TTL_SECS);
+    if let Ok(mut m) = download_tokens().lock() {
+        // Opportunistic expiry sweep so the map can't grow unbounded.
+        let now = now_epoch();
+        m.retain(|_, (_, e)| *e > now);
+        m.insert(token.clone(), (file_id, exp));
+    }
+    token
+}
+
+fn valid_download_token(token: &str, file_id: i64) -> bool {
+    if token.is_empty() || token.len() > 128 {
+        return false;
+    }
+    let now = now_epoch();
+    match download_tokens().lock() {
+        Ok(mut m) => {
+            match m.get(token) {
+                Some((fid, exp)) if *fid == file_id && *exp > now => true,
+                Some(_) => {
+                    // Wrong file or expired — drop it if expired.
+                    let expired = m.get(token).map(|(_, e)| *e <= now).unwrap_or(false);
+                    if expired {
+                        m.remove(token);
+                    }
+                    false
+                }
+                None => false,
+            }
+        }
+        Err(_) => false,
+    }
+}
+
+/// True when `?id=..&token=..` carries a live token for that file.
+/// Used by the auth gate so `GET /api/download` via plain link works.
+fn query_has_valid_download_token(query: &str) -> bool {
+    let q = parse_query(query);
+    let id: i64 = match q.get("id").and_then(|s| s.parse().ok()) {
+        Some(i) => i,
+        None => return false,
+    };
+    match q.get("token") {
+        Some(t) => valid_download_token(t, id),
+        None => false,
+    }
+}
+
+// ── Connection handler ────────────────────────────────────────────────────
+
+fn handle_connection(
+    mut stream: TcpStream,
+    db: Arc<Mutex<rusqlite::Connection>>,
+    spa_mode: bool,
+    web_dir: Option<PathBuf>,
+    auth: Option<std::sync::Arc<(String, String)>>,
+    locked: bool,
+    base_url: std::sync::Arc<String>,
+) {
+    // The accepted socket may inherit non-blocking mode from the listener;
+    // restore blocking semantics so reads/writes behave predictably.
+    let _ = stream.set_nonblocking(false);
+    let mut reader = std::io::BufReader::new(&mut stream);
+
+    // Read request line
+    let mut request_line = String::new();
+    if reader.read_line(&mut request_line).is_err() {
+        return;
+    }
+    let request_line = request_line.trim();
+    if request_line.is_empty() {
+        return;
+    }
+
+    let parts: Vec<&str> = request_line.splitn(3, ' ').collect();
+    if parts.len() < 2 {
+        return;
+    }
+    let method = parts[0];
+    let full_path = parts[1];
+    let (path, query) = full_path.split_once('?').unwrap_or((full_path, ""));
+
+    // Read headers
+    let mut content_length: u64 = 0;
+    let mut boundary = String::new();
+    let mut expect_continue = false;
+    let mut authorization = String::new();
+    let mut range_header = String::new();
+    let mut host_header = String::new();
+    let mut forwarded_host = String::new();
+    let mut forwarded_proto = String::new();
+    loop {
+        let mut line = String::new();
+        if reader.read_line(&mut line).is_err() {
+            return;
+        }
+        let line = line.trim();
+        if line.is_empty() {
+            break;
+        }
+        if let Some((k, v)) = line.split_once(':') {
+            let key = k.trim().to_lowercase();
+            let val = v.trim().to_string();
+            if key == "content-length" {
+                content_length = val.parse().unwrap_or(0);
+            }
+            if key == "content-type" && val.contains("multipart/form-data") {
+                if let Some(b) = val.split("boundary=").nth(1) {
+                    boundary = b.trim().to_string();
+                }
+            }
+            if key == "expect" && val.to_lowercase().contains("100-continue") {
+                expect_continue = true;
+            }
+            if key == "range" {
+                range_header = val.clone();
+            }
+            if key == "authorization" {
+                authorization = val.clone();
+            }
+            if key == "host" {
+                host_header = val.clone();
+            }
+            if key == "x-forwarded-host" {
+                forwarded_host = val.clone();
+            }
+            if key == "x-forwarded-proto" {
+                forwarded_proto = val;
+            }
+        }
+    }
+
+    // Auth gate: every `/api/*` route needs valid Basic credentials when
+    // `--auth` was given. Static files stay public so the login page loads;
+    // the check runs before any body is read so unauthenticated uploads
+    // can't burn bandwidth or disk.
+    // Exception: `GET /api/download?id=..&token=..` accepts a short-lived
+    // download token (minted via POST /api/download-token with a valid
+    // header) so plain `<a href>` links get browser-native progress bars.
+    if path.starts_with("/api/") {
+        if let Some(ref creds) = auth {
+            let expected = basic_expectation(&creds.0, &creds.1);
+            if !auth_matches(&authorization, &expected) {
+                let token_ok = method == "GET"
+                    && (path == "/api/download" || path.starts_with("/download/"))
+                    && query_has_valid_download_token(query);
+                if !token_ok {
+                    respond_unauthorized(&mut stream);
+                    return;
+                }
+            }
+        }
+    }
+
+    // Read body (only for methods that have one). Multipart uploads are
+    // streamed to a temp file so files up to MAX_UPLOAD (10 GB) never have
+    // to fit in memory; JSON payloads stay small and in-memory.
+    let mut body = Vec::new();
+    let mut upload_file: Option<PathBuf> = None;
+    let has_body = method == "POST" || method == "PUT" || method == "PATCH";
+    if has_body {
+        // Clients using Expect: 100-continue wait for this before sending the
+        // body; ack it so they don't stall (a stall surfaces as a network
+        // failure on the client). Oversized requests are rejected up front so
+        // the client doesn't transmit a body that will be refused anyway.
+        let oversized = content_length > MAX_UPLOAD;
+        if expect_continue && !oversized {
+            let _ = write_all_retry(reader.get_mut(), b"HTTP/1.1 100 Continue\r\n\r\n");
+        }
+        if boundary.is_empty() {
+            let max_body = MAX_UPLOAD;
+            if content_length > 0 && content_length > max_body {
+                print_warning(&format!("serve: JSON body too large ({})", content_length));
+                respond(&mut stream, 413, "text/plain", b"413 Payload Too Large");
+                return;
+            }
+            let mut buf = vec![0u8; 65536];
+            let mut total: u64 = 0;
+            let need = if content_length > 0 {
+                content_length
+            } else {
+                u64::MAX
+            };
+            let mut last_activity = std::time::Instant::now();
+            loop {
+                reader
+                    .get_ref()
+                    .set_read_timeout(Some(std::time::Duration::from_secs(BODY_READ_TIMEOUT)))
+                    .ok();
+                match reader.read(&mut buf) {
+                    Ok(0) => break,
+                    Ok(n) => {
+                        last_activity = std::time::Instant::now();
+                        total += n as u64;
+                        if total > max_body {
+                            respond(&mut stream, 413, "text/plain", b"413 Payload Too Large");
+                            return;
+                        }
+                        body.extend_from_slice(&buf[..n]);
+                        if total >= need {
+                            break;
+                        }
+                    }
+                    Err(ref e)
+                        if e.kind() == std::io::ErrorKind::WouldBlock
+                            || e.kind() == std::io::ErrorKind::TimedOut =>
+                    {
+                        if std::time::Instant::now().duration_since(last_activity)
+                            > std::time::Duration::from_secs(BODY_IDLE_TIMEOUT)
+                        {
+                            print_warning("serve: JSON body timed out");
+                            respond(&mut stream, 408, "text/plain", b"408 Request Timeout");
+                            return;
+                        }
+                        continue;
+                    }
+                    Err(e) => {
+                        print_error(&format!("serve: JSON body read failed: {}", e));
+                        respond(&mut stream, 500, "text/plain", b"500 Internal Server Error");
+                        return;
+                    }
+                }
+            }
+        } else {
+            match read_body_to_file(&mut reader, content_length) {
+                Ok(Some(p)) => upload_file = Some(p),
+                Ok(None) => {
+                    print_warning(&format!("serve: upload too large ({})", content_length));
+                    respond(&mut stream, 413, "text/plain", b"413 Payload Too Large");
+                    return;
+                }
+                Err(e) if e.kind() == std::io::ErrorKind::TimedOut => {
+                    print_warning("serve: upload timed out");
+                    respond(&mut stream, 408, "text/plain", b"408 Request Timeout");
+                    return;
+                }
+                Err(e) => {
+                    print_error(&format!("serve: upload body read failed: {}", e));
+                    respond(&mut stream, 500, "text/plain", b"500 Internal Server Error");
+                    return;
+                }
+            }
+        }
+    }
+
+    // Route
+    let response = match route_request(method, path) {
+        Route::Api => handle_api(
+            method,
+            path,
+            query,
+            &body,
+            &boundary,
+            upload_file.as_deref(),
+            db,
+            locked,
+        ),
+        // Everything lives under `/root/`: entering the bare URL walks the
+        // user into it so every later link is root-relative.
+        Route::RootRedirect => ApiResponse::Bytes(redirect_to_root()),
+        // Bare download base: send the client into the real root so the URL
+        // printed at startup works when pasted whole.
+        Route::DownloadRedirect => ApiResponse::Bytes(redirect_to("/download/root/")),
+        // Use the URL the client actually reached (tunnel, LAN IP, custom
+        // domain) instead of the bind address, so a shared /info page shows
+        // working links instead of http://127.0.0.1:<port>.
+        Route::Info => ApiResponse::Bytes(info_page(
+            &request_base_url(&host_header, &forwarded_host, &forwarded_proto, &base_url),
+            auth.is_some(),
+            locked,
+        )),
+        Route::Download(target) => serve_download(&target, &range_header, method == "HEAD", &db),
+        Route::Static => {
+            // `/root/<dir>` is a client-side route: hand back the SPA shell so
+            // a reload (or a copied folder link) lands on the same directory.
+            let requested = if method == "GET" || method == "HEAD" {
+                spa_path(path)
+            } else {
+                path
+            };
+            ApiResponse::Bytes(serve_static(requested, spa_mode, &web_dir))
+        }
+    };
+
+    if let Some(p) = &upload_file {
+        let _ = std::fs::remove_file(p);
+    }
+
+    match response {
+        ApiResponse::Bytes(b) => {
+            let _ = write_all_retry(&mut stream, &b);
+        }
+        ApiResponse::Stream { head, path } => {
+            let _ = write_all_retry(&mut stream, &head);
+            if let Ok(mut file) = std::fs::File::open(&path) {
+                let mut buf = vec![0u8; 65536];
+                loop {
+                    match file.read(&mut buf) {
+                        Ok(0) => break,
+                        Ok(n) => {
+                            if write_all_retry(&mut stream, &buf[..n]).is_err() {
+                                break;
+                            }
+                        }
+                        Err(_) => break,
+                    }
+                }
+            }
+        }
+        ApiResponse::StreamRange {
+            head,
+            path,
+            start,
+            len,
+        } => {
+            let _ = write_all_retry(&mut stream, &head);
+            if let Ok(mut file) = std::fs::File::open(&path) {
+                if file.seek(SeekFrom::Start(start)).is_ok() {
+                    let mut remaining = len;
+                    let mut buf = vec![0u8; 65536];
+                    while remaining > 0 {
+                        let want = remaining.min(buf.len() as u64) as usize;
+                        match file.read(&mut buf[..want]) {
+                            Ok(0) => break,
+                            Ok(n) => {
+                                if write_all_retry(&mut stream, &buf[..n]).is_err() {
+                                    break;
+                                }
+                                remaining -= n as u64;
+                            }
+                            Err(_) => break,
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+/// Streams the multipart body to a temp file, enforcing MAX_UPLOAD and an
+/// idle-based timeout. `Ok(Some(path))` is a fully received body; `Ok(None)`
+/// means it exceeded MAX_UPLOAD (413); `Err` is a stalled or failed read.
+fn read_body_to_file(
+    reader: &mut std::io::BufReader<&mut TcpStream>,
+    content_length: u64,
+) -> std::io::Result<Option<PathBuf>> {
+    if content_length > MAX_UPLOAD {
+        return Ok(None);
+    }
+    let nanos = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_nanos();
+    let tmp = files_dir().join(format!(".up-{}-{}", std::process::id(), nanos));
+    let mut out = std::fs::File::create(&tmp)?;
+    let mut buf = vec![0u8; 65536];
+    let mut total: u64 = 0;
+    let need = if content_length > 0 {
+        content_length
+    } else {
+        u64::MAX
+    };
+    // Slow-but-flowing uploads are allowed to take as long as the link needs;
+    // only a connection that stops sending entirely for BODY_IDLE_TIMEOUT is
+    // aborted. MAX_UPLOAD stays the hard cap.
+    let mut last_activity = std::time::Instant::now();
+    loop {
+        reader
+            .get_ref()
+            .set_read_timeout(Some(std::time::Duration::from_secs(BODY_READ_TIMEOUT)))
+            .ok();
+        match reader.read(&mut buf) {
+            Ok(0) => break,
+            Ok(n) => {
+                last_activity = std::time::Instant::now();
+                total += n as u64;
+                if total > MAX_UPLOAD {
+                    drop(out);
+                    let _ = std::fs::remove_file(&tmp);
+                    return Ok(None);
+                }
+                if out.write_all(&buf[..n]).is_err() {
+                    let _ = std::fs::remove_file(&tmp);
+                    return Err(std::io::Error::other("upload write failed"));
+                }
+                if total >= need {
+                    break;
+                }
+            }
+            Err(ref e)
+                if e.kind() == std::io::ErrorKind::WouldBlock
+                    || e.kind() == std::io::ErrorKind::TimedOut =>
+            {
+                if std::time::Instant::now().duration_since(last_activity)
+                    > std::time::Duration::from_secs(BODY_IDLE_TIMEOUT)
+                {
+                    let _ = std::fs::remove_file(&tmp);
+                    return Err(std::io::Error::new(
+                        std::io::ErrorKind::TimedOut,
+                        "upload timed out",
+                    ));
+                }
+                continue;
+            }
+            Err(_) => {
+                let _ = std::fs::remove_file(&tmp);
+                return Err(std::io::Error::other("upload read failed"));
+            }
+        }
+    }
+    drop(out);
+    Ok(Some(tmp))
+}
+
+// ── Static file serving ───────────────────────────────────────────────────
+
+/// `GET /` → `/root/`. The share root is always `/root`, so a URL copied from
+/// the address bar keeps working after the user walks into a subdirectory.
+fn redirect_to_root() -> Vec<u8> {
+    redirect_to("/root/")
+}
+
+/// 302 to `location` (kept tiny so it can be built without the response type).
+fn redirect_to(location: &str) -> Vec<u8> {
+    format!(
+        "HTTP/1.1 302 Found\r\nLocation: {}\r\nContent-Length: 0\r\nConnection: close\r\n\r\n",
+        location
+    )
+    .into_bytes()
+}
+
+/// The `/info` page: a self-contained explanation of the running server plus
+/// copy/paste upload and download recipes for every client we support.
+fn info_page(base: &str, auth: bool, locked: bool) -> Vec<u8> {
+    let html = crate::utils::serve_info::render(base, auth, locked);
+    let mut out = format!(
+        "HTTP/1.1 200 OK\r\nContent-Type: text/html; charset=utf-8\r\nContent-Length: {}\r\nCache-Control: no-store\r\nConnection: close\r\n\r\n",
+        html.as_bytes().len()
+    )
+    .into_bytes();
+    out.extend_from_slice(html.as_bytes());
+    out
+}
+
+/// What a request line resolves to. Kept pure so the routing table can be
+/// tested without a socket.
+#[derive(Debug, PartialEq, Eq)]
+pub(crate) enum Route {
+    Api,
+    RootRedirect,
+    DownloadRedirect,
+    Info,
+    Download(String),
+    Static,
+}
+
+pub(crate) fn route_request(method: &str, path: &str) -> Route {
+    if path.starts_with("/api/") {
+        return Route::Api;
+    }
+    if method == "GET" && (path == "/" || path == "/root") {
+        return Route::RootRedirect;
+    }
+    if method == "GET" && (path == "/download" || path == "/download/") {
+        return Route::DownloadRedirect;
+    }
+    if method == "GET" && matches!(path, "/info" | "/help" | "/about") {
+        return Route::Info;
+    }
+    if let Some(target) = download_target(path) {
+        return Route::Download(target);
+    }
+    Route::Static
+}
+
+/// `/download/root/<path/to/file>` → the share-relative path. The bare
+/// `/download/<path>` spelling is accepted too, so either form can be copied.
+fn download_target(path: &str) -> Option<String> {
+    let rest = path.strip_prefix("/download/")?;
+    let rest = if rest == "root" {
+        ""
+    } else {
+        rest.strip_prefix("root/").unwrap_or(rest)
+    };
+    Some(clean_path(rest))
+}
+
+/// Client-side routes under `/root/…` are answered with the SPA shell.
+fn spa_path(path: &str) -> &str {
+    if path == "/root" || path.starts_with("/root/") {
+        "/"
+    } else {
+        path
+    }
+}
+
+/// Resolve `bytes=<start>-<end>` against `total`. `None` means "send the whole
+/// file": no header, a suffix range, or an unsatisfiable offset.
+fn parse_range(header: &str, total: u64) -> Option<(u64, u64)> {
+    if total == 0 {
+        return None;
+    }
+    let spec = header.trim().strip_prefix("bytes=")?;
+    let (from, to) = spec.split_once('-')?;
+    let start = from.trim().parse::<u64>().ok()?;
+    if start >= total {
+        return None;
+    }
+    let end = to.trim().parse::<u64>().unwrap_or(total - 1).min(total - 1);
+    if end < start {
+        return None;
+    }
+    Some((start, end))
+}
+
+/// Serve a file from `/download/…`. Honours `Range` (so the page can pause a
+/// transfer and resume it later), and never rewrites the stored file.
+fn serve_download(
+    target: &str,
+    range_header: &str,
+    head_only: bool,
+    db: &Arc<Mutex<rusqlite::Connection>>,
+) -> ApiResponse {
+    let (dir_path, filename) = match split_path(target) {
+        Ok(p) => p,
+        Err(_) => return ApiResponse::Bytes(json_error(400)),
+    };
+    let row: Option<(Option<String>, Option<Vec<u8>>)> = {
+        let db = lock(db);
+        db.query_row(
+            "SELECT disk_name, data FROM files WHERE path = ?1 AND filename = ?2 AND is_dir = 0",
+            params![dir_path, filename],
+            |row| Ok((row.get(0)?, row.get(1)?)),
+        )
+        .ok()
+    };
+    let Some((disk_name, blob)) = row else {
+        return ApiResponse::Bytes(json_error(404));
+    };
+
+    enum Body {
+        File(PathBuf),
+        Memory(Vec<u8>),
+    }
+    let (total, body) = match (disk_name, blob) {
+        (Some(d), _) => {
+            let path = files_dir().join(&d);
+            match std::fs::metadata(&path) {
+                Ok(m) => (m.len(), Body::File(path)),
+                Err(_) => return ApiResponse::Bytes(json_error(404)),
+            }
+        }
+        (_, Some(b)) => (b.len() as u64, Body::Memory(b)),
+        _ => return ApiResponse::Bytes(json_error(404)),
+    };
+
+    let resolved = parse_range(range_header, total);
+    let (status, len, extra) = match resolved {
+        Some((start, end)) => (
+            206u16,
+            end - start + 1,
+            format!(
+                "Content-Range: bytes {}-{}/{}\r\nAccept-Ranges: bytes\r\n",
+                start, end, total
+            ),
+        ),
+        None => (200u16, total, "Accept-Ranges: bytes\r\n".to_string()),
+    };
+    let reason = if status == 206 {
+        "Partial Content"
+    } else {
+        "OK"
+    };
+    let ct = mime_guess::from_path(&filename)
+        .first_or_octet_stream()
+        .to_string();
+    let head = format!(
+        "HTTP/1.1 {} {}\r\nContent-Type: {}\r\nContent-Disposition: attachment; filename=\"{}\"\r\nContent-Length: {}\r\nConnection: close\r\nAccess-Control-Allow-Origin: *\r\nAccess-Control-Expose-Headers: Content-Range, Content-Length\r\n{}\r\n",
+        status,
+        reason,
+        ct,
+        filename.replace('"', ""),
+        len,
+        extra
+    );
+    if head_only {
+        return ApiResponse::Bytes(head.into_bytes());
+    }
+    match body {
+        Body::File(path) => ApiResponse::StreamRange {
+            head: head.into_bytes(),
+            path,
+            start: resolved.map(|(s, _)| s).unwrap_or(0),
+            len,
+        },
+        Body::Memory(data) => {
+            let slice = match resolved {
+                Some((start, end)) => data[start as usize..=end as usize].to_vec(),
+                None => data,
+            };
+            let mut out = head.into_bytes();
+            out.extend(slice);
+            ApiResponse::Bytes(out)
+        }
+    }
+}
+
+fn serve_static(path: &str, spa_mode: bool, web_dir: &Option<PathBuf>) -> Vec<u8> {
+    let clean = if path == "/" {
+        "index.html"
+    } else {
+        path.trim_start_matches('/')
+    };
+
+    if let Some(dir) = web_dir {
+        let fp = dir.join(clean);
+        if fp.is_file() {
+            if let Ok(d) = std::fs::read(&fp) {
+                return response_bytes(200, mime_for(clean), d);
+            }
+        }
+    }
+
+    if let Some(f) = Frontend::get(clean) {
+        return response_bytes(200, mime_for(clean), f.data.to_vec());
+    }
+
+    let alt = format!("/{}", clean).trim_start_matches('/').to_string();
+    if let Some(f) = Frontend::get(&alt) {
+        return response_bytes(200, mime_for(&alt), f.data.to_vec());
+    }
+
+    if spa_mode {
+        if let Some(f) = Frontend::get("index.html") {
+            return response_bytes(200, "text/html; charset=utf-8", f.data.to_vec());
+        }
+    }
+
+    json_error(404)
+}
+
+fn mime_for(path: &str) -> &'static str {
+    match Path::new(path)
+        .extension()
+        .and_then(|e| e.to_str())
+        .unwrap_or("")
+    {
+        "html" | "htm" => "text/html; charset=utf-8",
+        "css" => "text/css; charset=utf-8",
+        "js" | "mjs" => "application/javascript",
+        "json" => "application/json",
+        "png" => "image/png",
+        "jpg" | "jpeg" => "image/jpeg",
+        "gif" => "image/gif",
+        "svg" => "image/svg+xml",
+        "ico" => "image/x-icon",
+        "woff2" => "font/woff2",
+        _ => "application/octet-stream",
+    }
+}
+
+// ── API router ────────────────────────────────────────────────────────────
+
+fn handle_api(
+    method: &str,
+    path: &str,
+    query: &str,
+    body: &[u8],
+    boundary: &str,
+    upload_path: Option<&Path>,
+    db: Arc<Mutex<rusqlite::Connection>>,
+    locked: bool,
+) -> ApiResponse {
+    // `--lock`: read-only server — list + download only. Mutations return 403.
+    if locked {
+        match (method, path) {
+            ("POST", "/api/upload")
+            | ("POST", "/api/upload-chunk")
+            | ("POST", "/api/upload-finalize")
+            | ("DELETE", "/api/upload-cancel")
+            | ("POST", "/api/create-folder")
+            | ("DELETE", "/api/delete")
+            | ("PATCH", "/api/rename") => return ApiResponse::Bytes(json_error(403)),
+            _ => {}
+        }
+    }
+    match (method, path) {
+        ("GET", "/api/files") => ApiResponse::Bytes(api_list_files(query, db, locked)),
+        ("GET", "/api/download") => api_download(query, db),
+        ("POST", "/api/download-token") => ApiResponse::Bytes(api_download_token(body, db)),
+        ("POST", "/api/upload") => match upload_path {
+            Some(p) => api_upload(p, boundary, db),
+            None => ApiResponse::Bytes(json_error(400)),
+        },
+        ("POST", "/api/upload-chunk") => match upload_path {
+            Some(p) => api_upload_chunk(p, boundary, db),
+            None => ApiResponse::Bytes(json_error(400)),
+        },
+        ("POST", "/api/upload-finalize") => ApiResponse::Bytes(api_upload_finalize(body, db)),
+        ("DELETE", "/api/upload-cancel") => ApiResponse::Bytes(api_upload_cancel(query, db)),
+        ("POST", "/api/create-folder") => ApiResponse::Bytes(api_create_folder(body, db)),
+        ("DELETE", "/api/delete") => ApiResponse::Bytes(api_delete(query, db)),
+        ("PATCH", "/api/rename") => ApiResponse::Bytes(api_rename(body, db)),
+        // A known endpoint reached with the wrong verb: answer 405 (not 404)
+        // so endpoint discovery (`scan waep`) can tell it exists.
+        _ if is_known_api_path(path) => ApiResponse::Bytes(json_error(405)),
+        _ => ApiResponse::Bytes(json_error(404)),
+    }
+}
+
+/// Routes `/api/*` that exist, regardless of the method used.
+fn is_known_api_path(path: &str) -> bool {
+    matches!(
+        path,
+        "/api/files"
+            | "/api/download"
+            | "/api/download-token"
+            | "/api/upload"
+            | "/api/upload-chunk"
+            | "/api/upload-finalize"
+            | "/api/upload-cancel"
+            | "/api/create-folder"
+            | "/api/delete"
+            | "/api/rename"
+    )
+}
+
+fn lock(db: &Arc<Mutex<rusqlite::Connection>>) -> std::sync::MutexGuard<'_, rusqlite::Connection> {
+    db.lock().unwrap_or_else(|e| e.into_inner())
+}
+
+// ── API: List files ───────────────────────────────────────────────────────
+
+fn api_list_files(query: &str, db: Arc<Mutex<rusqlite::Connection>>, locked: bool) -> Vec<u8> {
+    let q = parse_query(query);
+    let p = q.get("path").map(|s| s.as_str()).unwrap_or("/");
+    let db = lock(&db);
+    let mut stmt = match db.prepare("SELECT id, filename, is_dir, size FROM files WHERE path = ?1 ORDER BY is_dir DESC, filename ASC") {
+        Ok(s) => s, Err(_) => return json_error(500),
+    };
+    let items: Vec<serde_json::Value> = match stmt.query_map(params![p], |row| {
+        Ok(serde_json::json!({"id": row.get::<_,i64>(0)?, "name": row.get::<_,String>(1)?, "isDir": row.get::<_,i32>(2)? == 1, "size": row.get::<_,i64>(3)?}))
+    }) {
+        Ok(rows) => rows.filter_map(|r| r.ok()).collect(),
+        Err(_) => vec![],
+    };
+    json_ok(
+        serde_json::to_vec(&serde_json::json!({"path": p, "items": items, "locked": locked}))
+            .unwrap(),
+    )
+}
+
+// ── API: Download token (for browser-native progress with --auth) ───────
+
+fn api_download_token(body: &[u8], db: Arc<Mutex<rusqlite::Connection>>) -> Vec<u8> {
+    let j: serde_json::Value = match serde_json::from_slice(body) {
+        Ok(v) => v,
+        Err(_) => return json_error(400),
+    };
+    let id: i64 = match j["id"].as_i64() {
+        Some(i) => i,
+        None => return json_error(400),
+    };
+    // Token must point at a real file (not a dir) so random ids can't mint.
+    {
+        let db = lock(&db);
+        let ok: bool = db
+            .query_row(
+                "SELECT COUNT(*) FROM files WHERE id = ?1 AND is_dir = 0",
+                params![id],
+                |row| row.get::<_, i64>(0),
+            )
+            .map(|n| n > 0)
+            .unwrap_or(false);
+        if !ok {
+            return json_error(404);
+        }
+    }
+    let token = mint_download_token(id);
+    json_ok(
+        serde_json::to_vec(&serde_json::json!({
+            "token": token,
+            "url": format!("/api/download?id={}&token={}", id, token),
+            "expiresIn": DOWNLOAD_TOKEN_TTL_SECS,
+        }))
+        .unwrap(),
+    )
+}
+
+// ── API: Download ─────────────────────────────────────────────────────────
+
+fn api_download(query: &str, db: Arc<Mutex<rusqlite::Connection>>) -> ApiResponse {
+    let q = parse_query(query);
+    let id: i64 = match q.get("id").and_then(|s| s.parse().ok()) {
+        Some(i) => i,
+        None => return ApiResponse::Bytes(json_error(400)),
+    };
+    let (filename, disk_name, blob): (String, Option<String>, Option<Vec<u8>>) = {
+        let db = lock(&db);
+        match db.query_row(
+            "SELECT filename, disk_name, data FROM files WHERE id = ?1 AND is_dir = 0",
+            params![id],
+            |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
+        ) {
+            Ok(r) => r,
+            Err(_) => return ApiResponse::Bytes(json_error(404)),
+        }
+    };
+    let ct = mime_guess::from_path(&filename)
+        .first_or_octet_stream()
+        .to_string();
+    match (disk_name, blob) {
+        (Some(d), _) => {
+            let path = files_dir().join(&d);
+            match std::fs::metadata(&path) {
+                Ok(m) => {
+                    let head = format!("HTTP/1.1 200 OK\r\nContent-Type: {}\r\nContent-Disposition: attachment; filename=\"{}\"\r\nContent-Length: {}\r\nConnection: close\r\nAccess-Control-Allow-Origin: *\r\n\r\n", ct, filename, m.len());
+                    ApiResponse::Stream {
+                        head: head.into_bytes(),
+                        path,
+                    }
+                }
+                Err(_) => ApiResponse::Bytes(json_error(404)),
+            }
+        }
+        (_, Some(b)) => {
+            let head = format!("HTTP/1.1 200 OK\r\nContent-Type: {}\r\nContent-Disposition: attachment; filename=\"{}\"\r\nContent-Length: {}\r\nConnection: close\r\nAccess-Control-Allow-Origin: *\r\n\r\n", ct, filename, b.len());
+            let mut r = head.into_bytes();
+            r.extend(b);
+            ApiResponse::Bytes(r)
+        }
+        _ => ApiResponse::Bytes(json_error(404)),
+    }
+}
+
+// ── API: Upload ───────────────────────────────────────────────────────────
+
+fn api_upload(
+    upload_path: &Path,
+    boundary: &str,
+    db: Arc<Mutex<rusqlite::Connection>>,
+) -> ApiResponse {
+    if boundary.is_empty() {
+        return ApiResponse::Bytes(json_error(400));
+    }
+    let (dest_path, files, _fields) =
+        match parse_multipart_stream(upload_path, boundary, &files_dir()) {
+            Ok(f) => f,
+            Err(_) => return ApiResponse::Bytes(json_error(500)),
+        };
+    if files.is_empty() {
+        return ApiResponse::Bytes(json_error(400));
+    }
+    {
+        let db = lock(&db);
+        for (filename, disk, size) in &files {
+            if db
+                .execute(
+                    "INSERT INTO files (filename, path, is_dir, size, disk_name) VALUES (?1, ?2, 0, ?3, ?4)",
+                    params![filename, dest_path, *size as i64, disk],
+                )
+                .is_err()
+            {
+                let _ = std::fs::remove_file(files_dir().join(disk));
+                return ApiResponse::Bytes(json_error(500));
+            }
+        }
+    }
+    ApiResponse::Bytes(json_ok(
+        serde_json::to_vec(&serde_json::json!({"path": dest_path, "uploaded": files.len()}))
+            .unwrap(),
+    ))
+}
+
+// ── API: Chunked upload ───────────────────────────────────────────────────
+//
+// Large files are split client-side into <= CHUNK_MAX pieces so each request
+// fits under the tunnel's per-request body cap. Chunks are appended to a
+// staging file and reassembled by upload-finalize.
+
+fn valid_upload_id(id: &str) -> bool {
+    !id.is_empty()
+        && id.len() <= 128
+        && id
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_')
+}
+
+fn chunk_part_path(id: &str) -> PathBuf {
+    chunks_dir().join(format!("{}.part", id))
+}
+
+fn chunk_meta_path(id: &str) -> PathBuf {
+    chunks_dir().join(format!("{}.meta", id))
+}
+
+/// Removes a chunk session's staging files (part + meta). Best-effort.
+fn chunk_cleanup(id: &str) {
+    let _ = std::fs::remove_file(chunk_part_path(id));
+    let _ = std::fs::remove_file(chunk_meta_path(id));
+}
+
+fn api_upload_chunk(
+    upload_path: &Path,
+    boundary: &str,
+    _db: Arc<Mutex<rusqlite::Connection>>,
+) -> ApiResponse {
+    if boundary.is_empty() {
+        return ApiResponse::Bytes(json_error(400));
+    }
+    let (dest_path, files, fields) =
+        match parse_multipart_stream(upload_path, boundary, &files_dir()) {
+            Ok(f) => f,
+            Err(_) => return ApiResponse::Bytes(json_error(500)),
+        };
+    // The parser extracts each chunk to a disk file; those are intermediate
+    // and must be removed on every path below (success or failure).
+    let drop_extracted = || {
+        for (_, disk, _) in &files {
+            let _ = std::fs::remove_file(files_dir().join(disk));
+        }
+    };
+    let upload_id = match fields.get("uploadId") {
+        Some(id) if valid_upload_id(id) => id.clone(),
+        _ => {
+            drop_extracted();
+            return ApiResponse::Bytes(json_error(400));
+        }
+    };
+    let total_size: u64 = match fields.get("totalSize").and_then(|s| s.parse().ok()) {
+        Some(s) => s,
+        None => {
+            drop_extracted();
+            return ApiResponse::Bytes(json_error(400));
+        }
+    };
+    if total_size > MAX_UPLOAD {
+        drop_extracted();
+        return ApiResponse::Bytes(json_error(413));
+    }
+    let chunk_index: u64 = fields
+        .get("chunkIndex")
+        .and_then(|s| s.parse().ok())
+        .unwrap_or(0);
+    if files.len() != 1 {
+        drop_extracted();
+        chunk_cleanup(&upload_id);
+        return ApiResponse::Bytes(json_error(400));
+    }
+    let (filename, disk, chunk_size) = &files[0];
+    let chunk_file = files_dir().join(disk);
+    if *chunk_size > CHUNK_MAX {
+        drop_extracted();
+        chunk_cleanup(&upload_id);
+        return ApiResponse::Bytes(json_error(413));
+    }
+
+    // Read the current staging state (single-session, chunks arrive in order).
+    let mut next_index: u64 = 0;
+    let mut received: u64 = 0;
+    if let Ok(meta) = std::fs::read_to_string(chunk_meta_path(&upload_id)) {
+        if let Ok(v) = serde_json::from_str::<serde_json::Value>(&meta) {
+            next_index = v["next"].as_u64().unwrap_or(0);
+            received = v["received"].as_u64().unwrap_or(0);
+        }
+    }
+    if chunk_index != next_index {
+        drop_extracted();
+        chunk_cleanup(&upload_id);
+        return ApiResponse::Bytes(json_error(400));
+    }
+    if received + chunk_size > total_size {
+        drop_extracted();
+        chunk_cleanup(&upload_id);
+        return ApiResponse::Bytes(json_error(400));
+    }
+
+    // Append this chunk's bytes to the staging file.
+    let part_path = chunk_part_path(&upload_id);
+    let append = || -> std::io::Result<u64> {
+        let mut staged = std::fs::OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(&part_path)?;
+        let mut src = std::fs::File::open(&chunk_file)?;
+        let n = std::io::copy(&mut src, &mut staged)?;
+        staged.sync_all().ok();
+        drop(src);
+        drop(staged);
+        Ok(n)
+    };
+    let written = match append() {
+        Ok(n) => n,
+        Err(_) => {
+            drop_extracted();
+            chunk_cleanup(&upload_id);
+            return ApiResponse::Bytes(json_error(500));
+        }
+    };
+    drop_extracted();
+
+    // Persist staging state for the next chunk / finalize.
+    received += written;
+    next_index += 1;
+    let meta = serde_json::json!({"next": next_index, "received": received, "total": total_size});
+    if std::fs::write(chunk_meta_path(&upload_id), meta.to_string()).is_err() {
+        chunk_cleanup(&upload_id);
+        return ApiResponse::Bytes(json_error(500));
+    }
+
+    ApiResponse::Bytes(json_ok(
+        serde_json::to_vec(&serde_json::json!({
+            "ok": true,
+            "received": received,
+            "total": total_size,
+            "path": dest_path,
+            "filename": filename,
+        }))
+        .unwrap(),
+    ))
+}
+
+fn api_upload_finalize(body: &[u8], db: Arc<Mutex<rusqlite::Connection>>) -> Vec<u8> {
+    let j: serde_json::Value = match serde_json::from_slice(body) {
+        Ok(v) => v,
+        Err(_) => return json_error(400),
+    };
+    let upload_id = match j["uploadId"].as_str() {
+        Some(id) if valid_upload_id(id) => id.to_string(),
+        _ => return json_error(400),
+    };
+    let dest_path = j["path"]
+        .as_str()
+        .map(clean_path)
+        .unwrap_or_else(|| "/".to_string());
+    let filename = match j["filename"].as_str() {
+        Some(n) if !n.trim().is_empty() => n.trim().to_string(),
+        _ => return json_error(400),
+    };
+    let size: u64 = match j["size"].as_u64() {
+        Some(s) => s,
+        None => return json_error(400),
+    };
+    if size > MAX_UPLOAD {
+        return json_error(413);
+    }
+
+    let part_path = chunk_part_path(&upload_id);
+    let meta = match std::fs::read_to_string(chunk_meta_path(&upload_id)) {
+        Ok(m) => m,
+        Err(_) => return json_error(404),
+    };
+    let v: serde_json::Value = match serde_json::from_str(&meta) {
+        Ok(v) => v,
+        Err(_) => return json_error(404),
+    };
+    let received = v["received"].as_u64().unwrap_or(0);
+    let total = v["total"].as_u64().unwrap_or(0);
+    if total != size || received != size {
+        chunk_cleanup(&upload_id);
+        return json_error(400);
+    }
+
+    let nanos = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_nanos();
+    let disk = format!("{}-{}", nanos, filename);
+    let final_path = files_dir().join(&disk);
+
+    // Move the assembled staging file into place (same volume => rename).
+    if std::fs::rename(&part_path, &final_path).is_err() {
+        // Fall back to copy+remove (e.g. cross-device edge cases).
+        if std::fs::copy(&part_path, &final_path).is_err() {
+            chunk_cleanup(&upload_id);
+            return json_error(500);
+        }
+        let _ = std::fs::remove_file(&part_path);
+    }
+    let _ = std::fs::remove_file(chunk_meta_path(&upload_id));
+
+    {
+        let db = lock(&db);
+        if db
+            .execute(
+                "INSERT INTO files (filename, path, is_dir, size, disk_name) VALUES (?1, ?2, 0, ?3, ?4)",
+                params![filename, dest_path, size as i64, disk],
+            )
+            .is_err()
+        {
+            let _ = std::fs::remove_file(&final_path);
+            return json_error(500);
+        }
+    }
+
+    json_ok(serde_json::to_vec(&serde_json::json!({"path": dest_path, "uploaded": 1})).unwrap())
+}
+
+fn api_upload_cancel(query: &str, _db: Arc<Mutex<rusqlite::Connection>>) -> Vec<u8> {
+    let q = parse_query(query);
+    match q.get("uploadId") {
+        Some(id) if valid_upload_id(id) => chunk_cleanup(id),
+        _ => {}
+    }
+    json_ok(serde_json::to_vec(&serde_json::json!({"ok": true})).unwrap())
+}
+
+// ── Multipart streaming parser ────────────────────────────────────────────
+//
+// Parses a multipart body that was already streamed to `file_path`, writing
+// each file field straight to disk so large uploads never need to fit in RAM.
+
+fn find(haystack: &[u8], needle: &[u8]) -> Option<usize> {
+    if needle.is_empty() || haystack.len() < needle.len() {
+        return None;
+    }
+    haystack.windows(needle.len()).position(|w| w == needle)
+}
+
+fn strip_trailing_crlf(data: &[u8]) -> (&[u8], usize) {
+    if data.ends_with(b"\r\n") {
+        (&data[..data.len() - 2], data.len() - 2)
+    } else if data.ends_with(b"\n") {
+        (&data[..data.len() - 1], data.len() - 1)
+    } else {
+        (data, data.len())
+    }
+}
+
+fn split_headers(buf: &[u8]) -> Option<usize> {
+    for form in [b"\r\n\r\n".as_slice(), b"\r\n\n", b"\n\r\n", b"\n\n"] {
+        if let Some(p) = find(buf, form) {
+            return Some(p + form.len());
+        }
+    }
+    None
+}
+
+fn header_blank(buf: &[u8]) -> bool {
+    buf.ends_with(b"\r\n\r\n")
+        || buf.ends_with(b"\r\n\n")
+        || buf.ends_with(b"\n\r\n")
+        || buf.ends_with(b"\n\n")
+}
+
+/// Streams bytes to `sink` up to (not including) the next `--boundary`,
+/// stripping the trailing CRLF that precedes it. `pending` holds bytes that
+/// were already read while looking for the end of the part headers. Returns
+/// the number of bytes written.
+fn stream_to_marker(
+    f: &mut BufReader<std::fs::File>,
+    tail: &mut Vec<u8>,
+    marker: &[u8],
+    sink: &mut dyn Write,
+    cap: Option<u64>,
+    mut pending: Vec<u8>,
+) -> std::io::Result<u64> {
+    let marker_len = marker.len();
+    let mut w = std::mem::take(tail);
+    if !pending.is_empty() {
+        w.append(&mut pending);
+    }
+    let mut size: u64 = 0;
+    loop {
+        if let Some(p) = find(&w, marker) {
+            let (data, n) = strip_trailing_crlf(&w[..p]);
+            sink.write_all(data)?;
+            size += n as u64;
+            *tail = w.split_off(p);
+            return Ok(size);
+        }
+        let keep = (marker_len - 1).min(w.len());
+        let split = w.len() - keep;
+        if let Some(c) = cap {
+            if size + split as u64 > c {
+                return Err(std::io::Error::new(
+                    std::io::ErrorKind::InvalidData,
+                    "multipart field too large",
+                ));
+            }
+        }
+        sink.write_all(&w[..split])?;
+        size += split as u64;
+        w = w.split_off(split);
+        let mut chunk = [0u8; 65536];
+        let n = f.read(&mut chunk)?;
+        if n == 0 {
+            if let Some(c) = cap {
+                if size + w.len() as u64 > c {
+                    return Err(std::io::Error::new(
+                        std::io::ErrorKind::InvalidData,
+                        "multipart field too large",
+                    ));
+                }
+            }
+            sink.write_all(&w)?;
+            size += w.len() as u64;
+            *tail = Vec::new();
+            return Ok(size);
+        }
+        w.extend_from_slice(&chunk[..n]);
+    }
+}
+
+/// Returns `(dest_path, [(filename, disk_name, size)]..., {field_name: value})`.
+/// Non-file multipart fields are collected so callers can read chunk metadata.
+type MultipartResult =
+    std::io::Result<(String, Vec<(String, String, u64)>, HashMap<String, String>)>;
+
+fn parse_multipart_stream(file_path: &Path, boundary: &str, base: &Path) -> MultipartResult {
+    let marker = format!("--{}", boundary).into_bytes();
+    let marker_len = marker.len();
+    let mut f = BufReader::with_capacity(1 << 20, std::fs::File::open(file_path)?);
+    let mut tail: Vec<u8> = Vec::new();
+    let mut created: Vec<PathBuf> = Vec::new();
+
+    let mut run = || -> MultipartResult {
+        let mut dest_path = "/".to_string();
+        let mut files: Vec<(String, String, u64)> = Vec::new();
+        let mut fields: HashMap<String, String> = HashMap::new();
+
+        loop {
+            // Ensure `tail` starts at the next part marker.
+            if !tail.starts_with(&marker) {
+                let mut found = false;
+                loop {
+                    if let Some(p) = find(&tail, &marker) {
+                        tail.drain(..p);
+                        found = true;
+                        break;
+                    }
+                    let mut chunk = [0u8; 65536];
+                    let n = f.read(&mut chunk)?;
+                    if n == 0 {
+                        break;
+                    }
+                    let keep = (marker_len - 1).min(tail.len());
+                    tail.drain(..tail.len() - keep);
+                    tail.extend_from_slice(&chunk[..n]);
+                }
+                if !found {
+                    break;
+                }
+            }
+            // Make sure we can inspect the two bytes after the marker.
+            while tail.len() < marker_len + 2 {
+                let mut b = [0u8; 1];
+                match f.read(&mut b) {
+                    Ok(0) => break,
+                    Ok(_) => tail.push(b[0]),
+                    Err(_) => break,
+                }
+            }
+            if tail.len() >= marker_len + 2 && &tail[marker_len..marker_len + 2] == b"--" {
+                break; // final boundary "--boundary--"
+            }
+            if tail.len() < marker_len {
+                break;
+            }
+            // Consume marker + trailing CRLF; leftover bytes start the headers.
+            tail.drain(..marker_len);
+            let mut skip = 0;
+            if tail.starts_with(b"\r\n") {
+                skip = 2;
+            } else if tail.starts_with(b"\n") {
+                skip = 1;
+            }
+            tail.drain(..skip);
+            let mut header: Vec<u8> = std::mem::take(&mut tail);
+            let mut pending: Vec<u8> = Vec::new();
+            match split_headers(&header) {
+                Some(q) => {
+                    pending = header.split_off(q);
+                }
+                None => {
+                    while !header_blank(&header) {
+                        let mut b = [0u8; 1];
+                        match f.read(&mut b) {
+                            Ok(0) => break,
+                            Ok(_) => header.push(b[0]),
+                            Err(_) => break,
+                        }
+                    }
+                }
+            }
+
+            // Parse Content-Disposition.
+            let header_str = String::from_utf8_lossy(&header);
+            let mut field_name = String::new();
+            let mut file_name = String::new();
+            for line in header_str.lines() {
+                let l = line.trim();
+                if l.to_lowercase().starts_with("content-disposition:") {
+                    for part in l.split(';') {
+                        let part = part.trim();
+                        if let Some(v) = part.strip_prefix("name=\"") {
+                            field_name = v.trim_end_matches('"').to_string();
+                        }
+                        if let Some(v) = part.strip_prefix("filename=\"") {
+                            file_name = v.trim_end_matches('"').to_string();
+                        }
+                    }
+                }
+            }
+
+            if field_name == "path" {
+                let mut data: Vec<u8> = Vec::new();
+                stream_to_marker(
+                    &mut f,
+                    &mut tail,
+                    &marker,
+                    &mut data,
+                    Some(1 << 20),
+                    pending,
+                )?;
+                let value = String::from_utf8_lossy(&data).to_string();
+                dest_path = clean_path(&value);
+                fields.insert("path".to_string(), dest_path.clone());
+            } else if field_name == "file" {
+                let nanos = std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .unwrap_or_default()
+                    .as_nanos();
+                let disk = format!("{}-{}", nanos, file_name);
+                let out_path = base.join(&disk);
+                let mut out = std::fs::File::create(&out_path)?;
+                let size = stream_to_marker(&mut f, &mut tail, &marker, &mut out, None, pending)?;
+                drop(out);
+                created.push(out_path);
+                files.push((file_name, disk, size));
+            } else {
+                let mut data: Vec<u8> = Vec::new();
+                stream_to_marker(
+                    &mut f,
+                    &mut tail,
+                    &marker,
+                    &mut data,
+                    Some(1 << 20),
+                    pending,
+                )?;
+                let value = String::from_utf8_lossy(&data).to_string();
+                fields.insert(field_name, value);
+            }
+        }
+        Ok((dest_path, files, fields))
+    };
+
+    match run() {
+        Ok(r) => Ok(r),
+        Err(e) => {
+            for p in &created {
+                let _ = std::fs::remove_file(p);
+            }
+            Err(e)
+        }
+    }
+}
+
+// ── API: Create folder ────────────────────────────────────────────────────
+
+fn api_create_folder(body: &[u8], db: Arc<Mutex<rusqlite::Connection>>) -> Vec<u8> {
+    let j: serde_json::Value = match serde_json::from_slice(body) {
+        Ok(v) => v,
+        Err(_) => return json_error(400),
+    };
+    let name = match j["name"].as_str() {
+        Some(n) => n.trim(),
+        None => return json_error(400),
+    };
+    let req_path = j["path"]
+        .as_str()
+        .map(clean_path)
+        .unwrap_or_else(|| "/".to_string());
+    if name.is_empty() || name.contains('/') || name.contains('\\') || name == "." || name == ".." {
+        return json_error(400);
+    }
+
+    let db = lock(&db);
+    if db
+        .query_row(
+            "SELECT COUNT(*) FROM files WHERE path=?1 AND filename=?2 AND is_dir=1",
+            params![req_path, name],
+            |row| row.get::<_, i64>(0),
+        )
+        .unwrap_or(0)
+        > 0
+    {
+        return json_error(409);
+    }
+    if db
+        .execute(
+            "INSERT INTO files (filename, path, is_dir, size) VALUES (?1, ?2, 1, 0)",
+            params![name, req_path],
+        )
+        .is_err()
+    {
+        return json_error(500);
+    }
+    json_ok(
+        serde_json::to_vec(
+            &serde_json::json!({"path": format!("{}/{}", req_path.trim_end_matches('/'), name)}),
+        )
+        .unwrap(),
+    )
+}
+
+// ── API: Delete ───────────────────────────────────────────────────────────
+
+fn api_delete(query: &str, db: Arc<Mutex<rusqlite::Connection>>) -> Vec<u8> {
+    let q = parse_query(query);
+    let target = q.get("path").map(|s| s.as_str()).unwrap_or("").to_string();
+    let (dir_path, filename) = match split_path(&target) {
+        Ok(p) => p,
+        Err(_) => return json_error(400),
+    };
+
+    let db = lock(&db);
+    let is_dir = db
+        .query_row(
+            "SELECT is_dir FROM files WHERE path=?1 AND filename=?2",
+            params![dir_path, filename],
+            |row| row.get::<_, i32>(0),
+        )
+        .map(|d| d == 1)
+        .unwrap_or(false);
+
+    if is_dir {
+        let prefix = if dir_path == "/" {
+            format!("/{}", filename)
+        } else {
+            format!("{}/{}", dir_path.trim_end_matches('/'), filename)
+        };
+        if let Ok(mut s) = db.prepare("SELECT path FROM files WHERE path=?1 OR path LIKE ?2") {
+            let paths: Vec<String> =
+                match s.query_map(params![&prefix, format!("{}/%", &prefix)], |r| r.get(0)) {
+                    Ok(rows) => rows.filter_map(|r| r.ok()).collect(),
+                    Err(_) => vec![],
+                };
+            for cp in &paths {
+                if let Ok(mut s) = db.prepare("SELECT disk_name FROM files WHERE path=?1 AND is_dir=0 AND disk_name IS NOT NULL") {
+                    let disks: Vec<String> = match s.query_map(params![cp], |r| r.get::<_,String>(0)) {
+                        Ok(rows) => rows.filter_map(|r| r.ok()).collect(),
+                        Err(_) => vec![],
+                    };
+                    for disk in &disks {
+                        let _ = std::fs::remove_file(files_dir().join(disk));
+                    }
+                }
+            }
+            let _ = db.execute(
+                "DELETE FROM files WHERE (path=?1 OR path LIKE ?2)",
+                params![&prefix, format!("{}/%", &prefix)],
+            );
+        }
+        // Remove the folder row itself (its parent path is `dir_path`, so the
+        // children-only DELETE above never matches it — previously the empty
+        // folder was left behind).
+        let _ = db.execute(
+            "DELETE FROM files WHERE path=?1 AND filename=?2 AND is_dir=1",
+            params![dir_path, filename],
+        );
+    } else {
+        // Remove the disk file(s) for every matching row, not just the first,
+        // so re-uploading the same name and deleting never leaves orphans.
+        if let Ok(mut s) = db.prepare(
+            "SELECT disk_name FROM files WHERE path=?1 AND filename=?2 AND disk_name IS NOT NULL",
+        ) {
+            if let Ok(rows) =
+                s.query_map(params![dir_path, filename], |row| row.get::<_, String>(0))
+            {
+                for disk in rows.filter_map(|r| r.ok()) {
+                    let _ = std::fs::remove_file(files_dir().join(&disk));
+                }
+            }
+        }
+        let _ = db.execute(
+            "DELETE FROM files WHERE path=?1 AND filename=?2",
+            params![dir_path, filename],
+        );
+    }
+    json_ok(serde_json::to_vec(&serde_json::json!({"path": target})).unwrap())
+}
+
+// ── API: Rename ───────────────────────────────────────────────────────────
+
+fn api_rename(body: &[u8], db: Arc<Mutex<rusqlite::Connection>>) -> Vec<u8> {
+    let j: serde_json::Value = match serde_json::from_slice(body) {
+        Ok(v) => v,
+        Err(_) => return json_error(400),
+    };
+    let old_path = match j["oldPath"].as_str() {
+        Some(p) => p,
+        None => return json_error(400),
+    };
+    let new_name = match j["newName"].as_str() {
+        Some(n) => n.trim().to_string(),
+        None => return json_error(400),
+    };
+    if new_name.is_empty()
+        || new_name.contains('/')
+        || new_name.contains('\\')
+        || new_name == "."
+        || new_name == ".."
+    {
+        return json_error(400);
+    }
+    // Normalize (handles trailing slashes) so folder renames resolve.
+    let old_path = clean_path(old_path);
+    let (dir_path, old_name) = match split_path(&old_path) {
+        Ok(p) => p,
+        Err(_) => return json_error(400),
+    };
+
+    let db = lock(&db);
+    let is_dir = match db.query_row(
+        "SELECT is_dir FROM files WHERE path=?1 AND filename=?2",
+        params![dir_path, old_name],
+        |row| row.get::<_, i32>(0),
+    ) {
+        Ok(d) => d,
+        Err(_) => return json_error(404),
+    };
+    if db
+        .query_row(
+            "SELECT COUNT(*) FROM files WHERE path=?1 AND filename=?2",
+            params![dir_path, new_name],
+            |row| row.get::<_, i64>(0),
+        )
+        .unwrap_or(0)
+        > 0
+    {
+        return json_error(409);
+    }
+    if db
+        .execute(
+            "UPDATE files SET filename=?1 WHERE path=?2 AND filename=?3",
+            params![new_name, dir_path, old_name],
+        )
+        .is_err()
+    {
+        return json_error(500);
+    }
+
+    if is_dir == 1 {
+        let old_prefix = format!("{}/{}", dir_path.trim_end_matches('/'), old_name);
+        let new_prefix = format!("{}/{}", dir_path.trim_end_matches('/'), new_name);
+        if let Ok(mut s) = db.prepare("SELECT id, path FROM files WHERE path=?1 OR path LIKE ?2") {
+            let children: Vec<(i64, String)> = match s
+                .query_map(params![old_prefix, format!("{}/%", old_prefix)], |row| {
+                    Ok((row.get::<_, i64>(0)?, row.get::<_, String>(1)?))
+                }) {
+                Ok(rows) => rows.filter_map(|r| r.ok()).collect(),
+                Err(_) => vec![],
+            };
+            for (id, cp) in &children {
+                let _ = db.execute(
+                    "UPDATE files SET path=?1 WHERE id=?2",
+                    params![cp.replacen(&old_prefix, &new_prefix, 1), id],
+                );
+            }
+        }
+    }
+    json_ok(serde_json::to_vec(&serde_json::json!({"path": old_path})).unwrap())
+}
+
+// ── Helpers ───────────────────────────────────────────────────────────────
+
+fn clean_path(p: &str) -> String {
+    let p = p.trim().trim_start_matches('/');
+    if p.is_empty() {
+        return "/".to_string();
+    }
+    let mut out = Vec::new();
+    for seg in p.split('/').filter(|s| !s.is_empty() && *s != ".") {
+        if seg == ".." {
+            out.pop();
+        } else {
+            out.push(seg.to_string());
+        }
+    }
+    if out.is_empty() {
+        "/".to_string()
+    } else {
+        format!("/{}", out.join("/"))
+    }
+}
+
+fn split_path(full: &str) -> Result<(String, String), ()> {
+    let full = full.trim();
+    if full.is_empty() || full == "/" {
+        return Err(());
+    }
+    let clean = full.trim_start_matches('/');
+    if let Some((parent, name)) = clean.rsplit_once('/') {
+        Ok((
+            if parent.is_empty() {
+                "/".to_string()
+            } else {
+                format!("/{}", parent)
+            },
+            name.to_string(),
+        ))
+    } else {
+        Ok(("/".to_string(), clean.to_string()))
+    }
+}
+
+fn print_serve_help() {
+    println!("{}", t!("cmd.serve.help_title").bold());
+    println!();
+    println!("{}", t!("cmd.serve.usage_title").cyan().bold());
+    println!("  {}", t!("cmd.serve.help_usage"));
+    println!();
+    println!("{}", t!("cmd.serve.options_title").cyan().bold());
+    println!("  {}", t!("cmd.serve.help_port"));
+    println!("  {}", t!("cmd.serve.help_bind"));
+    println!("  {}", t!("cmd.serve.help_auth"));
+    println!("  {}", t!("cmd.serve.help_lock"));
+    println!("  {}", t!("cmd.serve.help_tunnel"));
+    println!("  {}", t!("cmd.serve.help_share"));
+    println!("  {}", t!("cmd.serve.help_qr"));
+    println!("  {}", t!("cmd.serve.help_no_qr"));
+    println!("  {}", t!("cmd.serve.help_spa"));
+    println!("  {}", t!("cmd.serve.help_web_dir"));
+    println!("  {}", t!("cmd.serve.help_help"));
+    println!();
+    println!("{}", t!("cmd.serve.examples_title").cyan().bold());
+    println!("  {}", t!("cmd.serve.example_default"));
+    println!("  {}", t!("cmd.serve.example_port"));
+    println!("  {}", t!("cmd.serve.example_auth"));
+    println!("  {}", t!("cmd.serve.example_tunnel"));
+    println!("  {}", t!("cmd.serve.example_share"));
+    println!("  {}", t!("cmd.serve.example_spa"));
+    println!("  {}", t!("cmd.serve.example_http_default"));
+    println!("  {}", t!("cmd.serve.example_http_dir"));
+    println!();
+    println!(
+        "  {}",
+        t!(
+            "cmd.serve.current_defaults",
+            Config::global_get_serve_port(ServeService::Files),
+            Config::global_get_serve_bind(ServeService::Files)
+        )
+        .dimmed()
+    );
+    println!();
+    println!("{}", t!("cmd.serve.files_stored_title").cyan().bold());
+    println!("  {}", files_dir().to_string_lossy().dimmed());
+    println!("{}", t!("cmd.serve.db_title").cyan().bold());
+    println!("  {}", db_path().to_string_lossy().dimmed());
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn help_request_only_on_explicit_token() {
+        // Empty args mean "run with defaults" — only an explicit first
+        // token asks for help.
+        assert!(!is_help_request(&[]));
+        assert!(!is_help_request(&["--port".to_string()]));
+        assert!(!is_help_request(&["8080".to_string()]));
+        assert!(is_help_request(&["help".to_string()]));
+        assert!(is_help_request(&["--help".to_string()]));
+        assert!(is_help_request(&["-h".to_string()]));
+        // Help later in the arg list is not a help request here (the
+        // per-service parsers handle `help` anywhere themselves).
+        assert!(!is_help_request(&[
+            "--port".to_string(),
+            "9000".to_string(),
+            "help".to_string()
+        ]));
+    }
+
+    #[test]
+    fn auth_splits_on_first_colon_only() {
+        // `@` and later `:` are literal password characters.
+        assert_eq!(
+            parse_auth("admin:555@ntcstorage").unwrap(),
+            ("admin".to_string(), "555@ntcstorage".to_string())
+        );
+        assert_eq!(
+            parse_auth("admin:p:a:ss").unwrap(),
+            ("admin".to_string(), "p:a:ss".to_string())
+        );
+        assert!(parse_auth("nouser").is_err());
+        assert!(parse_auth(":nopass").is_err());
+        assert!(parse_auth("nouser:").is_err());
+        assert!(parse_auth("").is_err());
+    }
+
+    #[test]
+    fn basic_header_roundtrip_matches() {
+        let expected = basic_expectation("admin", "555@ntcstorage");
+        assert!(expected.starts_with("Basic "));
+        // Decodes back to the exact user:pass pair.
+        let encoded = expected.strip_prefix("Basic ").unwrap();
+        let bytes =
+            base64::Engine::decode(&base64::engine::general_purpose::STANDARD, encoded).unwrap();
+        assert_eq!(bytes, b"admin:555@ntcstorage");
+    }
+
+    #[test]
+    fn auth_matches_accepts_only_exact_header() {
+        let expected = basic_expectation("admin", "secret");
+        assert!(auth_matches(&expected, &expected));
+        // Whitespace padding is tolerated (header parsing trims already).
+        assert!(auth_matches(&format!("  {}  ", expected), &expected));
+        assert!(!auth_matches("Basic wrong", &expected));
+        assert!(!auth_matches("", &expected));
+        assert!(!auth_matches(
+            &basic_expectation("admin", "other"),
+            &expected
+        ));
+    }
+
+    #[test]
+    fn download_token_bound_to_file_id() {
+        let t1 = mint_download_token(42);
+        let t2 = mint_download_token(43);
+        assert!(!t1.is_empty() && !t2.is_empty());
+        assert_ne!(t1, t2);
+        assert!(valid_download_token(&t1, 42));
+        assert!(!valid_download_token(&t1, 43));
+        assert!(!valid_download_token(&t2, 42));
+        assert!(valid_download_token(&t2, 43));
+        assert!(!valid_download_token("", 42));
+        assert!(!valid_download_token("nope", 42));
+        // Query helper wires id+token together for the auth gate.
+        let q = format!("id=42&token={}", t1);
+        assert!(query_has_valid_download_token(&q));
+        assert!(!query_has_valid_download_token("id=43&token="));
+        assert!(!query_has_valid_download_token(&format!(
+            "id=43&token={}",
+            t1
+        )));
+    }
+
+    #[test]
+    fn route_table_covers_the_info_and_download_shortcuts() {
+        assert_eq!(route_request("GET", "/"), Route::RootRedirect);
+        assert_eq!(route_request("GET", "/root"), Route::RootRedirect);
+        // The bare download base redirects; the real root serves files.
+        assert_eq!(route_request("GET", "/download"), Route::DownloadRedirect);
+        assert_eq!(route_request("GET", "/download/"), Route::DownloadRedirect);
+        assert_eq!(
+            route_request("GET", "/download/root/a/b.txt"),
+            Route::Download("/a/b.txt".to_string())
+        );
+        // The info page and its aliases.
+        assert_eq!(route_request("GET", "/info"), Route::Info);
+        assert_eq!(route_request("GET", "/help"), Route::Info);
+        assert_eq!(route_request("GET", "/about"), Route::Info);
+        // API routes never fall through to the SPA.
+        assert_eq!(route_request("POST", "/api/upload"), Route::Api);
+        assert_eq!(route_request("GET", "/api/files"), Route::Api);
+        // Anything else is a static/SPA request.
+        assert_eq!(route_request("GET", "/root/src"), Route::Static);
+        assert_eq!(route_request("GET", "/favicon.ico"), Route::Static);
+        assert_eq!(route_request("POST", "/upload"), Route::Static);
+    }
+
+    #[test]
+    fn request_url_prefers_the_host_header_for_tunnels() {
+        // A cloudflared tunnel forwards the public host + https scheme.
+        assert_eq!(
+            request_base_url(
+                "blue-cat.trycloudflare.com",
+                "",
+                "https",
+                "http://127.0.0.1:55555"
+            ),
+            "https://blue-cat.trycloudflare.com"
+        );
+        // Local requests keep their own host:port.
+        assert_eq!(
+            request_base_url("127.0.0.1:55555", "", "", "http://127.0.0.1:55555"),
+            "http://127.0.0.1:55555"
+        );
+        // A forwarded host beats a rewritten backend Host.
+        assert_eq!(
+            request_base_url(
+                "127.0.0.1:55555",
+                "public.example.com",
+                "https",
+                "http://127.0.0.1:55555"
+            ),
+            "https://public.example.com"
+        );
+        // Proxy lists use the first scheme; missing Host keeps the fallback.
+        assert_eq!(
+            request_base_url("example.com", "", "https, http", "http://127.0.0.1"),
+            "https://example.com"
+        );
+        assert_eq!(
+            request_base_url("", "", "https", "http://127.0.0.1:8080"),
+            "http://127.0.0.1:8080"
+        );
+        // A malformed/injected Host is ignored rather than echoed.
+        assert_eq!(
+            request_base_url("<script>alert(1)</script>", "", "", "http://127.0.0.1"),
+            "http://127.0.0.1"
+        );
+    }
+
+    #[test]
+    fn known_api_paths_answer_405_not_404() {
+        // The method fallback tells endpoint scanners the path exists.
+        let resp = json_error(405);
+        let body = String::from_utf8_lossy(&resp);
+        assert!(body.starts_with("HTTP/1.1 405 Method Not Allowed"));
+        assert!(is_known_api_path("/api/upload"));
+        assert!(is_known_api_path("/api/upload-chunk"));
+        assert!(!is_known_api_path("/api/nope"));
+    }
+
+    #[test]
+    fn info_page_sets_html_headers_and_reports_its_length() {
+        let resp = info_page("http://127.0.0.1:8080", false, false);
+        let text = String::from_utf8_lossy(&resp);
+        assert!(text.starts_with("HTTP/1.1 200 OK\r\n"), "{text:.80}");
+        assert!(text.contains("Content-Type: text/html; charset=utf-8"));
+        assert!(text.contains("http://127.0.0.1:8080/api/upload"));
+        let (head, body) = text.split_once("\r\n\r\n").unwrap();
+        let len: usize = head
+            .lines()
+            .find_map(|l| l.strip_prefix("Content-Length: "))
+            .and_then(|v| v.trim().parse().ok())
+            .unwrap();
+        assert_eq!(len, body.len());
+    }
+
+    #[test]
+    fn root_urls_are_rewritten() {
+        // `/` and `/root` walk into the share root.
+        assert_eq!(&redirect_to_root()[..12], b"HTTP/1.1 302");
+        assert_eq!(spa_path("/root"), "/");
+        assert_eq!(spa_path("/root/docs"), "/");
+        assert_eq!(spa_path("/assets/x.js"), "/assets/x.js");
+    }
+
+    #[test]
+    fn download_urls_decode_to_share_paths() {
+        assert_eq!(
+            download_target("/download/root/hello.c").as_deref(),
+            Some("/hello.c")
+        );
+        assert_eq!(
+            download_target("/download/root/a/b.txt").as_deref(),
+            Some("/a/b.txt")
+        );
+        // Bare spelling keeps working.
+        assert_eq!(
+            download_target("/download/a/b.txt").as_deref(),
+            Some("/a/b.txt")
+        );
+        // A file whose name merely starts with "root" is not stripped twice.
+        assert_eq!(
+            download_target("/download/root/rootable.txt").as_deref(),
+            Some("/rootable.txt")
+        );
+        assert_eq!(download_target("/download/root").as_deref(), Some("/"));
+        assert_eq!(download_target("/api/files"), None);
+        // Traversal collapses inside the share root.
+        assert_eq!(
+            download_target("/download/root/../x").as_deref(),
+            Some("/x")
+        );
+    }
+
+    #[test]
+    fn range_headers_resolve() {
+        assert_eq!(parse_range("", 100), None);
+        assert_eq!(parse_range("bytes=0-", 100), Some((0, 99)));
+        assert_eq!(parse_range("bytes=10-19", 100), Some((10, 19)));
+        assert_eq!(parse_range("bytes=90-999", 100), Some((90, 99)));
+        // Unsatisfiable / suffix ranges fall back to the whole file.
+        assert_eq!(parse_range("bytes=100-", 100), None);
+        assert_eq!(parse_range("bytes=-20", 100), None);
+        assert_eq!(parse_range("items=0-1", 100), None);
+        assert_eq!(parse_range("bytes=0-", 0), None);
+    }
+
+    fn locked_response_status(method: &str, path: &str) -> u16 {
+        // handle_api is behind a DB handle; locked mutations return before touching it,
+        // so an empty in-memory DB is enough to observe the 403 gate.
+        let conn = rusqlite::Connection::open_in_memory().unwrap();
+        let db = Arc::new(Mutex::new(conn));
+        let resp = handle_api(method, path, "", b"", "", None, db, true);
+        match resp {
+            ApiResponse::Bytes(b) => {
+                let head = String::from_utf8_lossy(&b);
+                head.split_whitespace()
+                    .nth(1)
+                    .and_then(|s| s.parse::<u16>().ok())
+                    .unwrap_or(0)
+            }
+            ApiResponse::Stream { .. } | ApiResponse::StreamRange { .. } => 200,
+        }
+    }
+
+    #[test]
+    fn lock_blocks_mutations_but_allows_reads() {
+        // Mutations → 403.
+        for (method, path) in [
+            ("POST", "/api/upload"),
+            ("POST", "/api/upload-chunk"),
+            ("POST", "/api/upload-finalize"),
+            ("DELETE", "/api/upload-cancel"),
+            ("POST", "/api/create-folder"),
+            ("DELETE", "/api/delete"),
+            ("PATCH", "/api/rename"),
+        ] {
+            assert_eq!(
+                locked_response_status(method, path),
+                403,
+                "{} {} should be forbidden under --lock",
+                method,
+                path
+            );
+        }
+        // Reads stay open (empty DB lists fine / download-token validates body).
+        let conn = rusqlite::Connection::open_in_memory().unwrap();
+        let db = Arc::new(Mutex::new(conn));
+        let resp = handle_api("GET", "/api/files", "", b"", "", None, db, true);
+        assert!(matches!(resp, ApiResponse::Bytes(_)));
+    }
+
+    #[test]
+    fn unlocked_router_does_not_lock_gate() {
+        // Same request unlocked must NOT hit the 403 gate (it falls through to
+        // the real handler — upload without a multipart path yields 400, not 403).
+        let conn = rusqlite::Connection::open_in_memory().unwrap();
+        let db = Arc::new(Mutex::new(conn));
+        let resp = handle_api("POST", "/api/upload", "", b"", "", None, db, false);
+        match resp {
+            ApiResponse::Bytes(b) => {
+                let head = String::from_utf8_lossy(&b);
+                assert!(head.contains("400"), "expected 400, got: {}", head);
+            }
+            ApiResponse::Stream { .. } | ApiResponse::StreamRange { .. } => {
+                panic!("unexpected stream")
+            }
+        }
+    }
+}

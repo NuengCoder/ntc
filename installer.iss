@@ -13,7 +13,7 @@
 ;
 ; The shared setup body lives in packaging\ntc_install.issi.
 
-#define AppVer "2.4.8"
+#define AppVer "2.4.9"
 
 #ifdef USERINSTALL
   #define OutputSuffix "-user"

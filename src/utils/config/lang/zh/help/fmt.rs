@@ -2,6 +2,16 @@ use std::collections::HashMap;
 
 pub fn fill(m: &mut HashMap<String, String>) {
     m.insert(
+        "help.fmt.example1".into(),
+        "fmt json config.json to yaml ## 将 JSON 转换为 YAML".into(),
+    );
+
+    m.insert(
+        "help.fmt.example2".into(),
+        "fmt toml Cargo.toml to json -o output.json ## 将 TOML 转换为 JSON".into(),
+    );
+
+    m.insert(
         "help.fmt.json".into(),
         "fmt json <文件> [to yaml|toml] ## 将JSON转换为YAML或TOML".into(),
     );
@@ -21,15 +31,5 @@ pub fn fill(m: &mut HashMap<String, String>) {
     m.insert(
         "help.fmt.yaml".into(),
         "fmt yaml <文件> [to json|toml] ## 将YAML转换为JSON或TOML".into(),
-    );
-
-    m.insert(
-        "help.fmt.example1".into(),
-        "fmt json config.json to yaml ## 将 JSON 转换为 YAML".into(),
-    );
-
-    m.insert(
-        "help.fmt.example2".into(),
-        "fmt toml Cargo.toml to json -o output.json ## 将 TOML 转换为 JSON".into(),
     );
 }

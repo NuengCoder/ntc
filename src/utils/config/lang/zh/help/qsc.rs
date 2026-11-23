@@ -2,6 +2,21 @@ use std::collections::HashMap;
 
 pub fn fill(m: &mut HashMap<String, String>) {
     m.insert(
+        "help.qsc.example1".into(),
+        "config qsc \"#c 0\" ## 设置 Ctrl+0 热键".into(),
+    );
+
+    m.insert(
+        "help.qsc.example2".into(),
+        "qsc listen ## 启动 QSC 守护进程".into(),
+    );
+
+    m.insert(
+        "help.qsc.example3".into(),
+        "qsc status ## 检查守护进程状态".into(),
+    );
+
+    m.insert(
         "help.qsc.listen".into(),
         "qsc listen ## 启动QSC守护进程（后台进程）".into(),
     );
@@ -34,19 +49,4 @@ pub fn fill(m: &mut HashMap<String, String>) {
     m.insert("help.qsc.stop".into(), "qsc stop ## 停止QSC守护进程".into());
 
     m.insert("help.qsc.title".into(), "QSC（全局热键）命令：".into());
-
-    m.insert(
-        "help.qsc.example1".into(),
-        "config qsc \"#c 0\" ## 设置 Ctrl+0 热键".into(),
-    );
-
-    m.insert(
-        "help.qsc.example2".into(),
-        "qsc listen ## 启动 QSC 守护进程".into(),
-    );
-
-    m.insert(
-        "help.qsc.example3".into(),
-        "qsc status ## 检查守护进程状态".into(),
-    );
 }

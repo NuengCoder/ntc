@@ -1,0 +1,68 @@
+# script.ntc — ntc automation script
+# Run with: scr script.ntc [args...]   or just: script.ntc
+# Each line is a command: ntc builtin, run alias, or system command.
+set-showexc = 0
+# ── variables ────────────────────────────────────────────────────────────
+# Plain values are kept verbatim; anything with an operator is an expression.
+set name = "world"
+set dir = "src"
+set count = 1 + 2
+set wow = "good"
+
+# ── commands ─────────────────────────────────────────────────────────────
+# Each line is a command: ntc builtin, run alias, or system command.
+say "Hello $name (count=$count, dir=$dir)"
+
+# system command (fallback when not an ntc builtin)
+echo done
+
+# force a system command (bypasses ntc builtins)
+@ echo forced system command
+
+# positional script args: $1 $2 ... $@
+say "First arg: $1"
+
+# change directory like any other command — uncomment when it exists
+# cd $dir
+
+# ── conditionals ─────────────────────────────────────────────────────────
+if $count > 2
+  say "big"
+else if $count == 2
+  say "two"
+else
+  say "small"
+end
+
+# ── loops ────────────────────────────────────────────────────────────────
+set i = 0
+while $i < 3
+  set i = $i + 1
+  say "tick $i"
+end
+
+for item in alpha beta gamma
+  say "item: $item"
+end
+
+loop 2
+  say "again"
+end
+
+# ── functions ────────────────────────────────────────────────────────────
+func greet(who)
+  say "Hello, $who"
+  return 0
+end
+
+call greet "world"
+set label = call shout("hi")
+say $label
+
+func shout(text)
+  return upper($text) + "!"
+end
+
+# ── input and formatting ─────────────────────────────────────────────────
+input answer "Continue? "
+nprintf "you said %q\n" $answer

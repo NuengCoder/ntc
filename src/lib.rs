@@ -4,26 +4,7 @@
 
 // Top-level modules (multi-file directories)
 pub mod cli;
-pub mod deadlock;
-pub mod editor;
-pub mod fake;
-pub mod lsp;
-pub mod math;
-pub mod mql;
-pub mod ndb;
-pub mod netscan;
-pub mod nfe;
-pub mod nms;
-pub mod nsheet;
-pub mod nssh;
-pub mod ntpkg;
-pub mod ranfile;
-pub mod report;
-pub mod script;
 pub mod shell;
-pub mod skill;
-pub mod syntax;
-pub mod tutorial;
 pub mod utils;
 
 // Re-export utils modules so existing paths like `crate::config::Config` still work

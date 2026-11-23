@@ -8,8 +8,8 @@ use crate::output::{print_error, print_separator, print_success, print_warning};
 use crate::t;
 use crate::teleport::TeleportManager;
 
+use crate::utils::theme::style::ThemeColorize;
 use anyhow::{bail, Result};
-use colored::*;
 use std::collections::HashSet;
 use std::io::{self, Write};
 use std::path::{Path, PathBuf};
@@ -265,13 +265,33 @@ pub(crate) fn take_watch_refresh_suppressed() -> bool {
     WATCH_REFRESH_SUPPRESSED.swap(false, Ordering::SeqCst)
 }
 
-/// Render the automatic navigation tree for the current directory.
+/// Directory tree and display path used by the automatic navigation view.
+/// Shared by the shell and `serve theme` so the browser preview is the same
+/// tree the terminal would print.
+#[derive(Debug, Clone)]
+pub(crate) struct NavViewSnapshot {
+    pub path: String,
+    pub tree: String,
+}
+
+/// Build the automatic navigation view without printing it.
 ///
 /// Depth is always 1. Files are included only when `config file_view` is ON;
 /// sizes are annotated per `config size file|dir|all`. Any automatic sizing
 /// uses `--care` semantics so ignored entries are measured in full, and when
 /// sizes are shown entries inside each group are ordered largest first.
-pub(crate) fn show_nav_view(nav: &Navigator) {
+pub(crate) fn nav_view_snapshot(target: &Path) -> Option<NavViewSnapshot> {
+    nav_view_snapshot_inner(target, false)
+}
+
+/// Like [`nav_view_snapshot`], but always includes files alongside
+/// directories. Used by `serve theme` so its shell preview never hides
+/// files just because `config file` is off.
+pub(crate) fn nav_view_snapshot_all(target: &Path) -> Option<NavViewSnapshot> {
+    nav_view_snapshot_inner(target, true)
+}
+
+fn nav_view_snapshot_inner(target: &Path, force_files: bool) -> Option<NavViewSnapshot> {
     let (dir_view, file_view, show_filesize, show_dirsize) = {
         let cfg = Config::read_global();
         (
@@ -282,14 +302,16 @@ pub(crate) fn show_nav_view(nav: &Navigator) {
         )
     };
     // Both views off: the shell hides the banner, hint and tree entirely.
-    if !dir_view && !file_view {
-        return;
-    }
-    let entry_filter = match (dir_view, file_view) {
-        (true, true) => crate::explorer::TreeEntryFilter::All,
-        (true, false) => crate::explorer::TreeEntryFilter::DirsOnly,
-        (false, true) => crate::explorer::TreeEntryFilter::FilesOnly,
-        (false, false) => return,
+    let file_view = force_files || file_view;
+    let entry_filter = if force_files {
+        crate::explorer::TreeEntryFilter::All
+    } else {
+        match (dir_view, file_view) {
+            (true, true) => crate::explorer::TreeEntryFilter::All,
+            (true, false) => crate::explorer::TreeEntryFilter::DirsOnly,
+            (false, true) => crate::explorer::TreeEntryFilter::FilesOnly,
+            (false, false) => return None,
+        }
     };
     let opts = TreeViewOpts {
         sort_dirs_by_size: show_dirsize,
@@ -297,18 +319,71 @@ pub(crate) fn show_nav_view(nav: &Navigator) {
         entry_filter,
         ..TreeViewOpts::default()
     };
-    show_tree_at_ex(
-        nav.current_path(),
-        Some(1),
-        false,
-        file_view,
-        show_filesize,
-        show_dirsize,
-        false,
-        true,
-        None,
-        &opts,
-    );
+
+    let mut tree = generate_tree(&target.to_string_lossy(), Some(1), file_view, None);
+    if Config::global_get_git_integration_enabled() && crate::utils::git::is_repo(target) {
+        let status = crate::utils::git::status_map(target);
+        if !status.is_empty() {
+            crate::explorer::annotate_git_status(&mut tree, &status);
+        }
+    }
+    let need_sizes = show_filesize || show_dirsize;
+    if need_sizes {
+        crate::explorer::compute_tree_sizes(&mut tree, None, true);
+    }
+    if opts.entry_filter != crate::explorer::TreeEntryFilter::All {
+        crate::explorer::prune_tree_by_entry_filter(&mut tree, opts.entry_filter);
+    }
+    if opts.sort_dirs_by_size || opts.sort_files_by_size {
+        crate::explorer::sort_tree_by_size_groups(
+            &mut tree,
+            opts.sort_dirs_by_size,
+            opts.sort_files_by_size,
+        );
+    }
+    let tree = if show_filesize || show_dirsize {
+        format_tree_with_sizes(&tree, "", true, show_filesize, show_dirsize, true, None)
+    } else {
+        format_tree(&tree, "", true)
+    };
+
+    Some(NavViewSnapshot {
+        path: strip_unc_prefix(target).to_string(),
+        tree,
+    })
+}
+
+/// Render the automatic navigation tree for the current directory.
+pub(crate) fn show_nav_view(nav: &Navigator) {
+    let Some(view) = nav_view_snapshot(nav.current_path()) else {
+        return;
+    };
+    println!();
+    print_separator("Current Directory");
+    {
+        let theme = crate::utils::theme::ThemeManager::current();
+        let c = theme.shell.prompt_path.clone();
+        drop(theme);
+        println!("Path: {}", c.paint_ansi(&view.path));
+    }
+    println!();
+
+    let theme = crate::utils::theme::ThemeManager::current();
+    let c_ignored = theme.shell.tree_ignored.clone();
+    let c_dir = theme.shell.tree_dir.clone();
+    let c_branch = theme.shell.tree_branch.clone();
+    drop(theme);
+    for line in view.tree.lines() {
+        if line.contains("[ignored]") {
+            println!("{}", c_ignored.paint_ansi(line));
+        } else if line.contains("[Directory]") {
+            println!("{}", c_dir.paint_ansi_bold(line));
+        } else if line.trim().starts_with("├──") || line.trim().starts_with("└──") {
+            println!("{}", c_branch.paint_ansi(line));
+        } else {
+            println!("{}", line);
+        }
+    }
 }
 
 pub(crate) fn show_tree(
@@ -552,55 +627,70 @@ pub(crate) fn show_tree_at_ex(
 }
 
 pub(super) fn gosc_loop(nav: &mut Navigator) -> Result<()> {
+    use crate::utils::theme::{ShellRole, ThemeManager};
     let a = |s: &str| crate::utils::terminal::asciify(s);
+    let theme = ThemeManager::current();
+    let c_border = theme.shell.role(ShellRole::TableBorder);
+    let c_key = theme.shell.role(ShellRole::PromptBracket);
+    let c_heading = theme.shell.role(ShellRole::HelpHeader);
+    let c_dir = theme.shell.role(ShellRole::TreeDir);
+    let c_number = theme.shell.role(ShellRole::TreeSize);
+    let c_muted = theme.shell.role(ShellRole::Muted);
+    let c_sep = theme.shell.role(ShellRole::Separator);
+    let c_error = theme.shell.role(ShellRole::Error);
+    let c_success = theme.shell.role(ShellRole::Success);
+    drop(theme);
+    let border = c_border.paint_ansi("══════════════════════════════════════════════════");
+    let thin = c_border.paint_ansi("──────────────────────────────────────────────────");
+    let key = |s: &str| c_key.paint_ansi(s);
+    let title = c_heading.paint_ansi_bold(&format!("{:^50}", t!("gosc.panel.title")));
+    let dir_style = |s: &str| c_dir.paint_ansi(s);
+    let number_style = |s: &str| c_number.paint_ansi(s);
+    let dim = |s: &str| c_muted.paint_ansi(s);
+    let outline = c_sep.paint_ansi(&t!("gosc.output_zone"));
+    let outline_end = c_sep.paint_ansi(&t!("gosc.output_zone_end"));
+    let error_style = |s: &str| c_error.paint_ansi(s);
+    let success_style = |s: &str| c_success.paint_ansi(s);
+
     loop {
         let dirs = nav.list_subdirs()?;
         crate::navigator::clear_screen();
         show_nav_view(nav);
 
         println!();
-        println!(
-            "{}",
-            a("╔══════════════════════════════════════════════════╗")
-        );
-        println!(
-            "{}",
-            a(&format!("║{:^50}║", t!("gosc.panel.title").cyan().bold()))
-        );
-        println!(
-            "{}",
-            a("╠══════════════════════════════════════════════════╣")
-        );
-        println!("║ {} {}", "-1".yellow(), t!("gosc.panel.back_1"));
-        println!("║ {} {}", "-2".yellow(), t!("gosc.panel.back_2"));
-        println!("║ {} {}", "-n".yellow(), t!("gosc.panel.back_n"));
-        println!("║ {} {}", "v".yellow(), t!("gosc.panel.view_care"));
-        println!("║ {} {}", "s".yellow(), t!("gosc.panel.size_care"));
-        println!("║ {} {}", "vs".yellow(), t!("gosc.panel.view_size_care"));
-        println!("║ {} {}", "0".red(), t!("gosc.panel.exit"));
-        println!(
-            "{}",
-            a("╠──────────────────────────────────────────────────╣")
-        );
+        println!("{}", a(&format!("╔{}╗", border)));
+        println!("{}", a(&format!("║{}║", title)));
+        println!("{}", a(&format!("╠{}╣", border)));
+        println!("║ {} {}", key("-1"), t!("gosc.panel.back_1"));
+        println!("║ {} {}", key("-2"), t!("gosc.panel.back_2"));
+        println!("║ {} {}", key("-n"), t!("gosc.panel.back_n"));
+        println!("║ {} {}", key("v"), t!("gosc.panel.view_care"));
+        println!("║ {} {}", key("s"), t!("gosc.panel.size_care"));
+        println!("║ {} {}", key("vs"), t!("gosc.panel.view_size_care"));
+        println!("║ {} {}", error_style("0"), t!("gosc.panel.exit"));
+        println!("{}", a(&format!("╠{}╣", thin)));
 
         if dirs.is_empty() {
-            println!("║ {}", t!("gosc.panel.empty").dimmed());
+            println!("║ {}", dim(&t!("gosc.panel.empty")));
         } else {
             for (i, name) in &dirs {
-                println!("║ {}. {}", i.to_string().yellow(), name.bright_purple());
+                println!("║ {}. {}", number_style(&i.to_string()), dir_style(name));
             }
         }
 
-        println!(
-            "{}",
-            a("╚──────────────────────────────────────────────────╝")
-        );
+        println!("{}", a(&format!("╚{}╝", thin)));
         println!();
-        print!("{} ", t!("gosc.prompt").green().bold());
-
-        let mut input = String::new();
-        std::io::stdin().read_line(&mut input)?;
-        let input = input.trim();
+        let prompt = format!("{} ", t!("gosc.prompt"));
+        let labels: Vec<String> = dirs.iter().map(|(_, name)| name.clone()).collect();
+        let Some(line) = crate::utils::interactive::read_number_with_hint(
+            &prompt,
+            |text: &str| success_style(text),
+            &labels,
+        )?
+        else {
+            return Ok(());
+        };
+        let input = line.trim();
 
         if input.is_empty() {
             continue;
@@ -614,29 +704,24 @@ pub(super) fn gosc_loop(nav: &mut Navigator) -> Result<()> {
         match input {
             "s" => {
                 println!();
-                println!("{}", t!("gosc.output_zone").cyan());
+                println!("{}", outline);
                 let total = run_with_spinner(&t!("gosc.calculating_size"), || {
                     calculate_total_size(nav.current_path())
                 });
                 let bytes_str = format!("{}", total);
                 let human_str = human_readable_size(total);
                 let w = bytes_str.len().max(human_str.len()) + 18;
-                let v = a("│");
-                let h = a("─");
+                let v = c_border.paint_ansi(&a("│"));
+                let h = c_border.paint_ansi(&a("─"));
                 println!("{}{}{}", a("┌"), h.repeat(w), a("┐"));
-                println!(
-                    "{}{:^w$}{}",
-                    v,
-                    t!("gosc.size_title").cyan().bold(),
-                    v,
-                    w = w
-                );
+                let size_title = format!("{:^w$}", t!("gosc.size_title"), w = w);
+                println!("{}{}{}", v, c_heading.paint_ansi_bold(&size_title), v);
                 println!("{}{}{}", a("├"), h.repeat(w), a("┤"));
                 println!(
                     "{} {} {:<pad$} {}",
                     v,
                     t!("gosc.size_bytes"),
-                    bytes_str.yellow(),
+                    number_style(&bytes_str),
                     v,
                     pad = w - 9
                 );
@@ -644,36 +729,36 @@ pub(super) fn gosc_loop(nav: &mut Navigator) -> Result<()> {
                     "{} {} {:<pad$} {}",
                     v,
                     t!("gosc.size_human"),
-                    human_str.green().bold(),
+                    c_success.paint_ansi_bold(&human_str),
                     v,
                     pad = w - 9
                 );
                 println!("{}{}{}", a("└"), h.repeat(w), a("┘"));
-                println!("{}", t!("gosc.output_zone_end").cyan());
+                println!("{}", outline_end);
                 println!();
-                print!("{} ", t!("gosc.press_enter").dimmed());
+                print!("{} ", dim(&t!("gosc.press_enter")));
                 let mut dummy = String::new();
                 std::io::stdin().read_line(&mut dummy)?;
                 continue;
             }
             "v" => {
                 println!();
-                println!("{}", t!("gosc.output_zone").cyan());
+                println!("{}", outline);
                 show_tree(nav, Some(1), false, true, false, false, false, true);
-                println!("{}", t!("gosc.output_zone_end").cyan());
+                println!("{}", outline_end);
                 println!();
-                print!("{} ", t!("gosc.press_enter").dimmed());
+                print!("{} ", dim(&t!("gosc.press_enter")));
                 let mut dummy = String::new();
                 std::io::stdin().read_line(&mut dummy)?;
                 continue;
             }
             "vs" => {
                 println!();
-                println!("{}", t!("gosc.output_zone").cyan());
+                println!("{}", outline);
                 show_tree(nav, Some(1), false, true, true, true, false, true);
-                println!("{}", t!("gosc.output_zone_end").cyan());
+                println!("{}", outline_end);
                 println!();
-                print!("{} ", t!("gosc.press_enter").dimmed());
+                print!("{} ", dim(&t!("gosc.press_enter")));
                 let mut dummy = String::new();
                 std::io::stdin().read_line(&mut dummy)?;
                 continue;
@@ -1290,6 +1375,23 @@ mod tests {
         let nav = Navigator::new().unwrap();
         let abs = resolve_file_operand("C:/Windows", &nav).unwrap();
         assert_eq!(abs, PathBuf::from("C:/Windows"));
+    }
+
+    #[test]
+    fn nav_view_snapshot_all_includes_files_regardless_of_config() {
+        let _g = tsupport::lock_globals();
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(dir.path().join("hello.txt"), "hi").unwrap();
+        std::fs::create_dir(dir.path().join("sub")).unwrap();
+        let mut cfg = Config::default();
+        cfg.dir_view_enabled = false;
+        cfg.file_view_enabled = false;
+        Config::with_test_config(cfg, || {
+            assert!(nav_view_snapshot(dir.path()).is_none());
+            let all = nav_view_snapshot_all(dir.path()).unwrap();
+            assert!(all.tree.contains("hello.txt"), "tree:\n{}", all.tree);
+            assert!(all.tree.contains("sub"), "tree:\n{}", all.tree);
+        });
     }
 
     #[test]

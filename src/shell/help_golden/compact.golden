@@ -1,0 +1,119 @@
+╔══════════════════════════════════════════════════════════════════╗
+║                   ntc 2.4.9 - Command overview                   ║
+╚══════════════════════════════════════════════════════════════════╝
+  arc            Create and extract archives
+  autoup         Manage startup programs [Windows Only]
+  back           Go back to parent directory
+  backup         Back up and restore a project
+  betw           Print lines A to B
+  care           Care (un-ignore) rules
+  cd             Change directory
+  clear          Clear the screen
+  clip           Clipboard history
+  config         Show or change ntc settings
+  count          Count occurrences in text
+  cp             Copy a file or directory
+  cvcode         Convert between formats
+  deadlock       Encrypted password vault
+  decode         Decode hex, base64, URL, binary
+  deinit         Remove project files
+  dl             Download a file
+  dns            DNS lookup
+  doctor         Check config, PATH, ranfile and ntpkg
+  ds             Search directories by name
+  encode         Encode hex, base64, URL, binary
+  exit           Exit ntc
+  explorer       Full-screen file explorer
+  fake           Generate fake data
+  fgo            Find files and jump to one
+  fmt            Convert between file formats
+  fs             Search files by name
+  fsc            Search files and open one
+  git            Git shortcuts (status, branch, log)
+  godrive        Switch drives or /mnt mounts
+  gos            Pick a subdirectory to enter
+  gosc           Browse subdirectories continuously
+  gs             Search file contents
+  head           Print the first lines of a file
+  help           Show this help
+  http           Make an HTTP request
+  igcare         Import and export ignore/care rules
+  igcared        Show all ignore/care settings
+  ignore         Ignore dirs, files and extensions
+  image          Show images inline in the terminal
+  init           Initialize project files
+  ipcfg          Show IP configuration
+  line           Number each line
+  local          Manage the per-directory config
+  locate         Search files and directories
+  math           Evaluate math expressions
+  mkd            Create directories
+  mkf            Create files
+  mode           Admin / normal mode
+  mv             Move or rename files and directories
+  ndb            Browse SQLite databases
+  ne             Open the built-in editor
+  nms            Terminal music player
+  nprintf        Bash-style formatted output
+  nsheet         View spreadsheets
+  nssh           SSH profiles and file copy
+  ntpkg          Install and manage tools
+  ntpx           Run an installed package binary
+  opencg         Open config.toml in the editor
+  pathcp         Copy the current path to clipboard
+  ping           Ping a host
+  pipe           Pipes, redirects and filters [NON-COMMAND]
+  py_activate    Activate a Python venv
+  py_deactivate  Deactivate the Python venv
+  qr             Make and read QR codes
+  qsc            Quick command listener
+  qur            Query files and replace text
+  ral            Run aliases
+  ran            Run tasks from NTCRANFILE.toml
+  report         Project reports (report project)
+  resetcg        Reset config to defaults
+  restorecg      Restore config from backup
+  rev            Reverse each line
+  rmd            Delete directories
+  rmf            Delete files
+  rnmd           Rename a directory
+  rnmf           Rename a file
+  run            Execute an alias
+  say            Print text
+  scan           Scan extensions, ports, IPs
+  scr            Run saved script files
+  serve          Serve a directory or app
+  showcg         Show the current configuration
+  showenv        Show environment and PATH
+  size           Directory sizes
+  skill          Install AI skills
+  smtp           Send email (SMTP client)
+  sort           Sort lines
+  spec           Show computer specifications
+  sys            Live system monitor
+  syspath        Manage the system PATH
+  tail           Print the last lines of a file
+  theme          Switch, add, export themes
+  time           Command timing and countdowns
+  tl             Count lines in files
+  tmprt          Temperature and weather
+  todo           Project todo list
+  tp             Saved paths (tp jump <name>)
+  tpb            Teleport back to the previous location
+  trace          Trace the route to a host
+  trim           Strip a pattern from text
+  tutorial       Guided hands-on lessons
+  txtc           Copy file content to clipboard
+  txtf           Display file content
+  ui             Show current UI mode
+  up             Upload a file
+  usrpath        Manage the user PATH
+  version        Show version
+  view           Directory and file trees
+  viewd          Directories-only tree
+  viewf          Files-only tree
+  views          Short flat directory listing
+  where          Show the ntc path or find binaries
+  wi             Live file-change feed
+
+Type 'help <command>' for details, 'help --all' for the full reference.

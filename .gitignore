@@ -10,6 +10,7 @@ ntc_history.txt
 push.txt
 future_todo.txt
 specs.ps1
+ssh.txt
 
 # Generated binaries
 *.exe
@@ -47,3 +48,6 @@ node_modules/
 
 # Portable LLVM for the Windows ARM64 builds (packaging/find_clang.cmd)
 packaging/tools/
+ntc_smtp.json
+.obisidian/
+warning.txt

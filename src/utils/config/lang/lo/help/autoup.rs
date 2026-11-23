@@ -17,26 +17,6 @@ pub fn fill(m: &mut HashMap<String, String>) {
     );
 
     m.insert(
-        "help.autoup.list".into(),
-        "autoup list ## ລາຍຊື່ startup entries (CU/LM/SF sources)".into(),
-    );
-
-    m.insert(
-        "help.autoup.rm".into(),
-        "autoup rm <name> ## ລຶບ startup entry".into(),
-    );
-
-    m.insert(
-        "help.autoup.sources".into(),
-        "[CU]=HKCU [LM]=HKLM [SF]=Startup Folder".into(),
-    );
-
-    m.insert(
-        "help.autoup.title".into(),
-        "ການຈັດການ STARTUP (Windows):".into(),
-    );
-
-    m.insert(
         "help.autoup.example1".into(),
         "autoup list ## ລາຍຊື່ startup entries".into(),
     );
@@ -54,5 +34,25 @@ pub fn fill(m: &mut HashMap<String, String>) {
     m.insert(
         "help.autoup.example4".into(),
         "autoup disable ntc ## ປິດໃຊ້ງານ startup entry".into(),
+    );
+
+    m.insert(
+        "help.autoup.list".into(),
+        "autoup list ## ລາຍຊື່ startup entries (CU/LM/SF sources)".into(),
+    );
+
+    m.insert(
+        "help.autoup.rm".into(),
+        "autoup rm <name> ## ລຶບ startup entry".into(),
+    );
+
+    m.insert(
+        "help.autoup.sources".into(),
+        "[CU]=HKCU [LM]=HKLM [SF]=ໂຟນເດີ startup".into(),
+    );
+
+    m.insert(
+        "help.autoup.title".into(),
+        "ການຈັດການ STARTUP (Windows):".into(),
     );
 }

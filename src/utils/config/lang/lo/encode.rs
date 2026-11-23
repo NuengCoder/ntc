@@ -63,7 +63,7 @@ pub fn fill(m: &mut HashMap<String, String>) {
 
     m.insert(
         "encode.unknown_format".into(),
-        "ບໍ່ຮູ້ຈັກ encode format: '{}'. ໃຊ້ b2, b10, b64, hex, ຫຼື url.".into(),
+        "ບໍ່ຮູ້ຈັກ encode format: '{}'. ໃຊ້ b2, b10, b64, hex, url, utf8, utf16, ascii.".into(),
     );
 
     m.insert(
@@ -73,7 +73,7 @@ pub fn fill(m: &mut HashMap<String, String>) {
 
     m.insert(
         "encode.unknown_format_generic".into(),
-        "ບໍ່ຮູ້ຈັກ format: '{}'. ໃຊ້ b2, b10, b64, hex, ຫຼື url.".into(),
+        "ບໍ່ຮູ້ຈັກ format: '{}'. ໃຊ້ b2, b10, b64, hex, url, utf8, utf16, ascii.".into(),
     );
 
     m.insert(
@@ -111,4 +111,44 @@ pub fn fill(m: &mut HashMap<String, String>) {
     m.insert("encode.usage_title".into(), "ວິທີໃຊ້:".into());
 
     m.insert("encode.written_to".into(), "ຂຽນໄປທີ່: {}".into());
+
+    m.insert(
+        "encode.usage_encode_utf8".into(),
+        "  encode utf8 <target> [-o <file>] ເຂົ້າລະຫັດ UTF-8 ເປັນ byte escape (\\xc3\\xa9)".into(),
+    );
+
+    m.insert(
+        "encode.usage_encode_utf16".into(),
+        "  encode utf16 <target> [-o <file>] ເຂົ້າລະຫັດ UTF-16 ເປັນ escape \\uNNNN (\\u00e9)".into(),
+    );
+
+    m.insert(
+        "encode.usage_encode_ascii".into(),
+        "  encode ascii <target> [-o <file>] ເຂົ້າລະຫັດ ASCII (ຜິດພາດຖ້າເກີນ U+007F)".into(),
+    );
+
+    m.insert(
+        "encode.invalid_escape".into(),
+        "ລຳດັບ escape ບໍ່ຖືກຕ້ອງ: '{}'".into(),
+    );
+
+    m.insert(
+        "encode.invalid_utf8".into(),
+        "byte ທີ່ຖອດລະຫັດບໍ່ແມ່ນ UTF-8 ທີ່ຖືກຕ້ອງ".into(),
+    );
+
+    m.insert(
+        "encode.invalid_utf16".into(),
+        "UTF-16 ທີ່ຖອດລະຫັດບໍ່ຖືກຕ້ອງ (surrogate ບໍ່ຄູ່)".into(),
+    );
+
+    m.insert(
+        "encode.not_ascii".into(),
+        "ອັກຂະລະ '{}' ບໍ່ແມ່ນ ASCII".into(),
+    );
+
+    m.insert(
+        "encode.not_ascii_byte".into(),
+        "byte ທີ່ຖອດລະຫັດ {} ບໍ່ແມ່ນ ASCII".into(),
+    );
 }

@@ -2,13 +2,28 @@ use std::collections::HashMap;
 
 pub fn fill(m: &mut HashMap<String, String>) {
     m.insert(
+        "help.scan.care".into(),
+        "scan ext <ນາມສະກຸນ...> --care ## ລວມທຸກໄຟລ໌ (ໂໝດ care)".into(),
+    );
+
+    m.insert(
         "help.scan.depth".into(),
         "scan ext <ນາມສະກຸນ...> -d, --depth <n> ## ຈຳກັດຄວາມເລິກສະແກນ".into(),
     );
 
     m.insert(
+        "help.scan.dir".into(),
+        "scan dir [ແບບ] ## ສະແດງໄດເຣັກທໍຣີຕາມຊື່ (* = ທັງໝົດ)".into(),
+    );
+
+    m.insert(
         "help.scan.example1".into(),
         "scan ext rs ## ສະແດງໄຟລ໌ .rs ທັງໝົດ".into(),
+    );
+
+    m.insert(
+        "help.scan.example10".into(),
+        "scan waep example.com/api -r -d 2 -c 32 ## ລົງສອງຊັ້ນດ້ວຍ 32 probe ພ້ອມກັນ".into(),
     );
 
     m.insert(
@@ -42,6 +57,16 @@ pub fn fill(m: &mut HashMap<String, String>) {
     );
 
     m.insert(
+        "help.scan.example8".into(),
+        "scan waep http://127.0.0.1:55555/api ## ເບິ່ງວ່າ API ຂອງ ntc serve ເປີດຫຍັງໄວ້".into(),
+    );
+
+    m.insert(
+        "help.scan.example9".into(),
+        "scan waep example.com -x php,html --all ## ສະແດງທຸກການຕອບສະໜອງ ລວມ .php/.html".into(),
+    );
+
+    m.insert(
         "help.scan.ext".into(),
         "scan ext <ນາມສະກຸນ...> ## ສະແດງໄຟລ໌ຕາມນາມສະກຸນ (ບໍ່ນັບແຖວ)".into(),
     );
@@ -52,8 +77,8 @@ pub fn fill(m: &mut HashMap<String, String>) {
     );
 
     m.insert(
-        "help.scan.dir".into(),
-        "scan dir [ແບບ] ## ສະແດງໄດເຣັກທໍຣີຕາມຊື່ (* = ທັງໝົດ)".into(),
+        "help.scan.ip".into(),
+        "scan ip [cidr] [--top N | --ports <spec>] ## sweep ຫາ hosts + ARP".into(),
     );
 
     m.insert(
@@ -62,21 +87,12 @@ pub fn fill(m: &mut HashMap<String, String>) {
     );
 
     m.insert(
-        "help.scan.ip".into(),
-        "scan ip [cidr] [--top N | --ports <spec>] ## sweep ຫາ hosts + ARP".into(),
-    );
-
-    m.insert(
         "help.scan.size".into(),
         "scan ext <ນາມສະກຸນ...> -s, --size ## ສະແດງຂະໜາດແລະຜົນລວມ".into(),
     );
 
-    m.insert(
-        "help.scan.care".into(),
-        "scan ext <ນາມສະກຸນ...> --care ## ລວມທຸກໄຟລ໌ (ໂໝດ care)".into(),
-    );
-
     m.insert("help.scan.title".into(), "ຄຳສັ່ງ SCAN:".into());
+
     m.insert(
         "help.scan.waep".into(),
         "scan waep <ໂຮສ|URL> ## ຄົ້ນຫາເສັ້ນທາງເວັບ (/api, /admin, /upload, ...)".into(),
@@ -95,20 +111,5 @@ pub fn fill(m: &mut HashMap<String, String>) {
     m.insert(
         "help.scan.waep_recursive".into(),
         "scan waep <ເປົ້າໝາຍ> [-r] [-d 1-4] [-c 1-64] [--timeout <ms>] [-H 'ຊື່: ຄ່າ'] [-A <ua>] [-o <ຟາຍ>] [-q] ## ການລົງເລິກ, ຄວາມໄວ, header, ຜົນອອກ".into(),
-    );
-
-    m.insert(
-        "help.scan.example8".into(),
-        "scan waep http://127.0.0.1:55555/api ## ເບິ່ງວ່າ API ຂອງ ntc serve ເປີດຫຍັງໄວ້".into(),
-    );
-
-    m.insert(
-        "help.scan.example9".into(),
-        "scan waep example.com -x php,html --all ## ສະແດງທຸກການຕອບສະໜອງ ລວມ .php/.html".into(),
-    );
-
-    m.insert(
-        "help.scan.example10".into(),
-        "scan waep example.com/api -r -d 2 -c 32 ## ລົງສອງຊັ້ນດ້ວຍ 32 probe ພ້ອມກັນ".into(),
     );
 }

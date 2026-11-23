@@ -8,7 +8,10 @@ pub fn fill(m: &mut HashMap<String, String>) {
         "viewf [<目录|@tp|@tp/目录/>] ## 显示深度 1 的仅文件树".into(),
     );
 
-    m.insert("help.viewf.file_usage".into(), "viewf <文件|@tp/文件|@tp/目录/文件> [--head N|--tail N|--betw A:B] ## 显示文件内容（同 txtf）".into());
+    m.insert(
+        "help.viewf.file_usage".into(),
+        "viewf <文件|@tp/文件|@tp/目录/文件> [--head N|--tail N|--betw A:B] ## 显示文件内容（同 txtf）".into(),
+    );
 
     m.insert(
         "help.viewf.size".into(),

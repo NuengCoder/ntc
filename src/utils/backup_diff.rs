@@ -4,12 +4,11 @@ use crate::config::Config;
 use crate::filetype::FormatConfig;
 use crate::output::{print_error, print_info, print_success};
 use crate::t;
+use crate::utils::theme::style::ThemeColorize;
 use anyhow::Result;
-use colored::*;
 use sha2::{Digest, Sha256};
 use std::collections::HashMap;
 use std::fs;
-use std::io::{self, Write};
 use std::path::{Path, PathBuf};
 use walkdir::WalkDir;
 
@@ -82,14 +81,19 @@ impl BackupDiff {
         }
         println!("  {}", t!("backup_diff.cancel_opt").red());
         println!();
-        print!(
-            "{} ",
-            t!("backup_diff.select_prompt", backups.len()).green()
-        );
-        io::stdout().flush()?;
-
-        let mut input = String::new();
-        io::stdin().read_line(&mut input)?;
+        let labels: Vec<String> = backups
+            .iter()
+            .map(|(num, date, size, count)| format!("#{} {} {} {}", num, date, size, count))
+            .collect();
+        let Some(input) = crate::utils::interactive::read_number_with_hint(
+            &t!("backup_diff.select_prompt", backups.len()),
+            |text| text.green().to_string(),
+            &labels,
+        )?
+        else {
+            println!("{}", t!("backup_diff.cancelled").dimmed());
+            return Ok(());
+        };
         let input = input.trim();
 
         if input == "0" || input.is_empty() {

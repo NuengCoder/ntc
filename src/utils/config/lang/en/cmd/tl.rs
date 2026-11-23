@@ -6,7 +6,7 @@ pub fn fill(m: &mut HashMap<String, String>) {
         "Directory not found: {}".into(),
     );
 
-    m.insert("cmd.tl.dir_usage".into(), "Usage: tl dir <path>".into());
+    m.insert("cmd.tl.dir_usage".into(), "Usage: tl dir [path]".into());
 
     m.insert(
         "cmd.tl.ext_not_supported".into(),
@@ -24,7 +24,7 @@ pub fn fill(m: &mut HashMap<String, String>) {
 
     m.insert(
         "cmd.tl.help_dir".into(),
-        "  tl dir <path>           Show supported extensions and total lines in directory".into(),
+        "  tl dir [path]           Show supported extensions and total lines (default: current directory)".into(),
     );
 
     m.insert(

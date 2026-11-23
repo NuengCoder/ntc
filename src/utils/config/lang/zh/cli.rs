@@ -765,13 +765,6 @@ pub fn fill(m: &mut HashMap<String, String>) {
 
     m.insert("cli.run.help_list".into(), "列出所有命令行功能".into());
 
-    m.insert(
-        "cli.run.help_lsp".into(),
-        "通过 stdio 启动 ntc-math LSP 服务器".into(),
-    );
-
-    m.insert("cli.run.help_lsp_log".into(), "LSP 调试日志写入路径".into());
-
     m.insert("cli.run.help_math".into(), "计算数学表达式".into());
 
     m.insert(

@@ -271,6 +271,26 @@ pub fn fill(m: &mut HashMap<String, String>) {
 
     m.insert("msg.showcg.label_serve_chess".into(), "Serve chess:".into());
 
+    m.insert("msg.showcg.label_serve_git".into(), "Serve git:".into());
+
+    m.insert("msg.showcg.label_serve_arc".into(), "Serve arc:".into());
+
+    m.insert("msg.showcg.label_serve_theme".into(), "Serve theme:".into());
+
+    m.insert("msg.showcg.label_serve_ndb".into(), "Serve ndb:".into());
+
+    m.insert(
+        "msg.showcg.label_serve_backup".into(),
+        "Serve backup:".into(),
+    );
+
+    m.insert("msg.showcg.label_serve_fake".into(), "Serve fake:".into());
+
+    m.insert(
+        "msg.showcg.label_serve_config".into(),
+        "Serve config:".into(),
+    );
+
     m.insert("msg.showcg.title".into(), "การกำหนดค่าปัจจุบัน".into());
 
     m.insert("msg.size.bytes_label".into(), "ไบต์:".into());
@@ -482,5 +502,9 @@ pub fn fill(m: &mut HashMap<String, String>) {
     m.insert(
         "msg.setIdle.error".into(),
         "ค่าไม่รู้จัก: {} (ใช้ ON หรือ OFF)".into(),
+    );
+    m.insert(
+        "msg.showcg.label_serve_mdview".into(),
+        "Serve mdview:".into(),
     );
 }

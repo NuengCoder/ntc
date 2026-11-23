@@ -24,11 +24,9 @@ function isAndroidTermux() {
   return false;
 }
 
-// Android/Termux assets use Rust target triples and Node's `arch` names.
+// Termux supports arm64 only; Android x64/armv7 builds are not published.
 const ANDROID_ASSET_BY_ARCH = {
   arm64: 'aarch64-linux-android.tar.gz',
-  x64:   'x86_64-linux-android.tar.gz',
-  arm:   'armv7-linux-androideabi.tar.gz',
 };
 
 // Native (non-Android) release assets.
@@ -41,13 +39,10 @@ const NATIVE_ASSET_BY_PLATFORM = {
   'linux-arm64':  'linux-aarch64.tar.gz',
 };
 
-// Same-arch Linux build, used as the Termux fallback when the manually
-// uploaded Android asset is missing: degrade to the Linux build instead of
+// Linux arm64 build, used as the Termux fallback when the manually uploaded
+// Android arm64 asset is missing: degrade to the Linux build instead of
 // hard-failing, and say so on stdout.
-const LINUX_ASSET_BY_ARCH = {
-  arm64: 'linux-aarch64.tar.gz',
-  x64:   'linux-x86_64.tar.gz',
-};
+const TERMUX_FALLBACK_ASSET = 'linux-aarch64.tar.gz';
 
 // Returns { bin, candidates: [filename, ...] } so a missing/renamed manual
 // asset can fall back instead of 404ing. `platform`/`arch`/`android` are
@@ -61,14 +56,17 @@ function getPlatformInfo(platform = process.platform, arch = process.arch, andro
   const forced = process.env.NTC_NPM_ASSET;
   if (forced) return { bin, candidates: [forced] };
 
+  // Termux is arm64-only; reject x64/armv7 instead of silently picking a
+  // Linux build that Termux cannot run.
+  if (android && arch !== 'arm64') return null;
+
   const nativeAsset = NATIVE_ASSET_BY_PLATFORM[`${platform}-${arch}`];
   const androidAsset = android ? ANDROID_ASSET_BY_ARCH[arch] : null;
-  const linuxAsset = LINUX_ASSET_BY_ARCH[arch];
 
   const order = [];
   if (androidAsset) order.push(androidAsset);          // Termux first
   if (nativeAsset) order.push(nativeAsset);
-  if (androidAsset && !nativeAsset) order.push(linuxAsset); // Termux -> Linux
+  if (androidAsset && !nativeAsset) order.push(TERMUX_FALLBACK_ASSET); // Termux arm64 -> Linux
   const names = [...new Set(order)].filter(Boolean);
 
   if (names.length === 0) return null;
@@ -400,7 +398,11 @@ async function main() {
   const info = getPlatformInfo();
 
   if (!info) {
-    console.log(`ntc: unsupported platform ${process.platform}-${process.arch}.`);
+    if (isAndroidTermux()) {
+      console.log(`ntc: unsupported Termux architecture ${process.arch}; only arm64 is available.`);
+    } else {
+      console.log(`ntc: unsupported platform ${process.platform}-${process.arch}.`);
+    }
     console.log(`ntc: debug: ${describePlatform()}`);
     console.log('Install from source: cargo install ntc');
     process.exit(1);

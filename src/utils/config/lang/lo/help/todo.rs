@@ -17,47 +17,8 @@ pub fn fill(m: &mut HashMap<String, String>) {
     );
 
     m.insert(
-        "help.todo.info".into(),
-        "todo info [N] ## ສະແດງວຽກທັງໝົດ ຫຼື ລາຍລະອຽດວຽກ N".into(),
-    );
-
-    m.insert("help.todo.rm".into(), "todo rm <N> ## ລຶບວຽກ N".into());
-
-    m.insert(
-        "help.todo.show".into(),
-        "todo ## ສະແດງວຽກທັງໝົດ (ຈາກ future_todo.txt ໃນ CWD)".into(),
-    );
-
-    m.insert(
-        "help.todo.move".into(),
-        "todo move <N> <M> ## ຍ້າຍລາຍການທີ່ N ໄປຕຳແໜ່ງ M".into(),
-    );
-
-    m.insert(
-        "help.todo.replace".into(),
-        "todo replace <N> <M> ## ສະຫຼັບລາຍການທີ່ N ກັບ M".into(),
-    );
-
-    m.insert(
-        "help.todo.example4".into(),
-        "todo mv 5 1 ## ຍ້າຍລາຍການທີ່ 5 ຂຶ້ນເທິງສຸດ".into(),
-    );
-
-    m.insert(
-        "help.todo.example5".into(),
-        "todo rp 5 1 ## ສະຫຼັບລາຍການທີ່ 5 ກັບ 1".into(),
-    );
-
-    m.insert("help.todo.title".into(), "ຄຳສັ່ງ TODO:".into());
-
-    m.insert(
         "help.todo.done".into(),
         "todo done <N> ## ໝາຍວຽກ N ວ່າສຳເລັດ".into(),
-    );
-
-    m.insert(
-        "help.todo.undo".into(),
-        "todo undo <N> ## ເປີດວຽກ N ໃໝ່".into(),
     );
 
     m.insert(
@@ -73,4 +34,43 @@ pub fn fill(m: &mut HashMap<String, String>) {
     );
 
     m.insert("help.todo.example3".into(), "todo rm 1 ## ລຶບວຽກ #1".into());
+
+    m.insert(
+        "help.todo.example4".into(),
+        "todo mv 5 1 ## ຍ້າຍລາຍການທີ່ 5 ຂຶ້ນເທິງສຸດ".into(),
+    );
+
+    m.insert(
+        "help.todo.example5".into(),
+        "todo rp 5 1 ## ສະຫຼັບລາຍການທີ່ 5 ກັບ 1".into(),
+    );
+
+    m.insert(
+        "help.todo.info".into(),
+        "todo info [N] ## ສະແດງວຽກທັງໝົດ ຫຼື ລາຍລະອຽດວຽກ N".into(),
+    );
+
+    m.insert(
+        "help.todo.move".into(),
+        "todo move <N> <M> ## ຍ້າຍລາຍການທີ່ N ໄປຕຳແໜ່ງ M".into(),
+    );
+
+    m.insert(
+        "help.todo.replace".into(),
+        "todo replace <N> <M> ## ສະຫຼັບລາຍການທີ່ N ກັບ M".into(),
+    );
+
+    m.insert("help.todo.rm".into(), "todo rm <N> ## ລຶບວຽກ N".into());
+
+    m.insert(
+        "help.todo.show".into(),
+        "todo ## ສະແດງວຽກທັງໝົດ (ຈາກ future_todo.txt ໃນ CWD)".into(),
+    );
+
+    m.insert("help.todo.title".into(), "ຄຳສັ່ງ TODO:".into());
+
+    m.insert(
+        "help.todo.undo".into(),
+        "todo undo <N> ## ເປີດວຽກ N ໃໝ່".into(),
+    );
 }

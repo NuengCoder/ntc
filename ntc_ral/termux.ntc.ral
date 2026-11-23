@@ -1,0 +1,114 @@
+# ntc run aliases - Termux (Android, termux-api)
+# Import with: ral import ntc_ral/termux.ntc.ral
+# ${x} is a parameter; ${x:-default} is optional; $*{x} keeps spaces.
+
+[run_aliases]
+# --- ntc workspace ---
+bup = "backup create"
+bup-list = "backup list"
+bup-restore = "backup restore"
+bup-undo = "backup undo"
+x = "clear"
+v = "run clear && view --care --time -d ${x:-1}"
+vf = "run clear && viewf -s --time --care --sort size"
+vd = "run clear && viewd --care --time --size --sort size -d ${x:-1}"
+u = "run clear && size --care --time && view --size --care --time --sort size -d 1"
+vsz = "view --size --care --sort size --head 25"
+tld = "tl dir ${x:-.}"
+sz = "size --care -t"
+zipdir = "arc create ${x}.zip ${x}"
+unzip = "arc extract ${x}"
+ziplist = "arc list ${x}"
+servehttp = "serve files --port 8080"
+
+# --- storage ---
+storage = "termux-setup-storage"
+sd = "cd ~/storage/shared"
+docs = "cd ~/storage/shared/Documents"
+down = "cd ~/storage/downloads"
+dcim = "cd ~/storage/dcim"
+pics = "cd ~/storage/pictures"
+
+# --- open and share ---
+o = "termux-open ${x}"
+share = "termux-share ${x}"
+pb = "termux-clipboard-get"
+pbc = "termux-clipboard-set ${x}"
+
+# --- device ---
+batt = "termux-battery-status"
+info = "termux-info"
+wifi = "termux-wifi-connectioninfo"
+wifiscan = "termux-wifi-scaninfo"
+location = "termux-location"
+torch = "termux-torch on"
+torchoff = "termux-torch off"
+vibrate = "termux-vibrate -d 300"
+bright = "termux-brightness ${x}"
+toast = "termux-toast $*{x}"
+notify = "termux-notification -c $*{x}"
+speak = "termux-tts-speak $*{x}"
+camera = "termux-camera-photo -c 0 ${x}.jpg"
+mic = "termux-microphone-record -f ${x}.m4a"
+micstop = "termux-microphone-record -q"
+wake = "termux-wake-lock"
+wakeoff = "termux-wake-unlock"
+call = "termux-telephony-call ${x}"
+smsls = "termux-sms-list -l 10"
+
+# --- android UI ---
+settings = "am start -a android.settings.SETTINGS"
+wifisettings = "am start -a android.settings.WIFI_SETTINGS"
+apps = "pm list packages"
+appa = "pm list packages | grep ${x}"
+sshd = "sshd"
+
+# --- system info ---
+kernel = "uname -a"
+df = "df -h"
+du = "du -sh * | sort -h"
+ps = "ps aux"
+topn = "top -o %CPU"
+ip = "ifconfig"
+ports = "netstat -tulpn"
+
+# --- packages ---
+pkgup = "pkg update && pkg upgrade -y"
+pkgi = "pkg install ${x}"
+pkgrm = "pkg uninstall ${x}"
+pkgs = "pkg search ${x}"
+pkgl = "pkg list-installed"
+pkgclean = "pkg clean"
+
+# --- dev ---
+py = "python"
+pyt = "python ${x}"
+pyv = "python -m venv venv"
+pyact = "py_activate"
+pydeact = "py_deactivate"
+pipi = "pip install"
+pipu = "pip uninstall"
+gst = "git status"
+gl = "git log --oneline -n 20"
+gd = "git diff"
+ga = "git add ."
+gcm = "git commit -m $*{x}"
+gp = "git push"
+gpl = "git pull"
+gb = "git branch"
+gco = "git checkout ${x}"
+gcl = "git clone ${x}"
+cb = "cargo build"
+cbr = "cargo build --release"
+cr = "cargo run"
+ct = "cargo test"
+cc = "cargo check"
+
+[run_alias_hints]
+tld = "#x --hint-dir"
+zipdir = "#x --hint-dir"
+unzip = "#x --hint-ext zip"
+o = "#x --hint-all"
+share = "#x --hint-all"
+pyt = "#x --select-ext py"
+mic = "#x --hint-ext-name m4a"

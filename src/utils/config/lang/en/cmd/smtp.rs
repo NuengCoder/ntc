@@ -350,4 +350,50 @@ pub fn fill(m: &mut HashMap<String, String>) {
         "cmd.smtp.password_hidden".into(),
         "******** (hidden - use --deadlock)".into(),
     );
+
+    m.insert(
+        "cmd.smtp.help_file_title".into(),
+        "Single-file config (ntc_smtp.json):".into(),
+    );
+    m.insert(
+        "cmd.smtp.help_file_init".into(),
+        "  smtp init [file] [--force]      create ntc_smtp.json with server/user/password/to/files"
+            .into(),
+    );
+    m.insert(
+        "cmd.smtp.help_file_send".into(),
+        "  smtp -r ntc_smtp.json -s \"TITLE\" -b \"BODY\" [-f FILE] [-t TO]".into(),
+    );
+    m.insert(
+        "cmd.smtp.missing_read_file".into(),
+        "Missing config file after -r (example: -r ntc_smtp.json)".into(),
+    );
+    m.insert(
+        "cmd.smtp.file_missing".into(),
+        "SMTP config not found: {} (create it with: smtp init)".into(),
+    );
+    m.insert(
+        "cmd.smtp.file_read_fail".into(),
+        "Could not read SMTP config: {}".into(),
+    );
+    m.insert(
+        "cmd.smtp.file_invalid".into(),
+        "Invalid SMTP config JSON: {}".into(),
+    );
+    m.insert(
+        "cmd.smtp.file_incomplete".into(),
+        "SMTP config needs server, user and password: {}".into(),
+    );
+    m.insert(
+        "cmd.smtp.file_exists".into(),
+        "{} already exists (use --force to overwrite)".into(),
+    );
+    m.insert(
+        "cmd.smtp.file_write_fail".into(),
+        "Could not write SMTP config: {}".into(),
+    );
+    m.insert(
+        "cmd.smtp.file_created".into(),
+        "Created {} - fill in your SMTP details, then send with: smtp -r {}".into(),
+    );
 }

@@ -54,7 +54,7 @@ pub fn fill(m: &mut HashMap<String, String>) {
 
     m.insert(
         "ntpkg.help_install".into(),
-        "    ntpkg install <language> [version]   ດາວໂຫຼດ ແລະ ຕິດຕັ້ງ runtime".into(),
+        "    ntpkg install <language> [version] [--force]   ດາວໂຫຼດ ແລະ ຕິດຕັ້ງ runtime".into(),
     );
 
     m.insert(
@@ -143,7 +143,7 @@ pub fn fill(m: &mut HashMap<String, String>) {
 
     m.insert(
         "ntpkg.install_usage".into(),
-        "Usage: ntpkg install <language> [version]".into(),
+        "Usage: ntpkg install <language> [version] [--force]".into(),
     );
 
     m.insert("ntpkg.installed_msg".into(), "{} {} ຕິດຕັ້ງແລ້ວ!".into());
@@ -311,6 +311,23 @@ pub fn fill(m: &mut HashMap<String, String>) {
     m.insert(
         "ntpkg.termux_no_pkg".into(),
         "ບໍ່ມີ package pkg ຂອງ Termux ສຳລັບ '{}'.".into(),
+    );
+
+    m.insert(
+        "ntpkg.system_use_pkg".into(),
+        "ແພລັດຟອມນີ້ມີຕົວຈັດການແພັກເກັດທາງການສຳລັບ runtime ນີ້, ກະລຸນາໃຊ້ມັນແທນ ntpkg:".into(),
+    );
+
+    m.insert("ntpkg.system_cmd".into(), "    {}".into());
+
+    m.insert(
+        "ntpkg.system_force_hint".into(),
+        "ຖ້າຕ້ອງການຕິດຕັ້ງສຳເນົາແຍກຜ່ານ ntpkg ໃຫ້ລັນ: ntpkg install {} --force".into(),
+    );
+
+    m.insert(
+        "ntpkg.system_no_manager".into(),
+        "ບໍ່ພົບຕົວຈັດການແພັກເກັດລະບົບທີ່ຮອງຮັບ, ກະລຸນາໃຊ້ຕົວຈັດການແພັກເກັດຂອງແພລັດຟອມທ່ານ.".into(),
     );
 
     m.insert(

@@ -3,12 +3,12 @@ use std::collections::HashMap;
 pub fn fill(m: &mut HashMap<String, String>) {
     m.insert(
         "cmd.time.count_usage".into(),
-        "Usage: time count <duration>".into(),
+        "Usage: time --count <duration>".into(),
     );
 
     m.insert(
         "cmd.time.run_usage".into(),
-        "Usage: time run <command>".into(),
+        "Usage: time <command>".into(),
     );
 
     m.insert("cmd.time.executing".into(), "Executing: {}".into());
@@ -70,17 +70,17 @@ pub fn fill(m: &mut HashMap<String, String>) {
 
     m.insert(
         "cmd.time.compare_usage".into(),
-        "Usage: time compare <command A> --with <command B> [-w]".into(),
+        "Usage: time <command A> --compare <command B> [-w]".into(),
     );
 
     m.insert(
         "cmd.time.bench_usage".into(),
-        "Usage: time bench [--runs N] <command>".into(),
+        "Usage: time --bench <n> <command>".into(),
     );
 
     m.insert(
         "cmd.time.invalid_runs".into(),
-        "time bench: invalid run count '{}'. Use a positive integer.".into(),
+        "time --bench: invalid run count '{}'. Use a positive integer.".into(),
     );
 
     m.insert(

@@ -8,8 +8,7 @@ pub fn fill(m: &mut HashMap<String, String>) {
 
     m.insert(
         "cmd.qr.decode_requires".into(),
-        "ການຖອດລະຫັດ QR ຕ້ອງການ feature 'image' (ເປີດໂດຍຄ່າເລີ່ມຕົ້ນ). ແລ່ນດ້ວຍ --features image."
-            .into(),
+        "ການຖອດລະຫັດ QR ຕ້ອງການ feature 'image' (ເປີດໂດຍຄ່າເລີ່ມຕົ້ນ). ແລ່ນດ້ວຍ --features image.".into(),
     );
 
     m.insert(

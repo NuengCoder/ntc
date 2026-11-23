@@ -14,7 +14,7 @@ use std::sync::RwLock;
 ///
 /// # Examples
 /// ```
-/// let title = ntc::t!("help.nav.title");
+/// let title = ntc::t!("help.cd.title");
 /// let label = ntc::t!("config.lang.set", "thai");
 /// assert!(!title.is_empty());
 /// assert!(!label.is_empty());
@@ -190,6 +190,10 @@ mod tests {
         "cmd.serve.cloudflared_missing",
         // contextual --help <cr> hint
         "help.context.cr",
+        // editor status lines that previously leaked raw keys
+        "help.deadlock.clear",
+        "editor.mode_search_count",
+        "editor.query_upper_lower_required",
     ];
 
     const TIME_KEYS: &[&str] = &[
@@ -226,9 +230,7 @@ mod tests {
         "cmd.time.ignoring_whitespace",
         "help.time.title",
         "help.time.run",
-        "help.time.alias",
         "help.time.compare",
-        "help.time.compare_with",
         "help.time.bench",
         "help.time.count",
         "help.time.help",
@@ -274,7 +276,7 @@ mod tests {
         "help.context.qur.next_select",
         "help.context.qur.next_display_replace",
         "help.context.qur.next_depth",
-        "help.search.qur",
+        "help.qur.usage",
     ];
 
     /// Every `ran check` key must exist in all four bundled language packs.
@@ -312,6 +314,95 @@ mod tests {
         "ran.fmt.no_terminal",
         "help.ran.fmt",
     ];
+
+    /// Every `doctor` key must exist in all four bundled language packs.
+    /// `doctor.title` is the command name and stays identical everywhere, so
+    /// it is checked for presence but not for translation.
+    const DOCTOR_KEYS: &[&str] = &[
+        "doctor.title",
+        "doctor.platform",
+        "doctor.no_config_dir",
+        "doctor.config_new",
+        "doctor.config_ok",
+        "doctor.config_unwritable",
+        "doctor.settings",
+        "doctor.install",
+        "doctor.install_missing",
+        "doctor.ran_none",
+        "doctor.ran_ok",
+        "doctor.ran_env",
+        "doctor.ran_problems",
+        "doctor.ran_error",
+        "doctor.ntpkg_none",
+        "doctor.ntpkg_ok",
+        "doctor.ntpkg_error",
+        "doctor.ntpkg_path",
+        "doctor.ok",
+        "doctor.issues",
+        "help.doctor.title",
+        "help.doctor.usage",
+        "help.doctor.example1",
+        "help.compact.doctor",
+    ];
+
+    #[test]
+    fn doctor_keys_exist_in_all_languages() {
+        assert_keys_present(super::en::build_map(), "english", DOCTOR_KEYS);
+        assert_keys_present(super::zh::build_map(), "chinese", DOCTOR_KEYS);
+        assert_keys_present(super::th::build_map(), "thai", DOCTOR_KEYS);
+        assert_keys_present(super::lo::build_map(), "lao", DOCTOR_KEYS);
+    }
+
+    #[test]
+    fn doctor_keys_are_translated_outside_english() {
+        let en = super::en::build_map();
+        let translated = &DOCTOR_KEYS[1..];
+        assert_translated(super::zh::build_map(), &en, "chinese", translated);
+        assert_translated(super::th::build_map(), &en, "thai", translated);
+        assert_translated(super::lo::build_map(), &en, "lao", translated);
+    }
+
+    /// Every string the interactive `gs` pager paints must exist in all four
+    /// packs. The key bindings themselves (`j/k`, `n/p`) are language-neutral and
+    /// so live in the presence list only.
+    const GS_PAGER_KEYS: &[&str] = &[
+        "misc.gs.pager.header",
+        "misc.gs.pager.hint_help",
+        "misc.gs.pager.hint_pattern",
+        "misc.gs.pager.hint_open",
+        "misc.gs.pager.hint_row",
+        "misc.gs.pager.hint_move",
+        "misc.gs.pager.hint_page",
+        "misc.gs.pager.hint_context",
+        "misc.gs.pager.hint_quit",
+        "misc.gs.pager.hint_type",
+        "misc.gs.pager.hint_accept",
+        "misc.gs.pager.hint_cancel",
+        "misc.gs.pager.pattern_box",
+        "misc.gs.pager.searching",
+        "help.gs.interactive",
+    ];
+
+    #[test]
+    fn gs_pager_keys_exist_in_all_languages() {
+        assert_keys_present(super::en::build_map(), "english", GS_PAGER_KEYS);
+        assert_keys_present(super::zh::build_map(), "chinese", GS_PAGER_KEYS);
+        assert_keys_present(super::th::build_map(), "thai", GS_PAGER_KEYS);
+        assert_keys_present(super::lo::build_map(), "lao", GS_PAGER_KEYS);
+    }
+
+    #[test]
+    fn gs_pager_prose_is_translated_outside_english() {
+        let prose: Vec<&str> = GS_PAGER_KEYS
+            .iter()
+            .copied()
+            .filter(|k| !matches!(*k, "misc.gs.pager.hint_move" | "misc.gs.pager.hint_page"))
+            .collect();
+        let en = super::en::build_map();
+        assert_translated(super::zh::build_map(), &en, "chinese", &prose);
+        assert_translated(super::th::build_map(), &en, "thai", &prose);
+        assert_translated(super::lo::build_map(), &en, "lao", &prose);
+    }
 
     #[test]
     fn ran_fmt_keys_exist_in_all_languages() {
@@ -385,6 +476,7 @@ mod tests {
     /// Every `scr` script-runner key must exist in all four bundled language packs.
     const SCR_KEYS: &[&str] = &[
         "help.scr.continue",
+        "help.scr.direct",
         "help.scr.example1",
         "help.scr.example2",
         "help.scr.example3",
@@ -398,26 +490,58 @@ mod tests {
         "scr.completed",
         "scr.continue_warn",
         "scr.desc_args",
+        "scr.desc_break",
+        "scr.desc_call",
+        "scr.desc_exit",
+        "scr.desc_expr",
+        "scr.desc_fn_env",
+        "scr.desc_fn_math",
+        "scr.desc_fn_nprintf",
+        "scr.desc_fn_strings",
+        "scr.desc_for",
         "scr.desc_force",
+        "scr.desc_func",
+        "scr.desc_functions_header",
+        "scr.desc_if",
+        "scr.desc_input",
         "scr.desc_interp",
+        "scr.desc_loop",
+        "scr.desc_pipe",
+        "scr.desc_return",
         "scr.desc_set",
+        "scr.desc_showexc",
+        "scr.desc_while",
         "scr.done_errors",
+        "scr.err_break_outside_loop",
+        "scr.err_expr",
+        "scr.err_func_args",
+        "scr.err_func_missing",
+        "scr.err_loop_limit",
+        "scr.err_recursion",
         "scr.error_at",
         "scr.executing",
         "scr.failed_abort",
         "scr.help_continue",
+        "scr.help_direct",
         "scr.help_help",
         "scr.help_init",
         "scr.help_ls",
         "scr.help_run",
+        "scr.help_syntax_header",
         "scr.help_title",
         "scr.help_usage",
         "scr.init_created",
         "scr.init_exists",
+        "scr.input_eof",
+        "scr.input_prompt",
         "scr.ls_empty",
         "scr.ls_title",
+        "scr.nested_too_deep",
         "scr.no_commands",
         "scr.not_found",
+        "scr.parse_error",
+        "scr.parse_failed",
+        "scr.pipe_refused",
         "scr.start",
         "scr.syscmd",
         "scr.syscmd_exit",
@@ -586,8 +710,12 @@ mod tests {
         "cmd.views.invalid_sort",
         "cmd.views.invalid_sort_value",
         "cmd.views.empty",
-        "help.pipe.count",
+        "help.count.usage",
+        "help.count.example2",
         "misc.count.usage",
+        "misc.count.line_usage",
+        "misc.count.line_no_input",
+        "misc.count.line_bad_flag",
     ];
 
     #[test]
@@ -626,7 +754,7 @@ mod tests {
 
     /// `trim` help/usage keys.
     const TRIM_KEYS: &[&str] = &[
-        "help.pipe.trim",
+        "help.trim.usage",
         "help.pipe.example6",
         "misc.trim.usage",
         "misc.trim.empty_pattern",
@@ -859,7 +987,6 @@ mod tests {
         "ndb.yes",
         "help.ndb.db_exit",
         "help.ndb.db_schema",
-        "help.ndb.db_sql",
         "help.ndb.db_write",
         "help.ndb.db_edit",
         "help.ndb.db_backup",
@@ -936,6 +1063,7 @@ mod tests {
         "help.deadlock.title",
         "help.deadlock.launch",
         "help.deadlock.ls",
+        "help.deadlock.clear",
         "help.deadlock.add",
         "help.deadlock.rmpw",
         "help.deadlock.master",
@@ -1033,6 +1161,59 @@ mod tests {
         assert_keys_present(super::lo::build_map(), "lao", SERVE_CHESS_KEYS);
     }
 
+    /// Every `serve git` / `serve arc` key must exist in all four bundled
+    /// language packs, so their help screens never leak raw key names.
+    const SERVE_GIT_ARC_KEYS: &[&str] = &[
+        "cmd.serve.git_serving",
+        "cmd.serve.git_title",
+        "cmd.serve.git_usage",
+        "cmd.serve.git_help_port",
+        "cmd.serve.git_help_bind",
+        "cmd.serve.git_example",
+        "cmd.serve.git_no_repo",
+        "cmd.serve.git_no_git",
+        "cmd.serve.git_local_warning",
+        "cmd.serve.arc_serving",
+        "cmd.serve.arc_title",
+        "cmd.serve.arc_usage",
+        "cmd.serve.arc_help_port",
+        "cmd.serve.arc_help_bind",
+        "cmd.serve.arc_example",
+        "cmd.serve.arc_no_dir",
+        "cmd.serve.arc_local_warning",
+    ];
+
+    #[test]
+    fn serve_git_arc_keys_exist_in_all_languages() {
+        assert_keys_present(super::en::build_map(), "english", SERVE_GIT_ARC_KEYS);
+        assert_keys_present(super::zh::build_map(), "chinese", SERVE_GIT_ARC_KEYS);
+        assert_keys_present(super::th::build_map(), "thai", SERVE_GIT_ARC_KEYS);
+        assert_keys_present(super::lo::build_map(), "lao", SERVE_GIT_ARC_KEYS);
+    }
+
+    /// `serve mdview` help and its `serve` / `showcg` rows must exist in all
+    /// four bundled language packs.
+    const SERVE_MDVIEW_KEYS: &[&str] = &[
+        "cmd.serve.services_row_mdview",
+        "cmd.serve.mdview_title",
+        "cmd.serve.mdview_usage",
+        "cmd.serve.mdview_help_port",
+        "cmd.serve.mdview_help_bind",
+        "cmd.serve.mdview_example",
+        "cmd.serve.mdview_serving",
+        "cmd.serve.mdview_no_dir",
+        "cmd.serve.mdview_local_warning",
+        "msg.showcg.label_serve_mdview",
+    ];
+
+    #[test]
+    fn serve_mdview_keys_exist_in_all_languages() {
+        assert_keys_present(super::en::build_map(), "english", SERVE_MDVIEW_KEYS);
+        assert_keys_present(super::zh::build_map(), "chinese", SERVE_MDVIEW_KEYS);
+        assert_keys_present(super::th::build_map(), "thai", SERVE_MDVIEW_KEYS);
+        assert_keys_present(super::lo::build_map(), "lao", SERVE_MDVIEW_KEYS);
+    }
+
     /// Every `serve config` / `config serve` key must exist in all four
     /// bundled language packs.
     const SERVE_CONFIG_KEYS: &[&str] = &[
@@ -1052,6 +1233,13 @@ mod tests {
         "msg.showcg.label_serve_files",
         "msg.showcg.label_serve_http",
         "msg.showcg.label_serve_chess",
+        "msg.showcg.label_serve_git",
+        "msg.showcg.label_serve_arc",
+        "msg.showcg.label_serve_theme",
+        "msg.showcg.label_serve_ndb",
+        "msg.showcg.label_serve_backup",
+        "msg.showcg.label_serve_fake",
+        "msg.showcg.label_serve_config",
         "cmd.serve.services_title",
         "cmd.serve.services_usage",
         "cmd.serve.services_header",
@@ -1059,6 +1247,32 @@ mod tests {
         "cmd.serve.services_row_http",
         "cmd.serve.services_row_chess",
         "cmd.serve.services_row_config",
+        "cmd.serve.services_row_fake",
+        "cmd.serve.services_example_fake",
+        "cmd.serve.fake_title",
+        "cmd.serve.fake_usage",
+        "cmd.serve.fake_help_port",
+        "cmd.serve.fake_help_bind",
+        "cmd.serve.fake_example",
+        "cmd.serve.fake_serving",
+        "cmd.serve.fake_local_warning",
+        "cmd.serve.config_title",
+        "cmd.serve.config_usage",
+        "cmd.serve.config_help_port",
+        "cmd.serve.config_help_bind",
+        "cmd.serve.config_example",
+        "cmd.serve.config_serving",
+        "cmd.serve.config_local_warning",
+        "cmd.serve.services_row_backup",
+        "cmd.serve.services_example_backup",
+        "cmd.serve.backup_title",
+        "cmd.serve.backup_usage",
+        "cmd.serve.backup_help_port",
+        "cmd.serve.backup_help_bind",
+        "cmd.serve.backup_example",
+        "cmd.serve.backup_serving",
+        "cmd.serve.backup_local_warning",
+        "cmd.serve.backup_no_dir",
         "cmd.serve.services_example_files",
         "cmd.serve.services_example_http",
         "cmd.serve.services_example_config",
@@ -1070,6 +1284,24 @@ mod tests {
         assert_keys_present(super::zh::build_map(), "chinese", SERVE_CONFIG_KEYS);
         assert_keys_present(super::th::build_map(), "thai", SERVE_CONFIG_KEYS);
         assert_keys_present(super::lo::build_map(), "lao", SERVE_CONFIG_KEYS);
+    }
+
+    /// Keys used by the `init all` removal and the optional `tl dir` path.
+    const SHELL_UPDATE_KEYS: &[&str] = &[
+        "cmd.config.init.all_removed",
+        "cmd.config.deinit.flags_removed",
+        "cmd.config.local.init_all_removed",
+        "cmd.tl.dir_usage",
+        "cmd.tl.help_dir",
+        "cmd.tl.dir_not_found",
+    ];
+
+    #[test]
+    fn shell_update_keys_exist_in_all_languages() {
+        assert_keys_present(super::en::build_map(), "english", SHELL_UPDATE_KEYS);
+        assert_keys_present(super::zh::build_map(), "chinese", SHELL_UPDATE_KEYS);
+        assert_keys_present(super::th::build_map(), "thai", SHELL_UPDATE_KEYS);
+        assert_keys_present(super::lo::build_map(), "lao", SHELL_UPDATE_KEYS);
     }
 
     /// Every `nsheet` (sheet viewer) key must exist in all four bundled packs.
@@ -1339,8 +1571,8 @@ mod tests {
         "alias.ral.hintn_create_hint",
         "alias.ral.example_hint_values",
         "alias.ral.example_hintn",
-        "help.alias.hintn",
-        "help.alias.example7",
+        "help.ral.hintn",
+        "help.ral.example6",
     ];
 
     #[test]
@@ -1624,7 +1856,7 @@ mod tests {
         "cmd.config.init.opencode_ready",
         "cmd.config.deinit.usage",
         "cmd.config.deinit.opencode_not_found",
-        "help.other.init",
+        "help.init.usage",
     ];
 
     #[test]
@@ -1635,12 +1867,41 @@ mod tests {
         assert_keys_present(super::lo::build_map(), "lao", OPENCODE_INIT_KEYS);
     }
 
+    /// `init project` scaffold messages and its usage/help rows.
+    const INIT_PROJECT_KEYS: &[&str] = &[
+        "cmd.config.init.project.usage",
+        "cmd.config.init.project.creating",
+        "cmd.config.init.project.invalid_name",
+        "cmd.config.init.project.done",
+        "cmd.config.init.project.git_created",
+        "cmd.config.init.project.git_exists",
+        "cmd.config.init.project.git_missing",
+        "cmd.config.init.project.venv_prompt",
+        "cmd.config.init.project.venv_created",
+        "cmd.config.init.project.venv_failed",
+        "cmd.config.init.project.lang_ready",
+        "cmd.config.init.project.lang_unknown",
+        "cmd.config.init.project.license_unknown",
+        "cmd.config.init.project.no_unknown",
+        "cmd.config.init.project.tool_missing",
+        "help.init.example2",
+    ];
+
+    #[test]
+    fn init_project_keys_exist_in_all_languages() {
+        assert_keys_present(super::en::build_map(), "english", INIT_PROJECT_KEYS);
+        assert_keys_present(super::zh::build_map(), "chinese", INIT_PROJECT_KEYS);
+        assert_keys_present(super::th::build_map(), "thai", INIT_PROJECT_KEYS);
+        assert_keys_present(super::lo::build_map(), "lao", INIT_PROJECT_KEYS);
+    }
+
     /// `where <binary>` PATH lookup output and its help rows.
     const WHERE_BINARY_KEYS: &[&str] = &[
         "cmd.nav.where.not_found",
         "cmd.nav.where.path_title",
-        "help.nav.where",
-        "help.nav.example5",
+        "help.where.usage",
+        "help.where.example1",
+        "help.where.example2",
     ];
 
     #[test]
@@ -1658,7 +1919,7 @@ mod tests {
         "misc.rmd.confirm_delete",
         "misc.rmd.cancelled",
         "misc.rmd.deadlock_vault_admin_only",
-        "help.fileops.rmd",
+        "help.rmd.usage",
     ];
 
     #[test]
@@ -1687,7 +1948,7 @@ mod tests {
     /// Report clip keys used in report.rs.
     const REPORT_CLIP_KEYS: &[&str] = &[
         "help.report.clip",
-        "help.report.clip_example",
+        "help.report.example2",
         "cmd.report.help_clip",
         "cmd.report.legacy_removed",
         "cmd.report.example_project",
@@ -1746,6 +2007,7 @@ mod tests {
         "help.deadlock.title",
         "help.deadlock.launch",
         "help.deadlock.ls",
+        "help.deadlock.clear",
         "help.deadlock.add",
         "help.deadlock.rmpw",
         "help.deadlock.master",
@@ -1755,9 +2017,7 @@ mod tests {
         "help.deadlock.note",
         "help.time.title",
         "help.time.run",
-        "help.time.alias",
         "help.time.compare",
-        "help.time.compare_with",
         "help.time.bench",
         "help.time.count",
         "help.time.help",
@@ -1767,7 +2027,7 @@ mod tests {
         "cmd.report.clip_meta_lines",
         "cmd.report.clip_meta_chars",
         "help.report.project",
-        "help.report.project_example",
+        "help.report.example1",
         "help.report.clip",
         // help.deadlock.example1/2 and help.report.clip_example are literal
         // command examples and are identical in every language on purpose.

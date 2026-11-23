@@ -9,8 +9,7 @@ Press ? in Normal mode for the full help screen.
 Modes (Normal is home — Esc always walks back to it):
   Normal   single-letter verbs, nothing is typed
   Insert   actually edit text (i from Normal, Esc/Ctrl+Q back)
-  Visual   select with hjkl/arrows (v from Normal, Esc back)
-           Alt+hjkl/arrows moves selection (j/k) or indents it (h/l)
+  Visual   select with hjkl/arrows (v from Normal, Esc back)  Alt+hjkl/arrows moves selection (j/k) or indents it (h/l)
 
 Normal mode:
  i / v / q      Insert / Visual / Query panel

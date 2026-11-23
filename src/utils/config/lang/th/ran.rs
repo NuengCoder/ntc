@@ -28,6 +28,11 @@ pub fn fill(m: &mut HashMap<String, String>) {
     );
 
     m.insert(
+        "ran.desc_env".into(),
+        " รายการใน [env] เป็นตัวแปรสภาพแวดล้อมของทุกคำสั่ง และใช้เป็น $(NAME) ในคำสั่งได้.".into(),
+    );
+
+    m.insert(
         "ran.desc_note".into(),
         " ไม่อนุญาตให้เรียก 'ran' จากภายในคำสั่ง target ของ NTCRANFILE.".into(),
     );
@@ -49,6 +54,20 @@ pub fn fill(m: &mut HashMap<String, String>) {
 
     m.insert("ran.error_prefix".into(), "ran: {}".into());
 
+    m.insert(
+        "ran.dry_run.title".into(),
+        "ทดลองรัน \u{2014} จะไม่เรียกคำสั่งใด ๆ.".into(),
+    );
+
+    m.insert("ran.dry_run.header".into(), "{} ใน {}".into());
+
+    m.insert("ran.dry_run.env".into(), "ตัวแปรสภาพแวดล้อม: {}".into());
+
+    m.insert(
+        "ran.dry_run.summary".into(),
+        "ทั้งหมด {} target ตามลำดับ: {}".into(),
+    );
+
     m.insert("ran.exec_failed".into(), "ไม่สามารถเรียกคำสั่ง: {}".into());
 
     m.insert("ran.executing".into(), "กำลังเรียก: {}".into());
@@ -63,6 +82,11 @@ pub fn fill(m: &mut HashMap<String, String>) {
     m.insert(
         "ran.help_deinit_fmt".into(),
         " ran deinit ลบ {} ออกจากไดเรกทอรีปัจจุบัน".into(),
+    );
+
+    m.insert(
+        "ran.help_dry_run".into(),
+        " ran --dry-run [target] แสดงสิ่งที่จะรันโดยไม่เรียกจริง".into(),
     );
 
     m.insert("ran.help_help".into(), " ran help แสดงความช่วยเหลือนี้".into());
@@ -103,6 +127,8 @@ pub fn fill(m: &mut HashMap<String, String>) {
     m.insert("ran.section_aliases".into(), "Run aliases:".into());
 
     m.insert("ran.section_deps".into(), "Dependencies:".into());
+
+    m.insert("ran.section_env".into(), "ตัวแปรสภาพแวดล้อม:".into());
 
     m.insert("ran.section_note".into(), "หมายเหตุ:".into());
 

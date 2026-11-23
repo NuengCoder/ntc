@@ -3,7 +3,7 @@ use std::collections::HashMap;
 pub fn fill(m: &mut HashMap<String, String>) {
     m.insert(
         "help.pipe.title".into(),
-        "ไพป์และการเปลี่ยนเส้นทาง (PIPES & REDIRECTION):".into(),
+        "ไพป์และการเปลี่ยนเส้นทาง (PIPES & REDIRECTION) [NON-COMMAND]:".into(),
     );
 
     m.insert(
@@ -22,6 +22,13 @@ pub fn fill(m: &mut HashMap<String, String>) {
     );
 
     m.insert(
+        "help.pipe.seq".into(),
+        "a ; b ## รัน b แม้ a จะล้มเหลว (ต้องมีช่องว่างสองข้าง)".into(),
+    );
+
+    m.insert("help.pipe.in".into(), "cmd < file ## อ่านอินพุตจากไฟล์".into());
+
+    m.insert(
         "help.pipe.out".into(),
         "cmd > file ## เขียนเอาต์พุตลงไฟล์ (เขียนทับ)".into(),
     );
@@ -30,8 +37,6 @@ pub fn fill(m: &mut HashMap<String, String>) {
         "help.pipe.append".into(),
         "cmd >> file ## ต่อท้ายเอาต์พุตลงไฟล์".into(),
     );
-
-    m.insert("help.pipe.in".into(), "cmd < file ## อ่านอินพุตจากไฟล์".into());
 
     m.insert(
         "help.pipe.heredoc".into(),
@@ -44,38 +49,8 @@ pub fn fill(m: &mut HashMap<String, String>) {
     );
 
     m.insert(
-        "help.pipe.head".into(),
-        "head [N] [file] ## แสดง N บรรทัดแรก (ค่าเริ่มต้น 10)".into(),
-    );
-
-    m.insert(
-        "help.pipe.tail".into(),
-        "tail [N] [file] ## แสดง N บรรทัดสุดท้าย (ค่าเริ่มต้น 10)".into(),
-    );
-
-    m.insert(
-        "help.pipe.betw".into(),
-        "betw A:B [file] ## แสดงบรรทัดที่ A ถึง B (เริ่มที่ 1 รวมปลาย)".into(),
-    );
-
-    m.insert(
-        "help.pipe.sort".into(),
-        "sort [-r] [-n] [-u] [-f] [file] ## เรียงบรรทัด (ย้อนกลับ/ตัวเลข/ไม่ซ้ำ/ไม่สนตัวพิมพ์)".into(),
-    );
-
-    m.insert(
-        "help.pipe.rev".into(),
-        "rev [file] ## กลับตัวอักษรของแต่ละบรรทัด".into(),
-    );
-
-    m.insert(
-        "help.pipe.trim".into(),
-        "trim <pattern> [ข้อความ] ## ลบทุกครั้งที่พบ <pattern> (จากข้อความหรืออินพุตไปป์)".into(),
-    );
-
-    m.insert(
         "help.pipe.filters".into(),
-        "cmd | head|tail|betw|gs|sort|rev|count|trim|encode|qur|clip ## ตัวกรองไปป์ (เติมแฟล็กได้ด้วย)"
+        "cmd | <filter> ## ตัวกรองไปป์: head, tail, betw, gs, sort, rev, count, trim, encode, qur, clip (เติมแฟล็กได้ด้วย)"
             .into(),
     );
 

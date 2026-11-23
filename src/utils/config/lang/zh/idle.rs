@@ -190,7 +190,7 @@ pub fn fill(m: &mut HashMap<String, String>) {
 
     m.insert(
         "idle.count".into(),
-        "试试：view task.txt | count ntc   （统计管道文本中的匹配数）· trim 删除".into(),
+        "试试：view task.txt | count -l   （统计管道文本的行数）· trim 删除".into(),
     );
 
     m.insert(
@@ -370,7 +370,7 @@ pub fn fill(m: &mut HashMap<String, String>) {
 
     m.insert(
         "idle.say".into(),
-        "试试：say hello --loop 3   （打印文本；print 同义）".into(),
+        "试试：say hello --loop 3   （打印文本；nprintf 用于格式化）".into(),
     );
 
     m.insert(

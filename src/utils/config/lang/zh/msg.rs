@@ -250,6 +250,29 @@ pub fn fill(m: &mut HashMap<String, String>) {
         "Serve 象棋服务：".into(),
     );
 
+    m.insert("msg.showcg.label_serve_git".into(), "Serve git：".into());
+
+    m.insert("msg.showcg.label_serve_arc".into(), "Serve 归档：".into());
+
+    m.insert("msg.showcg.label_serve_theme".into(), "Serve 主题：".into());
+
+    m.insert("msg.showcg.label_serve_ndb".into(), "Serve 数据库：".into());
+
+    m.insert(
+        "msg.showcg.label_serve_backup".into(),
+        "Serve 备份：".into(),
+    );
+
+    m.insert(
+        "msg.showcg.label_serve_fake".into(),
+        "Serve 假数据：".into(),
+    );
+
+    m.insert(
+        "msg.showcg.label_serve_config".into(),
+        "Serve 配置：".into(),
+    );
+
     m.insert("msg.showcg.title".into(), "当前配置".into());
 
     m.insert("msg.size.bytes_label".into(), "字节：".into());
@@ -379,5 +402,54 @@ pub fn fill(m: &mut HashMap<String, String>) {
     m.insert(
         "msg.setIdle.error".into(),
         "未知值：{}（用 ON 或 OFF）".into(),
+    );
+
+    m.insert(
+        "msg.setFV.error".into(),
+        "用法：config file_view ON|OFF".into(),
+    );
+    m.insert("msg.setFV.off".into(), "文件视图已禁用。".into());
+    m.insert(
+        "msg.setFV.on".into(),
+        "文件视图已启用。切换目录后会显示文件。".into(),
+    );
+    m.insert("msg.setFV.status".into(), "文件视图：{}".into());
+    m.insert(
+        "msg.setSZ.error".into(),
+        "大小设置无效。用法：config size all|file|dir ON|OFF".into(),
+    );
+    m.insert("msg.setSZ.off".into(), "已禁用 {} 的自动大小计算。".into());
+    m.insert("msg.setSZ.on".into(), "已启用 {} 的自动大小计算。".into());
+    m.insert(
+        "msg.setSZ.slow_warn".into(),
+        "警告：自动大小计算使用 --care；每次 cd/teleport 都可能明显变慢。".into(),
+    );
+    m.insert(
+        "msg.setSZ.status".into(),
+        "自动大小：文件 {}，目录 {}".into(),
+    );
+    m.insert("msg.setSZ.target_status".into(), "{} 的自动大小：{}".into());
+    m.insert(
+        "msg.setSZ.usage".into(),
+        "用法：config size all|file|dir ON|OFF".into(),
+    );
+    m.insert(
+        "msg.setTD.error".into(),
+        "用法：config todo format <txt|md|json|toml|yaml|html>".into(),
+    );
+    m.insert(
+        "msg.setTD.set".into(),
+        "待办格式已设为 {}（文件：future_todo.{}）。".into(),
+    );
+    m.insert("msg.setTD.status".into(), "待办格式：{}".into());
+    m.insert(
+        "msg.showcg.auto_size_value".into(),
+        "文件 {}，目录 {}".into(),
+    );
+    m.insert("msg.showcg.label_auto_size".into(), "自动大小：".into());
+    m.insert("msg.showcg.label_file_view".into(), "文件视图：".into());
+    m.insert(
+        "msg.showcg.label_serve_mdview".into(),
+        "Serve Markdown 编辑器：".into(),
     );
 }

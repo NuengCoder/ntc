@@ -1,0 +1,310 @@
+#!/usr/bin/env bash
+#
+# ntc installer — downloads the matching release binary for this machine.
+#
+# Usage:
+#   curl -fsSL https://raw.githubusercontent.com/NuengCoder/ntc/main/install | bash
+#   wget -qO- https://raw.githubusercontent.com/NuengCoder/ntc/main/install | bash
+#   bash install
+#
+# Environment:
+#   NTC_VERSION      install a specific version (default: latest release)
+#   NTC_INSTALL_DIR  install location (default: ~/.local/bin, /usr/local/bin as root,
+#                    $PREFIX/bin on Termux)
+#   NTC_MIN_GLIBC    minimum glibc version (default: 2.39)
+#   NTC_SKIP_DEPS    set to 1 to skip the runtime dependency checks
+#
+# This script never uses sudo and never modifies shell profiles.
+
+set -euo pipefail
+
+REPO="NuengCoder/ntc"
+VERSION="${NTC_VERSION:-}"
+INSTALL_DIR="${NTC_INSTALL_DIR:-}"
+MIN_GLIBC="${NTC_MIN_GLIBC:-2.39}"
+SKIP_DEPS="${NTC_SKIP_DEPS:-0}"
+
+info() { printf '\033[36m==>\033[0m %s\n' "$*"; }
+warn() { printf '\033[33mwarning:\033[0m %s\n' "$*" >&2; }
+die() {
+    printf '\033[31merror:\033[0m %s\n' "$*" >&2
+    exit 1
+}
+
+have() { command -v "$1" >/dev/null 2>&1; }
+
+is_termux() {
+    [ -n "${PREFIX:-}" ] || return 1
+    case "$PREFIX" in
+        *com.termux*) return 0 ;;
+    esac
+    return 1
+}
+
+# $1 >= $2, comparing dotted numeric versions without external sort -V.
+version_ge() {
+    awk -v a="$1" -v b="$2" 'BEGIN {
+        n = split(a, x, "."); m = split(b, y, ".")
+        c = (n > m ? n : m)
+        for (i = 1; i <= c; i++) {
+            ai = (i <= n ? x[i] + 0 : 0)
+            bi = (i <= m ? y[i] + 0 : 0)
+            if (ai > bi) exit 0
+            if (ai < bi) exit 1
+        }
+        exit 0
+    }'
+}
+
+detect_latest_version() {
+    [ -n "$VERSION" ] && return 0
+    local api="https://api.github.com/repos/${REPO}/releases/latest"
+    local json=""
+    if have curl; then
+        json="$(curl -fsSL --connect-timeout 15 "$api" 2>/dev/null || true)"
+    elif have wget; then
+        json="$(wget -qO- --timeout=15 "$api" 2>/dev/null || true)"
+    fi
+    VERSION="$(printf '%s' "$json" |
+        sed -n 's/.*"tag_name"[[:space:]]*:[[:space:]]*"v\{0,1\}\([^"]*\)".*/\1/p' |
+        head -n1)"
+    if [ -z "$VERSION" ]; then
+        # Offline fallback: the version this script ships with.
+        VERSION="2.4.9"
+        warn "Could not read the latest release; trying v${VERSION}."
+    fi
+}
+
+download() {
+    local url="$1" out="$2"
+    if have curl; then
+        curl -fL --retry 3 --connect-timeout 15 -o "$out" "$url"
+    elif have wget; then
+        wget -q --show-progress -O "$out" "$url"
+    else
+        die "curl or wget is required to download ntc."
+    fi
+}
+
+usage() {
+    cat <<'EOF'
+ntc installer
+
+  bash install [options]
+
+Options:
+  -h, --help             Show this help
+      --version <ver>    Install a specific version (e.g. 2.4.9)
+      --dir <path>       Install into this directory
+EOF
+}
+
+while [ $# -gt 0 ]; do
+    case "$1" in
+        -h | --help)
+            usage
+            exit 0
+            ;;
+        --version)
+            [ $# -ge 2 ] || die "--version needs a value"
+            VERSION="$2"
+            shift 2
+            ;;
+        --dir)
+            [ $# -ge 2 ] || die "--dir needs a value"
+            INSTALL_DIR="$2"
+            shift 2
+            ;;
+        *) die "Unknown option: $1 (try --help)" ;;
+    esac
+done
+
+OS="$(uname -s 2>/dev/null || echo unknown)"
+ARCH="$(uname -m 2>/dev/null || echo unknown)"
+
+detect_latest_version
+VERSION="${VERSION#v}"
+
+case "$OS" in
+    MINGW* | MSYS* | CYGWIN* | Windows_NT)
+        cat <<EOF
+ntc on Windows is installed with the Windows installer:
+
+  https://github.com/${REPO}/releases/download/v${VERSION}/ntc-installer-${VERSION}.exe
+
+Or install from a terminal with npm:
+
+  npm install -g @nuengcoder/ntc
+EOF
+        exit 0
+        ;;
+esac
+
+asset_name() {
+    case "$OS" in
+        Linux)
+            if is_termux; then
+                case "$ARCH" in
+                    aarch64 | arm64) echo "ntc-v${VERSION}-aarch64-linux-android.tar.gz" ;;
+                    *) return 1 ;;
+                esac
+            else
+                case "$ARCH" in
+                    x86_64 | amd64) echo "ntc-v${VERSION}-linux-x86_64.tar.gz" ;;
+                    aarch64 | arm64) echo "ntc-v${VERSION}-linux-aarch64.tar.gz" ;;
+                    *) return 1 ;;
+                esac
+            fi
+            ;;
+        Darwin)
+            case "$ARCH" in
+                x86_64) echo "ntc-v${VERSION}-macos-x86_64.tar.gz" ;;
+                arm64 | aarch64) echo "ntc-v${VERSION}-macos-aarch64.tar.gz" ;;
+                *) return 1 ;;
+            esac
+            ;;
+        *) return 1 ;;
+    esac
+}
+
+asset="$(asset_name || true)"
+if [ -z "$asset" ]; then
+    if [ "$OS" = "Linux" ] && is_termux; then
+        die "Termux on ${ARCH} is not supported. ntc provides a Termux arm64 build only."
+    fi
+    die "No prebuilt ntc binary for ${OS}/${ARCH}. Install via npm instead: npm install -g @nuengcoder/ntc"
+fi
+
+check_glibc() {
+    [ "$OS" = "Linux" ] || return 0
+    is_termux && return 0
+
+    local glibc=""
+    if have getconf; then
+        glibc="$(getconf GNU_LIBC_VERSION 2>/dev/null | awk '{print $2}' || true)"
+    fi
+    if [ -z "$glibc" ] && have ldd; then
+        glibc="$(ldd --version 2>/dev/null | awk 'NR==1 {print $NF}' || true)"
+    fi
+    if [ -z "$glibc" ]; then
+        warn "glibc not detected (musl or non-glibc system)."
+        warn "If ntc fails to start, install via npm: npm install -g @nuengcoder/ntc"
+        return 0
+    fi
+    if ! version_ge "$glibc" "$MIN_GLIBC"; then
+        die "glibc ${glibc} is too old; this ntc release needs >= ${MIN_GLIBC}.
+       Update your distro, or install via npm: npm install -g @nuengcoder/ntc"
+    fi
+    info "glibc ${glibc} OK (>= ${MIN_GLIBC})"
+}
+
+runtime_hint() {
+    if is_termux; then
+        echo "  pkg install pulseaudio"
+    elif have apt-get; then
+        echo "  sudo apt-get install libasound2 libbz2-1.0 liblzma5"
+    elif have dnf; then
+        echo "  sudo dnf install alsa-lib bzip2-libs xz-libs"
+    elif have yum; then
+        echo "  sudo yum install alsa-lib bzip2-libs xz-libs"
+    elif have pacman; then
+        echo "  sudo pacman -S alsa-lib bzip2 xz"
+    elif have apk; then
+        echo "  sudo apk add alsa-lib bzip2 xz"
+    else
+        echo "  Install ALSA (libasound.so.2), bzip2 (libbz2.so.1.0) and xz (liblzma.so.5) with your package manager."
+    fi
+}
+
+runtime_lib_present() {
+    local lib="$1"
+    if have ldconfig && ldconfig -p 2>/dev/null | grep -qF "$lib"; then
+        return 0
+    fi
+    ls /usr/lib/*/"$lib" /usr/lib/"$lib" /lib/*/"$lib" /lib/"$lib" >/dev/null 2>&1
+}
+
+check_runtime_deps() {
+    [ "$SKIP_DEPS" = "1" ] && return 0
+    have tar || die "tar is required to unpack ntc."
+    [ "$OS" = "Linux" ] || return 0
+    is_termux && return 0
+
+    local missing=""
+    local lib
+    for lib in libasound.so.2 libbz2.so.1.0 liblzma.so.5; do
+        if ! runtime_lib_present "$lib"; then
+            missing="${missing} ${lib}"
+        fi
+    done
+    if [ -n "$missing" ]; then
+        printf '\033[31merror:\033[0m missing runtime libraries:%s\n' "$missing" >&2
+        echo "  ntc uses ALSA for audio, bzip2 for .bz2 archives and xz for .xz archives." >&2
+        runtime_hint >&2
+        echo "  Then re-run this installer. To skip this check: NTC_SKIP_DEPS=1 bash install" >&2
+        exit 1
+    fi
+    info "ALSA, bzip2 and xz runtime libraries found"
+}
+
+install_dir() {
+    if [ -n "$INSTALL_DIR" ]; then
+        printf '%s\n' "$INSTALL_DIR"
+    elif is_termux; then
+        printf '%s/bin\n' "${PREFIX:-/data/data/com.termux/files/usr}"
+    elif [ "$(id -u 2>/dev/null || echo 1)" = "0" ]; then
+        printf '/usr/local/bin\n'
+    else
+        printf '%s/.local/bin\n' "$HOME"
+    fi
+}
+
+check_glibc
+check_runtime_deps
+
+DEST="$(install_dir)"
+TMP="$(mktemp -d "${TMPDIR:-/tmp}/ntc-install.XXXXXX")"
+trap 'rm -rf "$TMP"' EXIT
+
+URL="https://github.com/${REPO}/releases/download/v${VERSION}/${asset}"
+info "Downloading ${asset} (v${VERSION})"
+if ! download "$URL" "$TMP/$asset"; then
+    die "Download failed: ${URL}
+       The ${OS}/${ARCH} asset may not be published for v${VERSION}.
+       Try: npm install -g @nuengcoder/ntc"
+fi
+
+case "$asset" in
+    *.tar.gz) tar -xzf "$TMP/$asset" -C "$TMP" ;;
+    *) die "Unsupported archive: ${asset}" ;;
+esac
+
+BIN="$(find "$TMP" -maxdepth 3 -type f -name ntc 2>/dev/null | head -n1 || true)"
+[ -n "$BIN" ] || die "The archive did not contain an ntc binary."
+
+mkdir -p "$DEST" 2>/dev/null || die "Cannot create ${DEST}. Set NTC_INSTALL_DIR to a writable directory."
+if [ -w "$DEST" ]; then
+    if have install; then
+        install -m 755 "$BIN" "$DEST/ntc"
+    else
+        cp "$BIN" "$DEST/ntc" && chmod 755 "$DEST/ntc"
+    fi
+else
+    die "${DEST} is not writable. Run with NTC_INSTALL_DIR=\"\$HOME/.local/bin\" bash install"
+fi
+
+info "Installed to ${DEST}/ntc"
+
+case ":${PATH}:" in
+    *":${DEST}:"*) ;;
+    *)
+        warn "${DEST} is not in your PATH. Add this to your shell profile:"
+        printf '  export PATH="%s:$PATH"\n' "$DEST"
+        ;;
+esac
+
+if "${DEST}/ntc" --version >/dev/null 2>&1; then
+    info "ntc $("${DEST}/ntc" --version 2>/dev/null | head -n1) ready. Run 'ntc' to start."
+else
+    warn "ntc was installed but did not start cleanly. Check your dependency setup above."
+fi

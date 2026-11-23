@@ -35,6 +35,11 @@ pub fn fill(m: &mut HashMap<String, String>) {
     );
 
     m.insert(
+        "ran.desc_env".into(),
+        " [env] entries become environment variables for every command, and commands may use them as $(NAME).".into(),
+    );
+
+    m.insert(
         "ran.desc_note".into(),
         " Calling 'ran' from within a NTCRANFILE target command is not allowed.".into(),
     );
@@ -58,6 +63,20 @@ pub fn fill(m: &mut HashMap<String, String>) {
     m.insert("ran.error_prefix".into(), "ran: {}".into());
 
     m.insert(
+        "ran.dry_run.title".into(),
+        "Dry run \u{2014} nothing will be executed.".into(),
+    );
+
+    m.insert("ran.dry_run.header".into(), "{} in {}".into());
+
+    m.insert("ran.dry_run.env".into(), "environment: {}".into());
+
+    m.insert(
+        "ran.dry_run.summary".into(),
+        "{} target(s), in order: {}".into(),
+    );
+
+    m.insert(
         "ran.exec_failed".into(),
         "Failed to execute command: {}".into(),
     );
@@ -77,6 +96,11 @@ pub fn fill(m: &mut HashMap<String, String>) {
     m.insert(
         "ran.help_deinit_fmt".into(),
         " ran deinit Remove {} from the current directory".into(),
+    );
+
+    m.insert(
+        "ran.help_dry_run".into(),
+        " ran --dry-run [target] Show what would run without executing it".into(),
     );
 
     m.insert("ran.help_help".into(), " ran help Show this help".into());
@@ -117,6 +141,8 @@ pub fn fill(m: &mut HashMap<String, String>) {
     m.insert("ran.section_aliases".into(), "Run aliases:".into());
 
     m.insert("ran.section_deps".into(), "Dependencies:".into());
+
+    m.insert("ran.section_env".into(), "Environment:".into());
 
     m.insert("ran.section_note".into(), "Note:".into());
 

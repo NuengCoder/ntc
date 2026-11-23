@@ -5,7 +5,7 @@ pub fn fill(m: &mut HashMap<String, String>) {
 
     m.insert(
         "cmd.tl.dir_usage".into(),
-        "การใช้งาน: tl dir <เส้นทาง>".into(),
+        "การใช้งาน: tl dir [เส้นทาง]".into(),
     );
 
     m.insert(
@@ -27,7 +27,7 @@ pub fn fill(m: &mut HashMap<String, String>) {
 
     m.insert(
         "cmd.tl.help_dir".into(),
-        "  tl dir <path>           แสดงนามสกุลที่รองรับและจำนวนบรรทัดรวมในไดเรกทอรี".into(),
+        "  tl dir [path]           แสดงนามสกุลที่รองรับและจำนวนบรรทัดรวมในไดเรกทอรี (ค่าเริ่มต้น: ไดเรกทอรีปัจจุบัน)".into(),
     );
 
     m.insert(

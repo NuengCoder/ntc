@@ -245,6 +245,22 @@ pub fn fill(m: &mut HashMap<String, String>) {
     );
 
     m.insert(
+        "cmd.serve.services_row_git".into(),
+        "  git           Git GUI: status, diff, stage, commit, branches, tags, stash, push/pull"
+            .into(),
+    );
+
+    m.insert(
+        "cmd.serve.services_row_arc".into(),
+        "  arc           Archive GUI: create, browse/extract archives".into(),
+    );
+
+    m.insert(
+        "cmd.serve.services_row_theme".into(),
+        "  theme         Theme GUI: edit, preview, save and apply themes".into(),
+    );
+
+    m.insert(
         "cmd.serve.services_row_config".into(),
         "  config        Show/set per-service defaults (port, bind)".into(),
     );
@@ -331,5 +347,376 @@ pub fn fill(m: &mut HashMap<String, String>) {
     m.insert(
         "cmd.serve.example_chess_port".into(),
         "  serve chess --port 9000  Chess on port 9000".into(),
+    );
+
+    m.insert(
+        "cmd.serve.help_online".into(),
+        "  --online              Enable online lobby + rooms (guests, quick match, coach rooms)"
+            .into(),
+    );
+
+    m.insert(
+        "cmd.serve.example_chess_online".into(),
+        "  serve chess --online -b 0.0.0.0 --share  Online chess over LAN with QR".into(),
+    );
+
+    m.insert(
+        "cmd.serve.git_serving".into(),
+        "Git server on {} ({})".into(),
+    );
+
+    m.insert("cmd.serve.git_title".into(), "Git (browser UI)".into());
+
+    m.insert(
+        "cmd.serve.git_usage".into(),
+        "serve git [dir] [--port 8000] [--bind addr]".into(),
+    );
+
+    m.insert(
+        "cmd.serve.git_help_port".into(),
+        "  --port, -p <port>     Port to listen on (default: {})".into(),
+    );
+
+    m.insert(
+        "cmd.serve.git_help_bind".into(),
+        "  --bind, -b <addr>     Bind address (default: {})".into(),
+    );
+
+    m.insert(
+        "cmd.serve.git_example".into(),
+        "  serve git --port 9000  Serve the current repository on 9000".into(),
+    );
+
+    m.insert(
+        "cmd.serve.git_no_repo".into(),
+        "Not a git repository: {}".into(),
+    );
+
+    m.insert(
+        "cmd.serve.git_no_git".into(),
+        "git is not installed or not on PATH".into(),
+    );
+
+    m.insert(
+        "cmd.serve.git_local_warning".into(),
+        "Bound to loopback: LAN devices cannot reach this server (use --bind 0.0.0.0).".into(),
+    );
+
+    m.insert(
+        "cmd.serve.arc_serving".into(),
+        "Archive server on {} ({})".into(),
+    );
+
+    m.insert("cmd.serve.arc_title".into(), "Archive (browser UI)".into());
+
+    m.insert(
+        "cmd.serve.arc_usage".into(),
+        "serve arc [dir] [--port 8000] [--bind addr]".into(),
+    );
+
+    m.insert(
+        "cmd.serve.arc_help_port".into(),
+        "  --port, -p <port>     Port to listen on (default: {})".into(),
+    );
+
+    m.insert(
+        "cmd.serve.arc_help_bind".into(),
+        "  --bind, -b <addr>     Bind address (default: {})".into(),
+    );
+
+    m.insert(
+        "cmd.serve.arc_example".into(),
+        "  serve arc --port 9000  Serve the current directory on 9000".into(),
+    );
+
+    m.insert(
+        "cmd.serve.arc_no_dir".into(),
+        "Directory '{}' not found".into(),
+    );
+
+    m.insert(
+        "cmd.serve.arc_local_warning".into(),
+        "Bound to loopback: LAN devices cannot reach this server (use --bind 0.0.0.0).".into(),
+    );
+
+    m.insert("cmd.serve.theme_title".into(), "Theme (browser UI)".into());
+
+    m.insert(
+        "cmd.serve.theme_usage".into(),
+        "serve theme [--port 8000] [--bind addr]".into(),
+    );
+
+    m.insert(
+        "cmd.serve.theme_help_port".into(),
+        "  --port, -p <port>     Port to listen on (default: {})".into(),
+    );
+
+    m.insert(
+        "cmd.serve.theme_help_bind".into(),
+        "  --bind, -b <addr>     Bind address (default: {})".into(),
+    );
+
+    m.insert(
+        "cmd.serve.theme_example".into(),
+        "  serve theme --port 9000  Edit themes on port 9000".into(),
+    );
+
+    m.insert(
+        "cmd.serve.theme_serving".into(),
+        "Theme server on {} ({})".into(),
+    );
+
+    m.insert(
+        "cmd.serve.theme_local_warning".into(),
+        "Bound to loopback: LAN devices cannot reach this server (use --bind 0.0.0.0).".into(),
+    );
+
+    m.insert(
+        "cmd.serve.services_row_ndb".into(),
+        "  ndb           SQLite browser: pick a database in the folder, browse it, optional --write".into(),
+    );
+
+    m.insert("cmd.serve.ndb_title".into(), "Database browser".into());
+
+    m.insert(
+        "cmd.serve.ndb_usage".into(),
+        "serve ndb [--port 8000] [--bind addr] [--auth user:pass] [--write]".into(),
+    );
+
+    m.insert(
+        "cmd.serve.ndb_help_port".into(),
+        "  --port, -p <port>     Port to listen on (default: {})".into(),
+    );
+
+    m.insert(
+        "cmd.serve.ndb_help_bind".into(),
+        "  --bind, -b <addr>     Bind address (default: {})".into(),
+    );
+
+    m.insert(
+        "cmd.serve.ndb_help_write".into(),
+        "  --write               Allow INSERT/UPDATE/DELETE/REPLACE; a <name>.bak.<stamp> copy is made before the first write".into(),
+    );
+
+    m.insert(
+        "cmd.serve.ndb_serving".into(),
+        "Serving the databases in {} on {}".into(),
+    );
+
+    m.insert(
+        "cmd.serve.ndb_write_on".into(),
+        "Writes enabled: one INSERT, UPDATE, DELETE or REPLACE at a time; a <name>.bak.<stamp> backup lands next to the database before its first write.".into(),
+    );
+
+    m.insert(
+        "cmd.serve.ndb_readonly".into(),
+        "Read-only: SELECT, PRAGMA, EXPLAIN, WITH, VALUES and TABLE only; start with --write to allow row-level writes.".into(),
+    );
+
+    m.insert(
+        "cmd.serve.ndb_local_warning".into(),
+        "Loopback only: LAN devices cannot reach this server (use --bind 0.0.0.0 plus --auth to share).".into(),
+    );
+
+    m.insert(
+        "cmd.serve.ndb_no_db".into(),
+        "No readable SQLite database found in {} - copy a .db, .sqlite or .sqlite3 file there"
+            .into(),
+    );
+
+    m.insert(
+        "cmd.serve.ndb_flags_only".into(),
+        "'{}' is not an option: `serve ndb` takes flags only - pick the database in the page"
+            .into(),
+    );
+
+    m.insert(
+        "cmd.serve.ndb_requires_auth".into(),
+        "Refusing to expose the database on {} without --auth <user:pass>".into(),
+    );
+
+    m.insert(
+        "cmd.serve.ndb_example".into(),
+        "  serve ndb --port 9000  List this folder's databases on port 9000".into(),
+    );
+
+    m.insert(
+        "cmd.serve.services_row_fake".into(),
+        "  fake          Fake-data GUI: pick types or a saved group, preview rows".into(),
+    );
+
+    m.insert(
+        "cmd.serve.services_row_config".into(),
+        "  config        Configuration GUI: every setting and serve default in the browser".into(),
+    );
+
+    m.insert(
+        "cmd.serve.services_example_fake".into(),
+        "  serve fake --port 9000".into(),
+    );
+
+    m.insert(
+        "cmd.serve.fake_title".into(),
+        "Fake data (browser UI)".into(),
+    );
+
+    m.insert(
+        "cmd.serve.fake_usage".into(),
+        "serve fake [--port 8000] [--bind addr]".into(),
+    );
+
+    m.insert(
+        "cmd.serve.fake_help_port".into(),
+        "  --port, -p <port>     Port to listen on (default: {})".into(),
+    );
+
+    m.insert(
+        "cmd.serve.fake_help_bind".into(),
+        "  --bind, -b <addr>     Bind address (default: {})".into(),
+    );
+
+    m.insert(
+        "cmd.serve.fake_example".into(),
+        "  serve fake --port 9000  Open the fake-data UI on port 9000".into(),
+    );
+
+    m.insert(
+        "cmd.serve.fake_serving".into(),
+        "Fake-data server on {}".into(),
+    );
+
+    m.insert(
+        "cmd.serve.fake_local_warning".into(),
+        "Bound to loopback: LAN devices cannot reach this server (use --bind 0.0.0.0).".into(),
+    );
+
+    m.insert(
+        "cmd.serve.config_title".into(),
+        "NTC configuration (browser UI)".into(),
+    );
+
+    m.insert(
+        "cmd.serve.config_usage".into(),
+        "serve config [--port 8000] [--bind addr]".into(),
+    );
+
+    m.insert(
+        "cmd.serve.config_help_port".into(),
+        "  --port, -p <port>     Port to listen on (default: {})".into(),
+    );
+
+    m.insert(
+        "cmd.serve.config_help_bind".into(),
+        "  --bind, -b <addr>     Bind address (default: {})".into(),
+    );
+
+    m.insert(
+        "cmd.serve.config_example".into(),
+        "  serve config --port 9000  Open the configuration UI on port 9000".into(),
+    );
+
+    m.insert(
+        "cmd.serve.config_serving".into(),
+        "Configuration server on {}".into(),
+    );
+
+    m.insert(
+        "cmd.serve.config_local_warning".into(),
+        "Bound to loopback: LAN devices cannot reach this server (use --bind 0.0.0.0).".into(),
+    );
+
+    m.insert(
+        "cmd.serve.services_row_backup".into(),
+        "  backup        Backup GUI: create, diff, restore, undo, clear this folder".into(),
+    );
+
+    m.insert(
+        "cmd.serve.services_example_backup".into(),
+        "  serve backup --port 9000".into(),
+    );
+
+    m.insert(
+        "cmd.serve.backup_title".into(),
+        "Backup (browser UI)".into(),
+    );
+
+    m.insert(
+        "cmd.serve.backup_usage".into(),
+        "serve backup [path] [--port 8000] [--bind addr]".into(),
+    );
+
+    m.insert(
+        "cmd.serve.backup_help_port".into(),
+        "  --port, -p <port>     Port to listen on (default: {})".into(),
+    );
+
+    m.insert(
+        "cmd.serve.backup_help_bind".into(),
+        "  --bind, -b <addr>     Bind address (default: {})".into(),
+    );
+
+    m.insert(
+        "cmd.serve.backup_example".into(),
+        "  serve backup --port 9000  Manage this folder's backups on port 9000".into(),
+    );
+
+    m.insert(
+        "cmd.serve.backup_serving".into(),
+        "Backup server on {} ({})".into(),
+    );
+
+    m.insert(
+        "cmd.serve.backup_local_warning".into(),
+        "Bound to loopback: LAN devices cannot reach this server (use --bind 0.0.0.0).".into(),
+    );
+
+    m.insert(
+        "cmd.serve.backup_no_dir".into(),
+        "Directory '{}' not found".into(),
+    );
+
+    m.insert(
+        "cmd.serve.services_row_mdview".into(),
+        "  mdview        Markdown editor with a live preview (writes .md files)".into(),
+    );
+
+    m.insert(
+        "cmd.serve.mdview_title".into(),
+        "Markdown editor (browser UI)".into(),
+    );
+
+    m.insert(
+        "cmd.serve.mdview_usage".into(),
+        "serve mdview [dir] [--port 8000] [--bind addr]".into(),
+    );
+
+    m.insert(
+        "cmd.serve.mdview_help_port".into(),
+        "  --port, -p <port>     Port to listen on (default: {})".into(),
+    );
+
+    m.insert(
+        "cmd.serve.mdview_help_bind".into(),
+        "  --bind, -b <addr>     Bind address (default: {})".into(),
+    );
+
+    m.insert(
+        "cmd.serve.mdview_example".into(),
+        "  serve mdview docs --port 9000  Edit the markdown under docs/ on port 9000".into(),
+    );
+
+    m.insert(
+        "cmd.serve.mdview_serving".into(),
+        "Markdown editor for {} on {}".into(),
+    );
+
+    m.insert(
+        "cmd.serve.mdview_no_dir".into(),
+        "Not a folder: {}".into(),
+    );
+
+    m.insert(
+        "cmd.serve.mdview_local_warning".into(),
+        "Bound to loopback: only this machine can edit these files (use --bind 0.0.0.0 to share)".into(),
     );
 }

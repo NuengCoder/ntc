@@ -1,8 +1,8 @@
 <p align="center">
-  <img src="https://img.shields.io/badge/version-2.4.8-blue.svg" alt="Version 2.4.8"/>
+  <img src="https://img.shields.io/badge/version-2.4.9-blue.svg" alt="Version 2.4.9"/>
 </p>
 
-<h1 align="center">ntc 2.4.8</h1>
+<h1 align="center">ntc 2.4.9</h1>
 
 <p align="center">
   <b>Navigate · Toolkit · Center</b><br>
@@ -10,7 +10,7 @@
 </p>
 
 <p align="center">
-  Windows · Linux · macOS · Android (via Termux)
+  Windows · Linux · macOS · Android (Termux arm64)
 </p>
 
 <p align="center">
@@ -39,6 +39,8 @@ A multi CLI tool gathered in one CLI tool, with nice navigation commands.
 | `ran` | Task runner |
 | `nfe` | File explorer |
 | `ne` | Built-in editor |
+| `view` | Directory tree with sizes, filters and previews |
+| `size` | File and folder sizes |
 | `sys` | System monitor |
 | `spec` | System specifications and disk usage |
 | `gosc` | Continuous navigation |
@@ -55,10 +57,54 @@ A multi CLI tool gathered in one CLI tool, with nice navigation commands.
 
 ## What's new
 
-- `spec` now shows each disk as `used/total percentage free`, for example
-  `200 GB/300 GB 67% 100 GB free` — the `free` label follows your language.
-- `spec` lists one row per GPU and falls back to the Android SoC name when the
-  CPU brand is not exposed by the system.
+- `config env NAME=value` is now accepted as the same thing as
+  `config env NAME value`.
+
+---
+
+## Screenshots
+
+<p align="center">
+  <img src="assets/before_tp.png" alt="tp before" width="32%">
+  <img src="assets/after_tp.png" alt="tp after" width="32%">
+  <img src="assets/ral_info.png" alt="ral info" width="32%">
+</p>
+
+<p align="center">
+  <img src="assets/after_ral.png" alt="ral after" width="32%">
+  <img src="assets/ran_info.png" alt="ran info" width="32%">
+  <img src="assets/after_ran.png" alt="ran after" width="32%">
+</p>
+
+<p align="center">
+  <img src="assets/nfe.png" alt="nfe file explorer" width="32%">
+  <img src="assets/ne.png" alt="ne editor" width="32%">
+  <img src="assets/sys.png" alt="sys system monitor" width="32%">
+</p>
+
+<p align="center">
+  <img src="assets/spec.png" alt="spec specs and disks" width="32%">
+  <img src="assets/view_and_size.png" alt="view --size" width="32%">
+  <img src="assets/view.png" alt="view directory tree" width="32%">
+</p>
+
+<p align="center">
+  <img src="assets/serve.png" alt="serve services" width="32%">
+  <img src="assets/serve_files.png" alt="serve files" width="32%">
+  <img src="assets/serve_httpserver.png" alt="serve files HTTP server" width="32%">
+</p>
+
+<p align="center">
+  <img src="assets/serve_chess.png" alt="serve chess" width="32%">
+  <img src="assets/serve_git.png" alt="serve git" width="32%">
+  <img src="assets/serve_arc.png" alt="serve arc" width="32%">
+</p>
+
+<p align="center">
+  <img src="assets/serve_theme.png" alt="serve theme" width="32%">
+  <img src="assets/serve_fake.png" alt="serve fake" width="32%">
+  <img src="assets/serve_backup.png" alt="serve backup" width="32%">
+</p>
 
 ---
 
@@ -77,7 +123,7 @@ pip install ntc-cli
 ```
 
 Note: pip wheels are only published for the four platforms above.
-Android/Termux and Windows ARM64 are not on PyPI — use npm or the
+Android/Termux arm64 and Windows ARM64 are not on PyPI — use npm or the
 GitHub Release binaries for those.
 
 ### Other channels
@@ -100,7 +146,7 @@ GitHub Release binaries for those.
 | Linux ARM64 (glibc) | yes | no | yes | pip wheel not published yet |
 | macOS x64 | yes | yes | yes | `macosx_*_x86_64` |
 | macOS ARM64 | yes | yes | yes | `macosx_*_arm64` |
-| Android / Termux | yes | no | yes | Termux asset via npm fallback |
+| Android / Termux arm64 | yes | no | yes | Termux arm64 asset via npm fallback |
 
 Legend: yes = supported · no = not available
 

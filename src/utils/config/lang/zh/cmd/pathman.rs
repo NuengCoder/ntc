@@ -13,11 +13,11 @@ pub fn fill(m: &mut HashMap<String, String>) {
         "已在 PATH 中：{}".into(),
     );
 
-    m.insert("cmd.pathman.empty_path".into(), "║  {}".into());
+    m.insert("cmd.pathman.empty_path".into(), "（空）".into());
 
     m.insert(
         "cmd.pathman.example_add".into(),
-        "  {} add C:\\Tools".into(),
+        "  {} add ~/bin".into()
     );
 
     m.insert(
@@ -37,7 +37,7 @@ pub fn fill(m: &mut HashMap<String, String>) {
 
     m.insert(
         "cmd.pathman.example_rm_path".into(),
-        "  {} rm C:\\OldTools".into(),
+        "  {} rm ~/old-tools".into()
     );
 
     m.insert("cmd.pathman.example_show".into(), "  {} show".into());
@@ -148,7 +148,31 @@ pub fn fill(m: &mut HashMap<String, String>) {
     m.insert("cmd.pathman.user_level".into(), "用户".into());
 
     m.insert(
-        "cmd.pathman.windows_only".into(),
-        "usrpath/syspath 是仅限 Windows 的功能。".into(),
+        "cmd.pathman.new_login_shell".into(),
+        "更改将在新的会话中生效。".into(),
+    );
+
+    m.insert(
+        "cmd.pathman.next_login".into(),
+        "已保存。新的 PATH 将在下次登录时生效（请退出后重新登录，或启动 login shell）。".into(),
+    );
+
+    m.insert(
+        "cmd.pathman.platform_unsupported".into(),
+        "usrpath/syspath 不支持此平台。".into(),
+    );
+
+    m.insert(
+        "cmd.pathman.shell_profile_hint".into(),
+        "将这一行加入你的 shell 配置文件：{}".into(),
+    );
+
+    m.insert("cmd.pathman.store_file".into(), "  文件：{}".into());
+
+    m.insert("cmd.pathman.sudo_fail".into(), "无法运行 sudo：{}".into());
+
+    m.insert(
+        "cmd.pathman.sudo_write".into(),
+        "系统 PATH 归 root 所有 — 正在用 sudo 写入 {} …".into(),
     );
 }

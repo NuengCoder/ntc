@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ntc config</title>
+<style>
+  :root {
+    --bg: #0d1117; --panel: #161b22; --line: #30363d;
+    --text: #e6edf3; --muted: #8b949e; --accent: #58a6ff;
+    --ok: #3fb950; --bad: #f85149;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--text);
+    font: 15px/1.5 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  }
+  header {
+    padding: 24px 32px; border-bottom: 1px solid var(--line);
+    display: flex; align-items: baseline; gap: 16px; flex-wrap: wrap;
+  }
+  header h1 { margin: 0; font-size: 22px; }
+  header p { margin: 0; color: var(--muted); }
+  main { max-width: 1000px; margin: 0 auto; padding: 24px 20px 64px; }
+  section { margin-top: 28px; }
+  h2 { font-size: 15px; text-transform: uppercase; letter-spacing: .08em; color: var(--accent); margin: 0 0 12px; }
+  .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
+  .row {
+    display: grid; grid-template-columns: minmax(180px, 1fr) 240px; gap: 16px;
+    align-items: center; padding: 10px 16px; border-bottom: 1px solid var(--line);
+  }
+  .row:last-child { border-bottom: 0; }
+  .row label { color: var(--text); }
+  .row .hint { display: block; color: var(--muted); font-size: 12px; margin-top: 2px; }
+  input[type=text], input[type=number], select {
+    width: 100%; background: #0d1117; color: var(--text);
+    border: 1px solid var(--line); border-radius: 6px; padding: 7px 9px; font: inherit;
+  }
+  input[type=checkbox] { width: 18px; height: 18px; accent-color: var(--accent); }
+  button {
+    background: var(--accent); color: #04121f; border: 0; border-radius: 6px;
+    padding: 8px 14px; font: inherit; font-weight: 600; cursor: pointer;
+  }
+  button:disabled { opacity: .5; cursor: progress; }
+  button.secondary { background: #21262d; color: var(--text); border: 1px solid var(--line); }
+  .toolbar { display: flex; gap: 10px; align-items: center; margin-top: 12px; }
+  .svc { grid-template-columns: minmax(120px, 1fr) 110px 180px 90px; }
+  .svc-head { color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: .06em; }
+  #status { color: var(--muted); }
+  #status.ok { color: var(--ok); }
+  #status.bad { color: var(--bad); }
+  .empty { padding: 18px; color: var(--muted); }
+  @media (max-width: 720px) {
+    .row, .svc { grid-template-columns: 1fr; }
+    .svc-head { display: none; }
+  }
+</style>
+</head>
+<body>
+<header>
+  <h1>ntc config</h1>
+  <p>Every change is saved to the global <code>config.toml</code> immediately.</p>
+</header>
+<main>
+  <section>
+    <h2>Settings</h2>
+    <div class="panel" id="settings"><div class="empty">Loading...</div></div>
+    <div class="toolbar">
+      <button class="secondary" id="refresh">Refresh</button>
+      <span id="status"></span>
+    </div>
+  </section>
+
+  <section>
+    <h2>Serve services</h2>
+    <div class="panel">
+      <div class="row svc svc-head">
+        <span>Service</span><span>Port</span><span>Bind</span><span></span>
+      </div>
+      <div id="services"><div class="empty">Loading...</div></div>
+    </div>
+  </section>
+</main>
+<script>
+"use strict";
+
+const LABELS = {
+  output_path: "Output path",
+  max_depth: "Max depth",
+  num_threads: "Threads",
+  show_line_numbers: "Line numbers",
+  color_enabled: "Color output",
+  autosuggest_enabled: "Autosuggest",
+  idle_hint_enabled: "Idle ghost typing",
+  git_integration_enabled: "Git integration",
+  integration_shell_enabled: "Integrated shell",
+  code_tools_enabled: "Code tool completions",
+  dir_view_enabled: "Directory view",
+  file_view_enabled: "File view",
+  intro_view_enabled: "Intro view",
+  update_check_enabled: "Update check",
+  auto_size_files: "Auto size (files)",
+  auto_size_dirs: "Auto size (dirs)",
+  history_enabled: "History",
+  file_watcher_enabled: "File watcher",
+  watch_limit: "Watch limit",
+  todo_format: "Todo format",
+  language: "Language"
+};
+
+const HINTS = {
+  output_path: "Reports go here; ~ is expanded.",
+  max_depth: "1-20 levels for tree walks.",
+  num_threads: "1-64 worker threads.",
+  idle_hint_enabled: "What the empty prompt types after you stop.",
+  watch_limit: "How many paths the watcher reports before trimming.",
+  todo_format: "Default format for the todo command.",
+  language: "Language packs reload immediately."
+};
+
+const statusEl = document.getElementById("status");
+
+function setStatus(text, kind) {
+  statusEl.textContent = text;
+  statusEl.className = kind || "";
+}
+
+async function api(path, body) {
+  const options = body === undefined
+    ? { method: "GET" }
+    : { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) };
+  const res = await fetch(path, options);
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || ("HTTP " + res.status));
+  return data;
+}
+
+function label(key) {
+  return LABELS[key] || key;
+}
+
+function rowEl(key, input, hint) {
+  const row = document.createElement("div");
+  row.className = "row";
+  const labelBox = document.createElement("label");
+  labelBox.htmlFor = "field-" + key;
+  labelBox.textContent = label(key);
+  if (hint) {
+    const small = document.createElement("span");
+    small.className = "hint";
+    small.textContent = hint;
+    labelBox.appendChild(small);
+  }
+  row.appendChild(labelBox);
+  row.appendChild(input);
+  return row;
+}
+
+function makeInput(setting) {
+  let input;
+  if (setting.kind === "bool") {
+    input = document.createElement("input");
+    input.type = "checkbox";
+    input.checked = Boolean(setting.value);
+    input.addEventListener("change", () => save(setting.key, input.checked));
+  } else if (setting.kind === "select") {
+    input = document.createElement("select");
+    (setting.options || []).forEach((value) => {
+      const option = document.createElement("option");
+      option.value = value;
+      option.textContent = value;
+      if (value === setting.value) option.selected = true;
+      input.appendChild(option);
+    });
+    input.addEventListener("change", () => save(setting.key, input.value));
+  } else if (setting.kind === "number") {
+    input = document.createElement("input");
+    input.type = "number";
+    input.value = setting.value;
+    input.addEventListener("change", () => save(setting.key, Number(input.value)));
+  } else {
+    input = document.createElement("input");
+    input.type = "text";
+    input.value = setting.value;
+    input.addEventListener("change", () => save(setting.key, input.value));
+  }
+  input.id = "field-" + setting.key;
+  return input;
+}
+
+function render(data) {
+  const box = document.getElementById("settings");
+  box.replaceChildren();
+  (data.settings || []).forEach((setting) => {
+    box.appendChild(rowEl(setting.key, makeInput(setting), HINTS[setting.key]));
+  });
+
+  const list = document.getElementById("services");
+  list.replaceChildren();
+  (data.services || []).forEach((svc) => list.appendChild(serviceRow(svc)));
+}
+
+function serviceRow(svc) {
+  const row = document.createElement("div");
+  row.className = "row svc";
+
+  const name = document.createElement("span");
+  name.textContent = svc.name;
+
+  const port = document.createElement("input");
+  port.type = "number";
+  port.min = "1";
+  port.max = "65535";
+  port.value = svc.port;
+
+  const bind = document.createElement("input");
+  bind.type = "text";
+  bind.value = svc.bind;
+
+  const saveBtn = document.createElement("button");
+  saveBtn.className = "secondary";
+  saveBtn.textContent = "Save";
+  saveBtn.addEventListener("click", async () => {
+    saveBtn.disabled = true;
+    try {
+      const data = await api("/api/serve", { name: svc.name, port: Number(port.value), bind: bind.value });
+      render(data);
+      setStatus("Saved " + svc.name + " defaults", "ok");
+    } catch (e) {
+      setStatus(e.message, "bad");
+      saveBtn.disabled = false;
+    }
+  });
+
+  row.append(name, port, bind, saveBtn);
+  return row;
+}
+
+async function save(key, value) {
+  setStatus("Saving " + label(key) + "...");
+  try {
+    const data = await api("/api/set", { key: key, value: value });
+    render(data);
+    setStatus("Saved " + label(key), "ok");
+  } catch (e) {
+    setStatus(e.message, "bad");
+    await refresh();
+  }
+}
+
+async function refresh() {
+  try {
+    render(await api("/api/config"));
+  } catch (e) {
+    setStatus(e.message, "bad");
+  }
+}
+
+document.getElementById("refresh").addEventListener("click", refresh);
+refresh();
+</script>
+</body>
+</html>

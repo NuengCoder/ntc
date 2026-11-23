@@ -1,10 +1,16 @@
 # NTCRANFILE — ntc task runner configuration
 # Usage:
-#   ran            → runs [targets.standalone]
-#   ran <name>    → runs a specific target
-#   ran list      → lists all targets
-#   ran init      → creates this file
-#   ran help    → shows full usage with examples
+#   ran                     → runs [targets.standalone]
+#   ran <name>              → runs a specific target
+#   ran --dry-run [target]  → shows what would run, executes nothing
+#   ran list                → lists all targets
+#   ran init                → creates this file
+#   ran check               → validates this file and points at problems
+#   ran fmt <fmt>           → converts this file to toml / json / yaml
+#   ran help                → shows full usage with examples
+#
+# Outside the ntc shell (bash, zsh, PowerShell), prefix every command with
+# `ntc` — for example `ntc ran build` is the same as `ran build` here.
 
 # ── Variables ──────────────────────────────────────────────────────────
 # Define variables here and reference them with $(VAR_NAME) in commands.
@@ -19,7 +25,7 @@
 [vars]
 # CC = "gcc"
 # FLAGS = "-O2"
-ver = "2.4.8"
+ver = "2.4.9"
 lux = "ntc-v$(ver)-linux-x86_64.tar.gz"
 lux_arm = "ntc-v$(ver)-linux-aarch64.tar.gz"
 adb = "ntc-v$(ver)-aarch64-linux-android.tar.gz"
@@ -127,7 +133,7 @@ cmd = "cargo build --release"
 
 [targets.tar]
 deps = []
-cmd = "arc create $(adb) $(adb_w)/ntc && arc create $(lux) $(lux_w)/ntc && arc create $(lux_arm) $(lux_arm_w)/ntc"
+cmd = "arc create $(adb) $(adb_w)/ntc ; arc create $(lux) $(lux_w)/ntc ; arc create $(lux_arm) $(lux_arm_w)/ntc"
 
 [targets.zip]
 deps = []
@@ -203,4 +209,4 @@ cmd = "git pull origin main --rebase"
 
 [targets.clean]
 deps = []
-cmd = "cargo clean && cleantmp && cleancrash"
+cmd = "cargo clean ; cleantmp ; cleancrash"

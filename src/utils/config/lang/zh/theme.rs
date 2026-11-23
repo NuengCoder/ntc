@@ -143,6 +143,20 @@ pub fn fill(m: &mut HashMap<String, String>) {
     m.insert("theme.usage_add".into(), "用法：theme add <名称>".into());
 
     m.insert(
+        "theme.usage_update".into(),
+        "用法：theme update <名称>".into(),
+    );
+
+    m.insert(
+        "theme.updated".into(),
+        "已更新主题 '{}'：添加了 {} 个缺失字段".into(),
+    );
+
+    m.insert("theme.up_to_date".into(), "主题 '{}' 已包含所有字段".into());
+
+    m.insert("theme.update_failed".into(), "更新失败：{}".into());
+
+    m.insert(
         "theme.usage_export".into(),
         "用法：theme export <名称> [输出文件]".into(),
     );
@@ -159,10 +173,54 @@ pub fn fill(m: &mut HashMap<String, String>) {
         "用法：theme rename <旧名> to <新名>".into(),
     );
 
-    m.insert("theme.usage_rm".into(), "用法：theme rm <名称>".into());
+    m.insert(
+        "theme.usage_rm".into(),
+        "用法：theme rm <名称> [<名称> ...] [-f|--force]".into(),
+    );
+
+    m.insert("theme.usage_use".into(), "用法：theme use <名称>".into());
+
+    m.insert(
+        "theme.remove_confirm".into(),
+        "删除 {} 个主题（{}）？[y/N]".into(),
+    );
+
+    m.insert("theme.remove_cancelled".into(), "已取消。".into());
+
+    m.insert(
+        "theme.remove_current".into(),
+        "无法删除当前主题“{}”；请先切换到其他主题".into(),
+    );
+
+    m.insert("theme.remove_builtin".into(), "无法删除内置主题“{}”".into());
 
     m.insert(
         "theme.usage_rnm".into(),
         "用法：theme rnm <旧名> to <新名>".into(),
+    );
+
+    m.insert("theme.install_downloading".into(), "正在下载 {}...".into());
+
+    m.insert("theme.install_failed".into(), "主题安装失败：{}".into());
+
+    m.insert(
+        "theme.install_fetching".into(),
+        "正在从 GitHub 获取 .ntc_theme 文件...".into(),
+    );
+
+    m.insert(
+        "theme.install_none".into(),
+        "未找到可安装的 .ntc_theme 文件。".into(),
+    );
+
+    m.insert("theme.install_prompt".into(), "选择主题（0 取消）：".into());
+
+    m.insert("theme.install_title".into(), "安装主题".into());
+
+    m.insert("theme.installed".into(), "已安装主题 '{}'".into());
+
+    m.insert(
+        "theme.installed_active".into(),
+        "已安装并切换到主题 '{}'".into(),
     );
 }

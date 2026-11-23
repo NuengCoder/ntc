@@ -150,4 +150,10 @@ pub fn fill(m: &mut HashMap<String, String>) {
     m.insert("cmd.report.clip_meta_lines".into(), "จำนวนสาย".into());
 
     m.insert("cmd.report.clip_meta_chars".into(), "จำนวนตัวอักษร".into());
+
+    m.insert("cmd.report.help_project".into(), "  report project <fmt> [path] --name <file>   บันทึกรายงานโปรเจกต์เป็น <file> (--name ไม่บังคับ; ใช้ <name>.html เมื่อไม่มีนามสกุล)".into());
+    m.insert(
+        "cmd.report.project_usage".into(),
+        "วิธีใช้: report project <txt|md|html|json|pdf|docx|xlsx> [path] [--name <output>]".into(),
+    );
 }

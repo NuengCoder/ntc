@@ -23,6 +23,178 @@ pub fn fill(m: &mut HashMap<String, String>) {
 
     m.insert("cmd.scan.help_ip".into(), "  scan ip [cidr] [--top N | --ports <spec>] [--timeout MS]  Live-host sweep (default auto local /24)".into());
 
+    m.insert(
+        "cmd.scan.help_pid".into(),
+        "  scan pid [[user@]host[:port]|profile] [--sort memory|pid|name] [--filter <text>] [--min-memory <size>] [--max-memory <size>] [--offset <n>] [--limit <n>]  List processes".into(),
+    );
+
+    m.insert(
+        "cmd.scan.pid_usage".into(),
+        "Usage: scan pid [[user@]host[:port]|profile] [--user <u>] [--port <p>] [--key <path>] [--pass-env <var>] [--trust] [--timeout <s>] [--sort memory|pid|name] [--desc] [--filter <text>] [--min-memory <size>] [--max-memory <size>] [--offset <n>] [--limit <n>]".into(),
+    );
+
+    m.insert(
+        "cmd.scan.pid_profile_using".into(),
+        "Using nssh profile '{}'.".into(),
+    );
+
+    m.insert(
+        "cmd.scan.pid_profile_error".into(),
+        "Cannot read nssh profiles: {}".into(),
+    );
+
+    m.insert(
+        "cmd.scan.pid_profile_bad".into(),
+        "nssh profile '{}' has an invalid host or port.".into(),
+    );
+
+    m.insert(
+        "cmd.scan.pid_bad_sort".into(),
+        "Invalid --sort value: '{}' (use memory, pid or name).".into(),
+    );
+
+    m.insert(
+        "cmd.scan.pid_bad_filter".into(),
+        "Filter text cannot be empty.".into(),
+    );
+
+    m.insert(
+        "cmd.scan.pid_bad_limit".into(),
+        "Invalid --limit value: '{}' (use a positive integer).".into(),
+    );
+
+    m.insert(
+        "cmd.scan.pid_bad_min_memory".into(),
+        "Invalid --min-memory value: '{}' (e.g. 512K, 100MB, 1.5GB).".into(),
+    );
+
+    m.insert(
+        "cmd.scan.pid_bad_max_memory".into(),
+        "Invalid --max-memory value: '{}' (e.g. 512K, 100MB, 1.5GB).".into(),
+    );
+
+    m.insert(
+        "cmd.scan.pid_bad_range".into(),
+        "--min-memory cannot be greater than --max-memory.".into(),
+    );
+
+    m.insert(
+        "cmd.scan.pid_bad_offset".into(),
+        "Invalid --offset value: '{}' (use a non-negative integer).".into(),
+    );
+
+    m.insert(
+        "cmd.scan.pid_no_match".into(),
+        "No processes match '{}' on {}.".into(),
+    );
+
+    m.insert("cmd.scan.pid_range_min".into(), "at least {}".into());
+
+    m.insert("cmd.scan.pid_range_max".into(), "at most {}".into());
+
+    m.insert(
+        "cmd.scan.pid_range_between".into(),
+        "between {} and {}".into(),
+    );
+
+    m.insert(
+        "cmd.scan.pid_no_match_range".into(),
+        "No processes use {} on {}.".into(),
+    );
+
+    m.insert(
+        "cmd.scan.pid_no_match_range_filter".into(),
+        "No processes match '{}' with memory {} on {}.".into(),
+    );
+
+    m.insert(
+        "cmd.scan.pid_offset_empty".into(),
+        "No processes at offset {} (only {} matched).".into(),
+    );
+
+    m.insert("cmd.scan.pid_bad_host".into(), "Invalid host: '{}'.".into());
+
+    m.insert("cmd.scan.pid_bad_port".into(), "Invalid port: '{}'.".into());
+
+    m.insert(
+        "cmd.scan.pid_bad_user".into(),
+        "SSH user cannot be empty.".into(),
+    );
+
+    m.insert(
+        "cmd.scan.pid_bad_timeout".into(),
+        "Invalid --timeout value: '{}'.".into(),
+    );
+
+    m.insert(
+        "cmd.scan.pid_missing".into(),
+        "Missing value after '{}'.".into(),
+    );
+
+    m.insert(
+        "cmd.scan.pid_connecting".into(),
+        "Connecting to {} over SSH...".into(),
+    );
+
+    m.insert(
+        "cmd.scan.pid_title_remote".into(),
+        "Processes on {} (via SSH):".into(),
+    );
+
+    m.insert(
+        "cmd.scan.pid_remote_failed".into(),
+        "SSH process lookup on {} failed: {}".into(),
+    );
+
+    m.insert(
+        "cmd.scan.pid_ps_empty".into(),
+        "'{}' returned no process rows.".into(),
+    );
+
+    m.insert(
+        "cmd.scan.pid_ps_status".into(),
+        "'{}' exited with status {}.".into(),
+    );
+
+    m.insert(
+        "cmd.scan.pid_ps_status_msg".into(),
+        "'{}' exited with status {}: {}".into(),
+    );
+
+    m.insert(
+        "cmd.scan.pid_ps_failed".into(),
+        "Cannot list processes on {} (tried POSIX ps and PowerShell): {}".into(),
+    );
+
+    m.insert(
+        "cmd.scan.pid_auth_no_tty".into(),
+        "SSH authentication failed for {}; no terminal is available to prompt for a password (use --key or --pass-env).".into(),
+    );
+
+    m.insert(
+        "cmd.scan.pid_password_prompt".into(),
+        "Password for {}: ".into(),
+    );
+
+    m.insert("cmd.scan.pid_title".into(), "Processes on {}:".into());
+
+    m.insert(
+        "cmd.scan.pid_header".into(),
+        "     PID  NAME                              MEMORY".into(),
+    );
+
+    m.insert("cmd.scan.pid_done".into(), "Total: {} processes.".into());
+
+    m.insert(
+        "cmd.scan.pid_done_limited".into(),
+        "Showing {} of {} processes.".into(),
+    );
+
+    m.insert(
+        "cmd.scan.pid_none".into(),
+        "No processes found on {}.".into(),
+    );
+
     m.insert("cmd.scan.ip_arp_only".into(), "(arp)".into());
 
     m.insert("cmd.scan.ip_done".into(), "Live: {} of {} swept.".into());

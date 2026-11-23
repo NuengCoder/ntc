@@ -16,11 +16,11 @@ pub fn fill(m: &mut HashMap<String, String>) {
         "อยู่ใน PATH แล้ว: {}".into(),
     );
 
-    m.insert("cmd.pathman.empty_path".into(), "║  {}".into());
+    m.insert("cmd.pathman.empty_path".into(), "(ว่าง)".into());
 
     m.insert(
         "cmd.pathman.example_add".into(),
-        "  {} add C:\\Tools".into(),
+        "  {} add ~/bin".into()
     );
 
     m.insert(
@@ -40,7 +40,7 @@ pub fn fill(m: &mut HashMap<String, String>) {
 
     m.insert(
         "cmd.pathman.example_rm_path".into(),
-        "  {} rm C:\\OldTools".into(),
+        "  {} rm ~/old-tools".into()
     );
 
     m.insert("cmd.pathman.example_show".into(), "  {} show".into());
@@ -154,7 +154,31 @@ pub fn fill(m: &mut HashMap<String, String>) {
     m.insert("cmd.pathman.user_level".into(), "User".into());
 
     m.insert(
-        "cmd.pathman.windows_only".into(),
-        "usrpath/syspath เป็นคุณสมบัติเฉพาะของ Windows.".into(),
+        "cmd.pathman.new_login_shell".into(),
+        "การเปลี่ยนแปลงจะมีผลในเซสชันใหม่.".into(),
+    );
+
+    m.insert(
+        "cmd.pathman.next_login".into(),
+        "บันทึกแล้ว PATH ใหม่จะมีผลเมื่อเข้าสู่ระบบครั้งถัดไป (ออกแล้วเข้าใหม่ หรือเปิด login shell).".into(),
+    );
+
+    m.insert(
+        "cmd.pathman.platform_unsupported".into(),
+        "usrpath/syspath ไม่รองรับบนแพลตฟอร์มนี้.".into(),
+    );
+
+    m.insert(
+        "cmd.pathman.shell_profile_hint".into(),
+        "เพิ่มบรรทัดนี้ในโปรไฟล์ shell ของคุณ: {}".into(),
+    );
+
+    m.insert("cmd.pathman.store_file".into(), "  ไฟล์: {}".into());
+
+    m.insert("cmd.pathman.sudo_fail".into(), "เรียก sudo ไม่ได้: {}".into());
+
+    m.insert(
+        "cmd.pathman.sudo_write".into(),
+        "PATH ของระบบเป็นของ root — กำลังเขียน {} ด้วย sudo …".into(),
     );
 }

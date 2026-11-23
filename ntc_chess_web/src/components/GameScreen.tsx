@@ -5,6 +5,7 @@ import {
   getSettings,
   getState,
   postBotMove,
+  postCoach,
   postDraw,
   postMove,
   postNew,
@@ -14,10 +15,76 @@ import {
 } from '../api'
 import { TC_OPTIONS } from '../constants'
 import { playSfx } from '../sfx'
-import { TERMINAL_STATUS, type GameState, type LegalTarget, type PositionPreview } from '../types'
+import {
+  TERMINAL_STATUS,
+  type CoachPayload,
+  type GameState,
+  type LegalTarget,
+  type PositionPreview,
+} from '../types'
 import Board, { findKing, sqToIndex, indexToSq, PieceGlyph, type AnimMove } from './Board'
 import BackButton from './BackButton'
 import MoveHistory from './MoveHistory'
+
+/// What a game screen can do. Hotseat enables everything; online disables
+/// local-only actions (undo, new game) and marks coach as limited.
+export interface GameCapabilities {
+  canUndo: boolean
+  canNewGame: boolean
+  canRematch: boolean
+  canDraw: boolean
+  canCoach: boolean
+  coachIsLimited: boolean
+}
+
+/// Where moves and state come from. The default implementation talks to the
+/// hotseat API; the online screen swaps in room-scoped endpoints.
+export interface GameTransport {
+  getState(signal?: AbortSignal): Promise<GameState>
+  getMoves(sq: string): Promise<{ moves: LegalTarget[] }>
+  getPosition(ply: number): Promise<PositionPreview>
+  move(from: string, to: string, promo?: string): Promise<GameState>
+  resign(color: 'white' | 'black'): Promise<GameState>
+  draw(action?: 'offer' | 'accept'): Promise<GameState>
+  rematch(): Promise<GameState>
+  undo?(): Promise<GameState>
+  newGame?(tc: string): Promise<GameState>
+  botMove?(ply: number): Promise<GameState>
+  getCoach?(signal?: AbortSignal): Promise<CoachPayload>
+}
+
+// Move-badge labels. `alright` is shown as a plain Good move.
+const BADGE_LABELS: Record<string, string> = {
+  brilliant: 'Brilliant',
+  best: 'Best',
+  great: 'Great',
+  good: 'Good',
+  inaccuracy: 'Inaccuracy',
+  mistake: 'Mistake',
+  blunder: 'Blunder',
+}
+
+const LOCAL_CAPABILITIES: GameCapabilities = {  canUndo: true,
+  canNewGame: true,
+  canRematch: true,
+  canDraw: true,
+  canCoach: true,
+  coachIsLimited: false,
+}
+
+const LOCAL_TRANSPORT: GameTransport = {
+  getState,
+  getMoves,
+  getPosition,
+  move: postMove,
+  resign: postResign,
+  draw: () => postDraw(),
+  rematch: postRematch,
+  undo: postUndo,
+  newGame: postNew,
+  botMove: postBotMove,
+  getCoach: postCoach,
+}
 
 // Standard material values (kings excluded — priceless).
 const PIECE_VALUE: Record<string, number> = { P: 1, N: 3, B: 3, R: 5, Q: 9 }
@@ -80,12 +147,24 @@ function statusText(s: GameState): string {
 }
 
 function isBotTurnState(s: GameState | null): boolean {
-  return !!s && s.mode === 'bot' && !!s.bot && s.turn === s.bot.color
+  if (!s) return false
+  if (s.mode === 'ai') return true
+  return s.mode === 'bot' && !!s.bot && s.turn === s.bot.color
 }
 
 function humanColorOf(s: GameState | null): 'w' | 'b' | null {
-  if (!s || s.mode !== 'bot' || !s.bot) return null
+  if (!s) return null
+  if (s.mode === 'online') return s.online?.color ?? null
+  if (s.mode !== 'bot' || !s.bot) return null
   return s.bot.color === 'w' ? 'b' : 'w'
+}
+
+/// The engine is on move (bot game with the bot's turn, or either side in
+/// an AI-vs-AI game).
+function engineOnMove(s: GameState | null): boolean {
+  if (!s || TERMINAL_STATUS.has(s.status)) return false
+  if (s.mode === 'ai') return true
+  return s.mode === 'bot' && !!s.bot && s.turn === s.bot.color
 }
 
 // Build a slide-ghost from a known board (mover art + castling rook hop).
@@ -127,7 +206,54 @@ function buildAnim(
   }
 }
 
-export default function GameScreen({ onExit }: { onExit(): void }) {
+function PlayerBar({
+  side,
+  name,
+  detail,
+  clock,
+  active,
+  captured,
+  score,
+}: {
+  side: 'w' | 'b'
+  name: string
+  detail: string
+  clock: number | null
+  active: boolean
+  captured: string[]
+  score: number
+}) {
+  return (
+    <div className={`player-bar${active ? ' is-active' : ''}`}>
+      <span className={`player-avatar ${side}`}>
+        <PieceGlyph code={`${side}K`} />
+      </span>
+      <span className="player-details">
+        <span className="player-name">{name}</span>
+        <span className="player-meta">{detail}</span>
+        <span className="player-captured">
+          {captured.map((code, i) => (
+            <PieceGlyph key={`${code}-${i}`} code={code} />
+          ))}
+          {score > 0 && <span className="player-score">+{score}</span>}
+        </span>
+      </span>
+      <span className={`player-clock${active ? ' active' : ''}`}>{fmtClock(clock)}</span>
+    </div>
+  )
+}
+
+export default function GameScreen({
+  onExit,
+  transport = LOCAL_TRANSPORT,
+  capabilities = LOCAL_CAPABILITIES,
+  onRoomGone,
+}: {
+  onExit(): void
+  transport?: GameTransport
+  capabilities?: GameCapabilities
+  onRoomGone?(): void
+}) {
   const [state, setState] = useState<GameState | null>(null)
   const [selected, setSelected] = useState<string | null>(null)
   const [targets, setTargets] = useState<LegalTarget[]>([])
@@ -177,6 +303,15 @@ export default function GameScreen({ onExit }: { onExit(): void }) {
   // Board-highlight display filters from Settings (server still computes
   // hot/pinned/silver every position; we just choose what to paint).
   const [highlights, setHighlights] = useState({ pinned: true, danger: true })
+  // Coach: the engine's suggested move plus a grade for the last move.
+  // `coachShow` separates a visible coach report (manual click or auto mode)
+  // from a silent grade fetch that only feeds the move badge.
+  const [coach, setCoach] = useState<CoachPayload | null>(null)
+  const [coachShow, setCoachShow] = useState(false)
+  const [coachBusy, setCoachBusy] = useState(false)
+  // Settings: auto-coach in local games and the move-quality badge.
+  const [coachAuto, setCoachAuto] = useState(false)
+  const [badgeOn, setBadgeOn] = useState(true)
 
   // Bot games: request a reply whenever it is the engine's turn. The
   // server guards expected ply and in-flight searches, so a duplicate
@@ -218,7 +353,7 @@ export default function GameScreen({ onExit }: { onExit(): void }) {
     const ctrl = new AbortController()
     pollCtrl.current = ctrl
     try {
-      const ns = await getState(ctrl.signal)
+      const ns = await transport.getState(ctrl.signal)
       if (!isStalePoll(ns)) setState(ns)
     } catch {
       /* aborted or server hiccup — keep last state, next poll retries */
@@ -254,12 +389,14 @@ export default function GameScreen({ onExit }: { onExit(): void }) {
   useEffect(() => {
     function load() {
       getSettings()
-        .then((s) =>
+        .then((s) => {
           setHighlights({
             pinned: (s['chess.highlight.pinned'] ?? 'on') === 'on',
             danger: (s['chess.highlight.danger'] ?? 'on') === 'on',
-          }),
-        )
+          })
+          setCoachAuto((s['chess.coach.auto'] ?? 'off') === 'on')
+          setBadgeOn((s['chess.highlight.badge'] ?? 'on') === 'on')
+        })
         .catch(() => {})
     }
     function onVis() {
@@ -274,31 +411,38 @@ export default function GameScreen({ onExit }: { onExit(): void }) {
   // see the bot's colour. Manual Flip still works afterwards.
   useEffect(() => {
     const s = stateRef.current
-    if (!s || s.mode !== 'bot' || !s.bot) return
-    const key = s.bot.color
-    if (autoFlipRef.current === key) return
+    if (!s) return
+    let key: string | null = null
+    let want = false
+    if (s.mode === 'online' && s.online) {
+      key = `online:${s.online.color}`
+      want = s.online.color === 'b'
+    } else if (s.mode === 'bot' && s.bot) {
+      key = `bot:${s.bot.color}`
+      want = s.bot.color === 'w'
+    }
+    if (!key || autoFlipRef.current === key) return
     autoFlipRef.current = key
-    const want = s.bot.color === 'w'
     setFlipped(want)
     try {
       localStorage.setItem('ntc.chess.flip', want ? '1' : '0')
     } catch {
       /* private mode — session-only */
     }
-  }, [state?.mode, state?.bot?.color])
+  }, [state?.mode, state?.bot?.color, state?.online?.color])
 
   // Ask the engine for its reply when it is the bot's turn. Errors are
   // retried lazily: `bot_busy`/`stale_ply` mean another tab or a poll beat
   // us, not a broken engine.
   useEffect(() => {
     const s = state
-    if (!s || s.mode !== 'bot' || !s.bot) return
-    if (s.turn !== s.bot.color) {
+    if (!s || (s.mode !== 'bot' && s.mode !== 'ai')) return
+    if (!engineOnMove(s)) {
       botPlyRef.current = -1
       setBotThinking(false)
       return
     }
-    if (TERMINAL_STATUS.has(s.status) || viewPly !== null) {
+    if (viewPly !== null) {
       setBotThinking(false)
       return
     }
@@ -308,7 +452,10 @@ export default function GameScreen({ onExit }: { onExit(): void }) {
     botPlyRef.current = ply
     setBotThinking(true)
     markMutating()
-    postBotMove(ply)
+    const request = transport.botMove
+      ? transport.botMove(ply)
+      : Promise.reject(new Error('Bot play is not available here'))
+    request
       .then((ns) => {
         if (ns.error) {
           botPlyRef.current = -1
@@ -343,7 +490,59 @@ export default function GameScreen({ onExit }: { onExit(): void }) {
   useEffect(() => {
     setSelected(null)
     setTargets([])
+    setCoach(null)
+    setCoachShow(false)
   }, [state?.last_move?.san])
+
+  async function askCoach(show = true) {
+    if (!transport.getCoach || coachBusy) return
+    setCoachBusy(true)
+    markMutating()
+    try {
+      const payload = await transport.getCoach()
+      setCoach(payload)
+      setCoachShow(show)
+      if (payload.available === false && show) {
+        setNotice(
+          payload.error === 'no_engine'
+            ? 'Coach needs an engine: ntc ntpkg install stockfish'
+            : 'Coach is unavailable right now',
+        )
+      }
+    } catch (e) {
+      if (show) setNotice(e instanceof Error ? e.message : 'Coach failed')
+    } finally {
+      setCoachBusy(false)
+    }
+  }
+
+  // Auto-coach / badge grades: local games only (PvP and PvAI). Online coach
+  // calls are rate-limited server-side and AI-vs-AI has no human move to
+  // grade, so both are excluded. `show` is true only when the Coach toggle is
+  // on; with just the badge enabled the payload stays silent.
+  useEffect(() => {
+    const s = state
+    if (!s || !transport.getCoach) return
+    if (!coachAuto && !badgeOn) return
+    if (s.mode !== 'human' && s.mode !== 'bot') return
+    if (TERMINAL_STATUS.has(s.status)) return
+    if (viewPly !== null) return
+    const ply = s.moves.length
+    if (ply === 0) return
+    if (coachBusy) return
+    if (coach?.ply === ply) return
+    void askCoach(coachAuto)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    state?.last_move?.san,
+    state?.moves.length,
+    state?.mode,
+    state?.status,
+    viewPly,
+    coachAuto,
+    badgeOn,
+    coachBusy,
+  ])
 
   // Slide animation: optimistic ghosts start on click (buildAnim below);
   // this effect only reconciles server truth — a matching arrival reveals
@@ -398,7 +597,7 @@ export default function GameScreen({ onExit }: { onExit(): void }) {
     if (previewPly.current === ply) return
     previewPly.current = ply
     try {
-      const pv = await getPosition(ply)
+      const pv = await transport.getPosition(ply)
       if (previewPly.current !== ply) return
       setPreview(pv)
       setViewPly(ply)
@@ -440,7 +639,8 @@ export default function GameScreen({ onExit }: { onExit(): void }) {
       let beforeLast = cur.board
       let last: GameState | null = null
       for (let i = 0; i < plies; i++) {
-        const ns = await postUndo()
+        if (!transport.undo) throw new Error('Undo is not available online')
+        const ns = await transport.undo()
         if (ns.error || !ns.undone) {
           if (!ns.error && i === 0) setNotice('Nothing to undo')
           break
@@ -574,7 +774,7 @@ export default function GameScreen({ onExit }: { onExit(): void }) {
   async function selectPiece(sq: string) {
     setSelected(sq)
     try {
-      const r = await getMoves(sq)
+      const r = await transport.getMoves(sq)
       setTargets(r.moves)
     } catch {
       setTargets([])
@@ -587,6 +787,7 @@ export default function GameScreen({ onExit }: { onExit(): void }) {
     suppressClick.current = false
     const s = stateRef.current
     if (!s || TERMINAL_STATUS.has(s.status) || promo || viewPly !== null) return
+    if (s.mode === 'online' && s.online && s.online.color !== s.turn) return
     if (isBotTurnState(s)) return
     if (e.button !== undefined && e.button !== 0 && e.pointerType === 'mouse') return
     const code = s.board[sqToIndex(sq)]
@@ -665,7 +866,7 @@ export default function GameScreen({ onExit }: { onExit(): void }) {
     let moves = cached
     if (moves.length === 0) {
       try {
-        moves = (await getMoves(from)).moves
+        moves = (await transport.getMoves(from)).moves
       } catch {
         clearSelection()
         return
@@ -702,6 +903,7 @@ export default function GameScreen({ onExit }: { onExit(): void }) {
     }
     const s = stateRef.current
     if (!s || TERMINAL_STATUS.has(s.status) || promo) return
+    if (s.mode === 'online' && s.online && s.online.color !== s.turn) return
     if (botBusyRef.current || isBotTurnState(s)) return
     const code = s.board[sq.charCodeAt(0) - 97 + (sq.charCodeAt(1) - 49) * 8]
     // Click a target square → move there.
@@ -735,7 +937,7 @@ export default function GameScreen({ onExit }: { onExit(): void }) {
       setAnim(buildAnim(cur.board, from, to, `opt-${animSeq.current}-${from}-${to}`))
     }
     try {
-      const ns = await postMove(from, to, p)
+      const ns = await transport.move(from, to, p)
       if (ns.error) {
         pendingRef.current = null
         setAnim(null)
@@ -755,7 +957,8 @@ export default function GameScreen({ onExit }: { onExit(): void }) {
   async function newGame() {
     markMutating()
     try {
-      const ns = await postNew(tc)
+      if (!transport.newGame) throw new Error('New game is not available here')
+      const ns = await transport.newGame(tc)
       if (ns.sfx) playSfx(ns.sfx)
       if (ns.abandoned) setNotice('Previous game abandoned — side to move forfeits')
       setState(ns)
@@ -777,7 +980,7 @@ export default function GameScreen({ onExit }: { onExit(): void }) {
   async function rematch() {
     markMutating()
     try {
-      const ns = await postRematch()
+      const ns = await transport.rematch()
       setState(ns)
       setSelected(null)
       setTargets([])
@@ -802,7 +1005,7 @@ export default function GameScreen({ onExit }: { onExit(): void }) {
     const human = humanColorOf(s)
     const loser = human ?? s.turn
     try {
-      const ns = await postResign(loser === 'w' ? 'white' : 'black')
+      const ns = await transport.resign(loser === 'w' ? 'white' : 'black')
       if (!ns.error) playSfx('lose')
       setState(ns.error ? s : ns)
       setConfirmResign(false)
@@ -815,8 +1018,12 @@ export default function GameScreen({ onExit }: { onExit(): void }) {
 
   async function draw() {
     markMutating()
+    const offer =
+      state?.mode === 'online' &&
+      !!state.online?.draw_offer &&
+      state.online.draw_offer !== state.online.color
     try {
-      const ns = await postDraw()
+      const ns = await transport.draw(offer ? 'accept' : 'offer')
       setState(ns.error ? (stateRef.current as GameState) : ns)
       pendingRef.current = null
       setAnim(null)
@@ -833,8 +1040,19 @@ export default function GameScreen({ onExit }: { onExit(): void }) {
   // (check, hot, pinned, silver) stay dark in preview.
   const isPreview = viewPly !== null && preview !== null
   const bot = state.mode === 'bot' ? state.bot : null
+  const ai = state.mode === 'ai' ? state.ai : null
+  const online = state.mode === 'online' ? state.online : null
   const humanColor = humanColorOf(state)
-  const botTurn = !!bot && state.turn === bot.color && !over
+  const botTurn = engineOnMove(state)
+  const coachFresh = coach?.ply === undefined || coach.ply === state.moves.length
+  const coachVisible = coachShow && !!coach?.available && coachFresh
+  const coachSuggestion = coachVisible ? coach?.suggestion ?? null : null
+  const coachGrade = coach?.available ? coach.grade ?? null : null
+  const coachLeft = coach?.coach_uses_left ?? online?.coach_uses_left ?? 0
+  const canCoachHere =
+    capabilities.canCoach && (!online || !!online.coach_allowed)
+  const opponentDrawOffer =
+    !!online?.draw_offer && online.draw_offer !== online.color
   const showBoard = isPreview && preview ? preview.board : state.board
   const showLast = isPreview && preview ? preview.last_move : state.last_move
   const showCapW = isPreview && preview ? preview.captured_by_white : state.captured_by_white
@@ -845,77 +1063,195 @@ export default function GameScreen({ onExit }: { onExit(): void }) {
       ? `Viewing ${Math.ceil(viewPly / 2)}. ${preview.last_move.san}`
       : null
 
+  // Badge priority: Book → Forced → engine grade. Only live positions get a
+  // badge; time-travel previews keep the board clean.
+  const liveLast = isPreview ? null : state.last_move
+  let moveBadge: { square: string; label: string; kind: string } | null = null
+  if (badgeOn && liveLast) {
+    if (liveLast.book) {
+      moveBadge = { square: liveLast.to, label: 'Book', kind: 'book' }
+    } else if (liveLast.forced) {
+      moveBadge = { square: liveLast.to, label: 'Forced', kind: 'forced' }
+    } else if (coachGrade && coachGrade.san === liveLast.san) {
+      const kind = coachGrade.label === 'alright' ? 'good' : coachGrade.label
+      moveBadge = { square: liveLast.to, label: BADGE_LABELS[kind] ?? kind, kind }
+    }
+  }
+
+  const bottomSide: 'w' | 'b' = flipped ? 'b' : 'w'
+  const topSide: 'w' | 'b' = flipped ? 'w' : 'b'
+  const sideLabel = (side: 'w' | 'b') => (side === 'w' ? 'White' : 'Black')
+  const playerFor = (side: 'w' | 'b') => {
+    let name = sideLabel(side)
+    let detail = 'Local player'
+    if (online) {
+      name = (side === 'w' ? online.white : online.black) ?? 'Waiting for opponent'
+      detail = online.color === side ? 'Online · You' : 'Online · Opponent'
+    } else if (bot) {
+      if (bot.color === side) {
+        name = bot.name
+        detail = `${bot.level_label} bot`
+      } else {
+        name = 'You'
+        detail = `${sideLabel(side)} · Human`
+      }
+    } else if (ai) {
+      const player = side === 'w' ? ai.white : ai.black
+      name = player.name
+      detail = `${player.level_label} · AI`
+    } else {
+      detail = `${sideLabel(side)} · local`
+    }
+    const captured =
+      side === 'w' ? trayCodes(showCapW, 'b') : trayCodes(showCapB, 'w')
+    const score = side === 'w' ? Math.max(diff, 0) : Math.max(-diff, 0)
+    return { name, detail, captured, score, clock: state.clocks[side] }
+  }
+  const topPlayer = playerFor(topSide)
+  const bottomPlayer = playerFor(bottomSide)
+  const statusLabel =
+    viewedLabel ??
+    (online?.status === 'waiting'
+      ? `Waiting for ${online.color === 'w' ? 'Black' : 'White'} to join…`
+      : botThinking
+        ? `${bot?.name ?? (ai ? 'Engine' : 'Bot')} is thinking…`
+        : statusText(state))
+  const modeLabel = online
+    ? online.room_name
+    : bot
+      ? `${bot.name} · ${bot.level_label}`
+      : ai
+        ? 'AI vs AI'
+        : 'Local game'
+
   return (
-    <div className="game">
-      <div className="game-top">
+    <div className="game-shell">
+      <header className="game-header">
         <BackButton onBack={onExit} />
-        <span className="tc-label">
-          {state.clocks.tc}
-          {bot ? ` — ${bot.name} (${bot.level_label})` : ''}
+        <span className="game-brand">
+          <img src="/pieces/wK.png" alt="" draggable={false} />
+          <span>
+            ntc<strong>chess</strong>
+          </span>
         </span>
-        <button className="back-btn" onClick={toggleFlip} title={flipped ? "White at bottom" : "Black at bottom"}>
-          Flip
+        <span className="game-mode-label">{modeLabel}</span>
+        <span className="header-spacer" />
+        <span className={`live-chip${over ? ' is-over' : ''}`}>
+          <span className="live-dot" />
+          {over ? 'Finished' : online?.status === 'waiting' ? 'Waiting' : 'Live'}
+        </span>
+        <button
+          className="icon-button"
+          onClick={toggleFlip}
+          title={flipped ? 'White at bottom' : 'Black at bottom'}
+        >
+          <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+            <path
+              d="M7 4 4 7l3 3M4 7h13M17 20l3-3-3-3m3 3H7"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.8"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+          </svg>
         </button>
-      </div>
+      </header>
 
-      <div className="game-main">
-        <div className="board-col">
-          <div className="clock-row">
-            <span className="tray">
-              {trayCodes(showCapB, 'w').map((code, i) => (
-                <PieceGlyph key={`${code}-${i}`} code={code} />
-              ))}
-            </span>
-            <span className={state.turn === 'b' && !over ? 'clock active' : 'clock'}>
-              ♟ black {fmtClock(state.clocks.b)}
-              {diff < 0 && <span className="score">+{-diff}</span>}
-            </span>
+      <div className="game-layout">
+        <main className="game-stage">
+          <div className="board-frame">
+            <PlayerBar
+              side={topSide}
+              name={topPlayer.name}
+              detail={topPlayer.detail}
+              clock={topPlayer.clock}
+              active={state.turn === topSide && !over}
+              captured={topPlayer.captured}
+              score={topPlayer.score}
+            />
+
+            <Board
+              board={showBoard}
+              turn={state.turn}
+              selected={selected}
+              targets={targets}
+              lastFrom={showLast?.from ?? null}
+              lastTo={showLast?.to ?? null}
+              checkKing={isPreview ? null : checkSq}
+              hotSquares={
+                isPreview || !highlights.danger ? [] : (state.hot ?? [])
+              }
+              coachFrom={isPreview ? null : (coachSuggestion?.from ?? null)}
+              coachTo={isPreview ? null : (coachSuggestion?.to ?? null)}
+              pinnedSquares={isPreview || !highlights.pinned ? [] : (state.pinned ?? [])}
+              silverSquares={isPreview || !highlights.pinned ? [] : (state.silver ?? [])}
+              anim={isPreview ? null : anim}
+              badge={moveBadge}
+              flipped={flipped}
+              drag={dragPos}
+              dragFrom={dragPos?.from ?? null}
+              interactive={
+                !over &&
+                !isPreview &&
+                !botTurn &&
+                (!online || online.status !== 'waiting') &&
+                (!online || online.color === state.turn)
+              }
+              onSquare={handleSquare}
+              onPress={onPress}
+              onDragMove={onDragMove}
+              onDragEnd={onDragEnd}
+              onBoardClick={() => {
+                suppressClick.current = false
+              }}
+              onAnimDone={() => {
+                // Unconfirmed ghosts hold at the destination (no snap-back
+                // while the POST is in flight); confirmed ones reveal static.
+                const a = animRef.current
+                const p = pendingRef.current
+                if (a && p && p.from === a.from && p.to === a.to) return
+                setAnim(null)
+              }}
+            />
+
+            <PlayerBar
+              side={bottomSide}
+              name={bottomPlayer.name}
+              detail={bottomPlayer.detail}
+              clock={bottomPlayer.clock}
+              active={state.turn === bottomSide && !over}
+              captured={bottomPlayer.captured}
+              score={bottomPlayer.score}
+            />
+          </div>
+          <div className="board-caption">
+            <span>{state.clocks.tc} time control</span>
+            <button className="link-btn" onClick={toggleFlip}>
+              Flip board
+            </button>
+          </div>
+        </main>
+
+        <aside className="game-side">
+          <div className="side-panel-head">
+            <span className="panel-kicker">Game</span>
+            <span className="panel-tc">{state.clocks.tc}</span>
           </div>
 
-          <Board
-            board={showBoard}
-            turn={state.turn}
-            selected={selected}
-            targets={targets}
-            lastFrom={showLast?.from ?? null}
-            lastTo={showLast?.to ?? null}
-            checkKing={isPreview ? null : checkSq}
-            hotSquares={isPreview || !highlights.danger ? [] : (state.hot ?? [])}
-            pinnedSquares={isPreview || !highlights.pinned ? [] : (state.pinned ?? [])}
-            silverSquares={isPreview || !highlights.pinned ? [] : (state.silver ?? [])}
-            anim={isPreview ? null : anim}
-            flipped={flipped}
-            drag={dragPos}
-            dragFrom={dragPos?.from ?? null}
-            interactive={!over && !isPreview && !botTurn}
-            onSquare={handleSquare}
-            onPress={onPress}
-            onDragMove={onDragMove}
-            onDragEnd={onDragEnd}
-            onBoardClick={() => {
-              suppressClick.current = false
-            }}
-            onAnimDone={() => {
-              // Unconfirmed ghosts hold at the destination (no snap-back
-              // while the POST is in flight); confirmed ones reveal static.
-              const a = animRef.current
-              const p = pendingRef.current
-              if (a && p && p.from === a.from && p.to === a.to) return
-              setAnim(null)
-            }}
-          />
-
-          <div className="clock-row">
-            <span className="tray">
-              {trayCodes(showCapW, 'b').map((code, i) => (
-                <PieceGlyph key={`${code}-${i}`} code={code} />
-              ))}
-            </span>
-            <span className={state.turn === 'w' && !over ? 'clock active' : 'clock'}>
-              ♟ white {fmtClock(state.clocks.w)}
-              {diff > 0 && <span className="score">+{diff}</span>}
-            </span>
+          <div
+            className={`game-status${over ? ' is-over' : botTurn || online?.status === 'waiting' ? ' is-waiting' : ' is-live'}`}
+          >
+            <span className="status-dot" />
+            <span>{statusLabel}</span>
           </div>
+
+          {isPreview && (
+            <button className="preview-banner" onClick={() => void selectPly(null)}>
+              <span>Viewing an earlier position</span>
+              <strong>Back to live</strong>
+            </button>
+          )}
 
           <MoveHistory
             moves={state.moves}
@@ -923,110 +1259,145 @@ export default function GameScreen({ onExit }: { onExit(): void }) {
             viewedPly={viewPly}
             onSelect={selectPly}
           />
-        </div>
 
-        <div className="side-col">
-          <div className="status">
-            {viewedLabel ??
-              (botThinking ? `${bot?.name ?? 'Bot'} is thinking…` : statusText(state))}
-          </div>
-          {bot && (
-            <div className="meta">
-              <span>
-                You play {humanColor === 'w' ? 'White' : 'Black'}
-              </span>
-              <span>{bot.name} · {bot.level_label}</span>
-            </div>
-          )}
           {notice && (
             <div className="notice" onClick={() => setNotice(null)}>
               {notice}
             </div>
           )}
 
-          <div className="btn-row">
-            <select value={tc} onChange={(e) => setTc(e.target.value)} disabled={false}>
-              {TC_OPTIONS.map((o) => (
-                <option key={o} value={o}>
-                  {o}
-                </option>
-              ))}
-            </select>
-            <button onClick={newGame}>New</button>
+          {coachSuggestion && (
+            <div className="coach-box">
+              <span className="coach-move">
+                Coach: <strong>{coachSuggestion.san}</strong> ({coachSuggestion.from} →{' '}
+                {coachSuggestion.to})
+              </span>
+              {coachGrade && (
+                <span className={`coach-grade grade-${coachGrade.label}`}>
+                  {coachGrade.label} — your {coachGrade.san}
+                  {coachGrade.loss_cp > 0 ? ` (−${(coachGrade.loss_cp / 100).toFixed(2)})` : ''}
+                </span>
+              )}
+            </div>
+          )}
+
+          <div className="side-actions">
+            {canCoachHere && (
+              <button
+                className="action-button"
+                onClick={() => void askCoach(true)}
+                disabled={coachBusy || isPreview || over}
+              >
+                {coachBusy
+                  ? 'Coach is thinking…'
+                  : capabilities.coachIsLimited
+                    ? `Coach (${coachLeft} left)`
+                    : 'Coach'}
+              </button>
+            )}
+
+            {!ai && !over && (
+              <button
+                className="action-button"
+                onPointerDown={startHoldUndo}
+                onPointerUp={stopHoldUndo}
+                onPointerLeave={stopHoldUndo}
+                onPointerCancel={stopHoldUndo}
+                onClick={() => {
+                  void undoTick()
+                }}
+                onContextMenu={(e) => e.preventDefault()}
+                disabled={
+                  !capabilities.canUndo ||
+                  state.moves.length === 0 ||
+                  promo !== null ||
+                  isPreview
+                }
+                title={
+                  isPreview
+                    ? 'Return to live first'
+                    : bot
+                      ? 'Undo your move and the bot reply (hold to rewind)'
+                      : 'Undo last move (hold to rewind)'
+                }
+              >
+                Undo
+              </button>
+            )}
+
+            {!over && !ai && (
+              <button
+                className="action-button"
+                onClick={() => setConfirmResign(true)}
+                disabled={isPreview}
+              >
+                Resign
+              </button>
+            )}
+
+            {!over && !ai && !bot && (
+              <button className="action-button" onClick={draw} disabled={isPreview}>
+                {opponentDrawOffer ? 'Accept draw' : 'Offer draw'}
+              </button>
+            )}
           </div>
 
-          <div className="btn-row">
-            <button
-              onPointerDown={startHoldUndo}
-              onPointerUp={stopHoldUndo}
-              onPointerLeave={stopHoldUndo}
-              onPointerCancel={stopHoldUndo}
-              onClick={() => {
-                void undoTick()
-              }}
-              onContextMenu={(e) => e.preventDefault()}
-              disabled={state.moves.length === 0 || promo !== null || isPreview}
-              title={
-                isPreview
-                  ? 'Return to live first'
-                  : bot
-                    ? 'Undo your move and the bot reply (hold to rewind)'
-                    : 'Undo last move (hold to rewind)'
-              }
-            >
-              Undo
-            </button>
-          </div>
+          {confirmResign && !isPreview && (
+            <div className="confirm-row">
+              <span>Resign this game?</span>
+              <button className="danger" onClick={resign}>
+                Yes, resign
+              </button>
+              <button onClick={() => setConfirmResign(false)}>Cancel</button>
+            </div>
+          )}
 
-          {!over && (
-            <div className="btn-row">
-              {confirmResign && !isPreview ? (
-                <>
-                  <button className="danger" onClick={resign}>
-                    Confirm resign ({humanColor ?? state.turn})
-                  </button>
-                  <button onClick={() => setConfirmResign(false)}>Cancel</button>
-                </>
-              ) : (
-                <button
-                  onClick={() => setConfirmResign(true)}
-                  disabled={isPreview}
-                  title={isPreview ? 'Return to live first' : undefined}
-                >
-                  Resign
-                </button>
-              )}
-              {!bot && (
-                <button
-                  onClick={draw}
-                  disabled={isPreview}
-                  title={isPreview ? 'Return to live first' : undefined}
-                >
-                  Draw (agree)
-                </button>
-              )}
+          {capabilities.canNewGame && (
+            <div className="new-game-row">
+              <select value={tc} onChange={(e) => setTc(e.target.value)}>
+                {TC_OPTIONS.map((o) => (
+                  <option key={o} value={o}>
+                    {o}
+                  </option>
+                ))}
+              </select>
+              <button className="primary" onClick={newGame}>
+                New game
+              </button>
             </div>
           )}
 
           {over && (
-            <div className="btn-row">
-              <button className="primary" onClick={rematch}>
-                Rematch
+            <div className="side-actions">
+              {capabilities.canRematch && (
+                <button className="primary action-button" onClick={rematch}>
+                  Rematch
+                </button>
+              )}
+              <button className="action-button" onClick={onExit}>
+                Main menu
               </button>
-              <button onClick={onExit}>Menu</button>
             </div>
           )}
 
-          <div className="meta">
-            <span>halfmove {state.halfmove}</span>
-            <span>repetition ×{state.repetition}</span>
-          </div>
-          {state.last_result && (
-            <div className="meta">
-              Last: {state.last_result.winner ?? 'draw'} ({state.last_result.reason})
+          {(online || ai || bot) && (
+            <div className="game-meta">
+              {online && (
+                <span>
+                  {online.white ?? 'Waiting'} vs {online.black ?? 'Waiting'} · You play{' '}
+                  {online.color === 'w' ? 'White' : 'Black'}
+                </span>
+              )}
+              {ai && (
+                <span>
+                  {ai.white.name} ({ai.white.level_label}) vs {ai.black.name} (
+                  {ai.black.level_label})
+                </span>
+              )}
+              {bot && <span>You play {humanColor === 'w' ? 'White' : 'Black'}</span>}
             </div>
           )}
-        </div>
+        </aside>
       </div>
 
       {promo && (
@@ -1057,12 +1428,15 @@ export default function GameScreen({ onExit }: { onExit(): void }) {
 
       {over && (
         <div className="modal-back">
-          <div className="modal">
+          <div className="modal game-over-modal">
+            <span className="modal-kicker">Game over</span>
             <div className="modal-title">{statusText(state)}</div>
             <div className="btn-row">
-              <button className="primary" onClick={rematch}>
-                Rematch
-              </button>
+              {capabilities.canRematch && (
+                <button className="primary" onClick={rematch}>
+                  Rematch
+                </button>
+              )}
               <button onClick={onExit}>Menu</button>
             </div>
           </div>

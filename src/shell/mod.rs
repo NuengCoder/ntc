@@ -10,6 +10,7 @@ pub(crate) mod helpers;
 mod hinter;
 pub(crate) mod idle;
 pub(crate) mod pipeline;
+pub(crate) mod prompt_highlight;
 pub(crate) mod stdin;
 pub(crate) mod update_check;
 pub(crate) mod venv;

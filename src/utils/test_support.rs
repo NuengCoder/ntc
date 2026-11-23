@@ -36,18 +36,6 @@ pub(crate) struct TempCwd {
 }
 
 impl TempCwd {
-    /// chdir into an existing directory.
-    pub(crate) fn chdir(dir: &Path) -> Self {
-        let lock = lock_globals();
-        let old = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
-        std::env::set_current_dir(dir).expect("test chdir failed");
-        Self {
-            _lock: lock,
-            old,
-            _tmp: None,
-        }
-    }
-
     /// Create a tempdir populated with `files` (`(relpath, contents)`) and
     /// `dirs`, chdir into it, and return the guard.
     pub(crate) fn with_fixture(files: &[(&str, &str)], dirs: &[&str]) -> Self {

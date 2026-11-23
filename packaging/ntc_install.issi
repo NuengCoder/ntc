@@ -4,8 +4,8 @@
 ;   #define ExeSource   "target\release\ntc.exe"
 ;   #define DllGlob     "target\release\*.dll"
 ;   #define DepsGlob    "target\release\deps\*.dll"
-;   #define OutputBase  "ntc-installer-2.4.8"
-;   #define AppVer      "2.4.8"
+;   #define OutputBase  "ntc-installer-2.4.9"
+;   #define AppVer      "2.4.9"
 ;   #include "packaging\ntc_install.issi"
 ;
 ; Two install modes come out of the same body:

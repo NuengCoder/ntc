@@ -2,34 +2,13 @@ use std::collections::HashMap;
 
 pub fn fill(m: &mut HashMap<String, String>) {
     m.insert(
-        "help.tmprt.title".into(),
-        "TEMPERATURE & WEATHER COMMANDS:".into(),
-    );
-
-    m.insert(
-        "help.tmprt.com".into(),
-        "tmprt com [secs] ## Live hardware temperature monitor (q=quit s=freeze c='oC/'oF)".into(),
-    );
-
-    m.insert(
-        "help.tmprt.weather".into(),
-        "tmprt weather [city] ## Current weather via OpenWeather API".into(),
-    );
-
-    m.insert(
-        "help.tmprt.key".into(),
-        "tmprt key [API_KEY] ## Save/display OpenWeather API key".into(),
-    );
-
-    m.insert(
         "help.tmprt.city".into(),
         "tmprt city [name] ## Save/display default city for weather".into(),
     );
 
     m.insert(
-        "help.tmprt.sensors".into(),
-        "tmprt sensors <status|install|uninstall|debug> ## Manage hardware sensor backends (LHM)"
-            .into(),
+        "help.tmprt.com".into(),
+        "tmprt com [secs] ## Live hardware temperature monitor (q=quit s=freeze c='oC/'oF)".into(),
     );
 
     m.insert(
@@ -50,5 +29,26 @@ pub fn fill(m: &mut HashMap<String, String>) {
     m.insert(
         "help.tmprt.example4".into(),
         "tmprt city Bangkok ## Set default city".into(),
+    );
+
+    m.insert(
+        "help.tmprt.key".into(),
+        "tmprt key [API_KEY] ## Save/display OpenWeather API key".into(),
+    );
+
+    m.insert(
+        "help.tmprt.sensors".into(),
+        "tmprt sensors <status|install|uninstall|debug> ## Manage hardware sensor backends (LHM)"
+            .into(),
+    );
+
+    m.insert(
+        "help.tmprt.title".into(),
+        "TEMPERATURE & WEATHER COMMANDS:".into(),
+    );
+
+    m.insert(
+        "help.tmprt.weather".into(),
+        "tmprt weather [city] ## Current weather via OpenWeather API".into(),
     );
 }

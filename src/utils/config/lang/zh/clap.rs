@@ -103,16 +103,6 @@ pub fn fill(m: &mut HashMap<String, String>) {
 
     m.insert("clap.arg.list.help".into(), "列出所有命令行功能".into());
 
-    m.insert(
-        "clap.arg.lsp.help".into(),
-        "通过stdio启动ntc-math LSP服务器".into(),
-    );
-
-    m.insert(
-        "clap.arg.lsp_log.help".into(),
-        "写入LSP调试日志的路径".into(),
-    );
-
     m.insert("clap.arg.math.help".into(), "计算数学表达式".into());
 
     m.insert("clap.arg.output.help".into(), "报告的输出文件名".into());

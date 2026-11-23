@@ -124,4 +124,23 @@ pub fn fill(m: &mut HashMap<String, String>) {
     m.insert("cmd.report.clip_meta_lines".into(), "行数".into());
 
     m.insert("cmd.report.clip_meta_chars".into(), "字符数".into());
+
+    m.insert("cmd.report.example_clip".into(), "  report clip 1".into());
+    m.insert(
+        "cmd.report.example_project".into(),
+        "  report project html . --name report.html".into(),
+    );
+    m.insert(
+        "cmd.report.help_clip".into(),
+        "  report clip <n>       完整显示剪贴板历史中的第 n 条".into(),
+    );
+    m.insert("cmd.report.help_project".into(), "  report project <fmt> [path] --name <file>   将项目报告保存为 <file>（--name 可省略；无扩展名时自动加 <name>.html）".into());
+    m.insert(
+        "cmd.report.legacy_removed".into(),
+        "旧版 report 快捷方式已移除。请改用“report project <fmt> ...”。".into(),
+    );
+    m.insert(
+        "cmd.report.project_usage".into(),
+        "用法：report project <txt|md|html|json|pdf|docx|xlsx> [path] [--name <output>]".into(),
+    );
 }

@@ -1,11 +1,12 @@
 use crate::config::Config;
 use crate::filetype::{is_supported_format_with_config, make_ignored_dir_filter, FormatConfig};
 use indicatif::ProgressBar;
+use rayon::iter::ParallelBridge;
 use rayon::prelude::*;
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
-use std::time::Instant;
+use std::time::{Duration, Instant};
 use walkdir::WalkDir;
 
 type TreeCacheKey = (String, usize, bool, bool, bool);
@@ -15,6 +16,16 @@ type TreeCache = std::sync::LazyLock<Mutex<HashMap<TreeCacheKey, TreeCacheValue>
 // Tree output cache: key = (root_path, max_depth, include_files, show_sizes, care_sizes)
 // Value = (timestamp, cached tree)
 static TREE_CACHE: TreeCache = std::sync::LazyLock::new(|| Mutex::new(HashMap::new()));
+
+const TREE_CACHE_TTL: Duration = Duration::from_secs(5);
+/// Cached trees are deep copies, so the cache stays small: a long browsing
+/// session must not accumulate a tree per visited directory.
+const TREE_CACHE_LIMIT: usize = 8;
+/// Trees larger than this are never cached: the saved walk is not worth a
+/// second full copy of hundreds of thousands of nodes.
+const TREE_CACHE_NODE_LIMIT: usize = 20_000;
+/// Per-file size entries are a `PathBuf` each, so the cache is capped.
+const FILE_SIZE_CACHE_LIMIT: usize = 20_000;
 
 /// Per-file size cache. Populated by calculate_total_size/calculate_dir_size,
 /// read by compute_tree_sizes to avoid redundant fs::metadata calls between
@@ -28,6 +39,9 @@ fn get_cached_size(path: &Path) -> Option<u64> {
 
 fn set_cached_size(path: PathBuf, size: u64) {
     if let Ok(mut cache) = FILE_SIZE_CACHE.lock() {
+        if cache.len() >= FILE_SIZE_CACHE_LIMIT && !cache.contains_key(&path) {
+            cache.clear();
+        }
         cache.insert(path, size);
     }
 }
@@ -51,7 +65,7 @@ pub fn invalidate_tree_cache() {
 fn get_cached_tree(key: &(String, usize, bool, bool, bool)) -> Option<TreeNode> {
     if let Ok(cache) = TREE_CACHE.lock() {
         if let Some((ts, tree)) = cache.get(key) {
-            if ts.elapsed().as_secs() < 5 {
+            if ts.elapsed() < TREE_CACHE_TTL {
                 return Some(tree.clone());
             }
         }
@@ -59,9 +73,13 @@ fn get_cached_tree(key: &(String, usize, bool, bool, bool)) -> Option<TreeNode> 
     None
 }
 
-/// Store a tree in the cache.
+/// Store a tree in the cache, dropping stale and surplus entries first.
 fn set_cached_tree(key: (String, usize, bool, bool, bool), tree: TreeNode) {
     if let Ok(mut cache) = TREE_CACHE.lock() {
+        cache.retain(|_, (ts, _)| ts.elapsed() < TREE_CACHE_TTL);
+        if cache.len() >= TREE_CACHE_LIMIT {
+            cache.clear();
+        }
         cache.insert(key, (Instant::now(), tree));
     }
 }
@@ -220,6 +238,10 @@ pub fn generate_tree(
         }
     }
 
+    // The path index is only needed while walking: free its PathBufs before
+    // the tree (and its cache copy) is assembled.
+    drop(path_to_idx);
+
     // ---- Phase 2: assemble owned TreeNode tree from the flat list ----
     //
     // Collect parent_indices BEFORE consuming `flat` so we can use the
@@ -311,8 +333,11 @@ pub fn generate_tree(
     // ignored dirs, ignored files.
     sort_children(&mut root_node.children);
 
-    // Cache the result for fast repeated lookups
-    set_cached_tree(cache_key, root_node.clone());
+    // Cache the result for fast repeated lookups. Huge trees are skipped so
+    // the cache never holds a second full copy of them.
+    if n <= TREE_CACHE_NODE_LIMIT {
+        set_cached_tree(cache_key, root_node.clone());
+    }
 
     // Return the root node of the assembled tree
     root_node
@@ -447,17 +472,31 @@ pub fn compute_tree_sizes(node: &mut TreeNode, pb: Option<&ProgressBar>, care: b
 // Legacy helpers (still used by the `size` command and CLI --size)
 // =========================================================================
 
-/// Count files (respects ignored dirs)
-/// Count files (respects ignored dirs)
+/// Count files (respects ignored dirs). Streamed: counting a big tree must
+/// not build a `Vec` of every path.
 pub fn count_files(path: &Path) -> u64 {
     let ignored_dirs = Config::get_ignored_dirs_combined();
-    walk_files(path, &ignored_dirs).len() as u64
+    file_walker(path, &ignored_dirs).count() as u64
 }
 
-fn walk_files(path: &Path, ignored_dirs: &HashSet<String>) -> Vec<PathBuf> {
+/// Size of one file, memoized in the bounded size cache.
+fn path_size(path: &Path) -> u64 {
+    if let Some(size) = get_cached_size(path) {
+        return size;
+    }
+    let size = std::fs::metadata(path).map(|m| m.len()).unwrap_or(0);
+    set_cached_size(path.to_path_buf(), size);
+    size
+}
+
+/// Walk the files under `path`, skipping ignored directories.
+fn file_walker<'a>(
+    path: &'a Path,
+    ignored_dirs: &'a HashSet<String>,
+) -> impl Iterator<Item = walkdir::DirEntry> + Send + 'a {
     WalkDir::new(path)
         .into_iter()
-        .filter_entry(|e| {
+        .filter_entry(move |e| {
             if e.depth() == 0 {
                 return true;
             }
@@ -469,48 +508,31 @@ fn walk_files(path: &Path, ignored_dirs: &HashSet<String>) -> Vec<PathBuf> {
         })
         .filter_map(|e| e.ok())
         .filter(|e| e.file_type().is_file())
-        .map(|e| e.path().to_path_buf())
-        .collect()
+}
+
+/// Stream walk entries across rayon workers. Unlike collecting the whole
+/// file list first, memory stays bounded no matter how large the tree is.
+fn par_size_sum<I>(entries: I) -> u64
+where
+    I: Iterator<Item = walkdir::DirEntry> + Send,
+{
+    entries.par_bridge().map(|e| path_size(e.path())).sum()
 }
 
 /// Calculate total size of a directory (parallel with rayon)
 pub fn calculate_dir_size(path: &Path) -> u64 {
     let ignored_dirs = Config::get_ignored_dirs_combined();
-    walk_files(path, &ignored_dirs)
-        .par_iter()
-        .map(|p| {
-            if let Some(size) = get_cached_size(p) {
-                return size;
-            }
-            let size = std::fs::metadata(p).map(|m| m.len()).unwrap_or(0);
-            set_cached_size(p.clone(), size);
-            size
-        })
-        .sum()
-}
-
-fn walk_files_all(path: &Path) -> Vec<PathBuf> {
-    WalkDir::new(path)
-        .into_iter()
-        .filter_map(|e| e.ok())
-        .filter(|e| e.file_type().is_file())
-        .map(|e| e.path().to_path_buf())
-        .collect()
+    par_size_sum(file_walker(path, &ignored_dirs))
 }
 
 /// Calculate total size ignoring all exclude rules (cares about everything)
 pub fn calculate_total_size(path: &Path) -> u64 {
-    walk_files_all(path)
-        .par_iter()
-        .map(|p| {
-            if let Some(size) = get_cached_size(p) {
-                return size;
-            }
-            let size = std::fs::metadata(p).map(|m| m.len()).unwrap_or(0);
-            set_cached_size(p.clone(), size);
-            size
-        })
-        .sum()
+    par_size_sum(
+        WalkDir::new(path)
+            .into_iter()
+            .filter_map(|e| e.ok())
+            .filter(|e| e.file_type().is_file()),
+    )
 }
 
 /// Size of a single file (uses the shared per-file size cache).
@@ -539,16 +561,11 @@ pub fn calculate_target_size(path: &Path, care: bool) -> u64 {
 /// Calculate total size with progress bar (parallel)
 pub fn calculate_dir_size_with_progress(path: &Path, pb: &ProgressBar) -> u64 {
     let ignored_dirs = Config::get_ignored_dirs_combined();
-    walk_files(path, &ignored_dirs)
-        .par_iter()
-        .map(|p| {
+    file_walker(path, &ignored_dirs)
+        .par_bridge()
+        .map(|e| {
             pb.inc(1);
-            if let Some(size) = get_cached_size(p) {
-                return size;
-            }
-            let size = std::fs::metadata(p).map(|m| m.len()).unwrap_or(0);
-            set_cached_size(p.clone(), size);
-            size
+            path_size(e.path())
         })
         .sum()
 }

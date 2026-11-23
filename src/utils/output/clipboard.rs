@@ -84,7 +84,7 @@ pub fn set_clipboard_text(content: &str) -> Result<()> {
 #[cfg(not(target_os = "android"))]
 pub fn copy_to_clipboard(content: &str, format: &str) -> Result<()> {
     let content = normalize_newlines(content);
-    crate::shell::commands::clipboard::push_clip(&content);
+    crate::shell::commands::builtin::clip::push_clip(&content);
     set_clipboard_text(&content)
         .with_context(|| format!("Failed to copy {} report to clipboard", format))?;
 

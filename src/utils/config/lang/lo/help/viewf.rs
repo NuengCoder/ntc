@@ -8,7 +8,10 @@ pub fn fill(m: &mut HashMap<String, String>) {
         "viewf [<dir|@tp|@tp/dir/>] ## ສະແດງ tree ສະເພາະໄຟລ໌ທີ່ depth 1".into(),
     );
 
-    m.insert("help.viewf.file_usage".into(), "viewf <file|@tp/file|@tp/dir/file> [--head N|--tail N|--betw A:B] ## ສະແດງເນື້ອໃນໄຟລ໌ (ຄື txtf)".into());
+    m.insert(
+        "help.viewf.file_usage".into(),
+        "viewf <file|@tp/file|@tp/dir/file> [--head N|--tail N|--betw A:B] ## ສະແດງເນື້ອໃນໄຟລ໌ (ຄື txtf)".into(),
+    );
 
     m.insert(
         "help.viewf.size".into(),

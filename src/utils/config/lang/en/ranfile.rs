@@ -8,6 +8,8 @@ pub fn fill(m: &mut HashMap<String, String>) {
 
     m.insert("ranfile.depends_on".into(), " ─> depends on: ".into());
 
+    m.insert("ranfile.env_title".into(), "Environment variables:".into());
+
     m.insert(
         "ranfile.runner.hint".into(),
         "Run {} to see available targets.".into(),

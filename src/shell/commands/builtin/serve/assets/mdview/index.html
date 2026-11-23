@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>NTC mdview</title>
+<link rel="stylesheet" href="/app.css">
+</head>
+<body>
+
+<aside class="rail" aria-label="Markdown files">
+  <div class="rail-head">
+    <div class="rail-title">NTC <span>mdview</span></div>
+    <input id="filter" type="search" placeholder="Filter files…" autocomplete="off">
+  </div>
+  <div class="rail-list" id="files" role="list"></div>
+  <div class="rail-foot">
+    <button id="new-file" title="New document (Ctrl+N)">New</button>
+    <a href="/about" target="_blank" rel="noopener">About</a>
+  </div>
+</aside>
+
+<header class="top">
+  <span class="path" id="path">no file open</span>
+  <span class="dirty hidden" id="dirty" title="Unsaved changes">●</span>
+  <span class="spacer"></span>
+  <div class="seg" id="modes" role="group" aria-label="View mode">
+    <button data-mode="split" class="on">Split</button>
+    <button data-mode="edit">Editor</button>
+    <button data-mode="preview">Preview</button>
+  </div>
+  <button id="save" class="primary" disabled title="Save (Ctrl+S)">Save</button>
+  <button id="theme" title="Switch light / dark">Theme</button>
+</header>
+
+<main id="panes" class="split">
+  <section class="pane editor">
+    <div class="editor-wrap">
+      <pre id="hl" class="hl" aria-hidden="true"></pre>
+      <textarea id="editor" spellcheck="true" placeholder="# Start writing…&#10;&#10;Pick a file on the left, or press New."></textarea>
+    </div>
+  </section>
+  <section class="pane preview">
+    <article id="preview" class="markdown"></article>
+  </section>
+</main>
+
+<div class="statusbar">
+  <span id="stats">0 words</span>
+  <span class="spacer"></span>
+  <span id="msg"></span>
+</div>
+
+<div class="toasts" id="toasts" aria-live="polite"></div>
+
+<script src="/app.js"></script>
+</body>
+</html>

@@ -165,4 +165,45 @@ pub fn fill(m: &mut HashMap<String, String>) {
         "deadlock.vault_missing".into(),
         "ยังไม่มี vault ของ deadlock - รัน `deadlock` หนึ่งครั้งเพื่อสร้าง".into(),
     );
+
+    m.insert(
+        "deadlock.corrupt_aborted".into(),
+        "vault อ่านไม่ได้ และต้องกู้คืนก่อนที่ deadlock จะเปิดได้".into(),
+    );
+    m.insert(
+        "deadlock.corrupt_cancelled".into(),
+        "ยกเลิกการกู้คืนแล้ว; vault ยังไม่ถูกแก้ไข".into(),
+    );
+    m.insert(
+        "deadlock.corrupt_kept".into(),
+        "เก็บ vault ที่อ่านไม่ได้ไว้เป็น {}".into(),
+    );
+    m.insert(
+        "deadlock.corrupt_notice".into(),
+        "ไฟล์ vault ที่ {} อ่านไม่ได้ (ไม่ใช่ vault ของ deadlock ที่ถูกต้อง)".into(),
+    );
+    m.insert(
+        "deadlock.corrupt_recreate_failed".into(),
+        "ย้าย vault ที่อ่านไม่ได้ออกไปไม่ได้: {}".into(),
+    );
+    m.insert(
+        "deadlock.corrupt_recreate_prompt".into(),
+        "สร้าง vault ว่างใหม่ตอนนี้หรือไม่? ไฟล์ที่อ่านไม่ได้จะถูกเก็บไว้ข้าง vault [y/N]".into(),
+    );
+    m.insert(
+        "deadlock.corrupt_recreated".into(),
+        "สร้าง vault ว่างใหม่แล้ว".into(),
+    );
+    m.insert(
+        "deadlock.corrupt_restore_failed".into(),
+        "กู้คืนสำเนาสำรองไม่ได้: {}".into(),
+    );
+    m.insert(
+        "deadlock.corrupt_restore_prompt".into(),
+        "มีสำเนาสำรองของ vault กู้คืนหรือไม่? [y/N]".into(),
+    );
+    m.insert(
+        "deadlock.corrupt_restored".into(),
+        "กู้คืน vault จากสำเนาสำรองแล้ว".into(),
+    );
 }

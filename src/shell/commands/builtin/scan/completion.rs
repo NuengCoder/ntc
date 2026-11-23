@@ -1,0 +1,71 @@
+//! Static subcommand/flag completions for the `scan` command.
+
+use crate::shell::commands::core::completion::{CompletionNode, CompletionSpec};
+
+pub(crate) static COMPLETION: CompletionSpec = CompletionSpec {
+    root: &[
+        "ext", "files", "dir", "port", "ip", "pid", "waep", "web", "help",
+    ],
+    flat: false,
+    nodes: &[
+        CompletionNode::at(
+            &[&["ext", "files", "dir"]],
+            &["-d", "--depth", "-s", "--size", "--care"],
+        ),
+        CompletionNode::at(
+            &[&["waep", "web"]],
+            &[
+                "-w",
+                "--wordlist",
+                "-x",
+                "--ext",
+                "-m",
+                "--method",
+                "-s",
+                "--status",
+                "--all",
+                "-r",
+                "--recursive",
+                "-d",
+                "--depth",
+                "-c",
+                "--concurrency",
+                "--timeout",
+                "-H",
+                "--header",
+                "-A",
+                "--user-agent",
+                "-o",
+                "--output",
+                "-q",
+                "--quiet",
+            ],
+        ),
+        CompletionNode::at(&[&["port"]], &["--top", "--ports", "--all", "--timeout"]),
+        CompletionNode::at(&[&["ip"]], &["--top", "--ports", "--timeout"]),
+        CompletionNode::at(
+            &[&["pid"]],
+            &[
+                "--user",
+                "-u",
+                "--port",
+                "-p",
+                "--key",
+                "--pass-env",
+                "--trust",
+                "--timeout",
+                "--sort",
+                "--desc",
+                "--filter",
+                "--min-memory",
+                "--min-mem",
+                "--max-memory",
+                "--max-mem",
+                "--offset",
+                "--limit",
+                "--head",
+                "-l",
+            ],
+        ),
+    ],
+};

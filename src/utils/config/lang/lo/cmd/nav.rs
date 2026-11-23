@@ -2,6 +2,11 @@ use std::collections::HashMap;
 
 pub fn fill(m: &mut HashMap<String, String>) {
     m.insert(
+        "cmd.godrive.unknown".into(),
+        "ບໍ່ພົບ drive ຫຼື mount ຊື່ '{}'".into(),
+    );
+
+    m.insert(
         "cmd.nav.back.invalid_number".into(),
         "ເລກບໍ່ຖືກຕ້ອງ: {}. ວິທີໃຊ້: back [n]".into(),
     );
@@ -112,5 +117,32 @@ pub fn fill(m: &mut HashMap<String, String>) {
         "ຕຳແໜ່ງຂອງ '{}' ໃນ PATH:".into(),
     );
 
+    m.insert("cmd.nav.where.deadlock".into(), "Deadlock vault:".into());
+
+    m.insert("cmd.nav.where.disabled".into(), "ປິດໃຊ້ງານ".into());
+
+    m.insert(
+        "cmd.nav.where.editor_config".into(),
+        "ໄຟລ໌ config editor:".into(),
+    );
+
+    m.insert("cmd.nav.where.history".into(), "ປະຫວັດ:".into());
+
+    m.insert("cmd.nav.where.home".into(), "NTC home:".into());
+
+    m.insert("cmd.nav.where.nssh".into(), "ໂປຣໄຟລ໌ SSH:".into());
+
+    m.insert("cmd.nav.where.packages".into(), "ແພັກເກດ:".into());
+
+    m.insert("cmd.nav.where.recovery".into(), "ການກູ້ຄືນຫຼັງ crash:".into());
+
+    m.insert("cmd.nav.where.sessions".into(), "Session:".into());
+
+    m.insert("cmd.nav.where.skills".into(), "ສະກິລ:".into());
+
+    m.insert("cmd.nav.where.themes".into(), "ທີມ:".into());
+
     m.insert("cmd.nav.where.title".into(), "ຂໍ້ມູນບ່ອນຕັ້ງ ntc".into());
+
+    m.insert("cmd.nav.where.tutorial".into(), "ບົດຮຽນ:".into());
 }

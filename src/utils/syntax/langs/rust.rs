@@ -1,0 +1,153 @@
+//! Rust lexer traits and word tables.
+
+use super::spec::LangSpec;
+
+pub(super) const SPEC: LangSpec = LangSpec::new(b"//")
+    .with_block_comments()
+    .with_char_literals()
+    .with_upper_heuristic()
+    .keywords(is_keyword)
+    .type_names(is_type_name)
+    .builtins(is_builtin);
+
+pub(super) fn is_keyword(word: &str) -> bool {
+    matches!(
+        word,
+        "as" | "async"
+            | "await"
+            | "break"
+            | "const"
+            | "continue"
+            | "crate"
+            | "dyn"
+            | "else"
+            | "enum"
+            | "extern"
+            | "false"
+            | "fn"
+            | "for"
+            | "if"
+            | "impl"
+            | "in"
+            | "let"
+            | "loop"
+            | "match"
+            | "mod"
+            | "move"
+            | "mut"
+            | "pub"
+            | "ref"
+            | "return"
+            | "self"
+            | "Self"
+            | "static"
+            | "struct"
+            | "super"
+            | "trait"
+            | "true"
+            | "type"
+            | "unsafe"
+            | "use"
+            | "where"
+            | "while"
+            | "abstract"
+            | "become"
+            | "box"
+            | "do"
+            | "final"
+            | "macro"
+            | "override"
+            | "priv"
+            | "try"
+            | "typeof"
+            | "unsized"
+            | "virtual"
+            | "yield"
+    )
+}
+
+pub(super) fn is_type_name(word: &str) -> bool {
+    matches!(
+        word,
+        "i8" | "i16"
+            | "i32"
+            | "i64"
+            | "i128"
+            | "isize"
+            | "u8"
+            | "u16"
+            | "u32"
+            | "u64"
+            | "u128"
+            | "usize"
+            | "f32"
+            | "f64"
+            | "bool"
+            | "char"
+            | "str"
+            | "String"
+            | "Vec"
+            | "HashMap"
+            | "HashSet"
+            | "BTreeMap"
+            | "BTreeSet"
+            | "Option"
+            | "Result"
+            | "Box"
+            | "Rc"
+            | "Arc"
+            | "Cell"
+            | "RefCell"
+            | "Mutex"
+            | "RwLock"
+            | "Path"
+            | "PathBuf"
+            | "OsStr"
+            | "OsString"
+            | "CStr"
+            | "CString"
+            | "Duration"
+            | "Ordering"
+            | "Cow"
+            | "Pin"
+            | "PhantomData"
+    )
+}
+
+pub(super) fn is_builtin(word: &str) -> bool {
+    matches!(
+        word,
+        "Some"
+            | "None"
+            | "Ok"
+            | "Err"
+            | "println"
+            | "eprintln"
+            | "format"
+            | "vec"
+            | "dbg"
+            | "todo"
+            | "unimplemented"
+            | "unreachable"
+            | "panic"
+            | "assert"
+            | "assert_eq"
+            | "assert_ne"
+            | "debug_assert"
+            | "debug_assert_eq"
+            | "debug_assert_ne"
+            | "write"
+            | "writeln"
+            | "include_str"
+            | "include_bytes"
+            | "stringify"
+            | "concat"
+            | "env"
+            | "option_env"
+            | "cfg"
+            | "column"
+            | "file"
+            | "line"
+            | "macro_rules"
+    )
+}

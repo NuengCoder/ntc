@@ -164,6 +164,20 @@ pub fn fill(m: &mut HashMap<String, String>) {
     m.insert("theme.usage_add".into(), "Usage: theme add <name>".into());
 
     m.insert(
+        "theme.usage_update".into(),
+        "Usage: theme update <name>".into(),
+    );
+
+    m.insert(
+        "theme.updated".into(),
+        "ອັບເດດ theme '{}' ແລ້ວ: ເພີ່ມ {} ຟິລດ໌ທີ່ຂາດ".into(),
+    );
+
+    m.insert("theme.up_to_date".into(), "theme '{}' ມີທຸກຟິລດ໌ແລ້ວ".into());
+
+    m.insert("theme.update_failed".into(), "ອັບເດດບໍ່ສຳເລັດ: {}".into());
+
+    m.insert(
         "theme.usage_export".into(),
         "Usage: theme export <name> [output_file]".into(),
     );
@@ -180,10 +194,57 @@ pub fn fill(m: &mut HashMap<String, String>) {
         "Usage: theme rename <old_name> to <new_name>".into(),
     );
 
-    m.insert("theme.usage_rm".into(), "Usage: theme rm <name>".into());
+    m.insert(
+        "theme.usage_rm".into(),
+        "ການໃຊ້: theme rm <ຊື່> [<ຊື່> ...] [-f|--force]".into(),
+    );
+
+    m.insert("theme.usage_use".into(), "ການໃຊ້: theme use <ຊື່>".into());
+
+    m.insert("theme.remove_confirm".into(), "ລຶບ {} ທີມ ({})? [y/N]".into());
+
+    m.insert("theme.remove_cancelled".into(), "ຍົກເລີກແລ້ວ.".into());
+
+    m.insert(
+        "theme.remove_current".into(),
+        "ບໍ່ສາມາດລຶບທີມທີ່ໃຊ້ຢູ່ '{}' ໄດ້; ກະລຸນາປ່ຽນໄປທີມອື່ນກ່ອນ".into(),
+    );
+
+    m.insert(
+        "theme.remove_builtin".into(),
+        "ບໍ່ສາມາດລຶບທີມໃນຕົວ '{}' ໄດ້".into(),
+    );
 
     m.insert(
         "theme.usage_rnm".into(),
         "Usage: theme rnm <old_name> to <new_name>".into(),
+    );
+
+    m.insert(
+        "theme.install_downloading".into(),
+        "ກຳລັງດາວໂຫຼດ {}...".into(),
+    );
+
+    m.insert("theme.install_failed".into(), "ຕິດຕັ້ງທີມບໍ່ສຳເລັດ: {}".into());
+
+    m.insert(
+        "theme.install_fetching".into(),
+        "ກຳລັງດຶງໄຟລ໌ .ntc_theme ຈາກ GitHub...".into(),
+    );
+
+    m.insert(
+        "theme.install_none".into(),
+        "ບໍ່ພົບໄຟລ໌ .ntc_theme ທີ່ຕິດຕັ້ງໄດ້".into(),
+    );
+
+    m.insert("theme.install_prompt".into(), "ເລືອກທີມ (0 ເພື່ອຍົກເລີກ):".into());
+
+    m.insert("theme.install_title".into(), "ຕິດຕັ້ງທີມ".into());
+
+    m.insert("theme.installed".into(), "ຕິດຕັ້ງທີມ '{}' ແລ້ວ".into());
+
+    m.insert(
+        "theme.installed_active".into(),
+        "ຕິດຕັ້ງ ແລະ ສະຫຼັບໄປທີມ '{}' ແລ້ວ".into(),
     );
 }

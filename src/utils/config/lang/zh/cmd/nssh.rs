@@ -315,4 +315,34 @@ pub fn fill(m: &mut HashMap<String, String>) {
     m.insert("cmd.nssh.shell_back".into(), "已回到 ntc shell".into());
 
     m.insert("cmd.nssh.shell_forced".into(), "已强制断开（~.）".into());
+
+    m.insert(
+        "cmd.nssh.auth_failed".into(),
+        "SSH 身份验证失败：{}@{}。".into(),
+    );
+    m.insert(
+        "cmd.nssh.master_unlock_failed".into(),
+        "无法解锁 deadlock 保险库（{}）；将回退到 SSH 密码提示。".into(),
+    );
+    m.insert(
+        "cmd.nssh.pass_env_from_vault".into(),
+        "正在使用 deadlock 保险库中的 pass-env“{}”。".into(),
+    );
+    m.insert(
+        "cmd.nssh.pass_env_not_in_vault".into(),
+        "deadlock 保险库中没有 pass-env“{}” - 正在尝试环境变量".into(),
+    );
+    m.insert(
+        "cmd.nssh.pass_env_pending".into(),
+        "pass-env“{}”将在连接时从 deadlock 保险库解析。".into(),
+    );
+    m.insert(
+        "cmd.nssh.pass_env_registered".into(),
+        "pass-env“{}”已注册到 deadlock 保险库。".into(),
+    );
+    m.insert(
+        "cmd.nssh.password_incorrect".into(),
+        "密码不正确。{}@{} 的密码：".into(),
+    );
+    m.insert("cmd.nssh.password_prompt".into(), "{}@{} 的密码：".into());
 }

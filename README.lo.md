@@ -1,8 +1,8 @@
 <p align="center">
-  <img src="https://img.shields.io/badge/version-2.4.8-blue.svg" alt="Version 2.4.8"/>
+  <img src="https://img.shields.io/badge/version-2.4.9-blue.svg" alt="Version 2.4.9"/>
 </p>
 
-<h1 align="center">ntc 2.4.8</h1>
+<h1 align="center">ntc 2.4.9</h1>
 
 <p align="center">
   <b>Navigate · Toolkit · Center</b><br>
@@ -10,7 +10,7 @@
 </p>
 
 <p align="center">
-  Windows · Linux · macOS · Android (ຜ່ານ Termux)
+  Windows · Linux · macOS · Android (ຜ່ານ Termux arm64)
 </p>
 
 <p align="center">
@@ -39,6 +39,8 @@
 | `ran` | ຕົວຮັນງານ |
 | `nfe` | ຕົວສຳຫຼວດໄຟລ໌ |
 | `ne` | ໂປຣແກຣມແກ້ໄຂໃນຕົວ |
+| `view` | ໂຄງສ້າງໄດເຣກທໍຣີພ້ອມຂະໜາດ, ຕົວກອງ ແລະ ຕົວຢ່າງໄຟລ໌ |
+| `size` | ຂະໜາດໄຟລ໌ ແລະ ໂຟນເດີ |
 | `sys` | ຕົວກວດກາລະບົບ |
 | `spec` | ສະເປັກລະບົບ ແລະ ການໃຊ້ດິສ |
 | `gosc` | ການນຳທາງຕໍ່ເນື່ອງ |
@@ -55,10 +57,53 @@
 
 ## ມີຫຍັງໃໝ່
 
-- `spec` ສະແດງແຕ່ລະດິສເປັນ `ໃຊ້ແລ້ວ/ທັງໝົດ ເປີເຊັນ ພື້ນທີ່ຫວ່າງ` ເຊັ່ນ
-  `200 GB/300 GB 67% 100 GB ຫວ່າງ` — ຄຳວ່າ "ຫວ່າງ" ຈະປ່ຽນຕາມພາສາທີ່ໃຊ້
-- `spec` ສະແດງກາດຈໍໜຶ່ງແຖວຕໍ່ໜຶ່ງຕົວ ແລະ ຈະໃຊ້ຊື່ຊິບ Android ແທນ
-  ເມື່ອລະບົບບໍ່ສະແດງຊື່ CPU
+- `config env NAME=value` ໃຊ້ໄດ້ຄືກັບ `config env NAME value` ແລ້ວ
+
+---
+
+## ພາບໜ້າຈໍ
+
+<p align="center">
+  <img src="assets/before_tp.png" alt="tp before" width="32%">
+  <img src="assets/after_tp.png" alt="tp after" width="32%">
+  <img src="assets/ral_info.png" alt="ral info" width="32%">
+</p>
+
+<p align="center">
+  <img src="assets/after_ral.png" alt="ral after" width="32%">
+  <img src="assets/ran_info.png" alt="ran info" width="32%">
+  <img src="assets/after_ran.png" alt="ran after" width="32%">
+</p>
+
+<p align="center">
+  <img src="assets/nfe.png" alt="nfe file explorer" width="32%">
+  <img src="assets/ne.png" alt="ne editor" width="32%">
+  <img src="assets/sys.png" alt="sys system monitor" width="32%">
+</p>
+
+<p align="center">
+  <img src="assets/spec.png" alt="spec specs and disks" width="32%">
+  <img src="assets/view_and_size.png" alt="view --size" width="32%">
+  <img src="assets/view.png" alt="view directory tree" width="32%">
+</p>
+
+<p align="center">
+  <img src="assets/serve.png" alt="serve services" width="32%">
+  <img src="assets/serve_files.png" alt="serve files" width="32%">
+  <img src="assets/serve_httpserver.png" alt="serve files HTTP server" width="32%">
+</p>
+
+<p align="center">
+  <img src="assets/serve_chess.png" alt="serve chess" width="32%">
+  <img src="assets/serve_git.png" alt="serve git" width="32%">
+  <img src="assets/serve_arc.png" alt="serve arc" width="32%">
+</p>
+
+<p align="center">
+  <img src="assets/serve_theme.png" alt="serve theme" width="32%">
+  <img src="assets/serve_fake.png" alt="serve fake" width="32%">
+  <img src="assets/serve_backup.png" alt="serve backup" width="32%">
+</p>
 
 ---
 
@@ -77,7 +122,7 @@ pip install ntc-cli
 ```
 
 ໝາຍເຫດ: pip wheel ເຜີຍແຜ່ສະເພາະສີ່ແພລດຟອມຂ້າງເທິງເທົ່ານັ້ນ
-Android/Termux ແລະ Windows ARM64 ບໍ່ມີໃນ PyPI — ໃຫ້ໃຊ້ npm ຫຼື
+Android/Termux arm64 ແລະ Windows ARM64 ບໍ່ມີໃນ PyPI — ໃຫ້ໃຊ້ npm ຫຼື
 ໄຟລ໌ໄບນາຣີຈາກ GitHub Release ແທນ
 
 ### ຊ່ອງທາງອື່ນ
@@ -100,7 +145,7 @@ Android/Termux ແລະ Windows ARM64 ບໍ່ມີໃນ PyPI — ໃຫ້�
 | Linux ARM64 (glibc) | yes | no | yes | ຍັງບໍ່ມີ pip wheel |
 | macOS x64 | yes | yes | yes | `macosx_*_x86_64` |
 | macOS ARM64 | yes | yes | yes | `macosx_*_arm64` |
-| Android / Termux | yes | no | yes | ໃຊ້ asset ຂອງ Termux ຜ່ານ npm |
+| Android / Termux arm64 | yes | no | yes | ໃຊ້ asset ຂອງ Termux arm64 ຜ່ານ npm |
 
 ຄຳອະທິບາຍ: yes = ຮອງຮັບ · no = ບໍ່ມີໃຫ້ໃຊ້
 

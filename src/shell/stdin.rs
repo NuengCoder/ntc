@@ -9,9 +9,23 @@
 
 use std::cell::RefCell;
 use std::io::{IsTerminal, Read};
+use std::sync::atomic::{AtomicBool, Ordering};
 
 thread_local! {
     static INPUT: RefCell<Option<Vec<u8>>> = RefCell::new(None);
+}
+
+/// True while the interactive shell is executing commands read from a
+/// piped/redirected script. External commands must not inherit that stdin,
+/// or the first one would swallow the remaining script lines.
+static SCRIPT_MODE: AtomicBool = AtomicBool::new(false);
+
+pub(crate) fn set_script_mode(enabled: bool) {
+    SCRIPT_MODE.store(enabled, Ordering::Relaxed);
+}
+
+pub(crate) fn script_mode() -> bool {
+    SCRIPT_MODE.load(Ordering::Relaxed)
 }
 
 /// Install the input bytes for the command that is about to run.
@@ -45,6 +59,11 @@ pub(crate) fn take_input() -> Option<Vec<u8>> {
     let explicit = INPUT.with(|i| i.borrow_mut().take());
     if explicit.is_some() {
         return explicit;
+    }
+    // The interactive shell is reading commands from this stdin; draining it
+    // here would swallow the rest of the script.
+    if script_mode() {
+        return None;
     }
     if !std::io::stdin().is_terminal() {
         let mut buf = Vec::new();

@@ -38,5 +38,10 @@ pub fn fill(m: &mut HashMap<String, String>) {
         "scr <file.ntc> [args...] ## 运行自动化脚本".into(),
     );
 
+    m.insert(
+        "help.scr.direct".into(),
+        "<file.ntc> [args...] ## 直接在提示符运行脚本".into(),
+    );
+
     m.insert("help.scr.title".into(), "SCR / 自动化脚本命令：".into());
 }

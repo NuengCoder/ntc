@@ -97,11 +97,17 @@ export interface BoardProps {
   hotSquares: string[] // hanging pieces (orange), computed server-side
   pinnedSquares: string[] // pinned to king (gray), computed server-side
   silverSquares: string[] // pinned to pricier piece (silver), computed server-side
+  /// Coach: teal square on the piece to move.
+  coachFrom?: string | null
+  /// Coach: lime mini-border on the destination square.
+  coachTo?: string | null
   anim: AnimMove | null
   flipped: boolean // Black's perspective when true (2P hotseat + future AI)
   drag: { code: string; x: number; y: number } | null // held piece, board-% pos
   dragFrom: string | null // origin square whose static piece hides mid-drag
   interactive: boolean
+  /// Move-quality pill anchored at the top-right of `square` (live only).
+  badge?: { square: string; label: string; kind: string } | null
   onSquare(sq: string): void
   onPress(sq: string, e: React.PointerEvent): void
   onDragMove(e: React.PointerEvent): void
@@ -147,6 +153,7 @@ const Square = memo(function Square({
   fileLabel,
   dot,
   ring,
+  coachBorder,
   interactive,
   live,
 }: {
@@ -158,6 +165,7 @@ const Square = memo(function Square({
   fileLabel: string | null
   dot: boolean
   ring: boolean
+  coachBorder: boolean
   interactive: boolean
   live: React.MutableRefObject<{
     onSquare(sq: string): void
@@ -175,6 +183,9 @@ const Square = memo(function Square({
       }}
     >
       {overlay && <div className="overlay" style={{ backgroundColor: overlay }} />}
+      {coachBorder && (
+        <div className="coach-border" style={{ borderColor: theme.coachTo }} />
+      )}
       {rankLabel !== null && (
         <span
           className="coord rank"
@@ -209,6 +220,8 @@ export default function Board(props: BoardProps) {
   const hot = new Set(props.hotSquares ?? [])
   const pinned = new Set(props.pinnedSquares ?? [])
   const silver = new Set(props.silverSquares ?? [])
+  const coachFrom = props.coachFrom ?? null
+  const coachTo = props.coachTo ?? null
   // While a ghost slides, hide the static pieces on its destinations
   // (captures vanish instantly by design). Reversed takebacks also hide
   // the origin square; held-drag pieces hide their origin the same way.
@@ -235,13 +248,15 @@ export default function Board(props: BoardProps) {
       const isHot = hot.has(sq)
       const isPinned = pinned.has(sq)
       const isSilver = silver.has(sq)
+      const isCoach = sq === coachFrom
+      const isCoachTo = sq === coachTo
       const target = targetMap.get(sq)
 
-      // Red check > orange hot > gray pinned > silver > yellow last-move.
-      // Hot never changes color; silver shows only when not hanging or
-      // king-pinned.
+      // Red check > teal coach-from > orange hot > gray pinned > silver >
+      // yellow last-move. The lime coach border is painted independently.
       let overlay: string | undefined
       if (isCheck) overlay = theme.check
+      else if (isCoach) overlay = theme.coachFrom
       else if (isHot) overlay = theme.hot
       else if (isPinned) overlay = theme.pinned
       else if (isSilver) overlay = theme.silver
@@ -259,6 +274,7 @@ export default function Board(props: BoardProps) {
           fileLabel={dy === 7 ? String.fromCharCode(97 + f) : null}
           dot={!!target && !code}
           ring={!!target && !!code}
+          coachBorder={isCoachTo}
           interactive={interactive}
           live={live}
         />,
@@ -284,6 +300,17 @@ export default function Board(props: BoardProps) {
       }}
     >
       {rows}
+      {props.badge && (
+        <span
+          className={`move-badge badge-${props.badge.kind}`}
+          style={{
+            left: `${sqDisplay(props.badge.square, flipped).x * 12.5 + 12.5}%`,
+            top: `${sqDisplay(props.badge.square, flipped).y * 12.5}%`,
+          }}
+        >
+          {props.badge.label}
+        </span>
+      )}
       {props.drag && (
         <div className="anim-layer">
           <div

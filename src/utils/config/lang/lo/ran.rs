@@ -28,6 +28,11 @@ pub fn fill(m: &mut HashMap<String, String>) {
     );
 
     m.insert(
+        "ran.desc_env".into(),
+        " ລາຍການໃນ [env] ເປັນ environment variable ຂອງທຸກຄຳສັ່ງ ແລະ ໃຊ້ເປັນ $(NAME) ໃນຄຳສັ່ງໄດ້.".into(),
+    );
+
+    m.insert(
         "ran.desc_note".into(),
         " ການເອີ້ນ 'ran' ຈາກພາຍໃນຄຳສັ່ງ NTCRANFILE target ບໍ່ອະນຸຍາດ.".into(),
     );
@@ -49,6 +54,20 @@ pub fn fill(m: &mut HashMap<String, String>) {
 
     m.insert("ran.error_prefix".into(), "ran: {}".into());
 
+    m.insert(
+        "ran.dry_run.title".into(),
+        "ລອງແລ່ນ \u{2014} ຈະບໍ່ຮັນຄຳສັ່ງໃດໆ.".into(),
+    );
+
+    m.insert("ran.dry_run.header".into(), "{} ໃນ {}".into());
+
+    m.insert("ran.dry_run.env".into(), "environment: {}".into());
+
+    m.insert(
+        "ran.dry_run.summary".into(),
+        "ທັງໝົດ {} target ຕາມລຳດັບ: {}".into(),
+    );
+
     m.insert("ran.exec_failed".into(), "ເຮັດວຽກຄຳສັ່ງບໍ່ສຳເລັດ: {}".into());
 
     m.insert("ran.executing".into(), "ກຳລັງເຮັດວຽກ: {}".into());
@@ -63,6 +82,11 @@ pub fn fill(m: &mut HashMap<String, String>) {
     m.insert(
         "ran.help_deinit_fmt".into(),
         " ran deinit ລຶບ {} ຈາກໄດເຣັກທໍຣີປັດຈຸບັນ".into(),
+    );
+
+    m.insert(
+        "ran.help_dry_run".into(),
+        " ran --dry-run [target] ສະແດງສິ່ງທີ່ຈະແລ່ນ ໂດຍບໍ່ຮັນຈິງ".into(),
     );
 
     m.insert("ran.help_help".into(), " ran help ສະແດງຄຳຊ່ວຍເຫຼືອນີ້".into());
@@ -103,6 +127,8 @@ pub fn fill(m: &mut HashMap<String, String>) {
     m.insert("ran.section_aliases".into(), "Run aliases:".into());
 
     m.insert("ran.section_deps".into(), "Dependencies:".into());
+
+    m.insert("ran.section_env".into(), "Environment:".into());
 
     m.insert("ran.section_note".into(), "Note:".into());
 

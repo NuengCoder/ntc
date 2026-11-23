@@ -2709,6 +2709,20 @@ mod tests {
     }
 
     #[test]
+    fn alias_expansion_runs_before_builtin_dispatch() {
+        // Configs predating registry-based validation can hold an alias
+        // named like a built-in. Expansion must still win: it runs before
+        // dispatch. Creating such aliases is now rejected at validation.
+        let mut cfg = Config::new();
+        cfg.run_aliases
+            .insert("version".to_string(), "say shadowed".to_string());
+        Config::with_test_config(cfg, || {
+            assert_eq!(expand_aliases_line("version"), "say shadowed");
+            assert!(!crate::config::validate_alias_name("version"));
+        });
+    }
+
+    #[test]
     fn typed_env_refs_expand_before_execution() {
         std::env::set_var("NTC_TEST_LINE_ENV", "hello world");
         assert_eq!(

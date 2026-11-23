@@ -7,23 +7,6 @@ pub fn fill(m: &mut HashMap<String, String>) {
     );
 
     m.insert(
-        "help.math.file".into(),
-        "math file.ntc.math ## Compile and run a math file".into(),
-    );
-
-    m.insert(
-        "help.math.fun".into(),
-        "math fun add/rm/edit/info/ls ## Manage custom math functions".into(),
-    );
-
-    m.insert(
-        "help.math.timer".into(),
-        "math timer [sec] ## Lap timer or countdown with alarm".into(),
-    );
-
-    m.insert("help.math.title".into(), "MATH COMMANDS:".into());
-
-    m.insert(
         "help.math.example1".into(),
         "math 3+4*5 ## Evaluate arithmetic expression".into(),
     );
@@ -52,4 +35,21 @@ pub fn fill(m: &mut HashMap<String, String>) {
         "help.math.example6".into(),
         "math calc.ntc.math ## Run math file".into(),
     );
+
+    m.insert(
+        "help.math.file".into(),
+        "math file.ntc.math ## Compile and run a math file".into(),
+    );
+
+    m.insert(
+        "help.math.fun".into(),
+        "math fun add/rm/edit/info/ls ## Manage custom math functions".into(),
+    );
+
+    m.insert(
+        "help.math.timer".into(),
+        "math timer [sec] ## Lap timer or countdown with alarm".into(),
+    );
+
+    m.insert("help.math.title".into(), "MATH COMMANDS:".into());
 }

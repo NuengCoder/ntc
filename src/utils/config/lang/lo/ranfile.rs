@@ -5,6 +5,8 @@ pub fn fill(m: &mut HashMap<String, String>) {
 
     m.insert("ranfile.depends_on".into(), " ─> ຂຶ້ນກັບ: ".into());
 
+    m.insert("ranfile.env_title".into(), "Environment variables:".into());
+
     m.insert(
         "ranfile.runner.hint".into(),
         "ເຮັດວຽກ {} ເພື່ອເບິ່ງ targets ທີ່ມີ.".into(),

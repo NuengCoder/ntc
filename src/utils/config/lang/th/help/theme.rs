@@ -17,6 +17,26 @@ pub fn fill(m: &mut HashMap<String, String>) {
     );
 
     m.insert(
+        "help.theme.example1".into(),
+        "theme list ## แสดงธีมทั้งหมด".into(),
+    );
+
+    m.insert(
+        "help.theme.example2".into(),
+        "theme dark ## สลับไปใช้ธีม 'dark'".into(),
+    );
+
+    m.insert(
+        "help.theme.example3".into(),
+        "theme current ## แสดงข้อมูลธีมปัจจุบัน".into(),
+    );
+
+    m.insert(
+        "help.theme.example4".into(),
+        "theme add mytheme ## สร้างธีมใหม่".into(),
+    );
+
+    m.insert(
         "help.theme.export".into(),
         "theme export <name> ## ส่งออกธีมไปยังไฟล์ .ntc_theme".into(),
     );
@@ -48,7 +68,10 @@ pub fn fill(m: &mut HashMap<String, String>) {
         "theme reload ## โหลดธีมจากดิสก์ใหม่".into(),
     );
 
-    m.insert("help.theme.rm".into(), "theme rm <name> ## ลบธีม".into());
+    m.insert(
+        "help.theme.rm".into(),
+        "theme rm <name...> [-f|--force] ## ลบธีม".into(),
+    );
 
     m.insert(
         "help.theme.rnm".into(),
@@ -57,10 +80,15 @@ pub fn fill(m: &mut HashMap<String, String>) {
 
     m.insert(
         "help.theme.switch".into(),
-        "theme <name> ## สลับไปใช้ธีมตามชื่อ".into(),
+        "theme use <name> ## สลับไปใช้ธีมตามชื่อ".into(),
     );
 
     m.insert("help.theme.title".into(), "คำสั่งธีม (THEME):".into());
+
+    m.insert(
+        "help.theme.update".into(),
+        "theme update <name> ## เพิ่มฟิลด์ที่ขาดให้ธีมที่มีอยู่".into(),
+    );
 
     m.insert(
         "help.theme.where".into(),
@@ -68,22 +96,7 @@ pub fn fill(m: &mut HashMap<String, String>) {
     );
 
     m.insert(
-        "help.theme.example1".into(),
-        "theme list ## แสดงธีมทั้งหมด".into(),
-    );
-
-    m.insert(
-        "help.theme.example2".into(),
-        "theme dark ## สลับไปใช้ธีม 'dark'".into(),
-    );
-
-    m.insert(
-        "help.theme.example3".into(),
-        "theme current ## แสดงข้อมูลธีมปัจจุบัน".into(),
-    );
-
-    m.insert(
-        "help.theme.example4".into(),
-        "theme add mytheme ## สร้างธีมใหม่".into(),
+        "help.theme.install".into(),
+        "theme install ## ติดตั้งธีมจากแคตตาล็อก GitHub ของ ntc".into(),
     );
 }

@@ -7,20 +7,6 @@ pub fn fill(m: &mut HashMap<String, String>) {
     );
 
     m.insert(
-        "help.size.path".into(),
-        "size -p, --path <文件|路径|@tp> ## 显示指定文件、路径或传送点的大小".into(),
-    );
-
-    m.insert("help.size.size".into(), "size ## 显示当前目录大小".into());
-
-    m.insert(
-        "help.size.time".into(),
-        "size -t, --time ## 显示耗时".into(),
-    );
-
-    m.insert("help.size.title".into(), "大小命令：".into());
-
-    m.insert(
         "help.size.example1".into(),
         "size ## 显示当前目录大小".into(),
     );
@@ -39,4 +25,18 @@ pub fn fill(m: &mut HashMap<String, String>) {
         "help.size.example4".into(),
         "size @web --care -t ## 传送点使用 care 模式并显示耗时".into(),
     );
+
+    m.insert(
+        "help.size.path".into(),
+        "size -p, --path <文件|路径|@tp> ## 显示指定文件、路径或传送点的大小".into(),
+    );
+
+    m.insert("help.size.size".into(), "size ## 显示当前目录大小".into());
+
+    m.insert(
+        "help.size.time".into(),
+        "size -t, --time ## 显示耗时".into(),
+    );
+
+    m.insert("help.size.title".into(), "大小命令：".into());
 }

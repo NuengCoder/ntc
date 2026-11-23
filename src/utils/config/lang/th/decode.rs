@@ -3,7 +3,7 @@ use std::collections::HashMap;
 pub fn fill(m: &mut HashMap<String, String>) {
     m.insert(
         "decode.unknown_format".into(),
-        "รูปแบบ decode ไม่รู้จัก: '{}'. ใช้ b2, b10, b64, hex หรือ url.".into(),
+        "รูปแบบ decode ไม่รู้จัก: '{}'. ใช้ b2, b10, b64, hex, url, utf8, utf16, ascii.".into(),
     );
 
     m.insert(
@@ -34,5 +34,20 @@ pub fn fill(m: &mut HashMap<String, String>) {
     m.insert(
         "decode.usage_decode_url".into(),
         "  decode url <เป้าหมาย> [-o <ไฟล์>] ถอดรหัสเปอร์เซ็นต์ URL".into(),
+    );
+
+    m.insert(
+        "decode.usage_decode_utf8".into(),
+        "  decode utf8 <เป้าหมาย> [-o <ไฟล์>] ไบต์ escape เป็น UTF-8 (\\xc3\\xa9)".into(),
+    );
+
+    m.insert(
+        "decode.usage_decode_utf16".into(),
+        "  decode utf16 <เป้าหมาย> [-o <ไฟล์>] escape \\uNNNN เป็นข้อความ (\\u00e9)".into(),
+    );
+
+    m.insert(
+        "decode.usage_decode_ascii".into(),
+        "  decode ascii <เป้าหมาย> [-o <ไฟล์>] ข้อความ escape เป็นไบต์ ASCII".into(),
     );
 }

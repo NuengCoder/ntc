@@ -2,53 +2,8 @@ use std::collections::HashMap;
 
 pub fn fill(m: &mut HashMap<String, String>) {
     m.insert(
-        "help.config.autosuggest".into(),
-        "config autosuggest ON|OFF ## แสดง/ตั้งค่าข้อความเลือน".into(),
-    );
-
-    m.insert(
-        "help.config.color".into(),
-        "config color ON|OFF ## แสดง/ตั้งค่าสีผลลัพธ์".into(),
-    );
-
-    m.insert(
-        "help.config.depth".into(),
-        "config depth [n] ## แสดง/ตั้งค่าความลึกสูงสุด (1-20)".into(),
-    );
-
-    m.insert(
-        "help.config.history".into(),
-        "config history [on|off|path] ## แสดง/ตั้งค่าประวัติ".into(),
-    );
-
-    m.insert(
-        "help.config.lang".into(),
-        "config lang [language] ## แสดง/ตั้งค่าภาษาอินเทอร์เฟซ".into(),
-    );
-
-    m.insert(
-        "help.config.linenumbers".into(),
-        "config linenumbers ON|OFF ## แสดง/ตั้งค่าหมายเลขบรรทัด".into(),
-    );
-
-    m.insert(
-        "help.config.local_deinit".into(),
-        "local deinit ## ลบ ntconfig.toml จากไดเรกทอรีปัจจุบัน".into(),
-    );
-
-    m.insert(
-        "help.config.local_help".into(),
-        "local help ## แสดงการใช้งานคำสั่ง local".into(),
-    );
-
-    m.insert(
-        "help.config.local_init".into(),
-        "local init ## สร้างเทมเพลต ntconfig.toml (แบบ comment)".into(),
-    );
-
-    m.insert(
-        "help.config.opencg".into(),
-        "opencg ## เปิด config.toml ในตัวแก้ไข".into(),
+        "help.config.title".into(),
+        "คำสั่งการกำหนดค่า (CONFIGURATION):".into(),
     );
 
     m.insert(
@@ -57,43 +12,18 @@ pub fn fill(m: &mut HashMap<String, String>) {
     );
 
     m.insert(
-        "help.config.qsc".into(),
-        "config qsc \"#c 0\" ## ตั้งค่าปุ่มลัด QSC".into(),
+        "help.config.depth".into(),
+        "config depth [n] ## แสดง/ตั้งค่าความลึกสูงสุด (1-20)".into(),
     );
 
     m.insert(
-        "help.config.qsc_off".into(),
-        "config qsc off ## ปิดการใช้งานปุ่มลัด QSC".into(),
+        "help.config.linenumbers".into(),
+        "config linenumbers ON|OFF ## แสดง/ตั้งค่าหมายเลขบรรทัด".into(),
     );
 
     m.insert(
-        "help.config.resetcg".into(),
-        "resetcg ## รีเซ็ตการกำหนดค่าเป็นค่าเริ่มต้น (มีตัวเลือกสำรอง)".into(),
-    );
-
-    m.insert(
-        "help.config.restorecg".into(),
-        "restorecg ## คืนค่าการกำหนดค่าจากข้อมูลสำรอง".into(),
-    );
-
-    m.insert(
-        "help.config.showcg".into(),
-        "showcg ## แสดงภาพรวมการกำหนดค่าปัจจุบัน".into(),
-    );
-
-    m.insert(
-        "help.config.showenv".into(),
-        "showenv ## แสดงตัวแปรสภาพแวดล้อม (PATH 5 รายการแรก)".into(),
-    );
-
-    m.insert(
-        "help.config.showenv_all".into(),
-        "showenv --all ## แสดง PATH ทั้งหมด".into(),
-    );
-
-    m.insert(
-        "help.config.showenv_d".into(),
-        "showenv -d <n> ## แสดง n รายการแรกของ PATH".into(),
+        "help.config.color".into(),
+        "config color ON|OFF ## แสดง/ตั้งค่าสีผลลัพธ์".into(),
     );
 
     m.insert(
@@ -102,8 +32,49 @@ pub fn fill(m: &mut HashMap<String, String>) {
     );
 
     m.insert(
-        "help.config.title".into(),
-        "คำสั่งการกำหนดค่า (CONFIGURATION):".into(),
+        "help.config.history".into(),
+        "config history [on|off|path] ## แสดง/ตั้งค่าประวัติ".into(),
+    );
+
+    m.insert(
+        "help.config.autosuggest".into(),
+        "config autosuggest ON|OFF ## แสดง/ตั้งค่าข้อความเลือน".into(),
+    );
+
+    m.insert(
+        "help.config.idle".into(),
+        "config idle ON|OFF ## แสดง/ตั้งค่าคำใบ้เมื่อหยุดพิมพ์".into(),
+    );
+
+    m.insert(
+        "help.config.git".into(),
+        "config git ON|OFF ## เปิด/ปิด git integration (prompt + สัญลักษณ์)".into(),
+    );
+
+    m.insert(
+        "help.config.dir_view".into(),
+        "config dir_view ON|OFF ## แสดง/ซ่อนแผนผังไดเรกทอรีใน shell".into(),
+    );
+
+    m.insert(
+        "help.config.intro_view".into(),
+        "config intro_view ON|OFF ## แสดง/ซ่อนโลโก้ตอนเริ่ม, ข้อมูล ntpkg และ watcher (alias: iv)".into(),
+    );
+
+    m.insert(
+        "help.config.file_view".into(),
+        "config file_view ON|OFF ## แสดงไฟล์ในแผนผังนำทางอัตโนมัติ (alias: fv)".into(),
+    );
+
+    m.insert(
+        "help.config.todo".into(),
+        "config todo format <txt|md|json|toml|yaml|html> ## ตั้งรูปแบบไฟล์ todo".into(),
+    );
+
+    m.insert(
+        "help.config.size".into(),
+        "config size all|file|dir ON|OFF ## คำนวณขนาดอัตโนมัติในแผนผังนำทาง; ใช้ --care (alias: s)"
+            .into(),
     );
 
     m.insert(
@@ -127,8 +98,54 @@ pub fn fill(m: &mut HashMap<String, String>) {
     );
 
     m.insert(
-        "help.config.wi".into(),
-        "wi [path] ## ฟีดการเปลี่ยนแปลงไฟล์แบบสด (q=ออก)".into(),
+        "help.config.qsc".into(),
+        "config qsc \"#c 0\" ## ตั้งค่าปุ่มลัด QSC".into(),
+    );
+
+    m.insert(
+        "help.config.qsc_off".into(),
+        "config qsc off ## ปิดการใช้งานปุ่มลัด QSC".into(),
+    );
+
+    m.insert(
+        "help.config.lang".into(),
+        "config lang [language] ## แสดง/ตั้งค่าภาษาอินเทอร์เฟซ".into(),
+    );
+
+    m.insert(
+        "help.config.env".into(),
+        "config env NAME value [-g|-l|-os|-osg] ## ตั้งตัวแปรสภาพแวดล้อม NTC (รองรับ NAME=value; ไม่ใส่ค่า: แสดงรายการ; ใส่ชื่อ: แสดงค่า)".into(),
+    );
+
+    m.insert(
+        "help.config.env_os".into(),
+        "  -g global | -l local | -os เซสชันนี้ | -osg บันทึกถาวรใน OS ## ค่าเริ่มต้น: local ถ้ามี ntconfig.toml ไม่เช่นนั้น global".into(),
+    );
+
+    m.insert(
+        "help.config.rmenv".into(),
+        "config rmenv NAME [-g|-l|-os|-osg|-all] ## ลบตัวแปรสภาพแวดล้อม NTC (-all: ทุกที่เก็บ + เซสชัน)"
+            .into(),
+    );
+
+    m.insert(
+        "help.config.serve".into(),
+        "config serve [บริการ] [--port-default พอร์ต] [--bind-default ที่อยู่] ## ค่าเริ่มต้น serve รายบริการ (CLI; `serve config` คือ GUI ในเบราว์เซอร์)".into(),
+    );
+
+    m.insert(
+        "help.config.update_check".into(),
+        "config update_check ON|OFF ## แสดง/ซ่อนแจ้งเตือนเวอร์ชันใหม่รายวัน (alias: uc)".into(),
+    );
+
+    m.insert(
+        "help.config.integration_shell".into(),
+        "config integration_shell ON|OFF ## เติมชื่อเชลล์ที่ติดตั้ง (powershell บน Windows, bash บน Linux desktop, cmd, …), แฟล็กตัวเรียก และเปิดโหมด ntc ps บน Windows / ntc <distro> บน Linux (alias: is)".into(),
+    );
+
+    m.insert(
+        "help.config.code_tools".into(),
+        "config code_tools ON|OFF ## เติมเครื่องมือเขียนโปรแกรม/คอมไพเลอร์ที่ติดตั้ง (g++, python, java, cargo, …) และแฟล็ก (alias: ct)".into(),
     );
 
     m.insert(
@@ -149,74 +166,5 @@ pub fn fill(m: &mut HashMap<String, String>) {
     m.insert(
         "help.config.example4".into(),
         "config threads 8 ## ตั้งจำนวนเธรดเป็น 8".into(),
-    );
-
-    m.insert(
-        "help.config.example5".into(),
-        "showcg ## แสดงภาพรวมการกำหนดค่าปัจจุบัน".into(),
-    );
-
-    m.insert(
-        "help.config.git".into(),
-        "config git ON|OFF ## เปิด/ปิด git integration (prompt + สัญลักษณ์)".into(),
-    );
-
-    m.insert(
-        "help.config.dir_view".into(),
-        "config dir_view ON|OFF ## แสดง/ซ่อนแผนผังไดเรกทอรีใน shell".into(),
-    );
-
-    m.insert(
-        "help.config.file_view".into(),
-        "config file_view ON|OFF ## แสดงไฟล์ในแผนผังนำทางอัตโนมัติ (alias: fv)".into(),
-    );
-
-    m.insert(
-        "help.config.size".into(),
-        "config size all|file|dir ON|OFF ## คำนวณขนาดอัตโนมัติในแผนผังนำทาง; ใช้ --care (alias: s)"
-            .into(),
-    );
-
-    m.insert(
-        "help.config.update_check".into(),
-        "config update_check ON|OFF ## แสดง/ซ่อนแจ้งเตือนเวอร์ชันใหม่รายวัน (alias: uc)".into(),
-    );
-
-    m.insert("help.config.serve".into(), "config serve [บริการ] [--port-default พอร์ต] [--bind-default ที่อยู่] ## ค่าเริ่มต้น serve รายบริการ (alias: serve config)".into());
-
-    m.insert(
-        "help.config.intro_view".into(),
-        "config intro_view ON|OFF ## แสดง/ซ่อนโลโก้ตอนเริ่ม, ข้อมูล ntpkg และ watcher (alias: iv)".into(),
-    );
-
-    m.insert(
-        "help.config.integration_shell".into(),
-        "config integration_shell ON|OFF ## เติมชื่อเชลล์ที่ติดตั้ง (powershell บน Windows, bash บน Linux desktop, cmd, …), แฟล็กตัวเรียก และเปิดโหมด ntc ps บน Windows / ntc <distro> บน Linux (alias: is)".into(),
-    );
-
-    m.insert(
-        "help.config.code_tools".into(),
-        "config code_tools ON|OFF ## เติมเครื่องมือเขียนโปรแกรม/คอมไพเลอร์ที่ติดตั้ง (g++, python, java, cargo, …) และแฟล็ก (alias: ct)".into(),
-    );
-
-    m.insert(
-        "help.config.todo".into(),
-        "config todo format <txt|md|json|toml|yaml|html> ## ตั้งรูปแบบไฟล์ todo".into(),
-    );
-
-    m.insert(
-        "help.config.env".into(),
-        "config env NAME value [-g|-l|-os|-osg] ## ตั้งตัวแปรสภาพแวดล้อม NTC (ไม่ใส่ค่า: แสดงรายการ; ใส่ชื่อ: แสดงค่า)".into(),
-    );
-
-    m.insert(
-        "help.config.env_os".into(),
-        "  -g global | -l local | -os เซสชันนี้ | -osg บันทึกถาวรใน OS ## ค่าเริ่มต้น: local ถ้ามี ntconfig.toml ไม่เช่นนั้น global".into(),
-    );
-
-    m.insert(
-        "help.config.rmenv".into(),
-        "config rmenv NAME [-g|-l|-os|-osg|-all] ## ลบตัวแปรสภาพแวดล้อม NTC (-all: ทุกที่เก็บ + เซสชัน)"
-            .into(),
     );
 }

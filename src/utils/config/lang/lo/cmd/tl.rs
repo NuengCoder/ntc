@@ -3,7 +3,7 @@ use std::collections::HashMap;
 pub fn fill(m: &mut HashMap<String, String>) {
     m.insert("cmd.tl.dir_not_found".into(), "ບໍ່ພົບໄດເຣັກທໍຣີ: {}".into());
 
-    m.insert("cmd.tl.dir_usage".into(), "ວິທີໃຊ້: tl dir <path>".into());
+    m.insert("cmd.tl.dir_usage".into(), "ວິທີໃຊ້: tl dir [path]".into());
 
     m.insert(
         "cmd.tl.ext_not_supported".into(),
@@ -18,7 +18,8 @@ pub fn fill(m: &mut HashMap<String, String>) {
 
     m.insert(
         "cmd.tl.help_dir".into(),
-        "  tl dir <path>           ສະແດງນາມສະກຸນທີ່ຮອງຮັບ ແລະ ຈຳນວນແຖວທັງໝົດໃນໄດເຣັກທໍຣີ".into(),
+        "  tl dir [path]           ສະແດງນາມສະກຸນທີ່ຮອງຮັບ ແລະ ຈຳນວນແຖວທັງໝົດ (ຄ່າເລີ່ມຕົ້ນ: ໄດເຣັກທໍຣີປັດຈຸບັນ)"
+            .into(),
     );
 
     m.insert(

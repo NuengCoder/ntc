@@ -28,6 +28,11 @@ pub fn fill(m: &mut HashMap<String, String>) {
     );
 
     m.insert(
+        "ran.desc_env".into(),
+        " [env] 中的条目会成为每条命令的环境变量，命令中也可用 $(NAME) 引用。".into(),
+    );
+
+    m.insert(
         "ran.desc_note".into(),
         " 不允许在 NTCRANFILE 目标命令中调用 'ran'。".into(),
     );
@@ -49,6 +54,20 @@ pub fn fill(m: &mut HashMap<String, String>) {
 
     m.insert("ran.error_prefix".into(), "ran：{}".into());
 
+    m.insert(
+        "ran.dry_run.title".into(),
+        "演练 \u{2014} 不会执行任何命令。".into(),
+    );
+
+    m.insert("ran.dry_run.header".into(), "{} 于 {}".into());
+
+    m.insert("ran.dry_run.env".into(), "环境变量：{}".into());
+
+    m.insert(
+        "ran.dry_run.summary".into(),
+        "共 {} 个目标，执行顺序：{}".into(),
+    );
+
     m.insert("ran.exec_failed".into(), "执行命令失败：{}".into());
 
     m.insert("ran.executing".into(), "正在执行：{}".into());
@@ -60,6 +79,11 @@ pub fn fill(m: &mut HashMap<String, String>) {
     m.insert(
         "ran.help_deinit_fmt".into(),
         " ran deinit 从当前目录删除 {}".into(),
+    );
+
+    m.insert(
+        "ran.help_dry_run".into(),
+        " ran --dry-run [目标] 只显示将运行的命令，不执行".into(),
     );
 
     m.insert("ran.help_help".into(), " ran help 显示此帮助".into());
@@ -94,6 +118,8 @@ pub fn fill(m: &mut HashMap<String, String>) {
     m.insert("ran.section_aliases".into(), "运行别名：".into());
 
     m.insert("ran.section_deps".into(), "依赖：".into());
+
+    m.insert("ran.section_env".into(), "环境变量：".into());
 
     m.insert("ran.section_note".into(), "注意：".into());
 

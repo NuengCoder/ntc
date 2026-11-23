@@ -179,4 +179,17 @@ pub fn fill(m: &mut HashMap<String, String>) {
         "cmd.todo.already_open".into(),
         "任务 #{} 已经是未完成状态".into(),
     );
+
+    m.insert(
+        "cmd.todo.help_format".into(),
+        "  config todo format <fmt>  设置待办文件格式（txt|md|json|toml|yaml|html）".into(),
+    );
+    m.insert(
+        "cmd.todo.parse_failed".into(),
+        "解析 {} 待办文件失败。".into(),
+    );
+    m.insert(
+        "cmd.todo.unknown_format".into(),
+        "未知待办格式“{}”（使用 txt|md|json|toml|yaml|html）".into(),
+    );
 }

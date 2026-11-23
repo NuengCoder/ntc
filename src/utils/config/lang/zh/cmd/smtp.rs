@@ -117,6 +117,11 @@ pub fn fill(m: &mut HashMap<String, String>) {
 
     m.insert("cmd.smtp.help_info_title".into(), "显示配置信息：".into());
 
+    m.insert(
+        "cmd.smtp.help_info_deadlock".into(),
+        "  smtp --id-info <id> --deadlock   同时显示应用密码（会先要求输入主密码）".into(),
+    );
+
     m.insert("cmd.smtp.help_list_syntax".into(), "  smtp --id-ls".into());
 
     m.insert("cmd.smtp.help_list_title".into(), "列出配置：".into());
@@ -238,6 +243,11 @@ pub fn fill(m: &mut HashMap<String, String>) {
 
     m.insert("cmd.smtp.password_label".into(), "密码：".into());
 
+    m.insert(
+        "cmd.smtp.password_hidden".into(),
+        "********（已隐藏 - 使用 --deadlock 显示）".into(),
+    );
+
     m.insert("cmd.smtp.path_not_found".into(), "路径未找到：{}".into());
 
     m.insert("cmd.smtp.port_label".into(), "端口：".into());
@@ -290,5 +300,51 @@ pub fn fill(m: &mut HashMap<String, String>) {
     m.insert(
         "cmd.smtp.with_attachments".into(),
         " （{} 个附件{}）".into(),
+    );
+
+    m.insert(
+        "cmd.smtp.file_created".into(),
+        "已创建 {} - 请填写 SMTP 信息，然后使用以下命令发送：smtp -r {}".into(),
+    );
+    m.insert(
+        "cmd.smtp.file_exists".into(),
+        "{} 已存在（使用 --force 覆盖）".into(),
+    );
+    m.insert(
+        "cmd.smtp.file_incomplete".into(),
+        "SMTP 配置需要服务器、用户名和密码：{}".into(),
+    );
+    m.insert(
+        "cmd.smtp.file_invalid".into(),
+        "SMTP 配置 JSON 无效：{}".into(),
+    );
+    m.insert(
+        "cmd.smtp.file_missing".into(),
+        "未找到 SMTP 配置：{}（使用 smtp init 创建）".into(),
+    );
+    m.insert(
+        "cmd.smtp.file_read_fail".into(),
+        "无法读取 SMTP 配置：{}".into(),
+    );
+    m.insert(
+        "cmd.smtp.file_write_fail".into(),
+        "无法写入 SMTP 配置：{}".into(),
+    );
+    m.insert(
+        "cmd.smtp.help_file_init".into(),
+        "  smtp init [file] [--force]      创建包含 server/user/password/to/files 的 ntc_smtp.json"
+            .into(),
+    );
+    m.insert(
+        "cmd.smtp.help_file_send".into(),
+        "  smtp -r ntc_smtp.json -s \"TITLE\" -b \"BODY\" [-f FILE] [-t TO]".into(),
+    );
+    m.insert(
+        "cmd.smtp.help_file_title".into(),
+        "单文件配置（ntc_smtp.json）：".into(),
+    );
+    m.insert(
+        "cmd.smtp.missing_read_file".into(),
+        "-r 后缺少配置文件（示例：-r ntc_smtp.json）".into(),
     );
 }

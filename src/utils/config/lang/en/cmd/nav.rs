@@ -2,6 +2,11 @@ use std::collections::HashMap;
 
 pub fn fill(m: &mut HashMap<String, String>) {
     m.insert(
+        "cmd.godrive.unknown".into(),
+        "No drive or mount named '{}'.".into(),
+    );
+
+    m.insert(
         "cmd.nav.back.invalid_number".into(),
         "Invalid number: {}. Usage: back [n]".into(),
     );
@@ -124,5 +129,32 @@ pub fn fill(m: &mut HashMap<String, String>) {
         "PATH matches for '{}':".into(),
     );
 
+    m.insert("cmd.nav.where.deadlock".into(), "Deadlock vault:".into());
+
+    m.insert("cmd.nav.where.disabled".into(), "disabled".into());
+
+    m.insert(
+        "cmd.nav.where.editor_config".into(),
+        "Editor config:".into(),
+    );
+
+    m.insert("cmd.nav.where.history".into(), "History:".into());
+
+    m.insert("cmd.nav.where.home".into(), "NTC home:".into());
+
+    m.insert("cmd.nav.where.nssh".into(), "SSH profiles:".into());
+
+    m.insert("cmd.nav.where.packages".into(), "Packages:".into());
+
+    m.insert("cmd.nav.where.recovery".into(), "Crash recovery:".into());
+
+    m.insert("cmd.nav.where.sessions".into(), "Session:".into());
+
+    m.insert("cmd.nav.where.skills".into(), "Skills:".into());
+
+    m.insert("cmd.nav.where.themes".into(), "Themes:".into());
+
     m.insert("cmd.nav.where.title".into(), "ntc Location Info".into());
+
+    m.insert("cmd.nav.where.tutorial".into(), "Tutorial:".into());
 }

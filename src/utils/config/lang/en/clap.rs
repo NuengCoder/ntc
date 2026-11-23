@@ -116,16 +116,6 @@ pub fn fill(m: &mut HashMap<String, String>) {
     );
 
     m.insert(
-        "clap.arg.lsp.help".into(),
-        "Start the ntc-math LSP server over stdio".into(),
-    );
-
-    m.insert(
-        "clap.arg.lsp_log.help".into(),
-        "Path to write LSP debug log".into(),
-    );
-
-    m.insert(
         "clap.arg.math.help".into(),
         "Evaluate a math expression".into(),
     );

@@ -12,18 +12,6 @@ pub fn fill(m: &mut HashMap<String, String>) {
     );
 
     m.insert(
-        "help.qr.save".into(),
-        "qr encode <text> -o <file> ## บันทึก QR เป็นภาพ PNG".into(),
-    );
-
-    m.insert(
-        "help.qr.image".into(),
-        "qr encode <image> -o <file> ## เข้ารหัสภาพเป็น QR (สแกนเพื่อดูภาพ)".into(),
-    );
-
-    m.insert("help.qr.title".into(), "คำสั่ง QR CODE:".into());
-
-    m.insert(
         "help.qr.example1".into(),
         "qr \"Hello World\" ## แสดง QR code ในเทอร์มินัล".into(),
     );
@@ -42,4 +30,16 @@ pub fn fill(m: &mut HashMap<String, String>) {
         "help.qr.example4".into(),
         "qr encode image.png -o imageqrcode.png ## เข้ารหัสภาพเพื่อให้สแกนแล้วเห็นภาพ".into(),
     );
+
+    m.insert(
+        "help.qr.image".into(),
+        "qr encode <image> -o <file> ## เข้ารหัสภาพเป็น QR (สแกนเพื่อดูภาพ)".into(),
+    );
+
+    m.insert(
+        "help.qr.save".into(),
+        "qr encode <text> -o <file> ## บันทึก QR เป็นภาพ PNG".into(),
+    );
+
+    m.insert("help.qr.title".into(), "คำสั่ง QR CODE:".into());
 }

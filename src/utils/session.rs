@@ -30,9 +30,9 @@ pub struct TabSnapshot {
     pub scroll_x: usize,
     pub modified: bool,
     #[serde(default)]
-    pub undo_stack: Vec<crate::editor::Snapshot>,
+    pub undo_stack: Vec<crate::shell::commands::builtin::ne::editor::Snapshot>,
     #[serde(default)]
-    pub redo_stack: Vec<crate::editor::Snapshot>,
+    pub redo_stack: Vec<crate::shell::commands::builtin::ne::editor::Snapshot>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -109,8 +109,12 @@ pub fn snapshot_for_restore(
 }
 
 impl SessionState {
-    fn session_path() -> Option<PathBuf> {
-        dirs::config_dir().map(|d| d.join("ntc").join("session.toml"))
+    /// Session file next to the main config (so `NTC_CONFIG_HOME` isolates it
+    /// for tests and portable installs, like config and themes).
+    fn session_path() -> PathBuf {
+        crate::utils::paths::config_home()
+            .join("ntc")
+            .join("session.toml")
     }
 
     fn empty() -> Self {
@@ -140,9 +144,7 @@ impl SessionState {
     }
 
     pub fn load() -> Self {
-        Self::session_path()
-            .and_then(|path| Self::load_from(&path))
-            .unwrap_or_else(Self::empty)
+        Self::load_from(&Self::session_path()).unwrap_or_else(Self::empty)
     }
 
     /// Tab snapshot stored for `dir`, if any.
@@ -175,9 +177,7 @@ impl SessionState {
     }
 
     pub fn save(&self) {
-        if let Some(path) = Self::session_path() {
-            self.save_to(&path);
-        }
+        self.save_to(&Self::session_path());
     }
 
     // ---- Global singleton ----

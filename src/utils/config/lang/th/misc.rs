@@ -131,12 +131,12 @@ pub fn fill(m: &mut HashMap<String, String>) {
 
     m.insert(
         "misc.rev.usage".into(),
-        "วิธีใช้: rev [file]  (กลับตัวอักษรของแต่ละบรรทัด; อ่านอินพุตที่ pipe เข้ามาเมื่อไม่ระบุไฟล์)".into(),
+        "วิธีใช้: rev [-u] [file]  (กลับตัวอักษรของแต่ละบรรทัด; -u จะสลับลำดับบรรทัดบนลงล่างแทน; อ่านอินพุตที่ pipe เข้ามาเมื่อไม่ระบุไฟล์)".into(),
     );
 
     m.insert(
         "misc.rev.bad_arg".into(),
-        "rev: อาร์กิวเมนต์ที่ไม่คาดคิด '{}' (วิธีใช้: rev [file])".into(),
+        "rev: อาร์กิวเมนต์ที่ไม่คาดคิด '{}' (วิธีใช้: rev [-u] [file])".into(),
     );
 
     m.insert(
@@ -255,12 +255,12 @@ pub fn fill(m: &mut HashMap<String, String>) {
 
     m.insert(
         "misc.gs.example3".into(),
-        "  gs -i main # โหมดโต้ตอบ (เรียกดูผลลัพธ์ Enter เพื่อเปิด)".into(),
+        "  gs -I main # โหมดโต้ตอบ (เรียกดูผลลัพธ์ Enter เพื่อเปิด)".into(),
     );
 
     m.insert(
         "misc.gs.example4".into(),
-        "  gs -i main -d 3 # โหมดโต้ตอบพร้อมจำกัดความลึก".into(),
+        "  gs -I main -d 3 # โหมดโต้ตอบพร้อมจำกัดความลึก".into(),
     );
 
     m.insert(
@@ -281,6 +281,58 @@ pub fn fill(m: &mut HashMap<String, String>) {
     m.insert(
         "misc.gs.example8".into(),
         "  gs error\\|warning # ค้นหาแบบ OR: ตรงกับคำใดคำหนึ่ง (a\\|b)".into(),
+    );
+
+    m.insert(
+        "misc.gs.example9".into(),
+        "  gs -w main # เฉพาะบรรทัดที่เป็น 'main' ทั้งบรรทัด".into(),
+    );
+
+    m.insert(
+        "misc.gs.example10".into(),
+        "  gs -z Main -h # ตัวพิมพ์ตรง บรรทัดขึ้นต้นด้วย 'Main'".into(),
+    );
+
+    m.insert(
+        "misc.gs.pager.header".into(),
+        " gs: {}/{} รายการ | หน้า {}/{} (10/หน้า) ".into(),
+    );
+
+    m.insert("misc.gs.pager.hint_help".into(), "?=ช่วยเหลือ".into());
+    m.insert("misc.gs.pager.hint_pattern".into(), "f=รูปแบบ".into());
+    m.insert(
+        "misc.gs.pager.hint_filters".into(),
+        "x/h/g/w/z=ตัวกรอง".into(),
+    );
+    m.insert("misc.gs.pager.hint_open".into(), "Enter/e=เปิด".into());
+    m.insert("misc.gs.pager.hint_row".into(), "0-9=แถว".into());
+    m.insert("misc.gs.pager.hint_move".into(), "j/k".into());
+    m.insert("misc.gs.pager.hint_page".into(), "n/p".into());
+    m.insert("misc.gs.pager.hint_context".into(), "c=บริบท ({}/{})".into());
+    m.insert("misc.gs.pager.hint_quit".into(), "q=ออก".into());
+    m.insert("misc.gs.pager.help_title".into(), "GS แบบโต้ตอบ — ปุ่ม".into());
+    m.insert(
+        "misc.gs.pager.help_body".into(),
+        "  j/k, ขึ้น/ลง      เลื่อน             n/p, เว้นวรรค, ซ้าย/ขวา  เปลี่ยนหน้า\n  0-9              ไปยังแถว          Home/End            แรก/สุดท้าย\n  Enter/e          เปิดในเอดิเตอร์    f  รูปแบบ   c  บริบท\n  x ข้อความตรงตัว  z ตัวพิมพ์  h ขึ้นต้น  g ลงท้าย  w ทั้งบรรทัด".into(),
+    );
+    m.insert(
+        "misc.gs.pager.help_close".into(),
+        "Esc หรือ q ปิดช่วยเหลือ  ·  กด ? เปิดอีกครั้ง  ·  q ออกจาก gs -I".into(),
+    );
+    m.insert("misc.gs.pager.hint_type".into(), "พิมพ์รูปแบบ".into());
+    m.insert("misc.gs.pager.hint_accept".into(), "Enter=ตกลง".into());
+    m.insert("misc.gs.pager.hint_cancel".into(), "Esc=ยกเลิก".into());
+    m.insert("misc.gs.pager.pattern_box".into(), "รูปแบบ: ".into());
+    m.insert("misc.gs.pager.searching".into(), "กำลังค้นหา…".into());
+
+    m.insert(
+        "misc.gs.i_renamed".into(),
+        "gs: -i เปลี่ยนเป็น -I แล้ว (gs -I เปิดตัวแบ่งหน้าแบบโต้ตอบ)".into(),
+    );
+
+    m.insert(
+        "misc.gs.mode_conflict".into(),
+        "gs: ใช้ -h, -g และ -w ร่วมกันไม่ได้ (เลือกได้ทีละตัว)".into(),
     );
 
     m.insert(
@@ -309,7 +361,7 @@ pub fn fill(m: &mut HashMap<String, String>) {
 
     m.insert(
         "misc.gs.usage".into(),
-        "การใช้งาน: gs <รูปแบบ> [-d <ความลึก>] [-l <จำนวน>] [-i] [-p <glob>]... [-s [line|path|size]]"
+        "การใช้งาน: gs <รูปแบบ> [-d <ความลึก>] [-l <จำนวน>] [-A <n>] [-B <n>] [-I] [-x] [-h|-g|-w] [-z] [-p <glob>]... [-s [line|path|size]]"
             .into(),
     );
 
@@ -639,6 +691,26 @@ pub fn fill(m: &mut HashMap<String, String>) {
     );
 
     m.insert(
+        "misc.nprintf.usage".into(),
+        "การใช้งาน: nprintf <รูปแบบ> [อาร์กิวเมนต์...]".into(),
+    );
+
+    m.insert(
+        "misc.nprintf.example1".into(),
+        " nprintf \"%s มี %d รายการ\\n\" cart 3 # จัดรูปแบบหนึ่งบรรทัด".into(),
+    );
+
+    m.insert(
+        "misc.nprintf.example2".into(),
+        " nprintf \"%.2f%%\\n\" 93.5 # ความกว้างและความแม่นยำ".into(),
+    );
+
+    m.insert(
+        "misc.nprintf.invalid_number".into(),
+        "nprintf: '{}': ตัวเลขไม่ถูกต้อง".into(),
+    );
+
+    m.insert(
         "misc.show_env.activate_hint".into(),
         "เรียก 'python_activate' เพื่อเปิดใช้งานสภาพแวดล้อม virtual".into(),
     );
@@ -863,4 +935,34 @@ pub fn fill(m: &mut HashMap<String, String>) {
         "misc.show_env.os_masked".into(),
         "*** (ใช้ 'showenv --all' เพื่อแสดง)".into(),
     );
+
+    m.insert(
+        "misc.count.usage".into(),
+        "วิธีใช้: count <needle> [text]   (หรือ: <command> | count <needle>)".into(),
+    );
+
+    m.insert(
+        "misc.count.line_usage".into(),
+        "วิธีใช้: <command> | count -l|--line   (นับจำนวนบรรทัดของข้อมูลที่ pipe เข้ามา; ไม่รับ <needle>)"
+            .into(),
+    );
+
+    m.insert(
+        "misc.count.line_no_input".into(),
+        "count -l: ต้องมีข้อมูลที่ส่งผ่านท่อ (เช่น: <command> | count -l)".into(),
+    );
+
+    m.insert(
+        "misc.count.line_bad_flag".into(),
+        "count -l: -l|--line ไม่รับค่าและใช้ร่วมกับแฟล็กอื่นไม่ได้ (ได้รับ '{}')".into(),
+    );
+    m.insert(
+        "misc.exit.in_editor".into(),
+        "ออกจาก ntc ภายใน ntceditor ไม่ได้ - ปิดตัวแก้ไขเพื่อออก (Ctrl+Q ซ่อนเทอร์มินัล)".into(),
+    );
+    m.insert(
+        "misc.exit.no_nested_ntc".into(),
+        "ซ้อน shell ของ ntc ภายใน ntceditor ไม่ได้ - เทอร์มินัลนี้รัน ntc อยู่แล้ว".into(),
+    );
+    m.insert("misc.ne.already_in_editor".into(), "คุณอยู่ในตัวแก้ไขแล้ว".into());
 }

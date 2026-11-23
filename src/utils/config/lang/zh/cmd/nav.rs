@@ -2,6 +2,11 @@ use std::collections::HashMap;
 
 pub fn fill(m: &mut HashMap<String, String>) {
     m.insert(
+        "cmd.godrive.unknown".into(),
+        "未找到名为 '{}' 的驱动器或挂载点。".into(),
+    );
+
+    m.insert(
         "cmd.nav.back.invalid_number".into(),
         "无效数字：{}。用法：back [n]".into(),
     );
@@ -115,5 +120,29 @@ pub fn fill(m: &mut HashMap<String, String>) {
         "'{}' 在 PATH 中的匹配项：".into(),
     );
 
+    m.insert("cmd.nav.where.deadlock".into(), "Deadlock 保险库：".into());
+
+    m.insert("cmd.nav.where.disabled".into(), "已禁用".into());
+
+    m.insert("cmd.nav.where.editor_config".into(), "编辑器配置：".into());
+
+    m.insert("cmd.nav.where.history".into(), "历史记录：".into());
+
+    m.insert("cmd.nav.where.home".into(), "NTC 目录：".into());
+
+    m.insert("cmd.nav.where.nssh".into(), "SSH 配置：".into());
+
+    m.insert("cmd.nav.where.packages".into(), "软件包：".into());
+
+    m.insert("cmd.nav.where.recovery".into(), "崩溃恢复：".into());
+
+    m.insert("cmd.nav.where.sessions".into(), "会话：".into());
+
+    m.insert("cmd.nav.where.skills".into(), "技能：".into());
+
+    m.insert("cmd.nav.where.themes".into(), "主题：".into());
+
     m.insert("cmd.nav.where.title".into(), "ntc 位置信息".into());
+
+    m.insert("cmd.nav.where.tutorial".into(), "教程：".into());
 }

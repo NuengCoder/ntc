@@ -3,7 +3,7 @@ use std::collections::HashMap;
 pub fn fill(m: &mut HashMap<String, String>) {
     m.insert("cmd.tl.dir_not_found".into(), "目录未找到：{}".into());
 
-    m.insert("cmd.tl.dir_usage".into(), "用法：tl dir <路径>".into());
+    m.insert("cmd.tl.dir_usage".into(), "用法：tl dir [路径]".into());
 
     m.insert(
         "cmd.tl.ext_not_supported".into(),
@@ -18,7 +18,7 @@ pub fn fill(m: &mut HashMap<String, String>) {
 
     m.insert(
         "cmd.tl.help_dir".into(),
-        "  tl dir <路径>          显示目录中受支持扩展名和总行数".into(),
+        "  tl dir [路径]          显示目录中受支持扩展名和总行数（默认：当前目录）".into(),
     );
 
     m.insert(

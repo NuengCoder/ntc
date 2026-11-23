@@ -1,31 +1,14 @@
 use std::collections::HashMap;
 
 pub fn fill(m: &mut HashMap<String, String>) {
-    m.insert("help.tmprt.title".into(), "温度与天气命令：".into());
-
-    m.insert(
-        "help.tmprt.com".into(),
-        "tmprt com [秒] ## 实时硬件温度监控（q=退出 s=冻结 c=切换'oC/'oF）".into(),
-    );
-
-    m.insert(
-        "help.tmprt.weather".into(),
-        "tmprt weather [城市] ## 通过 OpenWeather API 获取当前天气".into(),
-    );
-
-    m.insert(
-        "help.tmprt.key".into(),
-        "tmprt key [API_KEY] ## 保存/显示 OpenWeather API 密钥".into(),
-    );
-
     m.insert(
         "help.tmprt.city".into(),
         "tmprt city [名称] ## 保存/显示天气默认城市".into(),
     );
 
     m.insert(
-        "help.tmprt.sensors".into(),
-        "tmprt sensors <status|install|uninstall|debug> ## 管理硬件传感器后端（LHM）".into(),
+        "help.tmprt.com".into(),
+        "tmprt com [秒] ## 实时硬件温度监控（q=退出 s=冻结 c=切换'oC/'oF）".into(),
     );
 
     m.insert(
@@ -46,5 +29,22 @@ pub fn fill(m: &mut HashMap<String, String>) {
     m.insert(
         "help.tmprt.example4".into(),
         "tmprt city Bangkok ## 设置默认城市".into(),
+    );
+
+    m.insert(
+        "help.tmprt.key".into(),
+        "tmprt key [API_KEY] ## 保存/显示 OpenWeather API 密钥".into(),
+    );
+
+    m.insert(
+        "help.tmprt.sensors".into(),
+        "tmprt sensors <status|install|uninstall|debug> ## 管理硬件传感器后端（LHM）".into(),
+    );
+
+    m.insert("help.tmprt.title".into(), "温度与天气命令：".into());
+
+    m.insert(
+        "help.tmprt.weather".into(),
+        "tmprt weather [城市] ## 通过 OpenWeather API 获取当前天气".into(),
     );
 }

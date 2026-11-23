@@ -128,4 +128,46 @@ pub fn fill(m: &mut HashMap<String, String>) {
     m.insert("cmd.upgrade.updated".into(), "ntc 已更新到 v{}！".into());
 
     m.insert("cmd.upgrade.write_fail".into(), "写入下载文件失败".into());
+
+    m.insert(
+        "cmd.upgrade.extract_fail".into(),
+        "读取/解析下载的压缩包失败：{}".into(),
+    );
+    m.insert(
+        "cmd.upgrade.extracting".into(),
+        "正在解压可执行文件...".into(),
+    );
+    m.insert("cmd.upgrade.home_fail".into(), "无法确定你的主目录".into());
+    m.insert(
+        "cmd.upgrade.installed_user_dir".into(),
+        "ntc 已安装到 {}（用户安装，无需管理员/sudo）。".into(),
+    );
+    m.insert(
+        "cmd.upgrade.installer_launch".into(),
+        "正在启动 ntc 安装程序（静默）...".into(),
+    );
+    m.insert(
+        "cmd.upgrade.installer_launch_fail".into(),
+        "启动安装程序失败：{}".into(),
+    );
+    m.insert(
+        "cmd.upgrade.no_arch_asset".into(),
+        "此架构没有预编译的 ntc 可执行文件（{}）。请从源码构建：cargo build --release".into(),
+    );
+    m.insert(
+        "cmd.upgrade.no_asset_match".into(),
+        "没有与平台键“{}”匹配的发布资源".into(),
+    );
+    m.insert(
+        "cmd.upgrade.no_file_in_archive".into(),
+        "下载的压缩包中找不到“{}”".into(),
+    );
+    m.insert(
+        "cmd.upgrade.no_installer_asset".into(),
+        "找不到可用于更新 ntc 的 Windows 安装程序资源".into(),
+    );
+    m.insert(
+        "cmd.upgrade.path_exported".into(),
+        "PATH 已更新到 {}".into(),
+    );
 }

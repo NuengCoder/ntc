@@ -136,4 +136,23 @@ pub fn fill(m: &mut HashMap<String, String>) {
     m.insert("cmd.report.clip_meta_lines".into(), "ຈຳນວນແຖວ".into());
 
     m.insert("cmd.report.clip_meta_chars".into(), "ຈຳນວນຕົວອັກສອນ".into());
+
+    m.insert("cmd.report.example_clip".into(), "  report clip 1".into());
+    m.insert(
+        "cmd.report.example_project".into(),
+        "  report project html . --name report.html".into(),
+    );
+    m.insert(
+        "cmd.report.help_clip".into(),
+        "  report clip <n>       ສະແດງລາຍການປະຫວັດຄລິບບອດທີ່ <n> ທັງໝົດ".into(),
+    );
+    m.insert("cmd.report.help_project".into(), "  report project <fmt> [path] --name <file>   ບັນທຶກລາຍງານໂຄງການເປັນ <file> (--name ບໍ່ຈຳເປັນ; ໃຊ້ <name>.html ເມື່ອບໍ່ມີນາມສະກຸນ)".into());
+    m.insert(
+        "cmd.report.legacy_removed".into(),
+        "ທາງລັດ report ແບບເກົ່າຖືກລຶບແລ້ວ. ໃຊ້ 'report project <fmt> ...' ແທນ.".into(),
+    );
+    m.insert(
+        "cmd.report.project_usage".into(),
+        "ວິທີໃຊ້: report project <txt|md|html|json|pdf|docx|xlsx> [path] [--name <output>]".into(),
+    );
 }

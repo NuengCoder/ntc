@@ -1,0 +1,103 @@
+# grape - Ripe grape dark theme with magenta accents.
+# ntc theme. Install with: ntc theme import ntc_theme/grape.ntc_theme
+
+name = "grape"
+author = "ntc"
+description = "Ripe grape dark theme with magenta accents"
+
+[syntax]
+keyword = { r = 192, g = 154, b = 224 }
+string = { r = 168, g = 192, b = 168 }
+comment = { r = 110, g = 102, b = 128 }
+number = { r = 208, g = 184, b = 144 }
+type = { r = 168, g = 160, b = 216 }
+builtin = { r = 210, g = 154, b = 174 }
+function = { r = 184, g = 160, b = 224 }
+operator = { r = 183, g = 175, b = 197 }
+punctuation = { r = 154, g = 146, b = 169 }
+attribute = { r = 208, g = 184, b = 144 }
+macro_token = { r = 198, g = 154, b = 206 }
+regex = { r = 209, g = 164, b = 164 }
+tag = { r = 168, g = 160, b = 216 }
+constant = { r = 208, g = 184, b = 144 }
+normal = { r = 207, g = 199, b = 220 }
+muted = { r = 110, g = 102, b = 128 }
+table_header = { r = 168, g = 160, b = 216 }
+table_border = { r = 88, g = 81, b = 104 }
+line_number = { r = 110, g = 102, b = 128 }
+
+[shell]
+prompt_bracket = { r = 168, g = 160, b = 216 }
+prompt_path = { r = 184, g = 160, b = 224 }
+prompt_watcher = { r = 208, g = 184, b = 144 }
+prompt_arrow = { r = 168, g = 192, b = 168 }
+ntc_command = { r = 208, g = 184, b = 144 }
+txtf_file = { r = 168, g = 192, b = 168 }
+ral_name = { r = 192, g = 154, b = 224 }
+ral_command = { r = 208, g = 184, b = 144 }
+ntc_sub_command = { r = 168, g = 160, b = 216 }
+sub_sub_command = { r = 184, g = 160, b = 224 }
+flag1 = { r = 208, g = 184, b = 144 }
+flag2 = { r = 208, g = 188, b = 163 }
+tp_name = { r = 184, g = 160, b = 224 }
+tp_path = { r = 168, g = 160, b = 216 }
+ral_ls_alias = { r = 168, g = 160, b = 216 }
+tp_ls_tp_name = { r = 168, g = 160, b = 216 }
+success = { r = 168, g = 192, b = 168 }
+error = { r = 210, g = 154, b = 174 }
+warning = { r = 208, g = 184, b = 144 }
+info = { r = 184, g = 160, b = 224 }
+muted = { r = 110, g = 102, b = 128 }
+table_header = { r = 168, g = 160, b = 216 }
+table_border = { r = 88, g = 81, b = 104 }
+line_number = { r = 110, g = 102, b = 128 }
+tree_branch = { r = 128, g = 121, b = 152 }
+tree_dir = { r = 187, g = 181, b = 225 }
+tree_file = { r = 145, g = 137, b = 157 }
+tree_ignored = { r = 110, g = 102, b = 128 }
+tree_size = { r = 120, g = 112, b = 137 }
+command_output = { r = 207, g = 199, b = 220 }
+separator = { r = 93, g = 85, b = 109 }
+help_header = { r = 168, g = 160, b = 216 }
+help_section = { r = 184, g = 160, b = 224 }
+help_example = { r = 168, g = 192, b = 168 }
+teleport_name = { r = 184, g = 160, b = 224 }
+alias_name = { r = 178, g = 173, b = 202 }
+alias_command = { r = 110, g = 102, b = 128 }
+git_branch = { r = 168, g = 160, b = 216 }
+git_added = { r = 168, g = 192, b = 168 }
+git_modified = { r = 208, g = 184, b = 144 }
+git_deleted = { r = 210, g = 154, b = 174 }
+git_untracked = { r = 110, g = 102, b = 128 }
+git_conflict = { r = 205, g = 154, b = 189 }
+
+[editor]
+editor_bg = { r = 52, g = 46, b = 62 }
+gutter_bg = { r = 40, g = 36, b = 48 }
+status_bg = { r = 98, g = 78, b = 130 }
+hint_bg = { r = 31, g = 25, b = 41 }
+text_field_bg = { r = 80, g = 76, b = 89 }
+sidebar_bg = { r = 18, g = 14, b = 26 }
+sidebar_selected_bg = { r = 50, g = 43, b = 60 }
+run_panel_bg = { r = 29, g = 23, b = 40 }
+gutter_text = { r = 97, g = 90, b = 108 }
+status_text = { r = 224, g = 219, b = 232 }
+status_modified = { r = 208, g = 184, b = 144 }
+hint_text = { r = 194, g = 178, b = 222 }
+cursor_bg = { r = 189, g = 181, b = 218 }
+cursor_text = { r = 24, g = 18, b = 34 }
+extra_cursor_bg = { r = 209, g = 163, b = 183 }
+selection_bg = { r = 54, g = 42, b = 72 }
+search_match_bg = { r = 43, g = 33, b = 58 }
+search_current_bg = { r = 98, g = 78, b = 130 }
+border = { r = 53, g = 47, b = 64 }
+scrollbar = { r = 40, g = 34, b = 51 }
+scrollbar_thumb = { r = 75, g = 69, b = 86 }
+indent_guide = { r = 50, g = 43, b = 60 }
+sidebar_dir = { r = 181, g = 175, b = 222 }
+sidebar_file = { r = 147, g = 140, b = 158 }
+sidebar_current = { r = 208, g = 184, b = 144 }
+sidebar_selected = { r = 217, g = 210, b = 227 }
+run_header_fg = { r = 184, g = 160, b = 224 }
+run_header_unfocused_fg = { r = 104, g = 89, b = 129 }
+run_output_fg = { r = 178, g = 170, b = 192 }

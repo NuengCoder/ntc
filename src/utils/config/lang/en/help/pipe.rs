@@ -1,7 +1,10 @@
 use std::collections::HashMap;
 
 pub fn fill(m: &mut HashMap<String, String>) {
-    m.insert("help.pipe.title".into(), "PIPES & REDIRECTION:".into());
+    m.insert(
+        "help.pipe.title".into(),
+        "PIPES & REDIRECTION [NON-COMMAND]:".into(),
+    );
 
     m.insert(
         "help.pipe.pipe".into(),
@@ -19,6 +22,16 @@ pub fn fill(m: &mut HashMap<String, String>) {
     );
 
     m.insert(
+        "help.pipe.seq".into(),
+        "a ; b ## Run b even if a fails (spaces required)".into(),
+    );
+
+    m.insert(
+        "help.pipe.in".into(),
+        "cmd < file ## Read input from file".into(),
+    );
+
+    m.insert(
         "help.pipe.out".into(),
         "cmd > file ## Write output to file (overwrite)".into(),
     );
@@ -26,11 +39,6 @@ pub fn fill(m: &mut HashMap<String, String>) {
     m.insert(
         "help.pipe.append".into(),
         "cmd >> file ## Append output to file".into(),
-    );
-
-    m.insert(
-        "help.pipe.in".into(),
-        "cmd < file ## Read input from file".into(),
     );
 
     m.insert(
@@ -44,43 +52,9 @@ pub fn fill(m: &mut HashMap<String, String>) {
     );
 
     m.insert(
-        "help.pipe.head".into(),
-        "head [N] [file] ## Print the first N lines (default 10)".into(),
+        "help.pipe.filters".into(),
+        "cmd | <filter> ## Pipe filters: head, tail, betw, gs, sort, rev, count, trim, encode, qur, clip (their flags complete too)".into(),
     );
-
-    m.insert(
-        "help.pipe.tail".into(),
-        "tail [N] [file] ## Print the last N lines (default 10)".into(),
-    );
-
-    m.insert(
-        "help.pipe.betw".into(),
-        "betw A:B [file] ## Print lines A to B (1-based inclusive)".into(),
-    );
-
-    m.insert(
-        "help.pipe.sort".into(),
-        "sort [-r] [-n] [-u] [-f] [file] ## Sort lines (reverse/numeric/unique/ignore-case)".into(),
-    );
-
-    m.insert(
-        "help.pipe.rev".into(),
-        "rev [file] ## Reverse the characters of each line".into(),
-    );
-
-    m.insert(
-        "help.pipe.count".into(),
-        "count <needle> [text] ## Count how many times <needle> occurs (text or piped input)"
-            .into(),
-    );
-
-    m.insert(
-        "help.pipe.trim".into(),
-        "trim <pattern> [text] ## Remove every occurrence of <pattern> (text or piped input)"
-            .into(),
-    );
-
-    m.insert("help.pipe.filters".into(), "cmd | head|tail|betw|gs|sort|rev|count|trim|encode|qur|clip ## Pipe filters (their flags complete too)".into());
 
     m.insert(
         "help.pipe.note".into(),
@@ -118,5 +92,8 @@ pub fn fill(m: &mut HashMap<String, String>) {
         "gs error | sort -u | head 10 ## Unique sorted matches, first 10".into(),
     );
 
-    m.insert("help.pipe.example6".into(), "echo nice ... bro ... | trim \" ...\" ## Strip a pattern from piped text (inline: trim \" ...\" \"nice ... bro ...\")".into());
+    m.insert(
+        "help.pipe.example6".into(),
+        "echo nice ... bro ... | trim \" ...\" ## Strip a pattern from piped text (inline: trim \" ...\" \"nice ... bro ...\")".into(),
+    );
 }

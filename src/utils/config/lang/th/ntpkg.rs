@@ -57,7 +57,7 @@ pub fn fill(m: &mut HashMap<String, String>) {
 
     m.insert(
         "ntpkg.help_install".into(),
-        "    ntpkg install <language> [version]   ดาวน์โหลดและติดตั้ง runtime".into(),
+        "    ntpkg install <language> [version] [--force]   ดาวน์โหลดและติดตั้ง runtime".into(),
     );
 
     m.insert(
@@ -146,7 +146,7 @@ pub fn fill(m: &mut HashMap<String, String>) {
 
     m.insert(
         "ntpkg.install_usage".into(),
-        "การใช้งาน: ntpkg install <language> [version]".into(),
+        "การใช้งาน: ntpkg install <language> [version] [--force]".into(),
     );
 
     m.insert("ntpkg.installed_msg".into(), "{} {} ติดตั้งแล้ว!".into());
@@ -323,6 +323,23 @@ pub fn fill(m: &mut HashMap<String, String>) {
     m.insert(
         "ntpkg.termux_no_pkg".into(),
         "ไม่มีแพ็กเกจ pkg ของ Termux สำหรับ '{}'.".into(),
+    );
+
+    m.insert(
+        "ntpkg.system_use_pkg".into(),
+        "แพลตฟอร์มนี้มีตัวจัดการแพ็กเกจอย่างเป็นทางการสำหรับ runtime นี้ โปรดใช้แทน ntpkg:".into(),
+    );
+
+    m.insert("ntpkg.system_cmd".into(), "    {}".into());
+
+    m.insert(
+        "ntpkg.system_force_hint".into(),
+        "หากต้องการติดตั้งสำเนาแยกผ่าน ntpkg ให้รัน: ntpkg install {} --force".into(),
+    );
+
+    m.insert(
+        "ntpkg.system_no_manager".into(),
+        "ไม่พบตัวจัดการแพ็กเกจระบบที่รองรับ โปรดใช้ตัวจัดการแพ็กเกจของแพลตฟอร์มคุณ".into(),
     );
 
     m.insert(

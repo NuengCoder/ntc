@@ -60,7 +60,7 @@ pub fn fill(m: &mut HashMap<String, String>) {
 
     m.insert(
         "ntpkg.help_install".into(),
-        "    ntpkg install <language> [version]   Download & install a runtime".into(),
+        "    ntpkg install <language> [version] [--force]  Download & install a runtime".into(),
     );
 
     m.insert(
@@ -149,7 +149,7 @@ pub fn fill(m: &mut HashMap<String, String>) {
 
     m.insert(
         "ntpkg.install_usage".into(),
-        "Usage: ntpkg install <language> [version]".into(),
+        "Usage: ntpkg install <language> [version] [--force]".into(),
     );
 
     m.insert("ntpkg.installed_msg".into(), "{} {} installed!".into());
@@ -347,6 +347,25 @@ pub fn fill(m: &mut HashMap<String, String>) {
     m.insert(
         "ntpkg.termux_no_pkg".into(),
         "No Termux pkg package available for '{}'.".into(),
+    );
+
+    m.insert(
+        "ntpkg.system_use_pkg".into(),
+        "This platform has an official package manager for that runtime. Use it instead of ntpkg:"
+            .into(),
+    );
+
+    m.insert("ntpkg.system_cmd".into(), "    {}".into());
+
+    m.insert(
+        "ntpkg.system_force_hint".into(),
+        "To install a standalone copy through ntpkg anyway, run: ntpkg install {} --force".into(),
+    );
+
+    m.insert(
+        "ntpkg.system_no_manager".into(),
+        "No supported system package manager found. Use the package manager for your platform instead."
+            .into(),
     );
 
     m.insert(

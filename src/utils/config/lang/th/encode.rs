@@ -57,7 +57,7 @@ pub fn fill(m: &mut HashMap<String, String>) {
 
     m.insert(
         "encode.unknown_format".into(),
-        "รูปแบบ encode ไม่รู้จัก: '{}'. ใช้ b2, b10, b64, hex หรือ url.".into(),
+        "รูปแบบ encode ไม่รู้จัก: '{}'. ใช้ b2, b10, b64, hex, url, utf8, utf16, ascii.".into(),
     );
 
     m.insert(
@@ -67,7 +67,7 @@ pub fn fill(m: &mut HashMap<String, String>) {
 
     m.insert(
         "encode.unknown_format_generic".into(),
-        "ไม่รู้จักรูปแบบ: '{}'. ใช้ b2, b10, b64, hex หรือ url.".into(),
+        "ไม่รู้จักรูปแบบ: '{}'. ใช้ b2, b10, b64, hex, url, utf8, utf16, ascii.".into(),
     );
 
     m.insert(
@@ -105,4 +105,44 @@ pub fn fill(m: &mut HashMap<String, String>) {
     m.insert("encode.usage_title".into(), "การใช้งาน:".into());
 
     m.insert("encode.written_to".into(), "เขียนไปที่: {}".into());
+
+    m.insert(
+        "encode.usage_encode_utf8".into(),
+        "  encode utf8 <เป้าหมาย> [-o <ไฟล์>] เข้ารหัส UTF-8 เป็นไบต์ escape (\\xc3\\xa9)".into(),
+    );
+
+    m.insert(
+        "encode.usage_encode_utf16".into(),
+        "  encode utf16 <เป้าหมาย> [-o <ไฟล์>] เข้ารหัส UTF-16 เป็น escape \\uNNNN (\\u00e9)".into(),
+    );
+
+    m.insert(
+        "encode.usage_encode_ascii".into(),
+        "  encode ascii <เป้าหมาย> [-o <ไฟล์>] เข้ารหัส ASCII (ผิดพลาดหากเกิน U+007F)".into(),
+    );
+
+    m.insert(
+        "encode.invalid_escape".into(),
+        "ลำดับ escape ไม่ถูกต้อง: '{}'".into(),
+    );
+
+    m.insert(
+        "encode.invalid_utf8".into(),
+        "ไบต์ที่ถอดรหัสไม่ใช่ UTF-8 ที่ถูกต้อง".into(),
+    );
+
+    m.insert(
+        "encode.invalid_utf16".into(),
+        "UTF-16 ที่ถอดรหัสไม่ถูกต้อง (surrogate ไม่ครบคู่)".into(),
+    );
+
+    m.insert(
+        "encode.not_ascii".into(),
+        "อักขระ '{}' ไม่ใช่ ASCII".into(),
+    );
+
+    m.insert(
+        "encode.not_ascii_byte".into(),
+        "ไบต์ที่ถอดรหัส {} ไม่ใช่ ASCII".into(),
+    );
 }

@@ -77,6 +77,10 @@ pub fn fill(m: &mut HashMap<String, String>) {
 
     m.insert("editor.cmd_hex_saved".into(), "Hex saved".into());
 
+    m.insert("editor.lsp_on".into(), "Language service: on".into());
+    m.insert("editor.lsp_off".into(), "Language service: off".into());
+    m.insert("editor.lsp_usage".into(), "lsp [on|off] — toggle completion, signature help and hover".into());
+
     m.insert("editor.cmd_jumped_to_line".into(), "Jumped to line".into());
 
     m.insert(
@@ -848,6 +852,11 @@ pub fn fill(m: &mut HashMap<String, String>) {
 
     m.insert("editor.mode_search".into(), "[Search]".into());
 
+    m.insert(
+        "editor.mode_search_count".into(),
+        "[Search] {} ({} matches)".into(),
+    );
+
     m.insert("editor.mode_term_copied".into(), "Copied {} chars".into());
 
     m.insert("editor.mode_term_busy_esc".into(), "A command is still running - Esc returns to the editor and keeps the terminal (Ctrl+Q hides it)".into());
@@ -1141,6 +1150,11 @@ pub fn fill(m: &mut HashMap<String, String>) {
     );
 
     m.insert("editor.query_unknown".into(), "Unknown query: {}".into());
+
+    m.insert(
+        "editor.query_upper_lower_required".into(),
+        "Select text before changing it to {}case".into(),
+    );
 
     m.insert(
         "editor.query_uppercased".into(),

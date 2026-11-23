@@ -20,7 +20,7 @@
 
 use crate::config::Config;
 use crate::t;
-use colored::Colorize;
+use crate::utils::theme::style::ThemeColorize;
 use std::io::Write;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Mutex, OnceLock};
@@ -62,6 +62,9 @@ pub(crate) struct AnimState {
     /// Column where the ghost starts (right after the caret), so erase can go
     /// back to it exactly — character counts are wrong for CJK/Thai text.
     start_col: u16,
+    /// Visible width of the prompt currently on screen. The caret sits right
+    /// after it, so this is the ghost's column without asking the terminal.
+    prompt_cols: u16,
     /// When the current phase began.
     phase_started: Instant,
 }
@@ -77,6 +80,7 @@ impl Default for AnimState {
             displayed: 0,
             limit: 60,
             start_col: 0,
+            prompt_cols: 0,
             phase_started: Instant::now(),
         }
     }
@@ -193,19 +197,30 @@ fn worker_loop() {
 
 /// Record the caret column and how many characters fit on this row, so a
 /// long hint never wraps and leaves junk on the next line (rustyline only
-/// knows about its own layout). Returns false when the console cannot report
-/// the cursor: drawing from a guessed column could overwrite the prompt, so
-/// the animator stays off instead.
+/// knows about its own layout). Returns false when the terminal size cannot
+/// be read, since then no hint fits at all.
+///
+/// The column is derived from the prompt width instead of
+/// `crossterm::cursor::position()`: on Unix that helper writes `ESC[6n` and
+/// then reads the reply **from stdin**, which races rustyline (the line
+/// editor owns stdin while `readline` runs). The reply usually gets consumed
+/// by rustyline, `position()` times out after 2 s and returns `Err`, and the
+/// animator would switch itself off — that is why idle hints only ever
+/// appeared on Windows. `terminal::size()` is an ioctl on Unix and a WinAPI
+/// call on Windows, so it touches no input.
 fn begin_row(st: &mut AnimState) -> bool {
-    let (cols, col) = match (crossterm::terminal::size(), crossterm::cursor::position()) {
-        (Ok((cols, _)), Ok((col, _))) => (cols, col),
+    let cols = match crossterm::terminal::size() {
+        Ok((cols, _)) if cols > 0 => cols as usize,
         _ => {
             st.limit = 0;
             return false;
         }
     };
-    st.start_col = col;
-    let avail = (cols as usize).saturating_sub(col as usize + 1).min(200);
+    // A prompt wider than the terminal wraps; the caret then sits on the last
+    // wrapped row, at this column.
+    let col = st.prompt_cols as usize % cols;
+    st.start_col = col as u16;
+    let avail = cols.saturating_sub(col + 1).min(200);
     st.limit = avail;
     avail > 0
 }
@@ -240,7 +255,9 @@ fn erase_ghost(start_col: u16, displayed: usize) {
 }
 
 /// A fresh prompt is about to be shown: reset the timeline for `step`.
-pub(crate) fn prompt_started(step: usize) {
+/// `prompt_width` is the prompt's visible width (ANSI already discounted), so
+/// the ghost starts right after the caret.
+pub(crate) fn prompt_started(step: usize, prompt_width: usize) {
     let enabled =
         Config::global_get_autosuggest_enabled() && Config::global_get_idle_hint_enabled();
     ensure_worker();
@@ -255,6 +272,7 @@ pub(crate) fn prompt_started(step: usize) {
     st.phase = Phase::Waiting;
     st.phase_started = Instant::now();
     st.step = step;
+    st.prompt_cols = u16::try_from(prompt_width).unwrap_or(u16::MAX);
     st.suggestion.clear();
     st.typed = 0;
     // A previous ghost is cleared by rustyline's repaint/our hint path; never

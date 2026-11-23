@@ -1,8 +1,8 @@
 <p align="center">
-  <img src="https://img.shields.io/badge/version-2.4.8-blue.svg" alt="Version 2.4.8"/>
+  <img src="https://img.shields.io/badge/version-2.4.9-blue.svg" alt="Version 2.4.9"/>
 </p>
 
-<h1 align="center">ntc 2.4.8</h1>
+<h1 align="center">ntc 2.4.9</h1>
 
 <p align="center">
   <b>Navigate · Toolkit · Center</b><br>
@@ -10,7 +10,7 @@
 </p>
 
 <p align="center">
-  Windows · Linux · macOS · Android（通过 Termux）
+  Windows · Linux · macOS · Android（通过 Termux arm64）
 </p>
 
 <p align="center">
@@ -39,6 +39,8 @@
 | `ran` | 任务运行器 |
 | `nfe` | 文件浏览器 |
 | `ne` | 内置编辑器 |
+| `view` | 带大小、过滤和文件预览的目录树 |
+| `size` | 文件和文件夹大小 |
 | `sys` | 系统监视器 |
 | `spec` | 系统规格与磁盘使用情况 |
 | `gosc` | 连续导航 |
@@ -55,10 +57,53 @@
 
 ## 最新变化
 
-- `spec` 现在会将每个磁盘显示为 `已用/总计 百分比 可用空间`，例如
-  `200 GB/300 GB 67% 100 GB 可用` —— “可用”标签会跟随当前语言。
-- `spec` 会为每块 GPU 单独显示一行；当系统未提供 CPU 品牌时，
-  会回退显示 Android SoC 名称。
+- `config env NAME=value` 现在与 `config env NAME value` 等效。
+
+---
+
+## 截图
+
+<p align="center">
+  <img src="assets/before_tp.png" alt="tp before" width="32%">
+  <img src="assets/after_tp.png" alt="tp after" width="32%">
+  <img src="assets/ral_info.png" alt="ral info" width="32%">
+</p>
+
+<p align="center">
+  <img src="assets/after_ral.png" alt="ral after" width="32%">
+  <img src="assets/ran_info.png" alt="ran info" width="32%">
+  <img src="assets/after_ran.png" alt="ran after" width="32%">
+</p>
+
+<p align="center">
+  <img src="assets/nfe.png" alt="nfe file explorer" width="32%">
+  <img src="assets/ne.png" alt="ne editor" width="32%">
+  <img src="assets/sys.png" alt="sys system monitor" width="32%">
+</p>
+
+<p align="center">
+  <img src="assets/spec.png" alt="spec specs and disks" width="32%">
+  <img src="assets/view_and_size.png" alt="view --size" width="32%">
+  <img src="assets/view.png" alt="view directory tree" width="32%">
+</p>
+
+<p align="center">
+  <img src="assets/serve.png" alt="serve services" width="32%">
+  <img src="assets/serve_files.png" alt="serve files" width="32%">
+  <img src="assets/serve_httpserver.png" alt="serve files HTTP server" width="32%">
+</p>
+
+<p align="center">
+  <img src="assets/serve_chess.png" alt="serve chess" width="32%">
+  <img src="assets/serve_git.png" alt="serve git" width="32%">
+  <img src="assets/serve_arc.png" alt="serve arc" width="32%">
+</p>
+
+<p align="center">
+  <img src="assets/serve_theme.png" alt="serve theme" width="32%">
+  <img src="assets/serve_fake.png" alt="serve fake" width="32%">
+  <img src="assets/serve_backup.png" alt="serve backup" width="32%">
+</p>
 
 ---
 
@@ -77,7 +122,7 @@ pip install ntc-cli
 ```
 
 注意：pip wheel 仅为上述四个平台发布。
-Android/Termux 和 Windows ARM64 未发布到 PyPI —— 请使用 npm 或
+Android/Termux arm64 和 Windows ARM64 未发布到 PyPI —— 请使用 npm 或
 GitHub Release 二进制文件。
 
 ### 其他渠道
@@ -100,7 +145,7 @@ GitHub Release 二进制文件。
 | Linux ARM64 (glibc) | yes | no | yes | 尚未发布 pip wheel |
 | macOS x64 | yes | yes | yes | `macosx_*_x86_64` |
 | macOS ARM64 | yes | yes | yes | `macosx_*_arm64` |
-| Android / Termux | yes | no | yes | 通过 npm 回退使用 Termux asset |
+| Android / Termux arm64 | yes | no | yes | 通过 npm 回退使用 Termux arm64 asset |
 
 图例：yes = 支持 · no = 不可用
 

@@ -115,16 +115,6 @@ pub fn fill(m: &mut HashMap<String, String>) {
         "แสดงรายการฟังก์ชันบรรทัดคำสั่งทั้งหมด".into(),
     );
 
-    m.insert(
-        "clap.arg.lsp.help".into(),
-        "เริ่มเซิร์ฟเวอร์ LSP ของ ntc-math ผ่าน stdio".into(),
-    );
-
-    m.insert(
-        "clap.arg.lsp_log.help".into(),
-        "เส้นทางสำหรับเขียนบันทึกการดีบัก LSP".into(),
-    );
-
     m.insert("clap.arg.math.help".into(), "ประเมินนิพจน์คณิตศาสตร์".into());
 
     m.insert(

@@ -17,6 +17,26 @@ pub fn fill(m: &mut HashMap<String, String>) {
     );
 
     m.insert(
+        "help.theme.example1".into(),
+        "theme list ## List all available themes".into(),
+    );
+
+    m.insert(
+        "help.theme.example2".into(),
+        "theme use aura ## Switch to the 'aura' theme".into(),
+    );
+
+    m.insert(
+        "help.theme.example3".into(),
+        "theme current ## Show current theme info".into(),
+    );
+
+    m.insert(
+        "help.theme.example4".into(),
+        "theme add mytheme ## Create a new theme".into(),
+    );
+
+    m.insert(
         "help.theme.export".into(),
         "theme export <name> ## Export theme to .ntc_theme file".into(),
     );
@@ -24,6 +44,11 @@ pub fn fill(m: &mut HashMap<String, String>) {
     m.insert(
         "help.theme.import".into(),
         "theme import <file> ## Import theme from .ntc_theme file".into(),
+    );
+
+    m.insert(
+        "help.theme.install".into(),
+        "theme install ## Install a theme from the ntc GitHub catalog".into(),
     );
 
     m.insert(
@@ -53,7 +78,7 @@ pub fn fill(m: &mut HashMap<String, String>) {
 
     m.insert(
         "help.theme.rm".into(),
-        "theme rm <name> ## Remove a theme".into(),
+        "theme rm <name...> [-f|--force] ## Remove theme(s)".into(),
     );
 
     m.insert(
@@ -63,33 +88,18 @@ pub fn fill(m: &mut HashMap<String, String>) {
 
     m.insert(
         "help.theme.switch".into(),
-        "theme <name> ## Switch to a theme by name".into(),
+        "theme use <name> ## Switch to a theme by name".into(),
     );
 
     m.insert("help.theme.title".into(), "THEME COMMANDS:".into());
 
     m.insert(
+        "help.theme.update".into(),
+        "theme update <name> ## Add fields missing from an existing theme".into(),
+    );
+
+    m.insert(
         "help.theme.where".into(),
         "theme where ## Show theme directory location".into(),
-    );
-
-    m.insert(
-        "help.theme.example1".into(),
-        "theme list ## List all available themes".into(),
-    );
-
-    m.insert(
-        "help.theme.example2".into(),
-        "theme dark ## Switch to 'dark' theme".into(),
-    );
-
-    m.insert(
-        "help.theme.example3".into(),
-        "theme current ## Show current theme info".into(),
-    );
-
-    m.insert(
-        "help.theme.example4".into(),
-        "theme add mytheme ## Create a new theme".into(),
     );
 }

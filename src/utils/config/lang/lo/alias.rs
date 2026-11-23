@@ -492,4 +492,38 @@ pub fn fill(m: &mut HashMap<String, String>) {
         "alias.ral.bare_env_warning".into(),
         "ຕອນນີ້ $NAME ແບບບໍ່ມີວົງເລັບໝາຍເຖິງຕົວແປສະພາບແວດລ້ອມ. ໃຊ້ ${name} ສຳລັບພາລາມິເຕີ: {}".into(),
     );
+
+    m.insert(
+        "alias.ral.install_cmd".into(),
+        " ral install ຕິດຕັ້ງ run aliases ຈາກແຄັດຕາລັອກ GitHub ຂອງ ntc".into(),
+    );
+
+    m.insert(
+        "alias.ral.install_downloading".into(),
+        "ກຳລັງດາວໂຫຼດ {}...".into(),
+    );
+
+    m.insert("alias.ral.install_failed".into(), "ຕິດຕັ້ງບໍ່ສຳເລັດ: {}".into());
+
+    m.insert(
+        "alias.ral.install_fetching".into(),
+        "ກຳລັງດຶງໄຟລ໌ .ntc.ral ຈາກ GitHub...".into(),
+    );
+
+    m.insert(
+        "alias.ral.install_none".into(),
+        "ບໍ່ພົບໄຟລ໌ .ntc.ral ທີ່ຕິດຕັ້ງໄດ້".into(),
+    );
+
+    m.insert(
+        "alias.ral.install_prompt".into(),
+        "ເລືອກໄຟລ໌ (0 ເພື່ອຍົກເລີກ):".into(),
+    );
+
+    m.insert("alias.ral.install_title".into(), "ຕິດຕັ້ງ run aliases".into());
+
+    m.insert(
+        "alias.ral.installed".into(),
+        "ຕິດຕັ້ງ aliases ຈາກ {} ແລ້ວ".into(),
+    );
 }

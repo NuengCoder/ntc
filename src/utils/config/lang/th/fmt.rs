@@ -34,4 +34,25 @@ pub fn fill(m: &mut HashMap<String, String>) {
     );
 
     m.insert("fmt.help_usage".into(), "การใช้งาน:".into());
+
+    m.insert(
+        "fmt.help_example10".into(),
+        "  fmt data.csv to xlsx -o data.xlsx   # CSV เป็น Excel".into(),
+    );
+    m.insert(
+        "fmt.help_example6".into(),
+        "  fmt report.docx to md              # DOCX เป็น Markdown".into(),
+    );
+    m.insert(
+        "fmt.help_example7".into(),
+        "  fmt readme.md to html -o out.html".into(),
+    );
+    m.insert(
+        "fmt.help_example8".into(),
+        "  fmt notes.txt to pdf -o notes.pdf   # ข้อความเป็น PDF".into(),
+    );
+    m.insert(
+        "fmt.help_example9".into(),
+        "  fmt report.txt to docx -o report.docx".into(),
+    );
 }

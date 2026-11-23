@@ -2,25 +2,45 @@ use std::collections::HashMap;
 
 pub fn fill(m: &mut HashMap<String, String>) {
     m.insert(
+        "help.ran.check".into(),
+        "ran check ## Validate NTCRANFILE.toml and show where problems are".into(),
+    );
+
+    m.insert(
         "help.ran.deinit".into(),
         "ran deinit ## Remove NTCRANFILE.toml".into(),
     );
 
-    m.insert("help.ran.help".into(), "ran help ## Show ran usage".into());
+    m.insert(
+        "help.ran.example1".into(),
+        "ran ## Run default standalone target".into(),
+    );
+
+    m.insert(
+        "help.ran.example2".into(),
+        "ran build ## Run 'build' target".into(),
+    );
+
+    m.insert(
+        "help.ran.example3".into(),
+        "ran list ## List all targets".into(),
+    );
+
+    m.insert(
+        "help.ran.dry_run".into(),
+        "ran --dry-run [target] ## Show the commands that would run, execute nothing".into(),
+    );
 
     m.insert(
         "help.ran.fmt".into(),
         "ran fmt <toml|json|yaml> ## Convert the ranfile to another format (-o <file>, -y)".into(),
     );
 
+    m.insert("help.ran.help".into(), "ran help ## Show ran usage".into());
+
     m.insert(
         "help.ran.init".into(),
         "ran init ## Create a NTCRANFILE.toml template".into(),
-    );
-
-    m.insert(
-        "help.ran.check".into(),
-        "ran check ## Validate NTCRANFILE.toml and show where problems are".into(),
     );
 
     m.insert(
@@ -41,20 +61,5 @@ pub fn fill(m: &mut HashMap<String, String>) {
     m.insert(
         "help.ran.title".into(),
         "RAN / TASK RUNNER COMMANDS:".into(),
-    );
-
-    m.insert(
-        "help.ran.example1".into(),
-        "ran ## Run default standalone target".into(),
-    );
-
-    m.insert(
-        "help.ran.example2".into(),
-        "ran build ## Run 'build' target".into(),
-    );
-
-    m.insert(
-        "help.ran.example3".into(),
-        "ran list ## List all targets".into(),
     );
 }

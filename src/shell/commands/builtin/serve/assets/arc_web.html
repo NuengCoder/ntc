@@ -1,0 +1,499 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>NTC Archive</title>
+<style>
+  :root {
+    --bg: #0f1115;
+    --panel: #171a21;
+    --panel-2: #1d212a;
+    --line: #2a2f3a;
+    --text: #e6e9ef;
+    --muted: #8b93a3;
+    --accent: #5aa9ff;
+    --accent-2: #2f7ed8;
+    --ok: #57d38c;
+    --warn: #ffb454;
+    --err: #ff6b6b;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font: 14px/1.45 ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+    background: var(--bg);
+    color: var(--text);
+  }
+  header {
+    padding: 14px 20px;
+    border-bottom: 1px solid var(--line);
+    background: var(--panel);
+    position: sticky;
+    top: 0;
+    z-index: 2;
+  }
+  h1 { margin: 0 0 10px; font-size: 16px; letter-spacing: .04em; }
+  h1 span { color: var(--accent); }
+  h2 { margin: 0 0 10px; font-size: 13px; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; }
+  h2 button.mini {
+    float: right;
+    padding: 2px 8px;
+    font-size: 11px;
+    text-transform: none;
+    letter-spacing: 0;
+  }
+  .pathbar { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .pathbar .cwd {
+    font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+    background: var(--panel-2);
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    padding: 5px 9px;
+    flex: 1;
+    min-width: 180px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: var(--muted);
+  }
+  main {
+    display: grid;
+    grid-template-columns: minmax(0, 1.4fr) minmax(320px, 1fr);
+    gap: 16px;
+    padding: 16px 20px 90px;
+    align-items: start;
+  }
+  @media (max-width: 900px) { main { grid-template-columns: 1fr; } }
+  .panel {
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 14px;
+  }
+  .list {
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    max-height: 52vh;
+    overflow: auto;
+    background: var(--panel-2);
+  }
+  .entry {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 7px 10px;
+    border-bottom: 1px solid var(--line);
+  }
+  .entry:last-child { border-bottom: 0; }
+  .entry:hover { background: #222835; }
+  .entry input { accent-color: var(--accent); }
+  .entry .name {
+    flex: 1;
+    text-align: left;
+    background: none;
+    border: 0;
+    color: var(--text);
+    font: inherit;
+    cursor: pointer;
+    padding: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .entry .name.dir { color: var(--accent); }
+  .entry .name.archive { color: var(--warn); }
+  .entry .size {
+    color: var(--muted);
+    font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+    font-size: 12px;
+    white-space: nowrap;
+  }
+  .row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-top: 12px; }
+  label { color: var(--muted); font-size: 12px; display: flex; gap: 6px; align-items: center; flex: 1; }
+  input[type="text"], select {
+    background: var(--panel-2);
+    color: var(--text);
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    padding: 7px 9px;
+    font: inherit;
+    min-width: 0;
+  }
+  label input[type="text"] { flex: 1; }
+  button {
+    background: var(--panel-2);
+    color: var(--text);
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    padding: 7px 11px;
+    font: inherit;
+    cursor: pointer;
+  }
+  button:hover { border-color: var(--accent-2); }
+  button.primary { background: var(--accent-2); border-color: var(--accent-2); color: #fff; }
+  button.primary:hover { background: var(--accent); }
+  button:disabled { opacity: .45; cursor: default; }
+  .command {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    margin: 0;
+    padding: 12px 20px;
+    background: #0a0c10;
+    border-top: 1px solid var(--line);
+    color: var(--ok);
+    font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+    font-size: 13px;
+    white-space: pre-wrap;
+    word-break: break-all;
+  }
+  .hidden { display: none; }
+  .status { margin-top: 10px; font-size: 12px; color: var(--muted); min-height: 18px; }
+  .status.err { color: var(--err); }
+  .status.ok { color: var(--ok); }
+  .empty { padding: 18px; color: var(--muted); text-align: center; }
+  .tag {
+    font-size: 11px;
+    color: var(--muted);
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    padding: 1px 7px;
+    margin-left: 4px;
+  }
+</style>
+</head>
+<body>
+<header>
+  <h1>NTC <span>Archive</span></h1>
+  <div class="pathbar">
+    <button id="up" title="Parent folder">Up</button>
+    <button id="refresh" title="Reload this folder">Refresh</button>
+    <div class="cwd" id="cwd">/</div>
+  </div>
+</header>
+
+<main>
+  <section class="panel">
+    <h2>Files <span class="tag" id="selection-count">0 selected</span><button type="button" class="mini" id="select-all" title="Select all (Ctrl+A)" disabled>Select all</button></h2>
+    <div class="list" id="list"><div class="empty">Loading…</div></div>
+    <div class="row">
+      <label>Archive name
+        <input type="text" id="name" value="archive.zip" spellcheck="false">
+      </label>
+      <select id="format" title="Archive format">
+        <option value="zip">.zip</option>
+        <option value="tar.gz">.tar.gz</option>
+        <option value="tar">.tar</option>
+      </select>
+      <button class="primary" id="create">Create archive</button>
+    </div>
+    <div class="status" id="status"></div>
+  </section>
+
+  <section class="panel">
+    <div id="archive-panel" class="hidden">
+      <h2>Contents <span class="tag" id="archive-total"></span></h2>
+      <div class="cwd" id="archive-path" style="margin-bottom:10px"></div>
+      <div class="list" id="entries"></div>
+      <div class="row">
+        <label>Extract to
+          <input type="text" id="dest" spellcheck="false">
+        </label>
+        <button class="primary" id="extract">Extract</button>
+        <button id="close-archive">Close</button>
+      </div>
+    </div>
+    <div id="hint">
+      <h2>No archive open</h2>
+      <p class="status">Select files or folders on the left and press <b>Create archive</b>, or click an archive file (yellow) to list its contents and extract it. Tip: <b>Ctrl+A</b> selects everything and <b>Shift-click</b> selects a range.</p>
+    </div>
+  </section>
+</main>
+
+<pre class="command hidden" id="command"></pre>
+
+<script>
+(function () {
+  "use strict";
+
+  var cwd = "";
+  var current = [];
+  var selected = new Set();
+  var anchor = -1;
+  var archive = null;
+
+  function $(id) { return document.getElementById(id); }
+
+  function join(path, name) { return path ? path + "/" + name : name; }
+
+  function parentOf(path) {
+    var i = path.lastIndexOf("/");
+    return i < 0 ? "" : path.slice(0, i);
+  }
+
+  function fmtSize(n) {
+    if (n < 1024) return n + " B";
+    if (n < 1048576) return (n / 1024).toFixed(1) + " KB";
+    if (n < 1073741824) return (n / 1048576).toFixed(1) + " MB";
+    return (n / 1073741824).toFixed(1) + " GB";
+  }
+
+  function setStatus(msg, kind) {
+    var el = $("status");
+    el.textContent = msg || "";
+    el.className = "status" + (kind ? " " + kind : "");
+  }
+
+  function showCommand(text) {
+    var box = $("command");
+    box.textContent = "> " + text;
+    box.classList.remove("hidden");
+  }
+
+  function api(url, opts) {
+    return fetch(url, opts).then(function (res) {
+      return res.json().catch(function () { return { error: res.statusText }; }).then(function (data) {
+        if (!res.ok) throw new Error(data.error || res.statusText);
+        return data;
+      });
+    });
+  }
+
+  function updateName() {
+    var input = $("name");
+    var format = $("format").value;
+    if (selected.size === 1) {
+      var base = selected.values().next().value.replace(/\.(zip|tar\.gz|tgz|tar)$/i, "");
+      input.value = base + "." + format;
+    } else if (/^archive\./.test(input.value)) {
+      input.value = "archive." + format;
+    }
+  }
+
+  function updateCount() {
+    $("selection-count").textContent = selected.size + " selected";
+  }
+
+  function updateSelectAll() {
+    var all = current.length > 0 && selected.size === current.length;
+    $("select-all").textContent = all ? "Clear" : "Select all";
+    $("select-all").disabled = current.length === 0;
+  }
+
+  function boxes() {
+    return $("list").querySelectorAll("input[type=\"checkbox\"]");
+  }
+
+  function setAll(select) {
+    var all = boxes();
+    for (var i = 0; i < all.length; i++) all[i].checked = select;
+    selected.clear();
+    if (select) current.forEach(function (entry) { selected.add(entry.name); });
+    anchor = -1;
+    updateCount();
+    updateName();
+    updateSelectAll();
+  }
+
+  function load(path) {
+    setStatus("");
+    return api("/api/list?path=" + encodeURIComponent(path)).then(function (data) {
+      cwd = data.path;
+      current = data.entries;
+      selected.clear();
+      anchor = -1;
+      updateCount();
+      updateSelectAll();
+      $("cwd").textContent = "/" + cwd;
+      var list = $("list");
+      list.innerHTML = "";
+      if (!data.entries.length) {
+        var empty = document.createElement("div");
+        empty.className = "empty";
+        empty.textContent = "Empty folder.";
+        list.appendChild(empty);
+      }
+      data.entries.forEach(function (entry) {
+        var row = document.createElement("div");
+        row.className = "entry";
+
+        var box = document.createElement("input");
+        box.type = "checkbox";
+        box.checked = false;
+        box.dataset.name = entry.name;
+        // Shift-click extends from the last plain click; Ctrl+A is handled
+        // globally below (but not while typing in a text field).
+        box.addEventListener("click", function (e) {
+          var index = current.findIndex(function (item) { return item.name === entry.name; });
+          if (e.shiftKey && anchor >= 0 && anchor < current.length) {
+            var start = Math.min(anchor, index);
+            var end = Math.max(anchor, index);
+            var all = boxes();
+            for (var i = start; i <= end; i++) {
+              all[i].checked = box.checked;
+              if (box.checked) selected.add(current[i].name);
+              else selected.delete(current[i].name);
+            }
+          } else {
+            if (box.checked) selected.add(entry.name);
+            else selected.delete(entry.name);
+            anchor = index;
+          }
+          updateCount();
+          updateName();
+          updateSelectAll();
+        });
+
+        var name = document.createElement("button");
+        name.className = "name " + (entry.is_dir ? "dir" : entry.is_archive ? "archive" : "file");
+        name.textContent = entry.name + (entry.is_dir ? "/" : "");
+        name.title = entry.is_dir ? "Open folder" : entry.is_archive ? "List archive contents" : entry.name;
+        name.addEventListener("click", function () {
+          if (entry.is_dir) load(join(cwd, entry.name));
+          else if (entry.is_archive) openArchive(join(cwd, entry.name));
+          else showCommand("view " + quote(join(cwd, entry.name)));
+        });
+
+        var size = document.createElement("span");
+        size.className = "size";
+        size.textContent = entry.is_dir ? "" : fmtSize(entry.size);
+
+        row.appendChild(box);
+        row.appendChild(name);
+        row.appendChild(size);
+        list.appendChild(row);
+      });
+      updateName();
+      updateSelectAll();
+    }).catch(function (err) {
+      setStatus(err.message, "err");
+    });
+  }
+
+  function quote(text) {
+    return /^[A-Za-z0-9._\-\/:]+$/.test(text) ? text : '"' + text.replace(/"/g, '\\"') + '"';
+  }
+
+  function openArchive(path) {
+    api("/api/entries?path=" + encodeURIComponent(path)).then(function (data) {
+      archive = data.path;
+      $("hint").classList.add("hidden");
+      $("archive-panel").classList.remove("hidden");
+      $("archive-path").textContent = "/" + data.path;
+      $("archive-total").textContent = data.total + " entries";
+
+      var box = $("entries");
+      box.innerHTML = "";
+      if (!data.entries.length) {
+        var empty = document.createElement("div");
+        empty.className = "empty";
+        empty.textContent = "Archive is empty.";
+        box.appendChild(empty);
+      }
+      data.entries.forEach(function (entry) {
+        var row = document.createElement("div");
+        row.className = "entry";
+        var name = document.createElement("span");
+        name.className = "name";
+        name.textContent = entry.name + (entry.is_dir ? "/" : "");
+        var size = document.createElement("span");
+        size.className = "size";
+        size.textContent = entry.is_dir ? "" : fmtSize(entry.size);
+        row.appendChild(name);
+        row.appendChild(size);
+        box.appendChild(row);
+      });
+
+      var base = data.path.split("/").pop().replace(/\.(zip|tar\.gz|tgz|tar)$/i, "");
+      $("dest").value = base;
+      setStatus(data.total + " entries in " + data.path, "ok");
+    }).catch(function (err) {
+      setStatus(err.message, "err");
+    });
+  }
+
+  $("select-all").addEventListener("click", function () {
+    setAll(!(current.length > 0 && selected.size === current.length));
+  });
+
+  document.addEventListener("keydown", function (e) {
+    if (!(e.ctrlKey || e.metaKey) || e.key.toLowerCase() !== "a") return;
+    var target = e.target || {};
+    var tag = (target.tagName || "").toLowerCase();
+    if (
+      tag === "textarea" ||
+      tag === "select" ||
+      (tag === "input" && target.type !== "checkbox") ||
+      target.isContentEditable
+    ) {
+      return;
+    }
+    if (!current.length) return;
+    e.preventDefault();
+    setAll(true);
+  });
+
+  $("up").addEventListener("click", function () { load(parentOf(cwd)); });
+  $("refresh").addEventListener("click", function () { load(cwd); });
+
+  $("format").addEventListener("change", updateName);
+
+  $("create").addEventListener("click", function () {
+    var names = Array.from(selected);
+    if (!names.length) {
+      setStatus("Select at least one file or folder.", "err");
+      return;
+    }
+    var output = $("name").value.trim();
+    if (!output) {
+      setStatus("Enter an archive name.", "err");
+      return;
+    }
+    $("create").disabled = true;
+    api("/api/create", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ dir: cwd, names: names, output: output })
+    }).then(function (data) {
+      showCommand(data.command);
+      setStatus("Created " + data.output + " (" + data.count + " entries).", "ok");
+      return load(cwd);
+    }).catch(function (err) {
+      setStatus(err.message, "err");
+    }).then(function () {
+      $("create").disabled = false;
+    });
+  });
+
+  $("extract").addEventListener("click", function () {
+    if (!archive) return;
+    var dest = $("dest").value.trim();
+    $("extract").disabled = true;
+    api("/api/extract", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ archive: archive, dest: dest })
+    }).then(function (data) {
+      showCommand(data.command);
+      setStatus("Extracted " + data.count + " entries into " + (data.dest || ".") + ".", "ok");
+      return load(cwd);
+    }).catch(function (err) {
+      setStatus(err.message, "err");
+    }).then(function () {
+      $("extract").disabled = false;
+    });
+  });
+
+  $("close-archive").addEventListener("click", function () {
+    archive = null;
+    $("archive-panel").classList.add("hidden");
+    $("hint").classList.remove("hidden");
+  });
+
+  load("");
+})();
+</script>
+</body>
+</html>

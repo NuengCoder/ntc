@@ -2,48 +2,23 @@ use std::collections::HashMap;
 
 pub fn fill(m: &mut HashMap<String, String>) {
     m.insert(
-        "help.ntpkg.available".into(),
-        "ntpkg available [lang] ## แสดงรายการภาษา หรือเวอร์ชันที่ดาวน์โหลดได้".into(),
-    );
-
-    m.insert(
-        "help.ntpkg.help".into(),
-        "ntpkg help ## แสดงการใช้งาน ntpkg".into(),
-    );
-
-    m.insert(
-        "help.ntpkg.info".into(),
-        "ntpkg info <lang> ## แสดงข้อมูลแพ็กเกจ (เวอร์ชัน, ตำแหน่ง, ไบนารี)".into(),
-    );
-
-    m.insert(
-        "help.ntpkg.install".into(),
-        "ntpkg install <lang> [ver] ## ดาวน์โหลดและติดตั้ง runtime".into(),
-    );
-
-    m.insert(
-        "help.ntpkg.list".into(),
-        "ntpkg list ## แสดง runtimes ที่ติดตั้งแล้ว".into(),
-    );
-
-    m.insert(
-        "help.ntpkg.ntpx".into(),
-        "ntpx <pkg> [bin] [args] ## เรียกไบนารีของแพ็กเกจที่ติดตั้ง".into(),
-    );
-
-    m.insert(
-        "help.ntpkg.search".into(),
-        "ntpkg search [keyword] ## ค้นหาแพ็กเกจที่มี".into(),
-    );
-
-    m.insert(
         "help.ntpkg.title".into(),
         "ตัวจัดการแพ็กเกจ (ntpkg) + ntpx:".into(),
     );
 
     m.insert(
+        "help.ntpkg.install".into(),
+        "ntpkg install <lang> [ver] [--force] ## ดาวน์โหลดและติดตั้ง runtime".into(),
+    );
+
+    m.insert(
         "help.ntpkg.uninstall".into(),
         "ntpkg uninstall <lang> [ver] ## ลบ runtime ที่ติดตั้ง".into(),
+    );
+
+    m.insert(
+        "help.ntpkg.list".into(),
+        "ntpkg list ## แสดง runtimes ที่ติดตั้งแล้ว".into(),
     );
 
     m.insert(
@@ -54,6 +29,26 @@ pub fn fill(m: &mut HashMap<String, String>) {
     m.insert(
         "help.ntpkg.which".into(),
         "ntpkg which <lang> ## แสดงเส้นทางไปยัง runtime ที่ใช้งานอยู่".into(),
+    );
+
+    m.insert(
+        "help.ntpkg.search".into(),
+        "ntpkg search [keyword] ## ค้นหาแพ็กเกจที่มี".into(),
+    );
+
+    m.insert(
+        "help.ntpkg.info".into(),
+        "ntpkg info <lang> ## แสดงข้อมูลแพ็กเกจ (เวอร์ชัน, ตำแหน่ง, ไบนารี)".into(),
+    );
+
+    m.insert(
+        "help.ntpkg.available".into(),
+        "ntpkg available [lang] ## แสดงรายการภาษา หรือเวอร์ชันที่ดาวน์โหลดได้".into(),
+    );
+
+    m.insert(
+        "help.ntpkg.help".into(),
+        "ntpkg help ## แสดงการใช้งาน ntpkg".into(),
     );
 
     m.insert(
@@ -93,11 +88,6 @@ pub fn fill(m: &mut HashMap<String, String>) {
 
     m.insert(
         "help.ntpkg.example8".into(),
-        "ntpx node npm init ## เรียก npm ผ่าน ntpx".into(),
-    );
-
-    m.insert(
-        "help.ntpkg.example9".into(),
         "ntpkg help ## แสดงการใช้งาน ntpkg".into(),
     );
 }

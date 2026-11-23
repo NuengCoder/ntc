@@ -120,6 +120,11 @@ pub fn fill(m: &mut HashMap<String, String>) {
         "ສະແດງຂໍ້ມູນ profile:".into(),
     );
 
+    m.insert(
+        "cmd.smtp.help_info_deadlock".into(),
+        "  smtp --id-info <id> --deadlock   ສະແດງລະຫັດຜ່ານແອັບດ້ວຍ (ຖາມລະຫັດຜ່ານຫຼັກກ່ອນ)".into(),
+    );
+
     m.insert("cmd.smtp.help_list_syntax".into(), "  smtp --id-ls".into());
 
     m.insert("cmd.smtp.help_list_title".into(), "ລາຍຊື່ profiles:".into());
@@ -237,6 +242,11 @@ pub fn fill(m: &mut HashMap<String, String>) {
 
     m.insert("cmd.smtp.password_label".into(), "Password:".into());
 
+    m.insert(
+        "cmd.smtp.password_hidden".into(),
+        "******** (ເຊື່ອງໄວ້ - ໃຊ້ --deadlock)".into(),
+    );
+
     m.insert("cmd.smtp.path_not_found".into(), "ບໍ່ພົບ path: {}".into());
 
     m.insert("cmd.smtp.port_label".into(), "Port:".into());
@@ -293,4 +303,50 @@ pub fn fill(m: &mut HashMap<String, String>) {
     m.insert("cmd.smtp.user_label".into(), "User:".into());
 
     m.insert("cmd.smtp.with_attachments".into(), "  ({} ໄຟລ໌ແນບ{})".into());
+
+    m.insert(
+        "cmd.smtp.file_created".into(),
+        "ສ້າງ {} ແລ້ວ - ຕື່ມຂໍ້ມູນ SMTP ຂອງທ່ານ, ແລ້ວສົ່ງດ້ວຍ: smtp -r {}".into(),
+    );
+    m.insert(
+        "cmd.smtp.file_exists".into(),
+        "{} ມີຢູ່ແລ້ວ (ໃຊ້ --force ເພື່ອຂຽນທັບ)".into(),
+    );
+    m.insert(
+        "cmd.smtp.file_incomplete".into(),
+        "ການຕັ້ງຄ່າ SMTP ຕ້ອງມີເຊີບເວີ, ຜູ້ໃຊ້ ແລະ ລະຫັດຜ່ານ: {}".into(),
+    );
+    m.insert(
+        "cmd.smtp.file_invalid".into(),
+        "JSON ການຕັ້ງຄ່າ SMTP ບໍ່ຖືກຕ້ອງ: {}".into(),
+    );
+    m.insert(
+        "cmd.smtp.file_missing".into(),
+        "ບໍ່ພົບການຕັ້ງຄ່າ SMTP: {} (ສ້າງດ້ວຍ: smtp init)".into(),
+    );
+    m.insert(
+        "cmd.smtp.file_read_fail".into(),
+        "ອ່ານການຕັ້ງຄ່າ SMTP ບໍ່ໄດ້: {}".into(),
+    );
+    m.insert(
+        "cmd.smtp.file_write_fail".into(),
+        "ຂຽນການຕັ້ງຄ່າ SMTP ບໍ່ໄດ້: {}".into(),
+    );
+    m.insert(
+        "cmd.smtp.help_file_init".into(),
+        "  smtp init [file] [--force]      ສ້າງ ntc_smtp.json ພ້ອມ server/user/password/to/files"
+            .into(),
+    );
+    m.insert(
+        "cmd.smtp.help_file_send".into(),
+        "  smtp -r ntc_smtp.json -s \"TITLE\" -b \"BODY\" [-f FILE] [-t TO]".into(),
+    );
+    m.insert(
+        "cmd.smtp.help_file_title".into(),
+        "ການຕັ້ງຄ່າໄຟລ໌ດຽວ (ntc_smtp.json):".into(),
+    );
+    m.insert(
+        "cmd.smtp.missing_read_file".into(),
+        "ບໍ່ມີໄຟລ໌ການຕັ້ງຄ່າຫຼັງ -r (ຕົວຢ່າງ: -r ntc_smtp.json)".into(),
+    );
 }

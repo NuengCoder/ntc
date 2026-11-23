@@ -16,11 +16,11 @@ pub fn fill(m: &mut HashMap<String, String>) {
         "ຢູ່ໃນ PATH ແລ້ວ: {}".into(),
     );
 
-    m.insert("cmd.pathman.empty_path".into(), "║  {}".into());
+    m.insert("cmd.pathman.empty_path".into(), "(ຫວ່າງ)".into());
 
     m.insert(
         "cmd.pathman.example_add".into(),
-        "  {} add C:\\Tools".into(),
+        "  {} add ~/bin".into()
     );
 
     m.insert(
@@ -40,7 +40,7 @@ pub fn fill(m: &mut HashMap<String, String>) {
 
     m.insert(
         "cmd.pathman.example_rm_path".into(),
-        "  {} rm C:\\OldTools".into(),
+        "  {} rm ~/old-tools".into()
     );
 
     m.insert("cmd.pathman.example_show".into(), "  {} show".into());
@@ -155,7 +155,34 @@ pub fn fill(m: &mut HashMap<String, String>) {
     m.insert("cmd.pathman.user_level".into(), "User".into());
 
     m.insert(
-        "cmd.pathman.windows_only".into(),
-        "usrpath/syspath ແມ່ນຄຸນສົມບັດສະເພາະ Windows ເທົ່ານັ້ນ.".into(),
+        "cmd.pathman.new_login_shell".into(),
+        "ການປ່ຽນແປງຈະມີຜົນໃນ session ໃໝ່.".into(),
+    );
+
+    m.insert(
+        "cmd.pathman.next_login".into(),
+        "ບັນທຶກແລ້ວ. PATH ໃໝ່ຈະມີຜົນເມື່ອເຂົ້າສູ່ລະບົບຄັ້ງຕໍ່ໄປ (ອອກແລ້ວເຂົ້າໃໝ່ ຫຼື ເປີດ login shell).".into(),
+    );
+
+    m.insert(
+        "cmd.pathman.platform_unsupported".into(),
+        "usrpath/syspath ບໍ່ຮອງຮັບໃນແພລດຟອມນີ້.".into(),
+    );
+
+    m.insert(
+        "cmd.pathman.shell_profile_hint".into(),
+        "ເພີ່ມແຖວນີ້ໃສ່ profile ຂອງ shell: {}".into(),
+    );
+
+    m.insert("cmd.pathman.store_file".into(), "  ໄຟລ໌: {}".into());
+
+    m.insert(
+        "cmd.pathman.sudo_fail".into(),
+        "ເອີ້ນ sudo ບໍ່ໄດ້: {}".into(),
+    );
+
+    m.insert(
+        "cmd.pathman.sudo_write".into(),
+        "system PATH ເປັນຂອງ root — ກຳລັງຂຽນ {} ດ້ວຍ sudo …".into(),
     );
 }

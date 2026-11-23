@@ -131,12 +131,12 @@ pub fn fill(m: &mut HashMap<String, String>) {
 
     m.insert(
         "misc.rev.usage".into(),
-        "ວິທີໃຊ້: rev [file]  (ຍ້ອນຕົວອັກສອນຂອງແຕ່ລະແຖວ; ອ່ານ input ທີ່ pipe ເຂົ້າມາເມື່ອບໍ່ລະບຸໄຟລ໌)".into(),
+        "ວິທີໃຊ້: rev [-u] [file]  (ຍ້ອນຕົວອັກສອນຂອງແຕ່ລະແຖວ; -u ຈະສະຫຼັບລຳດັບແຖວຈາກລຸ່ມຂຶ້ນເທິງແທນ; ອ່ານ input ທີ່ pipe ເຂົ້າມາເມື່ອບໍ່ລະບຸໄຟລ໌)".into(),
     );
 
     m.insert(
         "misc.rev.bad_arg".into(),
-        "rev: ອາກິວເມັນທີ່ບໍ່ຄາດຄິດ '{}' (ວິທີໃຊ້: rev [file])".into(),
+        "rev: ອາກິວເມັນທີ່ບໍ່ຄາດຄິດ '{}' (ວິທີໃຊ້: rev [-u] [file])".into(),
     );
 
     m.insert(
@@ -242,7 +242,7 @@ pub fn fill(m: &mut HashMap<String, String>) {
 
     m.insert(
         "misc.gs.example1".into(),
-        " gs main # ຄົ້ນຫາເນື້ອໃນໄຟລ໌ດ້ວຍ config depth".into(),
+        " gs main # ຄົ້ນຫາເນື້ອໃນໄຟລ໌ດ້ວຍຄວາມເລິກຈາກ config".into(),
     );
 
     m.insert(
@@ -252,12 +252,12 @@ pub fn fill(m: &mut HashMap<String, String>) {
 
     m.insert(
         "misc.gs.example3".into(),
-        " gs -i main # interactive mode (ຊອກຫາຜົນ, Enter ເພື່ອເປີດ)".into(),
+        " gs -I main # ແບບໂຕ້ຕອບ (ເລື່ອນເບິ່ງຜົນ, Enter ເພື່ອເປີດ)".into(),
     );
 
     m.insert(
         "misc.gs.example4".into(),
-        " gs -i main -d 3 # interactive mode ດ້ວຍຂອບເຂດ depth".into(),
+        " gs -I main -d 3 # ແບບໂຕ້ຕອບດ້ວຍຄວາມເລິກ 3 ລະດັບ".into(),
     );
 
     m.insert(
@@ -278,6 +278,58 @@ pub fn fill(m: &mut HashMap<String, String>) {
     m.insert(
         "misc.gs.example8".into(),
         " gs error\\|warning # ຄົ້ນຫາແບບ OR: ກົງກັບຄຳໃດຄຳໜຶ່ງ (a\\|b)".into(),
+    );
+
+    m.insert(
+        "misc.gs.example9".into(),
+        " gs -w main # ສະເພາະແຖວທີ່ເປັນ 'main' ທັງແຖວ".into(),
+    );
+
+    m.insert(
+        "misc.gs.example10".into(),
+        " gs -z Main -h # ຕົວພິມກົງ, ແຖວເລີ່ມດ້ວຍ 'Main'".into(),
+    );
+
+    m.insert(
+        "misc.gs.pager.header".into(),
+        " gs: {}/{} ລາຍການ | ໜ້າ {}/{} (10/ໜ້າ) ".into(),
+    );
+
+    m.insert("misc.gs.pager.hint_help".into(), "?=ຊ່ວຍເຫຼືອ".into());
+    m.insert("misc.gs.pager.hint_pattern".into(), "f=ຮູບແບບ".into());
+    m.insert(
+        "misc.gs.pager.hint_filters".into(),
+        "x/h/g/w/z=ຕົວກອງ".into(),
+    );
+    m.insert("misc.gs.pager.hint_open".into(), "Enter/e=ເປີດ".into());
+    m.insert("misc.gs.pager.hint_row".into(), "0-9=ແຖວ".into());
+    m.insert("misc.gs.pager.hint_move".into(), "j/k".into());
+    m.insert("misc.gs.pager.hint_page".into(), "n/p".into());
+    m.insert("misc.gs.pager.hint_context".into(), "c=ບໍລິບົດ ({}/{})".into());
+    m.insert("misc.gs.pager.hint_quit".into(), "q=ອອກ".into());
+    m.insert("misc.gs.pager.help_title".into(), "GS ແບບໂຕ້ຕອບ — ປຸ່ມ".into());
+    m.insert(
+        "misc.gs.pager.help_body".into(),
+        "  j/k, ຂຶ້ນ/ລົງ        ເລື່ອນ             n/p, ຊ່ອງຫວ່າງ, ຊ້າຍ/ຂວາ  ປ່ຽນໜ້າ\n  0-9                ໄປແຖວ           Home/End              ທຳອິດ/ສຸດທ້າຍ\n  Enter/e            ເປີດໃນເອດິເຕີ      f  ຮູບແບບ   c  ບໍລິບົດ\n  x ຂໍ້ຄວາມກົງຕົວ  z ຕົວພິມ  h ເລີ່ມຕົ້ນ  g ສິ້ນສຸດ  w ທັງແຖວ".into(),
+    );
+    m.insert(
+        "misc.gs.pager.help_close".into(),
+        "Esc ຫຼື q ປິດການຊ່ວຍເຫຼືອ  ·  ກົດ ? ເປີດອີກ  ·  q ອອກຈາກ gs -I".into(),
+    );
+    m.insert("misc.gs.pager.hint_type".into(), "ພິມຮູບແບບ".into());
+    m.insert("misc.gs.pager.hint_accept".into(), "Enter=ຕົກລົງ".into());
+    m.insert("misc.gs.pager.hint_cancel".into(), "Esc=ຍົກເລີກ".into());
+    m.insert("misc.gs.pager.pattern_box".into(), "ຮູບແບບ: ".into());
+    m.insert("misc.gs.pager.searching".into(), "ກຳລັງຄົ້ນຫາ…".into());
+
+    m.insert(
+        "misc.gs.i_renamed".into(),
+        "gs: -i ປ່ຽນເປັນ -I ແລ້ວ (gs -I ເປີດຕົວແບ່ງໜ້າແບບໂຕ້ຕອບ)".into(),
+    );
+
+    m.insert(
+        "misc.gs.mode_conflict".into(),
+        "gs: ໃຊ້ -h, -g ແລະ -w ຮ່ວມກັນບໍ່ໄດ້ (ເລືອກໄດ້ທີລະຕົວ)".into(),
     );
 
     m.insert(
@@ -306,7 +358,7 @@ pub fn fill(m: &mut HashMap<String, String>) {
 
     m.insert(
         "misc.gs.usage".into(),
-        "Usage: gs <pattern> [-d <depth>] [-l <limit>] [-i] [-p <glob>]... [-s [line|path|size]]"
+        "Usage: gs <pattern> [-d <depth>] [-l <limit>] [-A <n>] [-B <n>] [-I] [-x] [-h|-g|-w] [-z] [-p <glob>]... [-s [line|path|size]]"
             .into(),
     );
 
@@ -627,6 +679,26 @@ pub fn fill(m: &mut HashMap<String, String>) {
     );
 
     m.insert(
+        "misc.nprintf.usage".into(),
+        "Usage: nprintf <format> [arguments...]".into(),
+    );
+
+    m.insert(
+        "misc.nprintf.example1".into(),
+        " nprintf \"%s ມີ %d ລາຍການ\\n\" cart 3 # ຈັດຮູບແບບໜຶ່ງແຖວ".into(),
+    );
+
+    m.insert(
+        "misc.nprintf.example2".into(),
+        " nprintf \"%.2f%%\\n\" 93.5 # ຄວາມກວ້າງແລະຄວາມແມ່ນຍຳ".into(),
+    );
+
+    m.insert(
+        "misc.nprintf.invalid_number".into(),
+        "nprintf: '{}': ຕົວເລກບໍ່ຖືກຕ້ອງ".into(),
+    );
+
+    m.insert(
         "misc.show_env.activate_hint".into(),
         "ເຮັດວຽກ 'python_activate' ເພື່ອເປີດໃຊ້ virtual environment".into(),
     );
@@ -848,4 +920,33 @@ pub fn fill(m: &mut HashMap<String, String>) {
         "misc.show_env.os_masked".into(),
         "*** (ໃຊ້ 'showenv --all' ເພື່ອສະແດງ)".into(),
     );
+
+    m.insert(
+        "misc.count.usage".into(),
+        "ວິທີໃຊ້: count <needle> [text]   (ຫຼື: <command> | count <needle>)".into(),
+    );
+
+    m.insert(
+        "misc.count.line_usage".into(),
+        "ວິທີໃຊ້: <command> | count -l|--line   (ນັບຈຳນວນແຖວຂອງຂໍ້ມູນທີ່ pipe ເຂົ້າມາ; ບໍ່ຮັບ <needle>)".into(),
+    );
+
+    m.insert(
+        "misc.count.line_no_input".into(),
+        "count -l: ຕ້ອງມີຂໍ້ມູນທີ່ສົ່ງຜ່ານທໍ່ (ເຊັ່ນ: <command> | count -l)".into(),
+    );
+
+    m.insert(
+        "misc.count.line_bad_flag".into(),
+        "count -l: -l|--line ບໍ່ຮັບຄ່າ ແລະ ໃຊ້ຮ່ວມກັບທຸງອື່ນບໍ່ໄດ້ (ໄດ້ຮັບ '{}')".into(),
+    );
+    m.insert(
+        "misc.exit.in_editor".into(),
+        "ອອກຈາກ ntc ພາຍໃນ ntceditor ບໍ່ໄດ້ - ປິດຕົວແກ້ໄຂເພື່ອອອກ (Ctrl+Q ເຊື່ອງເທີມິນອນ)".into(),
+    );
+    m.insert(
+        "misc.exit.no_nested_ntc".into(),
+        "ຊ້ອນ shell ntc ພາຍໃນ ntceditor ບໍ່ໄດ້ - ເທີມິນອນນີ້ຣັນ ntc ຢູ່ແລ້ວ".into(),
+    );
+    m.insert("misc.ne.already_in_editor".into(), "ທ່ານຢູ່ໃນຕົວແກ້ໄຂແລ້ວ".into());
 }

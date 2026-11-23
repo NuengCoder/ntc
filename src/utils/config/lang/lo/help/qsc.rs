@@ -2,6 +2,21 @@ use std::collections::HashMap;
 
 pub fn fill(m: &mut HashMap<String, String>) {
     m.insert(
+        "help.qsc.example1".into(),
+        "config qsc \"#c 0\" ## ຕັ້ງ hotkey Ctrl+0".into(),
+    );
+
+    m.insert(
+        "help.qsc.example2".into(),
+        "qsc listen ## ເລີ່ມ QSC daemon".into(),
+    );
+
+    m.insert(
+        "help.qsc.example3".into(),
+        "qsc status ## ກວດສະຖານະ daemon".into(),
+    );
+
+    m.insert(
         "help.qsc.listen".into(),
         "qsc listen ## ເລີ່ມ QSC daemon (background process)".into(),
     );
@@ -34,19 +49,4 @@ pub fn fill(m: &mut HashMap<String, String>) {
     m.insert("help.qsc.stop".into(), "qsc stop ## ຢຸດ QSC daemon".into());
 
     m.insert("help.qsc.title".into(), "ຄຳສັ່ງ QSC (GLOBAL HOTKEY):".into());
-
-    m.insert(
-        "help.qsc.example1".into(),
-        "config qsc \"#c 0\" ## ຕັ້ງ hotkey Ctrl+0".into(),
-    );
-
-    m.insert(
-        "help.qsc.example2".into(),
-        "qsc listen ## ເລີ່ມ QSC daemon".into(),
-    );
-
-    m.insert(
-        "help.qsc.example3".into(),
-        "qsc status ## ກວດສະຖານະ daemon".into(),
-    );
 }

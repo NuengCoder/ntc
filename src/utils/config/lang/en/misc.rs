@@ -7,6 +7,23 @@ pub fn fill(m: &mut HashMap<String, String>) {
     );
 
     m.insert(
+        "misc.count.line_usage".into(),
+        "Usage: <command> | count -l|--line   (counts lines of piped output; takes no needle)"
+            .into(),
+    );
+
+    m.insert(
+        "misc.count.line_no_input".into(),
+        "count -l: needs piped input (try: <command> | count -l)".into(),
+    );
+
+    m.insert(
+        "misc.count.line_bad_flag".into(),
+        "count -l: -l|--line takes no value and cannot be combined with other flags (got '{}')"
+            .into(),
+    );
+
+    m.insert(
         "misc.trim.usage".into(),
         "Usage: trim <pattern> [text]   (or: <command> | trim <pattern> [...])".into(),
     );
@@ -131,12 +148,12 @@ pub fn fill(m: &mut HashMap<String, String>) {
 
     m.insert(
         "misc.gs.example3".into(),
-        " gs -i main # interactive mode (browse results, Enter to open)".into(),
+        " gs -I main # interactive mode (browse results, Enter to open)".into(),
     );
 
     m.insert(
         "misc.gs.example4".into(),
-        " gs -i main -d 3 # interactive mode with depth limit".into(),
+        " gs -I main -d 3 # interactive mode with depth limit".into(),
     );
 
     m.insert(
@@ -157,6 +174,65 @@ pub fn fill(m: &mut HashMap<String, String>) {
     m.insert(
         "misc.gs.example8".into(),
         " gs error\\|warning # OR search: match either term (a\\|b)".into(),
+    );
+
+    m.insert(
+        "misc.gs.example9".into(),
+        " gs -w main # only lines that are exactly 'main'".into(),
+    );
+
+    m.insert(
+        "misc.gs.example10".into(),
+        " gs -z Main -h # case-sensitive, line starts with 'Main'".into(),
+    );
+
+    m.insert(
+        "misc.gs.pager.header".into(),
+        " gs: {}/{} matches | page {}/{} (10/page) ".into(),
+    );
+
+    m.insert("misc.gs.pager.hint_help".into(), "?=help".into());
+    m.insert("misc.gs.pager.hint_pattern".into(), "f=pattern".into());
+    m.insert(
+        "misc.gs.pager.hint_filters".into(),
+        "x/h/g/w/z=filters".into(),
+    );
+    m.insert("misc.gs.pager.hint_open".into(), "Enter/e=open".into());
+    m.insert("misc.gs.pager.hint_row".into(), "0-9=row".into());
+    m.insert("misc.gs.pager.hint_move".into(), "j/k".into());
+    m.insert("misc.gs.pager.hint_page".into(), "n/p".into());
+    m.insert(
+        "misc.gs.pager.hint_context".into(),
+        "c=context ({}/{})".into(),
+    );
+    m.insert("misc.gs.pager.hint_quit".into(), "q=quit".into());
+    m.insert(
+        "misc.gs.pager.help_title".into(),
+        "GS INTERACTIVE — KEYS".into(),
+    );
+    m.insert(
+        "misc.gs.pager.help_body".into(),
+        "  j/k, Up/Down      move              n/p, Space, Left/Right  page\n  0-9               jump to row       Home/End                first/last\n  Enter/e           open in editor    f  pattern    c  context lines\n  x  literal   z  case   h  starts with   g  ends with   w  whole line"
+            .into(),
+    );
+    m.insert(
+        "misc.gs.pager.help_close".into(),
+        "Esc or q closes this help  ·  press ? again later  ·  q quits gs -I".into(),
+    );
+    m.insert("misc.gs.pager.hint_type".into(), "type pattern".into());
+    m.insert("misc.gs.pager.hint_accept".into(), "Enter=accept".into());
+    m.insert("misc.gs.pager.hint_cancel".into(), "Esc=cancel".into());
+    m.insert("misc.gs.pager.pattern_box".into(), "pattern: ".into());
+    m.insert("misc.gs.pager.searching".into(), "searching…".into());
+
+    m.insert(
+        "misc.gs.i_renamed".into(),
+        "gs: -i moved to -I (gs -I opens the interactive pager)".into(),
+    );
+
+    m.insert(
+        "misc.gs.mode_conflict".into(),
+        "gs: -h, -g and -w can't be combined (pick one)".into(),
     );
 
     m.insert(
@@ -185,7 +261,7 @@ pub fn fill(m: &mut HashMap<String, String>) {
 
     m.insert(
         "misc.gs.usage".into(),
-        "Usage: gs <pattern> [-d <depth>] [-l <limit>] [-i] [-p <glob>]... [-s [line|path|size]]"
+        "Usage: gs <pattern> [-d <depth>] [-l <limit>] [-A <n>] [-B <n>] [-I] [-x] [-h|-g|-w] [-z] [-p <glob>]... [-s [line|path|size]]"
             .into(),
     );
 
@@ -331,13 +407,13 @@ pub fn fill(m: &mut HashMap<String, String>) {
 
     m.insert(
         "misc.rev.usage".into(),
-        "Usage: rev [file]  (reverses each line's characters; reads piped input when no file)"
+        "Usage: rev [-u] [file]  (reverses each line's characters; -u flips the line order upside down instead; reads piped input when no file)"
             .into(),
     );
 
     m.insert(
         "misc.rev.bad_arg".into(),
-        "rev: unexpected argument '{}' (usage: rev [file])".into(),
+        "rev: unexpected argument '{}' (usage: rev [-u] [file])".into(),
     );
 
     m.insert("misc.wi.not_dir".into(), "wi: not a directory: '{}'".into());
@@ -721,6 +797,26 @@ pub fn fill(m: &mut HashMap<String, String>) {
     m.insert(
         "misc.say.usage".into(),
         "Usage: say <text> [--loop N] [-n|-t]".into(),
+    );
+
+    m.insert(
+        "misc.nprintf.usage".into(),
+        "Usage: nprintf <format> [arguments...]".into(),
+    );
+
+    m.insert(
+        "misc.nprintf.example1".into(),
+        " nprintf \"%s has %d items\\n\" cart 3 # Format one line".into(),
+    );
+
+    m.insert(
+        "misc.nprintf.example2".into(),
+        " nprintf \"%.2f%%\\n\" 93.5 # Width and precision".into(),
+    );
+
+    m.insert(
+        "misc.nprintf.invalid_number".into(),
+        "nprintf: '{}': invalid number".into(),
     );
 
     m.insert(

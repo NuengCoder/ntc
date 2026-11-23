@@ -1,0 +1,387 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ntc fake</title>
+<style>
+  :root {
+    --bg: #0d1117; --panel: #161b22; --line: #30363d;
+    --text: #e6edf3; --muted: #8b949e; --accent: #58a6ff;
+    --ok: #3fb950; --bad: #f85149;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--text);
+    font: 14px/1.5 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  }
+  header {
+    padding: 20px 28px; border-bottom: 1px solid var(--line);
+    display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap;
+  }
+  header h1 { margin: 0; font-size: 21px; }
+  header p { margin: 0; color: var(--muted); }
+  main {
+    display: grid; grid-template-columns: 300px minmax(0, 1fr);
+    gap: 20px; padding: 20px 24px 60px; align-items: start;
+  }
+  .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; }
+  h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .08em; color: var(--accent); margin: 0 0 10px; }
+  .col { display: flex; flex-direction: column; gap: 18px; min-width: 0; }
+  .pad { padding: 14px; }
+  input[type=text], input[type=number], select {
+    width: 100%; background: #0d1117; color: var(--text); border: 1px solid var(--line);
+    border-radius: 6px; padding: 7px 9px; font: inherit;
+  }
+  input[type=checkbox] { width: 17px; height: 17px; accent-color: var(--accent); }
+  button {
+    background: var(--accent); color: #04121f; border: 0; border-radius: 6px;
+    padding: 8px 14px; font: inherit; font-weight: 600; cursor: pointer;
+  }
+  button.secondary { background: #21262d; color: var(--text); border: 1px solid var(--line); }
+  button:disabled { opacity: .5; cursor: progress; }
+  .types { max-height: 62vh; overflow: auto; border-top: 1px solid var(--line); }
+  .type {
+    display: flex; gap: 9px; align-items: flex-start; padding: 6px 14px;
+    border-bottom: 1px solid rgba(48,54,61,.5); cursor: pointer;
+  }
+  .type:hover { background: #1c2129; }
+  .type b { font-weight: 600; }
+  .type small { display: block; color: var(--muted); font-size: 12px; }
+  .type .cat { margin-left: auto; color: var(--muted); font-size: 11px; white-space: nowrap; }
+  .controls { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
+  .controls label { display: block; color: var(--muted); font-size: 12px; margin-bottom: 4px; }
+  .actions { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; margin-top: 12px; }
+  #status { color: var(--muted); }
+  #status.ok { color: var(--ok); }
+  #status.bad { color: var(--bad); }
+  .table-wrap { max-height: 46vh; overflow: auto; }
+  table { border-collapse: collapse; width: 100%; font-size: 13px; }
+  th, td { text-align: left; padding: 6px 10px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+  th { position: sticky; top: 0; background: var(--panel); color: var(--accent); }
+  pre {
+    margin: 0; padding: 14px; max-height: 34vh; overflow: auto;
+    background: #0d1117; border-top: 1px solid var(--line); color: #c9d1d9;
+  }
+  .tabs { display: flex; gap: 8px; margin-bottom: 10px; }
+  .tabs button.active { background: var(--accent); color: #04121f; }
+  .empty { padding: 18px; color: var(--muted); }
+  @media (max-width: 860px) {
+    main { grid-template-columns: 1fr; }
+    .controls { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  }
+</style>
+</head>
+<body>
+<header>
+  <h1>ntc fake</h1>
+  <p>Generate fake rows in the browser with the same engine as <code>fake gen</code>.</p>
+</header>
+<main>
+  <div class="col">
+    <section class="panel pad">
+      <h2>Saved groups</h2>
+      <select id="group"><option value="">(none - use types)</option></select>
+      <div class="hint" id="group-info" style="color:var(--muted);font-size:12px;margin-top:6px;"></div>
+    </section>
+
+    <section class="panel">
+      <div class="pad">
+        <h2>Types</h2>
+        <input type="text" id="search" placeholder="Search types...">
+        <select id="category" style="margin-top:8px"><option value="">All categories</option></select>
+      </div>
+      <div class="types" id="types"><div class="empty">Loading...</div></div>
+    </section>
+  </div>
+
+  <div class="col">
+    <section class="panel pad">
+      <h2>Options</h2>
+      <div class="controls">
+        <div>
+          <label for="count">Rows</label>
+          <input type="number" id="count" value="10" min="1" max="1000">
+        </div>
+        <div>
+          <label for="format">Format</label>
+          <select id="format"></select>
+        </div>
+        <div>
+          <label for="seed">Seed (optional)</label>
+          <input type="number" id="seed" placeholder="random">
+        </div>
+        <div>
+          <label for="locale">Locale</label>
+          <select id="locale"></select>
+        </div>
+      </div>
+      <div class="actions">
+        <label style="color:var(--muted)"><input type="checkbox" id="unique"> Unique rows</label>
+        <button id="generate">Generate</button>
+        <span id="status"></span>
+      </div>
+    </section>
+
+    <section class="panel">
+      <div class="pad" style="padding-bottom:0">
+        <h2>Result</h2>
+        <div class="tabs">
+          <button class="secondary active" id="tab-table">Table</button>
+          <button class="secondary" id="tab-text">Raw output</button>
+          <span style="flex:1"></span>
+          <button class="secondary" id="copy">Copy</button>
+          <button class="secondary" id="download">Download</button>
+        </div>
+      </div>
+      <div class="table-wrap" id="table-wrap"><div class="empty">Nothing generated yet.</div></div>
+      <pre id="text" hidden></pre>
+    </section>
+  </div>
+</main>
+<script>
+"use strict";
+
+const statusEl = document.getElementById("status");
+const typesBox = document.getElementById("types");
+const categorySelect = document.getElementById("category");
+const groupSelect = document.getElementById("group");
+const groupInfo = document.getElementById("group-info");
+const search = document.getElementById("search");
+const formatSelect = document.getElementById("format");
+const localeSelect = document.getElementById("locale");
+const tableWrap = document.getElementById("table-wrap");
+const textBox = document.getElementById("text");
+
+let META = { types: [], groups: [], formats: [], locales: [] };
+let RESULT = null;
+let selected = new Set();
+
+function setStatus(text, kind) {
+  statusEl.textContent = text;
+  statusEl.className = kind || "";
+}
+
+async function api(path, body) {
+  const options = body === undefined
+    ? { method: "GET" }
+    : { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) };
+  const res = await fetch(path, options);
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || ("HTTP " + res.status));
+  return data;
+}
+
+function renderTypes() {
+  const query = search.value.trim().toLowerCase();
+  const category = categorySelect.value;
+  typesBox.replaceChildren();
+  const shown = META.types.filter((t) => {
+    if (category && t.category !== category) return false;
+    if (!query) return true;
+    return (t.name + " " + t.category + " " + t.about).toLowerCase().includes(query);
+  });
+  if (!shown.length) {
+    const empty = document.createElement("div");
+    empty.className = "empty";
+    empty.textContent = "No matching types.";
+    typesBox.appendChild(empty);
+    return;
+  }
+  shown.forEach((t) => {
+    const row = document.createElement("label");
+    row.className = "type";
+    const check = document.createElement("input");
+    check.type = "checkbox";
+    check.checked = selected.has(t.name);
+    check.addEventListener("change", () => {
+      if (check.checked) selected.add(t.name);
+      else selected.delete(t.name);
+      groupSelect.value = "";
+      updateGroupInfo();
+    });
+    const body = document.createElement("span");
+    const name = document.createElement("b");
+    name.textContent = t.name;
+    const about = document.createElement("small");
+    about.textContent = t.about;
+    body.append(name, about);
+    const cat = document.createElement("span");
+    cat.className = "cat";
+    cat.textContent = t.category;
+    row.append(check, body, cat);
+    typesBox.appendChild(row);
+  });
+}
+
+function updateGroupInfo() {
+  const name = groupSelect.value;
+  if (!name) {
+    groupInfo.textContent = selected.size
+      ? selected.size + " type(s) selected"
+      : "Pick types on the left or a saved group.";
+    return;
+  }
+  const group = META.groups.find((g) => g.name === name);
+  if (!group) {
+    groupInfo.textContent = "";
+    return;
+  }
+  groupInfo.textContent = group.columns
+    .map((c) => c.alias + " as " + c.type + (c.unique ? "!" : ""))
+    .join(", ");
+}
+
+async function generate() {
+  const btn = document.getElementById("generate");
+  const group = groupSelect.value;
+  const types = Array.from(selected);
+  if (!group && !types.length) {
+    setStatus("Pick at least one type or a saved group", "bad");
+    return;
+  }
+  const seedRaw = document.getElementById("seed").value.trim();
+  btn.disabled = true;
+  setStatus("Generating...");
+  try {
+    RESULT = await api("/api/generate", {
+      types: group ? [] : types,
+      group: group || null,
+      count: Number(document.getElementById("count").value) || 1,
+      format: formatSelect.value,
+      seed: seedRaw === "" ? null : Number(seedRaw),
+      locale: localeSelect.value || null,
+      unique: document.getElementById("unique").checked,
+    });
+    renderResult();
+    setStatus(RESULT.rows.length + " row(s) generated", "ok");
+  } catch (e) {
+    setStatus(e.message, "bad");
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+function renderResult() {
+  tableWrap.replaceChildren();
+  if (!RESULT || !RESULT.rows.length) {
+    const empty = document.createElement("div");
+    empty.className = "empty";
+    empty.textContent = "Nothing generated yet.";
+    tableWrap.appendChild(empty);
+    textBox.textContent = "";
+    return;
+  }
+  const table = document.createElement("table");
+  const head = document.createElement("thead");
+  const headRow = document.createElement("tr");
+  RESULT.columns.forEach((col) => {
+    const th = document.createElement("th");
+    th.textContent = col;
+    headRow.appendChild(th);
+  });
+  head.appendChild(headRow);
+  table.appendChild(head);
+  const body = document.createElement("tbody");
+  RESULT.rows.forEach((row) => {
+    const tr = document.createElement("tr");
+    row.forEach((cell) => {
+      const td = document.createElement("td");
+      td.textContent = cell;
+      tr.appendChild(td);
+    });
+    body.appendChild(tr);
+  });
+  table.appendChild(body);
+  tableWrap.appendChild(table);
+  textBox.textContent = RESULT.text || "";
+}
+
+function showTab(which) {
+  const tableTab = document.getElementById("tab-table");
+  const textTab = document.getElementById("tab-text");
+  const tableOn = which === "table";
+  tableTab.classList.toggle("active", tableOn);
+  textTab.classList.toggle("active", !tableOn);
+  tableWrap.hidden = !tableOn;
+  textBox.hidden = tableOn;
+}
+
+function download() {
+  if (!RESULT) return;
+  const ext = RESULT.format || "txt";
+  const blob = new Blob([RESULT.text || ""], { type: "text/plain;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = "fake." + ext;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
+}
+
+async function copy() {
+  if (!RESULT) return;
+  try {
+    await navigator.clipboard.writeText(RESULT.text || "");
+    setStatus("Copied " + RESULT.rows.length + " row(s)", "ok");
+  } catch (e) {
+    setStatus("Copy failed: " + e.message, "bad");
+  }
+}
+
+async function boot() {
+  try {
+    META = await api("/api/meta");
+  } catch (e) {
+    setStatus(e.message, "bad");
+    return;
+  }
+  const categories = Array.from(new Set(META.types.map((t) => t.category))).sort();
+  categories.forEach((cat) => {
+    const option = document.createElement("option");
+    option.value = cat;
+    option.textContent = cat;
+    categorySelect.appendChild(option);
+  });
+  META.groups.forEach((group) => {
+    const option = document.createElement("option");
+    option.value = group.name;
+    option.textContent = group.name + " (" + group.columns.length + " cols)";
+    groupSelect.appendChild(option);
+  });
+  META.formats.forEach((fmt) => {
+    const option = document.createElement("option");
+    option.value = fmt;
+    option.textContent = fmt;
+    formatSelect.appendChild(option);
+  });
+  META.locales.forEach((code) => {
+    const option = document.createElement("option");
+    option.value = code;
+    option.textContent = code;
+    localeSelect.appendChild(option);
+  });
+  renderTypes();
+  updateGroupInfo();
+}
+
+search.addEventListener("input", renderTypes);
+categorySelect.addEventListener("change", renderTypes);
+groupSelect.addEventListener("change", () => {
+  if (groupSelect.value) {
+    selected.clear();
+    renderTypes();
+  }
+  updateGroupInfo();
+});
+document.getElementById("generate").addEventListener("click", generate);
+document.getElementById("tab-table").addEventListener("click", () => showTab("table"));
+document.getElementById("tab-text").addEventListener("click", () => showTab("text"));
+document.getElementById("copy").addEventListener("click", copy);
+document.getElementById("download").addEventListener("click", download);
+boot();
+</script>
+</body>
+</html>

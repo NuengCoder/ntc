@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>NTC Git</title>
+<link rel="stylesheet" href="/app.css">
+</head>
+<body>
+
+<aside class="rail" aria-label="Git sections">
+  <div class="rail-head">
+    <div class="rail-title">NTC <span>Git</span></div>
+    <button class="rail-path" id="repo-path" title="Copy the repository path">…</button>
+    <div class="rail-sync">
+      <span class="pill branch" id="rail-branch">no branch</span>
+      <span class="pill ahead hidden" id="rail-ahead"></span>
+      <span class="pill behind hidden" id="rail-behind"></span>
+      <span class="dot" id="rail-dot" title="Working tree state"></span>
+    </div>
+  </div>
+  <nav class="rail-nav" id="rail-nav"></nav>
+  <div class="rail-foot">
+    <button id="theme-toggle" title="Switch light / dark">Theme</button>
+    <a class="doclink" href="/about" target="_blank" rel="noopener" title="How to use this page, and its rules">About</a>
+  </div>
+</aside>
+
+<header class="top">
+  <div class="crumbs" id="crumbs"><span class="here">Repository</span></div>
+  <div class="top-actions">
+    <label class="inline" title="Reload the active tab every 5 seconds"><input type="checkbox" id="auto-refresh"> Auto</label>
+    <button id="refresh" title="Reload the active tab (R)">Refresh</button>
+    <button id="inspector-toggle" class="only-narrow" title="Show the inspector">Panel</button>
+  </div>
+</header>
+
+<main id="content"></main>
+
+<aside class="inspector" id="inspector" aria-label="Inspector">
+  <div class="inspector-head">
+    <span class="title" id="inspector-title">Inspector</span>
+    <button class="mini" id="inspector-close" title="Close (Esc)">Close</button>
+  </div>
+  <div class="inspector-body" id="inspector-body">
+    <div class="inspector-empty">
+      Select a changed file to see its diff, or a commit to see the files it touched.
+      Everything here runs a real <b>git</b> command; the bar at the bottom shows which one.
+    </div>
+  </div>
+</aside>
+
+<footer class="command" id="command-bar">
+  <span class="prompt">&gt;</span>
+  <code id="command-text" class="idle">no command yet</code>
+  <button id="command-copy" title="Copy the last command">copy</button>
+  <button id="command-history" title="Commands run in this session">history</button>
+  <div class="cmd-history hidden" id="command-history-list"></div>
+</footer>
+
+<div class="toasts" id="toasts" aria-live="polite"></div>
+<div class="scrim" id="scrim"></div>
+
+<script src="/app.js"></script>
+<script src="/diff.js"></script>
+<script src="/tabs/repository.js"></script>
+<script src="/tabs/changes.js"></script>
+<script src="/tabs/history.js"></script>
+<script src="/tabs/branches.js"></script>
+<script src="/tabs/remotes.js"></script>
+<script src="/tabs/stash.js"></script>
+<script src="/tabs/tags.js"></script>
+<script src="/tabs/actions.js"></script>
+<script>NTC.start();</script>
+</body>
+</html>

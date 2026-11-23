@@ -1,51 +1,31 @@
 use std::collections::HashMap;
 
 pub fn fill(m: &mut HashMap<String, String>) {
-    m.insert("help.view.file_usage".into(), "view <file|@tp/file|@tp/dir/file> [--head N|--tail N|--betw A:B] ## แสดงเนื้อหาไฟล์ (เหมือน txtf)".into());
+    m.insert("help.view.title".into(), "คำสั่ง View:".into());
 
     m.insert(
-        "help.view.example10".into(),
-        "view main.rs --tail 30 ## 30 บรรทัดสุดท้ายของ main.rs".into(),
+        "help.view.tree".into(),
+        "view [<dir|file|@tp|@tp/file|@tp/dir/>] ## แสดงต้นไม้หรือเนื้อหาไฟล์".into(),
     );
 
     m.insert(
-        "help.view.example11".into(),
-        "view main.rs --betw 10:20 ## บรรทัด 10-20 ของ main.rs".into(),
+        "help.view.size".into(),
+        "view -s, --size [ขนาดขั้นต่ำ] ## แสดงขนาด; ใส่ค่าเช่น 10KB, 1.5MB จะซ่อนที่เล็กกว่า".into(),
     );
 
     m.insert(
-        "help.view.example12".into(),
-        "view @docs/readme.md ## แสดงไฟล์ในจุดเทเลพอร์ต".into(),
-    );
-
-    m.insert(
-        "help.view.care".into(),
-        "view -c, --care ## แสดงต้นไม้พร้อม care ทุกอย่าง".into(),
-    );
-
-    m.insert(
-        "help.view.cp".into(),
-        "view -cp, --copy ## แสดงต้นไม้และคัดลอกไปยังคลิปบอร์ด".into(),
-    );
-
-    m.insert(
-        "help.view.file_only".into(),
-        "view -f, --file ## แสดงเฉพาะไฟล์ (ตัดไดเรกทอรีออก)".into(),
-    );
-
-    m.insert(
-        "help.view.dir_only".into(),
-        "view -dir, --directory ## แสดงเฉพาะไดเรกทอรี (ตัดไฟล์ออก)".into(),
-    );
-
-    m.insert(
-        "help.view.depth".into(),
-        "view -d, --depth <n> ## แสดงต้นไม้พร้อมความลึกกำหนดเอง".into(),
+        "help.view.filesize".into(),
+        "view -fs, --filesize [ขนาดขั้นต่ำ] ## แสดงขนาดไฟล์; ใส่ค่าจะซ่อนไฟล์ที่เล็กกว่า".into(),
     );
 
     m.insert(
         "help.view.dirsize".into(),
         "view -ds, --dirsize [ขนาดขั้นต่ำ] ## แสดงขนาดไดเรกทอรี; ใส่ค่าจะซ่อนที่เล็กกว่า".into(),
+    );
+
+    m.insert(
+        "help.view.sort".into(),
+        "view --sort size|char|ext ## เรียงลูก (ไดเรกทอรีอยู่ก่อน)".into(),
     );
 
     m.insert(
@@ -59,8 +39,18 @@ pub fn fill(m: &mut HashMap<String, String>) {
     );
 
     m.insert(
-        "help.view.sort".into(),
-        "view --sort size|char|ext ## เรียงลูก (ไดเรกทอรีอยู่ก่อน)".into(),
+        "help.view.file_usage".into(),
+        "view <file|@tp/file|@tp/dir/file> [--head N|--tail N|--betw A:B] ## แสดงเนื้อหาไฟล์ (เหมือน txtf)".into(),
+    );
+
+    m.insert(
+        "help.view.file_only".into(),
+        "view -f, --file ## แสดงเฉพาะไฟล์ (ตัดไดเรกทอรีออก)".into(),
+    );
+
+    m.insert(
+        "help.view.dir_only".into(),
+        "view -dir, --directory ## แสดงเฉพาะไดเรกทอรี (ตัดไฟล์ออก)".into(),
     );
 
     m.insert(
@@ -69,18 +59,18 @@ pub fn fill(m: &mut HashMap<String, String>) {
     );
 
     m.insert(
-        "help.view.filesize".into(),
-        "view -fs, --filesize [ขนาดขั้นต่ำ] ## แสดงขนาดไฟล์; ใส่ค่าจะซ่อนไฟล์ที่เล็กกว่า".into(),
+        "help.view.cp".into(),
+        "view -cp, --copy ## แสดงต้นไม้และคัดลอกไปยังคลิปบอร์ด".into(),
     );
 
     m.insert(
-        "help.view.path".into(),
-        "view -p, --path <path|@tp|@tp/sub> ## แสดงต้นไม้ของเส้นทางหรือจุดเทเลพอร์ต".into(),
+        "help.view.depth".into(),
+        "view -d, --depth <n> ## แสดงต้นไม้พร้อมความลึกกำหนดเอง".into(),
     );
 
     m.insert(
-        "help.view.size".into(),
-        "view -s, --size [ขนาดขั้นต่ำ] ## แสดงขนาด; ใส่ค่าเช่น 10KB, 1.5MB จะซ่อนที่เล็กกว่า".into(),
+        "help.view.care".into(),
+        "view -c, --care ## แสดงต้นไม้พร้อม care ทุกอย่าง".into(),
     );
 
     m.insert(
@@ -88,11 +78,9 @@ pub fn fill(m: &mut HashMap<String, String>) {
         "view --time, -t ## แสดงต้นไม้พร้อมเวลาดำเนินการ".into(),
     );
 
-    m.insert("help.view.title".into(), "คำสั่ง View:".into());
-
     m.insert(
-        "help.view.tree".into(),
-        "view [<dir|file|@tp|@tp/file|@tp/dir/>] ## แสดงต้นไม้หรือเนื้อหาไฟล์".into(),
+        "help.view.path".into(),
+        "view -p, --path <path|@tp|@tp/sub> ## แสดงต้นไม้ของเส้นทางหรือจุดเทเลพอร์ต".into(),
     );
 
     m.insert(
@@ -138,5 +126,20 @@ pub fn fill(m: &mut HashMap<String, String>) {
     m.insert(
         "help.view.example9".into(),
         "view --sort size --head 20 ## เรียงตามขนาดแสดง 20 บรรทัดแรก".into(),
+    );
+
+    m.insert(
+        "help.view.example10".into(),
+        "view main.rs --tail 30 ## 30 บรรทัดสุดท้ายของ main.rs".into(),
+    );
+
+    m.insert(
+        "help.view.example11".into(),
+        "view main.rs --betw 10:20 ## บรรทัด 10-20 ของ main.rs".into(),
+    );
+
+    m.insert(
+        "help.view.example12".into(),
+        "view @docs/readme.md ## แสดงไฟล์ในจุดเทเลพอร์ต".into(),
     );
 }

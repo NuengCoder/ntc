@@ -4,13 +4,19 @@ pub fn fill(m: &mut HashMap<String, String>) {
     m.insert("cmd.config.local.init_all_removed".into(), "'local init --all' ຖືກລຶກແລ້ວ - local config ບໍ່ສາມາດຄັດລອກການຕັ້ງຄ່າ global ໄດ້ອີແລ້ວ ໃຊ້ 'local init' ເພື່ອສ້າງ template".into());
 
     m.insert(
+        "cmd.config.init.all_removed".into(),
+        "'init all' ຖືກລຶກແລ້ວ - ໃຫ້ລັນ 'init ran', 'init local' ຫຼື 'init opencode' ແຍກກັນ (ຫຼື ລວມກັນ)"
+            .into(),
+    );
+
+    m.insert(
         "cmd.config.local.precedence_hint".into(),
         "ລາຍກาร local ມີຄວາມສຳຄັນກວ່າ ລາຍກาร global ຍັງໃຊ້ໄດ້ ແລະ config global ຈະບໍ່ຖືກແກ້ໄຂ".into(),
     );
 
     m.insert(
         "cmd.config.deinit.confirm".into(),
-        "ລຶບ {} ບໍ? (y/N): ".into(),
+        "ລຶບ {} ບໍ? [y|n]> ".into(),
     );
 
     m.insert(
@@ -44,7 +50,12 @@ pub fn fill(m: &mut HashMap<String, String>) {
 
     m.insert(
         "cmd.config.deinit.usage".into(),
-        "ວິທີໃຊ້: deinit [--all | --ran | --local | --opencode] [--force]".into(),
+        "ວິທີໃຊ້: deinit [ran | local | opencode]".into(),
+    );
+
+    m.insert(
+        "cmd.config.deinit.flags_removed".into(),
+        "'deinit all' ແລະ '--force' ຖືກລຶກແລ້ວ - ການລຶບຍ້ອນກັບບໍ່ໄດ້. ໃຫ້ລະບຸ 'ran', 'local' ຫຼື 'opencode'; ທຸກການລຶບຈະຖາມຢືນຢັນ.".into(),
     );
 
     m.insert(
@@ -98,12 +109,87 @@ pub fn fill(m: &mut HashMap<String, String>) {
 
     m.insert(
         "cmd.config.init.usage".into(),
-        "ວິທີໃຊ້: init [--all | --ran | --local | --opencode] [--force]".into(),
+        "ວິທີໃຊ້: init [ran | local | opencode | project] [-f|--force]".into(),
     );
 
     m.insert(
         "cmd.config.init.opencode_ready".into(),
         "OpenCode scaffold ພ້ອມແລ້ວ: {}".into(),
+    );
+
+    m.insert(
+        "cmd.config.init.project.usage".into(),
+        "ວິທີໃຊ້: init project [ຊື່] [--lang <python,rust,go,js,ts,java,c,c++,other>] [--license <MIT,APACHE>] [--no <docker,git,ai,doc,ntc,oc,lc>]".into(),
+    );
+
+    m.insert(
+        "cmd.config.init.project.creating".into(),
+        "ກຳລັງສ້າງໄດເຣກະທໍລີໂຄງການ {}".into(),
+    );
+
+    m.insert(
+        "cmd.config.init.project.invalid_name".into(),
+        "ຊື່ໂຄງການບໍ່ຖືກຕ້ອງ: {}".into(),
+    );
+
+    m.insert(
+        "cmd.config.init.project.done".into(),
+        "ໂຄງການພ້ອມແລ້ວ: {} (ໄຟລ໌ໃໝ່ {} ໄຟລ໌)".into(),
+    );
+
+    m.insert(
+        "cmd.config.init.project.git_created".into(),
+        "ເລີ່ມ Git repository ຫວ່າງແລ້ວ.".into(),
+    );
+
+    m.insert(
+        "cmd.config.init.project.git_exists".into(),
+        "ມີ Git repository ຢູ່ແລ້ວ.".into(),
+    );
+
+    m.insert(
+        "cmd.config.init.project.git_missing".into(),
+        "ບໍ່ພົບ Git. ຕິດຕັ້ງດ້ວຍ `ntpkg install git`.".into(),
+    );
+
+    m.insert(
+        "cmd.config.init.project.venv_prompt".into(),
+        "ສ້າງ Python virtual environment (.venv) ບໍ?".into(),
+    );
+
+    m.insert(
+        "cmd.config.init.project.venv_created".into(),
+        "ສ້າງ virtual environment ແລ້ວ: {}".into(),
+    );
+
+    m.insert(
+        "cmd.config.init.project.venv_failed".into(),
+        "ສ້າງ virtual environment ບໍ່ໄດ້ ຈະດຳເນີນການຕໍ່.".into(),
+    );
+
+    m.insert(
+        "cmd.config.init.project.lang_ready".into(),
+        "scaffold ພາສາພ້ອມແລ້ວ: {}".into(),
+    );
+
+    m.insert(
+        "cmd.config.init.project.lang_unknown".into(),
+        "ບໍ່ຮູ້ຈັກພາສາ. ໃຊ້ python, rust, go, js, ts, java, c, c++ ຫຼື other.".into(),
+    );
+
+    m.insert(
+        "cmd.config.init.project.license_unknown".into(),
+        "ບໍ່ຮູ້ຈັກ license. ໃຊ້ MIT ຫຼື APACHE.".into(),
+    );
+
+    m.insert(
+        "cmd.config.init.project.no_unknown".into(),
+        "ບໍ່ຮູ້ຈັກໝວດ --no: {}. ໃຊ້ docker, git, ai, doc, ntc, oc ຫຼື lc.".into(),
+    );
+
+    m.insert(
+        "cmd.config.init.project.tool_missing".into(),
+        "ຍັງບໍ່ໄດ້ຕິດຕັ້ງ {}. ຕິດຕັ້ງດ້ວຍ: {}".into(),
     );
 
     m.insert("cmd.config.lang.active".into(), "{} (active)".into());
@@ -485,7 +571,7 @@ pub fn fill(m: &mut HashMap<String, String>) {
 
     m.insert("cmd.config.serve.status".into(), "  {}: {}:{}".into());
 
-    m.insert("cmd.config.serve.usage".into(), "ວິທີໃຊ້: serve config [files|http-server|chess] [--port-default <ພອດ>] [--bind-default <ທີ່ຢູ່>] (alias: config serve …)".into());
+    m.insert("cmd.config.serve.usage".into(), "ວິທີໃຊ້: serve config [files|http-server|chess|git|arc|theme|ndb] [--port-default <ພອດ>] [--bind-default <ທີ່ຢູ່>] (alias: config serve …)".into());
 
     m.insert(
         "cmd.config.serve.example_show".into(),
@@ -509,7 +595,7 @@ pub fn fill(m: &mut HashMap<String, String>) {
 
     m.insert(
         "cmd.config.serve.invalid_service".into(),
-        "ບໍ່ຮູ້ຈັກບໍລິການ '{}' (ໃຊ້ files|http-server|chess)".into(),
+        "ບໍ່ຮູ້ຈັກບໍລິການ '{}' (ໃຊ້ files|http-server|chess|git|arc|theme|ndb|fake|config)".into(),
     );
 
     m.insert(
@@ -552,12 +638,12 @@ pub fn fill(m: &mut HashMap<String, String>) {
 
     m.insert(
         "cmd.config.env.empty".into(),
-        "ຍັງບໍ່ໄດ້ຕັ້ງຕົວແປສະພາບແວດລ້ອມ NTC. ໃຊ້: config env NAME value".into(),
+        "ຍັງບໍ່ໄດ້ຕັ້ງຕົວແປສະພາບແວດລ້ອມ NTC. ໃຊ້: config env NAME value (ຫຼື NAME=value)".into(),
     );
 
     m.insert(
         "cmd.config.env.list_hint".into(),
-        "ເຄັດລັບ: config env NAME value [-g|-l|-os|-osg] | config env NAME | config rmenv NAME [-all]".into(),
+        "ເຄັດລັບ: config env NAME value|NAME=value [-g|-l|-os|-osg] | config env NAME | config rmenv NAME [-all]".into(),
     );
 
     m.insert("cmd.config.env.get".into(), "{} = {}  [{}]".into());

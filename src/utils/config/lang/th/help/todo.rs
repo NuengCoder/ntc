@@ -17,47 +17,8 @@ pub fn fill(m: &mut HashMap<String, String>) {
     );
 
     m.insert(
-        "help.todo.info".into(),
-        "todo info [N] ## แสดงงานทั้งหมดหรือรายละเอียดงาน N".into(),
-    );
-
-    m.insert("help.todo.rm".into(), "todo rm <N> ## ลบงาน N".into());
-
-    m.insert(
-        "help.todo.show".into(),
-        "todo ## แสดงงานทั้งหมด (จาก future_todo.txt ใน CWD)".into(),
-    );
-
-    m.insert(
-        "help.todo.move".into(),
-        "todo move <N> <M> ## ย้ายรายการที่ N ไปตำแหน่ง M".into(),
-    );
-
-    m.insert(
-        "help.todo.replace".into(),
-        "todo replace <N> <M> ## สลับรายการที่ N กับ M".into(),
-    );
-
-    m.insert(
-        "help.todo.example4".into(),
-        "todo mv 5 1 ## ย้ายรายการที่ 5 ขึ้นบนสุด".into(),
-    );
-
-    m.insert(
-        "help.todo.example5".into(),
-        "todo rp 5 1 ## สลับรายการที่ 5 กับ 1".into(),
-    );
-
-    m.insert("help.todo.title".into(), "คำสั่ง TODO:".into());
-
-    m.insert(
         "help.todo.done".into(),
         "todo done <N> ## ทำเครื่องหมายงาน N ว่าเสร็จ".into(),
-    );
-
-    m.insert(
-        "help.todo.undo".into(),
-        "todo undo <N> ## เปิดงาน N ใหม่".into(),
     );
 
     m.insert(
@@ -73,4 +34,43 @@ pub fn fill(m: &mut HashMap<String, String>) {
     );
 
     m.insert("help.todo.example3".into(), "todo rm 1 ## ลบงาน #1".into());
+
+    m.insert(
+        "help.todo.example4".into(),
+        "todo mv 5 1 ## ย้ายรายการที่ 5 ขึ้นบนสุด".into(),
+    );
+
+    m.insert(
+        "help.todo.example5".into(),
+        "todo rp 5 1 ## สลับรายการที่ 5 กับ 1".into(),
+    );
+
+    m.insert(
+        "help.todo.info".into(),
+        "todo info [N] ## แสดงงานทั้งหมดหรือรายละเอียดงาน N".into(),
+    );
+
+    m.insert(
+        "help.todo.move".into(),
+        "todo move <N> <M> ## ย้ายรายการที่ N ไปตำแหน่ง M".into(),
+    );
+
+    m.insert(
+        "help.todo.replace".into(),
+        "todo replace <N> <M> ## สลับรายการที่ N กับ M".into(),
+    );
+
+    m.insert("help.todo.rm".into(), "todo rm <N> ## ลบงาน N".into());
+
+    m.insert(
+        "help.todo.show".into(),
+        "todo ## แสดงงานทั้งหมด (จาก future_todo.txt ใน CWD)".into(),
+    );
+
+    m.insert("help.todo.title".into(), "คำสั่ง TODO:".into());
+
+    m.insert(
+        "help.todo.undo".into(),
+        "todo undo <N> ## เปิดงาน N ใหม่".into(),
+    );
 }

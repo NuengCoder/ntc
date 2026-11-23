@@ -10,16 +10,17 @@ fn icon(unicode: &'static str, ascii: &'static str) -> &'static str {
 /// Unified raw-ANSI path so Termux shows the exact desktop colors
 /// when `setc ON` (blue border, yellow-bold title), plain when OFF.
 pub fn print_separator(title: &str) {
-    use crate::utils::theme::ThemeColor;
     let width: usize = 71;
     let title_len = title.len();
     let left_padding = (width.saturating_sub(title_len)) / 2;
     let right_padding = width.saturating_sub(title_len).saturating_sub(left_padding);
 
-    // Legacy desktop hues: blue border + yellow-bold title (matches
-    // previous `.blue()` / `.yellow().bold()` exactly on every OS).
-    let border_plus = ThemeColor::Blue.paint_ansi("+");
-    let title_painted = ThemeColor::Yellow.paint_ansi_bold(title);
+    let theme = crate::utils::theme::ThemeManager::current();
+    let border = theme.shell.separator;
+    let title_color = theme.shell.help_header;
+    drop(theme);
+    let border_plus = border.paint_ansi("+");
+    let title_painted = title_color.paint_ansi_bold(title);
     println!(
         "{}+{:-<left$}{}{:-<right$}+{}",
         border_plus,
@@ -62,7 +63,12 @@ pub fn print_success(msg: &str) {
 }
 
 /// Print error message using theme color (unified raw-ANSI on every OS).
+///
+/// Printing an error also records failure on the pipeline status channel, so
+/// built-ins that report problems by printing (instead of returning `Err`)
+/// still drive `&&` / `||` and the process exit code.
 pub fn print_error(msg: &str) {
+    crate::shell::pipeline::mark_failed();
     let theme = crate::utils::theme::ThemeManager::current();
     let c = theme.shell.error.clone();
     drop(theme);

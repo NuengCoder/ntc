@@ -7,23 +7,6 @@ pub fn fill(m: &mut HashMap<String, String>) {
     );
 
     m.insert(
-        "help.math.file".into(),
-        "math file.ntc.math ## ຄອມໄພ້ ແລະ ເຮັດວຽກໄຟລ໌ math".into(),
-    );
-
-    m.insert(
-        "help.math.fun".into(),
-        "math fun add/rm/edit/info/ls ## ຈັດການຟັງຊັນ math ທີ່ກຳນົດເອງ".into(),
-    );
-
-    m.insert(
-        "help.math.timer".into(),
-        "math timer [sec] ## lap timer ຫຼື ນັບຖອຍຫຼັງພ້ອມສຽງ".into(),
-    );
-
-    m.insert("help.math.title".into(), "ຄຳສັ່ງ MATH:".into());
-
-    m.insert(
         "help.math.example1".into(),
         "math 3+4*5 ## ຄຳນວນພົດ arithmetic".into(),
     );
@@ -52,4 +35,21 @@ pub fn fill(m: &mut HashMap<String, String>) {
         "help.math.example6".into(),
         "math calc.ntc.math ## ເຮັດວຽກໄຟລ໌ math".into(),
     );
+
+    m.insert(
+        "help.math.file".into(),
+        "math file.ntc.math ## ຄອມໄພ້ ແລະ ເຮັດວຽກໄຟລ໌ math".into(),
+    );
+
+    m.insert(
+        "help.math.fun".into(),
+        "math fun add/rm/edit/info/ls ## ຈັດການຟັງຊັນ math ທີ່ກຳນົດເອງ".into(),
+    );
+
+    m.insert(
+        "help.math.timer".into(),
+        "math timer [sec] ## lap timer ຫຼື ນັບຖອຍຫຼັງພ້ອມສຽງ".into(),
+    );
+
+    m.insert("help.math.title".into(), "ຄຳສັ່ງ MATH:".into());
 }

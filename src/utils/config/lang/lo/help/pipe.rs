@@ -3,7 +3,7 @@ use std::collections::HashMap;
 pub fn fill(m: &mut HashMap<String, String>) {
     m.insert(
         "help.pipe.title".into(),
-        "PIPE ແລະ ການປ່ຽນເສັ້ນທາງ (PIPES & REDIRECTION):".into(),
+        "PIPE ແລະ ການປ່ຽນເສັ້ນທາງ (PIPES & REDIRECTION) [NON-COMMAND]:".into(),
     );
 
     m.insert(
@@ -22,6 +22,16 @@ pub fn fill(m: &mut HashMap<String, String>) {
     );
 
     m.insert(
+        "help.pipe.seq".into(),
+        "a ; b ## ແລ່ນ b ເຖິງແມ່ນ a ລົ້ມເຫຼວ (ຕ້ອງມີຊ່ອງຫວ່າງສອງຂ້າງ)".into(),
+    );
+
+    m.insert(
+        "help.pipe.in".into(),
+        "cmd < file ## ອ່ານ input ຈາກໄຟລ໌".into(),
+    );
+
+    m.insert(
         "help.pipe.out".into(),
         "cmd > file ## ຂຽນ output ລົງໄຟລ໌ (ຂຽນທັບ)".into(),
     );
@@ -29,11 +39,6 @@ pub fn fill(m: &mut HashMap<String, String>) {
     m.insert(
         "help.pipe.append".into(),
         "cmd >> file ## ຕໍ່ທ້າຍ output ລົງໄຟລ໌".into(),
-    );
-
-    m.insert(
-        "help.pipe.in".into(),
-        "cmd < file ## ອ່ານ input ຈາກໄຟລ໌".into(),
     );
 
     m.insert(
@@ -47,38 +52,8 @@ pub fn fill(m: &mut HashMap<String, String>) {
     );
 
     m.insert(
-        "help.pipe.head".into(),
-        "head [N] [file] ## ສະແດງ N ແຖວທຳອິດ (ຄ່າເລີ່ມຕົ້ນ 10)".into(),
-    );
-
-    m.insert(
-        "help.pipe.tail".into(),
-        "tail [N] [file] ## ສະແດງ N ແຖວສຸດທ້າຍ (ຄ່າເລີ່ມຕົ້ນ 10)".into(),
-    );
-
-    m.insert(
-        "help.pipe.betw".into(),
-        "betw A:B [file] ## ສະແດງແຖວ A ຫາ B (ເລີ່ມທີ່ 1 ລວມປາຍ)".into(),
-    );
-
-    m.insert(
-        "help.pipe.sort".into(),
-        "sort [-r] [-n] [-u] [-f] [file] ## ຈັດລຳດັບແຖວ (ຍ້ອນກັບ/ຕົວເລກ/ບໍ່ຊ້ຳ/ບໍ່ສົນຕົວພິມ)".into(),
-    );
-
-    m.insert(
-        "help.pipe.rev".into(),
-        "rev [file] ## ຍ້ອນຕົວອັກສອນຂອງແຕ່ລະແຖວ".into(),
-    );
-
-    m.insert(
-        "help.pipe.trim".into(),
-        "trim <pattern> [ຂໍ້ຄວາມ] ## ລຶບທຸກຄັ້ງທີ່ພົບ <pattern> (ຈາກຂໍ້ຄວາມ ຫຼື ອິນພຸດ pipe)".into(),
-    );
-
-    m.insert(
         "help.pipe.filters".into(),
-        "cmd | head|tail|betw|gs|sort|rev|count|trim|encode|qur|clip ## ຕົວກອງ pipe (ເຕີມ flag ໄດ້)"
+        "cmd | <filter> ## ຕົວກອງ pipe: head, tail, betw, gs, sort, rev, count, trim, encode, qur, clip (ເຕີມ flag ໄດ້)"
             .into(),
     );
 

@@ -9,8 +9,8 @@
 
 use crate::config::Config;
 use crate::t;
+use crate::utils::theme::style::ThemeColorize;
 use anyhow::Result;
-use colored::*;
 use notify::{Event, EventKind, RecursiveMode, Watcher};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -43,7 +43,7 @@ impl ChangeKind {
         }
     }
 
-    fn color_label(&self) -> colored::ColoredString {
+    fn color_label(&self) -> crate::utils::theme::style::ThemedText {
         match self {
             ChangeKind::Created => "created".green(),
             ChangeKind::Modified => "modified".yellow(),

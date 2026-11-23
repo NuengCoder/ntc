@@ -11,7 +11,10 @@ pub fn fill(m: &mut HashMap<String, String>) {
         "viewf [<dir|@tp|@tp/dir/>] ## Show a files-only tree at depth 1".into(),
     );
 
-    m.insert("help.viewf.file_usage".into(), "viewf <file|@tp/file|@tp/dirs/file> [--head N|--tail N|--betw A:B] ## Display file content (same as txtf)".into());
+    m.insert(
+        "help.viewf.file_usage".into(),
+        "viewf <file|@tp/file|@tp/dirs/file> [--head N|--tail N|--betw A:B] ## Display file content (same as txtf)".into(),
+    );
 
     m.insert(
         "help.viewf.size".into(),

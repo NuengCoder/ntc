@@ -17,23 +17,6 @@ pub fn fill(m: &mut HashMap<String, String>) {
     );
 
     m.insert(
-        "help.autoup.list".into(),
-        "autoup list ## แสดงรายการเริ่มต้นทั้งหมด (CU/LM/SF)".into(),
-    );
-
-    m.insert(
-        "help.autoup.rm".into(),
-        "autoup rm <ชื่อ> ## ลบรายการเริ่มต้น".into(),
-    );
-
-    m.insert(
-        "help.autoup.sources".into(),
-        "[CU]=HKCU [LM]=HKLM [SF]=โฟลเดอร์ Startup".into(),
-    );
-
-    m.insert("help.autoup.title".into(), "ตัวจัดการเริ่มต้น (Windows):".into());
-
-    m.insert(
         "help.autoup.example1".into(),
         "autoup list ## แสดงรายการเริ่มต้น".into(),
     );
@@ -52,4 +35,21 @@ pub fn fill(m: &mut HashMap<String, String>) {
         "help.autoup.example4".into(),
         "autoup disable ntc ## ปิดใช้งานรายการเริ่มต้น".into(),
     );
+
+    m.insert(
+        "help.autoup.list".into(),
+        "autoup list ## แสดงรายการเริ่มต้นทั้งหมด (CU/LM/SF)".into(),
+    );
+
+    m.insert(
+        "help.autoup.rm".into(),
+        "autoup rm <ชื่อ> ## ลบรายการเริ่มต้น".into(),
+    );
+
+    m.insert(
+        "help.autoup.sources".into(),
+        "[CU]=HKCU [LM]=HKLM [SF]=โฟลเดอร์ Startup".into(),
+    );
+
+    m.insert("help.autoup.title".into(), "ตัวจัดการเริ่มต้น (Windows):".into());
 }

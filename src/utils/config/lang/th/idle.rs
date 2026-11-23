@@ -193,7 +193,7 @@ pub fn fill(m: &mut HashMap<String, String>) {
 
     m.insert(
         "idle.count".into(),
-        "ลอง: view task.txt | count ntc   (นับคำที่ตรงในข้อความที่ส่งต่อ) · trim ลบ".into(),
+        "ลอง: view task.txt | count -l   (นับจำนวนบรรทัดของข้อความที่ส่งต่อ) · trim ลบ".into(),
     );
 
     m.insert(
@@ -373,7 +373,7 @@ pub fn fill(m: &mut HashMap<String, String>) {
 
     m.insert(
         "idle.say".into(),
-        "ลอง: say hello --loop 3   (พิมพ์ข้อความ; print เหมือนกัน)".into(),
+        "ลอง: say hello --loop 3   (พิมพ์ข้อความ; nprintf ใช้จัดรูปแบบ)".into(),
     );
 
     m.insert(

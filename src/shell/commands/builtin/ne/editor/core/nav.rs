@@ -1,0 +1,469 @@
+use crate::shell::commands::builtin::ne::editor::{
+    display_col, gutter_width, next_char_byte, next_word_byte, prev_char_byte, prev_word_byte,
+    sel_range, set_status_bar, Editor,
+};
+use crate::t;
+use crossterm::style::Color;
+
+impl Editor {
+    pub(crate) fn clamp(&mut self) {
+        let max = self.lines.len().saturating_sub(1);
+        self.cursor.y = self.cursor.y.min(max);
+        let line_len = self.current().len();
+        self.cursor.byte = self.cursor.byte.min(line_len);
+        while self.cursor.byte > 0 && !self.current().is_char_boundary(self.cursor.byte) {
+            self.cursor.byte -= 1;
+        }
+        for c in &mut self.cursor.extra_cursors {
+            c.y = c.y.min(max);
+            let clen = self.lines[c.y].len();
+            c.byte = c.byte.min(clen);
+            while c.byte > 0 && !self.lines[c.y].is_char_boundary(c.byte) {
+                c.byte -= 1;
+            }
+            if let Some((ay, ab)) = c.anchor {
+                let ay = ay.min(max);
+                let ab = ab.min(self.lines[ay].len());
+                c.anchor = Some((ay, ab));
+            }
+        }
+    }
+
+    pub(crate) fn mark_dirty(&mut self, line: usize) {
+        if self.dirty_end == 0 {
+            self.dirty_start = line;
+            self.dirty_end = line + 1;
+        } else {
+            self.dirty_start = self.dirty_start.min(line);
+            self.dirty_end = self.dirty_end.max(line + 1);
+        }
+    }
+
+    pub(crate) fn mark_all_dirty(&mut self) {
+        let rows = self.visible_text_rows();
+        self.dirty_start = self.sv.offset;
+        self.dirty_end = self.sv.offset + rows;
+    }
+
+    /// Number of text rows available for the main content area, matching the
+    /// geometry used by `render()` (panel split when open, otherwise the full
+    /// editor area minus the bars).
+    pub(crate) fn visible_text_rows(&self) -> usize {
+        if self.run_panel_open || self.terminal.is_some() {
+            self.run_split_row().saturating_sub(1)
+        } else {
+            self.term_h.saturating_sub(5)
+        }
+    }
+
+    pub(crate) fn max_scroll_x(&self) -> usize {
+        let gw = gutter_width(self.lines.len());
+        let eo = self.editor_offset();
+        let editor_cols = self.term_w.saturating_sub(eo);
+        let text_cols = editor_cols.saturating_sub(gw + 2);
+        let tabstop = self.indent_width().max(1);
+        let max_vis = self
+            .lines
+            .iter()
+            .map(|l| display_col(l, l.len(), tabstop))
+            .max()
+            .unwrap_or(0);
+        max_vis.saturating_sub(text_cols)
+    }
+
+    pub(crate) fn scroll_visible(&mut self) {
+        let rows = self.visible_text_rows();
+        // nvim-style scrolloff: keep a small margin of context above and below
+        // the cursor so content never jumps to the very edge of the viewport.
+        let max_offset = self.lines.len().saturating_sub(rows);
+        let soff = 2.min(rows.saturating_sub(1) / 2).min(max_offset);
+
+        if self.cursor.y < self.sv.offset + soff {
+            self.sv.offset = self.cursor.y.saturating_sub(soff);
+        } else if self.cursor.y >= self.sv.offset + rows.saturating_sub(soff) {
+            self.sv.offset = self.cursor.y.saturating_sub(rows.saturating_sub(soff)) + 1;
+        }
+        self.sv.offset = self.sv.offset.min(max_offset);
+
+        let gw = gutter_width(self.lines.len());
+        let eo = self.editor_offset();
+        let editor_cols = self.term_w.saturating_sub(eo);
+        let text_cols = editor_cols.saturating_sub(gw + 2);
+        let cursor_col = display_col(self.current(), self.cursor.byte, self.indent_width().max(1));
+        if cursor_col >= self.sv.x + text_cols {
+            self.sv.x = cursor_col.saturating_sub(text_cols) + 1;
+        } else if cursor_col < self.sv.x {
+            self.sv.x = cursor_col;
+        }
+    }
+
+    /// Clamp the cursor and keep it in view after an input event, unless the
+    /// event drove a scrollbar directly. Wheel scrolling and bar drags set
+    /// `sv` themselves and must not be snapped back to the cursor's viewport:
+    /// `scroll_visible` clamps the offset to the last *page*, which would stop
+    /// the text bar from ever reaching the last line at the top.
+    pub(crate) fn settle_scroll(&mut self, is_mouse_scroll: bool, bar_drag: bool) {
+        if is_mouse_scroll || bar_drag || self.sv.dragging_vscroll || self.sv.dragging_hscroll {
+            return;
+        }
+        self.clamp();
+        self.scroll_visible();
+    }
+
+    pub(crate) fn clear_selection(&mut self) {
+        if let Some((ay, _ab)) = self.cursor.selection_anchor {
+            let (s, e) = if ay < self.cursor.y {
+                (ay, self.cursor.y)
+            } else {
+                (self.cursor.y, ay)
+            };
+            for row in s..=e {
+                self.mark_dirty(row);
+            }
+        }
+        self.cursor.selection_anchor = None;
+    }
+
+    pub(crate) fn start_or_extend_selection(&mut self) {
+        if self.cursor.selection_anchor.is_none() {
+            if self.has_multiple_cursors() {
+                self.clear_extra_cursors();
+            }
+            self.cursor.selection_anchor = Some((self.cursor.y, self.cursor.byte));
+            self.mark_dirty(self.cursor.y);
+        }
+    }
+
+    pub(crate) fn has_selection(&self) -> bool {
+        if let Some((ay, ab)) = self.cursor.selection_anchor {
+            (ay, ab) != (self.cursor.y, self.cursor.byte)
+        } else {
+            false
+        }
+    }
+
+    pub(crate) fn selected_text(&self) -> String {
+        let (ay, ab) = match self.cursor.selection_anchor {
+            Some(a) => a,
+            None => return String::new(),
+        };
+        let ((sy, sb), (ey, eb)) = sel_range(self.cursor.y, self.cursor.byte, ay, ab);
+        if sy == ey {
+            self.lines[sy][sb..eb.min(self.lines[sy].len())].to_string()
+        } else {
+            let mut out = String::new();
+            out.push_str(&self.lines[sy][sb..]);
+            out.push('\n');
+            for row in sy + 1..ey {
+                out.push_str(&self.lines[row]);
+                out.push('\n');
+            }
+            out.push_str(&self.lines[ey][..eb.min(self.lines[ey].len())]);
+            out
+        }
+    }
+
+    pub(crate) fn delete_selection(&mut self) {
+        let (ay, ab) = match self.cursor.selection_anchor {
+            Some(a) => a,
+            None => return,
+        };
+        let ((sy, sb), (ey, eb)) = sel_range(self.cursor.y, self.cursor.byte, ay, ab);
+        let end_clamped = eb.min(self.lines[ey].len());
+        if sy == ey {
+            self.lines[sy].drain(sb..end_clamped);
+            self.mark_dirty(sy);
+            self.syntax.invalidate_line(sy);
+        } else {
+            let tail = self.lines[ey][end_clamped..].to_string();
+            self.lines.drain(sy + 1..=ey);
+            for _ in sy + 1..=ey {
+                self.syntax.remove_line(sy + 1);
+            }
+            self.lines[sy].truncate(sb);
+            self.lines[sy].push_str(&tail);
+            self.syntax.invalidate_line(sy);
+            self.mark_dirty(sy);
+            self.dirty_end = self.dirty_end.max(self.lines.len());
+        }
+        self.cursor.y = sy;
+        self.cursor.byte = sb;
+        self.cursor.selection_anchor = None;
+        self.modified = true;
+    }
+
+    pub(crate) fn split_primary_cursor(&mut self) {
+        let cp = crate::shell::commands::builtin::ne::editor::CursorPos {
+            y: self.cursor.y,
+            byte: self.cursor.byte,
+            anchor: self.cursor.selection_anchor,
+        };
+        self.cursor.extra_cursors.push(cp);
+        self.cursor.last_added_cursor_idx = Some(self.cursor.extra_cursors.len() - 1);
+        self.mark_all_dirty();
+        self.status_msg = Some(format!(
+            "{} ({})",
+            t!("editor.nav_split_cursor"),
+            self.cursor.extra_cursors.len() + 1
+        ));
+    }
+
+    pub(crate) fn select_all(&mut self) {
+        self.cursor.selection_anchor = Some((0, 0));
+        self.cursor.y = self.lines.len().saturating_sub(1);
+        self.cursor.byte = self.lines[self.cursor.y].len();
+        self.mark_all_dirty();
+        self.status_msg = Some(t!("editor.nav_selected_all"));
+    }
+
+    pub(crate) fn select_line(&mut self) {
+        self.clear_extra_cursors();
+        self.cursor.selection_anchor = Some((self.cursor.y, 0));
+        self.cursor.byte = self.current().len();
+        self.mark_dirty(self.cursor.y);
+        self.status_msg = Some(t!("editor.nav_line_selected"));
+    }
+
+    pub(crate) fn select_word_under_cursor(&mut self) -> Option<String> {
+        let line = self.current();
+        let byte = self.cursor.byte;
+        if byte >= line.len() || line.is_empty() {
+            return None;
+        }
+        let start = byte
+            - line[..byte]
+                .chars()
+                .rev()
+                .take_while(|c| c.is_alphanumeric() || *c == '_')
+                .map(|c| c.len_utf8())
+                .sum::<usize>();
+        let end = byte
+            + line[byte..]
+                .chars()
+                .take_while(|c| c.is_alphanumeric() || *c == '_')
+                .map(|c| c.len_utf8())
+                .sum::<usize>();
+        if start == end {
+            return None;
+        }
+        let word = line[start..end].to_string();
+        self.cursor.byte = end;
+        self.cursor.selection_anchor = Some((self.cursor.y, start));
+        Some(word)
+    }
+
+    /// Single-step cursor motion shared by Normal/Visual (vim-style verbs).
+    pub(crate) fn move_left_charwise(&mut self) {
+        if self.cursor.byte > 0 {
+            self.cursor.byte = prev_char_byte(self.current(), self.cursor.byte);
+        } else if self.cursor.y > 0 {
+            let mut prev = self.cursor.y - 1;
+            loop {
+                if !self.lines[prev].is_empty() {
+                    self.cursor.y = prev;
+                    self.cursor.byte = self.lines[prev].len();
+                    break;
+                }
+                if prev == 0 {
+                    break;
+                }
+                prev -= 1;
+            }
+        }
+    }
+
+    pub(crate) fn move_right_charwise(&mut self) {
+        let line = self.current();
+        if self.cursor.byte < line.len() {
+            self.cursor.byte = next_char_byte(line, self.cursor.byte);
+        } else {
+            let mut next = self.cursor.y + 1;
+            while next < self.lines.len() && self.lines[next].is_empty() {
+                next += 1;
+            }
+            if next < self.lines.len() {
+                self.cursor.y = next;
+                self.cursor.byte = 0;
+            }
+        }
+    }
+
+    pub(crate) fn move_up_line(&mut self) {
+        if self.cursor.y > 0 {
+            self.cursor.y -= 1;
+        }
+    }
+
+    pub(crate) fn move_down_line(&mut self) {
+        if self.cursor.y + 1 < self.lines.len() {
+            self.cursor.y += 1;
+        }
+    }
+
+    pub(crate) fn extend_left(&mut self) {
+        self.start_or_extend_selection();
+        self.move_left_charwise();
+    }
+
+    pub(crate) fn extend_right(&mut self) {
+        self.start_or_extend_selection();
+        self.move_right_charwise();
+    }
+
+    /// Ctrl+Shift+Left / Ctrl+Shift+h: select word by word to the left.
+    pub(crate) fn extend_word_left(&mut self) {
+        self.start_or_extend_selection();
+        if self.cursor.byte > 0 {
+            self.cursor.byte = prev_word_byte(self.current(), self.cursor.byte);
+        } else if self.cursor.y > 0 {
+            self.cursor.y -= 1;
+            self.cursor.byte = self.lines[self.cursor.y].len();
+        }
+    }
+
+    /// Ctrl+Shift+Right / Ctrl+Shift+l: select word by word to the right.
+    pub(crate) fn extend_word_right(&mut self) {
+        self.start_or_extend_selection();
+        let line = self.current();
+        if self.cursor.byte < line.len() {
+            self.cursor.byte = next_word_byte(line, self.cursor.byte);
+        } else if self.cursor.y + 1 < self.lines.len() {
+            self.cursor.y += 1;
+            self.cursor.byte = 0;
+        }
+    }
+
+    /// Shift+Home: extend the selection back to the start of the line.
+    pub(crate) fn extend_line_start(&mut self) {
+        self.start_or_extend_selection();
+        self.cursor.byte = 0;
+    }
+
+    /// Shift+End: extend the selection to the end of the line.
+    pub(crate) fn extend_line_end(&mut self) {
+        self.start_or_extend_selection();
+        self.cursor.byte = self.current().len();
+    }
+
+    pub(crate) fn extend_up(&mut self) {
+        self.start_or_extend_selection();
+        self.move_up_line();
+    }
+
+    pub(crate) fn extend_down(&mut self) {
+        self.start_or_extend_selection();
+        self.move_down_line();
+    }
+
+    /// Toggle the integrated terminal panel (shared by Normal/Insert `t`).
+    /// Opening focuses the terminal so keys reach the shell for sure;
+    /// closing returns focus to the editor.
+    pub(crate) fn toggle_terminal(&mut self) {
+        if self.terminal.is_some() {
+            self.terminal = None;
+            self.focus = crate::shell::commands::builtin::ne::editor::Focus::Editor;
+            self.mark_all_dirty();
+        } else {
+            let (tw, th) = self.terminal_pty_size();
+            // The PTY grid must be the panel's content size, not half the
+            // window: the child formats full-width output to it.
+            let term_h = th;
+            let cwd = std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from("."));
+            match crate::shell::commands::builtin::ne::editor::terminal::TerminalState::spawn_ntc_shell(tw as u16, term_h, &cwd) {
+                Ok(term) => {
+                    self.terminal = Some(term);
+                    self.run_panel_open = false;
+                    self.focus = crate::shell::commands::builtin::ne::editor::Focus::Terminal;
+                    self.mark_all_dirty();
+                }
+                Err(e) => {
+                    self.status_msg = Some(t!("editor.mode_terminal_err", e));
+                }
+            }
+        }
+    }
+
+    /// Save with a green/red status-bar report (shared by Normal `s`).
+    pub(crate) fn save_with_status(&mut self, stdout: &mut std::io::Stdout) {
+        match self.save() {
+            Ok(()) => {
+                let _ =
+                    set_status_bar(stdout, Color::Green, Color::White, &t!("editor.saved_full"));
+            }
+            Err(e) => {
+                let _ = set_status_bar(
+                    stdout,
+                    Color::Red,
+                    Color::White,
+                    &t!("editor.cmd_save_failed", e),
+                );
+            }
+        }
+    }
+
+    /// Multicursor-aware Home: toggle first-non-ws / column 0.
+    pub(crate) fn move_line_start_toggle(&mut self) {
+        if self.has_multiple_cursors() {
+            self.for_each_cursor(false, |e| {
+                let first_non_ws = e
+                    .current()
+                    .char_indices()
+                    .find(|(_, c)| !c.is_whitespace())
+                    .map(|(b, _)| b)
+                    .unwrap_or(0);
+                e.cursor.byte = if e.cursor.byte != first_non_ws {
+                    first_non_ws
+                } else {
+                    0
+                };
+                e.sv.x = 0;
+            });
+        } else {
+            let first_non_ws = self
+                .current()
+                .char_indices()
+                .find(|(_, c)| !c.is_whitespace())
+                .map(|(b, _)| b)
+                .unwrap_or(0);
+            self.cursor.byte = if self.cursor.byte != first_non_ws {
+                first_non_ws
+            } else {
+                0
+            };
+            self.sv.x = 0;
+        }
+    }
+
+    /// Multicursor-aware End: jump to line end.
+    pub(crate) fn move_line_end(&mut self) {
+        if self.has_multiple_cursors() {
+            self.for_each_cursor(false, |e| {
+                e.cursor.byte = e.current().len();
+            });
+        } else {
+            self.cursor.byte = self.current().len();
+        }
+    }
+
+    pub(crate) fn page_up(&mut self) {
+        let rows = self.term_h.saturating_sub(4);
+        if self.has_multiple_cursors() {
+            self.for_each_cursor(false, |e| {
+                e.cursor.y = e.cursor.y.saturating_sub(rows);
+            });
+        } else {
+            self.cursor.y = self.cursor.y.saturating_sub(rows);
+        }
+    }
+
+    pub(crate) fn page_down(&mut self) {
+        let rows = self.term_h.saturating_sub(4);
+        if self.has_multiple_cursors() {
+            self.for_each_cursor(false, |e| {
+                e.cursor.y = (e.cursor.y + rows).min(e.lines.len().saturating_sub(1));
+            });
+        } else {
+            self.cursor.y = (self.cursor.y + rows).min(self.lines.len().saturating_sub(1));
+        }
+    }
+}

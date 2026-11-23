@@ -398,6 +398,26 @@ pub fn fill(m: &mut HashMap<String, String>) {
     );
 
     m.insert(
+        "cli.new.usage_here".into(),
+        "  ntc --here                Start interactive shell in the current directory".into(),
+    );
+
+    m.insert(
+        "cli.new.usage_path".into(),
+        "  ntc -p, --path <path>     Start interactive shell in <path>".into(),
+    );
+
+    m.insert(
+        "cli.path.missing".into(),
+        "missing value for -p/--path".into(),
+    );
+
+    m.insert(
+        "cli.path.not_a_directory".into(),
+        "not a directory: {}".into(),
+    );
+
+    m.insert(
         "cli.new.usage_cmd".into(),
         "  ntc <command> [args...]   Run a shell command non-interactively".into(),
     );
@@ -811,16 +831,6 @@ pub fn fill(m: &mut HashMap<String, String>) {
     m.insert(
         "cli.run.help_list".into(),
         "List all command-line functions".into(),
-    );
-
-    m.insert(
-        "cli.run.help_lsp".into(),
-        "Start the ntc-math LSP server over stdio".into(),
-    );
-
-    m.insert(
-        "cli.run.help_lsp_log".into(),
-        "Path to write LSP debug log".into(),
     );
 
     m.insert(

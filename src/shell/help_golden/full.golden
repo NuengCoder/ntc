@@ -1,0 +1,1124 @@
+╔══════════════════════════════════════════════════════════════════╗
+║                     ntc 2.4.9 - Interactive Help                 ║
+╚══════════════════════════════════════════════════════════════════╝
+
+ARCHIVE COMMANDS:
+  arc create <out.zip|tar.gz|tar> <files...>
+    Create archive
+  arc extract <file> [dest]              Extract archive
+  arc list <file>                        List archive contents
+Examples:
+    arc create backup.zip src Cargo.toml   # Create zip
+    arc list backup.zip                    # List contents
+    arc extract backup.zip restored        # Extract
+
+STARTUP MANAGER (Windows):
+  autoup list                            List all startup entries (CU/LM/SF sources)
+  autoup add <name> "<cmd>"              Add a startup entry to HKCU
+  autoup rm <name>                       Remove a startup entry
+  autoup disable <name>                  Disable entry (uses StartupApproved)
+  autoup enable <name>                   Re-enable a disabled entry
+  [CU]=HKCU [LM]=HKLM [SF]=Startup Folder
+Examples:
+    autoup list                            # List startup entries
+    autoup add ntc "C:\ntc\ntc.exe"        # Add to startup
+    autoup rm ntc                          # Remove startup entry
+    autoup disable ntc                     # Disable startup entry
+
+BACK COMMAND:
+  back [n]                               Go back to parent directory (or n levels)
+Examples:
+    back                                   # Go back to parent directory
+
+BACKUP COMMANDS:
+  backup create                          Create a backup of current project
+  backup list                            List all backups
+  backup restore [num]                   Restore a backup (interactive if no num)
+  backup restore --choose                Pick a backup from an interactive menu
+  backup restore --deleted               Restore only files that were deleted
+  backup undo                            Undo the last restore
+  backup undo --cls                      Clear undo history (asks confirmation)
+  backup undo --force                    Clear undo history (no confirmation)
+  backup clear                           Delete ALL backups (asks confirmation)
+  backup clear --force                   Delete ALL backups (no confirmation)
+  backup recreate                        Clear all + undo + create fresh backup
+  backup diff [num]                      Diff current project against a backup
+Examples:
+    backup create                          # Create a new backup
+    backup list                            # List all backups
+    backup restore 1                       # Restore backup #1
+    backup diff 1                          # Diff against backup #1
+
+BETW COMMAND:
+  betw A:B [file]                        Print lines A to B (1-based inclusive)
+Examples:
+    betw 10:20 app.log                     # Print lines 10-20 of app.log
+
+CARE COMMAND:
+  care dir <name>[, ...]                 Stop ignoring directories
+  care ext <ext>[, ...]                  Add extra supported extensions
+  care file <name>[, ...]                Add extra supported files
+Examples:
+    care dir src                           # Un-ignore src directory
+
+CD COMMAND:
+  cd <path>                              Navigate to a directory
+  cd to <tp_name>                        Teleport to a saved teleport point
+Examples:
+    cd src                                 # Navigate to the src directory
+    cd to web                              # Teleport to 'web' savepoint
+
+CLEAR COMMAND:
+  clear                                  Clear screen
+Examples:
+    clear                                  # Clear the screen
+
+CLIPBOARD COMMANDS:
+  clip                                   Show clipboard history
+  clip list                              Show clipboard history
+  clip select <N>                        Copy entry N back to clipboard
+  clip clear                             Clear clipboard history
+Examples:
+    clip                                   # Show clipboard history
+    clip select 1                          # Copy entry #1 back to clipboard
+
+CONFIGURATION COMMANDS:
+  config output [path]                   Show/set output path
+  config depth [n]                       Show/set max depth (1-20)
+  config linenumbers ON|OFF              Show/set line numbers
+  config color ON|OFF                    Show/set color output
+  config threads [n]                     Show/set thread count
+  config history [on|off|path]           Show/set history
+  config autosuggest ON|OFF              Show/set autosuggest (ghost text)
+  config idle ON|OFF                     Show/set the ghost typing idle hint
+  config git ON|OFF                      Enable/disable git integration (prompt + symbols)
+  config dir_view ON|OFF                 Show/hide directory tree in shell
+  config intro_view ON|OFF               Show/hide the startup logo, ntpkg and watcher notices (alias: iv)
+  config file_view ON|OFF                Include files in automatic navigation tree (alias: fv)
+  config todo format <txt|md|json|toml|yaml|html>
+    Set the todo file format
+  config size all|file|dir ON|OFF        Auto-calculate sizes in navigation tree; uses --care (alias: s)
+  config watch ON|OFF                    Enable/disable file watcher
+  config watch trigger <a>               Auto-run alias when watcher fires
+  config watch trigger off               Disable auto-run
+  config watch limit <n>                 Rows shown in watcher change box
+  config qsc "#c 0"                      Set QSC global hotkey
+  config qsc off                         Disable QSC hotkey
+  config lang [language]                 Show/set interface language
+  config env NAME value [-g|-l|-os|-osg] Set an NTC env var (NAME=value also works; bare: list; NAME alone: show)
+    -g global | -l local | -os this session | -osg persist to OS
+    default: local if ntconfig.toml exists, else global
+  config rmenv NAME [-g|-l|-os|-osg|-all]
+    Remove an NTC env var (-all: every store + session)
+  config serve [service] [--port-default N] [--bind-default ADDR]
+    Per-service serve defaults (CLI; `serve config` is the browser GUI)
+  config update_check ON|OFF             Show/hide daily new-release notice (alias: uc)
+  config integration_shell ON|OFF        Complete installed shell names (powershell on Windows, bash on Linux desktop, cmd, …), their launcher flags, and enable interactive ntc ps on Windows / ntc <distro> on Linux (alias: is)
+  config code_tools ON|OFF               Complete installed programming tools/compilers (g++, python, java, cargo, …) and their flags (alias: ct)
+Examples:
+    config output ~/Desktop                # Set output path to Desktop
+    config depth 3                         # Set max depth to 3
+    config color ON                        # Enable color output
+    config threads 8                       # Set thread count to 8
+
+COUNT COMMAND:
+  count <needle> [text] [-l|--line]      Count <needle> occurrences; -l|--line counts piped lines
+Examples:
+    gs TODO | count TODO                   # Count matches in piped text
+    gs TODO | count -l                     # Count the total lines of piped output
+
+CP COMMAND:
+  cp <src|@tp|pattern> <dst|@tp> [-f]    Copy file or dir (pattern src needs a dir dst)
+Examples:
+    cp file.txt backup.txt                 # Copy a file
+
+CVCODE COMMAND:
+  cvcode <from> <data> to <to>           Convert between formats
+Examples:
+    cvcode b64 "aGVsbG8=" to hex           # Convert between formats
+    cvcode b64 "aGVsbG8=" to plaintext     # Decode to readable text
+
+DEADLOCK - encrypted password vault:
+  deadlock                               Open the vault (asks for the master password)
+  ls                                     List every pass-env with its real password
+  add <pass-env> <real-password>         Store or update a secret (password may be quoted)
+  rmpw <pass-env>                        Delete a stored secret
+  master-pass                            Change the master password
+  forget                                 Remove the master password from the OS credential store
+  destroy                                Delete the vault and every stored secret
+  exit                                   Close the vault and return to the ntc shell
+Secrets are encrypted with AES-256-GCM under an Argon2id key derived from the master password. The default master password is 12345678 and deadlock asks for a new one on first login. The vault file is restricted to your user account and is protected against deletion by the OS (Windows deny-DELETE ACL / macOS uchg; Linux needs root). The master is registered in the OS credential store so nssh can resolve pass-env names without opening this shell.
+Examples:
+    deadlock
+    deadlock > add prod_pass CatLoveFish360@house
+
+DECODE COMMAND:
+  decode b2 <target> [-o <file>]         Binary decode
+  decode b10 <target> [-o <file>]        Decimal decode
+  decode b64 <target> [-o <file>]        Base64 decode
+  decode hex <target> [-o <file>]        Hex decode
+  decode url <target> [-o <file>]        URL percent-decode
+  decode utf8 <target> [-o <file>]       Escaped bytes to UTF-8
+  decode utf16 <target> [-o <file>]      \uNNNN escapes to text
+  decode ascii <target> [-o <file>]      Escaped text to ASCII bytes
+Examples:
+    decode b64 aGVsbG8=                    # Base64 decode
+
+DEINIT COMMAND:
+  deinit [ran|local|opencode]            Remove project files (asks before each removal)
+Examples:
+    deinit ran                             # Remove NTCRANFILE.toml
+
+DL COMMAND:
+  dl <url>                               Download file (--resume, --stop, --history, --cancel)
+Examples:
+    dl https://example.com/file.zip        # Download with progress
+
+DNS COMMAND:
+  dns <host>                             DNS lookup (-t A, AAAA, MX, NS, CNAME, TXT, PTR, SOA, ALL)
+Examples:
+    dns example.com -t MX                  # DNS MX record lookup
+
+DOCTOR COMMANDS:
+  doctor                                 Check config, PATH, ranfile and ntpkg for problems
+Examples:
+    doctor                                 # Read-only report; nothing is changed
+
+DS COMMAND:
+  ds <pattern> [-d <n>] [--no-fuzzy]     Search directories by name (exact/partial only with --no-fuzzy)
+Examples:
+    ds src                                 # Find directories named 'src'
+
+ENCODE COMMAND:
+  encode b2 <target> [-o <file>]         Binary encode (0101...)
+  encode b10 <target> [-o <file>]        Decimal encode (0-255...)
+  encode b64 <target> [-o <file>]        Base64 encode (file or raw text)
+  encode hex <target> [-o <file>]        Hex encode
+  encode url <target> [-o <file>]        URL percent-encode
+  encode utf8 <target> [-o <file>]       UTF-8 as escaped bytes (\xc3\xa9)
+  encode utf16 <target> [-o <file>]      UTF-16 as \uNNNN escapes (\u00e9)
+  encode ascii <target> [-o <file>]      ASCII text (errors above U+007F)
+Examples:
+    encode b64 "hello"                     # Base64 encode a string
+    encode hex file.bin                    # Hex encode a file
+
+EXIT COMMAND:
+  exit, quit                             Exit ntc
+Examples:
+    exit                                   # Leave ntc
+
+FILE EXPLORER (NFE):
+  explorer, nfe [PATH]                   Launch the full-screen terminal file explorer
+  h=help, b=parent dir, f=find (hits show their paths)
+  g/:=command (file|dir|line), /=live filter, e=editor
+  r=rename, d=delete, n=new file, m=new dir, i=hidden toggle
+  s=sort mode, S=sort direction (dirs too), F5=refresh
+  find: type/Backspace=query, Tab=hjkl/arrows, Enter=open, Esc=back
+Examples:
+    explorer                               # Launch file explorer in current dir
+    nfe ~/projects                         # Open explorer in ~/projects
+
+fake - generate fake/random data
+  fake gen <types> [-n N] [-f fmt] [-s seed] [-o file]
+    Generate rows
+  formats: json | txt | sql | csv | xlsx  (default: txt table)
+  fake gen -g <group> ...                Generate from a saved group
+  -u, --unique [cols]                    Unique rows or named columns
+  -l, --locale <code>                    Locale pools (en_US en_GB zh_CN th_TH lo_LA)
+  fake types                             List every type
+  fake types -s <pattern>                Fuzzy-search types
+  fake locales                           List --locale codes
+  fake group add <name> [alias as type, ...]
+    Create a group
+  fake group edit <name> [alias as type, ...]
+    Replace a group's columns
+  fake group rm <name>                   Delete a group
+  fake group rnm <old> <new>             Rename a group
+  fake group ls [pattern]                List groups (glob, e.g. u*)
+  fake group info <name>                 Show a group's columns
+  fake group clear [-f]                  Delete every group
+  fake group export <name>|--all [-o file]
+    Share groups as .ntc_fake
+  fake group import <file> [--force] [--prefix p]
+    Load groups from a file
+  columns: 'alias as type', 'type !' = unique, 'alias as ref:group.col'
+  fake help                              Show this help
+Examples:
+    fake gen name,email,city -n 5          # txt table
+    fake gen uuid,age -f json -o rows.json
+    fake group add users [username as name, year as age]
+    fake gen -g users -f sql -n 10         # INSERT INTO users ...
+
+FGO COMMAND:
+  fgo <pattern> [-d <n>]                 Find files, navigate to selected file's parent dir
+Examples:
+    fgo *.rs                               # Find Rust files and jump to one
+
+FORMAT CONVERTER:
+  Usage: fmt <file> [to json|yaml|toml|md|html|xml|docx|txt|pdf|csv|tsv|xlsx] [-o <output>]
+Examples:
+      fmt package.json to yaml
+      fmt config.json to toml -o config.toml
+      fmt Cargo.toml to json
+      fmt data.json                      # pretty-print in its own format
+      fmt report.docx to md              # DOCX to Markdown
+      fmt readme.md to html -o out.html
+      fmt notes.txt to pdf -o notes.pdf   # text to PDF
+      fmt report.txt to docx -o report.docx
+      fmt data.csv to xlsx -o data.xlsx   # CSV to Excel
+
+FS COMMAND:
+  fs <pattern> [-d <n>] [--no-fuzzy]     Search files by name (fuzzy fallback unless --no-fuzzy)
+Examples:
+    fs *.rs                                # Find .rs files
+
+FSC COMMAND:
+  fsc <pattern> [-d <n>] [--no-fuzzy]    Search files, pick one to display & optionally copy
+Examples:
+    fsc config                             # Find a matching file and display it
+
+GIT INTEGRATION COMMANDS:
+  git status | st                        Pretty-printed repo status
+  git branch | b                         List branches (current highlighted)
+  git log | l                            Colored recent commit log
+  git diff                               Show working tree diff
+  git <any>                              All other git subcommands pass through
+Examples:
+    git status                             # Show branch + staged/unstaged/untracked
+    git branch -a                          # List all branches (passthrough)
+    git commit -am "msg"                   # Normal git flow (passthrough)
+
+GODRIVE COMMAND:
+  godrive                                List and select drives (Windows) or /mnt mounts (Linux)
+Examples:
+    godrive                                # Pick a drive or mount
+    godrive c                              # Jump to drive C: on Windows or /mnt/c on Linux
+
+GOS COMMAND:
+  gos                                    List subdirectories and pick one
+Examples:
+    gos                                    # Interactive subdirectory selection
+
+GOSC COMMAND:
+  gosc                                   Continuous navigation (0 to exit, v/s/vs for view)
+Examples:
+    gosc                                   # Navigate subdirectories continuously
+
+GS COMMAND:
+  gs <pattern> [-p <glob>] [-s [line|path|size]] [-d <n>] [-l <n>] [-A <n>] [-B <n>] [-I] [-x] [-h|-g|-w] [-z]
+    Search file contents (simple grep)
+  gs -I [pattern] [-d <n>]               Interactive grep (10/page, f=pattern, e/Enter=open, 0-9=row, ?=keys, x/h/g/w/z=toggles)
+  cmd | gs <pattern>                     Search piped text (qur -s <pattern> too)
+  gs <pattern> -A <n> -B <n>             Show n lines after / before each match (10 matches unless -l <n>)
+  gs -x <literal> -h <starts> -g <ends> -w <whole> -z <case>
+    -x searches the text literally (a\|b is 'a|b', no OR); -h/-g/-w match the trimmed line and can't be combined; -z keeps case
+Examples:
+    gs fn main                             # Search for 'fn main' in files
+    gs -I config                           # Interactive search results
+    gs TODO < app.log                      # Search piped/redirected text
+    gs error\|warning                      # OR search: match either term (a\|b)
+    gs main -A 3 -B 2                      # Match plus 3 lines after and 2 before
+    gs -w main                             # Only lines that are exactly 'main'
+    gs -z Main -h                          # Case-sensitive: lines starting with 'Main'
+
+HEAD COMMAND:
+  head [N] [file]                        Print the first N lines (default 10)
+Examples:
+    head 20 app.log                        # First 20 lines of a file (or piped input)
+
+HELP COMMAND:
+  help                                   Show this help
+  help <command>                         Show one command's section
+  help --all                             Print every command section
+Examples:
+    help cd                                # Show one command's help
+
+HTTP COMMAND:
+  http <method> <url> [options]          Send a request (method defaults to GET)
+  http GET|POST|PUT|PATCH|DELETE|HEAD|QUERY <url>
+    Supported methods
+  Options: -H "Key: Value" header, -d text body, --json JSON body (sets Content-Type), -q key=value query param, -a user:pass Basic auth, --bearer token, -o file save the body, -s print only the body, -v show the request, -t seconds timeout (default 30). JSON responses are pretty-printed unless --no-pretty is given.
+Examples:
+    http GET https://api.example.com/users # Simple GET request
+    http POST https://api.example.com/users --json '{"name":"ada"}' # POST a JSON body
+    http GET https://api.github.com/repos/rust-lang/rust -H "Accept: application/vnd.github+json" -q per_page=1 # Header + query parameter
+    http GET https://api.example.com/me -a user:pass -o me.json # Basic auth, save body to a file
+    http GET https://api.example.com/users -s | qur -s name # Pipe the raw body into another command
+
+IGCARE COMMANDS:
+  igcare export --all <n>                Export all settings to <name>.ntc.igcare
+  igcare export --select <n>             Select categories to export
+  igcare import <file>                   Import settings from .ntc.igcare file
+  igcare make [name]                     Create igcare template in CWD
+Examples:
+    igcare make                            # Create an igcare template
+
+IGCARED COMMAND:
+  igcared                                Show all ignore/care settings
+Examples:
+    igcared                                # Show all ignore/care settings
+
+IGNORE COMMAND:
+  ignore dir <name>[, ...]               Ignore directories by name
+  ignore ext <ext>[, ...]                Ignore file extensions
+  ignore file <name>[, ...]              Ignore specific files
+Examples:
+    ignore dir node_modules                # Ignore node_modules
+    ignore ext .log                        # Ignore .log files
+
+IMAGE COMMANDS:
+  image                                  Pick an image from the current dir and show it inline
+  image <path>                           Show the image inline (same as display)
+  image display <path>                   Render image inline in the terminal
+  image show <path>                      Render image inline in the terminal
+  image display <path> --sixel           Force sixel rendering
+Examples:
+    image screenshot.png                   # Show an image inline
+    image display photo.jpg --sixel        # Force sixel rendering
+
+INIT COMMAND:
+  init [all|ran|local|opencode|project] [-f|--force]
+    Initialize project files (NTCRANFILE, ntconfig.toml, .opencode/, project scaffold)
+Examples:
+    init ran                               # Initialize NTCRANFILE.toml
+    init project my-app --no lc,oc,docker  # Scaffold without LICENSE, OpenCode, Docker
+
+IPCFG COMMAND:
+  ipcfg [name]                           Show adapters like ipconfig/ifconfig
+Examples:
+    ipcfg                                  # Show network adapters
+
+LINE COMMAND:
+  line [-A <prefix>] [-B <separator>] [file]
+    Number each line (default '1: line')
+Examples:
+    gs main | line -A 'line' -B ':'        # Prefix every line with line1: ...
+
+LOCAL COMMAND:
+  local init                             Create ntconfig.toml template (commented)
+  local help                             Show local command usage
+  local deinit                           Remove ntconfig.toml from current directory
+Examples:
+    local init                             # Create an ntconfig.toml template here
+
+LOCATE COMMAND:
+  locate <pattern> [-d <n>] [--no-fuzzy] Search both files and directories
+Examples:
+    locate README                          # Search files & dirs for 'README'
+
+MATH COMMANDS:
+  math <expr>                            Evaluate a math expression
+  math timer [sec]                       Lap timer or countdown with alarm
+  math fun add/rm/edit/info/ls           Manage custom math functions
+  math file.ntc.math                     Compile and run a math file
+Examples:
+    math 3+4*5                             # Evaluate arithmetic expression
+    math sin(PI/2)                         # Math with functions
+    math timer 30                          # Start 30-second countdown
+    math fun add myfn "x+1"                # Add custom function
+    math fun ls                            # List custom functions
+    math calc.ntc.math                     # Run math file
+
+MKD COMMAND:
+  mkd <dir>[, ...]                       Create a new directory
+Examples:
+    mkd src/components                     # Create directories
+
+MKF COMMAND:
+  mkf <file>[, ...]                      Create a new file
+Examples:
+    mkf index.html                         # Create a new file
+
+WINDOWS MODE (Windows):
+  mode admin                             Exit and re-launch ntc as Administrator
+  mode normal                            Exit and re-launch ntc without elevation
+Examples:
+    mode admin                             # Relaunch as Administrator
+
+MV COMMAND:
+  mv <src|@tp|pattern> <dst|@tp> [-f]    Move/rename file or dir (pattern src needs a dir dst)
+Examples:
+    mv old.txt new.txt                     # Rename a file
+
+NDB (DATABASE) COMMANDS:
+  ndb                                    Open the ndb database shell (.db browser) in the current directory
+  help                                   Show every ndb command (inside ndb)
+  view | ls                              List available .db files (inside ndb)
+  interface <file.db>                    Open a database: prompt becomes ndb [file.db]>
+  sql <query>                            Run a read-only query once a database is open (-l N rows, --all)
+  exit                                   Close the database, then leave ndb
+  viewf | v                              Show the schema tree of tables and columns
+  tables | t                             List table and view names
+  tablef <table>                         Display a table's rows (like txtf)
+  schema <table>                         Show CREATE TABLE SQL and column details
+  write YES <stmt>                       Run one write, needs edit on (inside ndb)
+  edit on|off                            Allow or block writes (inside ndb)
+  backup                                 Copy the .db file next to itself (inside ndb)
+  more                                   Show the next page of the last query (inside ndb)
+  indexes [table]                        List indexes (inside ndb)
+  info                                   Show database file, engine and object counts (inside ndb)
+  dbal                                   Manage saved read-only queries: add|run|list|rm (inside ndb)
+  exit                                   Close the database and return to ndb [cwd]>
+  read-only                              writes are blocked
+Examples:
+    ndb                                    # then: interface users.db
+    ndb                                    # then: tablef users --all
+
+EDITOR COMMANDS:
+  ne, ntceditor <file>                   Open an existing file in built-in text editor
+  ne, ntceditor <file>:<n>               Open file at line <n>
+  ne, ntceditor                          Open welcome screen in current directory
+  ne --init <file> [<file> ...] [-I <file>]
+    Create template file(s); -I opens one
+  ne --super <file> [<file> ...] [-I <file>]
+    Create super template file(s); -I opens one
+Examples:
+    ne main.rs                             # Open main.rs in editor
+    ne src/main.rs:42                      # Open main.rs at line 42
+    ne --init a.py b.html -I a.py          # Create templates and open a.py
+    ne --super run.sh run.ps1 run.bat -I run.sh # Create script starter files
+
+NMS COMMANDS (NTC Music):
+  nms play [-sf <dur>] <file>            Play sound in the terminal (Ctrl+C stops; -sf starts from an offset)
+  nms scan [-d <n>] [-s] [-l <dur>] [--care]
+    List audio + video files (dur: 25s, 1mn, 1h)
+  nms scan -l <dur>                      Only list media longer than <dur> (e.g. 25s, 1mn, 1h)
+  Plays in the terminal with a live position/remaining countdown · video plays audio only (through ffmpeg) · Ctrl+C stops
+Examples:
+    nms play -sf 30 song.mp3               # Start an audio file at 0:30
+    nms play movie.mp4                     # Play a video's audio track
+    nms scan -d 2 -s                       # List media with sizes
+    nms scan -l 1mn                        # List media longer than 1 minute
+
+NPRINTF COMMAND:
+  nprintf <format> [arguments...]        Bash-style formatted output
+    CONVERSIONS
+    %s text · %d/%i signed · %u unsigned · %o octal · %x/%X hex · %c first character
+    %b escapes in the argument · %q shell-quoted · %f/%e/%g/%a floats · %% literal %
+    FLAGS, WIDTH, PRECISION
+    %-8s left · %05d zero-pad · %+d sign · %.2f precision · %*s width from an argument
+    ESCAPES (a backslash starts each one)
+    \n newline · \t tab · \r return · \\ backslash · \" quote · \xHH hex · \0NNN octal · \c stop output
+    WHY \n?
+    nprintf adds nothing after the format. End with \n when you want a line break; without it, output continues on the same line.
+    QUOTING
+    Wrap the format in double quotes so spaces and escapes stay in one argument.
+    The format repeats while arguments remain; a missing %s is empty and a missing number is 0.
+Examples:
+    nprintf "hello %s\n" world             # One line; \n ends it
+    nprintf "%s has %d items\n" cart 3     # Text and integer
+    nprintf "%-8s|%05d|%.2f\n" left 42 3.14159 # Left, zero-pad, precision
+    nprintf "%b\n" "a\tb"                  # %b applies escapes from the argument
+    nprintf "no newline"                   # Stays on the same line
+
+NSHEET COMMANDS:
+  nsheet open <file> [options]           Fullscreen sheet viewer (CSV/TSV/JSON)
+  nsheet view <file> [options]           Print sheet as a table (default 50 rows)
+  nsheet view <file> --sort <col> [--desc]
+    Sort by column
+  nsheet view <file> --filter <expr>     Filter rows (col~text, col=n, col>n)
+  nsheet view <file> --export <json|md> [-o <file>]
+    Export rows
+  TUI keys: arrows/hjkl move · / search · n next · s sort · f filter · e export · Enter view · q quit
+Examples:
+    nsheet open users.csv                  # Browse the sheet
+    nsheet view data.json --filter "age>30" --sort age # Filter + sort
+    nsheet view a.csv --export md -o out.md # Export Markdown
+
+NSSH COMMANDS:
+  nssh add <name> --host <h>             Save an SSH profile
+  nssh ssh [name] [--cmd "..."]          Shell or one remote command
+  nssh cp <local> <name>:<remote>        SFTP upload/download
+  nssh scan <host> [--top N]             TCP port scan
+  nssh ls|info|rm|edit                   Manage profiles
+  nssh keygen                            Generate keys via ssh-keygen
+Examples:
+    nssh add prod --host 203.0.113.10 --user root # Save profile
+    nssh ssh prod --cmd "uptime"           # Run remote command
+    nssh cp ./app.tar.gz prod:/tmp/        # Upload file
+
+PACKAGE MANAGER (ntpkg) + ntpx:
+  ntpkg install <lang> [ver] [--force]   Download & install a runtime
+  ntpkg uninstall <lang> [ver]           Remove an installed runtime
+  ntpkg list                             Show installed runtimes
+  ntpkg use <lang> <ver>                 Activate a specific version
+  ntpkg which <lang>                     Show path to active runtime
+  ntpkg search [keyword]                 Search available packages
+  ntpkg info <lang>                      Show package info (version, location, binaries)
+  ntpkg available [lang]                 List languages or downloadable versions
+  ntpkg help                             Show ntpkg usage
+Examples:
+    ntpkg install node 18                  # Install Node.js 18
+    ntpkg list                             # Show installed runtimes
+    ntpkg use node 18                      # Activate Node.js 18
+    ntpkg which node                       # Show path to Node.js
+    ntpkg search python                    # Search for Python packages
+    ntpkg info node                        # Show Node.js package info
+    ntpkg available                        # List downloadable languages
+    ntpkg help                             # Show ntpkg usage
+
+NTPX COMMAND:
+  ntpx <pkg> [bin] [args]                Run an installed package's binary
+Examples:
+    ntpx node npm init                     # Run npm via ntpx
+
+OPENCG COMMAND:
+  opencg                                 Open config.toml in editor
+Examples:
+    opencg                                 # Edit config.toml in the editor
+
+PATHCP COMMAND:
+  pathcp                                 Copy current directory path to clipboard
+Examples:
+    pathcp                                 # Copy current directory path
+
+PING COMMAND:
+  ping <host>                            ICMP ping (-c count)
+  ping <host> [-c N] [--forever] [-w MS] [-s BYTES] [-t TTL] [-4|-6]
+    ICMP echo with flags
+Examples:
+    ping google.com                        # Ping google.com
+
+PIPES & REDIRECTION [NON-COMMAND]:
+  a | b                                  Send a's output to b as input
+  a && b                                 Run b only if a succeeds
+  a || b                                 Run b only if a fails
+  a ; b                                  Run b even if a fails (spaces required)
+  cmd < file                             Read input from file
+  cmd > file                             Write output to file (overwrite)
+  cmd >> file                            Append output to file
+  cmd <<EOF ... EOF                      Read input until the EOF line
+  cmd <<< text                           Read input from the literal text token
+  cmd | <filter>                         Pipe filters: head, tail, betw, gs, sort, rev, count, trim, encode, qur, clip (their flags complete too)
+  Operators need spaces around them; use - to read stdin
+  Hints: | lists the pipe filters; >> and < list text files only; > shows none; << only EOF
+Examples:
+    gs main > results.txt                  # Save search results to a file
+    view readme.md | encode b64            # Encode a file's contents
+    gs main | say                          # Page-search results through say
+    head 20 app.log                        # First 20 lines of a file (or piped input)
+    gs error | sort -u | head 10           # Unique sorted matches, first 10
+    echo nice ... bro ... | trim " ..."    # Strip a pattern from piped text (inline: trim " ..." "nice ... bro ...")
+
+PYTHON COMMANDS:
+  py_activate                            Activate Python virtual environment (auto-detect)
+  py_activate <path>                     Activate specific venv path
+Examples:
+    py_activate                            # Auto-activate Python venv
+    py_activate .venv                      # Activate specific venv
+
+PY_DEACTIVATE COMMAND:
+  py_deactivate                          Deactivate current virtual environment
+Examples:
+    py_deactivate                          # Deactivate venv
+
+QR CODE COMMANDS:
+  qr <text>                              Encode text and display QR in terminal
+  qr encode <text> -o <file>             Save QR as PNG image
+  qr encode <image> -o <file>            Encode an image into a QR (scan to view image)
+  qr decode <image>                      Decode QR code from image
+Examples:
+    qr "Hello World"                       # Display QR code in terminal
+    qr encode "Hello" -o hello.png         # Save QR as PNG
+    qr encode image.png -o imageqrcode.png # Encode image so scanning shows it
+    qr decode qr.png                       # Decode QR from image
+
+QSC (GLOBAL HOTKEY) COMMANDS:
+  config qsc "#c 0"                      Set hotkey (Ctrl+0)
+  config qsc "#c #s a"                   Set hotkey (Ctrl+Shift+A)
+  config qsc off                         Disable QSC hotkey
+  qsc listen                             Start QSC daemon (background process)
+  qsc stop                               Stop QSC daemon
+  qsc status                             Check if QSC daemon is running
+  qsc startup on|off                     Register/unregister as startup app
+Examples:
+    config qsc "#c 0"                      # Set Ctrl+0 hotkey
+    qsc listen                             # Start QSC daemon
+    qsc status                             # Check daemon status
+
+QUR COMMAND:
+  qur <glob> [-s "pat"] [-rp "new"] [-dp] [-d <n>]
+    Query files, select content, replace
+Examples:
+    qur *.rs -s "TODO" -dp                 # Query glob + grep-like display
+
+RUN ALIAS COMMANDS:
+  ral add <name> "<cmd>"                 Create alias
+  ral add <name>(x) "<cmd>"              Create parameterised alias with ${x}
+  ral add <name> "<cmd>"                 Bare $NAME is an env var at run time; use ${x} for parameters
+  ral add <name>({x=a,e=txt}) "<cmd>"    Alias with default values
+  ral add <name>(x[],y) "<cmd>"          Alias with array params
+  ral add <name>(x) "echo $*{x}"         One arg with spaces (quotes stripped)
+  ral edit <name> "<cmd>"                Update alias
+  ral rnm <old> to <new>                 Rename alias
+  ral rm <name>[, ...]                   Remove alias(es)
+  ral list                               Show all aliases
+  ral info <name> [--edit]               Show alias details (--edit: copy edit command to clipboard)
+  ral cls                                Clear ALL aliases (with confirmation)
+  ral export --all <name>                Export all aliases to <name>.ntc.ral
+  ral export --select <name>             Select aliases to export
+  ral import <file>                      Import aliases from .ntc.ral file
+  ral install                            Install run aliases from the ntc GitHub catalog
+  ral make [name]                        Create alias template in CWD
+  ral hintn add|rm|rnm|info|ls           Manage named value lists for --hint-n/--select-n
+Examples:
+    ral add build "cargo build"            # Create simple alias
+    ral add greet(x) "echo Hello ${x}"     # Parameterised alias
+    ral add v "view --care -t -d ${x:-1}"  # Alias with defaults
+    ral list                               # Show all aliases
+    ral export --all myaliases             # Export aliases
+    ral hintn add port [8080,5050]         # Named list for #x --hint-n port
+
+RAN / TASK RUNNER COMMANDS:
+  ran                                    Run the 'standalone' target (default)
+  ran <target>                           Run a specific target from NTCRANFILE.toml
+  ran --dry-run [target]                 Show the commands that would run, execute nothing
+  ran init                               Create a NTCRANFILE.toml template
+  ran deinit                             Remove NTCRANFILE.toml
+  ran list                               List all targets in NTCRANFILE.toml
+  ran check                              Validate NTCRANFILE.toml and show where problems are
+  ran fmt <toml|json|yaml>               Convert the ranfile to another format (-o <file>, -y)
+  ran help                               Show ran usage
+Examples:
+    ran                                    # Run default standalone target
+    ran build                              # Run 'build' target
+    ran list                               # List all targets
+
+REPORT COMMANDS:
+  report project <fmt> [path] --name <file>
+    Project report saved under <file>
+  report clip <n>                        Show clipboard history entry in full
+Examples:
+    report project html . --name docs/project # HTML report with a collapsible tree saved as docs/project.html
+    report clip 1
+
+RESETCG COMMAND:
+  resetcg                                Reset config to defaults (with backup option)
+Examples:
+    resetcg                                # Reset config to defaults
+
+RESTORECG COMMAND:
+  restorecg                              Restore config from backup
+Examples:
+    restorecg                              # Restore config from a backup
+
+REV COMMAND:
+  rev [-u] [file]                        Reverse each line's characters, or flip the line order with -u
+Examples:
+    rev notes.txt                          # Reverse characters on each line
+    rev -u notes.txt                       # Upside down: last line first, first line last
+
+RMD COMMAND:
+  rmd <dir>[, ...]                       Delete directories; wildcards delete every match after confirmation
+Examples:
+    rmd build                              # Delete the build directory
+
+RMF COMMAND:
+  rmf <file>[, ...]                      Delete a file (with confirmation)
+Examples:
+    rmf old.log                            # Delete a file
+
+RNMD COMMAND:
+  rnmd <old> <new>                       Rename a directory
+Examples:
+    rnmd src lib                           # Rename a directory
+
+RNMF COMMAND:
+  rnmf <old> <new>                       Rename a file
+Examples:
+    rnmf a.txt b.txt                       # Rename a file
+
+RUN COMMAND:
+  run <alias>                            Execute alias with 'run'
+  <alias>                                Execute alias directly
+  <alias>(<arg>)                         Execute parameterised alias
+Examples:
+    build                                  # Run alias directly
+
+SAY COMMAND:
+  say <text> [--loop N] [-n|-t]          Print text (no file redirect)
+Examples:
+    say "hello"                            # Print text
+
+SCAN COMMANDS:
+  scan ext <ext...>                      List files by extension (no line counts)
+  scan files [pattern]                   List files by name pattern (* = all)
+  scan dir [pattern]                     List directories by name pattern (* = all)
+  scan ext <ext...> -d, --depth <n>      Limit scan depth
+  scan ext <ext...> -s, --size           Show sizes + total
+  scan ext <ext...> --care               Include everything (care mode)
+  scan port [host] [--top N | --ports <spec> | --all]
+    TCP port scan
+  scan ip [cidr] [--top N | --ports <spec>]
+    Live-host sweep + ARP
+  scan pid [[user@]host[:port]|profile] [--sort memory|pid|name] [--filter <text>] [--min-memory <size>] [--max-memory <size>] [--offset <n>] [--limit <n>]
+    List processes (nssh profile, host, or local)
+  scan waep <host|url>                   Enumerate web paths (/api, /admin, /upload, ...)
+  scan waep example.com/api -r -d 2      Recurse under a base path
+  scan waep <target> [-w <file>] [-x <ext,...>] [-m GET|HEAD] [-s <codes>] [--all]
+    Wordlist, suffixes, method, accepted statuses
+  scan waep <target> [-r] [-d 1-4] [-c 1-64] [--timeout <ms>] [-H 'Name: value'] [-A <ua>] [-o <file>] [-q]
+    Recursion, speed, headers, output
+Examples:
+    scan ext rs                            # List all .rs files
+    scan ext rs c -d 2                     # List .rs/.c files up to depth 2
+    scan ext rs c -s                       # List with sizes + total
+    scan port 192.168.1.1 --top 10         # Scan top 10 ports
+    scan ip 192.168.1.0/24                 # Sweep for live hosts
+    scan files *.rs                        # List files by name pattern
+    scan dir k*                            # List directories by name pattern
+    scan waep http://127.0.0.1:55555/api   # Discover what an ntc serve API exposes
+    scan waep example.com -x php,html --all # Show every response plus .php/.html variants
+    scan waep example.com/api -r -d 2 -c 32 # Recurse two levels with 32 parallel probes
+
+SCR / AUTOMATION SCRIPT COMMANDS:
+  scr <file.ntc> [args...]               Run an automation script
+  <file.ntc> [args...]                   Run a script straight from the prompt
+  scr -c <file.ntc> [args...]            Run script, continue after errors
+  scr init [name]                        Create a script template
+  scr ls                                 List *.ntc scripts in the current directory
+  scr help                               Show scr usage
+Examples:
+    scr deploy.ntc                         # Run deploy.ntc
+    scr build.ntc dev prod                 # Pass args $1=dev, $2=prod
+    scr -c setup.ntc                       # Run and continue after errors
+
+SERVE COMMAND:
+  serve <service>                        Pick a service (bare `serve` lists them)
+  serve chess [--online]                 Hotseat/AI/coach chess UI (--online: lobby + rooms)
+  serve git [dir]                        Git GUI: status, diff, stage, commit, branches, tags, stash, push/pull
+  serve arc [dir]                        Archive GUI: create, inspect and extract archives
+  serve ndb                              SQLite browser: pick a database in this folder, browse schema/rows, optional --write
+  serve theme                            Theme GUI: edit, preview, save and apply themes
+  serve fake                             Fake-data GUI: types or saved groups, preview txt/json/csv/sql
+  serve config                           Configuration GUI: settings and serve defaults (CLI editor stays at config serve)
+  serve backup [path]                    Backup GUI: create, diff, restore, undo, clear this folder
+Examples:
+    serve files --port 8080                # Start files drive server on port 8080
+
+SHOWCG COMMAND:
+  showcg                                 Show current configuration overview
+Examples:
+    showcg                                 # Show current configuration overview
+
+SHOWENV COMMAND:
+  showenv                                Show environment variables (first 5 PATH entries)
+  showenv --all                          Show all PATH entries
+  showenv -d <n>                         Show first n PATH entries
+Examples:
+    showenv --all                          # Show every PATH entry
+
+SIZE COMMAND:
+  size                                   Show current directory size
+  size -p, --path <path|@tp>             Show size of a specific file, path or teleport savepoint
+  size --care                            Calculate size including everything (care mode)
+  size -t, --time                        Show elapsed time
+Examples:
+    size                                   # Show current directory size
+    size ../src                            # Show size of another directory
+    size Cargo.toml                        # Show size of a file
+    size @web --care -t                    # Care mode with elapsed time for a savepoint
+
+skill - Install AI skills (SKILL.md) into AI harness folders
+  skill download <alias|owner/repo[/skill]|url> [--name <name>]
+    Download skills from GitHub
+  skill add <name> to <harness> [--global]
+    Copy a skill (or bundle) into a harness
+  skill remove <name> from <harness> [--global]
+    Remove a harness copy
+  skill delete <name>                    Delete a skill from the library (the opposite of install)
+  skill edit <name>                      Open SKILL.md in ntceditor
+  skill [list]                           List downloaded bundles and their harness copies
+  skill list --all                       List every installed skill, not just bundles
+  skill avail                            List the skills ntc supports
+  skill info <harness>                   Show the skills a harness folder contains
+  skill sub <name> [ls]                  Show the skills inside an installed bundle
+  skill help                             Show skill usage
+Examples:
+    skill download superpowers             # 15 skills from obra/superpowers
+    skill download frontenddev             # only frontend-design from anthropics/skills
+    skill add superpower to opencode       # .opencode/skills in the current folder
+    skill add brainstorming to claude --global # ~/.claude/skills
+    skill remove superpowers from opencode # keep the library copy
+    skill download --url https://github.com/obra/superpowers # same as the alias
+    skill avail                            # superpowers, frontenddev, mcp-builder, sentry-fix-issues, ...
+    skill info opencode                    # what .opencode/skills currently holds
+    skill sub superpowers ls               # every skill inside the superpowers bundle
+    skill download --url <url> --name my-skill # install it under a different name
+
+SMTP COMMAND:
+  smtp                                   SMTP email client (--id, -i, -u, -pwd, -s, -b, -f, --to)
+Examples:
+    smtp --id 1                            # Open SMTP client profile 1
+
+SORT COMMAND:
+  sort [-r] [-n] [-u] [-f] [file]        Sort lines (reverse/numeric/unique/ignore-case)
+Examples:
+    gs error | sort -u | head 10           # Unique sorted matches, first 10
+
+SPEC COMMAND:
+  spec                                   Show computer/system specifications (CPU, GPU, RAM, storage, OS, serial)
+Examples:
+    spec                                   # Show system specifications
+
+SYSTEM COMMANDS:
+  sys, top [-l|--log] [-d|--delay [seconds:-1]]
+    Live system monitor (CPU, memory, disk, processes)
+  <any command>                          NTC passes unknown commands to your system
+  shell -- echo, git, dir/ls, ping, etc. all run natively alongside NTC commands.
+Examples:
+    sys                                    # Show system monitor
+    sys --log --delay 5                    # Append CPU/memory/disk stats every 5s (default: 15s) to log/ntc_sys.log
+    sys -ld 5                              # Same as 'sys -l -d 5': -l/--log switches logging on, -d/--delay takes the seconds
+
+SYSPATH COMMAND:
+  syspath show                           Show system-level PATH entries
+  syspath add <path>                     Add directory to system PATH
+  syspath add --cwd | --here             Add current directory to system PATH
+  syspath rm <path-or-number>            Remove from system PATH (by path or index)
+  syspath move <n> <m>                   Move entry #n to position #m
+Examples:
+    syspath show                           # Show system PATH entries
+    syspath add /usr/local/bin             # Add to system PATH
+    syspath move 3 1                       # Move entry to position 1
+
+TAIL COMMAND:
+  tail [N] [file]                        Print the last N lines (default 10)
+Examples:
+    tail 20 app.log                        # Last 20 lines of app.log
+
+THEME COMMANDS:
+  theme                                  Interactive theme manager (menu)
+  theme list                             List all available themes
+  theme current                          Show current theme name and details
+  theme use <name>                       Switch to a theme by name
+  theme add <name>                       Create a new theme (opens in editor)
+  theme rm <name...> [-f|--force]        Remove theme(s)
+  theme edit [name]                      Edit a theme (or open theme directory)
+  theme where                            Show theme directory location
+  theme info <name>                      Show theme metadata and color counts
+  theme export <name>                    Export theme to .ntc_theme file
+  theme import <file>                    Import theme from .ntc_theme file
+  theme install                          Install a theme from the ntc GitHub catalog
+  theme rnm <old> to <new>               Rename a theme
+  theme reload                           Reload themes from disk
+  theme make [name]                      Create theme template in CWD
+Examples:
+    theme list                             # List all available themes
+    theme use aura                         # Switch to the 'aura' theme
+    theme current                          # Show current theme info
+    theme add mytheme                      # Create a new theme
+
+TIME COMMAND - timing, comparison and countdowns:
+  time <command>                         Run a command and show how long it took
+  time <command A> --compare <command B> [-w]
+    Run both and compare exit status + captured output
+  time --bench <n> <command>             Repeat n times and show min/max/mean/median
+  time --count <duration>                Countdown (e.g. 30, 90s, 5m, 1h30m)
+  time --help                            Show this help
+  Commands run in the current directory and may be NTC commands, aliases, or external commands. --compare captures output; --bench runs the command n times, so its side effects repeat too. Ctrl+C cancels a countdown.
+
+TOTAL LINE COMMANDS:
+  tl file <path>                         Count lines in a single file
+  tl ext <ext> [-s <-n|-l|-r>]           Show all <ext> files and their total lines (respects igcare, sortable)
+  tl dir <path> [-s <-n|-l|-r>]          Show supported extensions and total lines in directory (sortable)
+  tl ext|dir <target> -s <-n|-l|-r>      Sort: -n normal, -l by line (small to big), -r reverse (big to small)
+Examples:
+    tl file main.rs                        # Count lines in main.rs
+    tl ext .rs                             # Count lines in all .rs files
+    tl dir .                               # Count lines in current directory
+    tl ext .rs -s -r                       # List .rs files sorted by lines, big to small
+
+TEMPERATURE & WEATHER COMMANDS:
+  tmprt com [secs]                       Live hardware temperature monitor (q=quit s=freeze c='oC/'oF)
+  tmprt weather [city]                   Current weather via OpenWeather API
+  tmprt key [API_KEY]                    Save/display OpenWeather API key
+  tmprt city [name]                      Save/display default city for weather
+  tmprt sensors <status|install|uninstall|debug>
+    Manage hardware sensor backends (LHM)
+Examples:
+    tmprt com 5                            # Live view refreshing every 5 seconds
+    tmprt weather Bangkok                  # Weather for Bangkok
+    tmprt key 1234567890abcdef             # Save API key
+    tmprt city Bangkok                     # Set default city
+
+TODO COMMANDS:
+  todo                                   Show all tasks (from future_todo.<fmt> in CWD; set with config todo format)
+  todo info [N]                          Show all tasks or details of task N
+  todo add "name"                        Append a new task
+  todo add "name" -> N                   Insert task at position N
+  todo done <N>                          Mark task N as done
+  todo undo <N>                          Reopen task N
+  todo edit <N> "name"                   Rename task N
+  todo rm <N>                            Remove task N
+  todo clear                             Clear ALL tasks (with confirmation)
+Examples:
+    todo                                   # Show all tasks
+    todo add "Fix bug"                     # Add a new task
+    todo rm 1                              # Remove task #1
+
+TELEPORT COMMANDS:
+  tp                                     Interactive menu
+  tp add <name>                          Save current directory
+  tp add <name> <path>                   Save specific path
+  tp jump <name>                         Teleport to saved location
+  tp jump <number>                       Teleport by number
+  tp list                                List all teleport points
+  tp info <name>                         Show savepoint details
+  tp rm <name>                           Remove teleport point
+  tp rnm <old> to <new>                  Rename a savepoint
+  tp cls                                 Clear ALL savepoints
+  @<name>                                Quick teleport shortcut
+Examples:
+    tp add web                             # Save current directory as 'web'
+    tp add docs ~/Documents                # Save specific path
+    tp jump web                            # Teleport to 'web'
+    tp list                                # List all savepoints
+    @web                                   # Quick teleport shortcut
+
+TPB COMMAND:
+  tpb                                    Teleport back to previous location (undo tp)
+  tpb history                            Show teleport navigation history
+  tpb clear                              Clear teleport history
+Examples:
+    tpb                                    # Return to the previous location
+
+TRACE COMMAND:
+  trace <host> [-m N] [-w MS]            Hop-by-hop route (tracert/traceroute, TTL-walk fallback)
+Examples:
+    trace example.com                      # Trace the route to example.com
+
+TRIM COMMAND:
+  trim <pattern> [text]                  Remove every occurrence of <pattern> (text or piped input)
+Examples:
+    echo nice ... bro ... | trim " ..."    # Strip a pattern from piped text (inline: trim " ..." "nice ... bro ...")
+
+TUTORIAL COMMAND:
+  tutorial [lesson]                      Guided hands-on lessons in a sandbox (tutorial list shows them all)
+Examples:
+    tutorial                               # Start interactive tutorial
+
+TXTC COMMAND:
+  txtc [--line|--no-line] <file>         Copy file content to clipboard (line numbers on/off)
+Examples:
+    txtc main.rs                           # Copy main.rs to the clipboard
+
+TXTF COMMAND:
+  txtf [--head N|--tail N|--betw A:B] [--line|--no-line] [file|dir|@tp/file|@tp/dir]
+    Display file content or pick a file from a directory (--line/--no-line override the line-number setting)
+Examples:
+    txtf main.rs --head 30                 # First 30 lines of main.rs
+    txtf --betw 10:20 main.rs              # Lines 10-20 of main.rs
+    txtf @docs/notes.txt                   # Display a teleport savepoint file
+    txtf src                               # Pick a supported file from src to display
+
+UI COMMAND:
+  ui                                     Show current UI mode
+Examples:
+    ui                                     # Show the current UI mode
+
+UP COMMAND:
+  up <file> <url>                        Upload file (multipart POST; --put, --raw, -a, --bearer, -F, -H, -d)
+Examples:
+    up ./file.zip https://example.com/upload # Upload a file
+
+PATH MANAGER:
+  usrpath show                           Show user-level PATH entries
+  usrpath add <path>                     Add directory to user PATH
+  usrpath add --cwd | --here             Add current directory to user PATH
+  usrpath rm <path-or-number>            Remove from user PATH (by path or index)
+  usrpath move <n> <m>                   Move entry #n to position #m
+Examples:
+    usrpath show                           # Show user PATH entries
+    usrpath add ~/bin                      # Add to user PATH
+    usrpath rm 2                           # Remove entry #2 from user PATH
+
+VERSION COMMAND:
+  version                                Show version
+Examples:
+    version                                # Show version info
+
+VIEW COMMAND:
+  view [<dir|file|@tp|@tp/file|@tp/dir/>]
+    Show tree or file content
+  view -s, --size [min-size]             Show sizes; with value (10KB, 1.5MB), hide smaller
+  view -fs, --filesize [min-size]        Show file sizes; with value, hide smaller files
+  view -ds, --dirsize [min-size]         Show dir sizes; with value, hide smaller dirs
+  view --sort size|char|ext              Sort children (dirs stay first)
+  view --head <n>                        Show only first n tree lines
+  view --tail <n>                        Show only last n tree lines
+  view <file|@tp/file|@tp/dirs/file> [--head N|--tail N|--betw A:B]
+    Display file content (same as txtf)
+  view -f, --file                        Show files only (directories pruned)
+  view -dir, --directory                 Show directories only (files pruned)
+  view -ext, --ext <ext...>              Show tree with only matching extensions
+  view -cp, --copy                       Show tree and copy to clipboard
+  view -d, --depth <n>                   Show tree with custom depth
+  view -c, --care                        Show tree with care everything
+  view --time, -t                        Show tree with execution time
+  view -p, --path <path|@tp|@tp/sub>     Show tree of a path or teleport path
+Examples:
+    view                                   # Show directory tree
+    view --size                            # Show tree with sizes
+    view -d 2                              # Show tree with depth 2
+    view -cp                               # Show tree and copy to clipboard
+    view --time                            # Show tree with execution time
+    view -p C:\code\project                # Show tree of a specific path
+    view @web                              # Show tree of a teleport savepoint
+    view -s 10MB                           # Only files/dirs at least 10MB
+    view --sort size --head 20             # 20 largest entries first
+    view main.rs --tail 30                 # Last 30 lines of main.rs
+    view main.rs --betw 10:20              # Lines 10-20 of main.rs
+    view @docs/readme.md                   # Display a teleport savepoint file
+
+VIEWD COMMAND (directories only):
+  viewd [<dir|@tp|@tp/dir/>] [-d N]      Show a directories-only tree
+  viewd -d, --depth <n>                  Show tree with custom depth
+  viewd -s, --size [min-size]            Show directory sizes; with value, hide smaller
+  viewd -c, --care                       Count everything when sizing
+  viewd --sort size|char|ext             Sort directory entries
+  viewd -t, --time                       Show execution time
+  viewd -cp, --copy                      Copy the directory tree to clipboard
+Examples:
+    viewd                                  # Show only directories in the current tree
+    viewd -d 2 --size                      # Two levels deep with directory sizes
+    viewd --sort size                      # Largest directories first
+    viewd @docs/                           # Show a teleport savepoint's directories
+
+VIEWF COMMAND (files only):
+  viewf [<dir|@tp|@tp/dir/>]             Show a files-only tree at depth 1
+  viewf <file|@tp/file|@tp/dirs/file> [--head N|--tail N|--betw A:B]
+    Display file content (same as txtf)
+  viewf -s, --size [min-size]            Show file sizes; with value, hide smaller files
+  viewf --sort size|char|ext             Sort file entries
+  viewf -e, --ext <ext...>               Show only matching extensions
+  viewf -c, --care                       Count everything when sizing
+  viewf -t, --time                       Show execution time
+  viewf -cp, --copy                      Copy the file list to clipboard
+Examples:
+    viewf                                  # List files in the current directory
+    viewf src                              # List files directly inside src
+    viewf -e rs,txt --sort size            # Files by extension, largest first
+    viewf @docs/readme.md --head 20        # Display a teleport file
+
+VIEWS COMMAND (short, flat listing):
+  views [<dir|@tp|@tp/dir/>]             List one directory level, flat like ls
+  views -s, --size [min-size]            Show sizes; with value (1024, 10KB, 5MB), hide smaller
+  views --sort <name|ext|size>           Sort entries (default: name)
+  views -n                               One entry per line instead of the flowing groups
+  views --trim <text>                    Remove text from names and the ... group separator (repeatable, keeps colours)
+  No [Directory]/[ignored] tags - colours show the kind. Depth is fixed at 1 and sizes are always computed with --care semantics. Use --size to display sizes.
+Examples:
+    views                                  # Flat listing of the current directory
+    views src --size 1KB --sort size       # Entries >= 1KB, largest first, sizes shown
+
+WHERE COMMAND:
+  where [-a|--all] [<binary>]            Show the ntc executable, or find a binary on PATH
+Examples:
+    where -a                               # Show every ntc config, session, package and vault path
+    where git                              # Show the first git on PATH (-a lists every match)
+
+WI COMMAND:
+  wi [path]                              Live file-change feed (q=quit)
+Examples:
+    wi                                     # Watch file changes live

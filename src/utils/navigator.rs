@@ -5,6 +5,13 @@ use anyhow::{Context, Result};
 use std::env;
 use std::path::{Path, PathBuf};
 
+/// A selectable volume root for cross-volume navigation (`godrive`):
+/// a drive letter on Windows (`C` → `C:\`) or a mount on Linux (`c` → `/mnt/c`).
+pub struct DriveRoot {
+    pub label: String,
+    pub path: PathBuf,
+}
+
 /// Manages the current working directory state
 pub struct Navigator {
     current_dir: PathBuf,
@@ -101,7 +108,7 @@ impl Navigator {
             if self.venv_name.is_none() && has_venv_in_dir(&self.current_dir) {
                 #[cfg(not(target_os = "android"))]
                 {
-                    use colored::Colorize;
+                    use crate::utils::theme::style::ThemeColorize;
                     println!();
                     println!("{}", t!("navigator.venv_tip").cyan());
                     #[cfg(windows)]
@@ -157,6 +164,45 @@ impl Navigator {
         }
     }
 
+    /// List directory names under `/mnt` on non-Windows platforms (WSL's
+    /// `/mnt/c`, Termux's `/mnt/sdcard`, macOS `/mnt` mounts).
+    /// On Windows, returns an empty Vec.
+    pub fn list_mounts() -> Vec<String> {
+        #[cfg(not(windows))]
+        {
+            subdirectory_names("/mnt")
+        }
+        #[cfg(windows)]
+        {
+            Vec::new()
+        }
+    }
+
+    /// Selectable volume roots: existing drives on Windows, `/mnt` mounts on
+    /// every other platform.
+    pub fn drive_roots() -> Vec<DriveRoot> {
+        #[cfg(windows)]
+        {
+            Self::list_drives()
+                .into_iter()
+                .map(|d| DriveRoot {
+                    label: d.to_string(),
+                    path: PathBuf::from(format!("{}:\\", d)),
+                })
+                .collect()
+        }
+        #[cfg(not(windows))]
+        {
+            Self::list_mounts()
+                .into_iter()
+                .map(|name| DriveRoot {
+                    path: PathBuf::from(format!("/mnt/{}", name)),
+                    label: name,
+                })
+                .collect()
+        }
+    }
+
     /// Go back to the parent directory
     pub fn go_back(&mut self) -> Result<()> {
         let parent = self
@@ -197,6 +243,23 @@ impl Navigator {
             .map(|(i, n)| (i + 1, n))
             .collect())
     }
+}
+
+/// Names of the directories directly under `root`, sorted case-insensitively.
+pub fn subdirectory_names(root: &str) -> Vec<String> {
+    let mut names = Vec::new();
+    if let Ok(entries) = std::fs::read_dir(root) {
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if path.is_dir() {
+                if let Some(name) = path.file_name().and_then(|n| n.to_str()) {
+                    names.push(name.to_string());
+                }
+            }
+        }
+    }
+    names.sort_by_cached_key(|a| a.to_lowercase());
+    names
 }
 
 /// Clear the terminal screen using ANSI escape codes.

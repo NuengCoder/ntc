@@ -2,13 +2,28 @@ use std::collections::HashMap;
 
 pub fn fill(m: &mut HashMap<String, String>) {
     m.insert(
+        "help.scan.care".into(),
+        "scan ext <扩展名...> --care ## 包含所有文件（care 模式）".into(),
+    );
+
+    m.insert(
         "help.scan.depth".into(),
         "scan ext <扩展名...> -d, --depth <n> ## 限制扫描深度".into(),
     );
 
     m.insert(
+        "help.scan.dir".into(),
+        "scan dir [匹配] ## 按名称匹配列出目录（* 表示全部）".into(),
+    );
+
+    m.insert(
         "help.scan.example1".into(),
         "scan ext rs ## 列出所有 .rs 文件".into(),
+    );
+
+    m.insert(
+        "help.scan.example10".into(),
+        "scan waep example.com/api -r -d 2 -c 32 ## 32 并发递归两层".into(),
     );
 
     m.insert(
@@ -42,6 +57,16 @@ pub fn fill(m: &mut HashMap<String, String>) {
     );
 
     m.insert(
+        "help.scan.example8".into(),
+        "scan waep http://127.0.0.1:55555/api ## 查看 ntc serve 接口暴露了哪些路径".into(),
+    );
+
+    m.insert(
+        "help.scan.example9".into(),
+        "scan waep example.com -x php,html --all ## 显示所有响应及 .php/.html 变体".into(),
+    );
+
+    m.insert(
         "help.scan.ext".into(),
         "scan ext <扩展名...> ## 按扩展名列出文件（不统计行数）".into(),
     );
@@ -52,8 +77,8 @@ pub fn fill(m: &mut HashMap<String, String>) {
     );
 
     m.insert(
-        "help.scan.dir".into(),
-        "scan dir [匹配] ## 按名称匹配列出目录（* 表示全部）".into(),
+        "help.scan.ip".into(),
+        "scan ip [网段] [--top N | --ports <范围>] ## 存活主机扫描（含 ARP）".into(),
     );
 
     m.insert(
@@ -62,21 +87,12 @@ pub fn fill(m: &mut HashMap<String, String>) {
     );
 
     m.insert(
-        "help.scan.ip".into(),
-        "scan ip [网段] [--top N | --ports <范围>] ## 存活主机扫描（含 ARP）".into(),
-    );
-
-    m.insert(
         "help.scan.size".into(),
         "scan ext <扩展名...> -s, --size ## 显示大小与总计".into(),
     );
 
-    m.insert(
-        "help.scan.care".into(),
-        "scan ext <扩展名...> --care ## 包含所有文件（care 模式）".into(),
-    );
-
     m.insert("help.scan.title".into(), "扫描命令：".into());
+
     m.insert(
         "help.scan.waep".into(),
         "scan waep <主机|URL> ## 枚举网页路径（/api、/admin、/upload ...）".into(),
@@ -95,20 +111,5 @@ pub fn fill(m: &mut HashMap<String, String>) {
     m.insert(
         "help.scan.waep_recursive".into(),
         "scan waep <目标> [-r] [-d 1-4] [-c 1-64] [--timeout <毫秒>] [-H '名称: 值'] [-A <ua>] [-o <文件>] [-q] ## 递归、速度、请求头、输出".into(),
-    );
-
-    m.insert(
-        "help.scan.example8".into(),
-        "scan waep http://127.0.0.1:55555/api ## 查看 ntc serve 接口暴露了哪些路径".into(),
-    );
-
-    m.insert(
-        "help.scan.example9".into(),
-        "scan waep example.com -x php,html --all ## 显示所有响应及 .php/.html 变体".into(),
-    );
-
-    m.insert(
-        "help.scan.example10".into(),
-        "scan waep example.com/api -r -d 2 -c 32 ## 32 并发递归两层".into(),
     );
 }

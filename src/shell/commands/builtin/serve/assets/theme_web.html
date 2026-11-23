@@ -1,0 +1,1293 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>NTC Theme Studio</title>
+<style>
+  :root {
+    color-scheme: dark;
+    --panel: #151821;
+    --panel-2: #10131b;
+    --line: #2b3040;
+    --text: #e7e9f0;
+    --muted: #8d95a9;
+    --accent: #8b7cf6;
+    --accent-2: #6ee7d8;
+    --danger: #ff7387;
+    --ok: #65d99a;
+    --mono: "Cascadia Code", "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  }
+  * { box-sizing: border-box; }
+  [hidden] { display: none !important; }
+  body {
+    margin: 0;
+    min-height: 100vh;
+    background: #0b0d12;
+    color: var(--text);
+    font: 14px/1.5 Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  }
+  button, input, textarea { font: inherit; }
+  button {
+    border: 1px solid var(--line);
+    background: #1b1f2b;
+    color: var(--text);
+    border-radius: 8px;
+    padding: 7px 12px;
+    cursor: pointer;
+    transition: background .15s, border-color .15s, transform .05s;
+  }
+  button:hover:not(:disabled) { background: #242938; border-color: #3b4257; }
+  button:active:not(:disabled) { transform: translateY(1px); }
+  button:disabled { opacity: .42; cursor: not-allowed; }
+  button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+  button.primary:hover:not(:disabled) { background: #9c8dff; border-color: #9c8dff; }
+  button.danger { color: var(--danger); }
+  .app { display: grid; grid-template-columns: 274px minmax(0, 1fr); min-height: 100vh; }
+  .sidebar {
+    border-right: 1px solid var(--line);
+    background: linear-gradient(180deg, #141721 0%, #0f1219 100%);
+    padding: 22px 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+  .brand { display: flex; align-items: center; gap: 11px; }
+  .logo {
+    width: 36px; height: 36px;
+    display: grid; place-items: center;
+    border-radius: 10px;
+    background: linear-gradient(135deg, var(--accent), #3b2f85);
+    color: #fff; font-size: 19px;
+    box-shadow: 0 0 22px rgba(139, 124, 246, .25);
+  }
+  h1 { margin: 0; font-size: 15px; letter-spacing: .01em; }
+  .brand p { margin: 1px 0 0; color: var(--muted); font-size: 11px; }
+  .hint { margin: 0; color: var(--muted); font-size: 12px; }
+  .actions { display: flex; flex-wrap: wrap; gap: 8px; }
+  .label {
+    color: var(--muted); font-size: 10px; font-weight: 700;
+    letter-spacing: .12em; text-transform: uppercase;
+    margin-bottom: -7px;
+  }
+  .theme-list { display: flex; flex-direction: column; gap: 5px; overflow: auto; }
+  .theme-item {
+    text-align: left;
+    display: flex; align-items: center; justify-content: space-between;
+    gap: 8px; padding: 8px 10px; border-color: transparent;
+    background: transparent; color: var(--muted);
+  }
+  .theme-item:hover { background: #1a1e2a; color: var(--text); }
+  .theme-item.active { background: #22263a; border-color: #3d4160; color: var(--text); }
+  .theme-item em {
+    font-style: normal; font-size: 9px; font-weight: 700;
+    color: var(--accent-2); letter-spacing: .08em; text-transform: uppercase;
+  }
+  .sidebar .footer { margin-top: auto; color: #666f84; font-size: 10px; line-height: 1.4; }
+  main { min-width: 0; padding: 22px 24px 30px; }
+  .topbar { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 14px; }
+  .topbar h2 { margin: 0; font-size: 20px; letter-spacing: -.01em; }
+  .path { color: var(--muted); font-size: 11px; margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 58vw; }
+  .tabs {
+    display: flex; gap: 5px; padding: 5px; margin-bottom: 14px;
+    background: #12151e; border: 1px solid var(--line); border-radius: 11px; width: fit-content;
+  }
+  .tab {
+    border: 0; background: transparent; color: var(--muted);
+    padding: 7px 16px; border-radius: 7px; font-size: 12px; font-weight: 700;
+    letter-spacing: .04em;
+  }
+  .tab:hover { background: #1b1f2b; color: var(--text); }
+  .tab[aria-selected="true"] { background: #2a2f42; color: var(--text); box-shadow: inset 0 0 0 1px #3d4160; }
+  .layout { display: grid; grid-template-columns: minmax(360px, .95fr) minmax(380px, 1.05fr); gap: 16px; align-items: start; }
+  .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; overflow: hidden; min-width: 0; }
+  .panel-head {
+    display: flex; align-items: center; justify-content: space-between; gap: 10px;
+    padding: 10px 13px; color: var(--muted); font-size: 11px;
+    font-weight: 700; letter-spacing: .08em; text-transform: uppercase;
+    border-bottom: 1px solid var(--line); background: #12151e;
+  }
+  .panel-head small { font-size: 10px; font-weight: 500; letter-spacing: 0; text-transform: none; color: #6d768c; }
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--accent-2); display: none; }
+  .dot.on { display: inline-block; box-shadow: 0 0 8px var(--accent-2); }
+
+  /* TOML editor: textarea over a syntax-highlighted copy. */
+  .code-wrap {
+    position: relative;
+    background: var(--panel-2);
+    height: calc(100vh - 218px);
+    min-height: 440px;
+  }
+  .code-highlight, #editor {
+    position: absolute; inset: 0;
+    margin: 0; padding: 14px 46px 14px 16px;
+    border: 0; outline: 0;
+    font: 12.5px/1.62 var(--mono);
+    tab-size: 3;
+    white-space: pre;
+    overflow: auto;
+  }
+  .code-highlight {
+    z-index: 1;
+    pointer-events: none;
+    color: #dbe1ee;
+    overflow: hidden;
+    scrollbar-width: none;
+  }
+  #editor {
+    z-index: 2;
+    resize: none;
+    background: transparent;
+    color: transparent;
+    -webkit-text-fill-color: transparent;
+    caret-color: var(--editor-caret, #7ee7f2);
+    scrollbar-gutter: stable;
+  }
+  #editor::selection { background: rgba(139, 124, 246, .32); }
+  #editor::placeholder { color: #596176; -webkit-text-fill-color: #596176; }
+
+  /* Inline color swatches aligned with TOML color fields. */
+  .toml-colors {
+    position: absolute; inset: 0;
+    z-index: 3; pointer-events: none; overflow: hidden;
+  }
+  .toml-swatch {
+    position: absolute; right: 21px;
+    width: 18px; height: 18px; padding: 0;
+    border: 1px solid rgba(128,128,128,.8); border-radius: 5px;
+    background: transparent; cursor: pointer; pointer-events: auto;
+    appearance: none; -webkit-appearance: none;
+    overflow: hidden;
+    box-shadow: 0 0 0 2px rgba(10, 12, 18, .38);
+    transition: transform .12s, border-color .12s;
+  }
+  .toml-swatch:hover { transform: scale(1.14); border-color: var(--accent-2); }
+  .toml-swatch::-webkit-color-swatch-wrapper {
+    padding: 0; width: 100%; height: 100%;
+  }
+  .toml-swatch::-webkit-color-swatch {
+    border: 0; border-radius: 0; width: 100%; height: 100%;
+  }
+  .toml-swatch::-moz-color-swatch { border: 0; border-radius: 0; width: 100%; height: 100%; }
+  .panel-head .swatch-hint {
+    display: inline-flex; align-items: center; gap: 8px;
+    font-size: 10px; font-weight: 500; letter-spacing: 0; text-transform: none;
+    color: #6d768c;
+  }
+
+  /* Full-window drop target for importing theme files. */
+  .drop-overlay {
+    position: fixed; inset: 0; z-index: 80;
+    display: grid; place-items: center;
+    background: rgba(5, 8, 15, .78);
+    backdrop-filter: blur(3px);
+    pointer-events: none;
+  }
+  .drop-card {
+    display: flex; flex-direction: column; align-items: center; gap: 5px;
+    min-width: 330px; padding: 34px 42px;
+    border: 2px dashed #6ee7d8; border-radius: 18px;
+    background: rgba(21, 24, 33, .94);
+    box-shadow: 0 22px 70px rgba(0, 0, 0, .5), 0 0 45px rgba(110, 231, 216, .12);
+  }
+  .drop-card .drop-icon {
+    width: 44px; height: 44px; margin-bottom: 5px;
+    display: grid; place-items: center;
+    border-radius: 12px; background: rgba(110, 231, 216, .13);
+    color: var(--accent-2); font-size: 24px; line-height: 1;
+  }
+  .drop-card strong { font-size: 17px; }
+  .drop-card span { color: var(--muted); font-size: 12px; }
+
+  /* Shell tab */
+  .shell-panel { display: flex; flex-direction: column; }
+  .shell-surface {
+    padding: 16px 17px 18px;
+    min-height: 460px;
+    font: 12.5px/1.65 var(--mono);
+    overflow: auto;
+    transition: background .15s, color .15s;
+  }
+  .term-gap { height: 1.65em; }
+  .term-line { min-height: 1.65em; }
+  .shell-tree { margin: 0; font: inherit; white-space: pre; }
+  .prompt-row { display: flex; align-items: center; min-height: 1.65em; }
+  .prompt-prefix { white-space: pre; flex: 0 0 auto; line-height: 1.65em; }
+  .prompt-field { position: relative; flex: 1 1 auto; min-width: 0; height: 1.65em; }
+  .prompt-highlight {
+    position: absolute; inset: 0;
+    white-space: pre; overflow: hidden;
+    pointer-events: none;
+  }
+  #prompt-input {
+    position: absolute; inset: 0; width: 100%;
+    border: 0; outline: 0; padding: 0; margin: 0;
+    background: transparent;
+    color: transparent;
+    -webkit-text-fill-color: transparent;
+    caret-color: var(--editor-caret, #7ee7f2);
+    font: inherit;
+    white-space: pre;
+  }
+  #prompt-input::selection { background: rgba(139, 124, 246, .32); }
+  .shell-foot {
+    padding: 8px 13px; border-top: 1px solid var(--line);
+    color: #6d768c; font-size: 10px; background: #12151e;
+  }
+
+  /* Editor tab */
+  .editor-mock { padding: 14px; }
+  .editor-frame { border-radius: 9px; overflow: hidden; border: 1px solid rgba(255,255,255,.09); }
+  .editor-tabbar {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 7px 12px; font: 11px/1.4 var(--mono);
+  }
+  .editor-tabbar .modified { font-weight: 700; }
+  .editor-body { display: flex; min-height: 268px; }
+  .editor-gutter, .editor-code {
+    margin: 0; padding: 11px 0;
+    font: 12.5px/1.7 var(--mono);
+    white-space: pre;
+  }
+  .editor-gutter {
+    padding-left: 12px; padding-right: 13px; text-align: right;
+    user-select: none; flex: 0 0 auto;
+  }
+  .editor-code { padding-left: 12px; padding-right: 16px; overflow: auto; flex: 1 1 auto; }
+  .block-cursor { display: inline-block; width: .72em; height: 1.35em; vertical-align: text-bottom; }
+  .editor-status {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 5px 11px; font: 11px/1.4 var(--mono);
+  }
+
+  /* Syntax tab */
+  .syntax-wrap { padding: 14px; display: flex; flex-direction: column; gap: 13px; }
+  .syntax-code {
+    margin: 0; border-radius: 9px; overflow: auto;
+    border: 1px solid rgba(255,255,255,.09);
+  }
+  .syntax-code-body { display: flex; }
+  .syntax-code .editor-gutter, .syntax-code .editor-code { min-height: 200px; }
+  .syntax-palette { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; }
+  .syntax-chip {
+    display: flex; align-items: center; gap: 8px;
+    padding: 7px 9px; border: 1px solid var(--line); border-radius: 8px;
+    background: #12151e; min-width: 0;
+  }
+  .syntax-chip i {
+    width: 15px; height: 15px; border-radius: 4px; flex: 0 0 auto;
+    border: 1px solid rgba(255,255,255,.18);
+  }
+  .syntax-chip b {
+    display: block; color: var(--text); font-size: 10px; font-weight: 700;
+    letter-spacing: .03em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .syntax-chip span { display: block; color: var(--muted); font: 10px/1.3 var(--mono); }
+
+  /* Help tab */
+  .help-panel { display: flex; flex-direction: column; }
+  .help-output {
+    margin: 0; padding: 14px 16px;
+    min-height: 460px; max-height: calc(100vh - 218px);
+    overflow: auto; font: 12.5px/1.55 var(--mono); white-space: pre;
+  }
+
+  .status {
+    min-height: 24px; margin-top: 12px; color: var(--muted);
+    font-size: 12px; white-space: pre-wrap;
+  }
+  .status.ok { color: var(--ok); }
+  .status.error { color: var(--danger); }
+  @media (max-width: 1050px) {
+    .app { grid-template-columns: 1fr; }
+    .sidebar { border-right: 0; border-bottom: 1px solid var(--line); }
+    .theme-list { max-height: 170px; }
+    .layout { grid-template-columns: 1fr; }
+    .code-wrap { height: 54vh; min-height: 360px; }
+    .path { max-width: 82vw; }
+  }
+</style>
+</head>
+<body>
+<div class="app">
+  <aside class="sidebar">
+    <div class="brand">
+      <div class="logo">◈</div>
+      <div><h1>NTC Theme Studio</h1><p>serve theme</p></div>
+    </div>
+    <p class="hint">Edit the active theme and watch the real shell update.</p>
+    <div class="actions">
+      <button id="new-btn">New theme</button>
+      <button id="reload-btn">Reload files</button>
+      <button id="import-btn">Import theme</button>
+      <button id="export-btn" disabled>Export TOML</button>
+    </div>
+    <input id="import-file" type="file" accept=".ntc_theme,.toml,application/toml,text/plain" hidden>
+    <div class="label">Themes</div>
+    <div id="theme-list" class="theme-list"></div>
+    <div class="footer">Writes go to the ntc themes folder.<br>Built-in themes cannot be deleted.<br>Missing fields are added on save.<br>Drop a .ntc_theme file to import.</div>
+  </aside>
+
+  <main>
+    <header class="topbar">
+      <div>
+        <h2 id="theme-title">Loading…</h2>
+        <div id="theme-path" class="path"></div>
+      </div>
+      <div class="actions">
+        <button id="apply-btn">Apply</button>
+        <button id="update-btn" title="Add theme fields missing from this file (never overwrites existing values)">Update</button>
+        <button id="save-btn" class="primary">Save</button>
+        <button id="delete-btn" class="danger">Delete</button>
+      </div>
+    </header>
+
+    <div class="tabs" role="tablist" aria-label="Theme previews">
+      <button class="tab" id="tab-shell" role="tab" aria-controls="panel-shell" aria-selected="true" data-tab="shell">Shell</button>
+      <button class="tab" id="tab-editor" role="tab" aria-controls="panel-editor" aria-selected="false" data-tab="editor">Editor</button>
+      <button class="tab" id="tab-syntax" role="tab" aria-controls="panel-syntax" aria-selected="false" data-tab="syntax">Syntax</button>
+      <button class="tab" id="tab-help" role="tab" aria-controls="panel-help" aria-selected="false" data-tab="help">Help</button>
+    </div>
+
+    <div class="layout">
+      <section class="panel" aria-label="Theme TOML editor">
+        <div class="panel-head">
+          <span>Theme TOML</span>
+          <span class="swatch-hint"><small>swatch = edit color</small><span id="dirty" class="dot" title="Unsaved changes"></span></span>
+        </div>
+        <div id="code-wrap" class="code-wrap">
+          <pre id="toml-highlight" class="code-highlight" aria-hidden="true"></pre>
+          <textarea id="editor" spellcheck="false" autocomplete="off" autocapitalize="off" wrap="off" placeholder="Loading theme…"></textarea>
+          <div id="toml-colors" class="toml-colors" role="group" aria-label="Theme colors"></div>
+        </div>
+      </section>
+
+      <div>
+        <section class="panel shell-panel" id="panel-shell" role="tabpanel" aria-labelledby="tab-shell">
+          <div class="panel-head"><span>Shell · current directory</span><small>Enter is disabled</small></div>
+          <div id="shell-surface" class="shell-surface">
+            <div class="term-gap"></div>
+            <div id="shell-nav">
+              <div id="shell-separator" class="term-line"></div>
+              <div id="shell-path" class="term-line"></div>
+              <div class="term-gap"></div>
+              <pre id="shell-tree" class="shell-tree"></pre>
+            </div>
+            <div class="prompt-row">
+              <span id="prompt-prefix" class="prompt-prefix"></span>
+              <div class="prompt-field">
+                <div id="prompt-highlight" class="prompt-highlight" aria-hidden="true"></div>
+                <input id="prompt-input" aria-label="Preview shell command" spellcheck="false" autocomplete="off" autocapitalize="off">
+              </div>
+            </div>
+          </div>
+          <div class="shell-foot">This is a live prompt preview. Commands are never executed here.</div>
+        </section>
+
+        <section class="panel" id="panel-editor" role="tabpanel" aria-labelledby="tab-editor" hidden>
+          <div class="panel-head"><span>Editor</span><small>preview.rs</small></div>
+          <div class="editor-mock"><div id="editor-preview"></div></div>
+        </section>
+
+        <section class="panel" id="panel-syntax" role="tabpanel" aria-labelledby="tab-syntax" hidden>
+          <div class="panel-head"><span>Syntax</span><small>token palette</small></div>
+          <div class="syntax-wrap">
+            <div id="syntax-code" class="syntax-code"></div>
+            <div id="syntax-palette" class="syntax-palette"></div>
+          </div>
+        </section>
+
+        <section class="panel help-panel" id="panel-help" role="tabpanel" aria-labelledby="tab-help" hidden>
+          <div class="panel-head"><span>Help</span><small>full help golden</small></div>
+          <pre id="help-output" class="help-output" aria-label="Full ntc help">Loading help…</pre>
+        </section>
+      </div>
+    </div>
+    <div id="status" class="status" role="status" aria-live="polite"></div>
+  </main>
+</div>
+
+<div id="drop-overlay" class="drop-overlay" hidden aria-hidden="true">
+  <div class="drop-card">
+    <div class="drop-icon">↓</div>
+    <strong>Drop theme file to import</strong>
+    <span>.ntc_theme or .toml</span>
+  </div>
+</div>
+
+<script>
+(() => {
+  "use strict";
+
+  const $ = (id) => document.getElementById(id);
+  const state = {
+    themes: [], current: "", selected: "", theme: null, path: "", exists: false,
+    context: null, promptSegments: [], toml: [], editor: [], syntax: [], help: [],
+    dirty: false, previewTimer: 0, promptTimer: 0, activeTab: "shell",
+    previewing: false, pendingPreview: false, saving: false, lastPrompt: ""
+  };
+  let dragDepth = 0;
+
+  const named = {
+    black: "#151515", red: "#e06c75", green: "#98c379", yellow: "#e5c07b",
+    blue: "#61afef", magenta: "#c678dd", cyan: "#56b6c2", white: "#dcdfe4",
+    bright_black: "#7f848e", bright_red: "#ff7d88", bright_green: "#b4e391",
+    bright_yellow: "#ffd68a", bright_blue: "#7cc7ff", bright_magenta: "#e39bff",
+    bright_cyan: "#7ee7f2", bright_white: "#ffffff"
+  };
+  const ansi16 = [
+    "#000000", "#cd0000", "#00cd00", "#cdcd00", "#0000ee", "#cd00cd", "#00cdcd", "#e5e5e5",
+    "#7f7f7f", "#ff0000", "#00ff00", "#ffff00", "#5c5cff", "#ff00ff", "#00ffff", "#ffffff"
+  ];
+
+  function ansi256(code) {
+    const n = Math.max(0, Math.min(255, Number(code) || 0));
+    if (n < 16) return ansi16[n];
+    if (n >= 232) {
+      const v = 8 + (n - 232) * 10;
+      return `rgb(${v}, ${v}, ${v})`;
+    }
+    const cube = n - 16;
+    const r = Math.floor(cube / 36);
+    const g = Math.floor((cube % 36) / 6);
+    const b = cube % 6;
+    const steps = [0, 95, 135, 175, 215, 255];
+    return `rgb(${steps[r]}, ${steps[g]}, ${steps[b]})`;
+  }
+
+  function cssColor(value) {
+    if (value == null) return "";
+    if (typeof value === "string") return named[value] || value;
+    if (typeof value === "object") {
+      if ("r" in value && "g" in value && "b" in value) {
+        return `rgb(${value.r}, ${value.g}, ${value.b})`;
+      }
+      if ("code" in value) return ansi256(value.code);
+    }
+    return "";
+  }
+
+  function rgbHex(r, g, b) {
+    const byte = (n) => Math.max(0, Math.min(255, Number(n) || 0)).toString(16).padStart(2, "0");
+    return "#" + byte(r) + byte(g) + byte(b);
+  }
+
+  function colorHex(value) {
+    if (value == null) return "";
+    if (typeof value === "object") {
+      if ("r" in value && "g" in value && "b" in value) {
+        return rgbHex(value.r, value.g, value.b);
+      }
+      if ("code" in value) return colorHex(ansi256(value.code));
+    }
+    let text = String(value).trim().toLowerCase();
+    if (named[text]) text = named[text];
+    if (/^#[0-9a-f]{3}$/.test(text)) {
+      return "#" + text.slice(1).split("").map((c) => c + c).join("");
+    }
+    if (/^#[0-9a-f]{6}$/.test(text)) return text;
+    const rgb = text.match(/^rgba?\(\s*(\d{1,3})\s*[, ]\s*(\d{1,3})\s*[, ]\s*(\d{1,3})/);
+    return rgb ? rgbHex(rgb[1], rgb[2], rgb[3]) : "";
+  }
+
+  function rawColorHex(raw) {
+    const text = String(raw || "").trim();
+    const quoted = text.match(/^(["'])(.*?)\1/);
+    if (quoted) return colorHex(quoted[2].trim());
+    const table = text.match(/^\{([\s\S]*)\}/);
+    if (table) {
+      const rgb = table[1].match(/\br\s*=\s*(\d{1,3})\s*,\s*g\s*=\s*(\d{1,3})\s*,\s*b\s*=\s*(\d{1,3})/i);
+      if (rgb) return rgbHex(rgb[1], rgb[2], rgb[3]);
+      const ansi = table[1].match(/\bcode\s*=\s*(\d{1,3})/i);
+      if (ansi) return colorHex(ansi256(ansi[1]));
+      return "";
+    }
+    return colorHex(text);
+  }
+
+  function colorFields(content) {
+    const fields = [];
+    let section = "";
+    String(content || "").split("\n").forEach((line, index) => {
+      const header = line.match(/^\s*\[([^\]]+)\]\s*(?:#.*)?$/);
+      if (header) {
+        section = header[1].trim().toLowerCase();
+        return;
+      }
+      // Any table assignment whose value parses as a color gets a swatch,
+      // not just the three built-in sections. Top-level metadata (name,
+      // author, description) is skipped.
+      if (!section) return;
+      const assignment = line.match(/^\s*([A-Za-z0-9_]+)\s*=\s*(.+)$/);
+      if (!assignment) return;
+      const hex = rawColorHex(assignment[2]);
+      if (hex) fields.push({ line: index, section, key: assignment[1], hex });
+    });
+    return fields;
+  }
+
+  function escapeHtml(text) {
+    return String(text).replace(/[&<>"']/g, (c) => ({
+      "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"
+    }[c]));
+  }
+
+  function styled(text, color, bold, italic) {
+    const style = `color:${color || "inherit"}${bold ? ";font-weight:700" : ""}${italic ? ";font-style:italic" : ""}`;
+    return `<span style="${style}">${escapeHtml(text)}</span>`;
+  }
+
+  function showStatus(message, kind) {
+    const el = $("status");
+    el.textContent = message || "";
+    el.className = "status" + (kind ? " " + kind : "");
+  }
+
+  function setDirty(value) {
+    state.dirty = value;
+    $("dirty").classList.toggle("on", value);
+  }
+
+  async function request(url, options) {
+    const opts = Object.assign({}, options || {});
+    opts.headers = Object.assign({ "Content-Type": "application/json", "Accept": "application/json" }, opts.headers || {});
+    const res = await fetch(url, opts);
+    let data;
+    try { data = await res.json(); } catch (_) { data = { error: res.statusText || ("HTTP " + res.status) }; }
+    if (!res.ok) throw new Error(data.error || ("HTTP " + res.status));
+    return data;
+  }
+
+  function shellColor(role) {
+    const shell = (state.theme && state.theme.shell) || {};
+    return cssColor(shell[role]);
+  }
+
+  function syntaxColor(kind) {
+    const syntax = (state.theme && state.theme.syntax) || {};
+    return cssColor(syntax[kind] || syntax.normal);
+  }
+
+  function editorColor(name) {
+    const editor = (state.theme && state.theme.editor) || {};
+    return cssColor(editor[name]);
+  }
+
+  function renderList() {
+    const box = $("theme-list");
+    box.innerHTML = "";
+    for (const name of state.themes) {
+      const button = document.createElement("button");
+      button.className = "theme-item" + (name === state.selected ? " active" : "");
+      button.innerHTML = `<span>${escapeHtml(name)}</span>${name === state.current ? "<em>active</em>" : ""}`;
+      button.addEventListener("click", () => {
+        if (state.dirty && !confirm("Discard unsaved changes?")) return;
+        loadTheme(name).catch((e) => showStatus(e.message, "error"));
+      });
+      box.appendChild(button);
+    }
+    const builtIn = state.selected === "default";
+    $("delete-btn").disabled = builtIn || !state.selected;
+    $("apply-btn").disabled = !state.selected;
+    $("update-btn").disabled = !state.selected || !state.exists;
+    $("save-btn").disabled = !$("editor").value.trim();
+    $("export-btn").disabled = !$("editor").value.trim();
+  }
+
+  function renderMeta() {
+    $("theme-title").textContent = state.theme ? state.theme.name : "Theme";
+    $("theme-path").textContent = state.path || "";
+    renderList();
+  }
+
+  function renderShell() {
+    const surface = $("shell-surface");
+    const shell = (state.theme && state.theme.shell) || {};
+    const editor = (state.theme && state.theme.editor) || {};
+    const base = editorColor("status_text") || shellColor("command_output") || "inherit";
+    surface.style.background = editorColor("editor_bg") || "#10131b";
+    surface.style.color = base;
+    surface.style.setProperty("--editor-caret", editorColor("cursor_bg") || base);
+
+    const ctx = state.context;
+    const nav = $("shell-nav");
+    $("prompt-prefix").textContent = ctx ? (ctx.prompt || "") : "";
+    if (ctx && ctx.show_nav) {
+      nav.hidden = false;
+      $("shell-separator").innerHTML = (ctx.separator || []).map((seg) =>
+        styled(seg.text, shellColor(seg.role), !!seg.bold)
+      ).join("");
+      $("shell-path").innerHTML = styled("Path: ", base) + styled(ctx.path || "", shellColor("prompt_path"));
+      $("shell-tree").innerHTML = (ctx.tree || []).map((line) =>
+        `<div>${styled(line.text, shellColor(line.role) || base)}</div>`
+      ).join("");
+    } else {
+      nav.hidden = true;
+      $("shell-separator").innerHTML = "";
+      $("shell-path").innerHTML = "";
+      $("shell-tree").innerHTML = "";
+    }
+
+    const segments = state.promptSegments || [];
+    $("prompt-highlight").innerHTML = segments.map((seg) =>
+      styled(seg.text, shellColor(seg.role) || base, !!seg.bold)
+    ).join("");
+  }
+
+  // Local TOML highlighter for the editor overlay. The visible text must not
+  // depend on the server preview: while a line is temporarily invalid the
+  // transparent textarea would otherwise stay blank.
+  function tomlSegments(line) {
+    const out = [];
+    const push = (text, kind) => { if (text) out.push({ text, kind: kind || "normal" }); };
+    const indent = line.match(/^\s*/)[0];
+    push(indent, "normal");
+    const rest = line.slice(indent.length);
+    if (!rest) return out;
+    if (rest.startsWith("#")) { push(rest, "comment"); return out; }
+    const header = rest.match(/^(\[\[?[^\]]*\]\]?)(\s*#.*)?$/);
+    if (header) {
+      push(header[1], "keyword");
+      if (header[2]) push(header[2], "comment");
+      return out;
+    }
+    const assign = rest.match(/^([A-Za-z0-9_.-]+)(\s*=\s*)([\s\S]*)$/);
+    if (assign) {
+      push(assign[1], "attribute");
+      push(assign[2], "operator");
+      pushTomlValue(assign[3], push);
+      return out;
+    }
+    push(rest, "normal");
+    return out;
+  }
+
+  function pushTomlValue(value, push) {
+    let plain = "";
+    const flush = () => {
+      if (!plain) return;
+      for (const part of plain.split(/(\btrue\b|\bfalse\b)/)) {
+        if (!part) continue;
+        push(part, part === "true" || part === "false" ? "constant" : "normal");
+      }
+      plain = "";
+    };
+    let i = 0;
+    while (i < value.length) {
+      const ch = value[i];
+      if (ch === "#") {
+        flush();
+        push(value.slice(i), "comment");
+        return;
+      }
+      if (ch === '"' || ch === "'") {
+        flush();
+        let j = i + 1;
+        while (j < value.length) {
+          if (ch === '"' && value[j] === "\\") { j += 2; continue; }
+          if (value[j] === ch) { j += 1; break; }
+          j += 1;
+        }
+        push(value.slice(i, Math.min(j, value.length)), "string");
+        i = Math.min(j, value.length);
+        continue;
+      }
+      if ("{}[],.".includes(ch)) {
+        flush();
+        push(ch, "punctuation");
+        i += 1;
+        continue;
+      }
+      if (/[0-9]/.test(ch) || ((ch === "+" || ch === "-") && /[0-9]/.test(value[i + 1] || ""))) {
+        const number = value.slice(i).match(/^[+-]?\d[\d_]*(?:\.\d[\d_]*)?(?:[eE][+-]?\d+)?/);
+        if (number) {
+          flush();
+          push(number[0], "number");
+          i += number[0].length;
+          continue;
+        }
+      }
+      plain += ch;
+      i += 1;
+    }
+    flush();
+  }
+
+  function renderToml() {
+    const syntax = (state.theme && state.theme.syntax) || {};
+    const normal = cssColor(syntax.normal) || "#dbe1ee";
+    const wrap = $("code-wrap");
+    const editor = $("editor");
+    const view = $("toml-highlight");
+    wrap.style.background = editorColor("editor_bg") || "#10131b";
+    wrap.style.setProperty("--editor-caret", editorColor("cursor_bg") || normal);
+    const lines = editor.value.split("\n");
+    if (lines.length > 1 && lines[lines.length - 1] === "") lines.pop();
+    const html = lines.map((line) =>
+      tomlSegments(line).map((seg) =>
+        styled(seg.text, cssColor(syntax[seg.kind] || syntax.normal) || normal, false, seg.kind === "comment")
+      ).join("")
+    ).join("\n");
+    view.innerHTML = html + "\n";
+    // A textarea reserves one more line box than a <pre> for the same text.
+    // Mirror it so both share a scroll range; otherwise the overlay clamps a
+    // line behind the input when scrolled to the bottom.
+    for (let i = 0; i < 2 && view.scrollHeight < editor.scrollHeight; i++) {
+      view.innerHTML += "\n";
+    }
+    renderColorRail();
+    // Re-flowing the mirror resets its scroll; keep the textarea's position.
+    syncEditorScroll();
+  }
+
+  function renderColorRail() {
+    const rail = $("toml-colors");
+    const view = $("toml-highlight");
+    const editor = $("editor");
+    if (!rail || !view || !editor) return;
+    const computed = getComputedStyle(view);
+    const lineHeight = parseFloat(computed.lineHeight) || 20.25;
+    const paddingTop = parseFloat(computed.paddingTop) || 14;
+    const fields = colorFields(editor.value);
+    rail.innerHTML = "";
+    for (const field of fields) {
+      const input = document.createElement("input");
+      input.type = "color";
+      input.className = "toml-swatch";
+      input.value = field.hex;
+      input.title = `${field.section}.${field.key}: ${field.hex}`;
+      input.setAttribute("aria-label", `Edit ${field.section}.${field.key} color, currently ${field.hex}`);
+      input.style.top = `${paddingTop + field.line * lineHeight + (lineHeight - 18) / 2}px`;
+      input.addEventListener("change", () => {
+        setColorAtLine(field.line, input.value, `${field.section}.${field.key}`);
+      });
+      rail.appendChild(input);
+    }
+    rail.hidden = fields.length === 0;
+    rail.style.transform = `translateY(${-editor.scrollTop}px)`;
+  }
+
+  function setColorAtLine(lineIndex, hex, label) {
+    const editor = $("editor");
+    const lines = editor.value.split("\n");
+    const line = lines[lineIndex] || "";
+    const next = line.replace(
+      /^(\s*[A-Za-z0-9_]+\s*=\s*)(?:"[^"]*"|'[^']*'|\{[^}]*\}|[^\s#]+)(\s*(?:#.*)?)$/,
+      (_, prefix, suffix) => prefix + `"${hex}"` + suffix
+    );
+    if (next === line) {
+      showStatus(`Could not update ${label}.`, "error");
+      return;
+    }
+    lines[lineIndex] = next;
+    editor.value = lines.join("\n");
+    setDirty(true);
+    renderColorRail();
+    syncEditorScroll();
+    schedulePreview(140);
+    showStatus(`Updated ${label} to ${hex}.`, "ok");
+  }
+
+  function editorLine(line, index, cursor) {
+    const syntax = (state.theme && state.theme.syntax) || {};
+    let html = (line.segments || []).map((seg) =>
+      styled(seg.text, cssColor(syntax[seg.kind] || syntax.normal) || "#dbe1ee", false, seg.kind === "comment")
+    ).join("");
+    if (cursor && index === 2) {
+      const bg = editorColor("cursor_bg") || "#fff";
+      const fg = editorColor("cursor_text") || "#000";
+      html += `<span class="block-cursor" style="background:${bg};color:${fg}">&nbsp;</span>`;
+    }
+    return html;
+  }
+
+  function renderEditor() {
+    const lines = state.editor || [];
+    const editor = (state.theme && state.theme.editor) || {};
+    const gutter = lines.map((_, i) => i + 1).join("\n");
+    const code = lines.map((line, i) => editorLine(line, i, true)).join("\n");
+    $("editor-preview").innerHTML = `
+      <div class="editor-frame">
+        <div class="editor-tabbar" style="background:${editorColor("hint_bg") || "#1c1a22"};color:${editorColor("hint_text") || "#8cdeff"}">
+          <span>src/theme.rs</span><span class="modified" style="color:${editorColor("status_modified") || "#e5c07b"}">● modified</span>
+        </div>
+        <div class="editor-body" style="background:${editorColor("editor_bg") || "#15131a"}">
+          <pre class="editor-gutter" style="background:${editorColor("gutter_bg") || "#18161e"};color:${editorColor("gutter_text") || "#645f76"}">${gutter}</pre>
+          <pre class="editor-code" style="color:${syntaxColor("normal") || "#fff"}">${code}</pre>
+        </div>
+        <div class="editor-status" style="background:${editorColor("status_bg") || "#8264d2"};color:${editorColor("status_text") || "#fff"}">
+          <span>NORMAL &nbsp; preview.rs</span><span>utf-8 &nbsp; ${lines.length}L</span>
+        </div>
+      </div>`;
+  }
+
+  function renderSyntax() {
+    const editor = (state.theme && state.theme.editor) || {};
+    const lines = state.syntax || [];
+    const gutter = lines.map((_, i) => i + 1).join("\n");
+    const code = lines.map((line, i) => editorLine(line, i, false)).join("\n");
+    $("syntax-code").innerHTML = `
+      <div class="syntax-code-body" style="background:${editorColor("editor_bg") || "#15131a"}">
+        <pre class="editor-gutter" style="background:${editorColor("gutter_bg") || "#18161e"};color:${cssColor(state.theme && state.theme.syntax && state.theme.syntax.line_number) || editorColor("gutter_text") || "#645f76"}">${gutter}</pre>
+        <pre class="editor-code" style="color:${syntaxColor("normal") || "#fff"}">${code}</pre>
+      </div>`;
+
+    const fields = [
+      ["keyword", "keyword", "let fn"],
+      ["string", "string", "\"text\""],
+      ["comment", "comment", "// note"],
+      ["number", "number", "42"],
+      ["type", "type", "Theme"],
+      ["builtin", "builtin", "println"],
+      ["function", "function", "paint()"],
+      ["operator", "operator", "+ ="],
+      ["punctuation", "punctuation", "{ } ( )"],
+      ["attribute", "attribute", "#[derive]"],
+      ["macro_token", "macro", "macro_rules!"],
+      ["regex", "regex", "r#\"^theme\"#"],
+      ["tag", "tag", "<tag>"],
+      ["constant", "constant", "true"],
+      ["normal", "normal", "plain"],
+      ["muted", "muted", "secondary"],
+      ["table_header", "table header", "HEADER"],
+      ["table_border", "table border", "┌──┐"],
+      ["line_number", "line number", "12"]
+    ];
+    $("syntax-palette").innerHTML = fields.map(([field, label, sample]) => {
+      const color = cssColor(state.theme && state.theme.syntax && state.theme.syntax[field]);
+      return `<div class="syntax-chip"><i style="background:${color || "transparent"}"></i><div><b>${escapeHtml(label)}</b><span>${escapeHtml(sample)}</span></div></div>`;
+    }).join("");
+  }
+
+  function renderHelp() {
+    const out = $("help-output");
+    const editor = (state.theme && state.theme.editor) || {};
+    const base = editorColor("status_text") || shellColor("command_output") || "inherit";
+    out.style.background = editorColor("editor_bg") || "#10131b";
+    out.style.color = base;
+    if (!state.help.length) {
+      out.textContent = "Loading help…";
+      return;
+    }
+    out.innerHTML = state.help.map((line) => {
+      const role = line.role || "normal";
+      return styled(line.text, shellColor(role) || base, role === "help_header");
+    }).join("\n");
+  }
+
+  async function loadHelp() {
+    try {
+      const data = await request("/api/help");
+      state.help = data.lines || [];
+      renderHelp();
+    } catch (e) {
+      $("help-output").textContent = "Could not load help: " + e.message;
+    }
+  }
+
+  function renderPanels() {
+    renderShell();
+    renderToml();
+    renderEditor();
+    renderSyntax();
+    renderHelp();
+  }
+
+  function setTab(name) {
+    state.activeTab = name;
+    for (const tab of document.querySelectorAll(".tab")) {
+      const active = tab.dataset.tab === name;
+      tab.setAttribute("aria-selected", active ? "true" : "false");
+    }
+    $("panel-shell").hidden = name !== "shell";
+    $("panel-editor").hidden = name !== "editor";
+    $("panel-syntax").hidden = name !== "syntax";
+    $("panel-help").hidden = name !== "help";
+  }
+
+  async function loadTheme(name) {
+    const data = await request("/api/theme?name=" + encodeURIComponent(name));
+    state.selected = data.name;
+    state.theme = data.theme;
+    state.path = data.path;
+    state.exists = !!data.exists;
+    state.lastPrompt = $("prompt-input").value;
+    $("editor").value = data.content || "";
+    setDirty(false);
+    renderMeta();
+    renderPanels();
+    await previewFromEditor(false);
+  }
+
+  async function loadThemes(selectName) {
+    const data = await request("/api/themes");
+    state.themes = data.themes || [];
+    state.current = data.current || "";
+    let wanted = selectName || state.selected || state.current;
+    if (!state.themes.includes(wanted)) wanted = state.current;
+    state.selected = wanted;
+    renderList();
+    await loadTheme(wanted);
+  }
+
+  async function previewFromEditor(showErrors) {
+    if (state.previewing) {
+      state.pendingPreview = true;
+      return;
+    }
+    const content = $("editor").value;
+    if (!content.trim()) return;
+    state.previewing = true;
+    try {
+      const data = await request("/api/preview", {
+        method: "POST",
+        body: JSON.stringify({ content, prompt: $("prompt-input").value })
+      });
+      state.theme = data.theme;
+      state.context = data.shell;
+      state.promptSegments = data.prompt || [];
+      state.toml = data.toml || [];
+      state.editor = data.editor || [];
+      state.syntax = data.syntax || [];
+      renderMeta();
+      renderPanels();
+    } catch (e) {
+      if (showErrors) showStatus("Preview: " + e.message, "error");
+    } finally {
+      state.previewing = false;
+      if (state.pendingPreview) {
+        state.pendingPreview = false;
+        schedulePreview(0);
+      }
+    }
+  }
+
+  function schedulePreview(ms) {
+    clearTimeout(state.previewTimer);
+    state.previewTimer = setTimeout(() => previewFromEditor(false), ms || 180);
+  }
+
+  async function save() {
+    if (state.saving || !$("editor").value.trim()) return;
+    state.saving = true;
+    showStatus("Validating and saving…");
+    try {
+      const data = await request("/api/save", {
+        method: "POST",
+        body: JSON.stringify({ content: $("editor").value })
+      });
+      setDirty(false);
+      await loadThemes(data.name);
+      let message = "Saved " + data.name + " to " + data.path;
+      if (data.added && data.added.length) {
+        const shown = data.added.slice(0, 4).join(", ");
+        const more = data.added.length > 4 ? `, +${data.added.length - 4} more` : "";
+        message += `\nAdded ${data.added.length} missing field${data.added.length === 1 ? "" : "s"}: ${shown}${more}`;
+      }
+      showStatus(message, "ok");
+    } catch (e) {
+      showStatus("Save failed: " + e.message, "error");
+    } finally {
+      state.saving = false;
+    }
+  }
+
+  async function updateTheme() {
+    if (!state.selected) return;
+    if (state.dirty && !confirm(
+      "Update rewrites the theme file on disk and discards unsaved editor changes. Continue?"
+    )) return;
+    try {
+      const data = await request("/api/update", {
+        method: "POST",
+        body: JSON.stringify({ name: state.selected })
+      });
+      setDirty(false);
+      await loadThemes(data.name);
+      const added = data.added || [];
+      const shown = added.slice(0, 4).join(", ");
+      const more = added.length > 4 ? `, +${added.length - 4} more` : "";
+      showStatus(added.length
+        ? `Updated ${data.name}: added ${added.length} missing field${added.length === 1 ? "" : "s"} (${shown}${more}).`
+        : `${data.name} already has every theme field.`, "ok");
+    } catch (e) {
+      showStatus("Update failed: " + e.message, "error");
+    }
+  }
+
+  async function apply() {
+    if (!state.selected) return;
+    try {
+      const data = await request("/api/apply", {
+        method: "POST",
+        body: JSON.stringify({ name: state.selected })
+      });
+      state.current = data.current;
+      renderList();
+      showStatus("Applied theme: " + data.current, "ok");
+    } catch (e) {
+      showStatus("Apply failed: " + e.message, "error");
+    }
+  }
+
+  async function importTheme(file) {
+    if (!file) return;
+    if (file.size > 2 * 1024 * 1024) {
+      showStatus("Import failed: theme files must be smaller than 2 MB.", "error");
+      return;
+    }
+    let content;
+    try {
+      content = await file.text();
+    } catch (e) {
+      showStatus("Import failed: " + e.message, "error");
+      return;
+    }
+    let data;
+    try {
+      data = await request("/api/parse", {
+        method: "POST",
+        body: JSON.stringify({ content })
+      });
+    } catch (e) {
+      showStatus("Import failed: " + e.message, "error");
+      return;
+    }
+    if (state.dirty && !confirm("Replace the editor with the imported theme? Unsaved changes will be lost.")) return;
+    if (data.theme.name !== state.selected && state.themes.includes(data.theme.name) &&
+        !confirm(`Theme "${data.theme.name}" already exists. Save will overwrite it. Continue?`)) return;
+
+    const matchesSelection = data.theme.name === state.selected;
+    state.theme = data.theme;
+    state.toml = [];
+    if (!matchesSelection) state.selected = "";
+    state.path = matchesSelection ? state.path : "Imported from " + file.name;
+    $("editor").value = content;
+    renderToml();
+    setDirty(true);
+    renderMeta();
+    renderColorRail();
+    syncEditorScroll();
+    schedulePreview(0);
+    showStatus(`Imported ${data.theme.name} from ${file.name}. Save to write it.`, "ok");
+  }
+
+  function resetDropOverlay() {
+    dragDepth = 0;
+    $("drop-overlay").hidden = true;
+  }
+
+  function isFileDrag(event) {
+    return Array.from((event.dataTransfer && event.dataTransfer.types) || []).includes("Files");
+  }
+
+  function droppedThemeFile(event) {
+    const files = Array.from((event.dataTransfer && event.dataTransfer.files) || []);
+    if (!files.length) return null;
+    const file = files[0];
+    const supported = /\.(ntc_theme|toml)$/i.test(file.name) ||
+      file.type === "text/plain" || file.type === "application/toml";
+    if (!supported) {
+      showStatus("Drop a .ntc_theme or .toml theme file.", "error");
+      return null;
+    }
+    return file;
+  }
+
+  function exportTheme() {
+    const content = $("editor").value;
+    if (!content.trim()) {
+      showStatus("There is no theme TOML to export.", "error");
+      return;
+    }
+    const name = (state.theme && state.theme.name) || state.selected || "theme";
+    const blob = new Blob([content], { type: "text/plain;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = name + ".ntc_theme";
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+    showStatus(`Exported ${name}.ntc_theme${state.dirty ? " with unsaved changes" : ""}.`, "ok");
+  }
+
+  async function create() {
+    const name = (prompt("New theme name (letters, numbers, _ and -):") || "").trim();
+    if (!name) return;
+    try {
+      const data = await request("/api/create", {
+        method: "POST",
+        body: JSON.stringify({ name })
+      });
+      await loadThemes(data.name);
+      showStatus("Created " + data.name + ". Edit it, then Save or Apply.", "ok");
+    } catch (e) {
+      showStatus("Create failed: " + e.message, "error");
+    }
+  }
+
+  async function remove() {
+    const deleted = state.selected;
+    if (!deleted || !confirm(`Delete theme "${deleted}"?`)) return;
+    try {
+      const data = await request("/api/delete", {
+        method: "POST",
+        body: JSON.stringify({ name: deleted })
+      });
+      state.current = data.current;
+      await loadThemes(data.current);
+      showStatus("Deleted " + deleted + ".", "ok");
+    } catch (e) {
+      showStatus("Delete failed: " + e.message, "error");
+    }
+  }
+
+  async function reloadFiles() {
+    if (state.dirty && !confirm("Reload from disk and discard unsaved changes?")) return;
+    try {
+      const data = await request("/api/reload", { method: "POST", body: "{}" });
+      state.current = data.current;
+      await loadThemes(state.selected);
+      showStatus("Reloaded themes from disk.", "ok");
+    } catch (e) {
+      showStatus("Reload failed: " + e.message, "error");
+    }
+  }
+
+  async function hotReload() {
+    if (document.hidden || state.saving) return;
+    try {
+      const listing = await request("/api/themes");
+      state.themes = listing.themes || [];
+      state.current = listing.current || "";
+      renderList();
+      if (!state.dirty && state.selected) {
+        const data = await request("/api/theme?name=" + encodeURIComponent(state.selected));
+        if (data.content !== $("editor").value) {
+          state.theme = data.theme;
+          state.path = data.path;
+          $("editor").value = data.content || "";
+          setDirty(false);
+          renderMeta();
+        }
+      }
+      await previewFromEditor(false);
+    } catch (_) {
+      // A live refresh must never interrupt editing.
+    }
+  }
+
+  function syncEditorScroll() {
+    const input = $("editor");
+    const view = $("toml-highlight");
+    view.scrollTop = input.scrollTop;
+    view.scrollLeft = input.scrollLeft;
+    $("toml-colors").style.transform = `translateY(${-input.scrollTop}px)`;
+  }
+
+  $("editor").addEventListener("input", () => {
+    setDirty(true);
+    renderToml();
+    syncEditorScroll();
+    schedulePreview(180);
+  });
+  $("editor").addEventListener("scroll", syncEditorScroll);
+  $("editor").addEventListener("keydown", (event) => {
+    if (event.key === "Tab" && !event.ctrlKey && !event.metaKey) {
+      event.preventDefault();
+      const start = $("editor").selectionStart;
+      const end = $("editor").selectionEnd;
+      const value = $("editor").value;
+      $("editor").value = value.slice(0, start) + "  " + value.slice(end);
+      $("editor").selectionStart = $("editor").selectionEnd = start + 2;
+      setDirty(true);
+      renderToml();
+      schedulePreview(180);
+    }
+  });
+
+  $("prompt-input").addEventListener("input", () => {
+    clearTimeout(state.promptTimer);
+    state.promptTimer = setTimeout(() => previewFromEditor(false), 90);
+  });
+  $("prompt-input").addEventListener("scroll", () => {
+    $("prompt-highlight").scrollLeft = $("prompt-input").scrollLeft;
+  });
+  $("prompt-input").addEventListener("keydown", (event) => {
+    if (event.key === "Enter") {
+      event.preventDefault();
+      showStatus("Shell preview only — commands are not executed here.", "");
+    }
+  });
+  $("shell-surface").addEventListener("click", (event) => {
+    if (event.target !== $("prompt-input")) $("prompt-input").focus();
+  });
+
+  for (const tab of document.querySelectorAll(".tab")) {
+    tab.addEventListener("click", () => setTab(tab.dataset.tab));
+  }
+
+  window.addEventListener("dragenter", (event) => {
+    if (!isFileDrag(event)) return;
+    event.preventDefault();
+    dragDepth += 1;
+    $("drop-overlay").hidden = false;
+  });
+  window.addEventListener("dragover", (event) => {
+    if (!isFileDrag(event)) return;
+    event.preventDefault();
+    event.dataTransfer.dropEffect = "copy";
+  });
+  window.addEventListener("dragleave", (event) => {
+    if ($("drop-overlay").hidden) return;
+    if (!isFileDrag(event) && dragDepth === 0) return;
+    dragDepth = Math.max(0, dragDepth - 1);
+    if (dragDepth === 0) $("drop-overlay").hidden = true;
+  });
+  window.addEventListener("drop", (event) => {
+    if (!isFileDrag(event)) return;
+    event.preventDefault();
+    resetDropOverlay();
+    const file = droppedThemeFile(event);
+    if (file) importTheme(file).catch((e) => showStatus("Import failed: " + e.message, "error"));
+  });
+  window.addEventListener("dragend", resetDropOverlay);
+
+  $("save-btn").addEventListener("click", save);
+  $("update-btn").addEventListener("click", updateTheme);
+  $("apply-btn").addEventListener("click", apply);
+  $("new-btn").addEventListener("click", create);
+  $("delete-btn").addEventListener("click", remove);
+  $("reload-btn").addEventListener("click", reloadFiles);
+  $("import-btn").addEventListener("click", () => $("import-file").click());
+  $("import-file").addEventListener("change", () => {
+    const file = $("import-file").files[0];
+    $("import-file").value = "";
+    importTheme(file);
+  });
+  $("export-btn").addEventListener("click", exportTheme);
+  document.addEventListener("keydown", (event) => {
+    if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "s") {
+      event.preventDefault();
+      save();
+    }
+  });
+  window.addEventListener("beforeunload", (event) => {
+    if (!state.dirty) return;
+    event.preventDefault();
+    event.returnValue = "";
+  });
+
+  setTab("shell");
+  loadHelp();
+  loadThemes().catch((e) => {
+    showStatus("Could not load themes: " + e.message, "error");
+    $("theme-title").textContent = "Theme";
+  });
+  setInterval(hotReload, 3000);
+})();
+</script>
+</body>
+</html>

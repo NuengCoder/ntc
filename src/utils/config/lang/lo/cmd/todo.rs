@@ -176,4 +176,17 @@ pub fn fill(m: &mut HashMap<String, String>) {
     m.insert("cmd.todo.already_done".into(), "ງານ #{} ສຳເລັດແລ້ວ".into());
 
     m.insert("cmd.todo.already_open".into(), "ງານ #{} ຍັງເປີດຢູ່".into());
+
+    m.insert(
+        "cmd.todo.help_format".into(),
+        "  config todo format <fmt>  ຕັ້ງຮູບແບບໄຟລ໌ todo (txt|md|json|toml|yaml|html)".into(),
+    );
+    m.insert(
+        "cmd.todo.parse_failed".into(),
+        "ແຍກໄຟລ໌ todo {} ບໍ່ສຳເລັດ.".into(),
+    );
+    m.insert(
+        "cmd.todo.unknown_format".into(),
+        "ຮູບແບບ todo '{}' ບໍ່ຮູ້ຈັກ (ໃຊ້ txt|md|json|toml|yaml|html)".into(),
+    );
 }

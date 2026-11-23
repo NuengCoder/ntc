@@ -7,6 +7,7 @@
 //   a | b        pipe a's stdout into b's stdin
 //   a && b       run b only if a succeeded
 //   a || b       run b only if a failed
+//   a ; b        run b even if a failed
 //   cmd > file   write stdout to file (overwrite)
 //   cmd >> file  append stdout to file
 //   cmd < file   read stdin from file
@@ -30,7 +31,7 @@ use std::sync::Arc;
 
 use super::stdin;
 
-const OPERATORS: &[&str] = &["&&", "||", "|", "<", "<<", "<<<", ">", ">>"];
+const OPERATORS: &[&str] = &["&&", "||", ";", "|", "<", "<<", "<<<", ">", ">>"];
 
 fn is_operator(tok: &str) -> bool {
     OPERATORS.contains(&tok)
@@ -44,14 +45,14 @@ fn operator_kind(tok: &str) -> Option<&'static str> {
 /// Command separators used by alias expansion (redirects excluded, so a
 /// filename after `>` is never mistaken for a command).
 fn is_command_sep(tok: &str) -> bool {
-    matches!(tok, "&&" | "||" | "|")
+    matches!(tok, "&&" | "||" | ";" | "|")
 }
 
 // ── failure status side-channel ────────────────────────────────────────────
-// Used by `&&` / `||` to decide whether the next segment runs. Set by the
-// system-command runner (non-zero exit) and when a command returns a hard
-// error. Conservative: built-ins that print an error and return Ok are not
-// detected (documented limitation).
+// Used by `&&` / `||` and the CLI exit status to decide whether a command
+// succeeded. Set by the system-command runner (non-zero exit), when a
+// command returns a hard error, and by `print_error` — so built-ins that
+// report failure by printing are covered too. Cleared before each command.
 
 static FAILED: AtomicBool = AtomicBool::new(false);
 
@@ -306,6 +307,8 @@ pub(crate) struct Stage {
 enum LogicOp {
     And,
     Or,
+    /// `;` — run the next segment whatever the previous one did.
+    Seq,
 }
 
 type Segment = (Option<LogicOp>, Vec<Stage>);
@@ -315,7 +318,7 @@ pub(crate) fn has_operators(input: &str) -> bool {
     tokenize(input).iter().any(|t| is_operator(t))
 }
 
-/// Split a line on command separators (`&&`, `||`, `|`) for alias expansion.
+/// Split a line on command separators (`&&`, `||`, `;`, `|`) for alias expansion.
 /// Returns `(separator, segment_text)` pairs; the first separator is `None`.
 pub(crate) fn split_commands(input: &str) -> Vec<(Option<String>, String)> {
     let toks = tokenize(input);
@@ -343,6 +346,7 @@ fn parse(input: &str) -> Vec<Segment> {
         match t.as_str() {
             "&&" => groups.push((Some(LogicOp::And), Vec::new())),
             "||" => groups.push((Some(LogicOp::Or), Vec::new())),
+            ";" => groups.push((Some(LogicOp::Seq), Vec::new())),
             _ => groups.last_mut().unwrap().1.push(t),
         }
     }
@@ -468,7 +472,7 @@ pub(crate) fn has_heredoc(input: &str) -> bool {
 
 // ── execution ───────────────────────────────────────────────────────────────
 
-/// Run a full command line, handling `&&` / `||` sequencing and pipelines.
+/// Run a full command line, handling `&&` / `||` / `;` sequencing and pipelines.
 /// Returns `(exit_shell, success)`.
 pub(crate) fn run(
     input: &str,
@@ -480,6 +484,7 @@ pub(crate) fn run(
 
     for (op, stages) in segments {
         if let Some(op) = op {
+            // `;` never looks at the previous status; `&&` / `||` do.
             match op {
                 LogicOp::And if !prev_ok => continue,
                 LogicOp::Or if prev_ok => continue,
@@ -533,6 +538,17 @@ fn run_segment(
         }
 
         let capture = !is_last || stage.output.is_some();
+        // A script can refuse to be piped or redirected (`set-pipe = fail`),
+        // and that has to be decided before it runs, not after.
+        if capture {
+            if let Some(reason) =
+                crate::shell::commands::builtin::scr::pipe_refusal(&stage.cmd, nav.current_path())
+            {
+                crate::output::print_error(&reason);
+                mark_failed();
+                return Ok((false, false));
+            }
+        }
         reset_failed();
 
         let exit_cell = Cell::new(false);
@@ -648,6 +664,34 @@ mod tests {
         assert!(has_operators("gs main | say"));
         assert!(has_operators("a && b"));
         assert!(has_operators("a || b"));
+    }
+
+    #[test]
+    fn semicolon_is_an_operator_only_when_spaced() {
+        assert!(has_operators("a ; b"));
+        assert!(has_operators("a ;"));
+        assert!(has_operators("; b"));
+        assert!(!has_operators("a;b"));
+        assert!(!has_operators("a; b"));
+        assert!(!has_operators("a ;b"));
+        assert!(!has_operators(r#"say "a ; b""#));
+    }
+
+    #[test]
+    fn parse_semicolon_runs_after_failure() {
+        set_heredoc_bodies(vec![]);
+        let segs = parse("a ; b");
+        assert_eq!(segs.len(), 2);
+        assert!(matches!(segs[1].0.as_ref(), Some(LogicOp::Seq)));
+        assert_eq!(segs[1].1[0].cmd, "b");
+    }
+
+    #[test]
+    fn split_commands_separates_semicolons() {
+        let parts = split_commands("a ; b");
+        let seps: Vec<_> = parts.iter().map(|(s, _)| s.clone()).collect();
+        assert_eq!(seps, vec![None, Some(";".into())]);
+        assert_eq!(parts[1].1, "b");
     }
 
     #[test]
@@ -784,6 +828,8 @@ mod tests {
         assert_eq!(active_operator("say <<< hi"), Some(("<<<", " hi")));
         assert_eq!(active_operator("a && b"), Some(("&&", " b")));
         assert_eq!(active_operator("a || b"), Some(("||", " b")));
+        assert_eq!(active_operator("a ; b"), Some((";", " b")));
+        assert_eq!(active_operator("a;b"), None);
         // The last operator wins.
         assert_eq!(
             active_operator("gs main > out.txt | sort"),

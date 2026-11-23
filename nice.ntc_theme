@@ -18,6 +18,10 @@ regex = "bright_red"
 tag = "bright_cyan"
 constant = "cyan"
 normal = "bright_white"
+muted = "bright_black"
+table_header = "cyan"
+table_border = "cyan"
+line_number = "yellow"
 
 [shell]
 prompt_bracket = "bright_cyan"
@@ -28,10 +32,10 @@ success = "green"
 error = "red"
 warning = "yellow"
 info = "cyan"
-tree_dir = "bright_magenta"
-tree_file = "yellow"
+tree_dir = { r = 230, g = 172, b = 238 }
+tree_file = { r = 166, g = 165, b = 171 }
 tree_ignored = "bright_black"
-tree_size = "yellow"
+tree_size = { r = 132, g = 132, b = 142 }
 command_output = "yellow"
 separator = "cyan"
 help_header = "cyan"
@@ -40,6 +44,28 @@ help_example = "green"
 teleport_name = "bright_blue"
 alias_name = "blue"
 alias_command = "bright_black"
+ntc_command = "yellow"
+txtf_file = "bright_green"
+ral_name = "bright_magenta"
+ral_command = "yellow"
+ntc_sub_command = "bright_cyan"
+sub_sub_command = "bright_blue"
+flag1 = "yellow"
+flag2 = "bright_yellow"
+tp_name = "bright_blue"
+tp_path = "cyan"
+ral_ls_alias = "cyan"
+tp_ls_tp_name = "cyan"
+muted = "bright_black"
+table_header = "cyan"
+table_border = "cyan"
+line_number = "yellow"
+git_branch = "bright_cyan"
+git_added = "green"
+git_modified = "yellow"
+git_deleted = "red"
+git_untracked = "bright_black"
+git_conflict = "bright_red"
 
 [shell.tree_branch]
 r = 30
@@ -54,14 +80,14 @@ cursor_text = "black"
 sidebar_selected = "white"
 
 [editor.editor_bg]
-r = 21
-g = 19
-b = 26
+r = 48
+g = 46
+b = 53
 
 [editor.gutter_bg]
-r = 24
-g = 22
-b = 30
+r = 38
+g = 36
+b = 44
 
 [editor.status_bg]
 r = 130
@@ -162,3 +188,13 @@ b = 120
 r = 185
 g = 198
 b = 212
+
+[editor.indent_guide]
+r = 45
+g = 41
+b = 56
+
+[editor.text_field_bg]
+r = 66
+g = 64
+b = 71

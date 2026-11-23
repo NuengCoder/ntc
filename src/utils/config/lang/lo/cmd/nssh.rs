@@ -350,4 +350,9 @@ pub fn fill(m: &mut HashMap<String, String>) {
         "cmd.nssh.auth_failed".into(),
         "SSH ການຍืนຢືນຕົວຕົນລົ້ມເຫຼວສຳລັບ {}@{}.".into(),
     );
+
+    m.insert(
+        "cmd.nssh.pass_env_not_in_vault".into(),
+        "ບໍ່ມີ pass-env '{}' ໃນຕູ້ເກັບ deadlock - ກຳລັງລອງຈາກຕົວແປສະພາບແວດລ້ອມ".into(),
+    );
 }

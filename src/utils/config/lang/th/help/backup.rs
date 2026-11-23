@@ -22,6 +22,26 @@ pub fn fill(m: &mut HashMap<String, String>) {
     );
 
     m.insert(
+        "help.backup.example1".into(),
+        "backup create ## สร้างข้อมูลสำรองใหม่".into(),
+    );
+
+    m.insert(
+        "help.backup.example2".into(),
+        "backup list ## แสดงข้อมูลสำรองทั้งหมด".into(),
+    );
+
+    m.insert(
+        "help.backup.example3".into(),
+        "backup restore 1 ## คืนค่าข้อมูลสำรอง #1".into(),
+    );
+
+    m.insert(
+        "help.backup.example4".into(),
+        "backup diff 1 ## เปรียบเทียบกับข้อมูลสำรอง #1".into(),
+    );
+
+    m.insert(
         "help.backup.list".into(),
         "backup list ## แสดงข้อมูลสำรองทั้งหมด".into(),
     );
@@ -61,25 +81,5 @@ pub fn fill(m: &mut HashMap<String, String>) {
     m.insert(
         "help.backup.undo_force".into(),
         "backup undo --force ## ล้างประวัติการเลิกทำ (ไม่ถาม)".into(),
-    );
-
-    m.insert(
-        "help.backup.example1".into(),
-        "backup create ## สร้างข้อมูลสำรองใหม่".into(),
-    );
-
-    m.insert(
-        "help.backup.example2".into(),
-        "backup list ## แสดงข้อมูลสำรองทั้งหมด".into(),
-    );
-
-    m.insert(
-        "help.backup.example3".into(),
-        "backup restore 1 ## คืนค่าข้อมูลสำรอง #1".into(),
-    );
-
-    m.insert(
-        "help.backup.example4".into(),
-        "backup diff 1 ## เปรียบเทียบกับข้อมูลสำรอง #1".into(),
     );
 }

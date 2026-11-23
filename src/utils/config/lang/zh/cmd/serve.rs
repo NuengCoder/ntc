@@ -241,6 +241,21 @@ pub fn fill(m: &mut HashMap<String, String>) {
     );
 
     m.insert(
+        "cmd.serve.services_row_git".into(),
+        "  git           Git 图形界面：状态、diff、暂存、提交、分支、标签、stash、push/pull".into(),
+    );
+
+    m.insert(
+        "cmd.serve.services_row_arc".into(),
+        "  arc           压缩包图形界面：创建、查看与解压".into(),
+    );
+
+    m.insert(
+        "cmd.serve.services_row_theme".into(),
+        "  theme         主题图形界面：编辑、预览、保存与应用主题".into(),
+    );
+
+    m.insert(
         "cmd.serve.services_row_config".into(),
         "  config        查看/设置各服务默认值（端口、绑定）".into(),
     );
@@ -321,5 +336,360 @@ pub fn fill(m: &mut HashMap<String, String>) {
     m.insert(
         "cmd.serve.example_chess_port".into(),
         "  serve chess --port 9000  在 9000 上运行象棋".into(),
+    );
+
+    m.insert(
+        "cmd.serve.help_online".into(),
+        "  --online              启用在线大厅和房间（访客、快速匹配、教练房）".into(),
+    );
+
+    m.insert(
+        "cmd.serve.example_chess_online".into(),
+        "  serve chess --online -b 0.0.0.0 --share  局域网在线象棋并显示二维码".into(),
+    );
+
+    m.insert(
+        "cmd.serve.git_serving".into(),
+        "Git 服务器运行于 {}（{}）".into(),
+    );
+
+    m.insert("cmd.serve.git_title".into(), "Git（浏览器界面）".into());
+
+    m.insert(
+        "cmd.serve.git_usage".into(),
+        "serve git [目录] [--port 8000] [--bind 地址]".into(),
+    );
+
+    m.insert(
+        "cmd.serve.git_help_port".into(),
+        "  --port, -p <端口>    监听端口（默认：{}）".into(),
+    );
+
+    m.insert(
+        "cmd.serve.git_help_bind".into(),
+        "  --bind, -b <地址>    绑定地址（默认：{}）".into(),
+    );
+
+    m.insert(
+        "cmd.serve.git_example".into(),
+        "  serve git --port 9000  在 9000 上托管当前仓库".into(),
+    );
+
+    m.insert("cmd.serve.git_no_repo".into(), "不是 Git 仓库：{}".into());
+
+    m.insert(
+        "cmd.serve.git_no_git".into(),
+        "未安装 git 或不在 PATH 中".into(),
+    );
+
+    m.insert(
+        "cmd.serve.git_local_warning".into(),
+        "已绑定到回环地址：局域网设备无法访问（请使用 --bind 0.0.0.0）。".into(),
+    );
+
+    m.insert(
+        "cmd.serve.arc_serving".into(),
+        "压缩包服务器运行于 {}（{}）".into(),
+    );
+
+    m.insert("cmd.serve.arc_title".into(), "压缩包（浏览器界面）".into());
+
+    m.insert(
+        "cmd.serve.arc_usage".into(),
+        "serve arc [目录] [--port 8000] [--bind 地址]".into(),
+    );
+
+    m.insert(
+        "cmd.serve.arc_help_port".into(),
+        "  --port, -p <端口>    监听端口（默认：{}）".into(),
+    );
+
+    m.insert(
+        "cmd.serve.arc_help_bind".into(),
+        "  --bind, -b <地址>    绑定地址（默认：{}）".into(),
+    );
+
+    m.insert(
+        "cmd.serve.arc_example".into(),
+        "  serve arc --port 9000  在 9000 上托管当前目录".into(),
+    );
+
+    m.insert("cmd.serve.arc_no_dir".into(), "目录 '{}' 不存在".into());
+
+    m.insert(
+        "cmd.serve.arc_local_warning".into(),
+        "已绑定到回环地址：局域网设备无法访问（请使用 --bind 0.0.0.0）。".into(),
+    );
+
+    m.insert("cmd.serve.theme_title".into(), "主题（浏览器界面）".into());
+
+    m.insert(
+        "cmd.serve.theme_usage".into(),
+        "serve theme [--port 8000] [--bind 地址]".into(),
+    );
+
+    m.insert(
+        "cmd.serve.theme_help_port".into(),
+        "  --port, -p <端口>    监听端口（默认：{}）".into(),
+    );
+
+    m.insert(
+        "cmd.serve.theme_help_bind".into(),
+        "  --bind, -b <地址>    绑定地址（默认：{}）".into(),
+    );
+
+    m.insert(
+        "cmd.serve.theme_example".into(),
+        "  serve theme --port 9000  在 9000 上编辑主题".into(),
+    );
+
+    m.insert(
+        "cmd.serve.theme_serving".into(),
+        "主题服务器运行于 {}（{}）".into(),
+    );
+
+    m.insert(
+        "cmd.serve.theme_local_warning".into(),
+        "已绑定到回环地址：局域网设备无法访问（请使用 --bind 0.0.0.0）。".into(),
+    );
+
+    m.insert(
+        "cmd.serve.services_row_ndb".into(),
+        "  ndb           浏览 SQLite：选择文件夹中的数据库、查看结构，可选 --write".into(),
+    );
+
+    m.insert("cmd.serve.ndb_title".into(), "数据库浏览器".into());
+
+    m.insert(
+        "cmd.serve.ndb_usage".into(),
+        "serve ndb [--port 8000] [--bind 地址] [--auth user:pass] [--write]".into(),
+    );
+
+    m.insert(
+        "cmd.serve.ndb_help_port".into(),
+        "  --port, -p <端口>    监听端口（默认：{}）".into(),
+    );
+
+    m.insert(
+        "cmd.serve.ndb_help_bind".into(),
+        "  --bind, -b <地址>    绑定地址（默认：{}）".into(),
+    );
+
+    m.insert(
+        "cmd.serve.ndb_help_write".into(),
+        "  --write              允许 INSERT/UPDATE/DELETE/REPLACE；首次写入前会生成 <名称>.bak.<时间戳> 副本".into(),
+    );
+
+    m.insert(
+        "cmd.serve.ndb_serving".into(),
+        "正在 {} 上提供 {} 中的数据库".into(),
+    );
+
+    m.insert(
+        "cmd.serve.ndb_write_on".into(),
+        "已启用写入：每次仅一条 INSERT、UPDATE、DELETE 或 REPLACE；数据库首次写入前会在旁边生成 <名称>.bak.<时间戳> 备份。".into(),
+    );
+
+    m.insert(
+        "cmd.serve.ndb_readonly".into(),
+        "只读：仅允许 SELECT、PRAGMA、EXPLAIN、WITH、VALUES 和 TABLE；使用 --write 开启行级写入。"
+            .into(),
+    );
+
+    m.insert(
+        "cmd.serve.ndb_local_warning".into(),
+        "仅回环：局域网设备无法访问（使用 --bind 0.0.0.0 并配合 --auth 共享）。".into(),
+    );
+
+    m.insert(
+        "cmd.serve.ndb_no_db".into(),
+        "在 {} 中未找到可读取的 SQLite 数据库 - 请将 .db、.sqlite 或 .sqlite3 文件复制到那里"
+            .into(),
+    );
+
+    m.insert(
+        "cmd.serve.ndb_flags_only".into(),
+        "'{}' 不是选项：`serve ndb` 只接受参数 - 请在页面中选择数据库".into(),
+    );
+
+    m.insert(
+        "cmd.serve.ndb_requires_auth".into(),
+        "拒绝在 {} 上无 --auth <user:pass> 暴露数据库".into(),
+    );
+
+    m.insert(
+        "cmd.serve.ndb_example".into(),
+        "  serve ndb --port 9000  在 9000 端口列出此文件夹的数据库".into(),
+    );
+
+    m.insert(
+        "cmd.serve.services_row_fake".into(),
+        "  fake          假数据界面：选择类型或分组，预览生成的行".into(),
+    );
+
+    m.insert(
+        "cmd.serve.services_row_config".into(),
+        "  config        配置界面：在浏览器中编辑全部设置和服务默认值".into(),
+    );
+
+    m.insert(
+        "cmd.serve.services_example_fake".into(),
+        "  serve fake --port 9000".into(),
+    );
+
+    m.insert("cmd.serve.fake_title".into(), "假数据（浏览器界面）".into());
+
+    m.insert(
+        "cmd.serve.fake_usage".into(),
+        "serve fake [--port 8000] [--bind 地址]".into(),
+    );
+
+    m.insert(
+        "cmd.serve.fake_help_port".into(),
+        "  --port, -p <端口>     监听端口（默认：{}）".into(),
+    );
+
+    m.insert(
+        "cmd.serve.fake_help_bind".into(),
+        "  --bind, -b <地址>     绑定地址（默认：{}）".into(),
+    );
+
+    m.insert(
+        "cmd.serve.fake_example".into(),
+        "  serve fake --port 9000  在 9000 端口打开假数据界面".into(),
+    );
+
+    m.insert(
+        "cmd.serve.fake_serving".into(),
+        "假数据服务器运行于 {}".into(),
+    );
+
+    m.insert(
+        "cmd.serve.fake_local_warning".into(),
+        "已绑定到回环地址：局域网设备无法访问（请使用 --bind 0.0.0.0）。".into(),
+    );
+
+    m.insert(
+        "cmd.serve.config_title".into(),
+        "NTC 配置（浏览器界面）".into(),
+    );
+
+    m.insert(
+        "cmd.serve.config_usage".into(),
+        "serve config [--port 8000] [--bind 地址]".into(),
+    );
+
+    m.insert(
+        "cmd.serve.config_help_port".into(),
+        "  --port, -p <端口>     监听端口（默认：{}）".into(),
+    );
+
+    m.insert(
+        "cmd.serve.config_help_bind".into(),
+        "  --bind, -b <地址>     绑定地址（默认：{}）".into(),
+    );
+
+    m.insert(
+        "cmd.serve.config_example".into(),
+        "  serve config --port 9000  在 9000 端口打开配置界面".into(),
+    );
+
+    m.insert(
+        "cmd.serve.config_serving".into(),
+        "配置服务器运行于 {}".into(),
+    );
+
+    m.insert(
+        "cmd.serve.config_local_warning".into(),
+        "已绑定到回环地址：局域网设备无法访问（请使用 --bind 0.0.0.0）。".into(),
+    );
+
+    m.insert(
+        "cmd.serve.services_row_backup".into(),
+        "  backup        备份界面：为此文件夹创建、对比、恢复、撤销和清空备份".into(),
+    );
+
+    m.insert(
+        "cmd.serve.services_example_backup".into(),
+        "  serve backup --port 9000".into(),
+    );
+
+    m.insert("cmd.serve.backup_title".into(), "备份（浏览器界面）".into());
+
+    m.insert(
+        "cmd.serve.backup_usage".into(),
+        "serve backup [路径] [--port 8000] [--bind 地址]".into(),
+    );
+
+    m.insert(
+        "cmd.serve.backup_help_port".into(),
+        "  --port, -p <端口>     监听端口（默认：{}）".into(),
+    );
+
+    m.insert(
+        "cmd.serve.backup_help_bind".into(),
+        "  --bind, -b <地址>     绑定地址（默认：{}）".into(),
+    );
+
+    m.insert(
+        "cmd.serve.backup_example".into(),
+        "  serve backup --port 9000  在 9000 端口管理此文件夹的备份".into(),
+    );
+
+    m.insert(
+        "cmd.serve.backup_serving".into(),
+        "备份服务器运行于 {} ({})".into(),
+    );
+
+    m.insert(
+        "cmd.serve.backup_local_warning".into(),
+        "已绑定到回环地址：局域网设备无法访问（请使用 --bind 0.0.0.0）。".into(),
+    );
+
+    m.insert("cmd.serve.backup_no_dir".into(), "目录未找到：{}".into());
+
+    m.insert(
+        "cmd.serve.services_row_mdview".into(),
+        "  mdview        带实时预览的 Markdown 编辑器（直接写入 .md 文件）".into(),
+    );
+
+    m.insert(
+        "cmd.serve.mdview_title".into(),
+        "Markdown 编辑器（浏览器界面）".into(),
+    );
+
+    m.insert(
+        "cmd.serve.mdview_usage".into(),
+        "serve mdview [目录] [--port 8000] [--bind 地址]".into(),
+    );
+
+    m.insert(
+        "cmd.serve.mdview_help_port".into(),
+        "  --port, -p <端口>     监听端口（默认：{}）".into(),
+    );
+
+    m.insert(
+        "cmd.serve.mdview_help_bind".into(),
+        "  --bind, -b <地址>     绑定地址（默认：{}）".into(),
+    );
+
+    m.insert(
+        "cmd.serve.mdview_example".into(),
+        "  serve mdview docs --port 9000  在 9000 端口编辑 docs/ 下的 markdown".into(),
+    );
+
+    m.insert(
+        "cmd.serve.mdview_serving".into(),
+        "Markdown 编辑器：{} 监听 {}".into(),
+    );
+
+    m.insert(
+        "cmd.serve.mdview_no_dir".into(),
+        "不是文件夹：{}".into(),
+    );
+
+    m.insert(
+        "cmd.serve.mdview_local_warning".into(),
+        "已绑定回环地址：只有本机可以编辑这些文件（如需共享请用 --bind 0.0.0.0）".into(),
     );
 }

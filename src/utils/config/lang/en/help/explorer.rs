@@ -2,6 +2,16 @@ use std::collections::HashMap;
 
 pub fn fill(m: &mut HashMap<String, String>) {
     m.insert(
+        "help.explorer.example1".into(),
+        "explorer ## Launch file explorer in current dir".into(),
+    );
+
+    m.insert(
+        "help.explorer.example2".into(),
+        "nfe ~/projects ## Open explorer in ~/projects".into(),
+    );
+
+    m.insert(
         "help.explorer.hint1".into(),
         "h=help, b=parent dir, f=find (hits show their paths)".into(),
     );
@@ -32,14 +42,4 @@ pub fn fill(m: &mut HashMap<String, String>) {
     );
 
     m.insert("help.explorer.title".into(), "FILE EXPLORER (NFE):".into());
-
-    m.insert(
-        "help.explorer.example1".into(),
-        "explorer ## Launch file explorer in current dir".into(),
-    );
-
-    m.insert(
-        "help.explorer.example2".into(),
-        "nfe ~/projects ## Open explorer in ~/projects".into(),
-    );
 }

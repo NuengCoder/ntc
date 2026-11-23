@@ -21,6 +21,11 @@ const HIGHLIGHT_KEYS = [
   ['chess.highlight.danger', 'Hanging danger'],
 ] as const
 
+const COACH_KEYS = [
+  ['chess.coach.auto', 'Coach highlight (auto-coach)'],
+  ['chess.highlight.badge', 'Move quality badge'],
+] as const
+
 export default function SettingsScreen({ onBack }: { onBack(): void }) {
   const [vals, setVals] = useState<Record<string, string>>({})
   const [tc, setTc] = useState('10+0')
@@ -75,6 +80,29 @@ export default function SettingsScreen({ onBack }: { onBack(): void }) {
         <p className="hint">
           Pinned covers gray king pins and aqua relative pins. Hanging danger covers orange
           attacked squares. Checks and last-move highlights always stay visible.
+        </p>
+
+        <h3>Coach &amp; badges</h3>
+        {COACH_KEYS.map(([k, label]) => {
+          const fallback = k === 'chess.highlight.badge' ? 'on' : 'off'
+          const on = (vals[k] ?? fallback) === 'on'
+          return (
+            <label key={k} className="toggle-row">
+              <span>{label}</span>
+              <input
+                type="checkbox"
+                className="toggle"
+                checked={on}
+                onChange={(e) => change(k, e.target.checked ? 'on' : 'off')}
+              />
+              <span className="slider-val">{on ? 'On' : 'Off'}</span>
+            </label>
+          )
+        })}
+        <p className="hint">
+          Coach highlight auto-analyses your last move in player-vs-player and player-vs-AI
+          games and paints the suggested move. The badge labels the last move (Book, Forced,
+          Best, Brilliant, Mistake…) in its top-right corner.
         </p>
 
         <h3>Sounds</h3>

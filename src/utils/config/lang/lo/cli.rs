@@ -796,16 +796,6 @@ pub fn fill(m: &mut HashMap<String, String>) {
         "ລາຍຊື່ຟັງຊັນ command-line ທັງໝົດ".into(),
     );
 
-    m.insert(
-        "cli.run.help_lsp".into(),
-        "ເລີ່ມ ntc-math LSP server ຜ່ານ stdio".into(),
-    );
-
-    m.insert(
-        "cli.run.help_lsp_log".into(),
-        "path ເພື່ອຂຽນ LSP debug log".into(),
-    );
-
     m.insert("cli.run.help_math".into(), "ຄິດໄລ່ນິພົດຄະນິດສາດ".into());
 
     m.insert(

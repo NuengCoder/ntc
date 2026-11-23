@@ -3,7 +3,7 @@ use std::collections::HashMap;
 pub fn fill(m: &mut HashMap<String, String>) {
     m.insert(
         "cmd.config.deinit.confirm".into(),
-        "Delete {}? (y/N): ".into(),
+        "Delete {}? [y|n]> ".into(),
     );
 
     m.insert(
@@ -37,7 +37,13 @@ pub fn fill(m: &mut HashMap<String, String>) {
 
     m.insert(
         "cmd.config.deinit.usage".into(),
-        "Usage: deinit [--all | --ran | --local | --opencode] [--force]".into(),
+        "Usage: deinit [ran | local | opencode]".into(),
+    );
+
+    m.insert(
+        "cmd.config.deinit.flags_removed".into(),
+        "'deinit all' and '--force' were removed - a removal cannot be rolled back. Name 'ran', 'local' or 'opencode'; every removal asks for confirmation."
+            .into(),
     );
 
     m.insert(
@@ -91,12 +97,87 @@ pub fn fill(m: &mut HashMap<String, String>) {
 
     m.insert(
         "cmd.config.init.usage".into(),
-        "Usage: init [--all | --ran | --local | --opencode] [--force]".into(),
+        "Usage: init [ran | local | opencode | project] [-f|--force]".into(),
     );
 
     m.insert(
         "cmd.config.init.opencode_ready".into(),
         "OpenCode scaffold ready: {}".into(),
+    );
+
+    m.insert(
+        "cmd.config.init.project.usage".into(),
+        "Usage: init project [name] [--lang <python,rust,go,js,ts,java,c,c++,other>] [--license <MIT,APACHE>] [--no <docker,git,ai,doc,ntc,oc,lc>]".into(),
+    );
+
+    m.insert(
+        "cmd.config.init.project.creating".into(),
+        "Creating project directory {}".into(),
+    );
+
+    m.insert(
+        "cmd.config.init.project.invalid_name".into(),
+        "Invalid project name: {}".into(),
+    );
+
+    m.insert(
+        "cmd.config.init.project.done".into(),
+        "Project ready: {} ({} new files)".into(),
+    );
+
+    m.insert(
+        "cmd.config.init.project.git_created".into(),
+        "Initialized an empty Git repository.".into(),
+    );
+
+    m.insert(
+        "cmd.config.init.project.git_exists".into(),
+        "Git repository already initialized.".into(),
+    );
+
+    m.insert(
+        "cmd.config.init.project.git_missing".into(),
+        "Git is not available. Run `ntpkg install git` to install it.".into(),
+    );
+
+    m.insert(
+        "cmd.config.init.project.venv_prompt".into(),
+        "Create a Python virtual environment (.venv)?".into(),
+    );
+
+    m.insert(
+        "cmd.config.init.project.venv_created".into(),
+        "Virtual environment created: {}".into(),
+    );
+
+    m.insert(
+        "cmd.config.init.project.venv_failed".into(),
+        "Could not create the virtual environment; continuing without it.".into(),
+    );
+
+    m.insert(
+        "cmd.config.init.project.lang_ready".into(),
+        "Language scaffold ready: {}".into(),
+    );
+
+    m.insert(
+        "cmd.config.init.project.lang_unknown".into(),
+        "Unknown language. Use python, rust, go, js, ts, java, c, c++, or other.".into(),
+    );
+
+    m.insert(
+        "cmd.config.init.project.license_unknown".into(),
+        "Unknown license. Use MIT or APACHE.".into(),
+    );
+
+    m.insert(
+        "cmd.config.init.project.no_unknown".into(),
+        "Unknown --no category: {}. Use docker, git, ai, doc, ntc, oc, or lc.".into(),
+    );
+
+    m.insert(
+        "cmd.config.init.project.tool_missing".into(),
+        "{} is not installed. Install it with: {}".into(),
     );
 
     m.insert("cmd.config.lang.active".into(), "{} (active)".into());
@@ -497,7 +578,7 @@ pub fn fill(m: &mut HashMap<String, String>) {
 
     m.insert("cmd.config.serve.status".into(), "  {}: {}:{}".into());
 
-    m.insert("cmd.config.serve.usage".into(), "Usage: serve config [files|http-server|chess] [--port-default <port>] [--bind-default <addr>]  (alias: config serve …)".into());
+    m.insert("cmd.config.serve.usage".into(), "Usage: serve config [files|http-server|chess|git|arc|theme|ndb] [--port-default <port>] [--bind-default <addr>]  (alias: config serve …)".into());
 
     m.insert(
         "cmd.config.serve.example_show".into(),
@@ -521,7 +602,7 @@ pub fn fill(m: &mut HashMap<String, String>) {
 
     m.insert(
         "cmd.config.serve.invalid_service".into(),
-        "Unknown service '{}' (use files|http-server|chess)".into(),
+        "Unknown service '{}' (use files|http-server|chess|git|arc|theme|ndb|fake|config)".into(),
     );
 
     m.insert(
@@ -540,6 +621,8 @@ pub fn fill(m: &mut HashMap<String, String>) {
     );
 
     m.insert("cmd.config.local.init_all_removed".into(), "'local init --all' was removed - a local config can no longer copy the global settings. Use 'local init' for the template.".into());
+
+    m.insert("cmd.config.init.all_removed".into(), "'init all' was removed - run 'init ran', 'init local' or 'init opencode' separately (or combine them).".into());
 
     m.insert("cmd.config.local.precedence_hint".into(), "Local entries take priority; global entries keep working and the global config is never changed.".into());
 
@@ -574,12 +657,12 @@ pub fn fill(m: &mut HashMap<String, String>) {
 
     m.insert(
         "cmd.config.env.empty".into(),
-        "No NTC environment variables set. Use: config env NAME value".into(),
+        "No NTC environment variables set. Use: config env NAME value (or NAME=value)".into(),
     );
 
     m.insert(
         "cmd.config.env.list_hint".into(),
-        "Tip: config env NAME value [-g|-l|-os|-osg] | config env NAME | config rmenv NAME [-all]"
+        "Tip: config env NAME value|NAME=value [-g|-l|-os|-osg] | config env NAME | config rmenv NAME [-all]"
             .into(),
     );
 

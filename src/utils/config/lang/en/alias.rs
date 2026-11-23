@@ -86,6 +86,46 @@ pub fn fill(m: &mut HashMap<String, String>) {
         " ral import <file> Import aliases from a .ntc.ral file".into(),
     );
 
+    m.insert(
+        "alias.ral.install_cmd".into(),
+        " ral install Install run aliases from the ntc GitHub catalog".into(),
+    );
+
+    m.insert(
+        "alias.ral.install_downloading".into(),
+        "Downloading {}...".into(),
+    );
+
+    m.insert(
+        "alias.ral.install_failed".into(),
+        "Install failed: {}".into(),
+    );
+
+    m.insert(
+        "alias.ral.install_fetching".into(),
+        "Fetching .ntc.ral files from GitHub...".into(),
+    );
+
+    m.insert(
+        "alias.ral.install_none".into(),
+        "No installable .ntc.ral files found.".into(),
+    );
+
+    m.insert(
+        "alias.ral.install_prompt".into(),
+        "Select a file (0 to cancel):".into(),
+    );
+
+    m.insert(
+        "alias.ral.install_title".into(),
+        "Install run aliases".into(),
+    );
+
+    m.insert(
+        "alias.ral.installed".into(),
+        "Installed aliases from {}".into(),
+    );
+
     m.insert("alias.ral.info_cmd".into(), " ral info <name> [--edit] Show alias details (--edit copies the edit command to clipboard)".into());
 
     m.insert("alias.ral.info_command".into(), "Command".into());

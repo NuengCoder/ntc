@@ -190,7 +190,7 @@ pub fn fill(m: &mut HashMap<String, String>) {
 
     m.insert(
         "idle.count".into(),
-        "ລອງ: view task.txt | count ntc   (ນັບຄຳທີ່ຕົງໃນຂໍ້ຄວາມທີ່ສົ່ງຕໍ່) · trim ລຶບ".into(),
+        "ລອງ: view task.txt | count -l   (ນັບຈຳນວນແຖວຂອງຂໍ້ຄວາມທີ່ສົ່ງຕໍ່) · trim ລຶບ".into(),
     );
 
     m.insert(
@@ -370,7 +370,7 @@ pub fn fill(m: &mut HashMap<String, String>) {
 
     m.insert(
         "idle.say".into(),
-        "ລອງ: say hello --loop 3   (ພິມຂໍ້ຄວາມ; print ຄືກັນ)".into(),
+        "ລອງ: say hello --loop 3   (ພິມຂໍ້ຄວາມ; nprintf ໃຊ້ຈັດຮູບແບບ)".into(),
     );
 
     m.insert(

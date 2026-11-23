@@ -1,0 +1,309 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ntc backup</title>
+<style>
+  :root {
+    --bg: #0d1117; --panel: #161b22; --line: #30363d;
+    --text: #e6edf3; --muted: #8b949e; --accent: #58a6ff;
+    --ok: #3fb950; --warn: #d29922; --bad: #f85149;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--text);
+    font: 14px/1.5 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  }
+  header { padding: 22px 30px; border-bottom: 1px solid var(--line); }
+  header h1 { margin: 0; font-size: 22px; }
+  header p { margin: 4px 0 0; color: var(--muted); }
+  main { max-width: 1100px; margin: 0 auto; padding: 20px 20px 64px; }
+  section { margin-top: 24px; }
+  h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .08em; color: var(--accent); margin: 0 0 10px; }
+  .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
+  .toolbar { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+  button {
+    background: var(--accent); color: #04121f; border: 0; border-radius: 6px;
+    padding: 8px 13px; font: inherit; font-weight: 600; cursor: pointer;
+  }
+  button.secondary { background: #21262d; color: var(--text); border: 1px solid var(--line); }
+  button.danger { background: #3d1d1d; color: #ffb3ad; border: 1px solid #6b2b2b; }
+  button:disabled { opacity: .4; cursor: not-allowed; }
+  table { border-collapse: collapse; width: 100%; }
+  th, td { text-align: left; padding: 9px 12px; border-bottom: 1px solid var(--line); }
+  th { color: var(--accent); font-size: 12px; text-transform: uppercase; letter-spacing: .06em; }
+  tr:last-child td { border-bottom: 0; }
+  .num { color: var(--muted); width: 54px; }
+  .actions { display: flex; gap: 6px; flex-wrap: wrap; }
+  .actions button { padding: 5px 9px; font-size: 12px; }
+  #status { color: var(--muted); }
+  #status.ok { color: var(--ok); }
+  #status.bad { color: var(--bad); }
+  .empty { padding: 20px; color: var(--muted); }
+  .diff-counts { display: flex; gap: 18px; flex-wrap: wrap; padding: 12px 16px; border-bottom: 1px solid var(--line); }
+  .diff-counts span b { font-size: 16px; }
+  .diff-lists { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; padding: 14px 16px; }
+  .diff-lists h3 { margin: 0 0 6px; font-size: 12px; text-transform: uppercase; letter-spacing: .06em; }
+  .diff-lists ul { margin: 0; padding-left: 18px; max-height: 260px; overflow: auto; color: var(--muted); }
+  .diff-lists li { word-break: break-all; }
+  .hint { color: var(--muted); font-size: 12px; }
+  @media (max-width: 760px) {
+    .diff-lists { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+<header>
+  <h1>ntc backup</h1>
+  <p id="root">Loading...</p>
+  <p class="hint" id="backup-dir"></p>
+</header>
+<main>
+  <section>
+    <h2>Actions</h2>
+    <div class="panel" style="padding:14px">
+      <div class="toolbar">
+        <button id="create">Create backup</button>
+        <button class="secondary" id="undo" disabled>Undo last restore</button>
+        <button class="danger" id="recreate">Recreate</button>
+        <button class="danger" id="clear">Clear all backups</button>
+        <span style="flex:1"></span>
+        <span id="status"></span>
+      </div>
+      <p class="hint" style="margin:10px 0 0">
+        Restore and undo are reversible through the undo snapshot. Clear deletes every backup for this folder.
+      </p>
+    </div>
+  </section>
+
+  <section>
+    <h2>Backups</h2>
+    <div class="panel" id="backups"><div class="empty">Loading...</div></div>
+  </section>
+
+  <section>
+    <h2>Diff</h2>
+    <div class="panel" id="diff"><div class="empty">Select a backup and press Diff.</div></div>
+  </section>
+</main>
+<script>
+"use strict";
+
+const statusEl = document.getElementById("status");
+const backupsBox = document.getElementById("backups");
+const diffBox = document.getElementById("diff");
+
+function setStatus(text, kind) {
+  statusEl.textContent = text;
+  statusEl.className = kind || "";
+}
+
+async function api(path, body) {
+  const options = body === undefined
+    ? { method: "GET" }
+    : { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) };
+  const res = await fetch(path, options);
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || ("HTTP " + res.status));
+  return data;
+}
+
+function render(state) {
+  document.getElementById("root").textContent = "Project: " + state.root;
+  document.getElementById("backup-dir").textContent = "Backups: " + state.backup_dir;
+  document.getElementById("undo").disabled = !state.undo_available;
+  renderBackups(state.backups || []);
+  if (state.message) setStatus(state.message, "ok");
+}
+
+function renderBackups(backups) {
+  backupsBox.replaceChildren();
+  if (!backups.length) {
+    const empty = document.createElement("div");
+    empty.className = "empty";
+    empty.textContent = "No backups for this folder yet. Press Create backup.";
+    backupsBox.appendChild(empty);
+    return;
+  }
+  const table = document.createElement("table");
+  const head = document.createElement("thead");
+  head.innerHTML = "<tr><th>#</th><th>Date</th><th>Size</th><th>Files</th><th>Actions</th></tr>";
+  table.appendChild(head);
+  const body = document.createElement("tbody");
+  backups.forEach((b) => {
+    const tr = document.createElement("tr");
+    const num = document.createElement("td");
+    num.className = "num";
+    num.textContent = "#" + b.number;
+    const date = document.createElement("td");
+    date.textContent = b.date;
+    const size = document.createElement("td");
+    size.textContent = b.size;
+    const files = document.createElement("td");
+    files.textContent = String(b.files);
+    const actions = document.createElement("td");
+    actions.className = "actions";
+
+    actions.appendChild(actionButton("Diff", "secondary", () => showDiff(b.number)));
+    actions.appendChild(actionButton("Restore", "", () => restore(b, false)));
+    actions.appendChild(actionButton("Deleted only", "secondary", () => restore(b, true)));
+
+    tr.append(num, date, size, files, actions);
+    body.appendChild(tr);
+  });
+  table.appendChild(body);
+  backupsBox.appendChild(table);
+}
+
+function actionButton(label, kind, handler) {
+  const button = document.createElement("button");
+  button.textContent = label;
+  if (kind) button.className = kind;
+  button.addEventListener("click", handler);
+  return button;
+}
+
+async function refresh() {
+  try {
+    render(await api("/api/state"));
+  } catch (e) {
+    setStatus(e.message, "bad");
+  }
+}
+
+async function create() {
+  setStatus("Creating backup...");
+  try {
+    render(await api("/api/create", {}));
+  } catch (e) {
+    setStatus(e.message, "bad");
+  }
+}
+
+async function restore(backup, deletedOnly) {
+  const what = deletedOnly
+    ? "Restore only the files deleted since backup #" + backup.number + "?"
+    : "Restore backup #" + backup.number + " (" + backup.date + ")?\n\nFiles changed since then will be overwritten, and files newer than the backup will be removed. An undo snapshot is saved first.";
+  if (!window.confirm(what)) return;
+  setStatus("Restoring...");
+  try {
+    render(await api("/api/restore", {
+      number: backup.number,
+      deleted_only: deletedOnly,
+      confirm: true,
+    }));
+    diffBox.replaceChildren(empty("Select a backup and press Diff."));
+  } catch (e) {
+    setStatus(e.message, "bad");
+  }
+}
+
+async function undo() {
+  if (!window.confirm("Undo the last restore and put the previous files back?")) return;
+  setStatus("Undoing...");
+  try {
+    render(await api("/api/undo", { confirm: true }));
+  } catch (e) {
+    setStatus(e.message, "bad");
+  }
+}
+
+async function clearAll() {
+  if (!window.confirm("Delete ALL backups for this folder? This cannot be undone.")) return;
+  setStatus("Clearing...");
+  try {
+    render(await api("/api/clear", { confirm: true }));
+    diffBox.replaceChildren(empty("Select a backup and press Diff."));
+  } catch (e) {
+    setStatus(e.message, "bad");
+  }
+}
+
+async function recreate() {
+  if (!window.confirm("Clear every backup and undo snapshot, then create a fresh backup?")) return;
+  setStatus("Recreating...");
+  try {
+    render(await api("/api/recreate", { confirm: true }));
+  } catch (e) {
+    setStatus(e.message, "bad");
+  }
+}
+
+async function showDiff(number) {
+  diffBox.replaceChildren(empty("Comparing..."));
+  try {
+    renderDiff(await api("/api/diff?number=" + encodeURIComponent(number)));
+  } catch (e) {
+    diffBox.replaceChildren(empty(e.message));
+  }
+}
+
+function empty(text) {
+  const div = document.createElement("div");
+  div.className = "empty";
+  div.textContent = text;
+  return div;
+}
+
+function renderDiff(diff) {
+  diffBox.replaceChildren();
+  const counts = document.createElement("div");
+  counts.className = "diff-counts";
+  [["Modified", diff.counts.modified], ["New", diff.counts.new],
+   ["Deleted", diff.counts.deleted], ["Unchanged", diff.counts.unchanged]]
+    .forEach(([label, value]) => {
+      const span = document.createElement("span");
+      const b = document.createElement("b");
+      b.textContent = String(value);
+      span.append(b, " " + label.toLowerCase());
+      counts.appendChild(span);
+    });
+  diffBox.appendChild(counts);
+
+  const lists = document.createElement("div");
+  lists.className = "diff-lists";
+  lists.appendChild(diffList("Modified", diff.modified));
+  lists.appendChild(diffList("New", diff.new));
+  lists.appendChild(diffList("Deleted", diff.deleted));
+  diffBox.appendChild(lists);
+
+  if (diff.truncated) {
+    const hint = document.createElement("p");
+    hint.className = "hint";
+    hint.style.padding = "0 16px 14px";
+    hint.textContent = "Lists are capped; the counts above are complete.";
+    diffBox.appendChild(hint);
+  }
+}
+
+function diffList(title, paths) {
+  const box = document.createElement("div");
+  const h = document.createElement("h3");
+  h.textContent = title + " (" + paths.length + ")";
+  box.appendChild(h);
+  if (!paths.length) {
+    const p = document.createElement("p");
+    p.className = "hint";
+    p.textContent = "None";
+    box.appendChild(p);
+    return box;
+  }
+  const ul = document.createElement("ul");
+  paths.forEach((path) => {
+    const li = document.createElement("li");
+    li.textContent = path;
+    ul.appendChild(li);
+  });
+  box.appendChild(ul);
+  return box;
+}
+
+document.getElementById("create").addEventListener("click", create);
+document.getElementById("undo").addEventListener("click", undo);
+document.getElementById("clear").addEventListener("click", clearAll);
+document.getElementById("recreate").addEventListener("click", recreate);
+refresh();
+</script>
+</body>
+</html>

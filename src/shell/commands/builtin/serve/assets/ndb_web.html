@@ -1,0 +1,667 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>NTC Database - serve ndb</title>
+<style>
+  :root {
+    --bg: #0f1115;
+    --panel: #171a21;
+    --panel-2: #1d212a;
+    --line: #2a2f3a;
+    --text: #e6e9ef;
+    --muted: #8b93a3;
+    --accent: #5aa9ff;
+    --accent-2: #2f7ed8;
+    --ok: #57d38c;
+    --warn: #ffb454;
+    --err: #ff6b6b;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font: 14px/1.45 ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+    background: var(--bg);
+    color: var(--text);
+  }
+  header {
+    padding: 12px 20px;
+    border-bottom: 1px solid var(--line);
+    background: var(--panel);
+    position: sticky;
+    top: 0;
+    z-index: 3;
+  }
+  h1 { margin: 0 0 6px; font-size: 16px; letter-spacing: .04em; }
+  h1 span { color: var(--accent); }
+  h2 { margin: 0 0 10px; font-size: 13px; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; }
+  .sub { color: var(--muted); font-size: 12px; }
+  .badge {
+    display: inline-block;
+    margin-left: 8px;
+    padding: 1px 7px;
+    border: 1px solid var(--accent-2);
+    border-radius: 999px;
+    color: var(--accent);
+    font-size: 11px;
+    letter-spacing: .05em;
+  }
+  .badge.writable { border-color: var(--warn); color: var(--warn); }
+  main { padding: 16px 20px 80px; }
+  #picker { max-width: 1100px; margin: 0 auto; }
+  #picker .toolbar { margin: 0 0 12px; }
+  .cards {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+    gap: 10px;
+  }
+  .file-card {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    align-items: flex-start;
+    text-align: left;
+    padding: 12px;
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+  }
+  .file-card:hover:not(:disabled) { border-color: var(--accent-2); }
+  .fname { font-weight: 600; color: var(--accent); }
+  .fmeta { color: var(--muted); font-size: 12px; }
+  .layout {
+    display: grid;
+    grid-template-columns: 250px minmax(0, 1fr);
+    gap: 16px;
+    align-items: start;
+  }
+  @media (max-width: 860px) { .layout { grid-template-columns: 1fr; } }
+  aside, section.panel {
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 12px;
+  }
+  aside { position: sticky; top: 92px; }
+  #tables { list-style: none; margin: 0; padding: 0; max-height: 62vh; overflow: auto; }
+  #tables li { margin: 0 0 2px; }
+  .table-item {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 8px;
+    background: transparent;
+    color: var(--text);
+    border: 1px solid transparent;
+    border-radius: 6px;
+    cursor: pointer;
+    text-align: left;
+    font: inherit;
+  }
+  .table-item:hover { background: var(--panel-2); border-color: var(--line); }
+  .table-item.active { background: var(--panel-2); border-color: var(--accent-2); }
+  .table-item .tname { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .table-item .tcount { color: var(--muted); font-size: 11px; white-space: nowrap; }
+  section.panel { margin-bottom: 16px; }
+  .toolbar { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 8px; }
+  .spacer { flex: 1; }
+  button {
+    padding: 5px 10px;
+    border-radius: 6px;
+    border: 1px solid var(--line);
+    background: var(--panel-2);
+    color: var(--text);
+    cursor: pointer;
+    font: inherit;
+  }
+  button:hover:not(:disabled) { border-color: var(--accent-2); }
+  button:disabled { opacity: .4; cursor: default; }
+  button.primary { border-color: var(--accent-2); color: var(--accent); }
+  button.danger { border-color: var(--err); color: var(--err); }
+  .grid-wrap { overflow: auto; max-height: 46vh; border: 1px solid var(--line); border-radius: 8px; }
+  table { border-collapse: collapse; width: 100%; font: 12.5px/1.4 ui-monospace, SFMono-Regular, Consolas, monospace; }
+  th, td { padding: 5px 9px; border-bottom: 1px solid var(--line); text-align: left; white-space: nowrap; }
+  th { position: sticky; top: 0; background: var(--panel-2); color: var(--muted); font-weight: 600; z-index: 1; }
+  tr:last-child td { border-bottom: 0; }
+  td.null { color: var(--muted); font-style: italic; }
+  pre {
+    margin: 0 0 10px;
+    padding: 10px;
+    background: var(--panel-2);
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    overflow: auto;
+    max-height: 24vh;
+    font: 12.5px/1.45 ui-monospace, SFMono-Regular, Consolas, monospace;
+    color: #cfe3ff;
+  }
+  ul.plain { margin: 0; padding-left: 18px; }
+  ul.plain li { margin: 2px 0; font-family: ui-monospace, SFMono-Regular, Consolas, monospace; font-size: 12.5px; }
+  details { margin-top: 8px; }
+  summary { cursor: pointer; color: var(--muted); padding: 3px 0; }
+  textarea {
+    width: 100%;
+    min-height: 90px;
+    padding: 10px;
+    background: var(--panel-2);
+    color: var(--text);
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    font: 13px/1.45 ui-monospace, SFMono-Regular, Consolas, monospace;
+    resize: vertical;
+  }
+  .hint { color: var(--muted); font-size: 12px; }
+  .hidden { display: none; }
+  #error {
+    position: fixed;
+    left: 20px;
+    bottom: 20px;
+    max-width: calc(100% - 40px);
+    padding: 9px 12px;
+    border-radius: 8px;
+    background: #2a1520;
+    border: 1px solid var(--err);
+    color: #ffd6d6;
+    z-index: 10;
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>NTC Database <span>/ serve ndb</span><span class="badge" id="mode-badge">read-only</span></h1>
+  <div class="sub"><strong id="dbname">Databases</strong> <span id="dbpath"></span></div>
+  <div class="sub" id="stats">loading...</div>
+</header>
+
+<div id="error" class="hidden"></div>
+
+<main>
+  <section id="picker">
+    <div class="toolbar">
+      <h2 style="margin:0">Databases in <span id="picker-dir">-</span></h2>
+      <span class="spacer"></span>
+      <button id="refresh">Refresh</button>
+    </div>
+    <div class="cards" id="file-list"></div>
+    <p class="hint hidden" id="picker-empty">
+      No SQLite databases in this folder. Only .db, .sqlite and .sqlite3 files are
+      listed; copy one in and press Refresh.
+    </p>
+  </section>
+
+  <div class="layout hidden" id="db-view">
+    <aside>
+      <h2>Tables</h2>
+      <ul id="tables"></ul>
+    </aside>
+
+    <div>
+      <div class="toolbar">
+        <button id="change-db">Change database</button>
+        <span class="spacer"></span>
+        <span class="hint" id="db-file"></span>
+      </div>
+
+      <section class="panel hidden" id="schema-panel">
+        <h2>Schema: <span id="schema-title"></span></h2>
+        <pre id="create-sql"></pre>
+        <div class="grid-wrap" style="max-height:26vh">
+          <table id="columns-table"></table>
+        </div>
+        <details>
+          <summary>Indexes</summary>
+          <ul class="plain" id="indexes"></ul>
+        </details>
+        <details>
+          <summary>Foreign keys</summary>
+          <ul class="plain" id="fks"></ul>
+        </details>
+        <details>
+          <summary>Triggers</summary>
+          <ul class="plain" id="triggers"></ul>
+        </details>
+      </section>
+
+      <section class="panel" id="rows-panel">
+        <h2>Rows</h2>
+        <div class="toolbar">
+          <button id="prev" disabled>Prev</button>
+          <span class="hint" id="page-label">-</span>
+          <button id="next" disabled>Next</button>
+          <span class="spacer"></span>
+          <button id="export-csv">Export CSV</button>
+          <button id="export-json">Export JSON</button>
+        </div>
+        <div class="grid-wrap">
+          <table id="rows"></table>
+        </div>
+        <p class="hint hidden" id="truncated">More rows are available - use Next.</p>
+      </section>
+
+      <section class="panel" id="sql-panel">
+        <h2>SQL console (read-only)</h2>
+        <textarea id="sql" spellcheck="false" placeholder="SELECT * FROM users LIMIT 20"></textarea>
+        <div class="toolbar" style="margin-top:8px">
+          <button class="primary" id="run">Run</button>
+          <span class="hint" id="sql-status">Ctrl+Enter runs the query</span>
+        </div>
+        <div class="grid-wrap">
+          <table id="sql-rows"></table>
+        </div>
+      </section>
+
+      <section class="panel hidden" id="write-panel">
+        <h2>Write console (INSERT / UPDATE / DELETE / REPLACE)</h2>
+        <textarea id="write-sql" spellcheck="false" placeholder="UPDATE users SET name = 'x' WHERE id = 1"></textarea>
+        <div class="toolbar" style="margin-top:8px">
+          <button class="danger" id="write-run">Review and run</button>
+          <span class="hint" id="write-status">One statement; a backup is made before the first write.</span>
+        </div>
+      </section>
+    </div>
+  </div>
+</main>
+
+<script>
+(function () {
+  "use strict";
+
+  var state = {
+    writable: false,
+    dir: "",
+    db: null,
+    tables: [],
+    table: null,
+    offset: 0,
+    limit: 50,
+    truncated: false
+  };
+
+  function $(id) { return document.getElementById(id); }
+
+  function showError(message) {
+    var box = $("error");
+    box.textContent = message;
+    box.classList.remove("hidden");
+    setTimeout(function () { box.classList.add("hidden"); }, 6000);
+  }
+
+  function fmtSize(n) {
+    if (n < 1024) return n + " B";
+    if (n < 1024 * 1024) return (n / 1024).toFixed(1) + " KB";
+    if (n < 1024 * 1024 * 1024) return (n / (1024 * 1024)).toFixed(1) + " MB";
+    return (n / (1024 * 1024 * 1024)).toFixed(1) + " GB";
+  }
+
+  function fmtTime(seconds) {
+    if (!seconds) return "unknown date";
+    return new Date(seconds * 1000).toLocaleString();
+  }
+
+  function safeName(name) {
+    var out = "";
+    for (var i = 0; i < name.length; i++) {
+      var c = name.charAt(i);
+      out += /[A-Za-z0-9_-]/.test(c) ? c : "_";
+    }
+    return out || "table";
+  }
+
+  // The browser attaches Basic credentials to same-origin requests after its
+  // own prompt, so there is nothing to cache here. On 401 just reload so the
+  // browser prompts again.
+  function api(path, options) {
+    options = options || {};
+    var headers = {};
+    if (options.body) headers["Content-Type"] = "application/json";
+    return fetch(path, {
+      method: options.method || "GET",
+      headers: headers,
+      body: options.body
+    }).then(function (res) {
+      if (res.status === 401) {
+        location.reload();
+        throw new Error("unauthorized");
+      }
+      return res.json().catch(function () { return { error: "invalid response" }; })
+        .then(function (data) {
+          if (!res.ok) throw new Error(data.error || ("HTTP " + res.status));
+          return data;
+        });
+    });
+  }
+
+  function withDb(path, params) {
+    var q = params || {};
+    q.db = state.db;
+    var out = [];
+    Object.keys(q).forEach(function (k) {
+      out.push(encodeURIComponent(k) + "=" + encodeURIComponent(q[k]));
+    });
+    return path + "?" + out.join("&");
+  }
+
+  function renderMode(writable) {
+    var badge = $("mode-badge");
+    badge.textContent = writable ? "writable" : "read-only";
+    badge.className = "badge" + (writable ? " writable" : "");
+    $("write-panel").classList.toggle("hidden", !writable);
+  }
+
+  function renderFiles(files) {
+    var list = $("file-list");
+    list.textContent = "";
+    $("picker-empty").classList.toggle("hidden", files.length > 0);
+    files.forEach(function (f) {
+      var card = document.createElement("button");
+      card.type = "button";
+      card.className = "file-card";
+      var name = document.createElement("span");
+      name.className = "fname";
+      name.textContent = f.name;
+      var meta = document.createElement("span");
+      meta.className = "fmeta";
+      meta.textContent = fmtSize(f.size) + " - " + f.tables + " tables - " + fmtTime(f.modified);
+      card.appendChild(name);
+      card.appendChild(meta);
+      card.addEventListener("click", function () { openDatabase(f.name); });
+      list.appendChild(card);
+    });
+  }
+
+  function renderInfo(info) {
+    $("dbname").textContent = info.file;
+    $("dbpath").textContent = info.path;
+    $("db-file").textContent = info.file;
+    $("stats").textContent = [
+      info.tables + " tables",
+      info.views + " views",
+      info.indexes + " indexes",
+      info.triggers + " triggers",
+      fmtSize(info.size),
+      "SQLite " + info.sqlite_version
+    ].join(" - ");
+  }
+
+  function renderTables() {
+    var list = $("tables");
+    list.textContent = "";
+    state.tables.forEach(function (t) {
+      var li = document.createElement("li");
+      var button = document.createElement("button");
+      button.type = "button";
+      button.className = "table-item" + (t.name === state.table ? " active" : "");
+      var name = document.createElement("span");
+      name.className = "tname";
+      name.textContent = t.name;
+      var count = document.createElement("span");
+      count.className = "tcount";
+      count.textContent = (t.kind === "view" ? "view - " : "") + t.rows + " rows";
+      button.appendChild(name);
+      button.appendChild(count);
+      button.addEventListener("click", function () { selectTable(t.name); });
+      li.appendChild(button);
+      list.appendChild(li);
+    });
+  }
+
+  function renderGrid(table, columns, rows) {
+    table.textContent = "";
+    var thead = document.createElement("thead");
+    var headRow = document.createElement("tr");
+    columns.forEach(function (col) {
+      var th = document.createElement("th");
+      th.textContent = col;
+      headRow.appendChild(th);
+    });
+    thead.appendChild(headRow);
+    table.appendChild(thead);
+
+    var tbody = document.createElement("tbody");
+    rows.forEach(function (row) {
+      var tr = document.createElement("tr");
+      columns.forEach(function (_, i) {
+        var td = document.createElement("td");
+        var value = i < row.length ? row[i] : null;
+        if (value === null || value === undefined) {
+          td.textContent = "NULL";
+          td.className = "null";
+        } else {
+          td.textContent = String(value);
+        }
+        tr.appendChild(td);
+      });
+      tbody.appendChild(tr);
+    });
+    table.appendChild(tbody);
+  }
+
+  function fillList(id, items, emptyText) {
+    var list = $(id);
+    list.textContent = "";
+    if (!items.length) {
+      var li = document.createElement("li");
+      li.textContent = emptyText;
+      li.style.color = "var(--muted)";
+      list.appendChild(li);
+      return;
+    }
+    items.forEach(function (text) {
+      var li = document.createElement("li");
+      li.textContent = text;
+      list.appendChild(li);
+    });
+  }
+
+  function loadSchema(name) {
+    return api(withDb("/api/schema", { table: name })).then(function (s) {
+      $("schema-title").textContent = s.table;
+      $("create-sql").textContent = s.create_sql || "";
+      renderGrid(
+        $("columns-table"),
+        ["Column", "Type", "Key"],
+        s.columns.map(function (c) { return [c.name, c.type || "", c.constraint || ""]; })
+      );
+      fillList("indexes", s.indexes.map(function (i) {
+        return i.name + (i.unique ? " (unique)" : "") + (i.sql ? " - " + i.sql : "");
+      }), "No indexes");
+      fillList("fks", s.foreign_keys.map(function (f) {
+        return f.from + " -> " + f.table + "." + f.to;
+      }), "No foreign keys");
+      fillList("triggers", s.triggers, "No triggers");
+    });
+  }
+
+  function updatePager(shown, truncated) {
+    state.truncated = truncated;
+    $("prev").disabled = state.offset === 0;
+    $("next").disabled = !truncated;
+    $("truncated").classList.toggle("hidden", !truncated);
+    $("page-label").textContent = shown === 0
+      ? "no rows"
+      : "rows " + (state.offset + 1) + " - " + (state.offset + shown) + (truncated ? " (more)" : "");
+  }
+
+  function loadRows() {
+    if (!state.table) return Promise.resolve();
+    var q = { table: state.table, limit: String(state.limit), offset: String(state.offset) };
+    return api(withDb("/api/rows", q)).then(function (r) {
+      renderGrid($("rows"), r.columns, r.rows);
+      updatePager(r.rows.length, r.truncated);
+    });
+  }
+
+  function selectTable(name) {
+    state.table = name;
+    state.offset = 0;
+    renderTables();
+    $("schema-panel").classList.remove("hidden");
+    loadSchema(name).catch(function (e) { showError(e.message); });
+    loadRows().catch(function (e) { showError(e.message); });
+  }
+
+  function refreshTables() {
+    return api(withDb("/api/tables")).then(function (t) {
+      state.tables = t.tables || [];
+      renderTables();
+    });
+  }
+
+  function openDatabase(name) {
+    state.db = name;
+    state.table = null;
+    state.offset = 0;
+    $("picker").classList.add("hidden");
+    $("db-view").classList.remove("hidden");
+    $("schema-panel").classList.add("hidden");
+    $("rows").textContent = "";
+    $("sql-rows").textContent = "";
+    $("sql-status").textContent = "Ctrl+Enter runs the query";
+    $("write-status").textContent = "One statement; a backup is made before the first write.";
+    $("page-label").textContent = "-";
+    renderTables();
+    return api(withDb("/api/info")).then(function (info) {
+      renderInfo(info);
+      state.writable = !!info.writable;
+      renderMode(state.writable);
+      return refreshTables();
+    }).then(function () {
+      if (state.tables.length) selectTable(state.tables[0].name);
+      else {
+        $("rows").textContent = "";
+        $("page-label").textContent = "no tables";
+      }
+    }).catch(function (e) { showError(e.message); });
+  }
+
+  function showPicker() {
+    state.db = null;
+    state.table = null;
+    state.tables = [];
+    $("db-view").classList.add("hidden");
+    $("picker").classList.remove("hidden");
+    $("tables").textContent = "";
+  }
+
+  function loadFiles() {
+    return api("/api/files").then(function (data) {
+      state.writable = !!data.writable;
+      state.dir = data.dir || "";
+      renderMode(state.writable);
+      $("picker-dir").textContent = state.dir;
+      $("dbname").textContent = "Databases";
+      $("dbpath").textContent = state.dir;
+      var files = data.files || [];
+      $("stats").textContent = files.length + (files.length === 1 ? " database" : " databases") +
+        (state.writable ? " - writable" : " - read-only");
+      renderFiles(files);
+    });
+  }
+
+  function exportTable(fmt) {
+    if (!state.table || !state.db) return;
+    var url = withDb("/api/export", { table: state.table, fmt: fmt });
+    fetch(url)
+      .then(function (res) {
+        if (res.status === 401) {
+          location.reload();
+          throw new Error("unauthorized");
+        }
+        if (!res.ok) {
+          return res.json().catch(function () { return { error: "HTTP " + res.status }; })
+            .then(function (d) { throw new Error(d.error || "export failed"); });
+        }
+        return res.blob();
+      })
+      .then(function (blob) {
+        var href = URL.createObjectURL(blob);
+        var a = document.createElement("a");
+        a.href = href;
+        a.download = safeName(state.table) + "." + fmt;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        setTimeout(function () { URL.revokeObjectURL(href); }, 2000);
+      })
+      .catch(function (e) { showError(e.message); });
+  }
+
+  function runSql() {
+    var sql = $("sql").value.trim();
+    if (!sql) return;
+    $("sql-status").textContent = "running...";
+    api("/api/query", {
+      method: "POST",
+      body: JSON.stringify({ db: state.db, sql: sql, limit: state.limit })
+    }).then(function (r) {
+      renderGrid($("sql-rows"), r.columns, r.rows);
+      $("sql-status").textContent = r.rows.length + " rows in " + r.elapsed_ms + " ms" +
+        (r.truncated ? " (truncated)" : "");
+    }).catch(function (e) {
+      $("sql-rows").textContent = "";
+      $("sql-status").textContent = e.message;
+    });
+  }
+
+  function runWrite() {
+    var sql = $("write-sql").value.trim();
+    if (!sql) return;
+    if (!window.confirm("Run this write on " + state.db + "?\n\n" + sql)) return;
+    $("write-status").textContent = "running...";
+    api("/api/query", {
+      method: "POST",
+      body: JSON.stringify({ db: state.db, sql: sql, mode: "write" })
+    }).then(function (r) {
+      $("write-status").textContent = "written " + r.written + " row(s) - backup " + r.backup;
+      $("write-sql").value = "";
+      return refreshTables().then(function () {
+        if (!state.table) return;
+        loadSchema(state.table).catch(function (e) { showError(e.message); });
+        loadRows().catch(function (e) { showError(e.message); });
+      });
+    }).catch(function (e) {
+      $("write-status").textContent = e.message;
+    });
+  }
+
+  $("refresh").addEventListener("click", function () {
+    loadFiles().catch(function (e) { showError(e.message); });
+  });
+  $("change-db").addEventListener("click", function () {
+    showPicker();
+    loadFiles().catch(function (e) { showError(e.message); });
+  });
+  $("prev").addEventListener("click", function () {
+    state.offset = Math.max(0, state.offset - state.limit);
+    loadRows().catch(function (e) { showError(e.message); });
+  });
+  $("next").addEventListener("click", function () {
+    state.offset += state.limit;
+    loadRows().catch(function (e) { showError(e.message); });
+  });
+  $("export-csv").addEventListener("click", function () { exportTable("csv"); });
+  $("export-json").addEventListener("click", function () { exportTable("json"); });
+  $("run").addEventListener("click", runSql);
+  $("write-run").addEventListener("click", runWrite);
+  $("sql").addEventListener("keydown", function (event) {
+    if ((event.ctrlKey || event.metaKey) && event.key === "Enter") {
+      event.preventDefault();
+      runSql();
+    }
+  });
+  $("write-sql").addEventListener("keydown", function (event) {
+    if ((event.ctrlKey || event.metaKey) && event.key === "Enter") {
+      event.preventDefault();
+      runWrite();
+    }
+  });
+
+  // Initial load: the picker lists the databases in the start folder.
+  loadFiles().catch(function (e) { showError(e.message); });
+})();
+</script>
+</body>
+</html>

@@ -221,8 +221,7 @@ impl ThemeColor {
     /// emits byte-identical escapes.
     #[cfg(not(target_os = "android"))]
     pub fn paint(&self, s: &str) -> colored::ColoredString {
-        use colored::Colorize;
-        s.color(self.to_colored())
+        colored::Colorize::color(s, self.to_colored())
     }
 
     #[cfg(target_os = "android")]
@@ -246,6 +245,38 @@ impl ThemeColor {
             return s.to_string();
         }
         format!("\x1b[1m{}{}\x1b[0m", self.to_ansi_fg(), s)
+    }
+
+    /// Default background for editable fields when a theme doesn't define
+    /// `text_field_bg`. Keeps the field tied to the theme instead of the
+    /// old hardcoded gray: dark backgrounds are lifted, light ones deepened.
+    pub fn input_bg_from(editor_bg: &ThemeColor) -> ThemeColor {
+        match editor_bg {
+            ThemeColor::Rgb { r, g, b } => {
+                let luma = 0.2126 * *r as f32 + 0.7152 * *g as f32 + 0.0722 * *b as f32;
+                let delta: i16 = if luma < 128.0 { 36 } else { -24 };
+                ThemeColor::Rgb {
+                    r: (*r as i16 + delta).clamp(0, 255) as u8,
+                    g: (*g as i16 + delta).clamp(0, 255) as u8,
+                    b: (*b as i16 + delta).clamp(0, 255) as u8,
+                }
+            }
+            ThemeColor::White | ThemeColor::BrightWhite => ThemeColor::Rgb {
+                r: 220,
+                g: 220,
+                b: 220,
+            },
+            ThemeColor::Black | ThemeColor::BrightBlack => ThemeColor::Rgb {
+                r: 56,
+                g: 56,
+                b: 56,
+            },
+            _ => ThemeColor::Rgb {
+                r: 60,
+                g: 60,
+                b: 60,
+            },
+        }
     }
 
     /// Convert to `crossterm::style::Color` for editor
@@ -275,6 +306,78 @@ impl ThemeColor {
             ThemeColor::Ansi { code } => crossterm::style::Color::AnsiValue(*code),
         }
     }
+
+    /// `#rrggbb` for a browser, using the standard xterm palette for named and
+    /// indexed colours. Used by `serve mdview` so the page highlights with the
+    /// same colours the terminal editor uses.
+    pub fn to_hex(&self) -> String {
+        let (r, g, b) = match self {
+            ThemeColor::Rgb { r, g, b } => (*r, *g, *b),
+            ThemeColor::Ansi { code } => ansi_rgb(*code),
+            named => BASE_PALETTE[named_index(named).min(BASE_PALETTE.len() - 1)],
+        };
+        format!("#{:02x}{:02x}{:02x}", r, g, b)
+    }
+}
+
+/// Index into [`BASE_PALETTE`] for the sixteen named colours.
+fn named_index(color: &ThemeColor) -> usize {
+    match color {
+        ThemeColor::Black => 0,
+        ThemeColor::Red => 1,
+        ThemeColor::Green => 2,
+        ThemeColor::Yellow => 3,
+        ThemeColor::Blue => 4,
+        ThemeColor::Magenta => 5,
+        ThemeColor::Cyan => 6,
+        ThemeColor::White => 7,
+        ThemeColor::BrightBlack => 8,
+        ThemeColor::BrightRed => 9,
+        ThemeColor::BrightGreen => 10,
+        ThemeColor::BrightYellow => 11,
+        ThemeColor::BrightBlue => 12,
+        ThemeColor::BrightMagenta => 13,
+        ThemeColor::BrightCyan => 14,
+        // BrightWhite, and anything unmapped, lands on the brightest entry.
+        _ => 15,
+    }
+}
+
+/// The classic xterm colours, which is what the terminal shows for these names.
+const BASE_PALETTE: [(u8, u8, u8); 16] = [
+    (0, 0, 0),
+    (128, 0, 0),
+    (0, 128, 0),
+    (128, 128, 0),
+    (0, 0, 128),
+    (128, 0, 128),
+    (0, 128, 128),
+    (192, 192, 192),
+    (128, 128, 128),
+    (255, 0, 0),
+    (0, 255, 0),
+    (255, 255, 0),
+    (0, 0, 255),
+    (255, 0, 255),
+    (0, 255, 255),
+    (255, 255, 255),
+];
+
+/// Expand an xterm-256 index to RGB: the 16 base colours, the 6×6×6 cube, then
+/// the 24-step greyscale ramp.
+fn ansi_rgb(code: u8) -> (u8, u8, u8) {
+    match code {
+        0..=15 => BASE_PALETTE[code as usize],
+        16..=231 => {
+            let n = code - 16;
+            let step = |v: u8| if v == 0 { 0 } else { 55 + v * 40 };
+            (step(n / 36), step((n % 36) / 6), step(n % 6))
+        }
+        _ => {
+            let grey = 8 + (code - 232) * 10;
+            (grey, grey, grey)
+        }
+    }
 }
 
 // ============================================================================
@@ -299,6 +402,14 @@ pub struct SyntaxTheme {
     pub tag: ThemeColor,
     pub constant: ThemeColor,
     pub normal: ThemeColor,
+    /// Secondary text, matching the shell's muted role.
+    pub muted: ThemeColor,
+    /// Header row in box/table output.
+    pub table_header: ThemeColor,
+    /// Frames and separators in box/table output.
+    pub table_border: ThemeColor,
+    /// Gutter line numbers for text views.
+    pub line_number: ThemeColor,
 }
 
 impl Default for SyntaxTheme {
@@ -319,6 +430,10 @@ impl Default for SyntaxTheme {
             tag: ThemeColor::BrightCyan,
             constant: ThemeColor::Cyan,
             normal: ThemeColor::BrightWhite,
+            muted: ThemeColor::BrightBlack,
+            table_header: ThemeColor::Cyan,
+            table_border: ThemeColor::Cyan,
+            line_number: ThemeColor::Yellow,
         }
     }
 }
@@ -334,10 +449,43 @@ pub struct ShellTheme {
     pub prompt_path: ThemeColor,
     pub prompt_watcher: ThemeColor,
     pub prompt_arrow: ThemeColor,
+    /// Root command in a prompt line (`cfg`, `git`).
+    pub ntc_command: ThemeColor,
+    /// File path typed after `txtf` / `txtc`.
+    pub txtf_file: ThemeColor,
+    /// Run-alias name (`ral add <name>`, `run <name>`).
+    pub ral_name: ThemeColor,
+    /// Command body passed to `ral add` / `ral edit`.
+    pub ral_command: ThemeColor,
+    /// Legacy first-subcommand color, kept so existing theme files still load.
+    /// Prompt first arguments now use `ntc_command`.
+    pub ntc_sub_command: ThemeColor,
+    /// Second subcommand in a prompt line (`cfg color on`).
+    pub sub_sub_command: ThemeColor,
+    /// Short flag such as `-d`.
+    pub flag1: ThemeColor,
+    /// Long flag such as `--depth`.
+    pub flag2: ThemeColor,
+    /// Teleport name such as `@web`.
+    pub tp_name: ThemeColor,
+    /// Path portion of a teleport or `tp add` path.
+    pub tp_path: ThemeColor,
+    /// Alias name shown in `ral ls`.
+    pub ral_ls_alias: ThemeColor,
+    /// Teleport name shown in `tp ls`.
+    pub tp_ls_tp_name: ThemeColor,
     pub success: ThemeColor,
     pub error: ThemeColor,
     pub warning: ThemeColor,
     pub info: ThemeColor,
+    /// Secondary text that used to be rendered with `.dimmed()`.
+    pub muted: ThemeColor,
+    /// Header row in box/table output (`nsheet`, reports).
+    pub table_header: ThemeColor,
+    /// Frames and separators in box/table output.
+    pub table_border: ThemeColor,
+    /// Gutter line numbers for `txtf` / `view`.
+    pub line_number: ThemeColor,
     pub tree_branch: ThemeColor,
     pub tree_dir: ThemeColor,
     pub tree_file: ThemeColor,
@@ -366,10 +514,26 @@ impl Default for ShellTheme {
             prompt_path: ThemeColor::Cyan,
             prompt_watcher: ThemeColor::Yellow,
             prompt_arrow: ThemeColor::Green,
+            ntc_command: ThemeColor::Yellow,
+            txtf_file: ThemeColor::BrightGreen,
+            ral_name: ThemeColor::BrightMagenta,
+            ral_command: ThemeColor::Yellow,
+            ntc_sub_command: ThemeColor::BrightCyan,
+            sub_sub_command: ThemeColor::BrightBlue,
+            flag1: ThemeColor::Yellow,
+            flag2: ThemeColor::BrightYellow,
+            tp_name: ThemeColor::BrightBlue,
+            tp_path: ThemeColor::Cyan,
+            ral_ls_alias: ThemeColor::Cyan,
+            tp_ls_tp_name: ThemeColor::Cyan,
             success: ThemeColor::Green,
             error: ThemeColor::Red,
             warning: ThemeColor::Yellow,
             info: ThemeColor::Cyan,
+            muted: ThemeColor::BrightBlack,
+            table_header: ThemeColor::Cyan,
+            table_border: ThemeColor::Cyan,
+            line_number: ThemeColor::Yellow,
             tree_branch: ThemeColor::Rgb {
                 r: 30,
                 g: 220,
@@ -408,6 +572,8 @@ pub struct EditorTheme {
     pub gutter_bg: ThemeColor,
     pub status_bg: ThemeColor,
     pub hint_bg: ThemeColor,
+    /// Background of editor text inputs (VS Code Dark+ `input.background`).
+    pub text_field_bg: ThemeColor,
     pub sidebar_bg: ThemeColor,
     pub sidebar_selected_bg: ThemeColor,
     pub run_panel_bg: ThemeColor,
@@ -424,6 +590,9 @@ pub struct EditorTheme {
     pub border: ThemeColor,
     pub scrollbar: ThemeColor,
     pub scrollbar_thumb: ThemeColor,
+    /// Vertical guides drawn at each tab stop inside a line's leading
+    /// whitespace (VS Code-style indent guides).
+    pub indent_guide: ThemeColor,
     pub sidebar_dir: ThemeColor,
     pub sidebar_file: ThemeColor,
     pub sidebar_current: ThemeColor,
@@ -437,14 +606,14 @@ impl Default for EditorTheme {
     fn default() -> Self {
         Self {
             editor_bg: ThemeColor::Rgb {
-                r: 21,
-                g: 19,
-                b: 26,
+                r: 46,
+                g: 44,
+                b: 51,
             },
             gutter_bg: ThemeColor::Rgb {
-                r: 24,
-                g: 22,
-                b: 30,
+                r: 38,
+                g: 36,
+                b: 44,
             },
             status_bg: ThemeColor::Rgb {
                 r: 130,
@@ -455,6 +624,11 @@ impl Default for EditorTheme {
                 r: 28,
                 g: 26,
                 b: 34,
+            },
+            text_field_bg: ThemeColor::Rgb {
+                r: 60,
+                g: 60,
+                b: 60,
             },
             sidebar_bg: ThemeColor::Rgb {
                 r: 21,
@@ -519,6 +693,11 @@ impl Default for EditorTheme {
                 r: 130,
                 g: 100,
                 b: 210,
+            },
+            indent_guide: ThemeColor::Rgb {
+                r: 45,
+                g: 41,
+                b: 56,
             },
             sidebar_dir: ThemeColor::Rgb {
                 r: 134,
@@ -590,237 +769,6 @@ impl Theme {
         t.name = "dark".into();
         t
     }
-
-    pub fn light_theme() -> Self {
-        Self {
-            name: "light".to_string(),
-            author: Some("NuengCoder".to_string()),
-            description: Some("Light theme for bright environments".to_string()),
-            syntax: SyntaxTheme {
-                keyword: ThemeColor::Rgb {
-                    r: 120,
-                    g: 60,
-                    b: 180,
-                },
-                string: ThemeColor::Rgb {
-                    r: 30,
-                    g: 140,
-                    b: 50,
-                },
-                comment: ThemeColor::Rgb {
-                    r: 120,
-                    g: 120,
-                    b: 120,
-                },
-                number: ThemeColor::Rgb {
-                    r: 200,
-                    g: 120,
-                    b: 40,
-                },
-                r#type: ThemeColor::Rgb {
-                    r: 40,
-                    g: 140,
-                    b: 160,
-                },
-                builtin: ThemeColor::Rgb {
-                    r: 180,
-                    g: 60,
-                    b: 80,
-                },
-                function: ThemeColor::Rgb {
-                    r: 50,
-                    g: 140,
-                    b: 180,
-                },
-                operator: ThemeColor::Rgb {
-                    r: 80,
-                    g: 80,
-                    b: 80,
-                },
-                punctuation: ThemeColor::Rgb {
-                    r: 100,
-                    g: 100,
-                    b: 100,
-                },
-                attribute: ThemeColor::Rgb {
-                    r: 130,
-                    g: 80,
-                    b: 200,
-                },
-                macro_token: ThemeColor::Rgb {
-                    r: 150,
-                    g: 100,
-                    b: 210,
-                },
-                regex: ThemeColor::Rgb {
-                    r: 200,
-                    g: 120,
-                    b: 60,
-                },
-                tag: ThemeColor::Rgb {
-                    r: 40,
-                    g: 160,
-                    b: 140,
-                },
-                constant: ThemeColor::Rgb {
-                    r: 180,
-                    g: 130,
-                    b: 60,
-                },
-                normal: ThemeColor::Rgb {
-                    r: 30,
-                    g: 30,
-                    b: 30,
-                },
-            },
-            shell: ShellTheme {
-                prompt_bracket: ThemeColor::BrightBlue,
-                prompt_path: ThemeColor::Blue,
-                prompt_watcher: ThemeColor::Yellow,
-                prompt_arrow: ThemeColor::Green,
-                success: ThemeColor::Green,
-                error: ThemeColor::Red,
-                warning: ThemeColor::Yellow,
-                info: ThemeColor::Blue,
-                tree_branch: ThemeColor::Green,
-                tree_dir: ThemeColor::Blue,
-                tree_file: ThemeColor::Black,
-                tree_ignored: ThemeColor::BrightBlack,
-                tree_size: ThemeColor::Yellow,
-                command_output: ThemeColor::Black,
-                separator: ThemeColor::BrightBlue,
-                help_header: ThemeColor::BrightBlue,
-                help_section: ThemeColor::Blue,
-                help_example: ThemeColor::Green,
-                teleport_name: ThemeColor::Blue,
-                alias_name: ThemeColor::Blue,
-                alias_command: ThemeColor::BrightBlack,
-                git_branch: ThemeColor::Blue,
-                git_added: ThemeColor::Green,
-                git_modified: ThemeColor::Yellow,
-                git_deleted: ThemeColor::Red,
-                git_untracked: ThemeColor::BrightBlack,
-                git_conflict: ThemeColor::BrightRed,
-            },
-            editor: EditorTheme {
-                editor_bg: ThemeColor::Rgb {
-                    r: 245,
-                    g: 245,
-                    b: 245,
-                },
-                gutter_bg: ThemeColor::Rgb {
-                    r: 240,
-                    g: 240,
-                    b: 240,
-                },
-                status_bg: ThemeColor::Rgb {
-                    r: 100,
-                    g: 80,
-                    b: 200,
-                },
-                hint_bg: ThemeColor::Rgb {
-                    r: 235,
-                    g: 235,
-                    b: 235,
-                },
-                sidebar_bg: ThemeColor::Rgb {
-                    r: 240,
-                    g: 240,
-                    b: 240,
-                },
-                sidebar_selected_bg: ThemeColor::Rgb {
-                    r: 210,
-                    g: 210,
-                    b: 220,
-                },
-                run_panel_bg: ThemeColor::Rgb {
-                    r: 235,
-                    g: 235,
-                    b: 235,
-                },
-                gutter_text: ThemeColor::Rgb {
-                    r: 120,
-                    g: 120,
-                    b: 120,
-                },
-                status_text: ThemeColor::White,
-                status_modified: ThemeColor::Yellow,
-                hint_text: ThemeColor::Rgb {
-                    r: 80,
-                    g: 140,
-                    b: 180,
-                },
-                cursor_bg: ThemeColor::Black,
-                cursor_text: ThemeColor::White,
-                extra_cursor_bg: ThemeColor::Rgb {
-                    r: 220,
-                    g: 100,
-                    b: 120,
-                },
-                selection_bg: ThemeColor::Rgb {
-                    r: 200,
-                    g: 190,
-                    b: 220,
-                },
-                search_match_bg: ThemeColor::Rgb {
-                    r: 210,
-                    g: 210,
-                    b: 220,
-                },
-                search_current_bg: ThemeColor::Rgb {
-                    r: 160,
-                    g: 120,
-                    b: 220,
-                },
-                border: ThemeColor::Rgb {
-                    r: 180,
-                    g: 180,
-                    b: 200,
-                },
-                scrollbar: ThemeColor::Rgb {
-                    r: 180,
-                    g: 180,
-                    b: 200,
-                },
-                scrollbar_thumb: ThemeColor::Rgb {
-                    r: 140,
-                    g: 100,
-                    b: 200,
-                },
-                sidebar_dir: ThemeColor::Rgb {
-                    r: 60,
-                    g: 140,
-                    b: 160,
-                },
-                sidebar_file: ThemeColor::Rgb {
-                    r: 60,
-                    g: 60,
-                    b: 60,
-                },
-                sidebar_current: ThemeColor::Rgb {
-                    r: 200,
-                    g: 120,
-                    b: 40,
-                },
-                sidebar_selected: ThemeColor::Black,
-                run_header_fg: ThemeColor::Rgb {
-                    r: 60,
-                    g: 100,
-                    b: 140,
-                },
-                run_header_unfocused_fg: ThemeColor::Rgb {
-                    r: 35,
-                    g: 65,
-                    b: 95,
-                },
-                run_output_fg: ThemeColor::Rgb {
-                    r: 40,
-                    g: 50,
-                    b: 60,
-                },
-            },
-        }
-    }
 }
 
 // ============================================================================
@@ -832,8 +780,7 @@ impl Theme {
 /// On Android/Termux: uses raw ANSI escape codes.
 #[cfg(not(target_os = "android"))]
 pub fn paint_with_shell_color(s: &str, color: &ThemeColor) -> colored::ColoredString {
-    use colored::Colorize;
-    s.color(color.to_colored())
+    colored::Colorize::color(s, color.to_colored())
 }
 
 /// Android version: wraps string with ANSI foreground color + reset.
@@ -846,10 +793,9 @@ pub fn paint_with_shell_color(s: &str, color: &ThemeColor) -> String {
 /// Example: `shell_paint("hello", |s| s.success)` to get theme.shell.success color.
 #[cfg(not(target_os = "android"))]
 pub fn shell_paint(s: &str, accessor: fn(&ShellTheme) -> &ThemeColor) -> colored::ColoredString {
-    use colored::Colorize;
     let theme = ThemeManager::current();
     let color = accessor(&theme.shell);
-    s.color(color.to_colored())
+    colored::Colorize::color(s, color.to_colored())
 }
 
 /// Android version: get shell color via accessor, then paint with ANSI escapes.
@@ -878,7 +824,9 @@ pub fn ansi_enabled() -> bool {
             return false;
         }
     }
-    true
+    // Legacy Windows conhost cannot render raw escapes even when the user
+    // enabled color; `detect()` folds the VT capability check in.
+    crate::utils::terminal::detect().color
 }
 
 /// Unified shell painter: identical escapes on Linux/Win/macOS/Termux.
@@ -897,7 +845,9 @@ pub fn shell_paint_ansi_bold(s: &str, accessor: fn(&ShellTheme) -> &ThemeColor) 
 }
 
 pub mod manager;
+pub mod style;
 pub use manager::ThemeManager;
+pub use style::{ShellRole, ThemeColorize, ThemedText};
 
 #[cfg(test)]
 mod tests {
@@ -907,15 +857,63 @@ mod tests {
     fn test_theme_switching() {
         assert!(ThemeManager::set_theme("default"));
         assert_eq!(ThemeManager::current().name, "default");
-        assert!(ThemeManager::set_theme("light"));
-        assert_eq!(ThemeManager::current().name, "light");
+        // Light themes are no longer bundled.
+        assert!(!ThemeManager::set_theme("light"));
+        assert_eq!(ThemeManager::current().name, "default");
     }
 
     #[test]
     fn test_list_themes() {
         let themes = ThemeManager::list_themes();
         assert!(themes.contains(&"default".to_string()));
-        assert!(themes.contains(&"light".to_string()));
+        assert!(!themes.contains(&"light".to_string()));
+    }
+
+    #[test]
+    fn colours_convert_to_css_hex() {
+        assert_eq!(ThemeColor::Rgb { r: 30, g: 144, b: 255 }.to_hex(), "#1e90ff");
+        assert_eq!(ThemeColor::Black.to_hex(), "#000000");
+        assert_eq!(ThemeColor::White.to_hex(), "#c0c0c0");
+        assert_eq!(ThemeColor::BrightBlack.to_hex(), "#808080");
+        assert_eq!(ThemeColor::BrightRed.to_hex(), "#ff0000");
+        assert_eq!(ThemeColor::BrightCyan.to_hex(), "#00ffff");
+        assert_eq!(ThemeColor::BrightWhite.to_hex(), "#ffffff");
+    }
+
+    #[test]
+    fn ansi_indices_expand_like_a_terminal() {
+        // The 6x6x6 cube starts at 16 and steps 0, 95, 135, 175, 215, 255.
+        assert_eq!(ansi_rgb(16), (0, 0, 0));
+        assert_eq!(ansi_rgb(17), (0, 0, 95));
+        assert_eq!(ansi_rgb(21), (0, 0, 255));
+        assert_eq!(ansi_rgb(196), (255, 0, 0));
+        assert_eq!(ansi_rgb(231), (255, 255, 255));
+        // The greyscale ramp starts at 232.
+        assert_eq!(ansi_rgb(232), (8, 8, 8));
+        assert_eq!(ansi_rgb(255), (238, 238, 238));
+        assert_eq!(ansi_rgb(3), (128, 128, 0));
+    }
+
+    #[test]
+    fn ls_name_roles_deserialize_and_default_to_cyan() {
+        let custom: Theme = toml::from_str(
+            r#"
+name = "custom"
+[shell]
+ral_ls_alias = { r = 1, g = 2, b = 3 }
+tp_ls_tp_name = "red"
+"#,
+        )
+        .unwrap();
+        assert_eq!(
+            custom.shell.ral_ls_alias,
+            ThemeColor::Rgb { r: 1, g: 2, b: 3 }
+        );
+        assert_eq!(custom.shell.tp_ls_tp_name, ThemeColor::Red);
+
+        let fallback: Theme = toml::from_str("name = \"fallback\"\n").unwrap();
+        assert_eq!(fallback.shell.ral_ls_alias, ThemeColor::Cyan);
+        assert_eq!(fallback.shell.tp_ls_tp_name, ThemeColor::Cyan);
     }
 
     #[test]

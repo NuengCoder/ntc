@@ -164,6 +164,20 @@ pub fn fill(m: &mut HashMap<String, String>) {
     );
 
     m.insert(
+        "theme.usage_update".into(),
+        "การใช้งาน: theme update <name>".into(),
+    );
+
+    m.insert(
+        "theme.updated".into(),
+        "อัปเดตธีม '{}' แล้ว: เพิ่ม {} ฟิลด์ที่ขาด".into(),
+    );
+
+    m.insert("theme.up_to_date".into(), "ธีม '{}' มีครบทุกฟิลด์แล้ว".into());
+
+    m.insert("theme.update_failed".into(), "อัปเดตไม่สำเร็จ: {}".into());
+
+    m.insert(
         "theme.usage_export".into(),
         "การใช้งาน: theme export <name> [output_file]".into(),
     );
@@ -183,10 +197,57 @@ pub fn fill(m: &mut HashMap<String, String>) {
         "การใช้งาน: theme rename <old_name> to <new_name>".into(),
     );
 
-    m.insert("theme.usage_rm".into(), "การใช้งาน: theme rm <name>".into());
+    m.insert(
+        "theme.usage_rm".into(),
+        "การใช้งาน: theme rm <ชื่อ> [<ชื่อ> ...] [-f|--force]".into(),
+    );
+
+    m.insert("theme.usage_use".into(), "การใช้งาน: theme use <ชื่อ>".into());
+
+    m.insert("theme.remove_confirm".into(), "ลบ {} ธีม ({})? [y/N]".into());
+
+    m.insert("theme.remove_cancelled".into(), "ยกเลิกแล้ว".into());
+
+    m.insert(
+        "theme.remove_current".into(),
+        "ไม่สามารถลบธีมที่ใช้อยู่ '{}' ได้; เปลี่ยนไปใช้ธีมอื่นก่อน".into(),
+    );
+
+    m.insert(
+        "theme.remove_builtin".into(),
+        "ไม่สามารถลบธีมในตัว '{}' ได้".into(),
+    );
 
     m.insert(
         "theme.usage_rnm".into(),
         "การใช้งาน: theme rnm <old_name> to <new_name>".into(),
+    );
+
+    m.insert(
+        "theme.install_downloading".into(),
+        "กำลังดาวน์โหลด {}...".into(),
+    );
+
+    m.insert("theme.install_failed".into(), "ติดตั้งธีมไม่สำเร็จ: {}".into());
+
+    m.insert(
+        "theme.install_fetching".into(),
+        "กำลังดึงไฟล์ .ntc_theme จาก GitHub...".into(),
+    );
+
+    m.insert(
+        "theme.install_none".into(),
+        "ไม่พบไฟล์ .ntc_theme ที่ติดตั้งได้".into(),
+    );
+
+    m.insert("theme.install_prompt".into(), "เลือกธีม (0 เพื่อยกเลิก):".into());
+
+    m.insert("theme.install_title".into(), "ติดตั้งธีม".into());
+
+    m.insert("theme.installed".into(), "ติดตั้งธีม '{}' แล้ว".into());
+
+    m.insert(
+        "theme.installed_active".into(),
+        "ติดตั้งและสลับไปยังธีม '{}' แล้ว".into(),
     );
 }

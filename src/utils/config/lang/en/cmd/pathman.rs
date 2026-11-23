@@ -13,11 +13,11 @@ pub fn fill(m: &mut HashMap<String, String>) {
         "Already in PATH: {}".into(),
     );
 
-    m.insert("cmd.pathman.empty_path".into(), "║  {}".into());
+    m.insert("cmd.pathman.empty_path".into(), "(empty)".into());
 
     m.insert(
         "cmd.pathman.example_add".into(),
-        "  {} add C:\\Tools".into(),
+        "  {} add ~/bin".into()
     );
 
     m.insert(
@@ -37,7 +37,7 @@ pub fn fill(m: &mut HashMap<String, String>) {
 
     m.insert(
         "cmd.pathman.example_rm_path".into(),
-        "  {} rm C:\\OldTools".into(),
+        "  {} rm ~/old-tools".into()
     );
 
     m.insert("cmd.pathman.example_show".into(), "  {} show".into());
@@ -151,7 +151,31 @@ pub fn fill(m: &mut HashMap<String, String>) {
     m.insert("cmd.pathman.user_level".into(), "User".into());
 
     m.insert(
-        "cmd.pathman.windows_only".into(),
-        "usrpath/syspath is a Windows-only feature.".into(),
+        "cmd.pathman.new_login_shell".into(),
+        "Changes apply to new sessions.".into(),
+    );
+
+    m.insert(
+        "cmd.pathman.next_login".into(),
+        "Saved. The new PATH takes effect at your next login (log out and back in, or start a login shell).".into(),
+    );
+
+    m.insert(
+        "cmd.pathman.platform_unsupported".into(),
+        "usrpath/syspath is not supported on this platform.".into(),
+    );
+
+    m.insert(
+        "cmd.pathman.shell_profile_hint".into(),
+        "Add this line to your shell profile: {}".into(),
+    );
+
+    m.insert("cmd.pathman.store_file".into(), "  File: {}".into());
+
+    m.insert("cmd.pathman.sudo_fail".into(), "Could not run sudo: {}".into());
+
+    m.insert(
+        "cmd.pathman.sudo_write".into(),
+        "System PATH is root-owned \u{2014} writing {} with sudo \u{2026}".into(),
     );
 }

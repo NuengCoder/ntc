@@ -1,7 +1,10 @@
 use std::collections::HashMap;
 
 pub fn fill(m: &mut HashMap<String, String>) {
-    m.insert("help.pipe.title".into(), "管道与重定向：".into());
+    m.insert(
+        "help.pipe.title".into(),
+        "管道与重定向 [NON-COMMAND]:".into(),
+    );
 
     m.insert(
         "help.pipe.pipe".into(),
@@ -19,6 +22,13 @@ pub fn fill(m: &mut HashMap<String, String>) {
     );
 
     m.insert(
+        "help.pipe.seq".into(),
+        "a ; b ## 即使 a 失败也运行 b（两侧必须有空格）".into(),
+    );
+
+    m.insert("help.pipe.in".into(), "cmd < file ## 从文件读取输入".into());
+
+    m.insert(
         "help.pipe.out".into(),
         "cmd > file ## 将输出写入文件（覆盖）".into(),
     );
@@ -27,8 +37,6 @@ pub fn fill(m: &mut HashMap<String, String>) {
         "help.pipe.append".into(),
         "cmd >> file ## 将输出追加到文件".into(),
     );
-
-    m.insert("help.pipe.in".into(), "cmd < file ## 从文件读取输入".into());
 
     m.insert(
         "help.pipe.heredoc".into(),
@@ -41,36 +49,9 @@ pub fn fill(m: &mut HashMap<String, String>) {
     );
 
     m.insert(
-        "help.pipe.head".into(),
-        "head [N] [file] ## 打印前 N 行（默认 10）".into(),
+        "help.pipe.filters".into(),
+        "cmd | <过滤器> ## 管道过滤器：head、tail、betw、gs、sort、rev、count、trim、encode、qur、clip（其标志也可补全）".into(),
     );
-
-    m.insert(
-        "help.pipe.tail".into(),
-        "tail [N] [file] ## 打印后 N 行（默认 10）".into(),
-    );
-
-    m.insert(
-        "help.pipe.betw".into(),
-        "betw A:B [file] ## 打印第 A 到 B 行（从 1 开始，含两端）".into(),
-    );
-
-    m.insert(
-        "help.pipe.sort".into(),
-        "sort [-r] [-n] [-u] [-f] [file] ## 排序行（倒序/数值/去重/忽略大小写）".into(),
-    );
-
-    m.insert(
-        "help.pipe.rev".into(),
-        "rev [file] ## 反转每行的字符".into(),
-    );
-
-    m.insert(
-        "help.pipe.trim".into(),
-        "trim <pattern> [文本] ## 删除 <pattern> 的每一次出现（文本或管道输入）".into(),
-    );
-
-    m.insert("help.pipe.filters".into(), "cmd | head|tail|betw|gs|sort|rev|count|trim|encode|qur|clip ## 管道过滤器（其标志也可补全）".into());
 
     m.insert(
         "help.pipe.note".into(),
@@ -107,5 +88,8 @@ pub fn fill(m: &mut HashMap<String, String>) {
         "gs error | sort -u | head 10 ## 排序去重后的匹配，取前 10 行".into(),
     );
 
-    m.insert("help.pipe.example6".into(), "echo nice ... bro ... | trim \" ...\" ## 从管道文本中删除模式（内联写法：trim \" ...\" \"nice ... bro ...\"）".into());
+    m.insert(
+        "help.pipe.example6".into(),
+        "echo nice ... bro ... | trim \" ...\" ## 从管道文本中删除模式（内联写法：trim \" ...\" \"nice ... bro ...\"）".into(),
+    );
 }

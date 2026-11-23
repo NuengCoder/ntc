@@ -107,12 +107,12 @@ pub fn fill(m: &mut HashMap<String, String>) {
 
     m.insert(
         "misc.gs.example3".into(),
-        " gs -i main # 交互模式（浏览结果，Enter打开）".into(),
+        " gs -I main # 交互模式（浏览结果，Enter打开）".into(),
     );
 
     m.insert(
         "misc.gs.example4".into(),
-        " gs -i main -d 3 # 带深度限制的交互模式".into(),
+        " gs -I main -d 3 # 带深度限制的交互模式".into(),
     );
 
     m.insert(
@@ -133,6 +133,61 @@ pub fn fill(m: &mut HashMap<String, String>) {
     m.insert(
         "misc.gs.example8".into(),
         " gs error\\|warning # 或搜索：匹配任意一个词 (a\\|b)".into(),
+    );
+
+    m.insert(
+        "misc.gs.example9".into(),
+        " gs -w main # 只匹配整行（去首尾空白）正好是 'main' 的行".into(),
+    );
+
+    m.insert(
+        "misc.gs.example10".into(),
+        " gs -z Main -h # 区分大小写，行以 'Main' 开头".into(),
+    );
+
+    m.insert(
+        "misc.gs.pager.header".into(),
+        " gs: {}/{} 个匹配 | 页 {}/{} (10/页) ".into(),
+    );
+
+    m.insert("misc.gs.pager.hint_help".into(), "?=帮助".into());
+    m.insert("misc.gs.pager.hint_pattern".into(), "f=模式".into());
+    m.insert("misc.gs.pager.hint_filters".into(), "x/h/g/w/z=筛选".into());
+    m.insert("misc.gs.pager.hint_open".into(), "Enter/e=打开".into());
+    m.insert("misc.gs.pager.hint_row".into(), "0-9=行".into());
+    m.insert("misc.gs.pager.hint_move".into(), "j/k".into());
+    m.insert("misc.gs.pager.hint_page".into(), "n/p".into());
+    m.insert(
+        "misc.gs.pager.hint_context".into(),
+        "c=上下文 ({}/{})".into(),
+    );
+    m.insert("misc.gs.pager.hint_quit".into(), "q=退出".into());
+    m.insert(
+        "misc.gs.pager.help_title".into(),
+        "GS 交互模式 — 按键".into(),
+    );
+    m.insert(
+        "misc.gs.pager.help_body".into(),
+        "  j/k、↑/↓    移动            n/p、空格、←/→  翻页\n  0-9          跳转到行        Home/End        首行/末行\n  Enter/e      在编辑器中打开  f 模式   c 上下文行数\n  x 字面  z 区分大小写  h 开头  g 结尾  w 整行".into(),
+    );
+    m.insert(
+        "misc.gs.pager.help_close".into(),
+        "Esc 或 q 关闭帮助  ·  稍后再按 ? 打开  ·  q 退出 gs -I".into(),
+    );
+    m.insert("misc.gs.pager.hint_type".into(), "输入模式".into());
+    m.insert("misc.gs.pager.hint_accept".into(), "Enter=确认".into());
+    m.insert("misc.gs.pager.hint_cancel".into(), "Esc=取消".into());
+    m.insert("misc.gs.pager.pattern_box".into(), "模式: ".into());
+    m.insert("misc.gs.pager.searching".into(), "搜索中…".into());
+
+    m.insert(
+        "misc.gs.i_renamed".into(),
+        "gs: -i 已改为 -I（gs -I 打开交互式分页）".into(),
+    );
+
+    m.insert(
+        "misc.gs.mode_conflict".into(),
+        "gs: -h、-g、-w 不能同时使用（只能选一个）".into(),
     );
 
     m.insert(
@@ -161,7 +216,7 @@ pub fn fill(m: &mut HashMap<String, String>) {
 
     m.insert(
         "misc.gs.usage".into(),
-        "用法：gs <模式> [-d <深度>] [-l <数量>] [-i] [-p <glob>]... [-s [line|path|size]]".into(),
+        "用法：gs <模式> [-d <深度>] [-l <数量>] [-A <n>] [-B <n>] [-I] [-x] [-h|-g|-w] [-z] [-p <glob>]... [-s [line|path|size]]".into(),
     );
 
     m.insert("misc.wi.not_dir".into(), "wi：不是目录：'{}'".into());
@@ -453,6 +508,26 @@ pub fn fill(m: &mut HashMap<String, String>) {
     );
 
     m.insert(
+        "misc.nprintf.usage".into(),
+        "用法：nprintf <格式> [参数...]".into(),
+    );
+
+    m.insert(
+        "misc.nprintf.example1".into(),
+        " nprintf \"%s 有 %d 项\\n\" cart 3 # 格式化一行".into(),
+    );
+
+    m.insert(
+        "misc.nprintf.example2".into(),
+        " nprintf \"%.2f%%\\n\" 93.5 # 宽度和精度".into(),
+    );
+
+    m.insert(
+        "misc.nprintf.invalid_number".into(),
+        "nprintf: '{}'：无效数字".into(),
+    );
+
+    m.insert(
         "misc.show_env.activate_hint".into(),
         "运行 'python_activate' 激活虚拟环境".into(),
     );
@@ -662,12 +737,12 @@ pub fn fill(m: &mut HashMap<String, String>) {
 
     m.insert(
         "misc.rev.usage".into(),
-        "用法：rev [file]（反转每行的字符；未指定文件时读取管道输入）".into(),
+        "用法：rev [-u] [file]（反转每行的字符；-u 则改为上下翻转行顺序；未指定文件时读取管道输入）".into(),
     );
 
     m.insert(
         "misc.rev.bad_arg".into(),
-        "rev：意外的参数 '{}'（用法：rev [file]）".into(),
+        "rev：意外的参数 '{}'（用法：rev [-u] [file]）".into(),
     );
 
     m.insert(
@@ -706,5 +781,121 @@ pub fn fill(m: &mut HashMap<String, String>) {
     m.insert(
         "misc.show_env.os_masked".into(),
         "***（使用 'showenv --all' 显示）".into(),
+    );
+
+    m.insert(
+        "misc.count.usage".into(),
+        "用法：count <needle> [text]   （或：<command> | count <needle>）".into(),
+    );
+
+    m.insert(
+        "misc.count.line_usage".into(),
+        "用法：<command> | count -l|--line   （统计管道输出的行数；不接受 <needle>）".into(),
+    );
+
+    m.insert(
+        "misc.count.line_no_input".into(),
+        "count -l：需要管道输入（例如：<command> | count -l）".into(),
+    );
+
+    m.insert(
+        "misc.count.line_bad_flag".into(),
+        "count -l：-l|--line 不接受值，也不能与其他标志组合（收到 '{}'）".into(),
+    );
+    m.insert(
+        "misc.exit.in_editor".into(),
+        "无法在 ntceditor 内退出 ntc - 请关闭编辑器退出（Ctrl+Q 隐藏终端）".into(),
+    );
+    m.insert(
+        "misc.exit.no_nested_ntc".into(),
+        "无法在 ntceditor 内再嵌套一个 ntc 外壳 - 此终端已在运行 ntc".into(),
+    );
+    m.insert(
+        "misc.ne.already_in_editor".into(),
+        "你已经在编辑器中".into(),
+    );
+    m.insert("misc.qur.cancelled".into(), "已取消替换。".into());
+    m.insert(
+        "misc.qur.confirm".into(),
+        "要替换 {} 个文件中的 {} 处内容吗？[y/N]：".into(),
+    );
+    m.insert(
+        "misc.qur.display_needs_select".into(),
+        "qur：-dp 需要 -s \"<pattern>\"（例如 qur *.* -s \"foo\" -dp）。".into(),
+    );
+    m.insert(
+        "misc.qur.empty_replace".into(),
+        "qur：-rp 需要替换内容（例如 -rp \"bar\"）。".into(),
+    );
+    m.insert(
+        "misc.qur.empty_select".into(),
+        "qur：-s 需要一个模式（例如 -s \"foo\"）。".into(),
+    );
+    m.insert(
+        "misc.qur.example1".into(),
+        "  qur *.* # 列出匹配 glob 的文件（递归）".into(),
+    );
+    m.insert(
+        "misc.qur.example2".into(),
+        "  qur *.rs -s \"TODO\" # 每个文件的摘要".into(),
+    );
+    m.insert(
+        "misc.qur.example3".into(),
+        "  qur *.* -s \"old\" -dp # 详细匹配（类似 gs）".into(),
+    );
+    m.insert(
+        "misc.qur.example4".into(),
+        "  qur *.md -s \"old\" -rp \"new\" -d 3 # 预览、确认、替换".into(),
+    );
+    m.insert(
+        "misc.qur.files_header".into(),
+        "匹配查询的文件（{}）：".into(),
+    );
+    m.insert(
+        "misc.qur.many_results".into(),
+        "qur：找到 {} 个匹配，仅显示前 20,000 个。请缩小搜索范围。".into(),
+    );
+    m.insert("misc.qur.no_files".into(), "qur：没有文件匹配“{}”。".into());
+    m.insert(
+        "misc.qur.no_matches".into(),
+        "qur：没有匹配“{}”的内容。".into(),
+    );
+    m.insert(
+        "misc.qur.replace_needs_select".into(),
+        "qur：-rp 需要 -s \"<pattern>\"（例如 qur *.* -s \"old\" -rp \"new\"）。".into(),
+    );
+    m.insert(
+        "misc.qur.replace_preview".into(),
+        "将“{}”替换为“{}” — 共 {} 处，涉及 {} 个文件：".into(),
+    );
+    m.insert(
+        "misc.qur.replaced".into(),
+        "已替换 {} 个文件中的 {} 处内容。".into(),
+    );
+    m.insert("misc.qur.searching".into(), "正在查询文件...".into());
+    m.insert(
+        "misc.qur.skipped".into(),
+        "已跳过 {} 个文件（无法读取/写入失败）。".into(),
+    );
+    m.insert(
+        "misc.qur.summary_header".into(),
+        "“{}”的匹配（{} 行，共 {} 个文件）：".into(),
+    );
+    m.insert(
+        "misc.qur.summary_hint".into(),
+        "添加 -dp 查看详细行（类似 gs），或添加 -rp \"new\" 进行替换。".into(),
+    );
+    m.insert(
+        "misc.qur.usage".into(),
+        "用法：qur <glob> [-s \"pattern\"] [-rp \"replacement\"] [-dp] [-d <depth>] [-l <limit>]"
+            .into(),
+    );
+    m.insert(
+        "misc.rmd.deadlock_vault_admin_only".into(),
+        "rmd：“{}”包含 deadlock 保险库，只能由 root/管理员删除".into(),
+    );
+    m.insert(
+        "misc.rmf.deadlock_vault_admin_only".into(),
+        "rmf：“{}”是 deadlock 保险库，只能由 root/管理员删除".into(),
     );
 }

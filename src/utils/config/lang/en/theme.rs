@@ -75,6 +75,40 @@ pub fn fill(m: &mut HashMap<String, String>) {
 
     m.insert("theme.imported".into(), "Imported theme from: {}".into());
 
+    m.insert(
+        "theme.install_downloading".into(),
+        "Downloading {}...".into(),
+    );
+
+    m.insert(
+        "theme.install_failed".into(),
+        "Theme install failed: {}".into(),
+    );
+
+    m.insert(
+        "theme.install_fetching".into(),
+        "Fetching .ntc_theme files from GitHub...".into(),
+    );
+
+    m.insert(
+        "theme.install_none".into(),
+        "No installable .ntc_theme files found.".into(),
+    );
+
+    m.insert(
+        "theme.install_prompt".into(),
+        "Select a theme (0 to cancel):".into(),
+    );
+
+    m.insert("theme.install_title".into(), "Install a theme".into());
+
+    m.insert("theme.installed".into(), "Installed theme '{}'".into());
+
+    m.insert(
+        "theme.installed_active".into(),
+        "Installed and switched to theme '{}'".into(),
+    );
+
     m.insert("theme.info_author".into(), "Author".into());
 
     m.insert("theme.info_defined".into(), "defined".into());
@@ -188,6 +222,23 @@ pub fn fill(m: &mut HashMap<String, String>) {
     m.insert("theme.usage_add".into(), "Usage: theme add <name>".into());
 
     m.insert(
+        "theme.usage_update".into(),
+        "Usage: theme update <name>".into(),
+    );
+
+    m.insert(
+        "theme.updated".into(),
+        "Updated theme '{}': added {} missing field(s)".into(),
+    );
+
+    m.insert(
+        "theme.up_to_date".into(),
+        "Theme '{}' already has every field".into(),
+    );
+
+    m.insert("theme.update_failed".into(), "Update failed: {}".into());
+
+    m.insert(
         "theme.usage_export".into(),
         "Usage: theme export <name> [output_file]".into(),
     );
@@ -204,7 +255,29 @@ pub fn fill(m: &mut HashMap<String, String>) {
         "Usage: theme rename <old_name> to <new_name>".into(),
     );
 
-    m.insert("theme.usage_rm".into(), "Usage: theme rm <name>".into());
+    m.insert(
+        "theme.usage_rm".into(),
+        "Usage: theme rm <name> [<name> ...] [-f|--force]".into(),
+    );
+
+    m.insert("theme.usage_use".into(), "Usage: theme use <name>".into());
+
+    m.insert(
+        "theme.remove_confirm".into(),
+        "Remove {} theme(s) ({})? [y/N]".into(),
+    );
+
+    m.insert("theme.remove_cancelled".into(), "Cancelled.".into());
+
+    m.insert(
+        "theme.remove_current".into(),
+        "Cannot remove the current theme '{}'; switch to another theme first".into(),
+    );
+
+    m.insert(
+        "theme.remove_builtin".into(),
+        "Cannot remove the built-in theme '{}'".into(),
+    );
 
     m.insert(
         "theme.usage_rnm".into(),

@@ -193,7 +193,8 @@ pub fn fill(m: &mut HashMap<String, String>) {
 
     m.insert(
         "idle.count".into(),
-        "try: view task.txt | count ntc   (count matches in piped text) \u{b7} trim removes".into(),
+        "try: view task.txt | count -l   (count the lines of piped text) \u{b7} trim removes"
+            .into(),
     );
 
     m.insert(
@@ -373,7 +374,7 @@ pub fn fill(m: &mut HashMap<String, String>) {
 
     m.insert(
         "idle.say".into(),
-        "try: say hello --loop 3   (print text; print is the same)".into(),
+        "try: say hello --loop 3   (print text; nprintf formats it)".into(),
     );
 
     m.insert(

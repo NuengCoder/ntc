@@ -1,0 +1,27 @@
+# Version control
+.git/
+.gitignore
+
+# Editors
+.vscode/
+.idea/
+
+# Local secrets
+.env
+.env.local
+ntc_smtp.json
+
+# Build output
+target/
+dist/
+build/
+node_modules/
+.venv/
+__pycache__/
+*.pyc
+*.class
+
+# ntc local state
+.ntc/
+*.log
+.DS_Store

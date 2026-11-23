@@ -802,16 +802,6 @@ pub fn fill(m: &mut HashMap<String, String>) {
         "แสดงรายการฟังก์ชันบรรทัดคำสั่งทั้งหมด".into(),
     );
 
-    m.insert(
-        "cli.run.help_lsp".into(),
-        "เริ่มเซิร์ฟเวอร์ LSP ของ ntc-math ผ่าน stdio".into(),
-    );
-
-    m.insert(
-        "cli.run.help_lsp_log".into(),
-        "เส้นทางสำหรับเขียนบันทึกการดีบัก LSP".into(),
-    );
-
     m.insert("cli.run.help_math".into(), "ประเมินนิพจน์คณิตศาสตร์".into());
 
     m.insert(

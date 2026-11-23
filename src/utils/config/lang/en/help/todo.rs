@@ -17,48 +17,8 @@ pub fn fill(m: &mut HashMap<String, String>) {
     );
 
     m.insert(
-        "help.todo.info".into(),
-        "todo info [N] ## Show all tasks or details of task N".into(),
-    );
-
-    m.insert("help.todo.rm".into(), "todo rm <N> ## Remove task N".into());
-
-    m.insert(
-        "help.todo.show".into(),
-        "todo ## Show all tasks (from future_todo.<fmt> in CWD; set with config todo format)"
-            .into(),
-    );
-
-    m.insert(
-        "help.todo.move".into(),
-        "todo move <N> <M> ## Move task N to position M (the rest shift)".into(),
-    );
-
-    m.insert(
-        "help.todo.replace".into(),
-        "todo replace <N> <M> ## Swap the tasks at N and M".into(),
-    );
-
-    m.insert(
-        "help.todo.example4".into(),
-        "todo mv 5 1 ## Move task #5 to the top".into(),
-    );
-
-    m.insert(
-        "help.todo.example5".into(),
-        "todo rp 5 1 ## Swap task #5 with task #1".into(),
-    );
-
-    m.insert("help.todo.title".into(), "TODO COMMANDS:".into());
-
-    m.insert(
         "help.todo.done".into(),
         "todo done <N> ## Mark task N as done".into(),
-    );
-
-    m.insert(
-        "help.todo.undo".into(),
-        "todo undo <N> ## Reopen task N".into(),
     );
 
     m.insert(
@@ -76,5 +36,45 @@ pub fn fill(m: &mut HashMap<String, String>) {
     m.insert(
         "help.todo.example3".into(),
         "todo rm 1 ## Remove task #1".into(),
+    );
+
+    m.insert(
+        "help.todo.example4".into(),
+        "todo mv 5 1 ## Move task #5 to the top".into(),
+    );
+
+    m.insert(
+        "help.todo.example5".into(),
+        "todo rp 5 1 ## Swap task #5 with task #1".into(),
+    );
+
+    m.insert(
+        "help.todo.info".into(),
+        "todo info [N] ## Show all tasks or details of task N".into(),
+    );
+
+    m.insert(
+        "help.todo.move".into(),
+        "todo move <N> <M> ## Move task N to position M (the rest shift)".into(),
+    );
+
+    m.insert(
+        "help.todo.replace".into(),
+        "todo replace <N> <M> ## Swap the tasks at N and M".into(),
+    );
+
+    m.insert("help.todo.rm".into(), "todo rm <N> ## Remove task N".into());
+
+    m.insert(
+        "help.todo.show".into(),
+        "todo ## Show all tasks (from future_todo.<fmt> in CWD; set with config todo format)"
+            .into(),
+    );
+
+    m.insert("help.todo.title".into(), "TODO COMMANDS:".into());
+
+    m.insert(
+        "help.todo.undo".into(),
+        "todo undo <N> ## Reopen task N".into(),
     );
 }

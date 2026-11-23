@@ -681,6 +681,11 @@ pub fn fill(m: &mut HashMap<String, String>) {
 
     m.insert("editor.mode_search".into(), "[搜索]".into());
 
+    m.insert(
+        "editor.mode_search_count".into(),
+        "[搜索] {}（{} 个匹配）".into(),
+    );
+
     m.insert("editor.mode_term_copied".into(), "已复制 {} 个字符".into());
 
     m.insert("editor.mode_terminal".into(), "[终端]".into());
@@ -931,6 +936,11 @@ pub fn fill(m: &mut HashMap<String, String>) {
 
     m.insert("editor.query_unknown".into(), "未知查询：{}".into());
 
+    m.insert(
+        "editor.query_upper_lower_required".into(),
+        "请先选择文本再转换大小写".into(),
+    );
+
     m.insert("editor.query_uppercased".into(), "已转为大写".into());
 
     m.insert("editor.redo".into(), "重做".into());
@@ -1052,4 +1062,61 @@ pub fn fill(m: &mut HashMap<String, String>) {
         "editor.zoom_hint".into(),
         "缩放：在终端模拟器中按 Ctrl++ / Ctrl+-".into(),
     );
+
+    m.insert(
+        "editor.mode_term_busy_esc".into(),
+        "命令仍在运行 - Esc 返回编辑器并保留终端（Ctrl+Q 隐藏）".into(),
+    );
+    m.insert(
+        "editor.nerun_no_file".into(),
+        "run：请先保存文件再运行".into(),
+    );
+    m.insert(
+        "editor.nerun_no_runner".into(),
+        "run：没有适用于 .{} 的运行器 — 请编辑 {}".into(),
+    );
+    m.insert("editor.nerun_running".into(), "正在运行 {}：{}".into());
+    m.insert(
+        "editor.nerun_save_failed".into(),
+        "run：保存失败：{}".into(),
+    );
+    m.insert(
+        "editor.nfe_box_actions".into(),
+        "Enter=确定 Esc=取消".into(),
+    );
+    m.insert("editor.nfe_box_new_dir".into(), "新建文件夹".into());
+    m.insert("editor.nfe_box_new_file".into(), "新建文件".into());
+    m.insert("editor.nfe_box_rename".into(), "重命名".into());
+    m.insert(
+        "editor.nfe_confirm".into(),
+        "删除“{}”？（y）确认，（n）取消？".into(),
+    );
+    m.insert(
+        "editor.nfe_jump_range".into(),
+        "侧边栏没有第 {} 项（1-{}）".into(),
+    );
+    m.insert("editor.nfe_jumped".into(), "已跳转到第 {} 项：{}".into());
+    m.insert("editor.nfe_rename_failed".into(), "重命名失败：{}".into());
+    m.insert(
+        "editor.nfe_rename_root".into(),
+        "请选择要重命名的文件或文件夹".into(),
+    );
+    m.insert("editor.nfe_renamed".into(), "已重命名为：{}".into());
+    m.insert("editor.nfe_rm_root".into(), "无法删除侧边栏根目录。".into());
+    m.insert(
+        "editor.tab_jump_range".into(),
+        "没有第 {} 个标签页（1-{}）".into(),
+    );
+    m.insert("editor.tab_no_tabs".into(), "没有可跳转的标签页".into());
+    m.insert(
+        "editor.unsaved_switch".into(),
+        "{} 中有未保存的更改 — 请先用 :w 保存（再次按下可强制切换）".into(),
+    );
+    m.insert(
+        "editor.visual_backspace_no_space".into(),
+        "Backspace 只会删除选区前的一个空格".into(),
+    );
+    m.insert("editor.lsp_on".into(), "语言服务：开".into());
+    m.insert("editor.lsp_off".into(), "语言服务：关".into());
+    m.insert("editor.lsp_usage".into(), "lsp [on|off] —— 切换补全、签名提示和悬浮信息".into());
 }

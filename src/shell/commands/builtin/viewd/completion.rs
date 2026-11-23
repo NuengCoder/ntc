@@ -1,0 +1,50 @@
+//! Static subcommand/flag completions for the `viewd` command.
+
+use crate::shell::commands::core::completion::{CompletionNode, CompletionSpec};
+
+pub(crate) static COMPLETION: CompletionSpec = CompletionSpec {
+    root: &[
+        "-d",
+        "--depth",
+        "-s",
+        "--size",
+        "-ds",
+        "--dirsize",
+        "-c",
+        "--care",
+        "--sort",
+        "-t",
+        "--time",
+        "-cp",
+        "--copy",
+        "-p",
+        "--path",
+    ],
+    flat: false,
+    nodes: &[CompletionNode {
+        path: &[],
+        case_sensitive: false,
+        tokens: &[
+            "-d",
+            "--depth",
+            "-s",
+            "--size",
+            "-ds",
+            "--dirsize",
+            "-c",
+            "--care",
+            "--sort",
+            "-t",
+            "--time",
+            "-cp",
+            "--copy",
+            "-p",
+            "--path",
+        ],
+        deeper: None,
+        beyond: None,
+        value_slots: &[],
+        suppress_after: &["-d", "--depth", "--sort", "-p", "--path"],
+        scope_flags: false,
+    }],
+};

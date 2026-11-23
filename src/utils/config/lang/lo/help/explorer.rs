@@ -2,8 +2,18 @@ use std::collections::HashMap;
 
 pub fn fill(m: &mut HashMap<String, String>) {
     m.insert(
+        "help.explorer.example1".into(),
+        "explorer ## ເປີດ file explorer ໃນໄດເຣັກທໍຣີປັດຈຸບັນ".into(),
+    );
+
+    m.insert(
+        "help.explorer.example2".into(),
+        "nfe ~/projects ## ເປີດ explorer ໃນ ~/projects".into(),
+    );
+
+    m.insert(
         "help.explorer.hint1".into(),
-        "h=help, b=parent dir, f=find (ສະແດງເສັ້ນທາງຜົນ)".into(),
+        "h=help, b=ໄດເຣັກທໍຣີແມ່, f=ຄົ້ນຫາ (ສະແດງເສັ້ນທາງຜົນ)".into(),
     );
 
     m.insert(
@@ -13,7 +23,7 @@ pub fn fill(m: &mut HashMap<String, String>) {
 
     m.insert(
         "help.explorer.hint3".into(),
-        "r=rename, d=delete, n=new file, m=new dir, i=hidden toggle".into(),
+        "r=ປ່ຽນຊື່, d=ລຶບ, n=ໄຟລ໌ໃໝ່, m=ໄດເຣັກທໍຣີໃໝ່, i=ສະຫຼັບການເຊື່ອງ".into(),
     );
 
     m.insert(
@@ -31,15 +41,5 @@ pub fn fill(m: &mut HashMap<String, String>) {
         "explorer, nfe [PATH] ## ເປີດ terminal file explorer ເຕັມຈໍ".into(),
     );
 
-    m.insert("help.explorer.title".into(), "FILE EXPLORER (NFE):".into());
-
-    m.insert(
-        "help.explorer.example1".into(),
-        "explorer ## ເປີດ file explorer ໃນໄດເຣັກທໍຣີປັດຈຸບັນ".into(),
-    );
-
-    m.insert(
-        "help.explorer.example2".into(),
-        "nfe ~/projects ## ເປີດ explorer ໃນ ~/projects".into(),
-    );
+    m.insert("help.explorer.title".into(), "ຕົວສຳຫຼວດໄຟລ໌ (NFE):".into());
 }

@@ -1,6 +1,6 @@
 [package]
 name = "ntc"
-version = "2.4.8"
+version = "2.4.9"
 edition = "2021"
 description = "Navigate, Toolkit, Center - A Combine of Navigation , Project Toolkit Center hub"
 authors = ["NuengCoder"]

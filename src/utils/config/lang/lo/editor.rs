@@ -724,6 +724,11 @@ pub fn fill(m: &mut HashMap<String, String>) {
 
     m.insert("editor.mode_search".into(), "[Search]".into());
 
+    m.insert(
+        "editor.mode_search_count".into(),
+        "[ຄົ້ນຫາ] {} (ພົບ {} ລາຍການ)".into(),
+    );
+
     m.insert("editor.mode_term_copied".into(), "ສຳເນົາ {} chars".into());
 
     m.insert("editor.mode_terminal".into(), "[Term]".into());
@@ -1024,6 +1029,11 @@ pub fn fill(m: &mut HashMap<String, String>) {
     m.insert("editor.query_unknown".into(), "ບໍ່ຮູ້ຈັກ query: {}".into());
 
     m.insert(
+        "editor.query_upper_lower_required".into(),
+        "ເລືອກຂໍ້ຄວາມກ່ອນປ່ຽນຕົວພິມ".into(),
+    );
+
+    m.insert(
         "editor.query_uppercased".into(),
         "ປ່ຽນການເລືອກເປັນຕົວພິມໃຫຍ່ແລ້ວ".into(),
     );
@@ -1156,4 +1166,56 @@ pub fn fill(m: &mut HashMap<String, String>) {
         "editor.zoom_hint".into(),
         "Zoom: Ctrl++ / Ctrl+- ໃນ terminal emulator".into(),
     );
+
+    m.insert("editor.mode_encoding".into(), "[ການເຂົ້າລະຫັດ]".into());
+    m.insert(
+        "editor.mode_term_busy_esc".into(),
+        "ຄຳສັ່ງຍັງຣັນຢູ່ - Esc ກັບໄປຕົວແກ້ໄຂ ແລະ ເກັບເທີມິນອນໄວ້ (Ctrl+Q ເຊື່ອງ)".into(),
+    );
+    m.insert("editor.nerun_no_file".into(), "run: ບັນທຶກໄຟລ໌ກ່ອນຣັນ".into());
+    m.insert(
+        "editor.nerun_no_runner".into(),
+        "run: ບໍ່ມີຕົວຣັນສຳລັບ .{} — ແກ້ໄຂ {}".into(),
+    );
+    m.insert("editor.nerun_running".into(), "ກຳລັງຣັນ {}: {}".into());
+    m.insert(
+        "editor.nerun_save_failed".into(),
+        "run: ບັນທຶກບໍ່ສຳເລັດ: {}".into(),
+    );
+    m.insert(
+        "editor.nfe_box_actions".into(),
+        "Enter=ຕົກລົງ Esc=ຍົກເລີກ".into(),
+    );
+    m.insert("editor.nfe_box_new_dir".into(), "ໂຟນເດີໃໝ່".into());
+    m.insert("editor.nfe_box_new_file".into(), "ໄຟລ໌ໃໝ່".into());
+    m.insert("editor.nfe_box_rename".into(), "ປ່ຽນຊື່".into());
+    m.insert(
+        "editor.nfe_confirm".into(),
+        "ລຶບ '{}' (y) ຢືນຢັນ, (n) ຍົກເລີກ? ".into(),
+    );
+    m.insert(
+        "editor.nfe_jump_range".into(),
+        "ບໍ່ມີລາຍການຂ້າງ {} (1-{})".into(),
+    );
+    m.insert("editor.nfe_jumped".into(), "ໄປຫາລາຍການ {}: {}".into());
+    m.insert("editor.nfe_rename_failed".into(), "ປ່ຽນຊື່ບໍ່ສຳເລັດ: {}".into());
+    m.insert(
+        "editor.nfe_rename_root".into(),
+        "ເລືອກໄຟລ໌ ຫຼື ໂຟນເດີເພື່ອປ່ຽນຊື່".into(),
+    );
+    m.insert("editor.nfe_renamed".into(), "ປ່ຽນຊື່ເປັນ: {}".into());
+    m.insert("editor.nfe_rm_root".into(), "ລຶບຮາກຂອງແຖບຂ້າງບໍ່ໄດ້.".into());
+    m.insert("editor.tab_jump_range".into(), "ບໍ່ມີແທັບ {} (1-{})".into());
+    m.insert("editor.tab_no_tabs".into(), "ບໍ່ມີແທັບໃຫ້ໄປ".into());
+    m.insert(
+        "editor.unsaved_switch".into(),
+        "ມີການປ່ຽນແປງທີ່ຍັງບໍ່ບັນທຶກໃນ {} — ໃຊ້ :w ບັນທຶກກ່ອນ (ກົດອີກຄັ້ງເພື່ອສະຫຼັບ)".into(),
+    );
+    m.insert(
+        "editor.visual_backspace_no_space".into(),
+        "Backspace ລຶບໄດ້ແຕ່ຊ່ອງຫວ່າງກ່ອນສ່ວນທີ່ເລືອກ".into(),
+    );
+    m.insert("editor.lsp_on".into(), "ບໍລິການພາສາ: ເປີດ".into());
+    m.insert("editor.lsp_off".into(), "ບໍລິການພາສາ: ປິດ".into());
+    m.insert("editor.lsp_usage".into(), "lsp [on|off] — ສະຫຼັບການເຕີມຄຳ, ຊ່ວຍລາຍເຊັນ ແລະ ຂໍ້ຄວາມລອຍ".into());
 }

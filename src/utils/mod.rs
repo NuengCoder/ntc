@@ -20,6 +20,7 @@ pub mod qsc;
 pub mod search;
 pub mod serve_info;
 pub mod session;
+pub mod syntax;
 pub mod teleport;
 pub mod terminal;
 #[cfg(test)]

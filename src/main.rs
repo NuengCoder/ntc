@@ -1,13 +1,24 @@
 use anyhow::Result;
-use colored::*;
+use colored::Colorize;
 use ntc::cli;
 use ntc::shell;
 use ntc::utils;
 use ntc::Config;
 
-fn run() -> Result<bool> {
+fn run() -> Result<(bool, i32)> {
     utils::theme::ThemeManager::ensure_default_themes();
     let _ = Config::global();
+    // rayon's default pool is one worker per CPU. On a small VPS that means a
+    // dozen threads (each with its own stack and malloc arena) for scans,
+    // sizes and views. Honor `config threads`, which was previously unused.
+    // Setting the env var (rather than building the pool here) keeps the pool
+    // lazy: commands that never use rayon still pay for no idle workers.
+    if std::env::var_os("RAYON_NUM_THREADS").is_none() {
+        std::env::set_var(
+            "RAYON_NUM_THREADS",
+            Config::global_get_num_threads().max(1).to_string(),
+        );
+    }
     cli::run_cli()
 }
 
@@ -75,7 +86,7 @@ fn main() -> Result<()> {
     {
         ntc::utils::terminal::init();
     }
-    let launch_interactive = run()?;
+    let (launch_interactive, exit_code) = run()?;
     if launch_interactive {
         // `config intro_view off` suppresses the whole startup intro
         // (logo here; ntpkg/watcher notices in the shell entry).
@@ -87,5 +98,10 @@ fn main() -> Result<()> {
         shell::run_shell()?;
     }
     Config::save_global();
+    // One-shot commands: hand the shell's success/failure back to the OS so
+    // scripts and CI can gate on `ntc <command>`.
+    if exit_code != 0 {
+        std::process::exit(exit_code);
+    }
     Ok(())
 }

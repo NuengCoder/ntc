@@ -716,6 +716,11 @@ pub fn fill(m: &mut HashMap<String, String>) {
 
     m.insert("editor.mode_search".into(), "[Search]".into());
 
+    m.insert(
+        "editor.mode_search_count".into(),
+        "[ค้นหา] {} (พบ {} รายการ)".into(),
+    );
+
     m.insert("editor.mode_term_copied".into(), "คัดลอก {} อักขระแล้ว".into());
 
     m.insert("editor.mode_terminal".into(), "[Term]".into());
@@ -1002,6 +1007,11 @@ pub fn fill(m: &mut HashMap<String, String>) {
     m.insert("editor.query_unknown".into(), "query ไม่รู้จัก: {}".into());
 
     m.insert(
+        "editor.query_upper_lower_required".into(),
+        "เลือกข้อความก่อนเปลี่ยนตัวพิมพ์".into(),
+    );
+
+    m.insert(
         "editor.query_uppercased".into(),
         "แปลงส่วนที่เลือกเป็นตัวพิมพ์ใหญ่แล้ว".into(),
     );
@@ -1141,4 +1151,57 @@ pub fn fill(m: &mut HashMap<String, String>) {
         "editor.nfe_rm_root".into(),
         "ไม่สามารถล้าง root ของ sidebar ได้.".into(),
     );
+
+    m.insert("editor.mode_encoding".into(), "[การเข้ารหัส]".into());
+    m.insert(
+        "editor.mode_term_busy_esc".into(),
+        "คำสั่งยังทำงานอยู่ - Esc กลับไปยังตัวแก้ไขและเก็บเทอร์มินัลไว้ (Ctrl+Q ซ่อน)".into(),
+    );
+    m.insert(
+        "editor.nerun_no_file".into(),
+        "run: บันทึกไฟล์ก่อนเรียกใช้".into(),
+    );
+    m.insert(
+        "editor.nerun_no_runner".into(),
+        "run: ไม่มีตัวเรียกใช้สำหรับ .{} — แก้ไข {}".into(),
+    );
+    m.insert("editor.nerun_running".into(), "กำลังเรียกใช้ {}: {}".into());
+    m.insert(
+        "editor.nerun_save_failed".into(),
+        "run: บันทึกไม่สำเร็จ: {}".into(),
+    );
+    m.insert(
+        "editor.nfe_box_actions".into(),
+        "Enter=ตกลง Esc=ยกเลิก".into(),
+    );
+    m.insert("editor.nfe_box_new_dir".into(), "โฟลเดอร์ใหม่".into());
+    m.insert("editor.nfe_box_new_file".into(), "ไฟล์ใหม่".into());
+    m.insert("editor.nfe_box_rename".into(), "เปลี่ยนชื่อ".into());
+    m.insert(
+        "editor.nfe_jump_range".into(),
+        "ไม่มีรายการด้านข้าง {} (1-{})".into(),
+    );
+    m.insert("editor.nfe_jumped".into(), "ไปยังรายการ {}: {}".into());
+    m.insert(
+        "editor.nfe_rename_failed".into(),
+        "เปลี่ยนชื่อไม่สำเร็จ: {}".into(),
+    );
+    m.insert(
+        "editor.nfe_rename_root".into(),
+        "เลือกไฟล์หรือโฟลเดอร์ที่จะเปลี่ยนชื่อ".into(),
+    );
+    m.insert("editor.nfe_renamed".into(), "เปลี่ยนชื่อเป็น: {}".into());
+    m.insert("editor.tab_jump_range".into(), "ไม่มีแท็บ {} (1-{})".into());
+    m.insert("editor.tab_no_tabs".into(), "ไม่มีแท็บให้ข้าม".into());
+    m.insert(
+        "editor.unsaved_switch".into(),
+        "มีการเปลี่ยนแปลงที่ยังไม่บันทึกใน {} — ใช้ :w บันทึกก่อน (กดอีกครั้งเพื่อสลับ)".into(),
+    );
+    m.insert(
+        "editor.visual_backspace_no_space".into(),
+        "Backspace ลบได้เฉพาะช่องว่างก่อนส่วนที่เลือก".into(),
+    );
+    m.insert("editor.lsp_on".into(), "บริการภาษา: เปิด".into());
+    m.insert("editor.lsp_off".into(), "บริการภาษา: ปิด".into());
+    m.insert("editor.lsp_usage".into(), "lsp [on|off] — สลับการเติมคำ ช่วยลายเซ็น และข้อความลอย".into());
 }

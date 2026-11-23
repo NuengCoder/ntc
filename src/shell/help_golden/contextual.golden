@@ -1,0 +1,78 @@
+=== cd ===
+cd <path>
+cd to <tp-alias>
+=== cd to ===
+cd to <tp-alias>
+=== cd to some_tp ===
+<cr> press enter to run it
+=== cd src ===
+<cr> press enter to run it
+=== ignore ===
+dir
+ext
+file
+=== ignore dir ===
+ignore dir <dir_name>
+=== ignore dir foo ===
+<cr> press enter to run it
+=== care ext ===
+care ext <ext>
+=== tp ===
+add
+jump
+to
+info
+list
+ls
+rm
+rnm
+rename
+cls
+help
+=== tp jump ===
+tp jump <tp-alias>
+=== tp jump foo ===
+<cr> press enter to run it
+=== arc ===
+create
+extract
+list
+help
+=== arc create ===
+arc create <out.zip|tar.gz|tgz|tar> <files...>
+  e.g. arc create backup.zip src Cargo.toml
+=== scan ===
+ext
+files
+dir
+port
+ip
+pid
+waep
+web
+help
+=== scan ext ===
+scan ext <ext...> [-d|--depth <n>] [-s|--size] [--care]
+=== qur ===
+qur <glob> [-s "pattern"] [-rp "new"] [-dp] [-d <n>] [-l <n>]
+-s
+--select
+-rp
+--replace
+-dp
+--display
+-d
+--depth
+-l
+--limit
+=== qur *.* ===
+qur <glob> -s "<pattern>" | -d <n> | -l <n>
+=== qur *.* -s foo ===
+qur <glob> -s "<pattern>" -dp | -rp "<new>" [-d <n>] [-l <n>]
+=== time ===
+--count
+--bench
+--compare
+--help
+=== where ===
+<cr> press enter to run it

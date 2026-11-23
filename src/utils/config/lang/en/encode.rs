@@ -57,13 +57,38 @@ pub fn fill(m: &mut HashMap<String, String>) {
     );
 
     m.insert(
+        "encode.invalid_escape".into(),
+        "Invalid escape sequence: '{}'".into(),
+    );
+
+    m.insert(
+        "encode.invalid_utf8".into(),
+        "Decoded bytes are not valid UTF-8".into(),
+    );
+
+    m.insert(
+        "encode.invalid_utf16".into(),
+        "Decoded UTF-16 is not valid (unpaired surrogate)".into(),
+    );
+
+    m.insert(
+        "encode.not_ascii".into(),
+        "Character '{}' is not ASCII".into(),
+    );
+
+    m.insert(
+        "encode.not_ascii_byte".into(),
+        "Decoded byte {} is not ASCII".into(),
+    );
+
+    m.insert(
         "encode.truncated_pct".into(),
         "Truncated percent-encoding".into(),
     );
 
     m.insert(
         "encode.unknown_format".into(),
-        "Unknown encode format: '{}'. Use b2, b10, b64, hex, or url.".into(),
+        "Unknown encode format: '{}'. Use b2, b10, b64, hex, url, utf8, utf16, or ascii.".into(),
     );
 
     m.insert(
@@ -73,7 +98,8 @@ pub fn fill(m: &mut HashMap<String, String>) {
 
     m.insert(
         "encode.unknown_format_generic".into(),
-        "Unknown format: '{}'. Use b2, b10, b64, hex, or url.".into(),
+        "Unknown format: '{}'. Use b2, b10, b64, hex, url, utf8, utf16, ascii, or plaintext."
+            .into(),
     );
 
     m.insert(
@@ -104,6 +130,21 @@ pub fn fill(m: &mut HashMap<String, String>) {
     m.insert(
         "encode.usage_encode_url".into(),
         " encode url <target> [-o <file>] URL percent-encode".into(),
+    );
+
+    m.insert(
+        "encode.usage_encode_utf8".into(),
+        " encode utf8 <target> [-o <file>] UTF-8 as escaped bytes (\\xc3\\xa9)".into(),
+    );
+
+    m.insert(
+        "encode.usage_encode_utf16".into(),
+        " encode utf16 <target> [-o <file>] UTF-16 as \\uNNNN escapes (\\u00e9)".into(),
+    );
+
+    m.insert(
+        "encode.usage_encode_ascii".into(),
+        " encode ascii <target> [-o <file>] ASCII text (errors above U+007F)".into(),
     );
 
     m.insert("encode.usage_examples".into(), "Examples:".into());

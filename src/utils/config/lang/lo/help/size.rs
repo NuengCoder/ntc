@@ -7,23 +7,6 @@ pub fn fill(m: &mut HashMap<String, String>) {
     );
 
     m.insert(
-        "help.size.path".into(),
-        "size -p, --path <path|@tp> ## ສະແດງຂະໜາດຂອງໄຟລ໌, path ຫຼື teleport savepoint ທີ່ລະບຸ".into(),
-    );
-
-    m.insert(
-        "help.size.size".into(),
-        "size ## ສະແດງຂະໜາດໄດເຣັກທໍຣີປັດຈຸບັນ".into(),
-    );
-
-    m.insert(
-        "help.size.time".into(),
-        "size -t, --time ## ສະແດງເວລາທີ່ໃຊ້".into(),
-    );
-
-    m.insert("help.size.title".into(), "ຄຳສັ່ງ SIZE:".into());
-
-    m.insert(
         "help.size.example1".into(),
         "size ## ສະແດງຂະໜາດໄດເຣັກທໍຣີປັດຈຸບັນ".into(),
     );
@@ -42,4 +25,21 @@ pub fn fill(m: &mut HashMap<String, String>) {
         "help.size.example4".into(),
         "size @web --care -t ## ໂໝດ care ພ້ອມເວລາທີ່ໃຊ້ສຳລັບ savepoint".into(),
     );
+
+    m.insert(
+        "help.size.path".into(),
+        "size -p, --path <path|@tp> ## ສະແດງຂະໜາດຂອງໄຟລ໌, path ຫຼື teleport savepoint ທີ່ລະບຸ".into(),
+    );
+
+    m.insert(
+        "help.size.size".into(),
+        "size ## ສະແດງຂະໜາດໄດເຣັກທໍຣີປັດຈຸບັນ".into(),
+    );
+
+    m.insert(
+        "help.size.time".into(),
+        "size -t, --time ## ສະແດງເວລາທີ່ໃຊ້".into(),
+    );
+
+    m.insert("help.size.title".into(), "ຄຳສັ່ງ SIZE:".into());
 }

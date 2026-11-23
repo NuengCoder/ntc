@@ -82,4 +82,9 @@ pub fn fill(m: &mut HashMap<String, String>) {
         "cmd.clipboard.unknown_sub".into(),
         "ບໍ່ຮູ້ຈັກ clip subcommand: {}".into(),
     );
+
+    m.insert(
+        "cmd.clipboard.copied_piped".into(),
+        "ຄັດລອກຂໍ້ມູນທີ່ສົ່ງຜ່ານທໍ່ໄປຍັງຄລິບບອດແລ້ວ.".into(),
+    );
 }

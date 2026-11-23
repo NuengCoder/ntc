@@ -42,6 +42,10 @@ static STATUS_CACHE: LazyLock<Mutex<HashMap<PathBuf, CacheEntry>>> =
     LazyLock::new(|| Mutex::new(HashMap::new()));
 
 const CACHE_TTL: Duration = Duration::from_secs(2);
+/// One entry holds every changed path of a repository, and the prompt caches
+/// per directory it is called with, so the map is capped instead of growing
+/// with every `cd` in a session.
+const CACHE_LIMIT: usize = 8;
 
 /// The system git binary, located once and cached.
 fn git_binary() -> Option<&'static PathBuf> {
@@ -68,6 +72,53 @@ pub fn git_output(dir: &Path, args: &[&str]) -> Option<String> {
     Some(String::from_utf8_lossy(&out.stdout).into_owned())
 }
 
+/// Absolute repository root that contains `dir`, or None outside a repo.
+pub fn repo_root(dir: &Path) -> Option<PathBuf> {
+    let out = git_output(dir, &["rev-parse", "--show-toplevel"])?;
+    let root = out.trim();
+    if root.is_empty() {
+        None
+    } else {
+        Some(PathBuf::from(root))
+    }
+}
+
+/// Run a mutating git command. Returns its combined output on success and
+/// git's own error text on failure, so a GUI can show why it refused.
+pub fn run_git(dir: &Path, args: &[&str]) -> std::result::Result<String, String> {
+    run_git_with(dir, args, false)
+}
+
+/// Like [`run_git`] for commands that talk to a remote (fetch/push/pull).
+pub fn run_git_net(dir: &Path, args: &[&str]) -> std::result::Result<String, String> {
+    run_git_with(dir, args, true)
+}
+
+fn run_git_with(dir: &Path, args: &[&str], _network: bool) -> std::result::Result<String, String> {
+    let bin = git_binary().ok_or_else(|| "git is not installed".to_string())?;
+    let out = Command::new(bin)
+        .args(args)
+        .current_dir(dir)
+        .output()
+        .map_err(|e| e.to_string())?;
+    let stdout = String::from_utf8_lossy(&out.stdout).into_owned();
+    let stderr = String::from_utf8_lossy(&out.stderr).into_owned();
+    if out.status.success() {
+        if stdout.trim().is_empty() {
+            Ok(stderr)
+        } else {
+            Ok(stdout)
+        }
+    } else {
+        let message = if stderr.trim().is_empty() {
+            stdout
+        } else {
+            stderr
+        };
+        Err(message.trim().to_string())
+    }
+}
+
 /// True if `dir` is inside a git work tree.
 pub fn is_repo(dir: &Path) -> bool {
     git_output(dir, &["rev-parse", "--is-inside-work-tree"])
@@ -87,6 +138,10 @@ pub fn status(dir: &Path) -> Option<GitStatus> {
 
     let parsed = status_uncached(dir);
     if let Ok(mut cache) = STATUS_CACHE.lock() {
+        cache.retain(|_, e| e.updated.elapsed() < CACHE_TTL);
+        if cache.len() >= CACHE_LIMIT {
+            cache.clear();
+        }
         cache.insert(
             dir.to_path_buf(),
             CacheEntry {

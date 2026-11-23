@@ -186,14 +186,38 @@ pub fn is_supported_format_with_config(path: &Path, cfg: &FormatConfig) -> bool 
     }
 
     // 6. Heuristic: read first 8 KB; if no null bytes, treat as text.
-    if let Ok(content) = std::fs::read(path) {
-        let sample = &content[..content.len().min(8192)];
+    if let Some(sample) = read_head(path) {
         if !sample.contains(&0) {
             return true;
         }
     }
 
     false
+}
+
+/// Bytes inspected when guessing whether a file is text.
+const SNIFF_BYTES: usize = 8192;
+
+/// Read at most [`SNIFF_BYTES`] from the start of `path`.
+///
+/// Sniffing used `std::fs::read`, which allocated the whole file: walking a
+/// directory that held a 600 MB archive or build artifact spiked ntc's RSS by
+/// that much for every such file. The heuristic only ever looks at the head.
+fn read_head(path: &Path) -> Option<Vec<u8>> {
+    use std::io::Read;
+    let mut file = std::fs::File::open(path).ok()?;
+    let mut sample = vec![0u8; SNIFF_BYTES];
+    let mut read = 0;
+    while read < SNIFF_BYTES {
+        match file.read(&mut sample[read..]) {
+            Ok(0) => break,
+            Ok(n) => read += n,
+            Err(e) if e.kind() == std::io::ErrorKind::Interrupted => continue,
+            Err(_) => return None,
+        }
+    }
+    sample.truncate(read);
+    Some(sample)
 }
 
 /// Convenience wrapper for single-file checks (e.g. `txt <file>` in the
@@ -301,8 +325,7 @@ pub fn is_finder_hidden(path: &Path) -> bool {
         return true;
     }
     if path.extension().is_none() && path.is_file() {
-        if let Ok(content) = std::fs::read(path) {
-            let sample = &content[..content.len().min(8192)];
+        if let Some(sample) = read_head(path) {
             if sample.contains(&0) {
                 return true;
             }

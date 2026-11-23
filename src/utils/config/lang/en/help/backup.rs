@@ -22,6 +22,26 @@ pub fn fill(m: &mut HashMap<String, String>) {
     );
 
     m.insert(
+        "help.backup.example1".into(),
+        "backup create ## Create a new backup".into(),
+    );
+
+    m.insert(
+        "help.backup.example2".into(),
+        "backup list ## List all backups".into(),
+    );
+
+    m.insert(
+        "help.backup.example3".into(),
+        "backup restore 1 ## Restore backup #1".into(),
+    );
+
+    m.insert(
+        "help.backup.example4".into(),
+        "backup diff 1 ## Diff against backup #1".into(),
+    );
+
+    m.insert(
         "help.backup.list".into(),
         "backup list ## List all backups".into(),
     );
@@ -61,25 +81,5 @@ pub fn fill(m: &mut HashMap<String, String>) {
     m.insert(
         "help.backup.undo_force".into(),
         "backup undo --force ## Clear undo history (no confirmation)".into(),
-    );
-
-    m.insert(
-        "help.backup.example1".into(),
-        "backup create ## Create a new backup".into(),
-    );
-
-    m.insert(
-        "help.backup.example2".into(),
-        "backup list ## List all backups".into(),
-    );
-
-    m.insert(
-        "help.backup.example3".into(),
-        "backup restore 1 ## Restore backup #1".into(),
-    );
-
-    m.insert(
-        "help.backup.example4".into(),
-        "backup diff 1 ## Diff against backup #1".into(),
     );
 }

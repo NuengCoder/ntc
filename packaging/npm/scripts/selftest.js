@@ -163,8 +163,6 @@ function testPlatformMatrix() {
   const a = (n) => `ntc-v${VERSION}-${n}`;
   const cases = [
     { name: 'termux android arm64',   p: 'android', a: 'arm64', x: true,  bin: 'ntc',     primary: a('aarch64-linux-android.tar.gz'),      rest: [a('linux-aarch64.tar.gz')] },
-    { name: 'termux android x64',     p: 'android', a: 'x64',   x: true,  bin: 'ntc',     primary: a('x86_64-linux-android.tar.gz'),       rest: [a('linux-x86_64.tar.gz')] },
-    { name: 'termux android arm',     p: 'android', a: 'arm',   x: true,  bin: 'ntc',     primary: a('armv7-linux-androideabi.tar.gz'),    rest: [] },
     { name: 'termux reporting linux', p: 'linux',   a: 'arm64', x: true,  bin: 'ntc',     primary: a('aarch64-linux-android.tar.gz'),      rest: [a('linux-aarch64.tar.gz')] },
     { name: 'linux arm64',            p: 'linux',   a: 'arm64', x: false, bin: 'ntc',     primary: a('linux-aarch64.tar.gz'),              rest: [] },
     { name: 'linux x64',              p: 'linux',   a: 'x64',   x: false, bin: 'ntc',     primary: a('linux-x86_64.tar.gz'),               rest: [] },
@@ -186,6 +184,9 @@ function testPlatformMatrix() {
   }
 
   check('platform matrix: unsupported -> null', getPlatformInfo('freebsd', 'x64', false) === null);
+  check('platform matrix: termux x64 unsupported', getPlatformInfo('android', 'x64', true) === null);
+  check('platform matrix: termux armv7 unsupported', getPlatformInfo('android', 'arm', true) === null);
+  check('platform matrix: termux reporting linux x64 unsupported', getPlatformInfo('linux', 'x64', true) === null);
 
   const saved = process.env.NTC_NPM_ASSET;
   process.env.NTC_NPM_ASSET = 'ntc-v0.0.0-custom.tar.gz';

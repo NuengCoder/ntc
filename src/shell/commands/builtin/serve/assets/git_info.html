@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>NTC Git — About this service</title>
+<style>
+  :root {
+    --bg: #0f1115;
+    --panel: #171a21;
+    --panel-2: #1d212a;
+    --line: #2a2f3a;
+    --text: #e6e9ef;
+    --muted: #8b93a3;
+    --accent: #5aa9ff;
+    --accent-2: #2f7ed8;
+    --ok: #57d38c;
+    --warn: #ffb454;
+    --err: #ff6b6b;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font: 14px/1.55 ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+    background: var(--bg);
+    color: var(--text);
+  }
+  header {
+    padding: 14px 20px;
+    border-bottom: 1px solid var(--line);
+    background: var(--panel);
+    display: flex;
+    gap: 12px;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+  }
+  h1 { margin: 0; font-size: 16px; letter-spacing: .04em; }
+  h1 span { color: var(--accent); }
+  h1 .muted { font-weight: 400; letter-spacing: 0; }
+  h2 {
+    margin: 0 0 10px;
+    font-size: 13px;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: .06em;
+  }
+  main { max-width: 880px; margin: 0 auto; padding: 20px 20px 60px; }
+  section {
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 16px;
+    margin-bottom: 16px;
+  }
+  p { margin: 0 0 10px; }
+  p:last-child { margin-bottom: 0; }
+  ul, ol { margin: 0; padding-left: 22px; }
+  li { margin-bottom: 7px; }
+  li:last-child { margin-bottom: 0; }
+  kbd {
+    font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+    font-size: 11px;
+    background: var(--panel-2);
+    border: 1px solid var(--line);
+    border-bottom-width: 2px;
+    border-radius: 4px;
+    padding: 0 5px;
+  }
+  code {
+    font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+    font-size: 12.5px;
+    background: var(--panel-2);
+    border: 1px solid var(--line);
+    border-radius: 5px;
+    padding: 1px 5px;
+    color: #cfd6e2;
+    overflow-wrap: anywhere;
+  }
+  pre {
+    margin: 8px 0 0;
+    padding: 10px 12px;
+    background: #0b0d12;
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    overflow: auto;
+    font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+    font-size: 12px;
+    color: #cfd6e2;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+  }
+  a { color: var(--accent); }
+  .muted { color: var(--muted); }
+  .back {
+    color: var(--text);
+    text-decoration: none;
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    padding: 6px 10px;
+    font-size: 12px;
+    white-space: nowrap;
+  }
+  .back:hover { border-color: var(--accent-2); }
+  dl { margin: 0; }
+  dt { color: var(--accent); font-size: 12px; text-transform: uppercase; letter-spacing: .05em; margin-top: 12px; }
+  dt:first-child { margin-top: 0; }
+  dd { margin: 3px 0 0; }
+  .rule { color: var(--warn); }
+</style>
+</head>
+<body>
+<header>
+  <h1>NTC <span>Git</span> <span class="muted">· about this service</span></h1>
+  <a class="back" href="/">Back to the repository</a>
+</header>
+
+<main>
+  <section>
+    <h2>What this is</h2>
+    <p>
+      <code>serve git</code> is a small, local web interface for the repository this command was
+      started in. It is a thin front-end over the system <code>git</code> binary: every button runs a
+      real git command, and the command bar at the bottom of the page shows exactly which one.
+      There is no database, no background state and no bundled copy of your history.
+    </p>
+    <p>Repository: <code>{{ROOT}}</code></p>
+    <p class="muted">
+      The page talks to a JSON API on the same port; the API is for this UI and is not a stable
+      public interface.
+    </p>
+  </section>
+
+  <section>
+    <h2>Quick start</h2>
+    <ol>
+      <li>Run <code>ntc serve git [path]</code> from the repository (or pass its path), optionally with <code>--port</code> / <code>--bind</code>.</li>
+      <li>Open <code>http://127.0.0.1:8091</code>.</li>
+      <li>In <b>Changes</b>, tick the files you want and press <b>Stage selected</b>.</li>
+      <li>Write a message in the sticky footer and press <b>Commit staged</b> (<kbd>Ctrl+Enter</kbd>).</li>
+      <li>In <b>Remotes</b>, <b>Fetch</b>, then <b>Pull</b>, <b>Push</b> or <b>Publish branch</b>.</li>
+    </ol>
+    <p class="muted">Default port and bind can be changed permanently with <code>serve config git --port-default N --bind-default ADDR</code> (alias <code>config serve git</code>).</p>
+  </section>
+
+  <section>
+    <h2>Tabs</h2>
+    <p class="muted">The left rail is the whole page. Each tab has its own hash route, so a link like <code>#/changes/file/src%2Fmain.rs</code> or <code>#/history/&lt;hash&gt;</code> survives a reload and can be bookmarked.</p>
+    <dl>
+      <dt>Repository</dt>
+      <dd>Repository facts (root, HEAD, upstream, ahead/behind, remotes, working-tree state) plus quick actions: refresh, fetch, open Changes/History, create a branch.</dd>
+      <dt>Changes</dt>
+      <dd>Every changed file with its index/worktree state, filterable by path and by staged/unstaged/untracked/conflicts. Stage, unstage or discard the selection, or use the per-row buttons. The diff of the selected file opens in the inspector; the commit box is a sticky footer.</dd>
+      <dt>History</dt>
+      <dd>The last 30 commits. Click one to list the files it changed, with the commit hash ready to copy.</dd>
+      <dt>Branches</dt>
+      <dd>Local branches: switch, create and switch, rename, safely delete (<code>git branch -d</code>), merge the selected branch into the current one, or rebase the current branch onto it.</dd>
+      <dt>Remotes</dt>
+      <dd>Pick a remote, fetch it, preview incoming commits, publish a branch that has no upstream, push, or pull with <code>--ff-only</code>.</dd>
+      <dt>Stash</dt>
+      <dd>Stash tracked changes with an optional message, then apply, pop or drop an entry.</dd>
+      <dt>Tags</dt>
+      <dd>List, create (lightweight or annotated) and delete local tags, and push every tag to a remote.</dd>
+      <dt>Actions</dt>
+      <dd>Merge/rebase state, <b>Continue rebase</b>, and the conflict resolver: take <b>Ours</b> or <b>Theirs</b> for a whole file, or edit it yourself and press <b>Resolved</b>.</dd>
+    </dl>
+  </section>
+
+  <section>
+    <h2>Keyboard</h2>
+    <ul>
+      <li><kbd>1</kbd>–<kbd>8</kbd> switch tab (ignored while typing).</li>
+      <li><kbd>/</kbd> focuses the current tab's filter.</li>
+      <li><kbd>j</kbd>/<kbd>k</kbd> or <kbd>↑</kbd>/<kbd>↓</kbd> move through the file list, <kbd>Space</kbd> toggles the current file.</li>
+      <li><kbd>Ctrl+A</kbd> in Changes selects every file in the current filter; <b>Shift-click</b> selects a range.</li>
+      <li><kbd>Ctrl+Enter</kbd> in the commit message commits the staged changes.</li>
+      <li><kbd>R</kbd> reloads the active tab, <kbd>Esc</kbd> closes the inspector.</li>
+    </ul>
+  </section>
+
+  <section>
+    <h2>Rules and safety</h2>
+    <ul>
+      <li><span class="rule">Local by default.</span> The server binds <code>127.0.0.1:8091</code>. Anyone who can reach the bind address can run git operations on this repository with your permissions, and there is no authentication — only use <code>--bind</code> on a network you trust.</li>
+      <li><span class="rule">Real git only.</span> Actions shell out to git and report git's own errors; the echoed command is the command that ran.</li>
+      <li><span class="rule">Paths are checked.</span> Stage, unstage and discard accept only paths that <code>git status</code> reports as changed. Discard keeps staged changes and refuses untracked files, conflicted paths and files with nothing unstaged.</li>
+      <li><span class="rule">Names are checked.</span> Branch and tag names must be valid ref names and are matched against the existing local branches/tags before use. Deleting a branch uses <code>git branch -d</code>, so unmerged branches and the current branch are refused.</li>
+      <li><span class="rule">Remote actions need context.</span> Push and pull require a checked-out branch with an upstream; Publish sets one with <code>git push -u &lt;remote&gt; &lt;branch&gt;</code>. Pull is <code>--ff-only</code>, so it never creates an unresolved merge commit.</li>
+      <li><span class="rule">No credential prompts.</span> Fetch, push, pull, publish and tag pushes disable interactive prompts, so missing credentials fail with git's error instead of hanging the server. Configure SSH keys or a credential helper first.</li>
+      <li><span class="rule">Bounded output.</span> Diffs stop at about 200 KB, commit file lists at 500 entries, commit and incoming lists at 30 entries, and commit messages at 4096 characters. Untracked files are not stashed.</li>
+    </ul>
+  </section>
+
+  <section>
+    <h2>If something goes wrong</h2>
+    <ul>
+      <li>A merge conflict keeps <code>MERGE_HEAD</code> until you commit the merge from the Changes tab; resolve every file in Actions first.</li>
+      <li>A rebase conflict leaves the rebase unfinished until <b>Continue rebase</b> in Actions; committing is disabled meanwhile.</li>
+      <li>If the page seems stale, press <b>Refresh</b> (<kbd>R</kbd>) or turn on <b>Auto</b>. Status is cached for about two seconds; actions that validate paths re-read it.</li>
+      <li>Anything the UI cannot do is still available in your terminal — the echoed command is a good starting point.</li>
+    </ul>
+  </section>
+</main>
+</body>
+</html>

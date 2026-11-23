@@ -1,8 +1,9 @@
 use crate::config::Config;
-use crate::syntax::{color_for, SyntaxHighlighter};
 use crate::t;
+use crate::utils::syntax::{color_for, SyntaxHighlighter};
+use crate::utils::theme::style::ThemeColorize;
+use crate::utils::theme::{ShellRole, ThemeManager};
 use anyhow::{Context, Result};
-use colored::*;
 use std::fs;
 use std::io::Write;
 use std::path::{Path, PathBuf};
@@ -130,15 +131,18 @@ pub fn cat_file_range(
 ) -> Result<()> {
     let content = read_file_as_string(file_path)?;
 
+    let theme = ThemeManager::current();
     println!(
         "{}",
-        t!(
-            "output.filename_header",
-            file_path.file_name().unwrap_or_default().to_string_lossy()
+        theme.shell.paint_bold(
+            ShellRole::HelpHeader,
+            &t!(
+                "output.filename_header",
+                file_path.file_name().unwrap_or_default().to_string_lossy()
+            )
         )
-        .cyan()
-        .bold()
     );
+    drop(theme);
 
     let lines: Vec<&str> = content.lines().collect();
     let selected = slice_numbered_lines(&lines, range);
@@ -148,9 +152,17 @@ pub fn cat_file_range(
     }
 
     if show_lines {
+        let theme = ThemeManager::current();
         for (no, line) in &selected {
-            println!("{} {}", t!("output.line_prefix", no).yellow().bold(), line);
+            println!(
+                "{} {}",
+                theme
+                    .shell
+                    .paint_bold(ShellRole::LineNumber, &t!("output.line_prefix", no)),
+                line
+            );
         }
+        drop(theme);
     } else {
         for (_, line) in &selected {
             println!("{}", line);
@@ -243,22 +255,18 @@ pub fn cat_file_with_syntax_range(
         return cat_file(file_path, show_lines);
     }
 
-    // Language is detected. Emit the header + line-number prefix using
-    // raw ANSI codes as well, so the whole display is consistently
-    // colored regardless of the `setc` toggle. (Otherwise the header
-    // would be plain while the body is colored, which is jarring.)
-    let header_color = "\x1b[36;1m"; // cyan bold
-    let line_num_color = "\x1b[33;1m"; // yellow bold
-    let reset = "\x1b[0m";
-
+    // Language is detected. Header and gutter use the selected theme;
+    // the body below already uses `SyntaxTheme` through `color_for`.
+    let theme = ThemeManager::current();
     print!(
-        "{}{}{}",
-        header_color,
-        t!(
-            "output.filename_header",
-            file_path.file_name().unwrap_or_default().to_string_lossy()
-        ),
-        reset
+        "{}",
+        theme.shell.paint_bold(
+            ShellRole::HelpHeader,
+            &t!(
+                "output.filename_header",
+                file_path.file_name().unwrap_or_default().to_string_lossy()
+            )
+        )
     );
     println!();
 
@@ -282,16 +290,16 @@ pub fn cat_file_with_syntax_range(
 
         if show_lines {
             print!(
-                "{}{} {}",
-                line_num_color,
-                t!("output.line_prefix", no),
-                ANSI_RESET,
+                "{} ",
+                theme
+                    .shell
+                    .paint_bold(ShellRole::LineNumber, &t!("output.line_prefix", no)),
             );
-            // Stay in the yellow-bold prefix style for the gap.
         }
 
         print_syntax_line(&mut syntax, i, line);
     }
+    drop(theme);
 
     Ok(())
 }

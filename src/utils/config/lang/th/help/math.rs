@@ -7,23 +7,6 @@ pub fn fill(m: &mut HashMap<String, String>) {
     );
 
     m.insert(
-        "help.math.file".into(),
-        "math file.ntc.math ## คอมไพล์และเรียกใช้ไฟล์คณิตศาสตร์".into(),
-    );
-
-    m.insert(
-        "help.math.fun".into(),
-        "math fun add/rm/edit/info/ls ## จัดการฟังก์ชันคณิตศาสตร์แบบกำหนดเอง".into(),
-    );
-
-    m.insert(
-        "help.math.timer".into(),
-        "math timer [sec] ## จับเวลารอบหรือนับถอยหลังพร้อมสัญญาณเตือน".into(),
-    );
-
-    m.insert("help.math.title".into(), "คำสั่งคณิตศาสตร์ (MATH):".into());
-
-    m.insert(
         "help.math.example1".into(),
         "math 3+4*5 ## ประเมินนิพจน์เลขคณิต".into(),
     );
@@ -52,4 +35,21 @@ pub fn fill(m: &mut HashMap<String, String>) {
         "help.math.example6".into(),
         "math calc.ntc.math ## เรียกไฟล์คณิตศาสตร์".into(),
     );
+
+    m.insert(
+        "help.math.file".into(),
+        "math file.ntc.math ## คอมไพล์และเรียกใช้ไฟล์คณิตศาสตร์".into(),
+    );
+
+    m.insert(
+        "help.math.fun".into(),
+        "math fun add/rm/edit/info/ls ## จัดการฟังก์ชันคณิตศาสตร์แบบกำหนดเอง".into(),
+    );
+
+    m.insert(
+        "help.math.timer".into(),
+        "math timer [sec] ## จับเวลารอบหรือนับถอยหลังพร้อมสัญญาณเตือน".into(),
+    );
+
+    m.insert("help.math.title".into(), "คำสั่งคณิตศาสตร์ (MATH):".into());
 }

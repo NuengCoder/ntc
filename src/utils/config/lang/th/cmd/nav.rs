@@ -2,6 +2,11 @@ use std::collections::HashMap;
 
 pub fn fill(m: &mut HashMap<String, String>) {
     m.insert(
+        "cmd.godrive.unknown".into(),
+        "ไม่พบไดรฟ์หรือเมานต์ชื่อ '{}'".into(),
+    );
+
+    m.insert(
         "cmd.nav.back.invalid_number".into(),
         "ตัวเลขไม่ถูกต้อง: {}. การใช้งาน: back [n]".into(),
     );
@@ -112,5 +117,32 @@ pub fn fill(m: &mut HashMap<String, String>) {
         "ตำแหน่งของ '{}' ใน PATH:".into(),
     );
 
+    m.insert("cmd.nav.where.deadlock".into(), "Deadlock vault:".into());
+
+    m.insert("cmd.nav.where.disabled".into(), "ปิดใช้งาน".into());
+
+    m.insert(
+        "cmd.nav.where.editor_config".into(),
+        "ไฟล์กำหนดค่าเอดิเตอร์:".into(),
+    );
+
+    m.insert("cmd.nav.where.history".into(), "ประวัติ:".into());
+
+    m.insert("cmd.nav.where.home".into(), "NTC home:".into());
+
+    m.insert("cmd.nav.where.nssh".into(), "โปรไฟล์ SSH:".into());
+
+    m.insert("cmd.nav.where.packages".into(), "แพ็กเกจ:".into());
+
+    m.insert("cmd.nav.where.recovery".into(), "กู้คืนหลังแครช:".into());
+
+    m.insert("cmd.nav.where.sessions".into(), "เซสชัน:".into());
+
+    m.insert("cmd.nav.where.skills".into(), "สกิล:".into());
+
+    m.insert("cmd.nav.where.themes".into(), "ธีม:".into());
+
     m.insert("cmd.nav.where.title".into(), "ข้อมูลตำแหน่งของ ntc".into());
+
+    m.insert("cmd.nav.where.tutorial".into(), "บทเรียน:".into());
 }

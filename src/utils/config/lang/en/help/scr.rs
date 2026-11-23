@@ -39,6 +39,11 @@ pub fn fill(m: &mut HashMap<String, String>) {
     );
 
     m.insert(
+        "help.scr.direct".into(),
+        "<file.ntc> [args...] ## Run a script straight from the prompt".into(),
+    );
+
+    m.insert(
         "help.scr.title".into(),
         "SCR / AUTOMATION SCRIPT COMMANDS:".into(),
     );

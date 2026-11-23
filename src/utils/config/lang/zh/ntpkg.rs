@@ -54,7 +54,7 @@ pub fn fill(m: &mut HashMap<String, String>) {
 
     m.insert(
         "ntpkg.help_install".into(),
-        "    ntpkg install <语言> [版本]   下载并安装运行时".into(),
+        "    ntpkg install <语言> [版本] [--force]  下载并安装运行时".into(),
     );
 
     m.insert(
@@ -140,7 +140,7 @@ pub fn fill(m: &mut HashMap<String, String>) {
 
     m.insert(
         "ntpkg.install_usage".into(),
-        "用法：ntpkg install <语言> [版本]".into(),
+        "用法：ntpkg install <语言> [版本] [--force]".into(),
     );
 
     m.insert("ntpkg.installed_msg".into(), "{} {} 已安装！".into());
@@ -314,6 +314,23 @@ pub fn fill(m: &mut HashMap<String, String>) {
     m.insert(
         "ntpkg.termux_no_pkg".into(),
         "Termux 中没有与 '{}' 对应的 pkg 包。".into(),
+    );
+
+    m.insert(
+        "ntpkg.system_use_pkg".into(),
+        "此平台有该运行时的官方包管理器，请改用它而不是 ntpkg：".into(),
+    );
+
+    m.insert("ntpkg.system_cmd".into(), "    {}".into());
+
+    m.insert(
+        "ntpkg.system_force_hint".into(),
+        "如果仍要通过 ntpkg 安装独立副本，请运行：ntpkg install {} --force".into(),
+    );
+
+    m.insert(
+        "ntpkg.system_no_manager".into(),
+        "未找到受支持的系统包管理器，请改用你的平台的包管理器。".into(),
     );
 
     m.insert(

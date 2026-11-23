@@ -23,6 +23,14 @@ pub enum ServeService {
     Files,
     Http,
     Chess,
+    Git,
+    Arc,
+    Theme,
+    Ndb,
+    Backup,
+    Fake,
+    Config,
+    Mdview,
 }
 
 impl ServeService {
@@ -32,6 +40,14 @@ impl ServeService {
             "files" => Some(ServeService::Files),
             "http-server" | "http" => Some(ServeService::Http),
             "chess" => Some(ServeService::Chess),
+            "git" => Some(ServeService::Git),
+            "arc" => Some(ServeService::Arc),
+            "theme" => Some(ServeService::Theme),
+            "ndb" => Some(ServeService::Ndb),
+            "backup" => Some(ServeService::Backup),
+            "fake" => Some(ServeService::Fake),
+            "config" => Some(ServeService::Config),
+            "mdview" | "md" => Some(ServeService::Mdview),
             _ => None,
         }
     }
@@ -41,6 +57,14 @@ impl ServeService {
             ServeService::Files => "files",
             ServeService::Http => "http-server",
             ServeService::Chess => "chess",
+            ServeService::Git => "git",
+            ServeService::Arc => "arc",
+            ServeService::Theme => "theme",
+            ServeService::Ndb => "ndb",
+            ServeService::Backup => "backup",
+            ServeService::Fake => "fake",
+            ServeService::Config => "config",
+            ServeService::Mdview => "mdview",
         }
     }
 }
@@ -65,6 +89,30 @@ pub struct ServeConfig {
     pub http_server: ServeServiceConfig,
     #[serde(default = "default_serve_service_config")]
     pub chess: ServeServiceConfig,
+    #[serde(default = "default_serve_service_config")]
+    pub git: ServeServiceConfig,
+    #[serde(default = "default_serve_service_config")]
+    pub arc: ServeServiceConfig,
+    #[serde(default = "default_serve_service_config")]
+    pub theme: ServeServiceConfig,
+    /// `serve ndb` defaults to loopback: the database is content, not a
+    /// shared drive, so it is never exposed to the LAN by accident.
+    #[serde(default = "default_serve_service_config_loopback")]
+    pub ndb: ServeServiceConfig,
+    /// `serve fake` generates data only; keep it local unless asked otherwise.
+    /// `serve backup` can restore or delete project files, so it is local-only
+    /// unless the user deliberately binds it to the LAN.
+    #[serde(default = "default_serve_service_config_loopback")]
+    pub backup: ServeServiceConfig,
+    #[serde(default = "default_serve_service_config_loopback")]
+    pub fake: ServeServiceConfig,
+    /// `serve config` writes the global config, so it stays local by default.
+    #[serde(default = "default_serve_service_config_loopback")]
+    pub config: ServeServiceConfig,
+    /// `serve mdview` writes markdown files in the folder it serves, so it is
+    /// loopback-only unless the user opts into the LAN.
+    #[serde(default = "default_serve_service_config_loopback")]
+    pub mdview: ServeServiceConfig,
 }
 
 /// One column of a `fake` group: the output column name (`alias`) plus the
@@ -101,6 +149,14 @@ impl ServeConfig {
             ServeService::Files => &self.files,
             ServeService::Http => &self.http_server,
             ServeService::Chess => &self.chess,
+            ServeService::Git => &self.git,
+            ServeService::Arc => &self.arc,
+            ServeService::Theme => &self.theme,
+            ServeService::Ndb => &self.ndb,
+            ServeService::Backup => &self.backup,
+            ServeService::Fake => &self.fake,
+            ServeService::Config => &self.config,
+            ServeService::Mdview => &self.mdview,
         }
     }
 
@@ -109,6 +165,14 @@ impl ServeConfig {
             ServeService::Files => &mut self.files,
             ServeService::Http => &mut self.http_server,
             ServeService::Chess => &mut self.chess,
+            ServeService::Git => &mut self.git,
+            ServeService::Arc => &mut self.arc,
+            ServeService::Theme => &mut self.theme,
+            ServeService::Ndb => &mut self.ndb,
+            ServeService::Backup => &mut self.backup,
+            ServeService::Fake => &mut self.fake,
+            ServeService::Config => &mut self.config,
+            ServeService::Mdview => &mut self.mdview,
         }
     }
 }
@@ -319,89 +383,22 @@ pub struct Config {
     pub serve: ServeConfig,
 }
 
-// Single source of truth for alias name validation.
-// Used by both config.rs and commands.rs — keep this list in sync with
-// all shell commands that users should not be able to override.
+// Single source of truth for alias name validation, used by config and
+// command code alike. Reserved names come from the command registry so
+// validation matches dispatch: any name the shell would resolve to a
+// built-in (case-insensitively) is rejected, because alias expansion runs
+// before dispatch and would otherwise shadow the command.
 pub fn validate_alias_name(name: &str) -> bool {
-    let reserved_commands = [
-        "cd",
-        "godrive",
-        "god",
-        "back",
-        "b",
-        "view",
-        "viewf",
-        "viewd",
-        "views",
-        "count",
-        "report",
-        "txtc",
-        "txtf",
+    // Historically reserved names that are not built-in commands. They
+    // fall through to system commands today; keeping them reserved stops
+    // an alias from shadowing those.
+    const EXTRA_RESERVED: &[&str] = &[
         "txt",
-        "config",
-        "cfg",
-        "clear",
-        "version",
-        "where",
-        "gos",
-        "gosc",
-        "ral",
-        "run",
-        "r",
         "showcg",
-        "help",
-        "exit",
-        "quit",
-        "backup",
-        "ignore",
-        "care",
-        "igcared",
-        "size",
-        "tp",
-        "opencg",
-        "editcfg",
-        "editcg",
-        "resetcg",
-        "restorecg",
-        "local",
-        "ne",
-        "ntceditor",
-        "igcare",
-        "esc",
-        "gs",
-        "fs",
-        "ds",
-        "fgo",
-        "fsc",
-        "locate",
-        "rnmf",
-        "rnmd",
-        "mv",
-        "move",
-        "cp",
-        "math",
-        "init",
-        "deinit",
         "diff",
-        "tl",
-        "image",
-        "img",
         "python_activate",
         "python_deactivate",
         "python_showenv",
-        "smtp",
-        "clip",
-        "todo",
-        "td",
-        "qsc",
-        "tmprt",
-        "git",
-        "ndb",
-        "nms",
-        "nsheet",
-        "nssh",
-        "fake",
-        "deadlock",
     ];
 
     if name.trim().is_empty() || name.contains(' ') {
@@ -412,11 +409,19 @@ pub fn validate_alias_name(name: &str) -> bool {
         return false;
     }
 
-    if reserved_commands.contains(&name) {
+    if EXTRA_RESERVED.contains(&name) {
         return false;
     }
 
-    true
+    // `plugin` is the namespace reserved for 2.5.0. The command does not
+    // exist yet, so it is not in the registry; reserve it here in any case
+    // to match dispatch's case-insensitive lookup. Once 2.5.0 registers the
+    // command, `is_reserved` below covers it too.
+    if name.eq_ignore_ascii_case("plugin") {
+        return false;
+    }
+
+    !crate::shell::commands::registry_data::registry().is_reserved(name)
 }
 
 fn default_output_path() -> PathBuf {
@@ -506,11 +511,28 @@ fn default_serve_service_config() -> ServeServiceConfig {
     }
 }
 
+/// Like the shared default, but bound to loopback: services that expose a whole
+/// database or edit stored settings must be opted into LAN access explicitly.
+fn default_serve_service_config_loopback() -> ServeServiceConfig {
+    ServeServiceConfig {
+        port: default_serve_port(),
+        bind: "127.0.0.1".to_string(),
+    }
+}
+
 fn default_serve_config() -> ServeConfig {
     ServeConfig {
         files: default_serve_service_config(),
         http_server: default_serve_service_config(),
         chess: default_serve_service_config(),
+        git: default_serve_service_config(),
+        arc: default_serve_service_config(),
+        theme: default_serve_service_config(),
+        ndb: default_serve_service_config_loopback(),
+        backup: default_serve_service_config_loopback(),
+        fake: default_serve_service_config_loopback(),
+        config: default_serve_service_config_loopback(),
+        mdview: default_serve_service_config_loopback(),
     }
 }
 
@@ -586,7 +608,13 @@ impl Config {
         }
         #[cfg(not(test))]
         {
-            dirs::config_dir().map(|d| d.join("ntc").join("config.toml"))
+            // Honor `NTC_CONFIG_HOME` (portable installs / spawned-binary
+            // tests); the default is still the platform config directory.
+            Some(
+                crate::utils::paths::config_home()
+                    .join("ntc")
+                    .join("config.toml"),
+            )
         }
     }
 
@@ -1049,6 +1077,42 @@ mod tests {
     }
 
     #[test]
+    fn test_validate_alias_name_matches_dispatch() {
+        let registry = crate::shell::commands::registry_data::registry();
+        for name in registry.names() {
+            assert!(
+                !validate_alias_name(name),
+                "built-in '{name}' must be reserved"
+            );
+            assert!(
+                !validate_alias_name(&name.to_uppercase()),
+                "dispatch is case-insensitive, so '{name}' must be reserved in any case"
+            );
+        }
+        // Names the old hand-maintained list missed: expansion runs before
+        // dispatch, so these aliases would have shadowed real commands.
+        for name in ["theme", "ping", "http", "skill", "sort", "time", "wi"] {
+            assert!(!validate_alias_name(name), "'{name}' must be reserved");
+        }
+        // Historically reserved non-builtins stay reserved.
+        for name in [
+            "txt",
+            "showcg",
+            "diff",
+            "python_activate",
+            "python_deactivate",
+            "python_showenv",
+        ] {
+            assert!(!validate_alias_name(name), "'{name}' must stay reserved");
+        }
+        // The 2.5.0 plugin namespace is reserved before the command exists,
+        // in any case, so an alias can never shadow it.
+        for name in ["plugin", "PLUGIN", "Plugin"] {
+            assert!(!validate_alias_name(name), "'{name}' must be reserved");
+        }
+    }
+
+    #[test]
     fn test_config_default_values() {
         let cfg = Config::new();
         assert_eq!(cfg.max_depth, 2);
@@ -1097,11 +1161,25 @@ mod tests {
         assert_eq!(ServeService::parse("http"), Some(ServeService::Http));
         assert_eq!(ServeService::parse("chess"), Some(ServeService::Chess));
         assert_eq!(ServeService::parse("CHESS"), Some(ServeService::Chess));
+        assert_eq!(ServeService::parse("theme"), Some(ServeService::Theme));
+        assert_eq!(ServeService::parse("THEME"), Some(ServeService::Theme));
+        assert_eq!(ServeService::parse("ndb"), Some(ServeService::Ndb));
+        assert_eq!(ServeService::parse("NDB"), Some(ServeService::Ndb));
+        assert_eq!(ServeService::parse("backup"), Some(ServeService::Backup));
+        assert_eq!(ServeService::parse("BACKUP"), Some(ServeService::Backup));
+        assert_eq!(ServeService::parse("fake"), Some(ServeService::Fake));
+        assert_eq!(ServeService::parse("FAKE"), Some(ServeService::Fake));
+        assert_eq!(ServeService::parse("config"), Some(ServeService::Config));
         assert_eq!(ServeService::parse("nope"), None);
         assert_eq!(ServeService::parse(""), None);
         assert_eq!(ServeService::Files.name(), "files");
         assert_eq!(ServeService::Http.name(), "http-server");
         assert_eq!(ServeService::Chess.name(), "chess");
+        assert_eq!(ServeService::Theme.name(), "theme");
+        assert_eq!(ServeService::Ndb.name(), "ndb");
+        assert_eq!(ServeService::Backup.name(), "backup");
+        assert_eq!(ServeService::Fake.name(), "fake");
+        assert_eq!(ServeService::Config.name(), "config");
     }
 
     #[test]
@@ -1113,8 +1191,22 @@ mod tests {
         assert_eq!(cfg.serve.http_server.bind, "0.0.0.0");
         assert_eq!(cfg.serve.chess.port, 8080);
         assert_eq!(cfg.serve.chess.bind, "0.0.0.0");
+        assert_eq!(cfg.serve.theme.port, 8080);
+        assert_eq!(cfg.serve.theme.bind, "0.0.0.0");
+        // `serve ndb`, `serve fake` and `serve config` are loopback-only.
+        assert_eq!(cfg.serve.ndb.port, 8080);
+        assert_eq!(cfg.serve.ndb.bind, "127.0.0.1");
+        assert_eq!(cfg.serve.backup.bind, "127.0.0.1");
+        assert_eq!(cfg.serve.fake.bind, "127.0.0.1");
+        assert_eq!(cfg.serve.config.bind, "127.0.0.1");
         assert_eq!(cfg.serve.for_service(ServeService::Files).port, 8080);
         assert_eq!(cfg.serve.for_service(ServeService::Http).bind, "0.0.0.0");
+        assert_eq!(cfg.serve.for_service(ServeService::Ndb).bind, "127.0.0.1");
+        assert_eq!(cfg.serve.for_service(ServeService::Fake).bind, "127.0.0.1");
+        assert_eq!(
+            cfg.serve.for_service(ServeService::Config).bind,
+            "127.0.0.1"
+        );
     }
 
     #[test]
@@ -1124,6 +1216,7 @@ mod tests {
         assert_eq!(cfg.max_depth, 3);
         assert_eq!(cfg.serve.files.port, 8080);
         assert_eq!(cfg.serve.http_server.bind, "0.0.0.0");
+        assert_eq!(cfg.serve.ndb.bind, "127.0.0.1");
     }
 
     #[test]

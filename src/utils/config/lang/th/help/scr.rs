@@ -41,5 +41,10 @@ pub fn fill(m: &mut HashMap<String, String>) {
         "scr <file.ntc> [args...] ## เรียกใช้สคริปต์อัตโนมัติ".into(),
     );
 
+    m.insert(
+        "help.scr.direct".into(),
+        "<file.ntc> [args...] ## เรียกสคริปต์ได้ตรงจากพรอมต์".into(),
+    );
+
     m.insert("help.scr.title".into(), "คำสั่ง SCR / สคริปต์อัตโนมัติ:".into());
 }

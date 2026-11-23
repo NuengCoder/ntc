@@ -476,6 +476,46 @@ pub struct ContentMatch {
     pub line: String,
 }
 
+/// Lines of surrounding context to show for each match (`gs -A` / `gs -B`).
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct ContextSpec {
+    /// Lines shown before the match (`-B`).
+    pub before: usize,
+    /// Lines shown after the match (`-A`).
+    pub after: usize,
+}
+
+impl ContextSpec {
+    pub fn is_active(self) -> bool {
+        self.before > 0 || self.after > 0
+    }
+}
+
+/// Where a term has to sit inside a line (`gs -h` / `-g` / `-w`).
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum MatchMode {
+    /// Anywhere in the line (the default `gs`).
+    #[default]
+    Contains,
+    /// The trimmed line starts with the term (`gs -h`).
+    StartsWith,
+    /// The trimmed line ends with the term (`gs -g`).
+    EndsWith,
+    /// The trimmed line is exactly the term (`gs -w`).
+    Whole,
+}
+
+/// Matching rules behind `gs`'s `-x` / `-h` / `-g` / `-w` / `-z` flags.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct MatchOptions {
+    /// Substring (default) or one of the anchored modes.
+    pub mode: MatchMode,
+    /// `-x`: the pattern is literal text, so `\|` no longer splits an OR.
+    pub literal: bool,
+    /// `-z`: keep letter case (the default ignores it).
+    pub case_sensitive: bool,
+}
+
 /// Sort key for `gs -s|--sort` (mirrors the CLI enum in shell commands).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ContentSort {
@@ -580,33 +620,94 @@ fn push_alternative(terms: &mut Vec<String>, cur: &mut String) {
     cur.clear();
 }
 
-/// Lowercased alternatives plus the shortest term length, ready for matching.
-/// `min_len` powers the cheap "line is too short to match" pre-check.
-fn compile_terms(pattern: &str) -> (Vec<String>, usize) {
-    let terms: Vec<String> = split_alternatives(pattern)
-        .iter()
-        .map(|t| t.to_lowercase())
-        .collect();
-    let min_len = terms.iter().map(|t| t.len()).min().unwrap_or(0);
-    (terms, min_len)
+/// A pattern compiled once per search: its alternatives plus the rules they
+/// are matched with.
+struct Matcher {
+    terms: Vec<String>,
+    mode: MatchMode,
+    case_sensitive: bool,
 }
 
-/// True when the (already lowercased) line contains any alternative.
-fn line_matches(lower_line: &str, terms: &[String]) -> bool {
-    terms.iter().any(|t| lower_line.contains(t.as_str()))
+impl Matcher {
+    /// `None` for an empty pattern, which matches nothing.
+    fn new(pattern: &str, opts: MatchOptions) -> Option<Self> {
+        if pattern.is_empty() {
+            return None;
+        }
+        // `-x` searches literal text, so `a\|b` means `a|b` and not "a OR b".
+        let terms: Vec<String> = if opts.literal {
+            vec![pattern.replace("\\|", "|")]
+        } else {
+            split_alternatives(pattern)
+        };
+        let terms: Vec<String> = if opts.case_sensitive {
+            terms
+        } else {
+            terms.iter().map(|t| t.to_lowercase()).collect()
+        };
+        if terms.is_empty() {
+            return None;
+        }
+        Some(Self {
+            terms,
+            mode: opts.mode,
+            case_sensitive: opts.case_sensitive,
+        })
+    }
+
+    /// Shortest alternative, powering the cheap "line is too short" pre-check.
+    fn min_len(&self) -> usize {
+        self.terms.iter().map(|t| t.len()).min().unwrap_or(0)
+    }
+
+    fn matches(&self, line: &str) -> bool {
+        match self.mode {
+            MatchMode::Contains => {
+                if self.case_sensitive {
+                    self.terms.iter().any(|t| line.contains(t.as_str()))
+                } else {
+                    let lower = line.to_lowercase();
+                    self.terms.iter().any(|t| lower.contains(t.as_str()))
+                }
+            }
+            mode => {
+                // Anchors and the whole-line test ignore the indentation and
+                // trailing blanks the result rows trim away anyway.
+                let trimmed = line.trim();
+                let hay = if self.case_sensitive {
+                    trimmed.to_string()
+                } else {
+                    trimmed.to_lowercase()
+                };
+                self.terms.iter().any(|t| match mode {
+                    MatchMode::StartsWith => hay.starts_with(t.as_str()),
+                    MatchMode::EndsWith => hay.ends_with(t.as_str()),
+                    MatchMode::Whole => hay.as_str() == t.as_str(),
+                    MatchMode::Contains => unreachable!(),
+                })
+            }
+        }
+    }
 }
 
 /// Search file contents for a pattern (case-insensitive).
 /// Only searches files that pass the ignore/care filters.
 /// Returns matches sorted by file path then line number.
 pub fn search_content(root: &Path, pattern: &str, max_depth: usize) -> Vec<ContentMatch> {
-    if pattern.is_empty() {
+    search_content_opts(root, pattern, max_depth, MatchOptions::default())
+}
+
+/// [`search_content`] with `-x` / `-h` / `-g` / `-w` / `-z` matching.
+pub fn search_content_opts(
+    root: &Path,
+    pattern: &str,
+    max_depth: usize,
+    opts: MatchOptions,
+) -> Vec<ContentMatch> {
+    let Some(matcher) = Matcher::new(pattern, opts) else {
         return Vec::new();
-    }
-    let (terms, min_len) = compile_terms(pattern);
-    if terms.is_empty() {
-        return Vec::new();
-    }
+    };
+    let min_len = matcher.min_len();
     let ignored_dirs = Config::get_ignored_dirs_combined();
     let fmt_cfg = FormatConfig::from_both();
 
@@ -633,7 +734,7 @@ pub fn search_content(root: &Path, pattern: &str, max_depth: usize) -> Vec<Conte
                 if line.len() < min_len {
                     continue;
                 }
-                if line_matches(&line.to_lowercase(), &terms) {
+                if matcher.matches(line) {
                     matches.push(ContentMatch {
                         file_path: path.clone(),
                         line_number: i + 1,
@@ -663,13 +764,19 @@ pub fn search_content(root: &Path, pattern: &str, max_depth: usize) -> Vec<Conte
 /// Same guards as [`search_content`]: skips huge files and non-UTF8 files.
 /// Returns matches sorted by file path then line number.
 pub fn search_content_in_files(files: &[PathBuf], pattern: &str) -> Vec<ContentMatch> {
-    if pattern.is_empty() {
+    search_content_in_files_opts(files, pattern, MatchOptions::default())
+}
+
+/// [`search_content_in_files`] with `-x` / `-h` / `-g` / `-w` / `-z` matching.
+pub fn search_content_in_files_opts(
+    files: &[PathBuf],
+    pattern: &str,
+    opts: MatchOptions,
+) -> Vec<ContentMatch> {
+    let Some(matcher) = Matcher::new(pattern, opts) else {
         return Vec::new();
-    }
-    let (terms, min_len) = compile_terms(pattern);
-    if terms.is_empty() {
-        return Vec::new();
-    }
+    };
+    let min_len = matcher.min_len();
     let mut results: Vec<ContentMatch> = files
         .par_iter()
         .filter_map(|path| {
@@ -687,7 +794,7 @@ pub fn search_content_in_files(files: &[PathBuf], pattern: &str) -> Vec<ContentM
                 if line.len() < min_len {
                     continue;
                 }
-                if line_matches(&line.to_lowercase(), &terms) {
+                if matcher.matches(line) {
                     matches.push(ContentMatch {
                         file_path: path.clone(),
                         line_number: i + 1,
@@ -760,9 +867,27 @@ fn ci_prefix_len(text: &str, needle: &str) -> Option<usize> {
 /// marks both words), and at any position the longest alternative wins so
 /// overlapping terms don't produce nested/misaligned highlights.
 pub fn highlight_segments<'a>(text: &'a str, pattern: &str) -> Vec<(&'a str, bool)> {
-    let terms = split_alternatives(pattern);
+    highlight_segments_opts(text, pattern, MatchOptions::default())
+}
+
+/// [`highlight_segments`] that follows the search's own rules, so `-x`, `-h`,
+/// `-g`, `-w` and `-z` mark exactly the text the search matched.
+pub fn highlight_segments_opts<'a>(
+    text: &'a str,
+    pattern: &str,
+    opts: MatchOptions,
+) -> Vec<(&'a str, bool)> {
+    // `-x` searches literal text, so `a\|b` is `a|b` with no alternatives.
+    let terms: Vec<String> = if opts.literal {
+        vec![pattern.replace("\\|", "|")]
+    } else {
+        split_alternatives(pattern)
+    };
     if terms.is_empty() {
         return vec![(text, false)];
+    }
+    if opts.mode != MatchMode::Contains {
+        return anchored_segments(text, &terms, opts);
     }
     let mut segments: Vec<(&'a str, bool)> = Vec::new();
     let mut plain_start = 0usize;
@@ -770,7 +895,7 @@ pub fn highlight_segments<'a>(text: &'a str, pattern: &str) -> Vec<(&'a str, boo
     while i < text.len() {
         let mut best: Option<usize> = None;
         for term in &terms {
-            if let Some(len) = ci_prefix_len(&text[i..], term) {
+            if let Some(len) = prefix_len(&text[i..], term, opts.case_sensitive) {
                 if best.map_or(true, |b| len > b) {
                     best = Some(len);
                 }
@@ -800,19 +925,137 @@ pub fn highlight_segments<'a>(text: &'a str, pattern: &str) -> Vec<(&'a str, boo
     segments
 }
 
+/// `text` starts with `needle`: the matched byte length.
+fn prefix_len(text: &str, needle: &str, case_sensitive: bool) -> Option<usize> {
+    if case_sensitive {
+        text.starts_with(needle).then_some(needle.len())
+    } else {
+        ci_prefix_len(text, needle)
+    }
+}
+
+/// `text` ends with `needle`: the matched byte length.
+fn suffix_len(text: &str, needle: &str, case_sensitive: bool) -> Option<usize> {
+    if case_sensitive {
+        return text.ends_with(needle).then_some(needle.len());
+    }
+    let total = text.chars().count();
+    let need = needle.chars().count();
+    if need == 0 || need > total {
+        return None;
+    }
+    let start = text
+        .char_indices()
+        .nth(total - need)
+        .map(|(i, _)| i)
+        .unwrap_or(0);
+    ci_prefix_len(&text[start..], needle)
+}
+
+/// The whole (trimmed) line is `needle`.
+fn whole_len(text: &str, needle: &str, case_sensitive: bool) -> Option<usize> {
+    if case_sensitive {
+        return (text == needle).then_some(text.len());
+    }
+    if text.chars().count() == needle.chars().count() {
+        prefix_len(text, needle, false)
+    } else {
+        None
+    }
+}
+
+/// Highlight the single match an anchored / whole-line mode makes (`-h`,
+/// `-g`, `-w`), leaving the rest of the row plain.
+fn anchored_segments<'a>(
+    text: &'a str,
+    terms: &[String],
+    opts: MatchOptions,
+) -> Vec<(&'a str, bool)> {
+    let cs = opts.case_sensitive;
+    let body_off = text.len() - text.trim_start().len();
+    let body = &text[body_off..body_off + text.trim().len()];
+    if body.is_empty() {
+        return vec![(text, false)];
+    }
+    let hit: Option<(usize, usize)> = match opts.mode {
+        MatchMode::StartsWith => terms
+            .iter()
+            .filter_map(|t| prefix_len(body, t, cs))
+            .max()
+            .map(|len| (body_off, len)),
+        MatchMode::EndsWith => terms
+            .iter()
+            .filter_map(|t| suffix_len(body, t, cs))
+            .max()
+            .map(|len| (body_off + body.len() - len, len)),
+        MatchMode::Whole => terms
+            .iter()
+            .any(|t| whole_len(body, t, cs).is_some())
+            .then_some((body_off, body.len())),
+        MatchMode::Contains => None,
+    };
+    let Some((start, len)) = hit else {
+        return vec![(text, false)];
+    };
+    let end = start + len;
+    let mut segments = Vec::with_capacity(3);
+    if start > 0 {
+        segments.push((&text[..start], false));
+    }
+    segments.push((&text[start..end], true));
+    if end < text.len() {
+        segments.push((&text[end..], false));
+    }
+    segments
+}
+
 /// Highlight every (case-insensitive) occurrence of `pattern` in `line` red,
 /// including every alternative of an OR pattern. Uses explicit ANSI codes so
 /// output is red even when piped/redirected.
 pub fn highlight_pattern(line: &str, pattern: &str) -> String {
-    if pattern.is_empty() || highlight_opt_out() {
+    highlight_pattern_with_color(
+        line,
+        pattern,
+        crate::config::Config::global_get_color_enabled(),
+    )
+}
+
+fn highlight_pattern_with_color(line: &str, pattern: &str, color_enabled: bool) -> String {
+    highlight_pattern_with_color_opts(line, pattern, color_enabled, MatchOptions::default())
+}
+
+/// [`highlight_pattern_with_color`] that follows the search's match rules, so
+/// `-x` / `-h` / `-g` / `-w` / `-z` mark exactly what the search matched.
+fn highlight_pattern_with_color_opts(
+    line: &str,
+    pattern: &str,
+    color_enabled: bool,
+    opts: MatchOptions,
+) -> String {
+    if pattern.is_empty() || highlight_opt_out() || !color_enabled {
         return line.to_string();
     }
-    const RED: &str = "\x1b[31m";
+    let color = {
+        let theme = crate::utils::theme::ThemeManager::current();
+        theme.shell.error.to_ansi_fg()
+    };
+    highlight_with_color(line, pattern, &color, opts)
+}
+
+/// Highlight with an explicit ANSI foreground code.
+///
+/// Kept apart from the theme lookup so the marking logic can be tested with a
+/// fixed color: the current theme is process-wide state that other tests may
+/// switch while this runs, and an empty code means "no highlighting".
+fn highlight_with_color(line: &str, pattern: &str, color: &str, opts: MatchOptions) -> String {
+    if color.is_empty() {
+        return line.to_string();
+    }
     const RESET: &str = "\x1b[0m";
     let mut out = String::with_capacity(line.len() + 16);
-    for (segment, is_match) in highlight_segments(line, pattern) {
+    for (segment, is_match) in highlight_segments_opts(line, pattern, opts) {
         if is_match {
-            out.push_str(RED);
+            out.push_str(color);
             out.push_str(segment);
             out.push_str(RESET);
         } else {
@@ -853,6 +1096,54 @@ pub fn format_content_results(
     root: &Path,
     total_found: usize,
 ) -> String {
+    format_content_results_opts(
+        results,
+        pattern,
+        max_depth,
+        root,
+        total_found,
+        MatchOptions::default(),
+    )
+}
+
+/// [`format_content_results`] that highlights with the `gs` match rules.
+pub fn format_content_results_opts(
+    results: &[ContentMatch],
+    pattern: &str,
+    max_depth: usize,
+    root: &Path,
+    total_found: usize,
+    opts: MatchOptions,
+) -> String {
+    let mut output = content_results_header(pattern, max_depth, results.len(), total_found);
+    if results.is_empty() {
+        return output;
+    }
+    let color_enabled = crate::config::Config::global_get_color_enabled();
+    for (i, m) in results.iter().enumerate() {
+        let path_str = display_content_path(&m.file_path, root);
+        let truncated = truncate_for_display(&m.line, 120);
+        let highlighted =
+            highlight_pattern_with_color_opts(&truncated, pattern, color_enabled, opts);
+        output.push_str(&format!(
+            "  {}. {}:{}: {}\n",
+            i + 1,
+            path_str,
+            m.line_number,
+            highlighted
+        ));
+    }
+
+    output
+}
+
+/// Header shared by the plain and context-aware content formatters.
+fn content_results_header(
+    pattern: &str,
+    max_depth: usize,
+    shown: usize,
+    total_found: usize,
+) -> String {
     let depth_label = if max_depth == usize::MAX {
         crate::t!("misc.gs.depth_unlimited").to_string()
     } else {
@@ -863,33 +1154,124 @@ pub fn format_content_results(
     output.push_str(&crate::t!("misc.gs.searching_header", pattern, depth_label));
     output.push('\n');
 
-    if results.is_empty() {
+    if shown == 0 {
         output.push_str(&format!("  {}\n", crate::t!("cmd.gs.no_matches")));
         return output;
     }
 
-    if total_found > results.len() {
+    if total_found > shown {
         output.push_str(&format!(
             "  Content matches (showing {} of {}):\n",
-            results.len(),
-            total_found
+            shown, total_found
         ));
     } else {
         output.push_str(&format!("  Content matches ({}):\n", total_found));
     }
-    for (i, m) in results.iter().enumerate() {
-        let path_str = display_content_path(&m.file_path, root);
-        let truncated = truncate_for_display(&m.line, 120);
-        let highlighted = highlight_pattern(&truncated, pattern);
-        output.push_str(&format!(
-            "  {}. {}:{}: {}\n",
-            i + 1,
-            path_str,
-            m.line_number,
-            highlighted
-        ));
+    output
+}
+
+/// Format content results with surrounding context, grep-style: context rows
+/// use `path-line-text`, match rows `path:line:text`. Overlapping or touching
+/// windows merge into one block (the way grep does), and one blank line
+/// follows each block so separate matches stay distinguishable.
+pub fn format_content_results_with_context(
+    results: &[ContentMatch],
+    pattern: &str,
+    max_depth: usize,
+    root: &Path,
+    total_found: usize,
+    ctx: ContextSpec,
+) -> String {
+    format_content_results_with_context_opts(
+        results,
+        pattern,
+        max_depth,
+        root,
+        total_found,
+        ctx,
+        MatchOptions::default(),
+    )
+}
+
+/// [`format_content_results_with_context`] that highlights with the `gs`
+/// match rules.
+pub fn format_content_results_with_context_opts(
+    results: &[ContentMatch],
+    pattern: &str,
+    max_depth: usize,
+    root: &Path,
+    total_found: usize,
+    ctx: ContextSpec,
+    opts: MatchOptions,
+) -> String {
+    let color_enabled = crate::config::Config::global_get_color_enabled();
+    let mut output = content_results_header(pattern, max_depth, results.len(), total_found);
+    if results.is_empty() {
+        return output;
     }
 
+    // Group matches whose context windows overlap (or just touch) into one
+    // block per file. Line ranges are unclamped here; printing clamps them.
+    type Block = (PathBuf, usize, usize, Vec<(usize, String)>);
+    let mut blocks: Vec<Block> = Vec::new();
+    for m in results {
+        let idx = m.line_number.saturating_sub(1);
+        let start = idx.saturating_sub(ctx.before);
+        let end = idx + ctx.after + 1;
+        match blocks.last_mut() {
+            Some((path, bstart, bend, hits))
+                if *path == m.file_path && start >= *bstart && start <= *bend =>
+            {
+                *bend = (*bend).max(end);
+                hits.push((idx, m.line.clone()));
+            }
+            _ => blocks.push((m.file_path.clone(), start, end, vec![(idx, m.line.clone())])),
+        }
+    }
+
+    // Re-read each file once (results are ordered by path in the default
+    // case) instead of opening it for every block.
+    let mut cached_path: Option<PathBuf> = None;
+    let mut cached_lines: Vec<String> = Vec::new();
+    for (path, start, end, hits) in &blocks {
+        let path_str = display_content_path(path, root);
+        if cached_path.as_deref() != Some(path.as_path()) {
+            cached_lines = std::fs::read_to_string(path)
+                .map(|text| text.lines().map(str::to_string).collect())
+                .unwrap_or_default();
+            cached_path = Some(path.clone());
+        }
+        let last = (*end).min(cached_lines.len());
+        for i in *start..last {
+            let line = truncate_context_line(&cached_lines[i], 120);
+            if hits.iter().any(|(hit, _)| *hit == i) {
+                output.push_str(&format!(
+                    "  {}:{}: {}\n",
+                    path_str,
+                    i + 1,
+                    highlight_pattern_with_color_opts(&line, pattern, color_enabled, opts)
+                ));
+            } else {
+                output.push_str(&format!("  {}-{}- {}\n", path_str, i + 1, line));
+            }
+        }
+        // The file vanished, shrank or changed after the search: keep every
+        // matched line that the re-read text no longer covers.
+        for (idx, text) in hits.iter().filter(|(idx, _)| *idx >= last) {
+            output.push_str(&format!(
+                "  {}:{}: {}\n",
+                path_str,
+                idx + 1,
+                highlight_pattern_with_color_opts(
+                    &truncate_context_line(text, 120),
+                    pattern,
+                    color_enabled,
+                    opts
+                )
+            ));
+        }
+        output.push('\n');
+    }
     output
 }
 
@@ -904,20 +1286,22 @@ pub struct TextMatch {
 /// substring semantics as [`search_content`]. Used when a command receives
 /// its content from a pipe or a `<`/`<<` redirect instead of the filesystem.
 pub fn search_text_lines(text: &str, pattern: &str) -> Vec<TextMatch> {
-    if pattern.is_empty() {
+    search_text_lines_opts(text, pattern, MatchOptions::default())
+}
+
+/// [`search_text_lines`] with `-x` / `-h` / `-g` / `-w` / `-z` matching.
+pub fn search_text_lines_opts(text: &str, pattern: &str, opts: MatchOptions) -> Vec<TextMatch> {
+    let Some(matcher) = Matcher::new(pattern, opts) else {
         return Vec::new();
-    }
-    let (terms, min_len) = compile_terms(pattern);
-    if terms.is_empty() {
-        return Vec::new();
-    }
+    };
+    let min_len = matcher.min_len();
     let mut matches: Vec<TextMatch> = Vec::new();
     for (i, line) in text.lines().enumerate() {
         // Cheap length pre-check before allocating a lowercase string.
         if line.len() < min_len {
             continue;
         }
-        if line_matches(&line.to_lowercase(), &terms) {
+        if matcher.matches(line) {
             matches.push(TextMatch {
                 line_number: i + 1,
                 line: line.to_string(),
@@ -930,12 +1314,142 @@ pub fn search_text_lines(text: &str, pattern: &str) -> Vec<TextMatch> {
 /// Format piped-text matches grep-style: one matching line per row with the
 /// pattern highlighted. No header/count, so the output stays pipe-friendly.
 pub fn format_text_matches(matches: &[TextMatch], pattern: &str) -> String {
+    format_text_matches_opts(matches, pattern, MatchOptions::default())
+}
+
+/// [`format_text_matches`] that highlights with the `gs` match rules.
+pub fn format_text_matches_opts(
+    matches: &[TextMatch],
+    pattern: &str,
+    opts: MatchOptions,
+) -> String {
+    format_text_matches_with_color(
+        matches,
+        pattern,
+        crate::config::Config::global_get_color_enabled(),
+        opts,
+    )
+}
+
+fn format_text_matches_with_color(
+    matches: &[TextMatch],
+    pattern: &str,
+    color_enabled: bool,
+    opts: MatchOptions,
+) -> String {
+    let color = if pattern.is_empty() || highlight_opt_out() || !color_enabled {
+        String::new()
+    } else {
+        let theme = crate::utils::theme::ThemeManager::current();
+        theme.shell.error.to_ansi_fg()
+    };
+    format_text_matches_with_code(matches, pattern, &color, opts)
+}
+
+/// [`format_text_matches_with_color`] with an explicit ANSI foreground code;
+/// an empty code prints every match unmarked.
+fn format_text_matches_with_code(
+    matches: &[TextMatch],
+    pattern: &str,
+    color: &str,
+    opts: MatchOptions,
+) -> String {
     let mut out = String::new();
     for m in matches {
-        out.push_str(&highlight_pattern(&m.line, pattern));
+        out.push_str(&highlight_with_color(&m.line, pattern, color, opts));
         out.push('\n');
     }
     out
+}
+
+/// Format piped-text matches with surrounding context, grep-style: context
+/// rows use `line-text`, match rows `line:text`. Overlapping or touching
+/// windows merge into one block, and one blank line follows each block.
+pub fn format_text_matches_with_context(
+    text: &str,
+    matches: &[TextMatch],
+    pattern: &str,
+    ctx: ContextSpec,
+) -> String {
+    format_text_matches_with_context_opts(text, matches, pattern, ctx, MatchOptions::default())
+}
+
+/// [`format_text_matches_with_context`] that highlights with the `gs` match
+/// rules.
+pub fn format_text_matches_with_context_opts(
+    text: &str,
+    matches: &[TextMatch],
+    pattern: &str,
+    ctx: ContextSpec,
+    opts: MatchOptions,
+) -> String {
+    format_text_matches_with_context_and_color(
+        text,
+        matches,
+        pattern,
+        ctx,
+        crate::config::Config::global_get_color_enabled(),
+        opts,
+    )
+}
+
+fn format_text_matches_with_context_and_color(
+    text: &str,
+    matches: &[TextMatch],
+    pattern: &str,
+    ctx: ContextSpec,
+    color_enabled: bool,
+    opts: MatchOptions,
+) -> String {
+    let lines: Vec<&str> = text.lines().collect();
+    // Merge touching/overlapping windows into one block, like grep.
+    let mut blocks: Vec<(usize, usize, Vec<usize>)> = Vec::new();
+    for m in matches {
+        let idx = m.line_number.saturating_sub(1);
+        if idx >= lines.len() {
+            continue;
+        }
+        let start = idx.saturating_sub(ctx.before);
+        let end = idx + ctx.after + 1;
+        match blocks.last_mut() {
+            Some((bstart, bend, hits)) if start >= *bstart && start <= *bend => {
+                *bend = (*bend).max(end);
+                hits.push(idx);
+            }
+            _ => blocks.push((start, end, vec![idx])),
+        }
+    }
+
+    let mut out = String::new();
+    for (start, end, hits) in &blocks {
+        let last = (*end).min(lines.len());
+        for i in *start..last {
+            let line = truncate_context_line(lines[i], 120);
+            if hits.contains(&i) {
+                out.push_str(&format!(
+                    "{}:{}",
+                    i + 1,
+                    highlight_pattern_with_color_opts(&line, pattern, color_enabled, opts)
+                ));
+            } else {
+                out.push_str(&format!("{}-{}", i + 1, line));
+            }
+            out.push('\n');
+        }
+        out.push('\n');
+    }
+    out
+}
+
+/// Truncate a context line without stripping its indentation, so surrounding
+/// code keeps its shape.
+fn truncate_context_line(line: &str, max_chars: usize) -> String {
+    let t = line.trim_end();
+    if t.chars().count() > max_chars {
+        format!("{}…", t.chars().take(max_chars).collect::<String>())
+    } else {
+        t.to_string()
+    }
 }
 
 // ============================================================================
@@ -1268,7 +1782,13 @@ mod tests {
 
     #[test]
     fn highlight_marks_every_alternative() {
-        let out = highlight_pattern("one ERROR and a warning", "error\\|warning");
+        // Explicit color: the theme is global state other tests can switch.
+        let out = highlight_with_color(
+            "one ERROR and a warning",
+            "error\\|warning",
+            "\x1b[31m",
+            MatchOptions::default(),
+        );
         assert!(out.contains("\x1b[31mERROR\x1b[0m"));
         assert!(out.contains("\x1b[31mwarning\x1b[0m"));
 
@@ -1406,9 +1926,209 @@ mod tests {
     }
 
     #[test]
+    fn format_text_matches_with_context_merges_touching_windows() {
+        let text = "one\ntwo\nhit\nfour\nfive\nsix\nhit\n";
+        let hits = search_text_lines(text, "hit");
+        let out = format_text_matches_with_context_and_color(
+            text,
+            &hits,
+            "hit",
+            ContextSpec {
+                before: 1,
+                after: 2,
+            },
+            false,
+            MatchOptions::default(),
+        );
+        // Windows [2,5) and [5,7) touch, so grep prints one block: context
+        // rows use `line-`, match rows `line:`, one blank line after.
+        assert_eq!(out, "2-two\n3:hit\n4-four\n5-five\n6-six\n7:hit\n\n");
+    }
+
+    #[test]
+    fn format_text_matches_with_context_keeps_distant_blocks_apart() {
+        let text = "a\nhit\nc\nd\ne\nhit\ng\n";
+        let hits = search_text_lines(text, "hit");
+        let out = format_text_matches_with_context_and_color(
+            text,
+            &hits,
+            "hit",
+            ContextSpec {
+                before: 0,
+                after: 1,
+            },
+            false,
+            MatchOptions::default(),
+        );
+        assert_eq!(out, "2:hit\n3-c\n\n6:hit\n7-g\n\n");
+    }
+
+    #[test]
+    fn format_content_results_with_context_reads_surrounding_lines() {
+        let dir = tempdir().unwrap();
+        let file = dir.path().join("notes.txt");
+        std::fs::write(&file, "a\nb\nhit\nc\nd\ne\n").unwrap();
+        let results = vec![ContentMatch {
+            file_path: file.clone(),
+            line_number: 3,
+            line: "hit".to_string(),
+        }];
+        let out = format_content_results_with_context(
+            &results,
+            "hit",
+            3,
+            dir.path(),
+            1,
+            ContextSpec {
+                before: 1,
+                after: 2,
+            },
+        );
+        assert!(out.contains("notes.txt-2- b"));
+        assert!(out.contains("notes.txt:3:"));
+        assert!(out.contains("notes.txt-4- c"));
+        assert!(out.contains("notes.txt-5- d"));
+        assert!(!out.contains("notes.txt-6-"));
+        assert!(out.ends_with("\n\n"));
+    }
+
+    #[test]
+    fn format_content_results_with_context_merges_touching_windows() {
+        let dir = tempdir().unwrap();
+        let file = dir.path().join("log.txt");
+        std::fs::write(&file, "a\nb\nhit\nc\nhit\ne\n").unwrap();
+        let results = vec![
+            ContentMatch {
+                file_path: file.clone(),
+                line_number: 3,
+                line: "hit".to_string(),
+            },
+            ContentMatch {
+                file_path: file.clone(),
+                line_number: 5,
+                line: "hit".to_string(),
+            },
+        ];
+        let out = format_content_results_with_context(
+            &results,
+            "hit",
+            3,
+            dir.path(),
+            2,
+            ContextSpec {
+                before: 0,
+                after: 1,
+            },
+        );
+        // One merged block, not two: a single blank separator at the end.
+        assert_eq!(out.matches("\n\n").count(), 1);
+        assert!(out.contains("log.txt:3:"));
+        assert!(out.contains("log.txt-4- c"));
+        assert!(out.contains("log.txt:5:"));
+        assert!(out.contains("log.txt-6- e"));
+    }
+
+    #[test]
+    fn match_modes_anchor_on_the_trimmed_line() {
+        let text = "  main()\nMain\nmain\nmostly\n";
+        let opts = |mode, case_sensitive| MatchOptions {
+            mode,
+            literal: false,
+            case_sensitive,
+        };
+        let hits = |mode| search_text_lines_opts(text, "main", opts(mode, false));
+
+        assert_eq!(hits(MatchMode::Contains).len(), 3);
+        assert_eq!(hits(MatchMode::StartsWith).len(), 3);
+        // "main()" ends with "()", so only the bare Main/main lines anchor.
+        assert_eq!(hits(MatchMode::EndsWith).len(), 2);
+        assert_eq!(hits(MatchMode::EndsWith)[0].line_number, 2);
+        assert_eq!(hits(MatchMode::EndsWith)[1].line_number, 3);
+        assert_eq!(hits(MatchMode::Whole).len(), 2);
+        assert_eq!(hits(MatchMode::Whole)[0].line_number, 2);
+        assert_eq!(hits(MatchMode::Whole)[1].line_number, 3);
+
+        // `-z` keeps case, so `Main` no longer matches a lowercase pattern.
+        assert_eq!(
+            search_text_lines_opts(text, "main", opts(MatchMode::StartsWith, true)).len(),
+            2
+        );
+    }
+
+    #[test]
+    fn search_content_opts_and_format_follow_the_flags() {
+        let dir = tempdir().unwrap();
+        std::fs::write(dir.path().join("f.txt"), "a|b\nMain\nmain\nmostly\n").unwrap();
+
+        let whole = MatchOptions {
+            mode: MatchMode::Whole,
+            literal: false,
+            case_sensitive: false,
+        };
+        let hits = search_content_opts(dir.path(), "main", 1, whole);
+        assert_eq!(hits.len(), 2);
+        let out = format_content_results_opts(&hits, "main", 1, dir.path(), hits.len(), whole);
+        assert!(out.contains("f.txt:2:"));
+        assert!(out.contains("f.txt:3:"));
+
+        // `-x` searches the literal text, so the OR shortcut is off.
+        let literal = MatchOptions {
+            mode: MatchMode::Contains,
+            literal: true,
+            case_sensitive: false,
+        };
+        let hits = search_content_opts(dir.path(), "a\\|b", 1, literal);
+        assert_eq!(hits.len(), 1);
+        assert_eq!(hits[0].line, "a|b");
+
+        // `-z` keeps case, so only the capitalised line matches.
+        let cs = MatchOptions {
+            mode: MatchMode::Contains,
+            literal: false,
+            case_sensitive: true,
+        };
+        let hits = search_content_opts(dir.path(), "Main", 1, cs);
+        assert_eq!(hits.len(), 1);
+        assert_eq!(hits[0].line_number, 2);
+    }
+
+    #[test]
+    fn literal_mode_disables_or() {
+        let text = "a|b\nalpha\nbeta\n";
+        let literal = MatchOptions {
+            mode: MatchMode::Contains,
+            literal: true,
+            case_sensitive: false,
+        };
+        assert_eq!(
+            search_text_lines_opts(text, "a\\|b", literal)[0].line,
+            "a|b"
+        );
+        assert_eq!(search_text_lines(text, "a\\|b").len(), 3);
+    }
+
+    #[test]
+    fn anchored_highlight_marks_only_the_anchor() {
+        let opts = MatchOptions {
+            mode: MatchMode::StartsWith,
+            literal: false,
+            case_sensitive: false,
+        };
+        assert_eq!(
+            highlight_segments_opts("  main x", "main", opts),
+            vec![("  ", false), ("main", true), (" x", false)]
+        );
+        // The term appears mid-line only: nothing is marked.
+        assert_eq!(
+            highlight_segments_opts("x main", "main", opts),
+            vec![("x main", false)]
+        );
+    }
+
+    #[test]
     fn format_text_matches_prints_one_line_per_match() {
         let hits = search_text_lines("foo bar\nbaz\nfood\n", "foo");
-        let out = format_text_matches(&hits, "foo");
+        let out = format_text_matches_with_code(&hits, "foo", "\x1b[31m", MatchOptions::default());
         // Two matching lines, each terminated by a newline.
         assert_eq!(out.matches('\n').count(), 2);
         // Highlight wraps only the matched substring, so the untouched tails

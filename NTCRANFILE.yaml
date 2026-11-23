@@ -26,6 +26,7 @@ vars:
   winiu: ntc-installer-2.4.9-user.exe
   winiz: ntc-installer-2.4.9.zip
   winiz7: ntc-installer-2.4.9-win7-x64.zip
+  docv: 1
 targets:
   aarch64_linux:
     deps: []
@@ -86,6 +87,9 @@ targets:
   push:
     deps: []
     cmd: git add . && git commit -m $(ver) && git tag v$(ver) && git push origin main --tags
+  push_noCI:
+    deps: []
+    cmd: git add . && git commit -m "$(ver)_$(docv)" -m "" -m "skip-checks:true" && git push
   repush:
     deps: []
     cmd: git push origin --delete v$(ver) && git push origin main --tags

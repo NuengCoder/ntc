@@ -91,6 +91,7 @@ pub(crate) static COMPLETION: CompletionSpec = CompletionSpec {
         "showenv",
         "size",
         "skill",
+        "skip",
         "smtp",
         "sort",
         "spec",

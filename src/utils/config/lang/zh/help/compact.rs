@@ -286,6 +286,8 @@ pub fn fill(m: &mut HashMap<String, String>) {
 
     m.insert("help.compact.skill".into(), "从 GitHub 下载技能".into());
 
+    m.insert("help.compact.skip".into(), "跳过前几行或指定行".into());
+
     m.insert("help.compact.smtp".into(), "SMTP邮件客户端".into());
 
     m.insert(

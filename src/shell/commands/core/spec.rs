@@ -3,7 +3,7 @@ use anyhow::Result;
 
 /// Where a command registration comes from.
 ///
-/// 2.4.9 ships only built-ins. The `Plugin` variant arrives in 2.5.0 with
+/// 2.4.9 ships only built-ins. The `Plugin` variant arrives in 2.4.9 with
 /// the out-of-process plugin registry (`commands::plugin`); carrying the
 /// source on every spec now keeps that addition from touching the 110
 /// built-in modules.
@@ -68,7 +68,7 @@ pub(crate) struct CommandSpec {
     /// flags but takes a path next, while `ndb` highlights subcommands it
     /// does not complete.
     pub subcommand_highlight: bool,
-    /// Whether this registration is a built-in or (2.5.0) a plugin command.
+    /// Whether this registration is a built-in or (2.4.9) a plugin command.
     pub source: CommandSource,
     /// The command body.
     pub run: Handler,

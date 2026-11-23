@@ -113,6 +113,11 @@ pub fn fill(m: &mut HashMap<String, String>) {
     );
 
     m.insert(
+        "misc.skip.usage".into(),
+        "ວິທີໃຊ້: skip [N] [file]  |  skip -x <lines> [file] (ຖ້າບໍ່ລະບຸໄຟລ໌ຈະອ່ານຈາກ pipe)".into(),
+    );
+
+    m.insert(
         "misc.window.bad_arg".into(),
         "{}: ອາກິວເມັນທີ່ບໍ່ຄາດຄິດ '{}'".into(),
     );

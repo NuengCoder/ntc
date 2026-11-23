@@ -642,7 +642,7 @@ PIPES & REDIRECTION [NON-COMMAND]:
   cmd >> file                            Append output to file
   cmd <<EOF ... EOF                      Read input until the EOF line
   cmd <<< text                           Read input from the literal text token
-  cmd | <filter>                         Pipe filters: head, tail, betw, gs, sort, rev, count, trim, encode, qur, clip (their flags complete too)
+  cmd | <filter>                         Pipe filters: head, tail, betw, skip, gs, sort, rev, count, trim, encode, qur, clip (their flags complete too)
   Operators need spaces around them; use - to read stdin
   Hints: | lists the pipe filters; >> and < list text files only; > shows none; << only EOF
 Examples:

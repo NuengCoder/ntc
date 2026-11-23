@@ -686,10 +686,10 @@ fn write_path(level: Level, path_value: &str) -> Result<()> {
 // Shared helpers
 // ============================================================================
 
-#[cfg(windows)]
-const PATH_SEP: char = ';';
-#[cfg(not(windows))]
-const PATH_SEP: char = ':';
+// Only the Windows/Linux/macOS backends build path strings, so the separator
+// is scoped to them; other targets (e.g. Android) leave it unused.
+#[cfg(any(windows, target_os = "linux", target_os = "macos"))]
+const PATH_SEP: char = if cfg!(windows) { ';' } else { ':' };
 
 #[cfg(any(windows, target_os = "linux", target_os = "macos"))]
 fn split_path(value: &str) -> Vec<String> {

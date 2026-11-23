@@ -50,7 +50,7 @@ pub fn fill(m: &mut HashMap<String, String>) {
 
     m.insert(
         "help.pipe.filters".into(),
-        "cmd | <过滤器> ## 管道过滤器：head、tail、betw、gs、sort、rev、count、trim、encode、qur、clip（其标志也可补全）".into(),
+        "cmd | <过滤器> ## 管道过滤器：head、tail、betw、skip、gs、sort、rev、count、trim、encode、qur、clip（其标志也可补全）".into(),
     );
 
     m.insert(

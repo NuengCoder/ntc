@@ -1,6 +1,6 @@
 //! The plugin registry. 2.4.9 ships it **empty**: nothing reads a plugin
 //! directory, spawns a process or loads a library. The type and its
-//! collision rules exist so 2.5.0 can add loading without touching the
+//! collision rules exist so 2.4.9 can add loading without touching the
 //! built-in modules. See `docs/architecture/plugins.md`.
 
 use std::collections::BTreeMap;
@@ -63,7 +63,7 @@ impl PluginRegistry {
     /// Plugins are exposed as `plugin <id> <command>`, so top-level collisions
     /// are impossible by construction; these checks are defense in depth and
     /// also guard the future opt-in short-name tier. Install-time trust and
-    /// run-alias collision checks are 2.5.0 concerns (see the architecture
+    /// run-alias collision checks are 2.4.9 concerns (see the architecture
     /// doc) and are intentionally not performed here.
     pub(crate) fn register(&mut self, manifest: PluginManifest) -> Result<(), RegisterError> {
         manifest.validate().map_err(RegisterError::Invalid)?;

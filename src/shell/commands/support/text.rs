@@ -58,7 +58,7 @@ enum ParseError {
 
 /// Quote-aware whitespace split (double quotes only, mirroring the shell's
 /// other arg parsers) so `head 5 "my file.txt"` keeps the path intact.
-fn tokenize(args: &str) -> Vec<String> {
+pub(crate) fn tokenize(args: &str) -> Vec<String> {
     let mut out = Vec::new();
     let mut cur = String::new();
     let mut in_quotes = false;
@@ -186,7 +186,7 @@ pub(crate) fn run(kind: Kind, args: &str) -> Result<bool> {
 
 /// Read lines from an explicit file (which wins) or piped/redirected input.
 /// Reports a missing file itself; returns `None` on any failure.
-fn read_source(file: &Option<String>) -> Option<String> {
+pub(crate) fn read_source(file: &Option<String>) -> Option<String> {
     if let Some(path) = file {
         let expanded = crate::utils::paths::expand_path_str(path);
         match read_file_as_string(Path::new(&expanded)) {

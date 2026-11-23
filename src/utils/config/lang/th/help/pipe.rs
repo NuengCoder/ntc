@@ -50,7 +50,7 @@ pub fn fill(m: &mut HashMap<String, String>) {
 
     m.insert(
         "help.pipe.filters".into(),
-        "cmd | <filter> ## ตัวกรองไปป์: head, tail, betw, gs, sort, rev, count, trim, encode, qur, clip (เติมแฟล็กได้ด้วย)"
+        "cmd | <filter> ## ตัวกรองไปป์: head, tail, betw, skip, gs, sort, rev, count, trim, encode, qur, clip (เติมแฟล็กได้ด้วย)"
             .into(),
     );
 

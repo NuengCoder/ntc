@@ -323,6 +323,11 @@ pub fn fill(m: &mut HashMap<String, String>) {
     m.insert("help.compact.skill".into(), "Install AI skills".into());
 
     m.insert(
+        "help.compact.skip".into(),
+        "Skip the first lines or chosen lines".into(),
+    );
+
+    m.insert(
         "help.compact.smtp".into(),
         "Send email (SMTP client)".into(),
     );

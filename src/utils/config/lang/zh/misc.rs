@@ -721,6 +721,11 @@ pub fn fill(m: &mut HashMap<String, String>) {
         "用法：betw A:B [file]（A:B 从 1 开始，含两端；未给文件时读取管道输入）".into(),
     );
 
+    m.insert(
+        "misc.skip.usage".into(),
+        "用法：skip [N] [file]  |  skip -x <lines> [file]（未给文件时读取管道输入）".into(),
+    );
+
     m.insert("misc.window.bad_arg".into(), "{}：意外的参数 '{}'".into());
 
     m.insert(

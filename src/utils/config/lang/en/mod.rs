@@ -210,6 +210,7 @@ pub fn build_map() -> HashMap<String, String> {
     help::showenv::fill(&mut m);
     help::size::fill(&mut m);
     help::skill::fill(&mut m);
+    help::skip::fill(&mut m);
     help::smtp::fill(&mut m);
     help::sort::fill(&mut m);
     help::spec::fill(&mut m);

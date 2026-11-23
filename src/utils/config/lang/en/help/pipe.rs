@@ -53,7 +53,7 @@ pub fn fill(m: &mut HashMap<String, String>) {
 
     m.insert(
         "help.pipe.filters".into(),
-        "cmd | <filter> ## Pipe filters: head, tail, betw, gs, sort, rev, count, trim, encode, qur, clip (their flags complete too)".into(),
+        "cmd | <filter> ## Pipe filters: head, tail, betw, skip, gs, sort, rev, count, trim, encode, qur, clip (their flags complete too)".into(),
     );
 
     m.insert(

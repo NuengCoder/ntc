@@ -796,7 +796,7 @@ mod tests {
 
     #[test]
     fn is_newer_recognizes_newer_version() {
-        assert!(is_newer("2.5.0", "2.4.3"));
+        assert!(is_newer("2.4.9", "2.4.3"));
         assert!(is_newer("3.0.0", "2.9.9"));
         assert!(is_newer("2.4.4", "2.4.3"));
     }

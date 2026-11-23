@@ -1,4 +1,4 @@
-//! Plugin manifest types (the 2.5.0 contract, parsed but never loaded in
+//! Plugin manifest types (the 2.4.9 contract, parsed but never loaded in
 //! 2.4.9). See `docs/architecture/plugins.md` for the full transport and
 //! trust model.
 //!
@@ -22,7 +22,7 @@
 use serde::Deserialize;
 use std::collections::BTreeMap;
 
-/// Host API major version this build speaks. The 2.5.0 handshake returns the
+/// Host API major version this build speaks. The 2.4.9 handshake returns the
 /// host's supported range; a manifest whose `abi` does not match is rejected.
 pub(crate) const HOST_ABI: u32 = 1;
 

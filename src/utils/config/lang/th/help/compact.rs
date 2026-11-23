@@ -307,6 +307,8 @@ pub fn fill(m: &mut HashMap<String, String>) {
 
     m.insert("help.compact.skill".into(), "ดาวน์โหลดสกิลจาก GitHub".into());
 
+    m.insert("help.compact.skip".into(), "ข้ามบรรทัดแรกหรือบรรทัดที่เลือก".into());
+
     m.insert("help.compact.smtp".into(), "ส่งอีเมล (ไคลเอนต์ SMTP)".into());
 
     m.insert("help.compact.sort".into(), "เรียงบรรทัด".into());

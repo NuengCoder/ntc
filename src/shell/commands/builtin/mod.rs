@@ -89,6 +89,7 @@ pub(crate) mod showcg;
 pub(crate) mod showenv;
 pub(crate) mod size;
 pub(crate) mod skill;
+pub(crate) mod skip;
 pub(crate) mod smtp;
 pub(crate) mod sort;
 pub(crate) mod spec;
@@ -224,6 +225,7 @@ pub(crate) static BUILTIN_SPECS: &[&CommandSpec] = &[
     &ran::SPEC,
     &run::SPEC,
     &skill::SPEC,
+    &skip::SPEC,
     &spec::SPEC,
     &sys::SPEC,
     &theme::SPEC,
@@ -673,6 +675,11 @@ pub(crate) static HELP_TOPICS: &[HelpTopic] = &[
         render: skill::help::print_skill_help_section,
     },
     HelpTopic {
+        topic: "skip",
+        aliases: &[],
+        render: skip::help::print_skip_help_section,
+    },
+    HelpTopic {
         topic: "smtp",
         aliases: &[],
         render: smtp::help::print_smtp_help_section,
@@ -901,6 +908,7 @@ pub(crate) static HELP_ORDER: &[&str] = &[
     "showenv",
     "size",
     "skill",
+    "skip",
     "smtp",
     "sort",
     "spec",
@@ -1022,6 +1030,7 @@ pub(crate) static COMPACT_HELP: &[CompactEntry] = &[
     ("showenv", "showenv", "help.compact.showenv"),
     ("size", "size", "help.compact.size"),
     ("skill", "skill", "help.compact.skill"),
+    ("skip", "skip", "help.compact.skip"),
     ("smtp", "smtp", "help.compact.smtp"),
     ("sort", "sort", "help.compact.sort"),
     ("spec", "spec", "help.compact.spec"),

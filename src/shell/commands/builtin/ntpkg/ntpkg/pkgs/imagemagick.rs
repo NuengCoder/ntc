@@ -217,7 +217,7 @@ fn install_platform(name: &str, version: &str, appimage: &Path, vdir: &Path) -> 
 }
 
 #[cfg(target_os = "macos")]
-fn install_platform(name: &str, _version: &str, _appimage: &Path, _vdir: &Path) -> Result<()> {
+fn install_platform(_name: &str, _version: &str, _appimage: &Path, _vdir: &Path) -> Result<()> {
     println!();
     print_info(&t!("ntpkg.magick_macos"));
     println!("  Install via Homebrew: brew install imagemagick");

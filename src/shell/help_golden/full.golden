@@ -589,7 +589,7 @@ PIPES & REDIRECTION [NON-COMMAND]:
   cmd >> file                            Append output to file
   cmd <<EOF ... EOF                      Read input until the EOF line
   cmd <<< text                           Read input from the literal text token
-  cmd | <filter>                         Pipe filters: head, tail, betw, gs, sort, rev, count, trim, encode, qur, clip (their flags complete too)
+  cmd | <filter>                         Pipe filters: head, tail, betw, skip, gs, sort, rev, count, trim, encode, qur, clip (their flags complete too)
   Operators need spaces around them; use - to read stdin
   Hints: | lists the pipe filters; >> and < list text files only; > shows none; << only EOF
 Examples:
@@ -845,6 +845,14 @@ Examples:
     skill info opencode                    # what .opencode/skills currently holds
     skill sub superpowers ls               # every skill inside the superpowers bundle
     skill download --url <url> --name my-skill # install it under a different name
+
+SKIP COMMAND:
+  skip [N] [file]                        Print every line after the first N (default 10)
+  skip -x <lines> [file]                 Print every line except the listed ones (1-based)
+  The -x list separates numbers with commas or spaces (2,5,8 or 2 5 8); input comes from a file or a pipe
+Examples:
+    skip 2 app.log                         # app.log without its first 2 lines
+    gs TODO | skip -x 2,5,8                # Drop lines 2, 5 and 8 of the search output
 
 SMTP COMMAND:
   smtp                                   SMTP email client (--id, -i, -u, -pwd, -s, -b, -f, --to)

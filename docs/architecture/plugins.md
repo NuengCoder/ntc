@@ -1,14 +1,14 @@
 # Plugin architecture (2.5.0 contract)
 
-Status: **seam shipped in 2.4.9, loading arrives in 2.5.0.**
+Status: **seam shipped in 2.5.0, loading arrives in 2.5.0.**
 
-2.4.9 ships the manifest types, the registry type and an **empty** process-wide
+2.5.0 ships the manifest types, the registry type and an **empty** process-wide
 plugin registry. Nothing in this release reads a plugin directory, spawns a
 subprocess or loads a native library. There is no user-facing `plugin` command
 yet; the namespace is reserved so an alias can never shadow it.
 
 This document is the contract 2.5.0 implements. Sections marked **(2.5.0)** are
-design commitments, not code that runs today. Sections marked **(2.4.9)** describe
+design commitments, not code that runs today. Sections marked **(2.5.0)** describe
 what is actually in the tree.
 
 - Seam code: `src/shell/commands/plugin/{mod,manifest,registry}.rs`
@@ -56,13 +56,13 @@ Resolution order for a typed line (unchanged by the seam):
 alias expansion → tutorial guard → built-in registry → plugin registry → cmd_fallback
 ```
 
-In 2.4.9 the plugin registry is empty and is **not consulted** by dispatch, so
+In 2.5.0 the plugin registry is empty and is **not consulted** by dispatch, so
 `plugin …` and every other unknown token fall through to `cmd_fallback`
 (`@teleport`, math, system command) exactly as before.
 
 ---
 
-## 3. Manifest **(2.4.9 types, 2.5.0 loading)**
+## 3. Manifest **(2.5.0 types, 2.5.0 loading)**
 
 One TOML manifest per plugin directory. Parsed by
 `PluginManifest::parse` in `src/shell/commands/plugin/manifest.rs`.
@@ -120,7 +120,7 @@ Validation notes:
 
 ---
 
-## 4. Registry and collision rules **(2.4.9)**
+## 4. Registry and collision rules **(2.5.0)**
 
 `PluginRegistry` (`src/shell/commands/plugin/registry.rs`) is an in-memory map of
 manifests keyed by `id`. Registration is the only mutation; there is no loader.
@@ -146,14 +146,14 @@ future opt-in short-name tier.
   user's `ral` alias). `register` only knows the built-in registry.
 
 The process-wide accessor is `plugin::registry()` in
-`src/shell/commands/plugin/mod.rs`. In 2.4.9 it returns an empty registry and is
+`src/shell/commands/plugin/mod.rs`. In 2.5.0 it returns an empty registry and is
 never populated.
 
 ---
 
-## 5. Command origin **(2.4.9)**
+## 5. Command origin **(2.5.0)**
 
-Every `CommandSpec` carries `source: CommandSource`. In 2.4.9 the only variant is
+Every `CommandSpec` carries `source: CommandSource`. In 2.5.0 the only variant is
 `CommandSource::Builtin`, and `Registry::new` asserts every spec is built-in.
 2.5.0 adds a `Plugin` variant so help, completion and diagnostics can distinguish
 origin without touching the 110 built-in modules.
@@ -228,7 +228,7 @@ Rules:
 
 ---
 
-## 8. Host integration: why 2.4.9 had to come first **(2.4.9)**
+## 8. Host integration: why 2.5.0 had to come first **(2.5.0)**
 
 The refactor removed every place that hard-coded "this is the complete list of
 commands". Dispatch, help, completion, alias validation and external completion
@@ -251,7 +251,7 @@ None of those steps require touching the existing command modules.
 
 ---
 
-## 9. What 2.4.9 guarantees (exit check)
+## 9. What 2.5.0 guarantees (exit check)
 
 **The registry can describe plugin commands but never loads one.**
 

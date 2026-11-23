@@ -12,6 +12,11 @@
 
 ### New Features
 
+#### skip — drop the first lines or chosen lines
+- `skip [N] [file]` prints everything after the first N lines (default 10) from a file or piped input, and `skip -x <lines> [file]` drops explicit 1-based line numbers, so `skip -x 2,5,8` and `skip -x 2 5 8` both keep every line except 2, 5 and 8
+- The list accepts commas, spaces or both, duplicates are collapsed, and a repeated `-x`, a zero line number, a second bare count or an unknown flag is reported with the usage line instead of being silently ignored
+- `help skip`, compact help, the `help pipe` filter list and all four language packs document it
+
 #### nprintf — bash-style printf
 - `print` is no longer an alias of `say`; that name is gone and `nprintf <format> [arguments...]` is its own command
 - The format follows bash: `%s %d %i %u %o %x %X %c %b %q %f %e %E %g %G %a %A %%`, the flags `-+ #0`, width and precision (including `*`), backslash escapes (`\n`, `\t`, `\xHH`, `\0NNN`, `\c`) and format reuse while arguments remain
@@ -252,7 +257,7 @@
 - Completion is data-driven: each command owns a `CompletionSpec` tree instead of a giant `subcommands_for` match; the shell hinter was split into an orchestrator plus `tree`, `providers` and `files` modules
 - `commands/mod.rs` is trimmed to pipeline glue, the tutorial guard, the nested-shell guard and the system/math/teleport fallback; help-topic and contextual-root lookups go straight to the registry
 - The `serve` service table is shared by the dispatcher, `serve` help, `showcg` and `config serve`, and a test guards the completion root against drifting from it
-- A plugin seam is staged for 2.5.0 (out-of-process JSON-RPC contract, manifest parsing/validation, an empty process-wide registry and the reserved `plugin` namespace). No plugin command loads in this release and dispatch is unchanged; see `docs/architecture/plugins.md`
+- A plugin seam is staged for 2.4.9 (out-of-process JSON-RPC contract, manifest parsing/validation, an empty process-wide registry and the reserved `plugin` namespace). No plugin command loads in this release and dispatch is unchanged; see `docs/architecture/plugins.md`
 - Behaviour is preserved throughout: command dispatch, help output and completion are unchanged, and the help golden snapshots stay byte-identical
 
 #### src/ directory flatten — no user-facing command changes

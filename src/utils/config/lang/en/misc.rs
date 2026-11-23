@@ -386,6 +386,12 @@ pub fn fill(m: &mut HashMap<String, String>) {
     );
 
     m.insert(
+        "misc.skip.usage".into(),
+        "Usage: skip [N] [file]  |  skip -x <lines> [file]  (reads piped input when no file)"
+            .into(),
+    );
+
+    m.insert(
         "misc.window.bad_arg".into(),
         "{}: unexpected argument '{}'".into(),
     );

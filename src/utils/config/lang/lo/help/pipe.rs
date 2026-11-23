@@ -53,7 +53,7 @@ pub fn fill(m: &mut HashMap<String, String>) {
 
     m.insert(
         "help.pipe.filters".into(),
-        "cmd | <filter> ## ຕົວກອງ pipe: head, tail, betw, gs, sort, rev, count, trim, encode, qur, clip (ເຕີມ flag ໄດ້)"
+        "cmd | <filter> ## ຕົວກອງ pipe: head, tail, betw, skip, gs, sort, rev, count, trim, encode, qur, clip (ເຕີມ flag ໄດ້)"
             .into(),
     );
 

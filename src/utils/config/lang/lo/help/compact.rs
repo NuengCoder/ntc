@@ -319,6 +319,11 @@ pub fn fill(m: &mut HashMap<String, String>) {
         "ດາວໂຫຼດ skill ຈາກ GitHub".into(),
     );
 
+    m.insert(
+        "help.compact.skip".into(),
+        "ຂ້າມແຖວທຳອິດ ຫຼື ແຖວທີ່ເລືອກ".into(),
+    );
+
     m.insert("help.compact.smtp".into(), "ສົ່ງອີເມວ (SMTP client)".into());
 
     m.insert("help.compact.sort".into(), "ຈັດລຳດັບແຖວ".into());

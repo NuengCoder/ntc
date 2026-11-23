@@ -1,3 +1,3 @@
-- [ ] fix warning: info in warning.txt
-- [ ] let's add new pipe command: skip what is skip is like Head but inverse; skip -x 2 , 5 , 8 meaning skip the line 2 , line 5 , line 8; skip 2 meaning skip the first 2 lines
-- [ ] let's create complete_ntc_v_2_4_9_doc.md this will tell everything about what is NTC, what is the project architecture? , why they are there; what command ntc totally have; what all of them does , where are they implement , files location; [create file in docs/ directory]
+- [x] fix warning: info in warning.txt
+- [x] let's create complete_ntc_v_2_4_9_doc.md this will tell everything about what is NTC, what is the project architecture? , why they are there; what command ntc totally have; what all of them does , where are they implement , files location; [create file in docs/ directory]
+- [x] let's add new pipe command: skip what is skip is like Head but inverse; skip -x 2 , 5 , 8 meaning skip the line 2 , line 5 , line 8; skip 2 meaning skip the first 2 lines

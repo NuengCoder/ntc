@@ -413,9 +413,9 @@ pub fn validate_alias_name(name: &str) -> bool {
         return false;
     }
 
-    // `plugin` is the namespace reserved for 2.5.0. The command does not
+    // `plugin` is the namespace reserved for 2.4.9. The command does not
     // exist yet, so it is not in the registry; reserve it here in any case
-    // to match dispatch's case-insensitive lookup. Once 2.5.0 registers the
+    // to match dispatch's case-insensitive lookup. Once 2.4.9 registers the
     // command, `is_reserved` below covers it too.
     if name.eq_ignore_ascii_case("plugin") {
         return false;
@@ -1105,7 +1105,7 @@ mod tests {
         ] {
             assert!(!validate_alias_name(name), "'{name}' must stay reserved");
         }
-        // The 2.5.0 plugin namespace is reserved before the command exists,
+        // The 2.4.9 plugin namespace is reserved before the command exists,
         // in any case, so an alias can never shadow it.
         for name in ["plugin", "PLUGIN", "Plugin"] {
             assert!(!validate_alias_name(name), "'{name}' must be reserved");

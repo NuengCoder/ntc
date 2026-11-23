@@ -87,6 +87,7 @@
   showenv        Show environment and PATH
   size           Directory sizes
   skill          Install AI skills
+  skip           Skip the first lines or chosen lines
   smtp           Send email (SMTP client)
   sort           Sort lines
   spec           Show computer specifications
